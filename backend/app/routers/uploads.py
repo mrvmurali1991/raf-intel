@@ -374,10 +374,11 @@ def _import_multi_sheet(
                 existing = cur.fetchone()
                 if existing:
                     pid = int(existing["id"])
-                    # Update: values minus the mrn/tenant_id/is_active positions.
+                    # Update: values minus the mrn/tenant_id positions.
+                    # Always reactivate on re-upload (is_active=1).
                     update_values = []
                     for c, val in zip(PATIENT_DB_INSERT_COLUMNS, values):
-                        if c in ("mrn", "tenant_id", "is_active"):
+                        if c in ("mrn", "tenant_id"):
                             continue
                         update_values.append(val)
                     update_values.append(pid)

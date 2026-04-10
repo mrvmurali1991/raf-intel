@@ -723,8 +723,20 @@ def population_summary(
             logger.error("population_summary patient count error: %s", exc)
             total_patients = 0
     else:
-        total_patients = 0
+        # Check for uploaded patients when EMR is off
+        try:
+            with raf_cursor() as _cur_up:
+                _cur_up.execute("SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND data_source = 'upload'")
+                total_patients = _cur_up.fetchone()["cnt"]
+        except Exception:
+            total_patients = 0
 
+    # When EMR off but uploads exist, scope scores to uploaded patients
+    _pop_score_filter = (
+        "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
+        if (not has_active and total_patients > 0)
+        else ACTIVE_PATIENTS_SUBQUERY
+    )
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -732,7 +744,7 @@ def population_summary(
                 SELECT patient_id, final_raf, score_type
                 FROM raf_scores
                 WHERE measurement_year = %s
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_pop_score_filter}
                   AND raf_scores.tenant_id = %s
                 ORDER BY calculated_at DESC
                 """,

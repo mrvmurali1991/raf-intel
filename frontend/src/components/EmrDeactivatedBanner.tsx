@@ -81,8 +81,8 @@ export function EmrDeactivatedBanner() {
               </>
             ) : (
               <>
-                <strong>EMR Disconnected</strong> — Activate a connection to
-                view patient data.
+                <strong>EMR Disconnected</strong> — Showing uploaded patient
+                data only. Activate a connection to include EMR patients.
               </>
             )}
           </span>

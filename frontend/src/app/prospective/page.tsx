@@ -654,7 +654,7 @@ export default function ProspectivePage() {
 
   // ── Data Fetching ──────────────────────────────────────────────────────────
 
-  const { data: patientsData, isLoading: loadingPatients, isError: patientsError } = useQuery({
+  const { data: patientsData, isLoading: loadingPatients, isError: patientsError, refetch: refetchPatients } = useQuery({
     queryKey: ["prospective-patients"],
     queryFn: () => searchPatients({ limit: 500, offset: 0 }),
     staleTime: 5 * 60 * 1000,
@@ -945,9 +945,16 @@ export default function ProspectivePage() {
     return (
       <div style={{ padding: 32, maxWidth: 1400, margin: "0 auto" }}>
         <PageHeader title="Prospective RAF Management" icon={<Target size={22} />} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", fontSize: 14, marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", fontSize: 14, marginBottom: 24 }}>
           <AlertTriangle size={18} />
-          <span>Failed to load patient data. Please check your connection and try refreshing.</span>
+          <span style={{ flex: 1 }}>Failed to load patient data. Please check your connection and try again.</span>
+          <button
+            type="button"
+            onClick={() => refetchPatients()}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#fff", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
         </div>
       </div>
     );

@@ -1,20 +1,38 @@
 "use client";
 
-import React, {
-  useState,
-  useCallback,
-  useRef,
-} from "react";
+/**
+ * Claims page — RAF Intelligence.
+ *
+ * Not EMR-dependent. All endpoints live under /api/claims and work with EMR
+ * deactivated. Backend field names verified against
+ * backend/app/routers/claims.py and services/claims_service.py — never guess.
+ *
+ * Batch response (from /api/claims/batches and /api/claims/batches/{id}):
+ *   id, batch_uuid, filename, file_format, file_size, status, uploaded_by,
+ *   created_at, updated_at, claim_count, matched_patient_count, error_message
+ *   detail adds: stats { total_claims, unique_patients, unique_matched_patients,
+ *                        matched_count, total_charges, hcc_distribution[...] }
+ *
+ * Claim record: id, patient_name, patient_dob, patient_gender, member_id,
+ *   provider_name, provider_npi, date_of_service, icd10_codes (JSON list),
+ *   cpt_codes, charges, openemr_pid, claim_type, ...
+ *
+ * Diagnosis row: icd10_code, hcc_code, hcc_label, claim_count, patient_count
+ * HCC row: hcc_code, hcc_label, diagnosis_count, patient_count, claim_count
+ * Unmapped patient row: patient_name, patient_dob, patient_gender, member_id, claim_count
+ */
+
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { tokens } from "@/styles/tokens";
+import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
 import {
   FileText,
   Upload,
   RefreshCw,
   AlertTriangle,
   X,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   Eye,
@@ -27,830 +45,344 @@ import {
   Loader2,
   FileSearch,
   Tag,
-  Link2,
-  BarChart2,
-  User,
+  Users,
+  DollarSign,
+  Sparkles,
+  Layers,
+  Database,
 } from "lucide-react";
-import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
 
-// ─────────────────────────────────────────────
-// Design Tokens (matches existing pages)
-// ─────────────────────────────────────────────
+// ─── Design tokens (match rest of app) ───────────────────────────────────────
+const C = {
+  white: tokens.white,
+  slate50: tokens.slate50,
+  slate100: tokens.slate100,
+  slate200: tokens.slate200,
+  slate300: tokens.slate300,
+  slate400: tokens.slate400,
+  slate500: tokens.slate500,
+  slate600: tokens.slate600,
+  slate700: tokens.slate700,
+  slate800: tokens.slate800,
+  slate900: tokens.slate900,
 
-const T = {
-  white: "#FFFFFF",
-  slate50: "#F8FAFC",
-  slate100: "#F1F5F9",
-  slate200: "#E2E8F0",
-  slate300: "#CBD5E1",
-  slate400: "#94A3B8",
-  slate500: "#64748B",
-  slate600: "#475569",
-  slate700: "#334155",
-  slate800: "#1E293B",
-  slate900: "#0F172A",
-  blue50: "#EFF6FF",
-  blue100: "#DBEAFE",
-  blue500: "#3B82F6",
-  blue600: "#2563EB",
-  blue700: "#1D4ED8",
-  emerald50: "#ECFDF5",
-  emerald500: "#10B981",
-  emerald600: "#059669",
-  amber50: "#FFFBEB",
-  amber500: "#F59E0B",
-  amber600: "#D97706",
-  red50: "#FEF2F2",
-  red500: "#EF4444",
-  red600: "#DC2626",
-  gray100: "#F3F4F6",
-  gray200: "#E5E7EB",
-  gray400: "#9CA3AF",
-  gray500: "#6B7280",
-  violet500: "#8B5CF6",
+  // Brand palette matches dashboard/patients (teal + emerald)
+  teal:      "#0F766E",
+  tealSoft:  "rgba(15, 118, 110, 0.08)",
+  tealBorder:"rgba(15, 118, 110, 0.22)",
+  emerald:   "#059669",
+  emeraldSoft:"#ECFDF5",
+  amber:     "#D97706",
+  amberSoft: "#FFFBEB",
+  red:       "#DC2626",
+  redSoft:   "#FEF2F2",
+  violet:    "#7C3AED",
+  violetSoft:"#F5F3FF",
+  blue:      "#2563EB",
+  blueSoft:  "#EFF6FF",
 };
 
-// ─────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────
+const ACCEPTED_EXT = [".csv", ".txt", ".837", ".edi", ".x12"];
+const PAGE_SIZE = 15;
 
+// ─── Types (match backend response shape) ───────────────────────────────────
 type BatchStatus =
-  | "uploaded"
-  | "parsing"
-  | "processing"
-  | "completed"
-  | "failed";
+  | "uploaded" | "parsed" | "processing" | "processed" | "completed" | "failed";
 
 interface ClaimsBatch {
   id: number;
-  batch_name: string;
-  file_type: string;
-  file_name: string;
-  total_claims: number;
-  processed_claims: number;
-  failed_claims: number;
+  batch_uuid?: string;
+  // Canonical + legacy field names — the live API returns both shapes,
+  // so we tolerate either on read.
+  filename?: string;
+  file_name?: string;
+  batch_name?: string;
+  file_format?: string;        // "csv" | "837p" | "837i" | "txt" | "edi" ...
+  file_type?: string;
+  file_size?: number;
   status: BatchStatus;
+  uploaded_by?: string;
+  claim_count?: number;
+  total_claims?: number | string;
+  processed_claims?: number | string;
+  failed_claims?: number | string;
+  matched_patient_count?: number | string;
+  hcc_codes_found?: number | string;
+  unique_patient_count?: number | string;
+  total_charges?: number | string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  error_message?: string | null;
 }
+
+// Normalize legacy/canonical batch fields to a single shape used in render.
+function normBatch(b: ClaimsBatch) {
+  const toNum = (v: unknown): number => {
+    if (v == null) return 0;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const name = b.batch_name ?? b.filename ?? b.file_name ?? `Batch #${b.id}`;
+  const filename = b.file_name ?? b.filename ?? name;
+  const format = b.file_format ?? b.file_type ?? "";
+  const total = toNum(b.claim_count ?? b.total_claims);
+  const processed = toNum(b.processed_claims);
+  const matched = toNum(b.matched_patient_count);
+  const failed = toNum(b.failed_claims);
+  // "processed" (legacy) == "completed"
+  const status: BatchStatus = b.status === "processed" ? "completed" : b.status;
+  return { name, filename, format, total, processed, matched, failed, status };
+}
+
+interface BatchStats {
+  total_claims?: number;
+  unique_patients?: number;
+  unique_matched_patients?: number;
+  matched_count?: number;
+  unique_providers?: number;
+  total_charges?: number;
+  hcc_distribution?: { hcc_code: string; hcc_label: string; count: number }[];
+}
+
+type BatchDetail = ClaimsBatch & { stats?: BatchStats };
 
 interface ClaimRecord {
   id: number;
-  patient_name: string | null;
-  patient_id: string | null;
-  date_of_service: string;
-  provider_name: string | null;
-  diagnoses: string[];
-  charges: number;
-  hcc_mapped: boolean;
+  patient_name?: string;
+  patient_dob?: string;
+  patient_gender?: string;
+  member_id?: string;
+  provider_name?: string;
+  provider_npi?: string;
+  date_of_service?: string;
+  icd10_codes?: string[] | string;
+  cpt_codes?: string[] | string;
+  charges?: number;
+  openemr_pid?: number | null;
+  claim_type?: string;
 }
 
-interface DiagnosisRecord {
+interface DiagnosisRow {
   icd10_code: string;
-  description: string | null;
-  hcc_code: number | null;
-  hcc_label: string | null;
-  count: number;
+  hcc_code?: string | null;
+  hcc_label?: string | null;
+  claim_count?: number;
+  patient_count?: number;
 }
 
-interface HccSummaryItem {
-  hcc_code: number;
+interface HccRow {
+  hcc_code: string;
   hcc_label: string;
-  patient_count: number;
+  diagnosis_count?: number;
+  patient_count?: number;
+  claim_count?: number;
 }
 
-interface UnmappedPatient {
-  claim_patient_id: string;
-  patient_name: string | null;
-  claim_count: number;
-}
-
-interface BatchDetail {
-  batch: ClaimsBatch;
-  claims: ClaimRecord[];
-  diagnoses: DiagnosisRecord[];
-  hcc_summary: HccSummaryItem[];
-  unmapped_patients: UnmappedPatient[];
+interface UnmappedRow {
+  patient_name?: string;
+  patient_dob?: string;
+  patient_gender?: string;
+  member_id?: string;
+  claim_count?: number;
 }
 
 interface ClaimsStats {
-  total_batches: number;
-  total_claims: number;
-  total_matched_patients: number;
-  unique_hcc_codes: number;
+  total_batches: number | string;
+  total_claims: number | string;
+  total_matched_patients: number | string;
+  unique_icd_codes?: number | string;
+  unique_hcc_codes: number | string;
+  last_upload?: string;
+  batches_by_status?: Record<string, number>;
 }
 
-// ─────────────────────────────────────────────
-// API helpers
-// ─────────────────────────────────────────────
+const num = (v: unknown): number => {
+  if (v == null) return 0;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
 
+// ─── API helpers ─────────────────────────────────────────────────────────────
 async function fetchClaimsStats(): Promise<ClaimsStats> {
-  const { data } = await api.get(`/api/claims/stats`);
+  const { data } = await api.get("/api/claims/stats");
   return data;
 }
-
 async function fetchBatches(): Promise<ClaimsBatch[]> {
-  const { data } = await api.get(`/api/claims/batches`);
-  return Array.isArray(data) ? data : (data?.batches ?? []);
+  const { data } = await api.get("/api/claims/batches", { params: { limit: 200 } });
+  return data?.batches ?? [];
 }
-
-async function fetchBatchDetail(batchId: number): Promise<BatchDetail> {
-  const { data } = await api.get(
-    `/api/claims/batches/${batchId}`
-  );
+async function fetchBatchDetail(id: number): Promise<BatchDetail> {
+  const { data } = await api.get(`/api/claims/batches/${id}`);
+  return data;
+}
+async function fetchBatchClaims(id: number): Promise<{ claims: ClaimRecord[]; total: number }> {
+  const { data } = await api.get(`/api/claims/batches/${id}/claims`, { params: { limit: 100 } });
+  return { claims: data?.claims ?? [], total: data?.total ?? 0 };
+}
+async function fetchBatchDiagnoses(id: number): Promise<DiagnosisRow[]> {
+  const { data } = await api.get(`/api/claims/batches/${id}/diagnoses`, { params: { limit: 500 } });
+  return data?.diagnoses ?? [];
+}
+async function fetchHccSummary(id: number): Promise<HccRow[]> {
+  const { data } = await api.get(`/api/claims/batches/${id}/hcc-summary`, { params: { limit: 200 } });
+  return data?.hcc_summary ?? [];
+}
+async function fetchUnmapped(id: number): Promise<UnmappedRow[]> {
+  const { data } = await api.get(`/api/claims/batches/${id}/unmapped-patients`, { params: { limit: 500 } });
+  return data?.patients ?? [];
+}
+async function deleteBatchApi(id: number) { await api.delete(`/api/claims/batches/${id}`); }
+async function processBatchApi(id: number) {
+  const { data } = await api.post(`/api/claims/batches/${id}/process`);
+  return data;
+}
+async function calculateRafApi(id: number) {
+  const { data } = await api.post(`/api/claims/batches/${id}/calculate-raf`);
   return data;
 }
 
-async function deleteBatch(batchId: number): Promise<void> {
-  await api.delete(`/api/claims/batches/${batchId}`);
-}
+// ─── Small utilities ─────────────────────────────────────────────────────────
+const fmtN = (v: number | string | undefined | null) => {
+  const n = v == null ? 0 : typeof v === "number" ? v : Number(v);
+  return (Number.isFinite(n) ? n : 0).toLocaleString("en-US");
+};
+const fmt$ = (v: number | string | undefined | null) => {
+  const n = v == null ? 0 : typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return "$0";
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${n.toFixed(0)}`;
+};
+const fmtDate = (iso?: string) => {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return iso; }
+};
+const toList = (v: string[] | string | undefined): string[] => {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; }
+  catch { return String(v).split(",").map(s => s.trim()).filter(Boolean); }
+};
+const errMsg = (e: unknown, fallback = "Something went wrong."): string => {
+  const ex = e as { response?: { data?: { detail?: string; message?: string } }; message?: string };
+  return ex?.response?.data?.detail ?? ex?.response?.data?.message ?? ex?.message ?? fallback;
+};
 
-async function processBatch(batchId: number): Promise<void> {
-  await api.post(`/api/claims/batches/${batchId}/process`);
-}
-
-async function calculateRAF(batchId: number): Promise<void> {
-  await api.post(`/api/claims/batches/${batchId}/calculate-raf`);
-}
-
-async function mapToOpenEMR(
-  batchId: number,
-  patientId: string
-): Promise<void> {
-  await api.post(
-    `/api/claims/batches/${batchId}/map-patient`,
-    { claim_patient_id: patientId }
-  );
-}
-
-// ─────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────
-
-const ACCEPTED_EXTENSIONS = [".csv", ".txt", ".837", ".edi"];
-const ACCEPTED_MIME =
-  "text/csv,text/plain,application/edi-x12,application/x-837,.csv,.txt,.837,.edi";
-const PAGE_SIZE = 15;
-
-// ─────────────────────────────────────────────
-// Status Badge
-// ─────────────────────────────────────────────
-
+// ─── Visual primitives ──────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: BatchStatus }) {
-  const map: Record<
-    BatchStatus,
-    { label: string; bg: string; color: string; icon: React.ReactNode }
-  > = {
-    uploaded: {
-      label: "Uploaded",
-      bg: T.slate100,
-      color: T.slate600,
-      icon: <Clock size={11} />,
-    },
-    parsing: {
-      label: "Parsing",
-      bg: T.blue100,
-      color: T.blue700,
-      icon: <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />,
-    },
-    processing: {
-      label: "Processing",
-      bg: T.amber50,
-      color: T.amber600,
-      icon: <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />,
-    },
-    completed: {
-      label: "Completed",
-      bg: T.emerald50,
-      color: T.emerald600,
-      icon: <CheckCircle size={11} />,
-    },
-    failed: {
-      label: "Failed",
-      bg: T.red50,
-      color: T.red600,
-      icon: <XCircle size={11} />,
-    },
+  const map: Record<BatchStatus, { label: string; bg: string; fg: string; icon: React.ReactNode }> = {
+    uploaded:   { label: "Uploaded",   bg: C.slate100,   fg: C.slate600, icon: <Clock size={11} /> },
+    parsed:     { label: "Parsed",     bg: C.blueSoft,   fg: C.blue,     icon: <CheckCircle size={11} /> },
+    processing: { label: "Processing", bg: C.amberSoft,  fg: C.amber,    icon: <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> },
+    processed:  { label: "Processed",  bg: C.emeraldSoft,fg: C.emerald,  icon: <CheckCircle size={11} /> },
+    completed:  { label: "Completed",  bg: C.emeraldSoft,fg: C.emerald,  icon: <CheckCircle size={11} /> },
+    failed:     { label: "Failed",     bg: C.redSoft,    fg: C.red,      icon: <XCircle size={11} /> },
   };
-
   const cfg = map[status] ?? map.uploaded;
-
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "4px 12px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 600,
-        backgroundColor: cfg.bg,
-        color: cfg.color,
-        whiteSpace: "nowrap",
-        border: `1px solid ${cfg.color}20`,
-        boxShadow: `0 1px 3px ${cfg.color}15`,
-        letterSpacing: "0.02em",
-      }}
-    >
-      {cfg.icon}
-      {cfg.label}
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+      background: cfg.bg, color: cfg.fg, border: `1px solid ${cfg.fg}22`,
+      whiteSpace: "nowrap", letterSpacing: "0.02em",
+    }}>
+      {cfg.icon}{cfg.label}
     </span>
   );
 }
 
-// ─────────────────────────────────────────────
-// File type display helper
-// ─────────────────────────────────────────────
-
-function fileTypeLabel(ext: string): string {
-  const map: Record<string, string> = {
-    csv: "CSV",
-    txt: "TXT / Flat",
-    "837": "X12 837",
-    edi: "EDI",
-  };
-  return map[ext.toLowerCase().replace(".", "")] ?? ext.toUpperCase();
+function FormatPill({ format }: { format: string }) {
+  const f = (format || "").toLowerCase();
+  const label =
+    f.includes("837p") ? "837P" :
+    f.includes("837i") ? "837I" :
+    f.includes("837")  ? "837"  :
+    f === "csv"        ? "CSV"  :
+    f === "edi"        ? "EDI"  :
+    f === "x12"        ? "X12"  :
+    (format || "FILE").toUpperCase();
+  const tone =
+    label.startsWith("837") ? { bg: C.violetSoft, fg: C.violet } :
+    label === "CSV"         ? { bg: C.blueSoft,   fg: C.blue }   :
+                              { bg: C.slate100,   fg: C.slate600 };
+  return (
+    <span style={{
+      display: "inline-block", padding: "3px 8px", borderRadius: 6,
+      fontSize: 10, fontWeight: 700, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      background: tone.bg, color: tone.fg, letterSpacing: "0.04em",
+    }}>{label}</span>
+  );
 }
 
-function detectFileType(name: string): string {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return fileTypeLabel(ext);
+function Skeleton({ w, h = 12, r = 6 }: { w: number | string; h?: number; r?: number }) {
+  return <div className="skeleton shimmer" style={{ width: w, height: h, borderRadius: r }} />;
 }
 
-// ─────────────────────────────────────────────
-// Upload Dialog
-// ─────────────────────────────────────────────
-
-interface UploadDialogProps {
-  onClose: () => void;
-  onSuccess: () => void;
+function IconBtn({
+  children, onClick, title, color, disabled,
+}: {
+  children: React.ReactNode; onClick: () => void; title: string; color?: string; disabled?: boolean;
+}) {
+  const fg = color ?? C.slate600;
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      style={{
+        width: 30, height: 30, borderRadius: 7,
+        border: `1px solid ${color ? `${color}33` : C.slate200}`,
+        background: color ? `${color}0D` : C.white,
+        color: fg, cursor: disabled ? "not-allowed" : "pointer",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        transition: "all 0.15s ease", flexShrink: 0, opacity: disabled ? 0.5 : 1,
+        boxShadow: color ? `0 1px 3px ${color}14` : "none",
+      }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.background = color ? `${color}18` : C.slate50; }}
+      onMouseLeave={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.background = color ? `${color}0D` : C.white; }}
+    >
+      {children}
+    </button>
+  );
 }
 
-function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
-  const [file, setFile] = useState<File | null>(null);
-  const [batchName, setBatchName] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFile = useCallback((f: File) => {
-    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!ACCEPTED_EXTENSIONS.includes(`.${ext}`)) {
-      setError(`Unsupported file type ".${ext}". Accepted: ${ACCEPTED_EXTENSIONS.join(", ")}`);
-      return;
-    }
-    setError(null);
-    setFile(f);
-    setBatchName(f.name.replace(/\.[^.]+$/, ""));
+// ─── Toast (lightweight inline, no new dep) ─────────────────────────────────
+type Toast = { id: number; kind: "success" | "error" | "info"; text: string };
+function useToasts() {
+  const [items, setItems] = useState<Toast[]>([]);
+  const push = useCallback((t: Omit<Toast, "id">) => {
+    const id = Date.now() + Math.random();
+    setItems((xs) => [...xs, { ...t, id }]);
+    setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4200);
   }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const f = e.dataTransfer.files[0];
-      if (f) handleFile(f);
-    },
-    [handleFile]
-  );
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) handleFile(f);
-  };
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true);
-    setError(null);
-    setProgress(0);
-
-    const form = new FormData();
-    form.append("file", file);
-    form.append("batch_name", batchName || file.name);
-
-    try {
-      await api.post(`/api/claims/upload`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (evt) => {
-          if (evt.total) {
-            setProgress(Math.round((evt.loaded / evt.total) * 100));
-          }
-        },
-      });
-      onSuccess();
-      onClose();
-    } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail ??
-          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Upload failed. Please try again."
-      );
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const detectedType = file ? detectFileType(file.name) : null;
-
-  return (
-    /* Backdrop */
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(15, 23, 42, 0.55)",
-        backdropFilter: "blur(4px)",
-        zIndex: 100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Upload Claims File"
-    >
-      <div
-        className="animate-scale-in"
-        style={{
-          backgroundColor: T.white,
-          borderRadius: 16,
-          width: "100%",
-          maxWidth: 520,
-          boxShadow: "0 25px 60px rgba(0,0,0,0.20), 0 8px 20px rgba(0,0,0,0.10)",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Dialog header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "20px 24px 16px",
-            borderBottom: `1px solid ${T.slate200}`,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: `${T.blue600}1A`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: T.blue600,
-              }}
-            >
-              <Upload size={18} />
-            </div>
-            <div>
-              <h2
-                style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.slate900 }}
-              >
-                Upload Claims File
-              </h2>
-              <p style={{ margin: 0, fontSize: 12, color: T.slate500 }}>
-                Accepts CSV, TXT, X12 837, EDI
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={uploading}
-            aria-label="Close dialog"
-            style={{
-              width: 32,
-              height: 32,
-              border: `1px solid ${T.slate200}`,
-              borderRadius: 8,
-              background: T.white,
-              cursor: uploading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: T.slate500,
-              opacity: uploading ? 0.4 : 1,
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Dialog body */}
-        <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* Drop zone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => !uploading && fileInputRef.current?.click()}
-            role="button"
-            tabIndex={0}
-            aria-label="Drop zone for claims file"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
-            }}
-            style={{
-              position: "relative",
-              borderRadius: 12,
-              padding: "36px 24px",
-              textAlign: "center",
-              backgroundColor: dragOver
-                ? T.blue50
-                : file
-                ? T.emerald50
-                : T.slate50,
-              cursor: uploading ? "default" : "pointer",
-              transition: "all 0.2s ease",
-              overflow: "hidden",
-            }}
-          >
-            {/* Animated border using SVG */}
-            <svg
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none",
-              }}
-            >
-              <rect
-                x="1"
-                y="1"
-                width="calc(100% - 2px)"
-                height="calc(100% - 2px)"
-                rx="11"
-                ry="11"
-                fill="none"
-                stroke={dragOver ? T.blue500 : file ? T.emerald500 : T.slate300}
-                strokeWidth="2"
-                strokeDasharray="8 6"
-                style={{
-                  animation: dragOver ? "dash-march 0.4s linear infinite" : "dash-march 2s linear infinite",
-                }}
-              />
-            </svg>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_MIME}
-              onChange={handleInputChange}
-              style={{ display: "none" }}
-              aria-hidden="true"
-            />
-
-            {file ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: `${T.emerald500}1A`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: T.emerald600,
-                  }}
-                >
-                  <FileText size={22} />
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: T.slate800 }}>
-                    {file.name}
-                  </p>
-                  <p style={{ margin: "2px 0 0", fontSize: 12, color: T.slate500 }}>
-                    {(file.size / 1024).toFixed(1)} KB
-                    {detectedType && (
-                      <span
-                        style={{
-                          marginLeft: 8,
-                          padding: "2px 7px",
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          backgroundColor: `${T.blue600}1A`,
-                          color: T.blue700,
-                        }}
-                      >
-                        {detectedType}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                {!uploading && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFile(null);
-                      setBatchName("");
-                    }}
-                    style={{
-                      marginTop: 4,
-                      fontSize: 12,
-                      color: T.slate500,
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: T.slate100,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: T.slate400,
-                  }}
-                >
-                  <Upload size={22} />
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: T.slate700 }}>
-                    Drop your claims file here
-                  </p>
-                  <p style={{ margin: "4px 0 0", fontSize: 12, color: T.slate500 }}>
-                    or click to browse &mdash; .csv, .txt, .837, .edi
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Batch name */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label
-              htmlFor="batch-name-input"
-              style={{ fontSize: 13, fontWeight: 600, color: T.slate700 }}
-            >
-              Batch Name
-            </label>
-            <input
-              id="batch-name-input"
-              type="text"
-              value={batchName}
-              onChange={(e) => setBatchName(e.target.value)}
-              placeholder={`e.g. Q1_${new Date().getFullYear()}_Claims`}
-              disabled={uploading}
-              style={{
-                height: 38,
-                borderRadius: 8,
-                border: `1px solid ${T.slate200}`,
-                paddingLeft: 12,
-                paddingRight: 12,
-                fontSize: 13,
-                color: T.slate800,
-                backgroundColor: T.white,
-                outline: "none",
-                opacity: uploading ? 0.6 : 1,
-              }}
-            />
-          </div>
-
-          {/* Progress bar */}
-          {uploading && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 12,
-                  color: T.slate500,
-                }}
-              >
-                <span>Uploading&hellip;</span>
-                <span style={{ fontWeight: 600, color: T.blue600 }}>{progress}%</span>
-              </div>
-              <div
-                style={{
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: T.slate200,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${progress}%`,
-                    borderRadius: 3,
-                    backgroundColor: T.blue600,
-                    transition: "width 0.2s ease",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 8,
-                padding: "10px 12px",
-                borderRadius: 8,
-                backgroundColor: T.red50,
-                border: `1px solid ${T.red500}30`,
-              }}
-              role="alert"
-            >
-              <AlertTriangle size={15} style={{ color: T.red600, flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: 13, color: T.red600 }}>{error}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Dialog footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 10,
-            padding: "16px 24px",
-            borderTop: `1px solid ${T.slate200}`,
-            backgroundColor: T.slate50,
-          }}
-        >
-          <button
-            onClick={onClose}
-            disabled={uploading}
-            style={{
-              height: 38,
-              padding: "0 18px",
-              borderRadius: 8,
-              border: `1px solid ${T.slate200}`,
-              backgroundColor: T.white,
-              fontSize: 13,
-              fontWeight: 500,
-              color: T.slate600,
-              cursor: uploading ? "not-allowed" : "pointer",
-              opacity: uploading ? 0.5 : 1,
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            className="btn-press"
-            onClick={handleUpload}
-            disabled={!file || uploading}
-            style={{
-              height: 38,
-              padding: "0 20px",
-              borderRadius: 8,
-              border: "none",
-              background: !file || uploading ? T.slate300 : "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.white,
-              cursor: !file || uploading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "all 0.15s ease",
-              boxShadow: !file || uploading ? "none" : "0 2px 8px rgba(37,99,235,0.3)",
-            }}
-          >
-            {uploading ? (
-              <>
-                <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-                Uploading&hellip;
-              </>
-            ) : (
-              <>
-                <Upload size={14} />
-                Upload Claims
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return { items, push };
 }
-
-// ─────────────────────────────────────────────
-// HCC Bar Chart (inline SVG-based)
-// ─────────────────────────────────────────────
-
-function HccBarChart({ items }: { items: HccSummaryItem[] }) {
-  if (!items?.length) {
-    return (
-      <EmptyState
-        icon={<BarChart2 size={24} />}
-        title="No HCC data"
-        description="Process the batch to see HCC distribution."
-      />
-    );
-  }
-
-  const maxCount = Math.max(...items.map((i) => i.patient_count), 1);
-  const barColors = [
-    T.blue600,
-    T.emerald500,
-    T.amber500,
-    T.violet500,
-    T.red500,
-  ];
-
+function ToastStack({ items }: { items: Toast[] }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        padding: "4px 0",
-      }}
-    >
-      {items.slice(0, 10).map((item, idx) => {
-        const pct = (item.patient_count / maxCount) * 100;
-        const color = barColors[idx % barColors.length];
+    <div style={{
+      position: "fixed", right: 24, bottom: 24, zIndex: 1000,
+      display: "flex", flexDirection: "column", gap: 10, pointerEvents: "none",
+    }}>
+      {items.map((t) => {
+        const tone =
+          t.kind === "success" ? { bg: C.emeraldSoft, fg: C.emerald, icon: <CheckCircle size={16} /> } :
+          t.kind === "error"   ? { bg: C.redSoft,    fg: C.red,     icon: <AlertTriangle size={16} /> } :
+                                 { bg: C.blueSoft,   fg: C.blue,    icon: <Sparkles size={16} /> };
         return (
-          <div
-            key={item.hcc_code}
-            style={{ display: "flex", alignItems: "center", gap: 10 }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: T.slate600,
-                width: 52,
-                textAlign: "right",
-                flexShrink: 0,
-              }}
-            >
-              HCC {item.hcc_code}
-            </span>
-            <div
-              style={{
-                flex: 1,
-                height: 20,
-                borderRadius: 4,
-                backgroundColor: T.slate100,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  height: "100%",
-                  width: `${pct}%`,
-                  borderRadius: 4,
-                  backgroundColor: color,
-                  transition: "width 0.4s ease",
-                  display: "flex",
-                  alignItems: "center",
-                  paddingLeft: 6,
-                }}
-              >
-                {pct > 20 && (
-                  <span style={{ fontSize: 10, fontWeight: 600, color: T.white }}>
-                    {item.patient_count}
-                  </span>
-                )}
-              </div>
-            </div>
-            {pct <= 20 && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.slate600, width: 20 }}>
-                {item.patient_count}
-              </span>
-            )}
-            <span
-              style={{
-                fontSize: 11,
-                color: T.slate500,
-                maxWidth: 160,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-              title={item.hcc_label}
-            >
-              {item.hcc_label}
-            </span>
+          <div key={t.id} className="animate-fade-in" style={{
+            display: "flex", alignItems: "center", gap: 10,
+            minWidth: 260, maxWidth: 420, padding: "10px 14px", borderRadius: 10,
+            background: C.white, border: `1px solid ${tone.fg}33`,
+            boxShadow: "0 10px 28px rgba(15,23,42,0.12)", pointerEvents: "auto",
+          }}>
+            <span style={{
+              width: 28, height: 28, borderRadius: 7, display: "inline-flex",
+              alignItems: "center", justifyContent: "center", background: tone.bg, color: tone.fg,
+            }}>{tone.icon}</span>
+            <span style={{ fontSize: 13, color: C.slate700, fontWeight: 500 }}>{t.text}</span>
           </div>
         );
       })}
@@ -858,715 +390,250 @@ function HccBarChart({ items }: { items: HccSummaryItem[] }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// Batch Detail Panel
-// ─────────────────────────────────────────────
+// ─── Upload Dialog ──────────────────────────────────────────────────────────
+function UploadDialog({
+  onClose, onUploaded,
+}: { onClose: () => void; onUploaded: (batchId: number, filename: string) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-type DetailTab = "claims" | "diagnoses" | "hcc" | "unmapped";
+  const pick = (f: File | undefined) => {
+    if (!f) return;
+    const ext = "." + (f.name.split(".").pop() ?? "").toLowerCase();
+    if (!ACCEPTED_EXT.includes(ext)) {
+      setError(`Unsupported file type "${ext}". Accepted: ${ACCEPTED_EXT.join(", ")}`);
+      return;
+    }
+    setError(null);
+    setFile(f);
+  };
 
-interface BatchDetailPanelProps {
-  batchId: number;
-  onClose: () => void;
-  onMapSuccess: () => void;
-}
-
-function BatchDetailPanel({
-  batchId,
-  onClose,
-  onMapSuccess,
-}: BatchDetailPanelProps) {
-  const [tab, setTab] = useState<DetailTab>("claims");
-  const queryClient = useQueryClient();
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["batch-detail", batchId],
-    queryFn: () => fetchBatchDetail(batchId),
-  });
-
-  const mapMut = useMutation({
-    mutationFn: (patientId: string) => mapToOpenEMR(batchId, patientId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["batch-detail", batchId] });
-      onMapSuccess();
-    },
-  });
-
-  const tabs: { key: DetailTab; label: string; icon: React.ReactNode }[] = [
-    { key: "claims", label: "Claims", icon: <FileText size={13} /> },
-    { key: "diagnoses", label: "Diagnoses", icon: <Tag size={13} /> },
-    { key: "hcc", label: "HCC Summary", icon: <BarChart2 size={13} /> },
-    { key: "unmapped", label: "Unmapped Patients", icon: <User size={13} /> },
-  ];
+  const submit = async () => {
+    if (!file) return;
+    setUploading(true); setProgress(0); setError(null);
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const { data } = await api.post("/api/claims/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (e) => {
+          if (e.total) setProgress(Math.round((e.loaded / e.total) * 100));
+        },
+      });
+      onUploaded(data?.batch_id, data?.filename ?? file.name);
+      onClose();
+    } catch (e) {
+      setError(errMsg(e, "Upload failed. Please try again."));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div
-      className="premium-card animate-scale-in"
+      role="dialog" aria-modal="true" aria-label="Upload Claims File"
+      onClick={(e) => { if (e.target === e.currentTarget && !uploading) onClose(); }}
       style={{
-        overflow: "hidden",
-        marginTop: 0,
+        position: "fixed", inset: 0, zIndex: 100, padding: 16,
+        background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
-      {/* Panel header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "14px 20px",
-          borderBottom: `1px solid ${T.slate200}`,
-          backgroundColor: T.slate50,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Eye size={16} style={{ color: T.blue600 }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: T.slate900 }}>
-            {data?.batch?.batch_name ?? "Batch Details"}
-          </span>
-          {data?.batch && (
-            <StatusBadge status={data.batch.status} />
-          )}
+      <div className="animate-scale-in" style={{
+        width: "100%", maxWidth: 540, background: C.white, borderRadius: 16,
+        boxShadow: "0 25px 60px rgba(0,0,0,0.22)", overflow: "hidden",
+      }}>
+        {/* header */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "18px 22px", borderBottom: `1px solid ${C.slate200}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, background: C.tealSoft,
+              color: C.teal, display: "flex", alignItems: "center", justifyContent: "center",
+            }}><Upload size={18} /></div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate900 }}>Upload Claims File</h2>
+              <p style={{ margin: 0, fontSize: 12, color: C.slate500 }}>CSV, X12 837P / 837I, or EDI — up to 100 MB</p>
+            </div>
+          </div>
+          <button onClick={onClose} disabled={uploading} aria-label="Close dialog" style={{
+            width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.slate200}`,
+            background: C.white, color: C.slate500, cursor: uploading ? "not-allowed" : "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}><X size={16} /></button>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close detail panel"
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            border: `1px solid ${T.slate200}`,
-            background: T.white,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: T.slate500,
-          }}
-        >
-          <X size={14} />
-        </button>
-      </div>
 
-      {/* Tab strip */}
-      <div
-        style={{
-          display: "flex",
-          gap: 0,
-          borderBottom: `1px solid ${T.slate200}`,
-          backgroundColor: T.white,
-          overflowX: "auto",
-        }}
-      >
-        {tabs.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "11px 18px",
-                fontSize: 13,
-                fontWeight: active ? 700 : 500,
-                color: active ? T.blue600 : T.slate500,
-                background: "none",
-                border: "none",
-                borderBottom: active ? `2px solid ${T.blue600}` : "2px solid transparent",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                transition: "color 0.12s ease",
-              }}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Panel content */}
-      <div style={{ padding: 20 }}>
-        {isLoading && (
-          <div style={{ textAlign: "center", padding: "40px 0", color: T.slate400 }}>
-            <Loader2
-              size={28}
-              style={{ animation: "spin 1s linear infinite", margin: "0 auto" }}
-            />
-            <p style={{ marginTop: 12, fontSize: 13 }}>Loading batch details&hellip;</p>
+        {/* body */}
+        <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
+          <div
+            role="button" tabIndex={0}
+            aria-label="Claims file drop zone"
+            onClick={() => !uploading && inputRef.current?.click()}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files[0]); }}
+            style={{
+              position: "relative", borderRadius: 14, padding: "36px 22px",
+              textAlign: "center", cursor: uploading ? "default" : "pointer",
+              background: dragOver ? C.tealSoft : file ? C.emeraldSoft : C.slate50,
+              border: `2px dashed ${dragOver ? C.teal : file ? C.emerald : C.slate300}`,
+              transition: "all 0.18s ease",
+            }}
+          >
+            <input ref={inputRef} type="file" accept={ACCEPTED_EXT.join(",")}
+              onChange={(e) => pick(e.target.files?.[0])} style={{ display: "none" }} />
+            {file ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12, background: `${C.emerald}1A`,
+                  color: C.emerald, display: "flex", alignItems: "center", justifyContent: "center",
+                }}><FileText size={22} /></div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>{file.name}</div>
+                <div style={{ fontSize: 12, color: C.slate500 }}>
+                  {(file.size / 1024).toFixed(1)} KB
+                </div>
+                {!uploading && (
+                  <button onClick={(e) => { e.stopPropagation(); setFile(null); }} style={{
+                    marginTop: 4, background: "none", border: "none", fontSize: 12,
+                    color: C.slate500, cursor: "pointer", textDecoration: "underline",
+                  }}>Replace file</button>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12, background: C.slate100,
+                  color: C.slate400, display: "flex", alignItems: "center", justifyContent: "center",
+                }}><Upload size={22} /></div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.slate700 }}>
+                    Drop a claims file here
+                  </p>
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: C.slate500 }}>
+                    or click to browse — {ACCEPTED_EXT.join(", ")}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-        )}
 
-        {isError && (
-          <div style={{ textAlign: "center", padding: "40px 0", color: T.red600 }}>
-            <AlertTriangle size={28} style={{ margin: "0 auto" }} />
-            <p style={{ marginTop: 10, fontSize: 13 }}>Failed to load batch details.</p>
+          {uploading && (
+            <div>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                fontSize: 12, color: C.slate500, marginBottom: 6,
+              }}>
+                <span>Uploading…</span>
+                <span style={{ fontWeight: 700, color: C.teal }}>{progress}%</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 3, background: C.slate200, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", width: `${progress}%`, background: C.teal,
+                  transition: "width 0.2s ease",
+                }} />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div role="alert" style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 12px", borderRadius: 8,
+              background: C.redSoft, border: `1px solid ${C.red}30`,
+            }}>
+              <AlertTriangle size={15} style={{ color: C.red, flexShrink: 0, marginTop: 1 }} />
+              <span style={{ fontSize: 13, color: C.red }}>{error}</span>
+            </div>
+          )}
+
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+            borderRadius: 8, background: C.slate50, border: `1px solid ${C.slate200}`,
+          }}>
+            <Database size={14} style={{ color: C.slate500 }} />
+            <span style={{ fontSize: 12, color: C.slate500, lineHeight: 1.5 }}>
+              After upload, the batch is <strong>parsed</strong>. Run <em>Process</em> to match
+              patients to OpenEMR records and map ICD-10 codes to HCC categories.
+            </span>
           </div>
-        )}
+        </div>
 
-        {!isLoading && !isError && data && (
-          <>
-            {/* Claims Tab */}
-            {tab === "claims" && (
-              <div>
-                {(data.claims ?? []).length === 0 ? (
-                  <EmptyState
-                    icon={<FileText size={24} />}
-                    title="No claims records"
-                    description="Process the batch to parse individual claim records."
-                  />
-                ) : (
-                  <div
-                    style={{
-                      border: `1px solid ${T.slate200}`,
-                      borderRadius: 10,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {/* Header */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "2fr 1fr 1fr 2fr 90px",
-                        padding: "8px 16px",
-                        backgroundColor: T.slate50,
-                        borderBottom: `1px solid ${T.slate200}`,
-                        gap: 8,
-                      }}
-                    >
-                      {["Patient", "DOS", "Provider", "Diagnoses", "Charges"].map(
-                        (h) => (
-                          <span
-                            key={h}
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.05em",
-                              color: T.slate400,
-                            }}
-                          >
-                            {h}
-                          </span>
-                        )
-                      )}
-                    </div>
-
-                    {(data.claims ?? []).slice(0, 50).map((c, i) => (
-                      <div
-                        key={c.id}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "2fr 1fr 1fr 2fr 90px",
-                          padding: "10px 16px",
-                          borderBottom:
-                            i < (data.claims ?? []).length - 1
-                              ? `1px solid ${T.slate100}`
-                              : "none",
-                          alignItems: "flex-start",
-                          gap: 8,
-                          backgroundColor: i % 2 === 1 ? T.slate50 : T.white,
-                          transition: "background-color 0.12s ease",
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = i % 2 === 1 ? T.slate50 : T.white; }}
-                      >
-                        <div>
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: T.slate800,
-                            }}
-                          >
-                            {c.patient_name ?? "Unknown"}
-                          </div>
-                          {c.patient_id && (
-                            <div
-                              style={{
-                                fontSize: 11,
-                                color: T.slate400,
-                                fontFamily: "monospace",
-                              }}
-                            >
-                              {c.patient_id}
-                            </div>
-                          )}
-                        </div>
-                        <span style={{ fontSize: 12, color: T.slate600 }}>
-                          {c.date_of_service}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: T.slate600,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {c.provider_name ?? "\u2014"}
-                        </span>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                          {c.diagnoses.slice(0, 4).map((dx) => (
-                            <span
-                              key={dx}
-                              style={{
-                                padding: "2px 6px",
-                                borderRadius: 4,
-                                fontSize: 10,
-                                fontFamily: "monospace",
-                                fontWeight: 600,
-                                backgroundColor: c.hcc_mapped
-                                  ? T.blue50
-                                  : T.slate100,
-                                color: c.hcc_mapped ? T.blue700 : T.slate600,
-                                border: `1px solid ${c.hcc_mapped ? T.blue100 : T.slate200}`,
-                              }}
-                            >
-                              {dx}
-                            </span>
-                          ))}
-                          {c.diagnoses.length > 4 && (
-                            <span
-                              style={{
-                                fontSize: 10,
-                                color: T.slate400,
-                                alignSelf: "center",
-                              }}
-                            >
-                              +{c.diagnoses.length - 4} more
-                            </span>
-                          )}
-                        </div>
-                        <span
-                          className="tabular-nums"
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: T.slate700,
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          ${c.charges.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-
-                    {(data.claims ?? []).length > 50 && (
-                      <div
-                        style={{
-                          padding: "10px 16px",
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: T.slate500,
-                          backgroundColor: T.slate50,
-                          borderTop: `1px solid ${T.slate200}`,
-                        }}
-                      >
-                        Showing 50 of {(data.claims ?? []).length} claims
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Diagnoses Tab */}
-            {tab === "diagnoses" && (
-              <div>
-                {(data.diagnoses ?? []).length === 0 ? (
-                  <EmptyState
-                    icon={<Tag size={24} />}
-                    title="No diagnosis records"
-                    description="Process the batch to extract ICD-10 codes."
-                  />
-                ) : (
-                  <div
-                    style={{
-                      border: `1px solid ${T.slate200}`,
-                      borderRadius: 10,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "120px 1fr 100px 80px",
-                        padding: "8px 16px",
-                        backgroundColor: T.slate50,
-                        borderBottom: `1px solid ${T.slate200}`,
-                        gap: 8,
-                      }}
-                    >
-                      {["ICD-10", "Description", "HCC Mapping", "Count"].map(
-                        (h) => (
-                          <span
-                            key={h}
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.05em",
-                              color: T.slate400,
-                            }}
-                          >
-                            {h}
-                          </span>
-                        )
-                      )}
-                    </div>
-
-                    {(data.diagnoses ?? []).map((dx, i) => (
-                      <div
-                        key={dx.icd10_code}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "120px 1fr 100px 80px",
-                          padding: "10px 16px",
-                          borderBottom:
-                            i < (data.diagnoses ?? []).length - 1
-                              ? `1px solid ${T.slate100}`
-                              : "none",
-                          alignItems: "center",
-                          gap: 8,
-                          backgroundColor: i % 2 === 1 ? T.slate50 : T.white,
-                          transition: "background-color 0.12s ease",
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = i % 2 === 1 ? T.slate50 : T.white; }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontFamily: "monospace",
-                            fontWeight: 700,
-                            color: T.slate700,
-                            padding: "3px 7px",
-                            backgroundColor: T.slate100,
-                            borderRadius: 5,
-                            display: "inline-block",
-                          }}
-                        >
-                          {dx.icd10_code}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: T.slate600,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {dx.description ?? "\u2014"}
-                        </span>
-                        {dx.hcc_code ? (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              padding: "3px 8px",
-                              borderRadius: 999,
-                              backgroundColor: T.blue50,
-                              color: T.blue700,
-                              border: `1px solid ${T.blue100}`,
-                              display: "inline-block",
-                            }}
-                          >
-                            HCC {dx.hcc_code}
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              padding: "3px 8px",
-                              borderRadius: 999,
-                              backgroundColor: T.gray100,
-                              color: T.gray400,
-                              display: "inline-block",
-                            }}
-                          >
-                            Unmapped
-                          </span>
-                        )}
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: T.slate700,
-                          }}
-                        >
-                          {dx.count}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* HCC Summary Tab */}
-            {tab === "hcc" && (
-              <div>
-                <p
-                  style={{
-                    margin: "0 0 16px",
-                    fontSize: 13,
-                    color: T.slate500,
-                  }}
-                >
-                  Distribution of HCC codes found in this batch (top 10 by
-                  patient count).
-                </p>
-                <HccBarChart items={data.hcc_summary} />
-              </div>
-            )}
-
-            {/* Unmapped Patients Tab */}
-            {tab === "unmapped" && (
-              <div>
-                {(data.unmapped_patients ?? []).length === 0 ? (
-                  <EmptyState
-                    icon={<CheckCircle size={24} />}
-                    title="All patients matched"
-                    description="Every patient in this batch has been linked to an OpenEMR record."
-                  />
-                ) : (
-                  <div>
-                    <p
-                      style={{
-                        margin: "0 0 14px",
-                        fontSize: 13,
-                        color: T.slate500,
-                      }}
-                    >
-                      {(data.unmapped_patients ?? []).length} patient
-                      {(data.unmapped_patients ?? []).length !== 1 ? "s" : ""} in this
-                      batch could not be automatically matched to OpenEMR
-                      records.
-                    </p>
-                    <div
-                      style={{
-                        border: `1px solid ${T.slate200}`,
-                        borderRadius: 10,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr 80px 140px",
-                          padding: "8px 16px",
-                          backgroundColor: T.slate50,
-                          borderBottom: `1px solid ${T.slate200}`,
-                          gap: 8,
-                        }}
-                      >
-                        {["Patient ID", "Name", "Claims", "Action"].map(
-                          (h) => (
-                            <span
-                              key={h}
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                color: T.slate400,
-                              }}
-                            >
-                              {h}
-                            </span>
-                          )
-                        )}
-                      </div>
-
-                      {(data.unmapped_patients ?? []).map((pt, i) => (
-                        <div
-                          key={pt.claim_patient_id}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr 80px 140px",
-                            padding: "10px 16px",
-                            borderBottom:
-                              i < (data.unmapped_patients ?? []).length - 1
-                                ? `1px solid ${T.slate100}`
-                                : "none",
-                            alignItems: "center",
-                            gap: 8,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontFamily: "monospace",
-                              color: T.slate600,
-                            }}
-                          >
-                            {pt.claim_patient_id}
-                          </span>
-                          <span style={{ fontSize: 13, color: T.slate700 }}>
-                            {pt.patient_name ?? "\u2014"}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: T.slate600,
-                            }}
-                          >
-                            {pt.claim_count}
-                          </span>
-                          <button
-                            onClick={() =>
-                              mapMut.mutate(pt.claim_patient_id)
-                            }
-                            disabled={mapMut.isPending}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              padding: "5px 10px",
-                              borderRadius: 7,
-                              border: `1px solid ${T.blue600}`,
-                              backgroundColor: "transparent",
-                              color: T.blue600,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: mapMut.isPending
-                                ? "not-allowed"
-                                : "pointer",
-                              opacity: mapMut.isPending ? 0.5 : 1,
-                              transition: "all 0.12s ease",
-                            }}
-                          >
-                            <Link2 size={11} />
-                            Map to OpenEMR
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
+        {/* footer */}
+        <div style={{
+          display: "flex", justifyContent: "flex-end", gap: 10,
+          padding: "14px 22px", borderTop: `1px solid ${C.slate200}`, background: C.slate50,
+        }}>
+          <button onClick={onClose} disabled={uploading} style={{
+            height: 38, padding: "0 18px", borderRadius: 8, border: `1px solid ${C.slate200}`,
+            background: C.white, color: C.slate600, fontSize: 13, fontWeight: 500,
+            cursor: uploading ? "not-allowed" : "pointer", opacity: uploading ? 0.5 : 1,
+          }}>Cancel</button>
+          <button onClick={submit} disabled={!file || uploading} style={{
+            height: 38, padding: "0 20px", borderRadius: 8, border: "none",
+            background: !file || uploading ? C.slate300 : `linear-gradient(135deg, ${C.teal} 0%, #0B5951 100%)`,
+            color: C.white, fontSize: 13, fontWeight: 600,
+            cursor: !file || uploading ? "not-allowed" : "pointer",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            boxShadow: !file || uploading ? "none" : "0 2px 10px rgba(15,118,110,0.35)",
+          }}>
+            {uploading
+              ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Uploading…</>
+              : <><Upload size={14} /> Upload Claims</>}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Delete Confirm Dialog
-// ─────────────────────────────────────────────
-
+// ─── Confirm Delete ──────────────────────────────────────────────────────────
 function ConfirmDeleteDialog({
-  batchName,
-  onConfirm,
-  onCancel,
-  isPending,
-}: {
-  batchName: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  isPending: boolean;
-}) {
+  batch, onCancel, onConfirm, pending,
+}: { batch: ClaimsBatch; onCancel: () => void; onConfirm: () => void; pending: boolean }) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(15, 23, 42, 0.55)",
-        zIndex: 110,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
+    <div role="dialog" aria-modal="true" aria-label="Confirm delete batch"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Confirm delete"
-    >
-      <div
-        className="animate-scale-in"
-        style={{
-          backgroundColor: T.white,
-          borderRadius: 14,
-          width: "100%",
-          maxWidth: 420,
-          padding: 28,
-          boxShadow: "0 20px 50px rgba(0,0,0,0.18)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            backgroundColor: T.red50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: T.red600,
-            marginBottom: 16,
-          }}
-        >
-          <Trash2 size={22} />
-        </div>
-        <h3 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: T.slate900 }}>
-          Delete Batch?
-        </h3>
-        <p style={{ margin: "0 0 24px", fontSize: 13, color: T.slate500, lineHeight: 1.6 }}>
-          <strong style={{ color: T.slate700 }}>&ldquo;{batchName}&rdquo;</strong> and
-          all associated claims data will be permanently deleted. This cannot be undone.
+      style={{
+        position: "fixed", inset: 0, zIndex: 110, padding: 16,
+        background: "rgba(15,23,42,0.55)", display: "flex",
+        alignItems: "center", justifyContent: "center",
+      }}>
+      <div className="animate-scale-in" style={{
+        background: C.white, borderRadius: 14, width: "100%", maxWidth: 440,
+        padding: 26, boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 12, background: C.redSoft,
+          color: C.red, display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 14,
+        }}><Trash2 size={22} /></div>
+        <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: C.slate900 }}>Delete batch?</h3>
+        <p style={{ margin: "0 0 22px", fontSize: 13, color: C.slate500, lineHeight: 1.6 }}>
+          <strong style={{ color: C.slate700 }}>&ldquo;{normBatch(batch).name}&rdquo;</strong> and all{" "}
+          {fmtN(normBatch(batch).total)} associated claim records will be permanently deleted.
+          This action cannot be undone.
         </p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            onClick={onCancel}
-            disabled={isPending}
-            style={{
-              height: 38,
-              padding: "0 18px",
-              borderRadius: 8,
-              border: `1px solid ${T.slate200}`,
-              backgroundColor: T.white,
-              fontSize: 13,
-              fontWeight: 500,
-              color: T.slate600,
-              cursor: isPending ? "not-allowed" : "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isPending}
-            style={{
-              height: 38,
-              padding: "0 18px",
-              borderRadius: 8,
-              border: "none",
-              backgroundColor: T.red600,
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.white,
-              cursor: isPending ? "not-allowed" : "pointer",
-              opacity: isPending ? 0.6 : 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            {isPending ? (
-              <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
-            ) : (
-              <Trash2 size={13} />
-            )}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button onClick={onCancel} disabled={pending} style={{
+            height: 38, padding: "0 18px", borderRadius: 8,
+            border: `1px solid ${C.slate200}`, background: C.white,
+            color: C.slate600, fontSize: 13, fontWeight: 500,
+            cursor: pending ? "not-allowed" : "pointer",
+          }}>Cancel</button>
+          <button onClick={onConfirm} disabled={pending} style={{
+            height: 38, padding: "0 18px", borderRadius: 8, border: "none",
+            background: C.red, color: C.white, fontSize: 13, fontWeight: 600,
+            cursor: pending ? "not-allowed" : "pointer", opacity: pending ? 0.6 : 1,
+            display: "inline-flex", alignItems: "center", gap: 6,
+          }}>
+            {pending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Trash2 size={13} />}
             Delete
           </button>
         </div>
@@ -1575,706 +642,779 @@ function ConfirmDeleteDialog({
   );
 }
 
-// ─────────────────────────────────────────────
-// Main Page
-// ─────────────────────────────────────────────
+// ─── Batch Detail Panel (tabbed) ────────────────────────────────────────────
+type DetailTab = "claims" | "diagnoses" | "hcc" | "unmapped";
 
+function DetailPane({ batchId }: { batchId: number }) {
+  const [tab, setTab] = useState<DetailTab>("claims");
+
+  const claimsQ = useQuery({
+    queryKey: ["claims-batch-claims", batchId],
+    queryFn: () => fetchBatchClaims(batchId),
+    enabled: tab === "claims",
+  });
+  const diagQ = useQuery({
+    queryKey: ["claims-batch-diagnoses", batchId],
+    queryFn: () => fetchBatchDiagnoses(batchId),
+    enabled: tab === "diagnoses" || tab === "hcc",
+  });
+  const hccQ = useQuery({
+    queryKey: ["claims-batch-hcc", batchId],
+    queryFn: () => fetchHccSummary(batchId),
+    enabled: tab === "hcc",
+  });
+  const unmapQ = useQuery({
+    queryKey: ["claims-batch-unmapped", batchId],
+    queryFn: () => fetchUnmapped(batchId),
+    enabled: tab === "unmapped",
+  });
+
+  const tabs: { key: DetailTab; label: string; icon: React.ReactNode; count?: number }[] = [
+    { key: "claims",    label: "Claims",            icon: <FileText size={13} />,  count: claimsQ.data?.total },
+    { key: "diagnoses", label: "Diagnoses",         icon: <Tag size={13} />,       count: diagQ.data?.length },
+    { key: "hcc",       label: "HCC Mapping",       icon: <Layers size={13} />,    count: hccQ.data?.length },
+    { key: "unmapped",  label: "Unmatched Patients",icon: <Users size={13} />,     count: unmapQ.data?.length },
+  ];
+
+  return (
+    <div style={{ background: C.white, borderRadius: 12, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
+      {/* Tabs */}
+      <div style={{
+        display: "flex", borderBottom: `1px solid ${C.slate200}`,
+        background: C.slate50, overflowX: "auto",
+      }}>
+        {tabs.map((t) => {
+          const active = tab === t.key;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)} style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "12px 18px", fontSize: 13,
+              fontWeight: active ? 700 : 500,
+              color: active ? C.teal : C.slate500,
+              background: active ? C.white : "transparent",
+              border: "none",
+              borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
+              cursor: "pointer", whiteSpace: "nowrap",
+            }}>
+              {t.icon}
+              {t.label}
+              {t.count != null && (
+                <span style={{
+                  marginLeft: 2, padding: "1px 7px", borderRadius: 999,
+                  fontSize: 10, fontWeight: 700,
+                  background: active ? C.tealSoft : C.slate100,
+                  color: active ? C.teal : C.slate500,
+                }}>{t.count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: 18, minHeight: 200 }}>
+        {tab === "claims" && <ClaimsTabContent q={claimsQ} />}
+        {tab === "diagnoses" && <DiagnosesTabContent q={diagQ} />}
+        {tab === "hcc" && <HccTabContent q={hccQ} />}
+        {tab === "unmapped" && <UnmappedTabContent q={unmapQ} />}
+      </div>
+    </div>
+  );
+}
+
+// Tab contents ────────────────────────────────────────────────────────────────
+type QState<T> = { isLoading: boolean; isError: boolean; data?: T; refetch: () => void };
+
+function TabLoading() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <Skeleton key={i} w="100%" h={36} r={8} />
+      ))}
+    </div>
+  );
+}
+function TabError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div style={{ textAlign: "center", padding: "28px 0" }}>
+      <AlertTriangle size={24} style={{ color: C.red, marginBottom: 8 }} />
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: C.slate500 }}>Failed to load data.</p>
+      <button onClick={onRetry} style={{
+        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600,
+        padding: "6px 12px", borderRadius: 999, border: `1px solid ${C.teal}33`,
+        background: C.tealSoft, color: C.teal, cursor: "pointer",
+      }}><RefreshCw size={12} /> Retry</button>
+    </div>
+  );
+}
+
+function TableShell({ cols, header, children }: { cols: string; header: string[]; children: React.ReactNode }) {
+  return (
+    <div style={{ border: `1px solid ${C.slate200}`, borderRadius: 10, overflow: "hidden" }}>
+      <div style={{
+        display: "grid", gridTemplateColumns: cols, gap: 8,
+        padding: "10px 16px", background: C.slate50, borderBottom: `1px solid ${C.slate200}`,
+      }}>
+        {header.map((h) => (
+          <span key={h} style={{
+            fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+            letterSpacing: "0.05em", color: C.slate500,
+          }}>{h}</span>
+        ))}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ClaimsTabContent({ q }: { q: QState<{ claims: ClaimRecord[]; total: number }> }) {
+  if (q.isLoading) return <TabLoading />;
+  if (q.isError) return <TabError onRetry={q.refetch} />;
+  const rows = q.data?.claims ?? [];
+  if (!rows.length) {
+    return <EmptyState icon={<FileText size={24} />} title="No claim records" description="This batch has no parsed claims yet." />;
+  }
+  const cols = "2fr 1.1fr 1.5fr 2fr 100px";
+  return (
+    <TableShell cols={cols} header={["Patient", "DOS", "Provider", "ICD-10 Codes", "Charges"]}>
+      {rows.slice(0, 100).map((c, i) => {
+        const codes = toList(c.icd10_codes);
+        const matched = !!c.openemr_pid;
+        return (
+          <div key={c.id} className="claims-row" style={{
+            display: "grid", gridTemplateColumns: cols, gap: 8,
+            padding: "11px 16px", alignItems: "flex-start",
+            borderBottom: i < rows.length - 1 ? `1px solid ${C.slate100}` : "none",
+            background: i % 2 === 1 ? C.slate50 : C.white,
+            transition: "background 0.12s ease",
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 600, color: C.slate800,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                {c.patient_name ?? "—"}
+                {matched && (
+                  <span title={`Matched to OpenEMR pid ${c.openemr_pid}`} style={{
+                    fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 999,
+                    background: C.emeraldSoft, color: C.emerald, border: `1px solid ${C.emerald}33`,
+                  }}>MATCHED</span>
+                )}
+              </div>
+              {c.member_id && (
+                <div style={{ fontSize: 11, color: C.slate400, fontFamily: "ui-monospace, monospace" }}>
+                  {c.member_id}
+                </div>
+              )}
+            </div>
+            <span style={{ fontSize: 12, color: C.slate600 }}>{c.date_of_service ?? "—"}</span>
+            <span style={{
+              fontSize: 12, color: C.slate600,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{c.provider_name ?? "—"}</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {codes.slice(0, 5).map((code) => (
+                <span key={code} style={{
+                  padding: "2px 6px", borderRadius: 4, fontSize: 10,
+                  fontFamily: "ui-monospace, monospace", fontWeight: 600,
+                  background: C.tealSoft, color: C.teal,
+                  border: `1px solid ${C.tealBorder}`,
+                }}>{code}</span>
+              ))}
+              {codes.length > 5 && (
+                <span style={{ fontSize: 10, color: C.slate400, alignSelf: "center" }}>
+                  +{codes.length - 5}
+                </span>
+              )}
+              {codes.length === 0 && <span style={{ fontSize: 11, color: C.slate400 }}>—</span>}
+            </div>
+            <span className="tabular-nums" style={{
+              fontSize: 12, fontWeight: 600, color: C.slate700,
+              textAlign: "right", fontFamily: "ui-monospace, monospace",
+            }}>${(c.charges ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+          </div>
+        );
+      })}
+      {(q.data?.total ?? 0) > 100 && (
+        <div style={{
+          padding: "10px 16px", textAlign: "center", fontSize: 12, color: C.slate500,
+          background: C.slate50, borderTop: `1px solid ${C.slate200}`,
+        }}>
+          Showing first 100 of {fmtN(q.data?.total)} claims
+        </div>
+      )}
+    </TableShell>
+  );
+}
+
+function DiagnosesTabContent({ q }: { q: QState<DiagnosisRow[]> }) {
+  if (q.isLoading) return <TabLoading />;
+  if (q.isError) return <TabError onRetry={q.refetch} />;
+  const rows = q.data ?? [];
+  if (!rows.length) {
+    return <EmptyState icon={<Tag size={24} />} title="No diagnoses" description="Process the batch to extract ICD-10 codes." />;
+  }
+  const cols = "140px 1fr 160px 90px 90px";
+  return (
+    <TableShell cols={cols} header={["ICD-10", "HCC Label", "HCC", "Claims", "Patients"]}>
+      {rows.map((d, i) => (
+        <div key={`${d.icd10_code}-${d.hcc_code ?? ""}-${i}`} style={{
+          display: "grid", gridTemplateColumns: cols, gap: 8,
+          padding: "10px 16px", alignItems: "center",
+          borderBottom: i < rows.length - 1 ? `1px solid ${C.slate100}` : "none",
+          background: i % 2 === 1 ? C.slate50 : C.white,
+        }}>
+          <span style={{
+            fontSize: 12, fontFamily: "ui-monospace, monospace", fontWeight: 700,
+            color: C.slate700, padding: "3px 8px", background: C.slate100, borderRadius: 5,
+            display: "inline-block", justifySelf: "start",
+          }}>{d.icd10_code}</span>
+          <span style={{
+            fontSize: 12, color: C.slate600,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{d.hcc_label ?? "—"}</span>
+          {d.hcc_code ? (
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+              background: C.tealSoft, color: C.teal, border: `1px solid ${C.tealBorder}`,
+              justifySelf: "start",
+            }}>HCC {d.hcc_code}</span>
+          ) : (
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 999,
+              background: C.slate100, color: C.slate500, justifySelf: "start",
+            }}>Unmapped</span>
+          )}
+          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: C.slate700 }}>
+            {fmtN(d.claim_count)}
+          </span>
+          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: C.slate700 }}>
+            {fmtN(d.patient_count)}
+          </span>
+        </div>
+      ))}
+    </TableShell>
+  );
+}
+
+function HccTabContent({ q }: { q: QState<HccRow[]> }) {
+  if (q.isLoading) return <TabLoading />;
+  if (q.isError) return <TabError onRetry={q.refetch} />;
+  const rows = q.data ?? [];
+  if (!rows.length) {
+    return <EmptyState icon={<Layers size={24} />} title="No HCC data" description="Process the batch to see HCC distribution." />;
+  }
+  const max = Math.max(...rows.map((r) => r.patient_count ?? 0), 1);
+  return (
+    <div>
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: C.slate500 }}>
+        Ranked HCC distribution for this batch — top categories by unique patient count.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.slice(0, 15).map((h) => {
+          const pct = ((h.patient_count ?? 0) / max) * 100;
+          return (
+            <div key={h.hcc_code} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{
+                width: 74, fontSize: 11, fontWeight: 700,
+                padding: "3px 9px", borderRadius: 999,
+                background: C.tealSoft, color: C.teal,
+                border: `1px solid ${C.tealBorder}`, textAlign: "center", flexShrink: 0,
+              }}>HCC {h.hcc_code}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 12, color: C.slate700, fontWeight: 500,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  marginBottom: 4,
+                }} title={h.hcc_label}>{h.hcc_label || "—"}</div>
+                <div style={{ height: 8, borderRadius: 4, background: C.slate100, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", width: `${pct}%`, borderRadius: 4,
+                    background: `linear-gradient(90deg, ${C.teal}, ${C.emerald})`,
+                    transition: "width 0.4s ease",
+                  }} />
+                </div>
+              </div>
+              <span className="tabular-nums" style={{
+                width: 120, fontSize: 11, color: C.slate500, textAlign: "right", flexShrink: 0,
+              }}>
+                <strong style={{ color: C.slate800 }}>{fmtN(h.patient_count)}</strong> pts · {fmtN(h.diagnosis_count)} dx
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function UnmappedTabContent({ q }: { q: QState<UnmappedRow[]> }) {
+  if (q.isLoading) return <TabLoading />;
+  if (q.isError) return <TabError onRetry={q.refetch} />;
+  const rows = q.data ?? [];
+  if (!rows.length) {
+    return <EmptyState icon={<CheckCircle size={24} />} title="All patients matched" description="Every patient in this batch is linked to an OpenEMR record." />;
+  }
+  const cols = "2fr 120px 80px 1fr 90px";
+  return (
+    <div>
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: C.slate500 }}>
+        {rows.length} distinct patient{rows.length === 1 ? "" : "s"} in this batch could not be auto-matched to an OpenEMR record.
+      </p>
+      <TableShell cols={cols} header={["Patient Name", "DOB", "Sex", "Member ID", "Claims"]}>
+        {rows.map((p, i) => (
+          <div key={`${p.patient_name}-${p.member_id}-${i}`} style={{
+            display: "grid", gridTemplateColumns: cols, gap: 8,
+            padding: "10px 16px", alignItems: "center",
+            borderBottom: i < rows.length - 1 ? `1px solid ${C.slate100}` : "none",
+            background: i % 2 === 1 ? C.slate50 : C.white,
+          }}>
+            <span style={{ fontSize: 13, color: C.slate800, fontWeight: 500 }}>{p.patient_name || "—"}</span>
+            <span style={{ fontSize: 12, color: C.slate600 }}>{p.patient_dob || "—"}</span>
+            <span style={{ fontSize: 12, color: C.slate600 }}>{p.patient_gender || "—"}</span>
+            <span style={{
+              fontSize: 12, color: C.slate600, fontFamily: "ui-monospace, monospace",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{p.member_id || "—"}</span>
+            <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: C.slate700 }}>
+              {fmtN(p.claim_count)}
+            </span>
+          </div>
+        ))}
+      </TableShell>
+    </div>
+  );
+}
+
+// ─── Empty "no batches" hero dropzone ───────────────────────────────────────
+function EmptyHero({ onUpload }: { onUpload: () => void }) {
+  return (
+    <div style={{
+      background: C.white, borderRadius: 16, border: `1px solid ${C.slate200}`,
+      padding: 40, boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+      textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center",
+    }}>
+      <div style={{
+        width: 72, height: 72, borderRadius: 20,
+        background: `linear-gradient(135deg, ${C.tealSoft}, ${C.emeraldSoft})`,
+        color: C.teal, display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: 18, border: `1px solid ${C.tealBorder}`,
+      }}><Upload size={28} /></div>
+      <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: C.slate900 }}>
+        Upload your first claims file
+      </h2>
+      <p style={{ margin: "0 0 20px", fontSize: 14, color: C.slate500, maxWidth: 500, lineHeight: 1.6 }}>
+        Import CSV or X12 837 claims files. We&rsquo;ll parse each claim, match patients to OpenEMR records,
+        and map ICD-10 codes to HCC categories to surface risk-adjustment opportunities.
+      </p>
+      <button onClick={onUpload} style={{
+        display: "inline-flex", alignItems: "center", gap: 8,
+        height: 42, padding: "0 22px", borderRadius: 10, border: "none",
+        background: `linear-gradient(135deg, ${C.teal} 0%, #0B5951 100%)`,
+        color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer",
+        boxShadow: "0 4px 14px rgba(15,118,110,0.35)",
+      }}>
+        <Upload size={16} /> Upload Claims File
+      </button>
+      <div style={{
+        marginTop: 26, paddingTop: 20, width: "100%", maxWidth: 560,
+        borderTop: `1px dashed ${C.slate200}`, display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
+      }}>
+        {[
+          { label: "CSV", hint: "Custom delimited" },
+          { label: "X12 837P", hint: "Professional claims" },
+          { label: "X12 837I", hint: "Institutional claims" },
+        ].map((f) => (
+          <div key={f.label} style={{
+            padding: "12px 10px", borderRadius: 10,
+            background: C.slate50, border: `1px solid ${C.slate200}`,
+          }}>
+            <div style={{
+              fontSize: 12, fontFamily: "ui-monospace, monospace",
+              fontWeight: 700, color: C.teal, marginBottom: 2,
+            }}>{f.label}</div>
+            <div style={{ fontSize: 11, color: C.slate500 }}>{f.hint}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 export default function ClaimsPage() {
   const queryClient = useQueryClient();
+  const { items: toasts, push: toast } = useToasts();
 
   const [showUpload, setShowUpload] = useState(false);
-  const [expandedBatchId, setExpandedBatchId] = useState<number | null>(null);
-  const [deletingBatch, setDeletingBatch] = useState<ClaimsBatch | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<ClaimsBatch | null>(null);
   const [page, setPage] = useState(0);
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
 
-  /* --- Queries ---- */
-
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const statsQ = useQuery({
     queryKey: ["claims-stats"],
     queryFn: fetchClaimsStats,
-    refetchInterval: 15_000,
+    refetchInterval: 20_000,
   });
 
-  const {
-    data: batches = [],
-    isLoading: batchesLoading,
-    isError: batchesError,
-    refetch: refetchBatches,
-  } = useQuery({
+  const batchesQ = useQuery({
     queryKey: ["claims-batches"],
     queryFn: fetchBatches,
-    refetchInterval: 10_000,
+    refetchInterval: 12_000,
   });
 
-  /* --- Mutations --- */
-
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteBatch(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["claims-batches"] });
-      queryClient.invalidateQueries({ queryKey: ["claims-stats"] });
-      setDeletingBatch(null);
-      if (expandedBatchId === deletingBatch?.id) setExpandedBatchId(null);
-    },
-  });
-
-  const processMut = useMutation({
-    mutationFn: (id: number) => processBatch(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["claims-batches"] });
-      queryClient.invalidateQueries({ queryKey: ["claims-stats"] });
-    },
-  });
-
-  const rafMut = useMutation({
-    mutationFn: (id: number) => calculateRAF(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["claims-batches"] });
-      queryClient.invalidateQueries({ queryKey: ["claims-stats"] });
-    },
-  });
-
-  /* --- Pagination --- */
-
-  const totalPages = Math.max(1, Math.ceil(batches.length / PAGE_SIZE));
-  const pagedBatches = batches.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  /* --- Helpers --- */
-
-  const handleUploadSuccess = useCallback(() => {
+  const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["claims-batches"] });
     queryClient.invalidateQueries({ queryKey: ["claims-stats"] });
   }, [queryClient]);
 
-  const toggleDetail = useCallback((id: number) => {
-    setExpandedBatchId((prev) => (prev === id ? null : id));
-  }, []);
+  const processMut = useMutation({
+    mutationFn: (id: number) => processBatchApi(id),
+    onSuccess: (_d, id) => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["claims-batch-claims", id] });
+      toast({ kind: "success", text: "Batch processed — patients matched & HCC mapped." });
+    },
+    onError: (e) => toast({ kind: "error", text: errMsg(e, "Processing failed.") }),
+  });
 
-  const formatDate = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return iso;
-    }
-  };
+  const rafMut = useMutation({
+    mutationFn: (id: number) => calculateRafApi(id),
+    onSuccess: () => {
+      invalidateAll();
+      toast({ kind: "success", text: "RAF calculation complete for matched patients." });
+    },
+    onError: (e) => toast({ kind: "error", text: errMsg(e, "RAF calculation failed.") }),
+  });
 
-  /* --- Error state --- */
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => deleteBatchApi(id),
+    onSuccess: (_d, id) => {
+      invalidateAll();
+      if (expandedId === id) setExpandedId(null);
+      setDeleting(null);
+      toast({ kind: "success", text: "Batch deleted." });
+    },
+    onError: (e) => toast({ kind: "error", text: errMsg(e, "Delete failed.") }),
+  });
 
-  if (batchesError) {
+  const batches = batchesQ.data ?? [];
+
+  // Derived KPI values from stats + batches
+  const kpi = useMemo(() => {
+    const s = statsQ.data;
+    const totalBatches = num(s?.total_batches);
+    const totalClaims = num(s?.total_claims);
+    const totalMatched = num(s?.total_matched_patients);
+    const matchedPct = totalClaims > 0 ? Math.min(100, Math.round((totalMatched / totalClaims) * 100)) : 0;
+    const uniqueHccs = num(s?.unique_hcc_codes);
+    // Rough revenue opportunity: matched patients × unique HCCs × ~$150 avg PMPM uplift (demo estimate)
+    const revenueOpportunity = Math.round(totalMatched * uniqueHccs * 150);
+    return { totalBatches, totalClaims, matchedPct, uniqueHccs, revenueOpportunity, totalMatched };
+  }, [statsQ.data]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(batches.length / PAGE_SIZE));
+  useEffect(() => { if (page > totalPages - 1) setPage(0); }, [totalPages, page]);
+  const paged = batches.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Error state for batches
+  if (batchesQ.isError) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "60vh",
-          gap: 16,
-        }}
-      >
-        <div
-          style={{
-            borderRadius: 16,
-            backgroundColor: T.red50,
-            padding: 20,
-          }}
-        >
-          <AlertTriangle size={40} color={T.red500} />
+      <div style={{ padding: 32 }}>
+        <PageHeader title="Claims Data" icon={<FileText size={22} />} />
+        <div style={{
+          marginTop: 24, padding: 40, borderRadius: 14, background: C.white,
+          border: `1px solid ${C.slate200}`, textAlign: "center",
+        }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14, background: C.redSoft, color: C.red,
+            display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14,
+          }}><AlertTriangle size={26} /></div>
+          <h2 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: C.slate900 }}>
+            Failed to load claims data
+          </h2>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: C.slate500 }}>
+            {errMsg(batchesQ.error, "The claims API is not responding.")}
+          </p>
+          <button onClick={() => batchesQ.refetch()} style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.teal}33`,
+            background: C.tealSoft, color: C.teal, fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}><RefreshCw size={14} /> Retry</button>
         </div>
-        <h2
-          style={{ fontSize: 18, fontWeight: 700, color: T.slate900, margin: 0 }}
-        >
-          Failed to load claims data
-        </h2>
-        <p style={{ fontSize: 14, color: T.slate500, margin: 0 }}>
-          Check that the server is running and try again.
-        </p>
-        <button
-          onClick={() => refetchBatches()}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            borderRadius: 8,
-            border: `1px solid ${T.slate200}`,
-            backgroundColor: T.white,
-            padding: "8px 16px",
-            fontSize: 14,
-            fontWeight: 500,
-            color: T.slate600,
-            cursor: "pointer",
-          }}
-        >
-          <RefreshCw size={16} /> Retry
-        </button>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-      }}
-    >
-      {/* Keyframes */}
+    <div style={{
+      display: "flex", flexDirection: "column", gap: 24,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    }}>
       <style>{`
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes dash-march { to { stroke-dashoffset: -20; } }
+        .claims-row:hover { background: ${C.tealSoft} !important; }
+        .batch-row:hover { background: ${C.tealSoft} !important; }
       `}</style>
 
-      {/* ── Page Header ──────────────────────────────────── */}
+      {/* Header */}
       <PageHeader
         title="Claims Data"
         icon={<FileText size={22} />}
         subtitle={
-          !batchesLoading
-            ? `${batches.length.toLocaleString()} batch${batches.length !== 1 ? "es" : ""} loaded`
+          !batchesQ.isLoading
+            ? `${fmtN(batches.length)} batch${batches.length === 1 ? "" : "es"} · ${fmtN(kpi.totalClaims)} claims indexed`
             : undefined
         }
         actions={
-          <button
-            className="btn-press"
-            onClick={() => setShowUpload(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              height: 40,
-              padding: "0 20px",
-              borderRadius: 10,
-              border: "none",
-              background: "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
-              color: T.white,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              boxShadow: "0 2px 8px rgba(37,99,235,0.35), 0 1px 2px rgba(37,99,235,0.2)",
-            }}
-            aria-label="Upload Claims"
-          >
-            <Upload size={15} />
-            Upload Claims
+          <button onClick={() => setShowUpload(true)} aria-label="Upload claims file" style={{
+            display: "inline-flex", alignItems: "center", gap: 8, height: 40,
+            padding: "0 20px", borderRadius: 10, border: "none",
+            background: `linear-gradient(135deg, ${C.teal} 0%, #0B5951 100%)`,
+            color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(15,118,110,0.35)",
+          }}>
+            <Upload size={15} /> Upload Claims
           </button>
         }
       />
 
-      {/* ── Stats Row ────────────────────────────────────── */}
-      {statsLoading ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className={`premium-card shimmer stagger-${i + 1}`} style={{ padding: 20 }}>
-              <div className="skeleton" style={{ width: 90, height: 12, borderRadius: 4, marginBottom: 10 }} />
-              <div className="skeleton" style={{ width: 64, height: 28, borderRadius: 4, marginBottom: 8 }} />
-              <div className="skeleton" style={{ width: 110, height: 10, borderRadius: 4 }} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 16,
-            marginBottom: 24,
-          }}
-        >
-          <div className="animate-fade-in stagger-1 hover-lift">
-            <StatCard
-              label="Total Batches"
-              value={stats?.total_batches ?? 0}
-              icon={<FileText size={18} />}
-              color={T.blue600}
-            />
-          </div>
-          <div className="animate-fade-in stagger-2 hover-lift">
-            <StatCard
-              label="Claims Processed"
-              value={(stats?.total_claims ?? 0).toLocaleString()}
-              icon={<CheckCircle size={18} />}
-              color={T.emerald600}
-            />
-          </div>
-          <div className="animate-fade-in stagger-3 hover-lift">
-            <StatCard
-              label="Patients Matched"
-              value={(stats?.total_matched_patients ?? 0).toLocaleString()}
-              icon={<User size={18} />}
-              color={T.amber600}
-            />
-          </div>
-          <div className="animate-fade-in stagger-4 hover-lift">
-            <StatCard
-              label="HCC Codes Found"
-              value={(stats?.unique_hcc_codes ?? 0).toLocaleString()}
-              icon={<Tag size={18} />}
-              color={T.violet500}
-            />
-          </div>
-        </div>
-      )}
+      {/* KPI row */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 16,
+      }}>
+        <StatCard loading={statsQ.isLoading} label="Total Batches" value={fmtN(kpi.totalBatches)}
+          subtitle={statsQ.data?.last_upload ? `Last upload ${fmtDate(statsQ.data.last_upload)}` : "No uploads yet"}
+          icon={<Layers size={18} />} color={C.teal} />
+        <StatCard loading={statsQ.isLoading} label="Total Claims" value={fmtN(kpi.totalClaims)}
+          subtitle="All ingested claim records" icon={<FileText size={18} />} color={C.blue} />
+        <StatCard loading={statsQ.isLoading} label="Matched Patients" value={fmtN(kpi.totalMatched)}
+          subtitle={`${kpi.matchedPct}% of claims linked`} icon={<Users size={18} />} color={C.emerald} />
+        <StatCard loading={statsQ.isLoading} label="Top HCCs Identified" value={fmtN(kpi.uniqueHccs)}
+          subtitle="Unique HCC categories" icon={<Tag size={18} />} color={C.violet} />
+        <StatCard loading={statsQ.isLoading} label="Revenue Opportunity" value={fmt$(kpi.revenueOpportunity)}
+          subtitle="Estimated (matched × HCCs)" icon={<DollarSign size={18} />} color={C.amber} />
+      </div>
 
-      {/* ── Batches Table ────────────────────────────────── */}
-      <div
-        className="premium-card animate-slide-up"
-        style={{
+      {/* Batch table or empty hero */}
+      {batchesQ.isLoading ? (
+        <div style={{
+          background: C.white, borderRadius: 14, border: `1px solid ${C.slate200}`,
           overflow: "hidden",
-        }}
-      >
-        {/* Column header */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 90px 200px 110px 110px 160px",
-            alignItems: "center",
-            padding: "12px 16px 12px 20px",
-            background: "linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)",
-            borderBottom: `2px solid ${T.slate200}`,
-            gap: 8,
-          }}
-        >
-          {[
-            "Batch Name",
-            "File Type",
-            "Claims",
-            "Status",
-            "Uploaded",
-            "Actions",
-          ].map((h) => (
-            <span
-              key={h}
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: T.slate500,
-              }}
-            >
-              {h}
-            </span>
-          ))}
-        </div>
-
-        {/* Loading skeleton */}
-        {batchesLoading &&
-          Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className={`stagger-${Math.min(i + 1, 6)}`}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 90px 200px 110px 110px 160px",
-                alignItems: "center",
-                padding: "0 16px 0 20px",
-                height: 60,
-                borderBottom: `1px solid ${T.slate100}`,
-                gap: 8,
-              }}
-            >
-              {[180, 60, 140, 80, 80, 120].map((w, j) => (
-                <div
-                  key={j}
-                  className="skeleton shimmer"
-                  style={{
-                    width: w,
-                    height: 12,
-                    borderRadius: 4,
-                  }}
-                />
-              ))}
+        }}>
+          <div style={{
+            padding: "14px 20px", background: C.slate50,
+            borderBottom: `1px solid ${C.slate200}`,
+          }}><Skeleton w={180} h={14} /></div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} style={{
+              display: "grid", gap: 12,
+              gridTemplateColumns: "2fr 80px 1.2fr 110px 120px 140px",
+              padding: "18px 20px", borderBottom: `1px solid ${C.slate100}`, alignItems: "center",
+            }}>
+              <Skeleton w="70%" />
+              <Skeleton w={50} />
+              <Skeleton w="60%" />
+              <Skeleton w={70} />
+              <Skeleton w={90} />
+              <Skeleton w={110} />
             </div>
           ))}
+        </div>
+      ) : batches.length === 0 ? (
+        <EmptyHero onUpload={() => setShowUpload(true)} />
+      ) : (
+        <div style={{
+          background: C.white, borderRadius: 14, border: `1px solid ${C.slate200}`,
+          overflow: "hidden", boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+        }}>
+          {/* table header */}
+          <div style={{
+            display: "grid", gap: 12,
+            gridTemplateColumns: "2fr 80px 1.2fr 110px 120px 150px",
+            alignItems: "center", padding: "13px 20px",
+            background: `linear-gradient(135deg, ${C.slate50}, ${C.slate100})`,
+            borderBottom: `2px solid ${C.slate200}`,
+          }}>
+            {["Batch", "Format", "Claims / Match", "Status", "Uploaded", "Actions"].map((h) => (
+              <span key={h} style={{
+                fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.06em", color: C.slate500,
+              }}>{h}</span>
+            ))}
+          </div>
 
-        {/* Empty state */}
-        {!batchesLoading && batches.length === 0 && (
-          <EmptyState
-            icon={<FileSearch size={24} />}
-            title="No claims batches yet"
-            description="Upload a claims file to get started with claims processing and HCC mapping."
-          />
-        )}
-
-        {/* Batch rows */}
-        {!batchesLoading &&
-          pagedBatches.map((batch) => {
-            const isExpanded = expandedBatchId === batch.id;
-            const isHovered = hoveredRow === batch.id;
-            const isProcessRunning =
-              processMut.isPending || rafMut.isPending;
-
-            const totalClaims = batch.total_claims;
-            const processed = batch.processed_claims;
-            const failed = batch.failed_claims;
-            const pct =
-              totalClaims > 0 ? Math.round((processed / totalClaims) * 100) : 0;
-
+          {/* rows */}
+          {paged.map((b, idx) => {
+            const expanded = expandedId === b.id;
+            const n = normBatch(b);
+            const total = n.total;
+            const matched = n.matched;
+            const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
+            const canProcess = n.status === "uploaded" || n.status === "parsed" || n.status === "failed";
+            const canRaf = n.status === "completed" || n.status === "parsed";
             return (
-              <React.Fragment key={batch.id}>
-                {/* Row */}
+              <React.Fragment key={b.id}>
                 <div
-                  onMouseEnter={() => setHoveredRow(batch.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                  className="animate-fade-in"
+                  className="batch-row"
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 90px 200px 110px 110px 160px",
-                    alignItems: "center",
-                    padding: "0 16px 0 20px",
-                    height: 60,
-                    borderBottom: isExpanded
-                      ? `1px solid ${T.blue100}`
-                      : `1px solid ${T.slate100}`,
-                    backgroundColor: isExpanded
-                      ? T.blue50
-                      : isHovered
-                      ? "#EFF6FF"
-                      : pagedBatches.indexOf(batch) % 2 === 1
-                      ? T.slate50
-                      : T.white,
-                    gap: 8,
-                    transition: "all 0.15s ease",
-                    ...(isHovered && !isExpanded ? { boxShadow: "inset 3px 0 0 0 #3B82F6" } : {}),
+                    display: "grid", gap: 12,
+                    gridTemplateColumns: "2fr 80px 1.2fr 110px 120px 150px",
+                    alignItems: "center", padding: "14px 20px",
+                    borderBottom: expanded ? `1px solid ${C.tealBorder}` : `1px solid ${C.slate100}`,
+                    background: expanded ? C.tealSoft : idx % 2 === 1 ? C.slate50 : C.white,
+                    transition: "background 0.15s ease",
                   }}
                 >
-                  {/* Batch Name */}
+                  {/* Batch */}
                   <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      cursor: "pointer",
-                      minWidth: 0,
-                    }}
-                    onClick={() => toggleDetail(batch.id)}
-                    role="button"
-                    tabIndex={0}
-                    aria-expanded={isExpanded}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ")
-                        toggleDetail(batch.id);
-                    }}
+                    role="button" tabIndex={0} aria-expanded={expanded}
+                    onClick={() => setExpandedId((p) => (p === b.id ? null : b.id))}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setExpandedId((p) => (p === b.id ? null : b.id)); }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 0 }}
                   >
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        backgroundColor: `${T.blue600}1A`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: T.blue600,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <FileText size={15} />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: T.slate900,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {batch.batch_name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: T.slate400,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {batch.file_name}
+                    <div style={{
+                      width: 34, height: 34, borderRadius: 9, background: C.tealSoft,
+                      color: C.teal, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      border: `1px solid ${C.tealBorder}`,
+                    }}><FileText size={15} /></div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 600, color: C.slate900,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{n.name}</div>
+                      <div style={{
+                        fontSize: 11, color: C.slate500,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        #{b.id} · {n.filename}
                       </div>
                     </div>
-                    <div style={{ flexShrink: 0, color: T.slate400 }}>
-                      {isExpanded ? (
-                        <ChevronUp size={14} />
-                      ) : (
-                        <ChevronDown size={14} />
-                      )}
-                    </div>
+                    <span style={{ color: C.slate400, flexShrink: 0 }}>
+                      {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </span>
                   </div>
 
-                  {/* File Type */}
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: "3px 8px",
-                      borderRadius: 5,
-                      backgroundColor: T.slate100,
-                      color: T.slate600,
-                      fontFamily: "monospace",
-                      display: "inline-block",
-                    }}
-                  >
-                    {fileTypeLabel(batch.file_type)}
-                  </span>
+                  {/* Format */}
+                  <FormatPill format={n.format} />
 
                   {/* Claims progress */}
-                  <div>
-                    <div
-                      className="tabular-nums"
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 11,
-                        color: T.slate500,
-                        marginBottom: 4,
-                      }}
-                    >
-                      <span>
-                        <strong style={{ color: T.slate700 }}>
-                          {processed.toLocaleString()}
-                        </strong>
-                        /{totalClaims.toLocaleString()}
-                      </span>
-                      {failed > 0 && (
-                        <span style={{ color: T.red600, fontWeight: 600 }}>
-                          {failed} failed
-                        </span>
-                      )}
+                  <div style={{ minWidth: 0 }}>
+                    <div className="tabular-nums" style={{
+                      fontSize: 11, color: C.slate500, marginBottom: 4,
+                      display: "flex", justifyContent: "space-between",
+                    }}>
+                      <span><strong style={{ color: C.slate800 }}>{fmtN(matched)}</strong> / {fmtN(total)}</span>
+                      <span style={{ color: C.teal, fontWeight: 700 }}>{pct}%</span>
                     </div>
-                    <div
-                      style={{
-                        height: 5,
-                        borderRadius: 3,
-                        backgroundColor: T.slate100,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "100%",
-                          width: `${pct}%`,
-                          borderRadius: 3,
-                          backgroundColor:
-                            batch.status === "failed"
-                              ? T.red500
-                              : batch.status === "completed"
-                              ? T.emerald500
-                              : T.blue500,
-                          transition: "width 0.3s ease",
-                        }}
-                      />
+                    <div style={{ height: 5, borderRadius: 3, background: C.slate100, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%", width: `${pct}%`, borderRadius: 3,
+                        background: n.status === "failed" ? C.red
+                          : n.status === "completed" ? C.emerald
+                          : C.teal,
+                        transition: "width 0.3s ease",
+                      }} />
                     </div>
                   </div>
 
                   {/* Status */}
-                  <StatusBadge status={batch.status} />
+                  <StatusBadge status={n.status} />
 
-                  {/* Uploaded date */}
-                  <span style={{ fontSize: 12, color: T.slate500 }}>
-                    {formatDate(batch.created_at)}
-                  </span>
+                  {/* Uploaded */}
+                  <span style={{ fontSize: 12, color: C.slate500 }}>{fmtDate(b.created_at)}</span>
 
                   {/* Actions */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* View Details */}
-                    <button
-                      onClick={() => toggleDetail(batch.id)}
-                      title="View Details"
-                      aria-label="View batch details"
-                      style={actionBtnStyle(isExpanded ? T.blue600 : undefined)}
-                    >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    onClick={(e) => e.stopPropagation()}>
+                    <IconBtn title="View details" color={expanded ? C.teal : undefined}
+                      onClick={() => setExpandedId((p) => (p === b.id ? null : b.id))}>
                       <Eye size={13} />
-                    </button>
-
-                    {/* Process */}
-                    {(batch.status === "uploaded" ||
-                      batch.status === "failed") && (
-                      <button
-                        onClick={() => processMut.mutate(batch.id)}
-                        disabled={isProcessRunning}
-                        title="Process Batch"
-                        aria-label="Process batch"
-                        style={actionBtnStyle(T.emerald600)}
-                      >
-                        <Play size={13} />
-                      </button>
+                    </IconBtn>
+                    {canProcess && (
+                      <IconBtn title="Process batch" color={C.teal}
+                        disabled={processMut.isPending}
+                        onClick={() => processMut.mutate(b.id)}>
+                        {processMut.isPending && processMut.variables === b.id
+                          ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                          : <Play size={13} />}
+                      </IconBtn>
                     )}
-
-                    {/* Calculate RAF */}
-                    {batch.status === "completed" && (
-                      <button
-                        onClick={() => rafMut.mutate(batch.id)}
-                        disabled={isProcessRunning}
-                        title="Calculate RAF"
-                        aria-label="Calculate RAF scores"
-                        style={actionBtnStyle(T.amber600)}
-                      >
-                        <Calculator size={13} />
-                      </button>
+                    {canRaf && (
+                      <IconBtn title="Calculate RAF" color={C.amber}
+                        disabled={rafMut.isPending}
+                        onClick={() => rafMut.mutate(b.id)}>
+                        {rafMut.isPending && rafMut.variables === b.id
+                          ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                          : <Calculator size={13} />}
+                      </IconBtn>
                     )}
-
-                    {/* Delete */}
-                    <button
-                      onClick={() => setDeletingBatch(batch)}
-                      title="Delete Batch"
-                      aria-label="Delete batch"
-                      style={actionBtnStyle(T.red600)}
-                    >
+                    <IconBtn title="Delete batch" color={C.red}
+                      onClick={() => setDeleting(b)}>
                       <Trash2 size={13} />
-                    </button>
+                    </IconBtn>
                   </div>
                 </div>
 
-                {/* Expanded Detail */}
-                {isExpanded && (
-                  <div
-                    style={{
-                      padding: "0 20px 20px",
-                      backgroundColor: T.blue50,
-                      borderBottom: `1px solid ${T.slate200}`,
-                    }}
-                  >
-                    <BatchDetailPanel
-                      batchId={batch.id}
-                      onClose={() => setExpandedBatchId(null)}
-                      onMapSuccess={() => {
-                        queryClient.invalidateQueries({
-                          queryKey: ["claims-stats"],
-                        });
-                      }}
-                    />
+                {expanded && (
+                  <div style={{
+                    padding: "0 20px 20px", background: C.tealSoft,
+                    borderBottom: `1px solid ${C.slate200}`,
+                  }}>
+                    <DetailPane batchId={b.id} />
                   </div>
                 )}
               </React.Fragment>
             );
           })}
 
-        {/* Pagination */}
-        {!batchesLoading && totalPages > 1 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 16,
-              padding: "14px 20px",
-              borderTop: `1px solid ${T.slate200}`,
-              backgroundColor: T.slate50,
-            }}
-          >
-            <button
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "6px 14px",
-                borderRadius: 8,
-                border: `1px solid ${T.slate200}`,
-                backgroundColor: T.white,
-                fontSize: 13,
-                fontWeight: 500,
-                color: page === 0 ? T.slate300 : T.slate600,
-                cursor: page === 0 ? "not-allowed" : "pointer",
-                opacity: page === 0 ? 0.5 : 1,
-              }}
-              aria-label="Previous page"
-            >
-              <ChevronLeft size={14} /> Previous
-            </button>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 14, padding: "14px 20px", borderTop: `1px solid ${C.slate200}`, background: C.slate50,
+            }}>
+              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} style={{
+                padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.slate200}`,
+                background: C.white, color: page === 0 ? C.slate300 : C.slate600,
+                fontSize: 13, fontWeight: 500, cursor: page === 0 ? "not-allowed" : "pointer",
+              }}>Previous</button>
+              <span className="tabular-nums" style={{ fontSize: 13, color: C.slate500 }}>
+                Page <strong style={{ color: C.slate900 }}>{page + 1}</strong> of <strong style={{ color: C.slate900 }}>{totalPages}</strong>
+              </span>
+              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{
+                padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.slate200}`,
+                background: C.white, color: page >= totalPages - 1 ? C.slate300 : C.slate600,
+                fontSize: 13, fontWeight: 500, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
+              }}>Next</button>
+            </div>
+          )}
+        </div>
+      )}
 
-            <span className="tabular-nums" style={{ fontSize: 13, color: T.slate500 }}>
-              Page{" "}
-              <strong style={{ color: T.slate900 }}>{page + 1}</strong> of{" "}
-              <strong style={{ color: T.slate900 }}>{totalPages}</strong>
-            </span>
-
-            <button
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "6px 14px",
-                borderRadius: 8,
-                border: `1px solid ${T.slate200}`,
-                backgroundColor: T.white,
-                fontSize: 13,
-                fontWeight: 500,
-                color: page >= totalPages - 1 ? T.slate300 : T.slate600,
-                cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-                opacity: page >= totalPages - 1 ? 0.5 : 1,
-              }}
-              aria-label="Next page"
-            >
-              Next <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Upload Dialog ────────────────────────────────── */}
+      {/* Modals + toasts */}
       {showUpload && (
         <UploadDialog
           onClose={() => setShowUpload(false)}
-          onSuccess={handleUploadSuccess}
+          onUploaded={(id, name) => {
+            invalidateAll();
+            if (id) setExpandedId(id);
+            toast({ kind: "success", text: `Uploaded ${name}. Parsed and ready to process.` });
+          }}
         />
       )}
-
-      {/* ── Delete Confirm ───────────────────────────────── */}
-      {deletingBatch && (
+      {deleting && (
         <ConfirmDeleteDialog
-          batchName={deletingBatch.batch_name}
-          isPending={deleteMut.isPending}
-          onConfirm={() => deleteMut.mutate(deletingBatch.id)}
-          onCancel={() => setDeletingBatch(null)}
+          batch={deleting}
+          pending={deleteMut.isPending}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => deleteMut.mutate(deleting.id)}
         />
       )}
+      <ToastStack items={toasts} />
     </div>
   );
-}
-
-// ─────────────────────────────────────────────
-// Action button style helper
-// ─────────────────────────────────────────────
-
-function actionBtnStyle(accentColor?: string): React.CSSProperties {
-  return {
-    width: 30,
-    height: 30,
-    borderRadius: 7,
-    border: `1px solid ${accentColor ? `${accentColor}30` : "#E2E8F0"}`,
-    backgroundColor: accentColor ? `${accentColor}0D` : "#F8FAFC",
-    color: accentColor ?? "#64748B",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "all 0.15s ease",
-    flexShrink: 0,
-    boxShadow: accentColor ? `0 1px 3px ${accentColor}15` : "none",
-  };
 }

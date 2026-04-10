@@ -58,7 +58,9 @@ function formatBytes(n: number | null | undefined): string {
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString();
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+      ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   } catch {
     return iso;
   }
@@ -278,7 +280,7 @@ export default function UploadsPage() {
                   : "Upload finished with some errors"}
             </div>
             <span style={{ marginLeft: "auto", ...statusPillStyle(lastResult.status) }}>
-              {lastResult.status}
+              {lastResult.status.charAt(0).toUpperCase() + lastResult.status.slice(1)}
             </span>
           </div>
           <div
@@ -350,10 +352,58 @@ export default function UploadsPage() {
           }}
         >
           {histLoading ? (
-            <div style={{ padding: 24, color: C.textSubtle, fontSize: 14 }}>Loading…</div>
+            <div style={{ padding: 16 }}>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="raf-skel"
+                  style={{
+                    height: 44,
+                    borderRadius: 8,
+                    marginBottom: i === 2 ? 0 : 8,
+                    background: `linear-gradient(90deg, ${C.bgSubtle} 0%, ${C.borderSoft} 50%, ${C.bgSubtle} 100%)`,
+                    backgroundSize: "200% 100%",
+                    animation: "rafSkelShimmer 1.4s ease-in-out infinite",
+                  }}
+                />
+              ))}
+              <style>{`@keyframes rafSkelShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+            </div>
           ) : !history?.uploads?.length ? (
-            <div style={{ padding: 28, textAlign: "center", color: C.textSubtle, fontSize: 14 }}>
-              No uploads yet. Drop a file above to get started.
+            <div style={{ padding: "44px 24px", textAlign: "center" }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  background: C.brandSoft,
+                  color: C.brand,
+                  marginBottom: 12,
+                }}
+              >
+                <FileSpreadsheet size={24} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                No uploads yet
+              </div>
+              <div style={{ fontSize: 13, color: C.textSubtle, marginBottom: 14 }}>
+                Drop a CSV or Excel file above to import your first batch of patients.
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  ...btnSecondary,
+                  borderColor: C.brand,
+                  color: C.brand,
+                  background: C.brandSoft,
+                }}
+              >
+                <Upload size={14} /> Upload a file
+              </button>
             </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -386,14 +436,16 @@ export default function UploadsPage() {
                     </td>
                     <td style={{ ...td, color: C.textMuted }}>{formatDate(u.created_at)}</td>
                     <td style={{ ...td, textAlign: "right", color: C.text, fontWeight: 600 }}>
-                      {u.row_count_imported}
+                      {u.row_count_imported.toLocaleString("en-US")}
                       <span style={{ color: C.textSubtle, fontWeight: 400 }}>
                         {" "}
-                        / {u.row_count_total}
+                        / {u.row_count_total.toLocaleString("en-US")}
                       </span>
                     </td>
                     <td style={td}>
-                      <span style={statusPillStyle(u.status)}>{u.status}</span>
+                      <span style={statusPillStyle(u.status)}>
+                        {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
+                      </span>
                     </td>
                     <td style={{ ...td, textAlign: "right" }}>
                       <button
@@ -445,7 +497,9 @@ function MiniStat({ label, value, color }: { label: string; value: number; color
       <div style={{ fontSize: 11, color: C.label, textTransform: "uppercase", letterSpacing: 0.5 }}>
         {label}
       </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color, marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color, marginTop: 2 }}>
+        {value.toLocaleString("en-US")}
+      </div>
     </div>
   );
 }

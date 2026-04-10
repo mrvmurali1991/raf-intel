@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
+import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from "lucide-react";
 import { getRecaptureGapsReport } from "@/lib/api";
 import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 
@@ -80,7 +80,7 @@ export default function RecapturePage() {
   const [sortBy, setSortBy] = useState<SortKey>("priority");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useQuery<RecaptureReport>({
+  const { data, isLoading, isError, refetch } = useQuery<RecaptureReport>({
     queryKey: ["recapture-gaps", year],
     queryFn: () => getRecaptureGapsReport(year) as unknown as Promise<RecaptureReport>,
   });
@@ -163,7 +163,7 @@ export default function RecapturePage() {
   if (isLoading) {
     return (
       <div style={{ padding: 32 }}>
-        <PageHeader title="Recapture Gaps" subtitle="Loading..." />
+        <PageHeader title="Recapture Gaps" subtitle="Loading recapture opportunities…" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
           {[1, 2, 3].map((i) => (
             <div key={i} className="premium-card shimmer" style={{ height: 100, borderRadius: 12 }} />
@@ -178,7 +178,17 @@ export default function RecapturePage() {
     return (
       <div style={{ padding: 32 }}>
         <PageHeader title="Recapture Gaps" />
-        <EmptyState title="Failed to load recapture data" description="Please try again later or contact support." />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", fontSize: 14, marginTop: 16 }}>
+          <AlertTriangle size={18} />
+          <span style={{ flex: 1 }}>Failed to load recapture data. Please try again.</span>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#fff", color: "#B91C1C", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
+        </div>
       </div>
     );
   }

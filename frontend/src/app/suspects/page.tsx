@@ -1835,7 +1835,7 @@ function SuspectDrawer({
   const cConf = confColor(conf);
 
   // Parse evidence_detail if it's a JSON string
-  let evidenceLines: { label: string; value: string }[] = [];
+  const evidenceLines: { label: string; value: string }[] = [];
   const detail = s.evidence_detail;
   try {
     const obj =

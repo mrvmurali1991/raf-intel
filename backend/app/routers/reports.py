@@ -81,27 +81,13 @@ def revenue_opportunity(year: int = Query(default=None),
 
     try:
         # Count distinct patients that have been through AI analysis — active connections only.
-        # raf_encounter_analysis uses "pid" while ACTIVE_PATIENTS_SUBQUERY targets "patient_id";
-        # we use a correlated EXISTS check instead to keep the query clean.
+        # When no EMR is active, scope to uploaded patients instead.
         with raf_cursor() as cur:
             cur.execute(
                 """
                 SELECT COUNT(DISTINCT ea.pid) AS cnt
                 FROM raf_encounter_analysis ea
-                WHERE (
-                    EXISTS (
-                        SELECT 1
-                        FROM emr_patient_matches pm
-                        JOIN emr_connections ec ON ec.id = pm.connection_id
-                        WHERE ec.is_active = 1
-                          AND pm.raf_patient_id = ea.pid
-                          AND pm.raf_patient_id IS NOT NULL
-                    )
-                    OR EXISTS (
-                        SELECT 1 FROM emr_connections
-                        WHERE connection_type = 'direct_db' AND is_active = 1
-                    )
-                )
+                WHERE ea.pid IN (SELECT id FROM patients WHERE is_active = 1)
                 """
             )
             row = cur.fetchone()
@@ -134,7 +120,7 @@ def revenue_opportunity(year: int = Query(default=None),
             billing_rows = cur.fetchall()
 
         # Sum AI RAF — latest overall_score per patient from raf_encounter_analysis,
-        # restricted to patients from active EMR connections.
+        # restricted to active patients (works for both EMR and uploaded patients).
         with raf_cursor() as cur:
             cur.execute(
                 """
@@ -142,20 +128,7 @@ def revenue_opportunity(year: int = Query(default=None),
                 FROM raf_encounter_analysis
                 WHERE overall_score IS NOT NULL
                   AND YEAR(analyzed_at) = %s
-                  AND (
-                      EXISTS (
-                          SELECT 1
-                          FROM emr_patient_matches pm
-                          JOIN emr_connections ec ON ec.id = pm.connection_id
-                          WHERE ec.is_active = 1
-                            AND pm.raf_patient_id = raf_encounter_analysis.pid
-                            AND pm.raf_patient_id IS NOT NULL
-                      )
-                      OR EXISTS (
-                          SELECT 1 FROM emr_connections
-                          WHERE connection_type = 'direct_db' AND is_active = 1
-                      )
-                  )
+                  AND pid IN (SELECT id FROM patients WHERE is_active = 1)
                 ORDER BY pid, encounter_id DESC
                 """,
                 (calc_year,),
@@ -260,7 +233,7 @@ def patient_scorecard(year: int = Query(default=None),
             )
             billing_rows = cur.fetchall()
 
-        # Latest AI overall_score per patient — active connections only
+        # Latest AI overall_score per patient — scoped to active patients
         with raf_cursor() as cur:
             cur.execute(
                 """
@@ -268,27 +241,14 @@ def patient_scorecard(year: int = Query(default=None),
                        MAX(overall_score) AS ai_raf,
                        MAX(hcc_opportunity_count) AS hcc_count_ai
                 FROM raf_encounter_analysis
-                WHERE (
-                    EXISTS (
-                        SELECT 1
-                        FROM emr_patient_matches pm
-                        JOIN emr_connections ec ON ec.id = pm.connection_id
-                        WHERE ec.is_active = 1
-                          AND pm.raf_patient_id = raf_encounter_analysis.pid
-                          AND pm.raf_patient_id IS NOT NULL
-                    )
-                    OR EXISTS (
-                        SELECT 1 FROM emr_connections
-                        WHERE connection_type = 'direct_db' AND is_active = 1
-                    )
-                )
+                WHERE pid IN (SELECT id FROM patients WHERE is_active = 1)
                 GROUP BY pid
                 """,
             )
             ai_rows = cur.fetchall()
 
     except NoActiveEMRConnection:
-        return []
+        ai_rows = []
     except Exception as exc:
         logger.error("patient_scorecard db error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -546,29 +506,60 @@ def recapture_gaps_report(year: int = Query(default=None),
         LIMIT 1000
     """
 
+    gaps: list[dict[str, Any]] = []
     try:
         with openemr_cursor() as cur:
             cur.execute(sql, (f"{calc_year}-01-01", f"{calc_year + 1}-01-01"))
             rows = cur.fetchall()
+        for row in rows:
+            emr_pid = int(row["pid"])
+            names = emr_pid_to_name.get(emr_pid, {})
+            raf_patient_id = emr_pid_to_id.get(emr_pid, emr_pid)
+            gaps.append({
+                "pid": raf_patient_id,
+                "first_name": names.get("first_name", ""),
+                "last_name": names.get("last_name", ""),
+                "condition": row.get("title") or "",
+                "icd_code": row.get("diagnosis") or "",
+                "onset_date": row["begdate"].isoformat() if hasattr(row.get("begdate"), "isoformat") else (row.get("begdate") or ""),
+            })
     except NoActiveEMRConnection:
-        return {"gaps": [], "patients_affected": 0, "total_gaps": 0}
+        pass  # Fall through to suspect-conditions fallback below
     except Exception as exc:
         logger.error("recapture_gaps_report db error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
 
-    gaps: list[dict[str, Any]] = []
-    for row in rows:
-        emr_pid = int(row["pid"])
-        names = emr_pid_to_name.get(emr_pid, {})
-        raf_patient_id = emr_pid_to_id.get(emr_pid, emr_pid)
-        gaps.append({
-            "pid": raf_patient_id,
-            "first_name": names.get("first_name", ""),
-            "last_name": names.get("last_name", ""),
-            "condition": row.get("title") or "",
-            "icd_code": row.get("diagnosis") or "",
-            "onset_date": row["begdate"].isoformat() if hasattr(row.get("begdate"), "isoformat") else (row.get("begdate") or ""),
-        })
+    # When no OpenEMR gaps found (e.g. EMR off + uploaded patients), fall back to
+    # open suspect conditions as recapture opportunities.
+    if not gaps:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT sc.patient_id, sc.suspect_icd10, sc.suspect_hcc,
+                           sc.evidence_detail, sc.created_at,
+                           p.first_name, p.last_name
+                    FROM raf_suspect_conditions sc
+                    JOIN patients p ON p.id = sc.patient_id
+                    WHERE sc.status = 'open'
+                      AND {ACTIVE_PATIENTS_SUBQUERY}
+                      AND sc.tenant_id = %s
+                    ORDER BY sc.confidence_score DESC
+                    LIMIT 1000
+                    """,
+                    (tenant_id,),
+                )
+                sc_rows = cur.fetchall()
+            for row in sc_rows:
+                gaps.append({
+                    "pid": int(row["patient_id"]),
+                    "first_name": row.get("first_name") or "",
+                    "last_name": row.get("last_name") or "",
+                    "condition": row.get("evidence_detail") or row.get("suspect_icd10") or "",
+                    "icd_code": row.get("suspect_icd10") or "",
+                    "onset_date": row["created_at"].isoformat() if hasattr(row.get("created_at"), "isoformat") else str(row.get("created_at") or ""),
+                })
+        except Exception as exc:
+            logger.warning("recapture_gaps_report suspect fallback error: %s", exc)
 
     # Distinct patients with at least one gap
     patients_affected = len({g["pid"] for g in gaps})
@@ -674,11 +665,10 @@ def data_completeness(
         for row in rows:
             counts[row["metric"]] = int(row["cnt"])
     except NoActiveEMRConnection:
-        return {
-            "total_patients": counts.get("total_patients", 0),
-            "categories": [],
-            "completeness_score": 0,
-        }
+        # No EMR available — clinical categories from OpenEMR are unavailable,
+        # but we still return total_patients and zero-filled categories so the
+        # frontend renders properly.
+        pass
     except Exception as exc:
         logger.error("data_completeness db error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -786,20 +776,7 @@ def workflow_summary(
                     """
                     SELECT COUNT(DISTINCT ea.pid) AS cnt
                     FROM raf_encounter_analysis ea
-                    WHERE (
-                        EXISTS (
-                            SELECT 1
-                            FROM emr_patient_matches pm
-                            JOIN emr_connections ec ON ec.id = pm.connection_id
-                            WHERE ec.is_active = 1
-                              AND pm.raf_patient_id = ea.pid
-                              AND pm.raf_patient_id IS NOT NULL
-                        )
-                        OR EXISTS (
-                            SELECT 1 FROM emr_connections
-                            WHERE connection_type = 'direct_db' AND is_active = 1
-                        )
-                    )
+                    WHERE ea.pid IN (SELECT id FROM patients WHERE is_active = 1)
                     """
                 )
                 row = cur.fetchone()
@@ -820,20 +797,7 @@ def workflow_summary(
                 FROM raf_encounter_analysis
                 WHERE (analyzed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                    OR created_at  >= DATE_SUB(NOW(), INTERVAL 7 DAY))
-                  AND (
-                      EXISTS (
-                          SELECT 1
-                          FROM emr_patient_matches pm
-                          JOIN emr_connections ec ON ec.id = pm.connection_id
-                          WHERE ec.is_active = 1
-                            AND pm.raf_patient_id = raf_encounter_analysis.pid
-                            AND pm.raf_patient_id IS NOT NULL
-                      )
-                      OR EXISTS (
-                          SELECT 1 FROM emr_connections
-                          WHERE connection_type = 'direct_db' AND is_active = 1
-                      )
-                  )
+                  AND pid IN (SELECT id FROM patients WHERE is_active = 1)
                 """
             )
             row = cur.fetchone()

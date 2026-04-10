@@ -281,6 +281,9 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
+  // Show dashboard content when EMR is connected OR uploaded patient data exists
+  const hasData = (stats?.total_patients ?? 0) > 0;
+
   const { data: pop, isLoading: popL } = useQuery({
     queryKey: ["population-summary", new Date().getFullYear()],
     queryFn: () => getPopulationSummary(new Date().getFullYear()),
@@ -807,8 +810,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Welcome State when not connected ── */}
-      {!emrStatusL && !emrConnected && (
+      {/* ── Welcome State when not connected and no uploaded data ── */}
+      {!emrStatusL && !emrConnected && !hasData && (
         <div
           style={{
             ...card,
@@ -871,7 +874,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {(emrConnected || emrStatusL) && <>
+      {(emrConnected || emrStatusL || hasData) && <>
 
       {/* Partial data warning */}
       {(statsErr || revErr) && (

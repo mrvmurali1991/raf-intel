@@ -138,7 +138,7 @@ def providers_summary(
     opportunity, and average documentation quality.
     """
     try:
-        return get_providers_summary()
+        return get_providers_summary(tenant_id=current_user.get("tenant_id"))
     except Exception as exc:
         logger.error("providers_summary error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -1837,7 +1837,7 @@ export default function DocumentsPage() {
         <div className="animate-fade-in stagger-1">
           <StatCard
             label="Total Documents"
-            value={isLoading ? "..." : stats.total.toLocaleString()}
+            value={isLoading ? "—" : stats.total.toLocaleString()}
             icon={<FileImage size={18} color={c.primary} />}
             color={c.primary}
           />
@@ -1845,7 +1845,7 @@ export default function DocumentsPage() {
         <div className="animate-fade-in stagger-2">
           <StatCard
             label="Documents Analyzed"
-            value={isLoading ? "..." : stats.analyzed.toLocaleString()}
+            value={isLoading ? "—" : stats.analyzed.toLocaleString()}
             icon={<CheckCircle2 size={18} color={c.emerald500} />}
             color={c.emerald500}
           />
@@ -1853,7 +1853,7 @@ export default function DocumentsPage() {
         <div className="animate-fade-in stagger-3">
           <StatCard
             label="HCC Codes Found"
-            value={isLoading ? "..." : stats.hcc_count.toLocaleString()}
+            value={isLoading ? "—" : stats.hcc_count.toLocaleString()}
             icon={<Zap size={18} color={c.violet500} />}
             color={c.violet500}
           />
@@ -1861,7 +1861,7 @@ export default function DocumentsPage() {
         <div className="animate-fade-in stagger-4">
           <StatCard
             label="Pending Review"
-            value={isLoading ? "..." : stats.pending.toLocaleString()}
+            value={isLoading ? "—" : stats.pending.toLocaleString()}
             icon={<Clock size={18} color={c.amber500} />}
             color={c.amber500}
           />
@@ -2378,9 +2378,9 @@ function OpenEMRDocumentsPanel() {
     <div>
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
-        <StatCard label="Total OpenEMR Docs" value={isLoading ? "..." : totalCount.toString()} icon={<Database size={18} color={c.primary} />} color={c.primary} />
-        <StatCard label="Already Imported" value={isLoading ? "..." : importedCount.toString()} icon={<CheckCircle2 size={18} color={c.emerald500} />} color={c.emerald500} />
-        <StatCard label="Pending Import" value={isLoading ? "..." : unimportedCount.toString()} icon={<Clock size={18} color={c.amber500} />} color={c.amber500} />
+        <StatCard label="Total OpenEMR Docs" value={isLoading ? "—" : totalCount.toLocaleString("en-US")} icon={<Database size={18} color={c.primary} />} color={c.primary} />
+        <StatCard label="Already Imported" value={isLoading ? "—" : importedCount.toLocaleString("en-US")} icon={<CheckCircle2 size={18} color={c.emerald500} />} color={c.emerald500} />
+        <StatCard label="Pending Import" value={isLoading ? "—" : unimportedCount.toLocaleString("en-US")} icon={<Clock size={18} color={c.amber500} />} color={c.amber500} />
       </div>
 
       {/* Filter bar */}
@@ -2454,7 +2454,7 @@ function OpenEMRDocumentsPanel() {
         {isLoading ? (
           <div style={{ padding: 40, textAlign: "center", color: c.subtleText, fontSize: 14 }}>
             <RefreshCw size={20} style={{ animation: "spin 1s linear infinite", marginBottom: 8 }} />
-            <div>Loading OpenEMR documents...</div>
+            <div>Loading OpenEMR documents…</div>
           </div>
         ) : isError ? (
           <div style={{ padding: 40, textAlign: "center" }}>

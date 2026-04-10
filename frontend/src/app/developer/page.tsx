@@ -1216,7 +1216,7 @@ function DocsTab() {
 // ---------------------------------------------------------------------------
 
 function KeysTab() {
-  const [keys, setKeys] = useState([
+  const [keys, setKeys] = useState(() => [
     { id: "1", name: "Production Internal Sync", prefix: "raf_live_9f8d", created: new Date(Date.now() - 86400000 * 90).toISOString().slice(0, 10), lastUsed: "2 mins ago" },
     { id: "2", name: "CI/CD Pipeline Analysis", prefix: "raf_test_1c2b", created: new Date(Date.now() - 86400000 * 7).toISOString().slice(0, 10), lastUsed: "Yesterday" }
   ]);

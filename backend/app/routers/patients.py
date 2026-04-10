@@ -172,6 +172,7 @@ def _list_raf_patients(
                        email,
                        mrn,
                        insurance_type,
+                       data_source,
                        created_at AS created_date
                 FROM patients
                 {where}
@@ -402,16 +403,33 @@ def patients_with_encounters(
     _perm: None = Depends(require_permission("patients", "read")),
 ) -> dict[str, Any]:
     """Return only patients that have at least one encounter."""
-    if not _has_active_emr_connection():
-        return {"total": 0, "patients": []}
+    if _has_active_emr_connection():
+        try:
+            patients = emr.get_patients_with_encounters(limit=limit)
+            return {"total": len(patients), "patients": patients}
+        except Exception as exc:
+            logger.error("patients_with_encounters error: %s", exc)
+            raise HTTPException(status_code=500, detail="Internal server error")
 
+    # No active EMR — return uploaded patients that have encounter analysis data
     try:
-        patients = emr.get_patients_with_encounters(limit=limit)
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT p.id AS pid, p.first_name AS fname, p.last_name AS lname,
+                       p.dob AS DOB, p.sex
+                FROM patients p
+                JOIN raf_encounter_analysis ea ON ea.pid = p.id
+                WHERE p.is_active = 1 AND p.data_source = 'upload'
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            patients = [dict(r) for r in cur.fetchall()]
+        return {"total": len(patients), "patients": patients}
     except Exception as exc:
-        logger.error("patients_with_encounters error: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-    return {"total": len(patients), "patients": patients}
+        logger.error("patients_with_encounters (upload fallback) error: %s", exc)
+        return {"total": 0, "patients": []}
 
 
 # ---------------------------------------------------------------------------

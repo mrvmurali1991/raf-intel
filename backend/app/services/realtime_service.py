@@ -130,7 +130,10 @@ class ConnectionManager:
             self._redis_task = asyncio.create_task(self._listen_redis())
             logger.info("realtime: connected to Redis Pub/Sub channel '%s'", self._redis_channel)
         except Exception as exc:
-            logger.error("realtime: failed to connect to Redis Pub/Sub: %s", exc)
+            logger.warning(
+                "realtime: Redis Pub/Sub unavailable, falling back to in-process bus: %s",
+                exc,
+            )
             self._redis = None
 
     async def _listen_redis(self) -> None:

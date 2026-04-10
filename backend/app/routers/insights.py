@@ -116,24 +116,25 @@ def _hcc_recapture_gaps(now: str, tenant_id: str | None = None) -> dict | None:
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT
                     COUNT(*)               AS gap_count,
                     COUNT(DISTINCT p.patient_id) AS patients_at_risk,
-                    COALESCE(SUM(p.coefficient), 0) AS total_coefficient
-                FROM raf_patient_hccs p
+                    COALESCE(SUM(p.raf_coefficient), 0) AS total_coefficient
+                FROM raf_patient_hcc p
                 WHERE p.measurement_year = YEAR(CURDATE()) - 1
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND p.patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
                   AND p.tenant_id = %s
                   AND NOT EXISTS (
                       SELECT 1
-                      FROM raf_patient_hccs c
+                      FROM raf_patient_hcc c
                       WHERE c.patient_id       = p.patient_id
                         AND c.hcc_code         = p.hcc_code
                         AND c.measurement_year = YEAR(CURDATE())
                   )
                 """,
-                (int(tenant_id) if tenant_id is not None else 1,),
+                (str(tenant_id) if tenant_id is not None else "1",
+                 str(tenant_id) if tenant_id is not None else "1"),
             )
             row = cur.fetchone()
 
@@ -171,7 +172,7 @@ def _high_risk_unreviewed(now: str, tenant_id: str | None = None) -> dict | None
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT
                     COUNT(DISTINCT rs.patient_id) AS patient_count,
                     AVG(rs.final_raf)             AS avg_raf,
@@ -182,10 +183,10 @@ def _high_risk_unreviewed(now: str, tenant_id: str | None = None) -> dict | None
                  AND rsc.status     = 'open'
                 WHERE rs.final_raf          >= 2.0
                   AND rs.measurement_year   = YEAR(CURDATE())
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND rs.patient_id IN (SELECT id FROM patients WHERE is_active = 1)
                   AND rs.tenant_id = %s
                 """,
-                (int(tenant_id) if tenant_id is not None else 1,),
+                (str(tenant_id) if tenant_id is not None else "1",),
             )
             row = cur.fetchone()
 
@@ -226,7 +227,7 @@ def _provider_coding_variation(now: str, tenant_id: str | None = None) -> dict |
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT
                     p.full_name,
                     ROUND(AVG(rs.final_raf), 3) AS avg_raf,
@@ -237,14 +238,14 @@ def _provider_coding_variation(now: str, tenant_id: str | None = None) -> dict |
                   ON rs.patient_id       = ppp.patient_id
                  AND rs.measurement_year = YEAR(CURDATE())
                 WHERE p.status = 'active'
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND rs.patient_id IN (SELECT id FROM patients WHERE is_active = 1)
                   AND rs.tenant_id = %s
                 GROUP BY p.id, p.full_name
                 HAVING patient_count >= 5
                 ORDER BY avg_raf DESC
                 LIMIT 10
                 """,
-                (int(tenant_id) if tenant_id is not None else 1,),
+                (str(tenant_id) if tenant_id is not None else "1",),
             )
             rows = cur.fetchall()
 
@@ -422,7 +423,7 @@ def _data_freshness(now: str) -> dict | None:
             cur.execute(
                 """
                 SELECT
-                    MAX(updated_at) AS last_sync,
+                    updated_at AS last_sync,
                     display_name,
                     vendor
                 FROM emr_connections

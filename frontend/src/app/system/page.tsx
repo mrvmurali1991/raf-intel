@@ -338,7 +338,7 @@ export default function SystemHealthPage() {
               ))
             ) : (
               <div style={{ fontSize: 13, color: "#94a3b8", padding: "8px 0" }}>
-                {healthLoading ? "Loading..." : "No data available"}
+                {healthLoading ? "Checking database status…" : "No data available"}
               </div>
             )}
           </div>

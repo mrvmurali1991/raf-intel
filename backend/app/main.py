@@ -424,7 +424,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob:; "
             "font-src 'self'; "
-            "connect-src 'self'; "
+            f"connect-src 'self' {os.environ.get('FRONTEND_URL', '')} {os.environ.get('NEXT_PUBLIC_API_URL', '')}; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self'"
@@ -947,8 +947,19 @@ def dashboard_stats(
         logger.error("Dashboard stats — emr_connections query error: %s", exc)
         return ZERO_RESPONSE
 
+    # If no active EMR, check if uploaded data exists — still show dashboard
+    has_uploaded_data = False
     if not has_active:
-        return ZERO_RESPONSE
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM patients WHERE data_source = 'upload' AND is_active = 1 LIMIT 1"
+                )
+                has_uploaded_data = cur.fetchone() is not None
+        except Exception:
+            pass
+        if not has_uploaded_data:
+            return ZERO_RESPONSE
 
     total_patients = 0
     analyzed = 0
@@ -959,23 +970,30 @@ def dashboard_stats(
     # Total patients = the active cohort in raf_intelligence.patients.
     # This respects the activate/deactivate pattern used by CSV upload and
     # EMR reactivation flows, so deactivated patients are correctly excluded.
+    # When EMR is off, only count uploaded patients
+    _ds_filter = " AND data_source = 'upload'" if (not has_active and has_uploaded_data) else ""
     try:
         with raf_cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1")
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1{_ds_filter}")
             total_patients = cur.fetchone()["cnt"]
     except Exception as exc:
         logger.error("Dashboard stats — active patients query error: %s", exc)
 
-    # Query RAF database for scoring stats filtered by active connections
+    # Query RAF database for scoring stats — when EMR off, scope to uploaded patients only
+    _score_filter = (
+        "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
+        if (not has_active and has_uploaded_data)
+        else ACTIVE_PATIENTS_SUBQUERY
+    )
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM raf_scores WHERE {ACTIVE_PATIENTS_SUBQUERY} AND raf_scores.tenant_id = %s AND measurement_year = %s",
+                f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
                 (int(tenant_id), measurement_year),
             )
             analyzed = cur.fetchone()["cnt"]
             cur.execute(
-                f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE {ACTIVE_PATIENTS_SUBQUERY} AND raf_scores.tenant_id = %s AND measurement_year = %s",
+                f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
                 (int(tenant_id), measurement_year),
             )
             row = cur.fetchone()

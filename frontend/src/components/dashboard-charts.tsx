@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useId } from "react";
 import { ArrowUp, ArrowDown, Download } from "lucide-react";
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
@@ -98,7 +98,8 @@ export interface SparklineProps {
 }
 
 export function Sparkline({ data, width = 80, height = 28, color = colors.primary, showArea = false }: SparklineProps) {
-  const pathId = useRef(`sparkline-${Math.random().toString(36).slice(2, 8)}`).current;
+  const reactId = useId();
+  const pathId = `sparkline-${reactId.replace(/:/g, "")}`;
 
   if (!data || data.length === 0) {
     return <svg width={width} height={height} />;

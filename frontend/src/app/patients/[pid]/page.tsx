@@ -429,7 +429,7 @@ function SectionLoader({ label }: { label?: string }) {
       }}
     >
       <Spinner size={18} />
-      <span style={{ fontSize: 13 }}>{label || "Loading..."}</span>
+      <span style={{ fontSize: 13 }}>{label || "Loading…"}</span>
     </div>
   );
 }
@@ -788,7 +788,7 @@ export default function PatientDetailPage({
 
   const patientName = patient
     ? `${patient.fname || patient.first_name || ""} ${patient.lname || patient.last_name || ""}`.trim()
-    : "Loading...";
+    : "Loading…";
   const dob = patient?.DOB || patient?.dob || "";
   const sex = patient?.sex || patient?.gender || "";
   const age = dob ? calculateAge(dob) : null;

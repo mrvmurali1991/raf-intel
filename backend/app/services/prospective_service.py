@@ -74,7 +74,11 @@ _HIGH_PRIORITY_PERCENTILE = 0.80
 
 
 def _active_patient_ids() -> set[int]:
-    """Return the set of patient IDs linked to active EMR connections."""
+    """Return the set of patient IDs linked to active EMR connections.
+
+    When no EMR connection is active, falls back to uploaded patients
+    (data_source='upload') so that CSV/Excel-imported data is still visible.
+    """
     try:
         with raf_cursor() as cur:
             # Check if active connection is direct_db
@@ -85,13 +89,24 @@ def _active_patient_ids() -> set[int]:
                 # Use raf_intelligence.patients instead of OpenEMR patient_data
                 cur.execute("SELECT id FROM patients WHERE is_active = 1 LIMIT 10000")
                 return {int(r["id"]) for r in cur.fetchall()}
-            # FHIR/REST: use emr_patient_matches
+            if ct_row:
+                # FHIR/REST: use emr_patient_matches
+                cur.execute(
+                    "SELECT DISTINCT pm.raf_patient_id FROM emr_patient_matches pm "
+                    "JOIN emr_connections ec ON ec.id = pm.connection_id "
+                    "WHERE ec.is_active = 1 AND pm.raf_patient_id IS NOT NULL"
+                )
+                return {int(r["raf_patient_id"]) for r in cur.fetchall()}
+            # No active EMR — fall back to uploaded patients
             cur.execute(
-                "SELECT DISTINCT pm.raf_patient_id FROM emr_patient_matches pm "
-                "JOIN emr_connections ec ON ec.id = pm.connection_id "
-                "WHERE ec.is_active = 1 AND pm.raf_patient_id IS NOT NULL"
+                "SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' LIMIT 10000"
             )
-            return {int(r["raf_patient_id"]) for r in cur.fetchall()}
+            result = {int(r["id"]) for r in cur.fetchall()}
+            if result:
+                return result
+            # Final fallback: all active patients
+            cur.execute("SELECT id FROM patients WHERE is_active = 1 LIMIT 10000")
+            return {int(r["id"]) for r in cur.fetchall()}
     except Exception as exc:
         logger.error("_active_patient_ids failed: %s", exc)
         return set()
@@ -179,7 +194,7 @@ def get_prospective_worklist(
                            p.address AS street, p.city, p.state,
                            p.zip AS postal_code, pp.provider_id AS providerID
                     FROM patients p
-                    LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
+                    LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
                     WHERE p.is_active = 1 AND pp.provider_id = %s
                     ORDER BY p.last_name, p.first_name
                     LIMIT 10000
@@ -195,7 +210,7 @@ def get_prospective_worklist(
                            p.address AS street, p.city, p.state,
                            p.zip AS postal_code, pp.provider_id AS providerID
                     FROM patients p
-                    LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
+                    LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
                     WHERE p.is_active = 1
                     ORDER BY p.last_name, p.first_name
                     LIMIT 10000
@@ -443,7 +458,7 @@ def generate_pre_visit_summary(patient_id: int, year: int) -> dict[str, Any]:
                        p.zip AS postal_code, p.phone AS phone_home, p.phone AS phone_cell,
                        p.email, pp.provider_id AS providerID
                 FROM patients p
-                LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
+                LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
                 WHERE p.id = %s
                 """,
                 (patient_id,),
@@ -703,7 +718,7 @@ def get_awv_eligible(tenant_id: str, year: int) -> dict[str, Any]:
                        p.address AS street, p.city, p.state, p.zip AS postal_code,
                        pp.provider_id AS providerID
                 FROM patients p
-                LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
+                LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
                 WHERE p.is_active = 1
                 ORDER BY p.last_name, p.first_name
                 LIMIT 10000
@@ -986,7 +1001,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
                        COUNT(*)                   AS gaps
                 FROM raf_patient_hcc h
                 WHERE h.measurement_year = %s
-                  AND h.{ACTIVE_PATIENTS_SUBQUERY}
+                  AND h.patient_id IN (SELECT id FROM patients WHERE is_active = 1)
                   AND h.tenant_id = %s
                   AND NOT EXISTS (
                       SELECT 1 FROM raf_patient_hcc h2

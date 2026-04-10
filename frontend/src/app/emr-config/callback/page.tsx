@@ -10,6 +10,7 @@ export default function OAuth2CallbackPage() {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Exchanging authorization code…");
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const code = params.get("code");
     const state = params.get("state");
@@ -41,6 +42,7 @@ export default function OAuth2CallbackPage() {
         setMessage(String(detail));
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>

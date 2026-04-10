@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Active EMR patient filter
 # ---------------------------------------------------------------------------
 
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY  # noqa: E402
+from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY, active_patients_subquery  # noqa: E402
 
 # Base annual revenue per RAF point (CMS MA benchmark) — configurable via env CMS_REVENUE_PER_RAF_POINT
 _ANNUAL_REVENUE_PER_RAF_POINT = settings.cms_revenue_per_raf_point
@@ -453,8 +453,8 @@ def calculate_provider_scorecard(
     # --- 1. Get panel patient IDs (active EMR connections only) ---
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY} AND tenant_id = %s",
-            (provider_id, tid),
+            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY}",
+            (provider_id,),
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 
@@ -849,8 +849,8 @@ def calculate_hcc_performance(
 
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY} AND tenant_id = %s",
-            (provider_id, tid),
+            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY}",
+            (provider_id,),
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 
@@ -967,8 +967,8 @@ def generate_provider_alerts(
 
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY} AND tenant_id = %s",
-            (provider_id, tid),
+            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY}",
+            (provider_id,),
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 
@@ -1292,9 +1292,10 @@ def get_providers_summary(tenant_id: Optional[int] = None) -> dict[str, Any]:
         total_providers = int(row["cnt"]) if row else 0
 
     with raf_cursor() as cur:
+        _frag, _fparams = active_patients_subquery(tid)
         cur.execute(
-            f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM provider_patient_panel WHERE {ACTIVE_PATIENTS_SUBQUERY} AND tenant_id = %s",
-            (tid,),
+            f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM provider_patient_panel WHERE {_frag}",
+            _fparams,
         )
         row = cur.fetchone()
         total_attributed = int(row["cnt"]) if row else 0

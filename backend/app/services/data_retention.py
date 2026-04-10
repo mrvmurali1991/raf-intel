@@ -80,7 +80,7 @@ DEFAULT_POLICIES: list[RetentionPolicy] = [
     RetentionPolicy(
         table_name="emr_sync_log",
         retention_days=int(os.getenv("RETENTION_SYNC_LOG_DAYS", "365")),  # 1 year
-        date_column="created_at",
+        date_column="started_at",
         description="EMR synchronisation operation logs",
     ),
     RetentionPolicy(
@@ -104,7 +104,7 @@ DEFAULT_POLICIES: list[RetentionPolicy] = [
     RetentionPolicy(
         table_name="documents",
         retention_days=int(os.getenv("RETENTION_DOCUMENTS_DAYS", "1095")),  # 3 years
-        date_column="uploaded_at",
+        date_column="created_at",
         description="Uploaded patient document records",
     ),
 ]

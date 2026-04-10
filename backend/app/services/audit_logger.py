@@ -56,11 +56,11 @@ def log_phi_access(
     details:      Optional free-text context (keep PHI-free — IDs only).
     """
     if user == "system":
-        _app_logger.warning(
+        _app_logger.debug(
             "PHI access logged without user identity — caller should pass user_id"
         )
     if tenant_id is None:
-        _app_logger.warning(
+        _app_logger.debug(
             "no tenant_id provided, defaulting to 1 — caller: log_phi_access"
         )
         tid: int = 1
