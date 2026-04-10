@@ -1,0 +1,397 @@
+# ---------------------------------------------------------------------------
+# RAF Intelligence — Production Docker Compose
+#
+# Services:
+#   redis     — Celery broker + result backend
+#   backend   — FastAPI via Gunicorn (2 Uvicorn workers)
+#   worker    — Celery worker (4 concurrent tasks, heavy + default queues)
+#   frontend  — Next.js standalone server
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Required environment variables (set in .env or CI secrets):
+#   GOOGLE_API_KEY, JWT_SECRET, JWT_REFRESH_SECRET
+#   RAF_DB_HOST, RAF_DB_PORT, RAF_DB_USER, RAF_DB_PASSWORD, RAF_DB_NAME
+#   OPENEMR_DB_HOST, OPENEMR_DB_PORT, OPENEMR_DB_USER, OPENEMR_DB_PASSWORD
+#   NEXT_PUBLIC_API_URL   (publicly reachable URL for the backend)
+#
+# Kubernetes note:
+#   Each top-level service maps 1:1 to a Kubernetes Deployment.
+#   resource limits below are authoritative for both Compose and K8s HPA.
+# ---------------------------------------------------------------------------
+
+x-backend-env: &backend-env
+  RAF_DB_HOST: ${RAF_DB_HOST}
+  RAF_DB_PORT: ${RAF_DB_PORT:-3306}
+  RAF_DB_USER: ${RAF_DB_USER}
+  RAF_DB_PASSWORD: ${RAF_DB_PASSWORD}
+  RAF_DB_NAME: ${RAF_DB_NAME:-raf_intelligence}
+  OPENEMR_DB_HOST: ${OPENEMR_DB_HOST}
+  OPENEMR_DB_PORT: ${OPENEMR_DB_PORT:-3306}
+  OPENEMR_DB_USER: ${OPENEMR_DB_USER}
+  OPENEMR_DB_PASSWORD: ${OPENEMR_DB_PASSWORD}
+  OPENEMR_DB_NAME: ${OPENEMR_DB_NAME:-openemr}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+  REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+  APP_ENV: production
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+  MAX_FAILED_LOGINS: ${MAX_FAILED_LOGINS:-5}
+  LOCKOUT_DURATION_MINUTES: ${LOCKOUT_DURATION_MINUTES:-15}
+  IDLE_TIMEOUT_MINUTES: ${IDLE_TIMEOUT_MINUTES:-15}
+  DB_SSL_ENABLED: ${DB_SSL_ENABLED:-true}
+  FRONTEND_URL: ${FRONTEND_URL:-}
+  OPENEMR_URL: ${OPENEMR_URL:-http://openemr:80}
+
+services:
+  # -------------------------------------------------------------------------
+  # Redis — Celery broker and result backend
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7.2.7-alpine
+    container_name: raf-redis
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64M
+    command: >
+      redis-server
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+        --save 60 1000
+        --loglevel warning
+        --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    networks:
+      - raf-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 640M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------------
+  # Backend — FastAPI via Gunicorn + Uvicorn workers
+  # -------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: raf-backend:${IMAGE_TAG:-latest}
+    container_name: raf-backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${BACKEND_PORT:-8500}:8500"
+    environment:
+      <<: *backend-env
+    extra_hosts:
+      # Allow the container to resolve host.docker.internal on Linux hosts.
+      # On Docker Desktop (Mac/Windows) this is automatic; keep it for Linux.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+      - submissions:/app/data/submissions
+      - logs:/app/logs
+    networks:
+      - raf-internal
+      - raf-external
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8500/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # Gunicorn is the production-grade process manager; each worker is a
+    # Uvicorn ASGI worker.  2 workers is conservative — adjust to (2 * CPU + 1).
+    command: >
+      gunicorn app.main:app
+        --worker-class uvicorn.workers.UvicornWorker
+        --workers ${GUNICORN_WORKERS:-2}
+        --bind 0.0.0.0:8500
+        --timeout 120
+        --graceful-timeout 30
+        --keep-alive 5
+        --access-logfile -
+        --error-logfile -
+        --log-level info
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # -------------------------------------------------------------------------
+  # Worker — Celery task processor
+  # -------------------------------------------------------------------------
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: raf-worker:${IMAGE_TAG:-latest}
+    container_name: raf-worker
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      <<: *backend-env
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+      - submissions:/app/data/submissions
+      - logs:/app/logs
+    networks:
+      - raf-internal
+      - raf-external
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.services.job_service inspect ping --destination celery@$$HOSTNAME --timeout 10"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
+    deploy:
+      # Scale horizontally: docker compose up --scale worker=3
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # -------------------------------------------------------------------------
+  # Frontend — Next.js standalone server
+  # -------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+    image: raf-frontend:${IMAGE_TAG:-latest}
+    container_name: raf-frontend
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64M
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      PORT: "3000"
+    networks:
+      - raf-external
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "require('http').get('http://localhost:3000/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------------
+  # Nginx — TLS-terminating reverse proxy
+  # -------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: raf-nginx
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64M
+      - /var/cache/nginx:size=64M
+      - /var/run:size=1M
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    networks:
+      - raf-external
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------------
+  # OpenEMR — Optional EMR system (start with --profile emr)
+  # -------------------------------------------------------------------------
+  openemr:
+    image: openemr/openemr:7.0.2
+    container_name: raf-openemr
+    restart: unless-stopped
+    profiles:
+      - emr
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${OPENEMR_PORT:-8080}:80"
+    environment:
+      MYSQL_HOST: ${OPENEMR_DB_HOST}
+      MYSQL_ROOT_PASS: ${OPENEMR_DB_PASSWORD}
+      MYSQL_USER: ${OPENEMR_DB_USER}
+      MYSQL_PASS: ${OPENEMR_DB_PASSWORD}
+      MYSQL_DATABASE: ${OPENEMR_DB_NAME:-openemr}
+      OE_USER: ${OE_USER:-admin}
+      OE_PASS: ${OE_PASS}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+      - openemr_logs:/var/log
+    networks:
+      - raf-internal
+      - raf-external
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  # Internal network: backend, worker, redis — never exposed outside Docker
+  raf-internal:
+    driver: bridge
+    internal: true
+
+  # External network: backend and frontend have published ports
+  raf-external:
+    driver: bridge
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${REDIS_DATA_PATH:-./data/redis}
+
+  uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${UPLOADS_PATH:-./data/uploads}
+
+  submissions:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SUBMISSIONS_PATH:-./data/submissions}
+
+  logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${LOGS_PATH:-./data/logs}
+
+  openemr_sites:
+  openemr_logs:

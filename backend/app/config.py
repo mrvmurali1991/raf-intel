@@ -1,0 +1,200 @@
+"""
+Application configuration loaded from .env file.
+"""
+from __future__ import annotations
+
+import os
+import secrets
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env from the project root (two levels above this file)
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=_env_path)
+
+# Resolve APP_ENV once at import time so _get_jwt_secret() can use it.
+_APP_ENV = os.getenv("APP_ENV", "development").lower()
+
+
+def _get_required_credential(env_var: str) -> str:
+    """Return a required database credential from the environment.
+
+    In production the application refuses to start if the variable is not set.
+    In development a loud warning is logged and an empty string is returned so
+    that local bring-up works without extra configuration.
+    """
+    value = os.getenv(env_var, "")
+    if not value:
+        if _APP_ENV != "development":
+            raise RuntimeError(
+                f"FATAL: {env_var} environment variable is not set. "
+                f"The application cannot start in production without this credential. "
+                f"Set {env_var} in your environment or .env file."
+            )
+        import logging
+        logging.getLogger(__name__).warning(
+            "WARNING: %s is not set. This is only acceptable in development.", env_var
+        )
+    return value
+
+
+def _get_jwt_secret() -> str:
+    """Return JWT_SECRET from env.
+
+    In production the application refuses to start if JWT_SECRET is not set –
+    a randomly generated secret would invalidate all tokens on every restart
+    and is not acceptable for production use.
+
+    In development a random secret is generated with a loud warning so that
+    local bring-up works without extra configuration.
+    """
+    secret = os.getenv("JWT_SECRET", "")
+    if not secret:
+        if _APP_ENV != "development":
+            raise RuntimeError(
+                "FATAL: JWT_SECRET environment variable is not set. "
+                "The application cannot start in production without a stable JWT secret. "
+                "Set JWT_SECRET in your environment or .env file."
+            )
+        import logging
+        logging.getLogger(__name__).warning(
+            "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+            "WARNING: JWT_SECRET is not set – generating a random secret.\n"
+            "All tokens will be invalidated on every process restart.\n"
+            "This is ONLY acceptable in development. Set JWT_SECRET before\n"
+            "deploying to any shared or production environment.\n"
+            "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        )
+        return secrets.token_hex(32)
+    return secret
+
+
+def _get_submission_output_dir() -> str:
+    """Return the submission output directory, warning if it falls under /tmp in non-dev."""
+    default = "/var/lib/raf_intelligence/submissions"
+    path = os.getenv("SUBMISSION_OUTPUT_DIR", default)
+    if path.startswith("/tmp") and _APP_ENV != "development":
+        import logging
+        logging.getLogger(__name__).warning(
+            "WARNING: SUBMISSION_OUTPUT_DIR is set to a path under /tmp (%s). "
+            "Files under /tmp may be purged by the OS at any time and are not suitable "
+            "for production use. Set SUBMISSION_OUTPUT_DIR to a persistent directory.",
+            path,
+        )
+    return path
+
+
+class Settings:
+    # Environment
+    app_env: str = _APP_ENV
+
+    # Gemini
+    google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+
+    @property
+    def gemini_api_key(self) -> str:
+        """Alias for google_api_key — used by readiness probe and health checks."""
+        return self.google_api_key
+
+    # OpenEMR database
+    openemr_db_host: str = os.getenv("OPENEMR_DB_HOST", "127.0.0.1")
+    openemr_db_port: int = int(os.getenv("OPENEMR_DB_PORT", "3309"))
+    openemr_db_user: str = _get_required_credential("OPENEMR_DB_USER")
+    openemr_db_password: str = _get_required_credential("OPENEMR_DB_PASSWORD")
+    openemr_db_name: str = os.getenv("OPENEMR_DB_NAME", "openemr")
+
+    # RAF database
+    raf_db_host: str = os.getenv("RAF_DB_HOST", "127.0.0.1")
+    raf_db_port: int = int(os.getenv("RAF_DB_PORT", "3309"))
+    raf_db_user: str = _get_required_credential("RAF_DB_USER")
+    raf_db_password: str = _get_required_credential("RAF_DB_PASSWORD")
+    raf_db_name: str = os.getenv("RAF_DB_NAME", "raf_intelligence")
+
+    # Application
+    app_port: int = int(os.getenv("APP_PORT", "8500"))
+    openemr_url: str = os.getenv("OPENEMR_URL", "http://localhost:8080")
+
+    # Redis (for Celery)
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+    # JWT / Auth
+    jwt_secret: str = _get_jwt_secret()
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))  # was 30; reduced for HIPAA
+
+    @property
+    def jwt_refresh_secret(self) -> str:
+        """Separate signing key for refresh tokens.
+
+        Reads JWT_REFRESH_SECRET from the environment.  In production the
+        application raises RuntimeError if it is not set — a derived fallback
+        key is not acceptable for production use.  In development it falls back
+        to jwt_secret + '_refresh' with a loud warning so local bring-up works
+        without extra configuration.
+        """
+        env_val = os.getenv("JWT_REFRESH_SECRET", "")
+        if not env_val:
+            if _APP_ENV != "development":
+                raise RuntimeError(
+                    "FATAL: JWT_REFRESH_SECRET environment variable is not set. "
+                    "The application cannot start in production without a stable "
+                    "refresh token secret. Set JWT_REFRESH_SECRET in your environment "
+                    "or .env file."
+                )
+            import logging
+            logging.getLogger(__name__).warning(
+                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+                "WARNING: JWT_REFRESH_SECRET is not set – deriving from JWT_SECRET.\n"
+                "This is ONLY acceptable in development. Set JWT_REFRESH_SECRET\n"
+                "before deploying to any shared or production environment.\n"
+                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            )
+            return self.jwt_secret + "_refresh"
+        return env_val
+
+    refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+    max_failed_logins: int = int(os.getenv("MAX_FAILED_LOGINS", "5"))
+    lockout_duration_minutes: int = int(os.getenv("LOCKOUT_DURATION_MINUTES", "15"))
+    idle_timeout_minutes: int = int(os.getenv("IDLE_TIMEOUT_MINUTES", "15"))
+
+    # Database TLS / SSL
+    # Default to enabled in production so TLS is required unless explicitly
+    # overridden via DB_SSL_ENABLED=false.  In non-production environments the
+    # default stays disabled to reduce friction with local dev databases.
+    db_ssl_enabled: bool = os.getenv(
+        "DB_SSL_ENABLED",
+        "true" if _APP_ENV == "production" else "false",
+    ).lower() in ("1", "true", "yes")
+    db_ssl_ca: str = os.getenv("DB_SSL_CA", "")
+
+    # Submission output directory (used by submission_service for generated files)
+    submission_output_dir: str = _get_submission_output_dir()
+
+    # Error monitoring (Sentry)
+    sentry_dsn: str = os.getenv("SENTRY_DSN", "")
+    sentry_environment: str = os.getenv("SENTRY_ENV", "development")
+
+    # Data retention
+    data_retention_enabled: bool = os.getenv("DATA_RETENTION_ENABLED", "true").lower() not in ("0", "false", "no")
+    retention_check_interval_hours: int = int(os.getenv("RETENTION_CHECK_INTERVAL_HOURS", "24"))
+
+    # SMTP / Email notifications
+    smtp_host: str = os.getenv("SMTP_HOST", "")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user: str = os.getenv("SMTP_USER", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from: str = os.getenv("SMTP_FROM", "noreply@raf-intelligence.com")
+    smtp_tls: bool = os.getenv("SMTP_TLS", "true").lower() == "true"
+
+    # Frontend URL (used to construct email links, e.g. password reset)
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    # CMS per-member per-year revenue benchmark used for RAF opportunity calcs
+    cms_revenue_per_raf_point: float = float(
+        os.getenv("CMS_REVENUE_PER_RAF_POINT", "11015.04")
+    )
+
+
+settings = Settings()

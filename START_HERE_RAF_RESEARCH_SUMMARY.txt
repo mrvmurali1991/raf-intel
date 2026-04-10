@@ -1,0 +1,331 @@
+================================================================================
+RAF RESEARCH DOCUMENTATION - COMPLETE TECHNICAL REFERENCE
+================================================================================
+
+Compiled: April 1, 2026
+Purpose: Building a Risk Adjustment Factor (RAF) calculation SaaS product
+
+================================================================================
+PRIMARY REFERENCE DOCUMENTS (READ THESE FIRST)
+================================================================================
+
+1. RESEARCH_COMPLETE_RAF_COMPREHENSIVE_GUIDE.md (22 KB)
+   --> Master summary of all RAF calculation concepts
+   --> Parts 1-4 cover the core formula and models
+   --> Key takeaway: RAF = Demographic + HCCs + Interactions + Modifiers
+
+2. RAF_Calculation_Deep_Dive.md (25 KB)
+   --> Complete technical specifications for all calculation aspects
+   --> Covers V24, V28, V22, ESRD, and ACA models
+   --> Includes demographic coefficient tables and HCC organization
+
+3. RAF_Technical_Reference_Coefficients.md (18 KB)
+   --> Specific coefficient values and tables
+   --> Worked calculation examples (7 detailed examples)
+   --> Common error scenarios and validation rules
+
+4. SaaS_Implementation_Architecture.md (26 KB)
+   --> System design, data models, and database schemas
+   --> Python pseudocode algorithm
+   --> Integration points and technology recommendations
+
+5. RAF_RESEARCH_INDEX.md (7 KB)
+   --> Navigation guide for all four documents
+   --> Organized by role (engineer, actuary, executive, analyst)
+   --> Quick reference by topic
+
+================================================================================
+CORE RAF CALCULATION FORMULA
+================================================================================
+
+Total RAF = Demographic + Σ(HCC Coefficients) + Σ(Disease Interactions) + Count Modifiers
+
+Adjusted RAF = Raw RAF / Normalization Factor
+
+EXAMPLE: 72-year-old male with diabetes, CHF, and CKD
+- Demographic: 0.527
+- HCC 20 (Diabetes): 0.166
+- HCC 85 (Heart Failure): 0.360
+- HCC 328 (CKD): 0.095
+- Interaction (Diabetes + CHF): +0.112
+- Interaction (CHF + CKD): +0.189
+- HCC Count (5+ HCCs): +0.050
+- Raw RAF: 1.499
+- Normalized (÷1.050): 1.428
+- Annual Payment: $12,500 × 1.428 = $17,850
+
+================================================================================
+KEY NUMBERS TO REMEMBER
+================================================================================
+
+MODEL VERSIONS:
+- V28: 115 HCCs, 7,770 ICD-10 codes (current/future)
+- V24: 86 HCCs, 9,797 ICD-10 codes (being phased out)
+- V22: 86 HCCs (PACE uses until 2029)
+- HHS-HCC: 127 HCCs (ACA marketplace)
+
+V24/V28 TRANSITION (Medicare Advantage):
+- PY2024: 67% V24 + 33% V28
+- PY2025: 33% V24 + 67% V28
+- PY2026+: 100% V28
+
+NORMALIZATION FACTORS:
+- 2024: 1.030
+- 2025: 1.045
+- 2026: ~1.050
+
+TYPICAL RAF VALUES:
+- New enrollee: 0.45-0.75 (demographics only)
+- Healthy continuing: 0.70-0.90
+- Sick continuing: 1.20-2.50
+- Institutional: +20-40% higher baseline
+
+FINANCIAL IMPACT:
+- RAF difference of 0.01: $120-200 annually per member
+- New vs. continuing enrollee: 50-75% payment difference
+- V28 transition: -3.12% average (billions saved to Medicare)
+
+================================================================================
+QUICK IMPLEMENTATION CHECKLIST
+================================================================================
+
+PHASE 1: Core Engine (Months 1-3)
+- [ ] Demographic coefficient lookup
+- [ ] ICD-10 to HCC mapping
+- [ ] HCC hierarchy rule engine
+- [ ] Sum HCC coefficients
+- [ ] Apply normalization factor
+Result: Single patient RAF calculation works
+
+PHASE 2: Advanced (Months 4-6)
+- [ ] Disease interaction terms
+- [ ] HCC count modifiers
+- [ ] V24/V28 blend calculation
+- [ ] Multiple program support (MA, PACE, ACA, ESRD)
+Result: Accurate RAF for all population types
+
+PHASE 3: Data Integration (Months 7-9)
+- [ ] Claims data pipeline
+- [ ] EHR/clinical data integration
+- [ ] Chart review workflow
+- [ ] Diagnosis validation
+Result: Automated diagnosis ingestion
+
+PHASE 4: Production (Months 10-12)
+- [ ] Reporting dashboard
+- [ ] Audit trails
+- [ ] Compliance reporting
+- [ ] Performance optimization
+Result: Production-ready system
+
+TOTAL: ~12 months to full deployment
+
+================================================================================
+WHAT MAKES RAF CALCULATION COMPLEX
+================================================================================
+
+1. HIERARCHY RULES
+   --> Some HCC diagnoses suppress others (more severe wins)
+   --> But interactions apply INDEPENDENTLY of hierarchy
+
+2. MULTIPLE MODELS
+   --> V24, V28, V22 (PACE), ESRD, HHS-HCC (ACA)
+   --> Each with different coefficients and rules
+
+3. CALCULATION DIFFERENCES
+   --> New enrollees: demographics only (no HCC credit)
+   --> Continuing enrollees: full HCC calculation
+   --> Institutional: 20-40% higher demographic baseline
+
+4. ANNUAL CHANGES
+   --> New coefficients released April each year
+   --> New ICD-10 codes October each year
+   --> Normalization factors change yearly
+
+5. TRANSITION PERIODS
+   --> V24/V28 blend in 2024-2025
+   --> PACE has different slower transition (2026-2029)
+
+================================================================================
+CRITICAL RULES TO GET RIGHT
+================================================================================
+
+RULE 1: One HCC per Category per Year
+  WRONG: Count same diagnosis 4 times for 4 visits = 0.360 × 4
+  RIGHT: Count once = 0.360
+
+RULE 2: Apply Interactions Regardless of Hierarchy
+  WRONG: If diabetes suppressed by cancer, skip interaction
+  RIGHT: Interaction applies even if diagnosis suppressed
+
+RULE 3: New Enrollees Get Zero HCC Credit
+  WRONG: New enrollee with chronic conditions gets HCC credit
+  RIGHT: New enrollee gets demographics only until 12 months data
+
+RULE 4: Always Apply Normalization Factor
+  WRONG: Raw RAF = 2.100 is final score
+  RIGHT: 2.100 / 1.050 = 2.000 (normalized)
+
+RULE 5: Different Models for Different Programs
+  WRONG: Use MA model for ACA patient
+  RIGHT: Use HHS-HCC for ACA, CMS-HCC V28 for MA
+
+RULE 6: Institutional Gets Higher Baseline
+  WRONG: SNF patient gets same demographic as community
+  RIGHT: SNF demographic coefficient × 1.20-1.40
+
+RULE 7: ESRD Kidney Disease HCCs = Zero
+  WRONG: ESRD dialysis patient gets HCC 327 (CKD Stage 5) credit
+  RIGHT: HCC 327 = 0.0 for all ESRD patients
+
+RULE 8: Blend Calculations for Transition Years
+  WRONG: PY2024 = 33% V24 + 67% V28
+  RIGHT: PY2024 = 67% V24 + 33% V28
+
+================================================================================
+WORKED EXAMPLE: STEP-BY-STEP CALCULATION
+================================================================================
+
+Patient: 78-year-old female, community, non-dual, continuing enrollee
+Diagnoses: Diabetes, Heart Failure, CKD Stage 3B, COPD, Hypertension
+
+Step 1: Demographic (V28 age 78F): 0.650
+
+Step 2: HCC Coefficients
+- HCC 106 (Hypertension): 0.086
+- HCC 111 (COPD): 0.441
+- HCC 20 (Diabetes): 0.166
+- HCC 85 (CHF): 0.360
+- HCC 328 (CKD): 0.095
+Sum: 1.148
+
+Step 3: Disease Interactions
+- Diabetes + CHF: +0.112
+- CHF + CKD: +0.189
+- Diabetes + CKD: +0.095
+Sum: 0.396
+
+Step 4: HCC Count Modifier (5 HCCs): +0.050
+
+Step 5: Raw RAF
+0.650 + 1.148 + 0.396 + 0.050 = 2.244
+
+Step 6: Normalized (÷1.050)
+2.244 / 1.050 = 2.138
+
+Step 7: Annual Payment
+$12,500 benchmark × 2.138 = $26,725
+
+================================================================================
+DOCUMENT ORGANIZATION
+================================================================================
+
+FOR UNDERSTANDING THE FORMULA:
+  --> Read: RESEARCH_COMPLETE_RAF_COMPREHENSIVE_GUIDE.md (Parts 1-4)
+  --> Then: RAF_Calculation_Deep_Dive.md (Section 1)
+
+FOR COEFFICIENT VALUES:
+  --> Read: RAF_Technical_Reference_Coefficients.md (Sections 1-4)
+  --> Reference: RESEARCH_COMPLETE_RAF_COMPREHENSIVE_GUIDE.md (Parts 8-9)
+
+FOR DIFFERENT PROGRAMS:
+  --> Read: RAF_Calculation_Deep_Dive.md (Section 6)
+  --> Reference: RAF_Technical_Reference_Coefficients.md (Section 7)
+
+FOR SYSTEM DESIGN:
+  --> Read: SaaS_Implementation_Architecture.md (All sections)
+  --> Database schemas included
+  --> Python algorithm pseudocode included
+
+FOR TESTING & VALIDATION:
+  --> Read: RAF_Technical_Reference_Coefficients.md (Sections 8-9)
+  --> Use examples from Section 7 for unit test cases
+
+================================================================================
+REGULATORY AUTHORITIES & SOURCES
+================================================================================
+
+All information derived from:
+- CMS official Advance Notices (2024-2026)
+- CMS Rate Announcements
+- CMS-HCC Model V28 Clinical Revision documentation
+- MedPAC reports
+- Industry research papers
+- Insurance company white papers
+
+Specific sources cited in each document with full URLs.
+
+================================================================================
+HOW TO USE THIS DOCUMENTATION
+================================================================================
+
+EXECUTIVES / PRODUCT MANAGERS:
+1. Read RESEARCH_COMPLETE_RAF_COMPREHENSIVE_GUIDE.md (30 min)
+2. Skim RAF_Calculation_Deep_Dive.md Section 1 (10 min)
+3. Reference RAF_Key_Benchmarks_Summary.md for numbers
+Result: Full understanding of RAF concept and impact
+
+ENGINEERS / DEVELOPERS:
+1. Read SaaS_Implementation_Architecture.md Section 1 (15 min)
+2. Study RAF_Technical_Reference_Coefficients.md Sections 1-4 (30 min)
+3. Review pseudocode in Section 2 of Architecture doc (30 min)
+4. Use examples in Section 7 for unit tests
+Result: Ready to build calculation engine
+
+ACTUARIES / COMPLIANCE OFFICERS:
+1. Read RAF_Calculation_Deep_Dive.md (entire) (90 min)
+2. Reference RAF_Technical_Reference_Coefficients.md (30 min)
+3. Review SaaS_Implementation_Architecture.md Section 6 (30 min)
+Result: Full compliance understanding and audit capability
+
+DATA ANALYSTS:
+1. Read SaaS_Implementation_Architecture.md Section 1 (20 min)
+2. Study RAF_Technical_Reference_Coefficients.md (45 min)
+3. Reference RAF_Calculation_Deep_Dive.md Section 10 (20 min)
+Result: Understanding of data requirements and reporting
+
+================================================================================
+ESTIMATED STUDY TIME
+================================================================================
+
+Quick Overview: 30 minutes
+- Read this file
+- Skim RESEARCH_COMPLETE_RAF_COMPREHENSIVE_GUIDE.md
+
+Comprehensive Understanding: 4-6 hours
+- Read RAF_Calculation_Deep_Dive.md
+- Study RAF_Technical_Reference_Coefficients.md with examples
+
+Implementation Planning: 2-3 hours
+- Review SaaS_Implementation_Architecture.md
+- Map to your existing systems
+
+Deep Technical Work: Ongoing
+- Reference specific sections as needed
+- Build and validate code against examples
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Start with RESEARCH_COMPLETE_RAF_COMPREHENSIVE_GUIDE.md
+2. Move to RAF_Calculation_Deep_Dive.md for details
+3. Use RAF_Technical_Reference_Coefficients.md while building
+4. Reference SaaS_Implementation_Architecture.md for system design
+5. Use RAF_RESEARCH_INDEX.md to navigate by role/topic
+
+================================================================================
+CONTACT / QUESTIONS
+================================================================================
+
+All documents are cross-referenced. Use RAF_RESEARCH_INDEX.md to find
+specific information by role or topic.
+
+Total documentation package: ~80,000 words
+Covers: Medicare Advantage (MA), PACE, ACA Marketplace, ESRD
+Current through: April 2026 CMS announcements
+Version: 1.0 (published April 1, 2026)
+
+================================================================================
+END OF SUMMARY
+================================================================================

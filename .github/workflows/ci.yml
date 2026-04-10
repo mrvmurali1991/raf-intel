@@ -1,0 +1,382 @@
+# ===========================================================================
+# RAF Intelligence — Continuous Integration
+#
+# Triggered on every push to main/develop and on all pull requests targeting main.
+# Jobs run in parallel where there are no dependencies between them.
+#
+# Required GitHub secrets (none for CI — all tools installed from public registries).
+# ===========================================================================
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+# Cancel any in-progress run for the same ref so a rapid succession of pushes
+# does not queue up stale runs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+# ---------------------------------------------------------------------------
+# Job: backend-lint
+# Ruff linter + formatter check on the Python codebase.
+# Fast — runs in ~15 s and catches style / import errors before tests run.
+# ---------------------------------------------------------------------------
+jobs:
+  backend-lint:
+    name: "Backend — Ruff lint & format"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install ruff
+        run: pip install ruff==0.4.4
+
+      - name: Run ruff linter
+        run: ruff check backend/app backend/tests --output-format=github
+
+      - name: Run ruff format check
+        run: ruff format --check backend/app backend/tests
+
+  # ---------------------------------------------------------------------------
+  # Job: backend-test
+  # Full pytest suite with MySQL integration-test service container.
+  # Coverage is uploaded as an artifact so it can be reviewed in PRs.
+  # ---------------------------------------------------------------------------
+  backend-test:
+    name: "Backend — Pytest + coverage"
+    runs-on: ubuntu-latest
+    needs: backend-lint
+
+    # MySQL service container — mirrors the production database engine.
+    # The FastAPI app reads connection details from environment variables set below.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: raf_intelligence_test
+          MYSQL_USER: raf_app
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3306:3306
+        # Wait for MySQL to be ready before starting tests.
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Application environment — keeps secret-validation checks in non-strict mode
+      APP_ENV: development
+
+      # RAF Intelligence database (test schema)
+      RAF_DB_HOST: 127.0.0.1
+      RAF_DB_PORT: 3306
+      RAF_DB_USER: raf_app
+      RAF_DB_PASSWORD: testpassword
+      RAF_DB_NAME: raf_intelligence_test
+
+      # OpenEMR database — point to the same test container
+      OPENEMR_DB_HOST: 127.0.0.1
+      OPENEMR_DB_PORT: 3306
+      OPENEMR_DB_USER: raf_app
+      OPENEMR_DB_PASSWORD: testpassword
+      OPENEMR_DB_NAME: openemr_test
+
+      # Auth secrets (non-production values are fine for unit / integration tests)
+      JWT_SECRET: ci-test-jwt-secret-not-for-production-use-64chars-padding-here
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-not-for-production-64chars-padding
+
+      # Redis — not available in CI; tests that need it should be marked and skipped
+      REDIS_URL: redis://localhost:6379/0
+
+      # Gemini — omit real key; tests calling the API must be marked @pytest.mark.slow
+      GOOGLE_API_KEY: ""
+
+      # Sentry — disable in CI
+      SENTRY_DSN: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Install test extras (coverage, timeout)
+        run: pip install pytest-cov pytest-timeout pytest-asyncio
+
+      - name: Wait for MySQL to accept connections
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -u root -prootpassword --silent; do
+            echo "Waiting for MySQL…"
+            sleep 2
+          done
+
+      - name: Run pytest with coverage
+        run: |
+          pytest \
+            --cov=app \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            --cov-fail-under=40 \
+            -m "not slow and not integration" \
+            --timeout=60
+        working-directory: backend
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job: frontend-typecheck
+  # TypeScript compiler check — catches type errors before lint or build.
+  # ---------------------------------------------------------------------------
+  frontend-typecheck:
+    name: "Frontend — TypeScript typecheck"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: TypeScript compile check (no emit)
+        run: npx tsc --noEmit
+        working-directory: frontend
+
+  # ---------------------------------------------------------------------------
+  # Job: frontend-lint
+  # ESLint check using the project's existing eslint.config.mjs.
+  # ---------------------------------------------------------------------------
+  frontend-lint:
+    name: "Frontend — ESLint"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run ESLint
+        run: npm run lint
+        working-directory: frontend
+
+  # ---------------------------------------------------------------------------
+  # Job: frontend-build
+  # Full Next.js production build — validates that the app compiles end-to-end.
+  # NEXT_PUBLIC_API_URL is set to a placeholder so the build doesn't abort on
+  # a missing required env var.
+  # ---------------------------------------------------------------------------
+  frontend-build:
+    name: "Frontend — Next.js build"
+    runs-on: ubuntu-latest
+    needs:
+      - frontend-typecheck
+      - frontend-lint
+
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:8500
+      NODE_ENV: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build Next.js application
+        run: npm run build
+        working-directory: frontend
+
+  # ---------------------------------------------------------------------------
+  # Job: security-scan
+  # Bandit (Python SAST) + pip-audit (Python dependency CVEs)
+  # + npm audit (frontend dependency CVEs).
+  # Results are uploaded as SARIF so GitHub Security displays them natively.
+  # ---------------------------------------------------------------------------
+  security-scan:
+    name: "Security — Bandit + pip-audit + npm audit"
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Required to upload SARIF results to GitHub Security tab
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: pip install bandit[toml]==1.7.9 pip-audit==2.7.3
+
+      # Bandit scans for common Python security issues (SQL injection, hard-coded
+      # passwords, use of weak crypto, etc.). The -ll flag reports medium+ severity.
+      - name: Run Bandit (Python SAST)
+        run: |
+          bandit \
+            -r backend/app \
+            -ll \
+            --format sarif \
+            --output bandit-results.sarif || true
+
+      - name: Upload Bandit SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+
+      # pip-audit checks all installed packages against the OSV / PyPI advisory DB.
+      - name: Run pip-audit (Python dependency CVEs)
+        run: |
+          pip-audit \
+            -r backend/requirements.txt \
+            --format cyclonedx-json \
+            --output pip-audit-results.json \
+            --ignore-vuln GHSA-jfh8-c2jp-5 \
+            || true
+
+      - name: Upload pip-audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-results
+          path: pip-audit-results.json
+          retention-days: 14
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      # npm audit fails the job on high/critical vulnerabilities only.
+      # The --json flag produces a machine-readable report saved as an artifact.
+      - name: Run npm audit (frontend dependency CVEs)
+        run: |
+          npm audit --audit-level=high --json > npm-audit-results.json || true
+        working-directory: frontend
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-results
+          path: frontend/npm-audit-results.json
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job: docker-build-verify
+  # Verify both Docker images build cleanly. Uses BuildKit layer caching so
+  # subsequent runs are fast. Images are NOT pushed here — push happens in deploy.
+  # ---------------------------------------------------------------------------
+  docker-build-verify:
+    name: "Docker — Build verification"
+    runs-on: ubuntu-latest
+    needs:
+      - backend-test
+      - frontend-build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: raf-backend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: raf-frontend:ci-${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8500
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

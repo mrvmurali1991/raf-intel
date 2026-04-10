@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+ENV/
+
+# Node
+node_modules/
+.next/
+out/
+.npm
+.yarn/cache
+.yarn/unplugged
+.pnp.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+data/logs/
+
+# Uploads
+data/uploads/
+
+# Docker
+docker-compose.override.yml
+
+# Test artifacts
+playwright-report/
+test-results/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+*.lcov
+
+# Build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Lint result files
+lint_output.txt
+lint_results*.txt
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets/
+
+# Large ML models
+models/

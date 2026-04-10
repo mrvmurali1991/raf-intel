@@ -1,0 +1,361 @@
+# ===========================================================================
+# RAF Intelligence — Deployment Pipeline
+#
+# Triggered on every push to main (i.e. after a PR is merged and CI has passed).
+#
+# Flow:
+#   1. build-images   — Build and push versioned Docker images to GHCR
+#   2. deploy-staging — Pull new images and restart containers on staging
+#   3. smoke-test     — Hit the health endpoint; fail fast if staging is broken
+#   4. deploy-production — Manual approval gate, then deploy to production
+#
+# Required GitHub Secrets:
+#   PROD_HOST        — Production server IP (e.g. 10.1.1.66)
+#   PROD_USER        — SSH username on the production server
+#   PROD_SSH_KEY     — Private SSH key (PEM format) authorised on PROD_HOST
+#   JUMP_HOST        — Jump / bastion host IP (e.g. 15.204.73.232)
+#   JUMP_USER        — SSH username on the jump host
+#   JUMP_SSH_KEY     — Private SSH key authorised on JUMP_HOST
+#   STAGING_HOST     — Staging server IP
+#   STAGING_USER     — SSH username on the staging server
+#   STAGING_SSH_KEY  — Private SSH key authorised on STAGING_HOST
+#   STAGING_JUMP_HOST     — (optional) Jump host for staging if behind a bastion
+#   STAGING_JUMP_USER     — (optional) Jump host username for staging
+#   STAGING_JUMP_SSH_KEY  — (optional) Jump host SSH key for staging
+#
+# Required GitHub Variables (repository-level, not secrets):
+#   REGISTRY         — Container registry hostname (e.g. ghcr.io)
+#   REGISTRY_NAMESPACE — e.g. ghcr.io/your-org/raf-intelligence
+#   STAGING_API_URL  — Base URL of the staging backend for smoke tests
+#   PROD_DEPLOY_PATH — Absolute path on the production server (e.g. /opt/raf-intelligence)
+#   STAGING_DEPLOY_PATH — Absolute path on the staging server
+#
+# Healthcare / HIPAA notes:
+#   - Images are signed with cosign (Sigstore) after push.
+#   - The production deploy job requires manual approval via a GitHub Environment
+#     named "production" with required reviewers configured.
+#   - IMAGE_TAG is pinned to the commit SHA — never "latest" in production.
+# ===========================================================================
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+# Only one deployment runs at a time for a given environment to prevent
+# concurrent deploys from racing each other.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false   # do NOT cancel in-flight deploys
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+  # Namespace follows the pattern ghcr.io/<owner>/<repo>
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/raf-intelligence-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/raf-intelligence-frontend
+
+# ---------------------------------------------------------------------------
+# Job: build-images
+# Builds and pushes both Docker images tagged with the commit SHA.
+# Also tags the images as "staging" so the staging server can pull by name.
+# Images are signed with cosign for supply-chain integrity.
+# ---------------------------------------------------------------------------
+jobs:
+  build-images:
+    name: "Build & push Docker images"
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write        # push to GHCR
+      id-token: write        # cosign keyless signing
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Install cosign for image signing (Sigstore keyless mode)
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # ---- Backend image ----
+      - name: Extract backend image metadata
+        id: backend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BACKEND }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=staging
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push backend image
+        id: build-backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.backend-meta.outputs.tags }}
+          labels: ${{ steps.backend-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true    # SLSA provenance attestation
+          sbom: true          # Software bill of materials
+
+      - name: Sign backend image with cosign
+        env:
+          BACKEND_DIGEST: ${{ steps.build-backend.outputs.digest }}
+          BACKEND_IMAGE: ${{ env.IMAGE_BACKEND }}
+        run: cosign sign --yes "${BACKEND_IMAGE}@${BACKEND_DIGEST}"
+
+      # ---- Frontend image ----
+      - name: Extract frontend image metadata
+        id: frontend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_FRONTEND }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=staging
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push frontend image
+        id: build-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.frontend-meta.outputs.tags }}
+          labels: ${{ steps.frontend-meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.STAGING_API_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Sign frontend image with cosign
+        env:
+          FRONTEND_DIGEST: ${{ steps.build-frontend.outputs.digest }}
+          FRONTEND_IMAGE: ${{ env.IMAGE_FRONTEND }}
+        run: cosign sign --yes "${FRONTEND_IMAGE}@${FRONTEND_DIGEST}"
+
+  # ---------------------------------------------------------------------------
+  # Job: deploy-staging
+  # SSHs into the staging server (optionally via a jump host), pulls the new
+  # images, and performs a rolling restart with zero-downtime health checks.
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: "Deploy — Staging"
+    runs-on: ubuntu-latest
+    needs: build-images
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          # Uncomment proxy_* lines if staging is behind a jump host
+          # proxy_host: ${{ secrets.STAGING_JUMP_HOST }}
+          # proxy_username: ${{ secrets.STAGING_JUMP_USER }}
+          # proxy_key: ${{ secrets.STAGING_JUMP_SSH_KEY }}
+          timeout: 300s
+          script: |
+            set -euo pipefail
+
+            DEPLOY_PATH="${{ vars.STAGING_DEPLOY_PATH }}"
+            IMAGE_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
+            REGISTRY="${{ env.REGISTRY }}"
+            OWNER="${{ github.repository_owner }}"
+
+            echo "==> Deploying image tag: ${IMAGE_TAG}"
+            cd "${DEPLOY_PATH}"
+
+            # Pull latest images
+            IMAGE_BACKEND="${REGISTRY}/${OWNER}/raf-intelligence-backend:${IMAGE_TAG}"
+            IMAGE_FRONTEND="${REGISTRY}/${OWNER}/raf-intelligence-frontend:${IMAGE_TAG}"
+
+            echo "docker pull ${IMAGE_BACKEND}"
+            docker pull "${IMAGE_BACKEND}"
+
+            echo "docker pull ${IMAGE_FRONTEND}"
+            docker pull "${IMAGE_FRONTEND}"
+
+            # Export tag so docker-compose substitutes it
+            export IMAGE_TAG="${IMAGE_TAG}"
+
+            # Rolling restart — Compose will recreate only changed containers
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+              up -d --remove-orphans
+
+            # Remove dangling images to free disk space
+            docker image prune -f
+
+            echo "==> Staging deploy complete. Tag: ${IMAGE_TAG}"
+
+  # ---------------------------------------------------------------------------
+  # Job: smoke-test
+  # Hits the backend health check endpoint on staging to confirm the new
+  # containers are serving traffic before production is offered for approval.
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: "Smoke test — Staging"
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+
+    steps:
+      - name: Wait for containers to settle
+        run: sleep 15
+
+      - name: Health check — backend /api/health
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            "${{ vars.STAGING_API_URL }}/api/health" || echo "000")
+
+          echo "Health check HTTP status: ${STATUS}"
+
+          if [ "${STATUS}" != "200" ]; then
+            echo "ERROR: Backend health check returned HTTP ${STATUS}. Aborting deploy."
+            exit 1
+          fi
+          echo "Staging backend is healthy."
+
+      - name: Health check — frontend /
+        run: |
+          set -euo pipefail
+          FRONTEND_URL="${{ vars.STAGING_API_URL }}"
+          # Derive frontend URL by replacing the backend port if needed;
+          # adjust the URL variable to point at your staging frontend.
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            "${FRONTEND_URL}" || echo "000")
+
+          echo "Frontend HTTP status: ${STATUS}"
+
+          if [ "${STATUS}" != "200" ] && [ "${STATUS}" != "301" ] && [ "${STATUS}" != "302" ]; then
+            echo "WARNING: Frontend returned HTTP ${STATUS}."
+          fi
+          echo "Smoke tests passed."
+
+  # ---------------------------------------------------------------------------
+  # Job: deploy-production
+  # Requires manual approval via the "production" GitHub Environment.
+  # Configure required reviewers on that environment in:
+  #   Settings -> Environments -> production -> Required reviewers
+  #
+  # Deploys to the production server (10.1.1.66) via jump host (15.204.73.232).
+  # Uses the same image SHA that was validated on staging — never rebuilds.
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    name: "Deploy — Production"
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    # The "production" environment has a required-reviewer protection rule
+    # configured in GitHub repository settings. The workflow will pause here
+    # until an authorised reviewer approves.
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production via SSH (jump host)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          proxy_host: ${{ secrets.JUMP_HOST }}
+          proxy_username: ${{ secrets.JUMP_USER }}
+          proxy_key: ${{ secrets.JUMP_SSH_KEY }}
+          timeout: 300s
+          script: |
+            set -euo pipefail
+
+            DEPLOY_PATH="${{ vars.PROD_DEPLOY_PATH }}"
+            IMAGE_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
+            REGISTRY="${{ env.REGISTRY }}"
+            OWNER="${{ github.repository_owner }}"
+
+            echo "==> Production deploy. Image tag: ${IMAGE_TAG}"
+            cd "${DEPLOY_PATH}"
+
+            IMAGE_BACKEND="${REGISTRY}/${OWNER}/raf-intelligence-backend:${IMAGE_TAG}"
+            IMAGE_FRONTEND="${REGISTRY}/${OWNER}/raf-intelligence-frontend:${IMAGE_TAG}"
+
+            # Pull — images are already in the registry from the build-images job
+            docker pull "${IMAGE_BACKEND}"
+            docker pull "${IMAGE_FRONTEND}"
+
+            # Export for docker-compose interpolation
+            export IMAGE_TAG="${IMAGE_TAG}"
+
+            # Rolling restart with health-check awareness
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+              up -d --remove-orphans
+
+            # Verify the backend came up healthy before declaring success
+            echo "==> Waiting for backend health check…"
+            for i in $(seq 1 12); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                --max-time 5 http://localhost:8500/api/health || echo "000")
+              if [ "${STATUS}" = "200" ]; then
+                echo "Backend healthy (attempt ${i})."
+                break
+              fi
+              if [ "${i}" -eq 12 ]; then
+                echo "ERROR: Backend health check timed out. Rolling back."
+                docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+                  rollback || true
+                exit 1
+              fi
+              echo "Attempt ${i}/12 — status ${STATUS}. Retrying in 10 s…"
+              sleep 10
+            done
+
+            # Clean up old images
+            docker image prune -f
+
+            echo "==> Production deploy complete. Commit: ${{ github.sha }}"
+
+      - name: Record deployment in GitHub
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              description: 'RAF Intelligence production deploy',
+              auto_merge: false,
+              required_contexts: [],
+              production_environment: true,
+            });

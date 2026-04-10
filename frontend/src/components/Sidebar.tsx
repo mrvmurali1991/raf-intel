@@ -1,0 +1,923 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect, CSSProperties } from "react";
+import {
+  LayoutDashboard,
+  Users,
+  ClipboardCheck,
+  CalendarClock,
+  Target,
+  Microscope,
+  Layers,
+  FileImage,
+  FileText,
+  Workflow,
+  Plug,
+  BarChart3,
+  UserCheck,
+  Star,
+  Send,
+  Calculator,
+  ShieldCheck,
+  UsersRound,
+  Code,
+  Settings,
+  Database,
+  Moon,
+  Sun,
+  PanelLeftClose,
+  PanelLeft,
+  Menu,
+  X,
+  LogOut,
+  HeartPulse,
+  Search,
+  ArrowLeftRight,
+  Activity,
+  Upload,
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useTheme } from "@/providers/theme-provider";
+import { useAuth } from "@/contexts/auth-context";
+import { getEmrStatus } from "@/lib/api";
+import { NotificationCenter } from "@/components/NotificationCenter";
+import { hasUsedKeyboardShortcuts } from "@/components/KeyboardShortcuts";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string; style?: CSSProperties }>;
+  badge?: string | number;
+  /** Keyboard shortcut hint, e.g. "g h". Shown when sidebar is expanded and user has used shortcuts before. */
+  shortcut?: string;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Navigation structure — all 21 pages present in /app
+// ---------------------------------------------------------------------------
+
+const navGroups: NavGroup[] = [
+  {
+    title: "MAIN",
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
+      { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
+      { href: "/uploads", label: "Data Uploads", icon: Upload },
+      { href: "/suspects", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
+      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
+      { href: "/prospective", label: "Prospective", icon: Target },
+    ],
+  },
+  {
+    title: "ANALYSIS",
+    items: [
+      { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
+      { href: "/batch", label: "Batch Analysis", icon: Layers },
+      { href: "/documents", label: "Documents", icon: FileImage },
+      { href: "/claims", label: "Claims", icon: FileText },
+      { href: "/demo", label: "Pipeline Demo", icon: Workflow },
+      { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
+      { href: "/integrations", label: "Integrations", icon: Plug },
+    ],
+  },
+  {
+    title: "REPORTS",
+    items: [
+      { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
+      { href: "/providers", label: "Provider Performance", icon: UserCheck },
+      { href: "/quality", label: "Quality & STARS", icon: Star },
+      { href: "/submissions", label: "CMS Submissions", icon: Send },
+      { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
+      { href: "/roi", label: "ROI Calculator", icon: Calculator },
+      { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
+    ],
+  },
+  {
+    title: "ADMIN",
+    items: [
+      { href: "/users",      label: "Users",          icon: UsersRound },
+      { href: "/system",     label: "System Health",  icon: Activity },
+      { href: "/developer",  label: "Developer",      icon: Code },
+      { href: "/emr-config", label: "EMR Config",     icon: Database, shortcut: "g e" },
+    ],
+  },
+  {
+    title: "ACCOUNT",
+    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Design tokens
+// ---------------------------------------------------------------------------
+
+const EXPANDED_WIDTH = 240;
+const COLLAPSED_WIDTH = 64;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getUserInitials(firstName?: string, lastName?: string): string {
+  const first = firstName?.[0] ?? "";
+  const last = lastName?.[0] ?? "";
+  return (first + last).toUpperCase() || "\u2022";
+}
+
+function getUserDisplayName(
+  user: { first_name?: string; last_name?: string; email?: string } | null
+): string {
+  if (!user) return "Guest";
+  const full = [user.first_name, user.last_name].filter(Boolean).join(" ");
+  return full || user.email || "User";
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { theme, toggle } = useTheme();
+  const { user, logout, isAuthenticated } = useAuth();
+  
+  const { data: emrStatus, isLoading: emrLoading } = useQuery({
+    queryKey: ["emr-status"],
+    queryFn: () => getEmrStatus(),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+
+  const isDark = theme === "dark";
+  const BG = isDark ? "#0f172a" : "#ffffff";
+  const BG_GRADIENT = isDark
+    ? "linear-gradient(180deg, #0f172a 0%, #0c1222 50%, #0f172a 100%)"
+    : "linear-gradient(180deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)";
+  const BG_HOVER = isDark ? "#1e293b" : "#f8fafc";
+  const BG_ACTIVE = isDark ? "#0f766e20" : "#f0fdfa";
+  const TEXT_DEFAULT = isDark ? "#94a3b8" : "#64748b";
+  const TEXT_ACTIVE = isDark ? "#ffffff" : "#0f766e";
+  const TEXT_SECTION = isDark ? "#64748b" : "#cbd5e1";
+  const TEXT_SUBTLE = isDark ? "#64748b" : "#94a3b8";
+  const ACCENT = isDark ? "#0f766e" : "#0d9488";
+  const ACCENT_LIGHT = isDark ? "#2dd4bf" : "#0f766e";
+  const BORDER_COLOR = isDark ? "#1e293b" : "#f1f5f9";
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  // Only show shortcut hint badges after the user has triggered at least one shortcut
+  const [showShortcutHints, setShowShortcutHints] = useState(false);
+
+  useEffect(() => {
+    // Check on mount, then re-check whenever a shortcut fires (storage event
+    // covers cross-tab; custom event covers same-tab from KeyboardShortcuts).
+    const refresh = () => setShowShortcutHints(hasUsedKeyboardShortcuts());
+    refresh();
+    window.addEventListener("raf-kb-used", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("raf-kb-used", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+
+  // Close mobile menu on route change
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    if (mobileOpen) setMobileOpen(false);
+  }
+
+  // Close mobile menu on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  function isActive(href: string): boolean {
+    if (href === "/") return pathname === "/";
+    // Match /patients as active for /patients/[pid] sub-pages
+    return pathname === href || pathname.startsWith(href + "/");
+  }
+
+  function handleLogout() {
+    // logout() handles navigation to /login internally — no need to push here.
+    logout();
+  }
+
+  const width = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+
+  // ----- Nav item renderer -----
+  function renderNavItem(item: NavItem) {
+    const active = isActive(item.href);
+    const hovered = hoveredItem === item.href;
+
+    const itemStyle: CSSProperties = {
+      display: "flex",
+      alignItems: "center",
+      gap: collapsed ? 0 : 10,
+      justifyContent: collapsed ? "center" : "flex-start",
+      height: 38,
+      fontSize: 13,
+      fontWeight: 500,
+      color: active ? TEXT_ACTIVE : TEXT_DEFAULT,
+      backgroundColor: active ? BG_ACTIVE : hovered ? BG_HOVER : "transparent",
+      borderLeft: active ? `3px solid ${ACCENT}` : "3px solid transparent",
+      borderRadius: collapsed ? 8 : "0 8px 8px 0",
+      marginRight: collapsed ? 8 : 8,
+      marginLeft: collapsed ? 8 : 0,
+      paddingLeft: collapsed ? 0 : 13,
+      paddingRight: collapsed ? 0 : 12,
+      textDecoration: "none",
+      transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+      position: "relative",
+      cursor: "pointer",
+      boxShadow: active
+        ? isDark
+          ? `0 0 12px ${ACCENT}25, inset 0 0 0 1px ${ACCENT}15`
+          : `0 0 10px ${ACCENT}15, inset 0 0 0 1px ${ACCENT}10`
+        : "none",
+    };
+
+    const iconStyle: CSSProperties = {
+      width: 18,
+      height: 18,
+      flexShrink: 0,
+      color: active ? ACCENT_LIGHT : TEXT_DEFAULT,
+      transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1), color 200ms",
+      transform: hovered ? "scale(1.15)" : "scale(1)",
+    };
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        style={itemStyle}
+        // Tooltip shown in collapsed mode instead of label text
+        title={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
+        onMouseEnter={() => setHoveredItem(item.href)}
+        onMouseLeave={() => setHoveredItem(null)}
+      >
+        <item.icon style={iconStyle} />
+        {!collapsed && (
+          <>
+            <span
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {item.label}
+            </span>
+            {item.badge !== undefined && (
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  backgroundColor: "rgba(37,99,235,0.15)",
+                  color: ACCENT_LIGHT,
+                  padding: "2px 7px",
+                  borderRadius: 4,
+                }}
+              >
+                {item.badge}
+              </span>
+            )}
+            {showShortcutHints && item.shortcut && item.badge === undefined && (
+              <span
+                aria-label={`Shortcut: ${item.shortcut}`}
+                title={`Shortcut: ${item.shortcut}`}
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  gap: 3,
+                  flexShrink: 0,
+                  opacity: hovered || active ? 1 : 0.45,
+                  transition: "opacity 150ms",
+                }}
+              >
+                {item.shortcut.split(" ").map((k, i) => (
+                  <kbd
+                    key={i}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      fontFamily: "inherit",
+                      color: isDark ? "#64748b" : "#94a3b8",
+                      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                      border: `1px solid ${BORDER_COLOR}`,
+                      borderRadius: 3,
+                      padding: "1px 4px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {k}
+                  </kbd>
+                ))}
+              </span>
+            )}
+          </>
+        )}
+      </Link>
+    );
+  }
+
+  // ----- Nav group renderer -----
+  function renderNavGroup(group: NavGroup, index: number) {
+    return (
+      <div key={group.title}>
+        {!collapsed ? (
+          <>
+            {index > 0 && (
+              <div
+                style={{
+                  height: 1,
+                  margin: "12px 16px 0",
+                  background: isDark
+                    ? "linear-gradient(90deg, transparent, #1e293b 30%, #334155 50%, #1e293b 70%, transparent)"
+                    : "linear-gradient(90deg, transparent, #e2e8f0 30%, #cbd5e1 50%, #e2e8f0 70%, transparent)",
+                }}
+              />
+            )}
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: TEXT_SECTION,
+                marginTop: index > 0 ? 10 : 8,
+                marginBottom: 4,
+                paddingLeft: 16,
+              }}
+            >
+              {group.title}
+            </div>
+          </>
+        ) : (
+          index > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                margin: "12px 0 8px",
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 1,
+                  background: isDark
+                    ? "linear-gradient(90deg, transparent, #334155, transparent)"
+                    : "linear-gradient(90deg, transparent, #cbd5e1, transparent)",
+                  borderRadius: 1,
+                }}
+              />
+            </div>
+          )
+        )}
+        {group.items.map(renderNavItem)}
+      </div>
+    );
+  }
+
+  // ----- Shared sidebar content (used by both desktop and mobile) -----
+  const sidebarContent = (
+    <>
+      {/* Logo */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: collapsed ? 0 : 8,
+          justifyContent: collapsed ? "center" : "flex-start",
+          height: 64,
+          flexShrink: 0,
+          borderBottom: `1px solid ${BORDER_COLOR}`,
+          paddingLeft: collapsed ? 0 : 16,
+          paddingRight: collapsed ? 0 : 16,
+        }}
+      >
+        {collapsed ? (
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -4, borderRadius: 12, background: `radial-gradient(circle, ${ACCENT}40, transparent 70%)`, filter: "blur(6px)" }} />
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff" }}>
+              <HeartPulse size={18} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -6, borderRadius: 14, background: `radial-gradient(circle, ${ACCENT}50, transparent 70%)`, filter: "blur(8px)" }} />
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff", boxShadow: `0 2px 12px ${ACCENT}40` }}>
+                <HeartPulse size={18} />
+              </div>
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 17, fontWeight: 800, color: TEXT_ACTIVE, letterSpacing: "-0.02em" }}>
+                  TMIAB
+                </span>
+                <span style={{ fontSize: 17, fontWeight: 800, color: ACCENT_LIGHT, letterSpacing: "-0.02em" }}>
+                  RAF
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 600, marginTop: -2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Clinical Intelligence
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search + Notifications row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: collapsed ? 0 : 6,
+          margin: collapsed ? "8px 8px 0" : "8px 10px 0",
+          flexShrink: 0,
+        }}
+      >
+        {/* Search button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+          title="Search (⌘K)"
+          aria-label="Open command palette (Cmd+K)"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: collapsed ? 0 : 8,
+            justifyContent: collapsed ? "center" : "flex-start",
+            height: 38,
+            flex: collapsed ? "0 0 auto" : 1,
+            width: collapsed ? 32 : undefined,
+            padding: collapsed ? "0" : "0 10px",
+            borderRadius: 7,
+            background: isDark
+              ? "rgba(15,23,42,0.6)"
+              : "rgba(248,250,252,0.8)",
+            border: `1px solid ${BORDER_COLOR}`,
+            boxShadow: isDark
+              ? "inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 transparent"
+              : "inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0 transparent",
+            cursor: "pointer",
+            color: TEXT_DEFAULT,
+            fontSize: 13,
+            transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+          onMouseEnter={(e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            btn.style.borderColor = isDark ? "#334155" : "#cbd5e1";
+            btn.style.background = isDark ? "rgba(30,41,59,0.8)" : "rgba(241,245,249,0.9)";
+            btn.style.boxShadow = isDark
+              ? `inset 0 1px 3px rgba(0,0,0,0.3), 0 0 8px ${ACCENT}20`
+              : `inset 0 1px 3px rgba(0,0,0,0.06), 0 0 8px ${ACCENT}15`;
+          }}
+          onMouseLeave={(e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            btn.style.borderColor = BORDER_COLOR;
+            btn.style.background = isDark ? "rgba(15,23,42,0.6)" : "rgba(248,250,252,0.8)";
+            btn.style.boxShadow = isDark
+              ? "inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 transparent"
+              : "inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0 transparent";
+          }}
+        >
+          <Search style={{ width: 15, height: 15, flexShrink: 0, color: TEXT_DEFAULT }} aria-hidden />
+          {!collapsed && (
+            <>
+              <span style={{ flex: 1, textAlign: "left", color: TEXT_DEFAULT }}>Search…</span>
+              <kbd
+                style={{
+                  fontSize: 10,
+                  color: TEXT_SUBTLE,
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${BORDER_COLOR}`,
+                  borderRadius: 3,
+                  padding: "1px 5px",
+                  fontFamily: "inherit",
+                  flexShrink: 0,
+                }}
+              >
+                ⌘K
+              </kbd>
+            </>
+          )}
+        </button>
+
+        {/* Notification bell */}
+        <NotificationCenter collapsed={collapsed} />
+      </div>
+
+      {/* Collapse toggle — desktop only (hidden on mobile via className) */}
+      <div
+        className="hidden lg:flex"
+        style={{
+          justifyContent: collapsed ? "center" : "flex-end",
+          alignItems: "center",
+          height: 36,
+          flexShrink: 0,
+          paddingRight: collapsed ? 0 : 8,
+        }}
+      >
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 6,
+            cursor: "pointer",
+            color: TEXT_SUBTLE,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 4,
+          }}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <PanelLeft style={{ width: 16, height: 16 }} />
+          ) : (
+            <PanelLeftClose style={{ width: 16, height: 16 }} />
+          )}
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav
+        style={{ flex: 1, overflowY: "auto", paddingTop: 4, paddingBottom: 8 }}
+        role="navigation"
+        aria-label="Main navigation"
+      >
+        {navGroups.map((group, i) => renderNavGroup(group, i))}
+      </nav>
+
+      {/* Bottom section: theme toggle + user profile + version */}
+      <div
+        style={{
+          flexShrink: 0,
+          borderTop: `1px solid ${BORDER_COLOR}`,
+          padding: collapsed ? "8px 4px" : "8px 12px",
+        }}
+      >
+        {/* EMR Connection Status */}
+        <Link
+          href="/emr-config"
+          title={collapsed ? (emrLoading ? "EMR: Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected") : undefined}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
+            gap: 8,
+            width: "100%",
+            height: 32,
+            background: "none",
+            textDecoration: "none",
+            cursor: "pointer",
+            color: TEXT_DEFAULT,
+            fontSize: 12,
+            borderRadius: 4,
+            paddingLeft: collapsed ? 0 : 4,
+            marginBottom: 4,
+          }}
+        >
+          <span
+            className={emrStatus?.connected ? "emr-pulse" : undefined}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              flexShrink: 0,
+              backgroundColor: emrLoading
+                ? (isDark ? "#64748b" : "#94a3b8")
+                : emrStatus?.connected
+                  ? "#22c55e"
+                  : "#ef4444",
+              transition: "background-color 300ms",
+            }}
+          />
+          {!collapsed && (
+            <span style={{ fontSize: 12, color: TEXT_DEFAULT }}>
+              {emrLoading ? "EMR Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected"}
+            </span>
+          )}
+        </Link>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggle}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
+            gap: 8,
+            width: "100%",
+            height: 32,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: TEXT_DEFAULT,
+            fontSize: 12,
+            borderRadius: 4,
+            paddingLeft: collapsed ? 0 : 4,
+          }}
+          aria-label={
+            theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+          }
+          title={
+            collapsed
+              ? theme === "dark"
+                ? "Light mode"
+                : "Dark mode"
+              : undefined
+          }
+        >
+          {theme === "dark" ? (
+            <Sun style={{ width: 16, height: 16 }} />
+          ) : (
+            <Moon style={{ width: 16, height: 16 }} />
+          )}
+          {!collapsed && (
+            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          )}
+        </button>
+
+        {/* User profile row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: collapsed ? 0 : 8,
+            justifyContent: collapsed ? "center" : "flex-start",
+            padding: collapsed ? "6px 4px" : "8px 8px",
+            marginTop: 6,
+            borderRadius: 10,
+            backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "rgba(241,245,249,0.7)",
+            border: `1px solid ${isDark ? "rgba(51,65,85,0.3)" : "rgba(226,232,240,0.6)"}`,
+            transition: "background-color 200ms",
+          }}
+        >
+          {/* Avatar */}
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              backgroundColor: ACCENT,
+              color: TEXT_ACTIVE,
+              fontSize: 12,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              overflow: "hidden",
+            }}
+            title={collapsed ? getUserDisplayName(user) : undefined}
+          >
+            {user?.avatar_url && user.avatar_url.startsWith("https://") ? (
+              <img
+                src={user.avatar_url}
+                alt={getUserDisplayName(user)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              getUserInitials(user?.first_name, user?.last_name)
+            )}
+          </div>
+
+          {/* Name + role (expanded only) */}
+          {!collapsed && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: TEXT_ACTIVE,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {getUserDisplayName(user)}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: TEXT_SUBTLE,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {(user as { role?: string } | null)?.role ?? "User"}
+              </div>
+            </div>
+          )}
+
+          {/* Logout button — inline when expanded */}
+          {!collapsed && isAuthenticated && (
+            <button
+              onClick={handleLogout}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 4,
+                cursor: "pointer",
+                color: TEXT_SUBTLE,
+                display: "flex",
+                alignItems: "center",
+                borderRadius: 4,
+              }}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut style={{ width: 15, height: 15 }} />
+            </button>
+          )}
+        </div>
+
+        {/* Logout button — standalone row when collapsed */}
+        {collapsed && isAuthenticated && (
+          <button
+            onClick={handleLogout}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              height: 32,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: TEXT_SUBTLE,
+              borderRadius: 4,
+            }}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOut style={{ width: 15, height: 15 }} />
+          </button>
+        )}
+
+        {/* Version */}
+        <div
+          style={{
+            textAlign: collapsed ? "center" : "left",
+            paddingLeft: collapsed ? 0 : 4,
+            paddingTop: 6,
+          }}
+        >
+          <span style={{ fontSize: 10, color: TEXT_SECTION }}>v2.0</span>
+        </div>
+      </div>
+    </>
+  );
+
+  const sidebarBaseStyle: CSSProperties = {
+    background: BG_GRADIENT,
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  };
+
+  return (
+    <>
+      {/* Keyframe animations for sidebar */}
+      <style>{`
+        @keyframes sidebarLogoGlow {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
+        .sidebar-logo-glow {
+          animation: sidebarLogoGlow 3s ease-in-out infinite;
+        }
+        @keyframes emrPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+          50% { box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+        }
+        .emr-pulse {
+          animation: emrPulse 2s ease-in-out infinite;
+        }
+      `}</style>
+
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg shadow-lg lg:hidden"
+        style={{ backgroundColor: BG, border: `1px solid ${BORDER_COLOR}` }}
+        aria-label="Open navigation menu"
+        aria-expanded={mobileOpen}
+        aria-controls="mobile-sidebar"
+      >
+        <Menu className="h-5 w-5" style={{ color: TEXT_ACTIVE }} />
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile sidebar */}
+      <aside
+        id="mobile-sidebar"
+        className="fixed left-0 top-0 z-50 lg:hidden transition-transform duration-300 ease-out"
+        style={{
+          ...sidebarBaseStyle,
+          width: EXPANDED_WIDTH,
+          transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
+        }}
+        aria-label="Mobile navigation"
+        aria-hidden={!mobileOpen}
+      >
+        {/* Close button */}
+        <div style={{ position: "absolute", right: 10, top: 10, zIndex: 10 }}>
+          <button
+            onClick={() => setMobileOpen(false)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 4,
+              cursor: "pointer",
+              color: TEXT_SUBTLE,
+              display: "flex",
+            }}
+            aria-label="Close navigation menu"
+          >
+            <X style={{ width: 20, height: 20 }} />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside
+        className="fixed left-0 top-0 z-30 hidden lg:flex"
+        style={{
+          ...sidebarBaseStyle,
+          width,
+          transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+        aria-label="Main navigation sidebar"
+      >
+        {sidebarContent}
+      </aside>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hook — returns the current desktop sidebar width for main-content offsetting
+// ---------------------------------------------------------------------------
+
+export function useSidebarWidth(): number {
+  const [width, setWidth] = useState(EXPANDED_WIDTH);
+
+  useEffect(() => {
+    const sidebar = document.querySelector(
+      "aside.lg\\:flex"
+    ) as HTMLElement | null;
+    if (!sidebar) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(sidebar);
+    return () => observer.disconnect();
+  }, []);
+
+  return width;
+}

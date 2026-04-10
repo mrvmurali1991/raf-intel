@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  # Ephemeral MySQL 8.0 environment for CI/CD Testing
+  db-ci:
+    image: mysql:8.0
+    command: --default-authentication-plugin=caching_sha2_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ci_testing_root_pwd
+      MYSQL_DATABASE: raf_intel_ci
+      MYSQL_USER: ci_user
+      MYSQL_PASSWORD: ci_password
+    ports:
+      - "3306:3306"
+    volumes:
+      # Optional: In CI, we usually don't mount a local volume to keep it ephemeral, 
+      # but we mount init scripts if we have initial database setup needs.
+      # - ./backend/database/migrations:/docker-entrypoint-initdb.d
+      - ci_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "ci_user", "-pci_password"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+
+volumes:
+  ci_db_data: # Local ephemeral volume for CI run

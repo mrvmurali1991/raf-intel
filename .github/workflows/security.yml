@@ -1,0 +1,516 @@
+# ===========================================================================
+# RAF Intelligence — Weekly Security Scanning
+#
+# Runs on a weekly schedule (Monday 02:00 UTC) and can also be triggered
+# manually via workflow_dispatch for ad-hoc security reviews.
+#
+# Scans performed:
+#   1. Bandit          — Python SAST (security anti-patterns in source code)
+#   2. pip-audit       — Python dependency CVE scan against OSV / PyPI advisories
+#   3. npm audit       — Node.js dependency CVE scan
+#   4. Trivy (backend) — Container image vulnerability scan (OS + app layer)
+#   5. Trivy (frontend)— Container image vulnerability scan
+#   6. CodeQL          — Semantic code analysis for Python and JavaScript/TypeScript
+#   7. Secret scanning — Gitleaks detects accidentally committed credentials
+#   8. SBOM generation — CycloneDX software bill of materials for both images
+#
+# All results are uploaded as SARIF where supported so findings appear on the
+# GitHub Security tab under Code scanning alerts.
+#
+# HIPAA / healthcare context:
+#   PHI is never present in source code. However, the application processes
+#   patient-level data at runtime, so the security posture of the codebase,
+#   dependencies, and container images is a HIPAA technical-safeguard control.
+#   SBOMs are retained for 365 days to support compliance audits.
+#
+# Required permissions (set at job level, not repository level):
+#   security-events: write  — upload SARIF to GitHub Security
+#   contents: read           — checkout code and open issues
+#   packages: read           — pull images from GHCR for Trivy scans
+#   id-token: write          — OIDC token for cosign (SBOM signing)
+#
+# Security note on expression injection:
+#   All github context values used in shell run: steps are passed through
+#   env: blocks to prevent script injection. github-script JS steps receive
+#   context values as typed properties, not raw shell strings.
+# ===========================================================================
+
+name: Weekly Security Scan
+
+on:
+  schedule:
+    # Every Monday at 02:00 UTC
+    - cron: "0 2 * * 1"
+
+  # Allow security team to trigger manually at any time
+  workflow_dispatch:
+    inputs:
+      scan_images:
+        description: "Pull and scan Docker images from registry (requires images to exist)"
+        required: false
+        default: "true"
+        type: boolean
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/raf-intelligence-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/raf-intelligence-frontend
+
+# ---------------------------------------------------------------------------
+# Job: python-sast
+# Bandit static analysis on the Python application code.
+# Full severity scan (not just medium+) for the weekly deep-dive report.
+# ---------------------------------------------------------------------------
+jobs:
+  python-sast:
+    name: "Python SAST — Bandit"
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit
+        run: pip install bandit[toml]==1.7.9
+
+      # Scan all severity levels for the weekly report.
+      # SARIF output feeds the GitHub Security tab for triage.
+      - name: Run Bandit full scan
+        run: |
+          bandit \
+            -r backend/app \
+            -f sarif \
+            -o bandit-results.sarif \
+            || true
+
+      - name: Upload Bandit SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit-weekly
+
+      - name: Upload Bandit SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-sarif
+          path: bandit-results.sarif
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # Job: python-dependency-audit
+  # pip-audit checks all backend packages against OSV and PyPI advisory databases.
+  # ---------------------------------------------------------------------------
+  python-dependency-audit:
+    name: "Python dependencies — pip-audit"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pip-audit
+        run: pip install pip-audit==2.7.3
+
+      - name: Run pip-audit (CycloneDX output)
+        run: |
+          pip-audit \
+            -r backend/requirements.txt \
+            --format cyclonedx-json \
+            --output pip-audit-cyclonedx.json \
+            --strict \
+            || true
+
+      - name: Run pip-audit (human-readable summary)
+        run: |
+          pip-audit \
+            -r backend/requirements.txt \
+            --format columns \
+            || true
+
+      - name: Upload pip-audit CycloneDX report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-cyclonedx
+          path: pip-audit-cyclonedx.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # Job: node-dependency-audit
+  # npm audit for the Next.js frontend dependency tree.
+  # ---------------------------------------------------------------------------
+  node-dependency-audit:
+    name: "Node.js dependencies — npm audit"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run npm audit (full JSON report)
+        run: npm audit --json > npm-audit-full.json || true
+        working-directory: frontend
+
+      - name: Print npm audit summary
+        run: npm audit --audit-level=moderate || true
+        working-directory: frontend
+
+      - name: Upload npm audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-full
+          path: frontend/npm-audit-full.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # Job: container-scan-backend
+  # Builds the backend Docker image locally and runs Trivy against it.
+  # Produces a SARIF report (GitHub Security) and a CycloneDX SBOM (compliance).
+  # ---------------------------------------------------------------------------
+  container-scan-backend:
+    name: "Container scan — Backend image"
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          load: true
+          tags: raf-backend:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy — backend vulnerability scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: raf-backend:scan
+          format: sarif
+          output: trivy-backend.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      - name: Upload Trivy SARIF — backend
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      - name: Upload Trivy SARIF artifact — backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-backend-sarif
+          path: trivy-backend.sarif
+          retention-days: 90
+
+      - name: Generate backend SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: raf-backend:scan
+          format: cyclonedx
+          output: sbom-backend.cdx.json
+
+      - name: Upload backend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: sbom-backend.cdx.json
+          # Retain SBOMs for 1 year — supports HIPAA audit trails
+          retention-days: 365
+
+  # ---------------------------------------------------------------------------
+  # Job: container-scan-frontend
+  # Same as backend scan — builds the frontend image and runs Trivy.
+  # ---------------------------------------------------------------------------
+  container-scan-frontend:
+    name: "Container scan — Frontend image"
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          load: true
+          tags: raf-frontend:scan
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8500
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy — frontend vulnerability scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: raf-frontend:scan
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      - name: Upload Trivy SARIF — frontend
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+      - name: Upload Trivy SARIF artifact — frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-frontend-sarif
+          path: trivy-frontend.sarif
+          retention-days: 90
+
+      - name: Generate frontend SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: raf-frontend:scan
+          format: cyclonedx
+          output: sbom-frontend.cdx.json
+
+      - name: Upload frontend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-frontend
+          path: sbom-frontend.cdx.json
+          retention-days: 365
+
+  # ---------------------------------------------------------------------------
+  # Job: codeql-analysis
+  # GitHub CodeQL semantic analysis for Python and JavaScript/TypeScript.
+  # Uses the security-extended query suite to detect healthcare-relevant issues:
+  #   SQL injection, XSS, path traversal, insecure deserialization, SSRF, etc.
+  # ---------------------------------------------------------------------------
+  codeql-analysis:
+    name: "CodeQL — ${{ matrix.language }}"
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - python
+          - javascript-typescript
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-extended adds checks beyond the default security suite;
+          # appropriate for a HIPAA-regulated healthcare application.
+          queries: security-extended
+
+      - name: Auto-build
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: codeql-${{ matrix.language }}
+
+  # ---------------------------------------------------------------------------
+  # Job: secret-scanning
+  # Gitleaks scans the full git history for accidentally committed credentials:
+  # API keys, JWT secrets, database passwords, private keys, etc.
+  # HIPAA requires protecting all access credentials — this job enforces that
+  # no credentials were ever committed even transiently.
+  # ---------------------------------------------------------------------------
+  secret-scanning:
+    name: "Secret scanning — Gitleaks"
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout full git history
+        uses: actions/checkout@v4
+        with:
+          # Scan the entire commit history, not just HEAD
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Set GITLEAKS_LICENSE if using Gitleaks organisational features
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ---------------------------------------------------------------------------
+  # Job: security-report
+  # Runs after all scan jobs (pass or fail) and posts a consolidated summary
+  # to the workflow run page. Opens a GitHub Issue when critical scans fail
+  # so findings cannot be silently ignored by the team.
+  # ---------------------------------------------------------------------------
+  security-report:
+    name: "Security — Weekly summary report"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - python-sast
+      - python-dependency-audit
+      - node-dependency-audit
+      - container-scan-backend
+      - container-scan-frontend
+      - codeql-analysis
+      - secret-scanning
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Write summary to workflow run page
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          RESULT_BANDIT: ${{ needs.python-sast.result }}
+          RESULT_PIP_AUDIT: ${{ needs.python-dependency-audit.result }}
+          RESULT_NPM_AUDIT: ${{ needs.node-dependency-audit.result }}
+          RESULT_TRIVY_BACKEND: ${{ needs.container-scan-backend.result }}
+          RESULT_TRIVY_FRONTEND: ${{ needs.container-scan-frontend.result }}
+          RESULT_CODEQL: ${{ needs.codeql-analysis.result }}
+          RESULT_GITLEAKS: ${{ needs.secret-scanning.result }}
+        run: |
+          {
+            echo "## RAF Intelligence — Weekly Security Scan"
+            echo ""
+            echo "**Scan date:** $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "**Commit:** ${COMMIT_SHA}"
+            echo ""
+            echo "| Scan | Result |"
+            echo "|------|--------|"
+            echo "| Python SAST (Bandit)            | ${RESULT_BANDIT} |"
+            echo "| Python dependencies (pip-audit) | ${RESULT_PIP_AUDIT} |"
+            echo "| Node.js dependencies (npm audit) | ${RESULT_NPM_AUDIT} |"
+            echo "| Container scan — backend (Trivy) | ${RESULT_TRIVY_BACKEND} |"
+            echo "| Container scan — frontend (Trivy) | ${RESULT_TRIVY_FRONTEND} |"
+            echo "| CodeQL semantic analysis         | ${RESULT_CODEQL} |"
+            echo "| Secret scanning (Gitleaks)       | ${RESULT_GITLEAKS} |"
+            echo ""
+            echo "SARIF results visible in the Security tab. SBOMs retained 365 days."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Open a GitHub Issue when any critical scan job fails.
+      # Uses github-script (JavaScript) — context values are typed properties,
+      # not shell strings, so no injection risk applies.
+      - name: Open issue on critical scan failure
+        uses: actions/github-script@v7
+        if: |
+          needs.python-sast.result == 'failure' ||
+          needs.container-scan-backend.result == 'failure' ||
+          needs.container-scan-frontend.result == 'failure' ||
+          needs.secret-scanning.result == 'failure'
+        with:
+          script: |
+            const results = {
+              'Python SAST (Bandit)':          '${{ needs.python-sast.result }}',
+              'Container scan — backend':      '${{ needs.container-scan-backend.result }}',
+              'Container scan — frontend':     '${{ needs.container-scan-frontend.result }}',
+              'Secret scanning (Gitleaks)':    '${{ needs.secret-scanning.result }}',
+            };
+
+            const failed = Object.entries(results)
+              .filter(([, v]) => v === 'failure')
+              .map(([k]) => `- ${k}`)
+              .join('\n');
+
+            const runUrl =
+              `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const today = new Date().toISOString().split('T')[0];
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Security] Weekly scan failures — ${today}`,
+              body: [
+                '## Weekly Security Scan — Action Required',
+                '',
+                `**Workflow run:** [${context.runId}](${runUrl})`,
+                `**Commit:** ${context.sha}`,
+                `**Date:** ${new Date().toUTCString()}`,
+                '',
+                '### Failed scans',
+                failed,
+                '',
+                '### Remediation steps',
+                '1. Open the [Security tab](../../security/code-scanning) to review SARIF findings.',
+                '2. For each finding: fix, accept risk with written justification, or add a suppression comment.',
+                '3. **Secret scanning failure**: rotate any exposed credentials immediately and audit access logs.',
+                '4. Download SBOMs from workflow artifacts for vendor disclosure if required.',
+                '5. Close this issue once all findings are resolved and documented.',
+                '',
+                '> Auto-opened by the weekly security scan workflow.',
+                '> HIPAA Technical Safeguard reference: Access Control (§164.312(a)) and Audit Controls (§164.312(b)).',
+              ].join('\n'),
+              labels: ['security', 'automated', 'hipaa'],
+            });

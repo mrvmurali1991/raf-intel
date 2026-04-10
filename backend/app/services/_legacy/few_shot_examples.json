@@ -1,0 +1,286 @@
+[
+  {
+    "note_excerpt": "72yo M with Type 2 DM with A1c 8.2%, on metformin 1000mg BID and insulin glargine 20u. Diabetic nephropathy with eGFR 42. Continue current regimen, referred to nephrology.",
+    "codes": [
+      {"icd10": "E11.22", "hcc": "18", "description": "Type 2 DM with diabetic chronic kidney disease"},
+      {"icd10": "N18.3", "hcc": "329", "description": "CKD Stage 3 (moderate)"}
+    ],
+    "meat": {
+      "M": "A1c 8.2%, eGFR 42",
+      "E": "Nephropathy assessed, eGFR reviewed",
+      "A": "DM with nephropathy documented",
+      "T": "Metformin 1000mg BID, insulin glargine 20u, nephrology referral"
+    },
+    "rationale": "eGFR 42 = CKD stage 3b. E11.22 requires both DM2 and CKD; N18.3 separately captures stage."
+  },
+  {
+    "note_excerpt": "68yo F with systolic CHF, EF 30% on last echo. On carvedilol 25mg BID, lisinopril 10mg, furosemide 40mg. Weight stable, no edema today. BNP 480.",
+    "codes": [
+      {"icd10": "I50.22", "hcc": "85", "description": "Chronic systolic (congestive) heart failure"},
+      {"icd10": "Z79.899", "hcc": null, "description": "Other long-term current drug therapy"}
+    ],
+    "meat": {
+      "M": "BNP 480, weight stable",
+      "E": "Echo EF 30%, no edema on exam",
+      "A": "Chronic systolic CHF documented",
+      "T": "Carvedilol, lisinopril, furosemide"
+    },
+    "rationale": "EF 30% = systolic dysfunction; 'chronic' because ongoing. I50.22 not I50.9 (unspecified)."
+  },
+  {
+    "note_excerpt": "75yo M with COPD, FEV1 40% predicted (GOLD III). On tiotropium, fluticasone/salmeterol. Moderate exacerbation treated with prednisone burst and azithromycin. SpO2 88% on room air.",
+    "codes": [
+      {"icd10": "J44.1", "hcc": "111", "description": "COPD with acute exacerbation"},
+      {"icd10": "J96.01", "hcc": "84", "description": "Acute respiratory failure with hypoxia"}
+    ],
+    "meat": {
+      "M": "SpO2 88%, FEV1 40%",
+      "E": "Pulmonary function tests reviewed",
+      "A": "GOLD III COPD with acute exacerbation",
+      "T": "Tiotropium, fluticasone/salmeterol, prednisone burst, azithromycin"
+    },
+    "rationale": "Active exacerbation → J44.1 not J44.0. SpO2 88% on RA supports acute hypoxic respiratory failure."
+  },
+  {
+    "note_excerpt": "80yo F with major depressive disorder, recurrent, moderate severity. On sertraline 100mg daily. PHQ-9 score 12. Referred to behavioral health. Denied suicidal ideation.",
+    "codes": [
+      {"icd10": "F33.1", "hcc": "155", "description": "Major depressive disorder, recurrent, moderate"}
+    ],
+    "meat": {
+      "M": "PHQ-9 score 12",
+      "E": "Mood and affect assessed, SI screened",
+      "A": "MDD recurrent moderate documented",
+      "T": "Sertraline 100mg, behavioral health referral"
+    },
+    "rationale": "PHQ-9 12 = moderate. F33.1 = recurrent moderate. 'Denied SI' is not negation of diagnosis."
+  },
+  {
+    "note_excerpt": "70yo M with Stage 3B CKD (eGFR 34), not on dialysis. Proteinuria 2+ on UA. BP 148/90. On lisinopril 20mg, amlodipine 10mg. Renal diet counseled.",
+    "codes": [
+      {"icd10": "N18.32", "hcc": "329", "description": "Chronic kidney disease, stage 3b"},
+      {"icd10": "N04.9", "hcc": null, "description": "Nephrotic syndrome, unspecified morphologic changes"},
+      {"icd10": "I10", "hcc": null, "description": "Essential hypertension"}
+    ],
+    "meat": {
+      "M": "eGFR 34, BP 148/90, proteinuria 2+",
+      "E": "UA reviewed, renal function assessed",
+      "A": "CKD 3B with proteinuria",
+      "T": "Lisinopril 20mg, amlodipine 10mg, renal diet"
+    },
+    "rationale": "eGFR 34 = stage 3b → N18.32 not N18.3. Proteinuria warrants separate code."
+  },
+  {
+    "note_excerpt": "66yo F with atrial fibrillation, non-valvular, on apixaban 5mg BID. Heart rate 78 bpm today, no palpitations. CHA2DS2-VASc 5. Rhythm strip shows AF.",
+    "codes": [
+      {"icd10": "I48.91", "hcc": "96", "description": "Unspecified atrial fibrillation"},
+      {"icd10": "Z79.01", "hcc": null, "description": "Long-term current use of anticoagulants"}
+    ],
+    "meat": {
+      "M": "HR 78 bpm, rhythm strip",
+      "E": "EKG showing AF, CHA2DS2-VASc scored",
+      "A": "Non-valvular AF documented",
+      "T": "Apixaban 5mg BID"
+    },
+    "rationale": "Non-valvular unspecified chronicity = I48.91. Anticoagulant use separately captured with Z79.01."
+  },
+  {
+    "note_excerpt": "74yo M with peripheral artery disease, left lower extremity. ABI 0.65. On cilostazol 100mg BID, aspirin 81mg. Vascular surgery referral for possible revascularization. Claudication at 100 feet.",
+    "codes": [
+      {"icd10": "I70.212", "hcc": "108", "description": "Atherosclerosis of native arteries of left leg with intermittent claudication"}
+    ],
+    "meat": {
+      "M": "ABI 0.65",
+      "E": "Claudication at 100 feet, ABI measured",
+      "A": "PAD left LE with intermittent claudication",
+      "T": "Cilostazol, aspirin, vascular surgery referral"
+    },
+    "rationale": "Laterality and symptom specificity required. ABI 0.65 confirms PAD with claudication."
+  },
+  {
+    "note_excerpt": "78yo M, BMI 38, morbid obesity. Counseled on weight loss. Referred to bariatric surgery program. Associated hypertension and obstructive sleep apnea. On CPAP nightly.",
+    "codes": [
+      {"icd10": "E66.01", "hcc": null, "description": "Morbid obesity due to excess calories"},
+      {"icd10": "G47.33", "hcc": "135", "description": "Obstructive sleep apnea (adult)"},
+      {"icd10": "I10", "hcc": null, "description": "Essential hypertension"}
+    ],
+    "meat": {
+      "M": "BMI 38 documented",
+      "E": "OSA assessed, CPAP compliance evaluated",
+      "A": "Morbid obesity with comorbidities",
+      "T": "CPAP, bariatric referral, weight counseling"
+    },
+    "rationale": "BMI 38 = morbid obesity → E66.01. OSA is HCC-mapped and requires separate code."
+  },
+  {
+    "note_excerpt": "71yo F with rheumatoid arthritis on methotrexate 15mg weekly and hydroxychloroquine 200mg BID. Joints stable, ESR 32. Ophthalmology follow-up scheduled for HCQ monitoring.",
+    "codes": [
+      {"icd10": "M05.79", "hcc": "40", "description": "Rheumatoid arthritis with rheumatoid factor of multiple sites without organ or systems involvement"},
+      {"icd10": "Z79.899", "hcc": null, "description": "Other long-term drug therapy"}
+    ],
+    "meat": {
+      "M": "ESR 32",
+      "E": "Joint exam stable, ophthalmology monitoring",
+      "A": "Seropositive RA documented",
+      "T": "Methotrexate 15mg weekly, hydroxychloroquine 200mg BID"
+    },
+    "rationale": "Multiple joint sites without organ involvement = M05.79. DMARDs require long-term drug Z code."
+  },
+  {
+    "note_excerpt": "69yo M, HIV positive, on tenofovir/emtricitabine/dolutegravir. Viral load undetectable, CD4 count 620. No opportunistic infections. Annual labs reviewed.",
+    "codes": [
+      {"icd10": "B20", "hcc": "1", "description": "Human immunodeficiency virus [HIV] disease"},
+      {"icd10": "Z79.899", "hcc": null, "description": "Other long-term drug therapy"}
+    ],
+    "meat": {
+      "M": "Viral load undetectable, CD4 620",
+      "E": "Annual labs reviewed, no OIs",
+      "A": "HIV disease on ART",
+      "T": "Tenofovir/emtricitabine/dolutegravir"
+    },
+    "rationale": "B20 (HIV disease) not Z21 (asymptomatic) because patient is on ART management. HCC 1 is highest weight."
+  },
+  {
+    "note_excerpt": "67yo F with history of breast cancer, left, ER+/PR+, s/p lumpectomy and radiation 3 years ago. Currently on letrozole 2.5mg daily. No evidence of recurrence on CT chest/abdomen.",
+    "codes": [
+      {"icd10": "Z85.3", "hcc": null, "description": "Personal history of malignant neoplasm of breast"},
+      {"icd10": "Z79.818", "hcc": null, "description": "Long-term current use of other agents affecting estrogen receptors"}
+    ],
+    "meat": {
+      "M": "CT chest/abdomen NED",
+      "E": "Recurrence surveillance imaging reviewed",
+      "A": "Breast cancer history documented, no recurrence",
+      "T": "Letrozole 2.5mg daily"
+    },
+    "rationale": "No active disease → Z85.3 (history). Letrozole as adjuvant hormonal therapy → Z79.818."
+  },
+  {
+    "note_excerpt": "76yo M with vascular dementia, moderate stage. MMSE 16/30. Lives with daughter who reports increasing confusion. Safety concerns discussed. On donepezil 10mg daily.",
+    "codes": [
+      {"icd10": "F01.51", "hcc": "52", "description": "Vascular dementia with behavioral disturbance"},
+      {"icd10": "Z74.01", "hcc": null, "description": "Bed confinement status"}
+    ],
+    "meat": {
+      "M": "MMSE 16/30",
+      "E": "Cognitive assessment, safety evaluation",
+      "A": "Moderate vascular dementia documented",
+      "T": "Donepezil 10mg daily, caregiver education"
+    },
+    "rationale": "Increasing confusion = behavioral disturbance → F01.51 not F01.50. Caregiver reports count as evaluation."
+  },
+  {
+    "note_excerpt": "65yo M with schizophrenia, paranoid type, on olanzapine 20mg daily and haloperidol decanoate 100mg IM monthly. Stable, no hospitalizations in past year. Insight limited.",
+    "codes": [
+      {"icd10": "F20.0", "hcc": "57", "description": "Paranoid schizophrenia"},
+      {"icd10": "Z79.899", "hcc": null, "description": "Other long-term drug therapy"}
+    ],
+    "meat": {
+      "M": "Psychiatric status assessed, no hospitalizations",
+      "E": "Insight evaluated, symptom review",
+      "A": "Paranoid schizophrenia stable",
+      "T": "Olanzapine 20mg daily, haloperidol decanoate 100mg IM monthly"
+    },
+    "rationale": "F20.0 paranoid type specifically documented. Both oral and depot antipsychotics = long-term drug use."
+  },
+  {
+    "note_excerpt": "70yo F with systemic lupus erythematosus with lupus nephritis, class III. Creatinine 1.8, urine protein/creatinine ratio 1.2. On hydroxychloroquine and mycophenolate 2g daily. Rheumatology co-managing.",
+    "codes": [
+      {"icd10": "M32.14", "hcc": "39", "description": "Glomerular disease in systemic lupus erythematosus"},
+      {"icd10": "N08", "hcc": null, "description": "Glomerular disorders in diseases classified elsewhere"}
+    ],
+    "meat": {
+      "M": "Creatinine 1.8, UPCR 1.2",
+      "E": "Renal function monitored, rheumatology co-management",
+      "A": "SLE with lupus nephritis class III",
+      "T": "Hydroxychloroquine, mycophenolate 2g daily"
+    },
+    "rationale": "M32.14 codes lupus with renal involvement specifically. N08 separately captures nephritis manifestation."
+  },
+  {
+    "note_excerpt": "73yo M with liver cirrhosis secondary to NASH, decompensated. Ascites present, paracentesis done. Total bilirubin 4.2, albumin 2.8, INR 1.9. On spironolactone, lactulose, rifaximin.",
+    "codes": [
+      {"icd10": "K76.6", "hcc": "27", "description": "Portal hypertension"},
+      {"icd10": "K70.31", "hcc": "27", "description": "Alcoholic cirrhosis of liver with ascites"},
+      {"icd10": "K74.60", "hcc": "27", "description": "Unspecified cirrhosis of liver"}
+    ],
+    "meat": {
+      "M": "Bilirubin 4.2, albumin 2.8, INR 1.9",
+      "E": "Ascites on exam, LFTs reviewed",
+      "A": "Decompensated NASH cirrhosis with ascites and portal HTN",
+      "T": "Spironolactone, lactulose, rifaximin, paracentesis"
+    },
+    "rationale": "NASH cirrhosis = K74.60 (not alcoholic K70.x). Ascites and portal HTN coded separately."
+  },
+  {
+    "note_excerpt": "68yo F with Type 2 DM and proliferative diabetic retinopathy, right eye, with vitreous hemorrhage. Last ophthalmology visit showed new NVD. On anti-VEGF injections.",
+    "codes": [
+      {"icd10": "E11.3511", "hcc": "18", "description": "Type 2 DM with proliferative diabetic retinopathy with combined traction retinal detachment and rhegmatogenous retinal detachment, right eye"},
+      {"icd10": "H43.11", "hcc": null, "description": "Vitreous hemorrhage, right eye"}
+    ],
+    "meat": {
+      "M": "Ophthalmology follow-up, NVD documented",
+      "E": "Funduscopic exam, vitreous hemorrhage identified",
+      "A": "PDR with vitreous hemorrhage right eye",
+      "T": "Anti-VEGF injections"
+    },
+    "rationale": "Proliferative DR requires laterality and complication specificity. Vitreous hemorrhage coded separately."
+  },
+  {
+    "note_excerpt": "77yo M with sequelae of ischemic stroke 2 years ago. Residual left hemiparesis and dysarthria. On aspirin 325mg and atorvastatin 40mg. Continues PT/OT.",
+    "codes": [
+      {"icd10": "I69.351", "hcc": "100", "description": "Hemiplegia and hemiparesis following cerebral infarction affecting right dominant side"},
+      {"icd10": "I69.322", "hcc": "100", "description": "Dysarthria following cerebral infarction"},
+      {"icd10": "Z87.39", "hcc": null, "description": "Personal history of other endocrine, nutritional and metabolic diseases"}
+    ],
+    "meat": {
+      "M": "Neurological deficits assessed",
+      "E": "PT/OT evaluation of function",
+      "A": "Post-stroke hemiparesis and dysarthria",
+      "T": "Aspirin 325mg, atorvastatin 40mg, PT/OT"
+    },
+    "rationale": "Residual neurological deficits from old stroke = I69.x codes, not acute stroke. Each deficit coded separately."
+  },
+  {
+    "note_excerpt": "65yo F with end-stage renal disease on hemodialysis 3x/week. Dialysis fistula left forearm functioning well. Erythropoietin stimulating agent administered. Interdialytic weight gain 2kg.",
+    "codes": [
+      {"icd10": "N18.6", "hcc": "326", "description": "End-stage renal disease"},
+      {"icd10": "Z99.2", "hcc": null, "description": "Dependence on renal dialysis"},
+      {"icd10": "D63.1", "hcc": null, "description": "Anemia in chronic kidney disease"}
+    ],
+    "meat": {
+      "M": "Interdialytic weight gain 2kg, ESA administered",
+      "E": "Fistula assessed, dialysis adequacy evaluated",
+      "A": "ESRD on HD, CKD anemia",
+      "T": "Hemodialysis 3x/week, erythropoietin stimulating agent"
+    },
+    "rationale": "N18.6 for ESRD. Z99.2 for dialysis dependence. Anemia of CKD (D63.1) separately coded."
+  },
+  {
+    "note_excerpt": "70yo M with amyotrophic lateral sclerosis, bulbar onset. PEG tube placed 3 months ago for dysphagia. FVC 55%. Riluzole 50mg BID. Palliative care team involved.",
+    "codes": [
+      {"icd10": "G12.21", "hcc": "75", "description": "Amyotrophic lateral sclerosis"},
+      {"icd10": "J96.10", "hcc": "84", "description": "Chronic respiratory failure, unspecified whether with hypoxia or hypercapnia"},
+      {"icd10": "Z43.1", "hcc": null, "description": "Encounter for attention to gastrostomy"}
+    ],
+    "meat": {
+      "M": "FVC 55%, respiratory status",
+      "E": "Pulmonary function, dysphagia assessed",
+      "A": "Bulbar onset ALS with respiratory compromise",
+      "T": "Riluzole 50mg BID, PEG tube, palliative care"
+    },
+    "rationale": "G12.21 specific for ALS. FVC 55% = respiratory failure warranting J96 code. PEG encounter Z43.1."
+  },
+  {
+    "note_excerpt": "69yo F with protein-calorie malnutrition, severe, BMI 16.4. Admitted for nutritional support. Albumin 2.1, prealbumin 8. Dietitian consultation ordered. TPN initiated.",
+    "codes": [
+      {"icd10": "E43", "hcc": "21", "description": "Unspecified severe protein-calorie malnutrition"},
+      {"icd10": "E46", "hcc": "21", "description": "Unspecified protein-calorie malnutrition"}
+    ],
+    "meat": {
+      "M": "Albumin 2.1, prealbumin 8, BMI 16.4",
+      "E": "Nutritional status assessed by dietitian",
+      "A": "Severe protein-calorie malnutrition documented",
+      "T": "TPN initiated, dietitian consultation"
+    },
+    "rationale": "BMI 16.4 + albumin 2.1 = severe malnutrition → E43. HCC 21 carries significant RAF weight."
+  }
+]

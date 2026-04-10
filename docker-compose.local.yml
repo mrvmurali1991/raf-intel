@@ -1,0 +1,108 @@
+# WARNING: Credentials in this file are for LOCAL DEVELOPMENT ONLY.
+# They must NEVER be used in production environments.
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: raf-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: raf_intelligence
+    ports:
+      - "3309:3306"
+    volumes:
+      - raf_mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-raf-schema.sql
+      - ./database/openemr-minimal.sql:/docker-entrypoint-initdb.d/02-openemr-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: raf-backend
+    restart: unless-stopped
+    ports:
+      - "8500:8500"
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
+      RAF_DB_HOST: mysql
+      RAF_DB_PORT: "3306"
+      RAF_DB_USER: root
+      RAF_DB_PASSWORD: root
+      RAF_DB_NAME: raf_intelligence
+      OPENEMR_DB_HOST: mysql
+      OPENEMR_DB_PORT: "3306"
+      OPENEMR_DB_USER: root
+      OPENEMR_DB_PASSWORD: root
+      OPENEMR_DB_NAME: openemr
+      JWT_SECRET: local-dev-secret-DO-NOT-USE-IN-PRODUCTION
+      JWT_REFRESH_SECRET: local-dev-refresh-secret-change-me
+      FRONTEND_URL: http://localhost:3444
+      OPENEMR_URL: http://openemr:80
+      APP_ENV: development
+    volumes:
+      - ./models:/app/models:ro
+      - ./data/uploads:/app/uploads
+      - ./data/submissions:/app/data/submissions
+      - ./data/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8500
+    container_name: raf-frontend
+    restart: unless-stopped
+    ports:
+      - "3444:3000"
+    depends_on:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  openemr:
+    image: openemr/openemr:7.0.2
+    container_name: raf-openemr
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_ROOT_PASS: root
+      MYSQL_USER: root
+      MYSQL_PASS: root
+      MYSQL_DATABASE: openemr
+      OE_USER: admin
+      OE_PASS: pass
+    volumes:
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+      - openemr_logs:/var/log
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  raf_mysql_data:
+  openemr_sites:
+  openemr_logs:

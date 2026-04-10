@@ -1,0 +1,141 @@
+# ---------------------------------------------------------------------------
+# RAF Intelligence — Simple Production Compose (no Celery/Redis)
+#
+# For the full production stack with Celery workers and Redis, use:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# This file is suitable for single-server deployments where the backend
+# connects to an external MySQL database (e.g., host machine or RDS).
+# ---------------------------------------------------------------------------
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: raf-backend:${IMAGE_TAG:-latest}
+    container_name: raf-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8500}:8500"
+    env_file: .env
+    environment:
+      RAF_DB_HOST: ${RAF_DB_HOST:-host.docker.internal}
+      RAF_DB_PORT: ${RAF_DB_PORT:-3306}
+      OPENEMR_DB_HOST: ${OPENEMR_DB_HOST:-mysql}
+      OPENEMR_DB_PORT: ${OPENEMR_DB_PORT:-3306}
+      OPENEMR_URL: http://openemr:80
+      STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend/app:/app/app
+      - ./models:/app/models:ro
+      - ./data/uploads:/app/uploads
+      - ./data/logs:/app/logs
+    networks:
+      - raf-net
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8500/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://raf-api.comercioit.com}
+    image: raf-frontend:${IMAGE_TAG:-latest}
+    container_name: raf-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    networks:
+      - raf-net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "require('http').get('http://localhost:3000/login', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mysql:
+    image: mysql:8.0
+    container_name: raf-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: openemr
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - raf-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  openemr:
+    image: openemr/openemr:7.0.2
+    container_name: raf-openemr
+    restart: unless-stopped
+    ports:
+      - "${OPENEMR_PORT:-8080}:80"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_ROOT_PASS: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER: root
+      MYSQL_PASS: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: openemr
+      OE_USER: ${OE_USER:-admin}
+      OE_PASS: ${OE_PASS:-pass}
+    volumes:
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+      - openemr_logs:/var/log
+    networks:
+      - raf-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  raf-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  openemr_sites:
+  openemr_logs:

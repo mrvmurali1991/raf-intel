@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# RAF Intelligence — Celery Worker Multi-Stage Image
+# ---------------------------------------------------------------------------
+
+# Stage 1: Build — compile native extensions
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc \
+        g++ \
+        libffi-dev \
+        libssl-dev \
+        default-libmysqlclient-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Stage 2: Runtime — no compilers
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libmariadb3 \
+        libffi8 \
+        libssl3 \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+
+COPY app/ ./app/
+
+RUN groupadd --gid 1001 celery && \
+    useradd  --uid 1001 --gid celery --no-create-home celery
+
+USER celery
+
+HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
+    CMD celery -A app.services.job_service inspect ping --timeout 10 || exit 1
+
+CMD ["sh", "-c", \
+     "celery -A app.services.job_service worker \
+      --loglevel=info \
+      --concurrency=${CELERY_CONCURRENCY:-4} \
+      -Q default,heavy \
+      --max-tasks-per-child=50 \
+      --without-gossip \
+      --without-mingle \
+      --hostname=worker@%h"]
