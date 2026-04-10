@@ -1,0 +1,14 @@
+.env
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+.next/
+*.log
+.DS_Store
+models/
+
+# Large ML models (download separately)
+models/
