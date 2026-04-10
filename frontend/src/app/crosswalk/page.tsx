@@ -177,6 +177,9 @@ export default function CrosswalkPage() {
   const baseRate = result?.base_rate ?? 11015;
   const normFactor = result?.norm_factor ?? 1.199;
   const maci = result?.maci ?? 0.059;
+  // Payment = coefficient × baseRate × adjustmentFactor
+  // adjustmentFactor accounts for CMS normalization and coding intensity
+  const adjustmentFactor = (1 - maci) / normFactor;
 
   function handleCalculate() {
     runCalculation(input);
@@ -197,12 +200,13 @@ export default function CrosswalkPage() {
       "MA Payment",
     ];
     const rows: (string | number)[][] = [header];
+    const csvAdj = adjustmentFactor;
     rows.push([
       "Demographic",
       result.demographic.category || "—",
       "—",
       fmt3(result.demographic.coefficient),
-      fmtMoney(result.demographic.coefficient * baseRate),
+      fmtMoney(result.demographic.coefficient * baseRate * csvAdj),
     ]);
     result.hcc_details.forEach((h) => {
       rows.push([
@@ -210,7 +214,7 @@ export default function CrosswalkPage() {
         h.label,
         `HCC ${h.hcc}`,
         fmt3(h.coefficient),
-        fmtMoney(h.coefficient * baseRate),
+        fmtMoney(h.coefficient * baseRate * csvAdj),
       ]);
     });
     if (result.interactions.length > 0) {
@@ -220,7 +224,7 @@ export default function CrosswalkPage() {
           "—",
           "—",
           fmt3(iac.coefficient),
-          fmtMoney(iac.coefficient * baseRate),
+          fmtMoney(iac.coefficient * baseRate * csvAdj),
         ]);
       });
     }
@@ -229,17 +233,17 @@ export default function CrosswalkPage() {
       "—",
       "—",
       fmt3(result.totals.grand_total),
-      fmtMoney(result.totals.grand_total * baseRate),
+      fmtMoney(result.totals.ma_cp_adjusted * baseRate),
     ]);
     rows.push([
       "Normalized",
       "—",
       "—",
       fmt3(result.totals.normalized),
-      fmtMoney(result.totals.normalized * baseRate),
+      fmtMoney(result.totals.ma_cp_adjusted * baseRate),
     ]);
     rows.push([
-      "MA_CP_Adjusted",
+      "Payment_RAF",
       "—",
       "—",
       fmt3(result.totals.ma_cp_adjusted),
@@ -674,7 +678,7 @@ export default function CrosswalkPage() {
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {fmtMoney((result?.demographic.coefficient ?? 0) * baseRate)}
+                  {fmtMoney((result?.demographic.coefficient ?? 0) * baseRate * adjustmentFactor)}
                 </td>
               </tr>
 
@@ -754,7 +758,7 @@ export default function CrosswalkPage() {
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    {fmtMoney(h.coefficient * baseRate)}
+                    {fmtMoney(h.coefficient * baseRate * adjustmentFactor)}
                   </td>
                 </tr>
               ))}
@@ -801,7 +805,7 @@ export default function CrosswalkPage() {
                           fontVariantNumeric: "tabular-nums",
                         }}
                       >
-                        {fmtMoney(iac.coefficient * baseRate)}
+                        {fmtMoney(iac.coefficient * baseRate * adjustmentFactor)}
                       </td>
                     </tr>
                   ))}
@@ -834,7 +838,7 @@ export default function CrosswalkPage() {
                     color: C.accent,
                   }}
                 >
-                  {fmtMoney((result?.totals.grand_total ?? 0) * baseRate)}
+                  {fmtMoney((result?.totals.ma_cp_adjusted ?? 0) * baseRate)}
                 </td>
               </tr>
               <tr style={totalRowStyle}>
@@ -867,12 +871,12 @@ export default function CrosswalkPage() {
                     color: C.accent,
                   }}
                 >
-                  {fmtMoney((result?.totals.normalized ?? 0) * baseRate)}
+                  {fmtMoney((result?.totals.ma_cp_adjusted ?? 0) * baseRate)}
                 </td>
               </tr>
               <tr style={totalRowStyle}>
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: 700 }}>
-                  MA_CP_Adjusted
+                  Payment RAF
                   <div style={{ fontSize: 10, fontWeight: 600, color: C.textSubtle }}>
                     × {(1 - maci).toFixed(3)} coding intensity
                   </div>
