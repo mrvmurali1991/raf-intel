@@ -734,14 +734,21 @@ def population_summary(
             if _conn_type in ("fhir_r4", "rest_api"):
                 with raf_cursor() as _cur3:
                     _cur3.execute(
-                        "SELECT COUNT(DISTINCT epm.id) AS cnt "
+                        "SELECT COUNT(DISTINCT COALESCE(epm.raf_patient_id, epm.id)) AS cnt "
                         "FROM emr_patient_matches epm "
                         "JOIN emr_connections ec ON ec.id = epm.connection_id "
-                        "WHERE ec.is_active = 1"
+                        "WHERE ec.is_active = 1 AND epm.tenant_id = %s",
+                        (int(tenant_id),),
                     )
                     total_patients = _cur3.fetchone()["cnt"]
             else:
-                total_patients = get_patient_count()
+                # Direct-DB: count tenant-scoped active patients inline
+                with raf_cursor() as _cur_db:
+                    _cur_db.execute(
+                        "SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s",
+                        (int(tenant_id),),
+                    )
+                    total_patients = _cur_db.fetchone()["cnt"]
         except Exception as exc:
             logger.error("population_summary patient count error: %s", exc)
             total_patients = 0
@@ -749,17 +756,16 @@ def population_summary(
         # Check for uploaded patients when EMR is off
         try:
             with raf_cursor() as _cur_up:
-                _cur_up.execute("SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND data_source = 'upload'")
+                _cur_up.execute(
+                    "SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND data_source = 'upload' AND tenant_id = %s",
+                    (int(tenant_id),),
+                )
                 total_patients = _cur_up.fetchone()["cnt"]
         except Exception:
             total_patients = 0
 
-    # When EMR off but uploads exist, scope scores to uploaded patients
-    if not has_active and total_patients > 0:
-        _pop_score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
-        _pop_score_params: tuple = ()
-    else:
-        _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
+    # Scope RAF scores to tenant-active patients regardless of EMR mode
+    _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             cur.execute(

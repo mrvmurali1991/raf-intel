@@ -120,7 +120,7 @@ def provider_leaderboard(
     """
     calc_year = year or date.today().year
     try:
-        return get_leaderboard(calc_year)
+        return get_leaderboard(calc_year, tenant_id=current_user.get("tenant_id"))
     except Exception as exc:
         logger.error("provider_leaderboard error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -370,7 +370,9 @@ def get_scorecard(
     calc_year = year or date.today().year
     try:
         cached = get_latest_scorecard(provider_id, calc_year)
-        scorecard_data = cached if cached else calculate_provider_scorecard(provider_id, calc_year)
+        scorecard_data = cached if cached else calculate_provider_scorecard(
+            provider_id, calc_year, tenant_id=current_user.get("tenant_id")
+        )
 
         # Build ProviderDetail shape the frontend expects
         _PCP = {"Internal Medicine", "Family Medicine", "General Practice", "Geriatrics"}
@@ -460,7 +462,9 @@ def refresh_scorecard(
     _get_or_404(provider_id)
     calc_year = year or date.today().year
     try:
-        return calculate_provider_scorecard(provider_id, calc_year)
+        return calculate_provider_scorecard(
+            provider_id, calc_year, tenant_id=current_user.get("tenant_id")
+        )
     except Exception as exc:
         logger.error("refresh_scorecard error pid=%s: %s", provider_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

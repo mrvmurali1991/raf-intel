@@ -350,6 +350,30 @@ def dashboard_stats(
     except Exception:
         pass
 
+    # MEAT compliance — percentage of HCCs with meat_status = 'complete'
+    meat_compliance_pct = 0.0
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_hccs,
+                    SUM(CASE WHEN meat_status = 'complete' THEN 1 ELSE 0 END) AS complete_count
+                FROM raf_patient_hcc
+                WHERE tenant_id = %s
+                  AND measurement_year = %s
+                  AND meat_status IS NOT NULL
+                """,
+                (tenant_id, measurement_year),
+            )
+            row = cur.fetchone()
+            if row and row["total_hccs"]:
+                meat_compliance_pct = round(
+                    100.0 * int(row["complete_count"] or 0) / int(row["total_hccs"]), 1
+                )
+    except Exception:
+        pass
+
     return {
         "total_patients": total_patients,
         "patients_analyzed": analyzed,
@@ -358,7 +382,7 @@ def dashboard_stats(
         if total_patients
         else 0,
         "total_suspects_open": total_suspects_open,
-        "meat_compliance_pct": 0.0,
+        "meat_compliance_pct": meat_compliance_pct,
         "raf_distribution": raf_distribution,
         "top_undercoded": top_undercoded,
         "pipeline": _build_pipeline_block(tenant_id),

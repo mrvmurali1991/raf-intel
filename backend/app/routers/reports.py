@@ -143,10 +143,10 @@ def revenue_opportunity(year: int = Query(default=None),
                 FROM raf_encounter_analysis
                 WHERE overall_score IS NOT NULL
                   AND YEAR(analyzed_at) = %s
-                  AND pid IN (SELECT id FROM patients WHERE is_active = 1)
+                  AND pid IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
                 ORDER BY pid, encounter_id DESC
                 """,
-                (calc_year,),
+                (calc_year, tenant_id),
             )
             ai_rows = cur.fetchall()
 
@@ -161,15 +161,15 @@ def revenue_opportunity(year: int = Query(default=None),
         if pid not in billing_by_pid:
             billing_by_pid[pid] = float(row["final_raf"])
 
-    # Aggregate AI RAF per patient — take the highest overall_score per patient
-    # (encounter-level scores represent the most complete picture per encounter;
-    # the highest score per patient reflects the full clinical picture found)
+    # Aggregate AI RAF per patient — take the most recent overall_score per patient.
+    # The query is ordered by (pid, encounter_id DESC) so the first row per pid is
+    # the latest encounter's AI estimate. Using the max would inflate the total by
+    # cherry-picking the best single-encounter score rather than the latest view.
     ai_by_pid: dict[int, float] = {}
     for row in ai_rows:
         pid = int(row["pid"])
-        score = float(row["overall_score"])
-        if pid not in ai_by_pid or score > ai_by_pid[pid]:
-            ai_by_pid[pid] = score
+        if pid not in ai_by_pid:
+            ai_by_pid[pid] = float(row["overall_score"])
 
     total_billing_raf = round(sum(billing_by_pid.values()), 4)
     total_ai_raf = round(sum(ai_by_pid.values()), 4)
@@ -248,7 +248,7 @@ def patient_scorecard(year: int = Query(default=None),
             )
             billing_rows = cur.fetchall()
 
-        # Latest AI overall_score per patient — scoped to active patients
+        # Latest AI overall_score per patient — scoped to active patients for this tenant
         with raf_cursor() as cur:
             cur.execute(
                 """
@@ -256,9 +256,10 @@ def patient_scorecard(year: int = Query(default=None),
                        MAX(overall_score) AS ai_raf,
                        MAX(hcc_opportunity_count) AS hcc_count_ai
                 FROM raf_encounter_analysis
-                WHERE pid IN (SELECT id FROM patients WHERE is_active = 1)
+                WHERE pid IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
                 GROUP BY pid
                 """,
+                (tenant_id,),
             )
             ai_rows = cur.fetchall()
 
@@ -662,26 +663,55 @@ def data_completeness(
         logger.error("data_completeness patients count error: %s", exc, exc_info=True)
         counts["total_patients"] = 0
 
-    clinical_sql = """
-        SELECT 'patients_with_billing'               AS metric, COUNT(DISTINCT pid)      AS cnt FROM billing          WHERE activity = 1
-        UNION ALL
-        SELECT 'patients_with_problems',              COUNT(DISTINCT pid)      FROM lists            WHERE type = 'medical_problem' AND activity = 1
-        UNION ALL
-        SELECT 'patients_with_clinical_notes',        COUNT(DISTINCT pid)      FROM form_clinical_notes
-        UNION ALL
-        SELECT 'patients_with_vitals',                COUNT(DISTINCT pid)      FROM form_vitals      WHERE activity = 1
-        UNION ALL
-        SELECT 'patients_with_immunizations',         COUNT(DISTINCT patient_id) FROM immunizations  WHERE added_erroneously = 0 OR added_erroneously IS NULL
-        UNION ALL
-        SELECT 'patients_with_insurance',             COUNT(DISTINCT pid)      FROM insurance_data
-    """
+    # Run each clinical category as its own query so that a missing table
+    # (e.g. form_clinical_notes absent in some OpenEMR versions) or a column
+    # mismatch (form_vitals has no 'activity' column) only zeros out that one
+    # metric rather than silently aborting the entire UNION ALL.
+    #
+    # Note on form_vitals: OpenEMR's form_vitals table does not have an
+    # 'activity' column — the activity flag lives on the parent 'forms' row.
+    # We count all vitals rows directly without that filter.
+    _clinical_queries: list[tuple[str, str]] = [
+        (
+            "patients_with_billing",
+            "SELECT COUNT(DISTINCT pid) AS cnt FROM billing WHERE activity = 1",
+        ),
+        (
+            "patients_with_problems",
+            "SELECT COUNT(DISTINCT pid) AS cnt FROM lists WHERE type = 'medical_problem' AND activity = 1",
+        ),
+        (
+            "patients_with_clinical_notes",
+            "SELECT COUNT(DISTINCT pid) AS cnt FROM form_clinical_notes",
+        ),
+        (
+            "patients_with_vitals",
+            "SELECT COUNT(DISTINCT pid) AS cnt FROM form_vitals",
+        ),
+        (
+            "patients_with_immunizations",
+            "SELECT COUNT(DISTINCT patient_id) AS cnt FROM immunizations WHERE added_erroneously = 0 OR added_erroneously IS NULL",
+        ),
+        (
+            "patients_with_insurance",
+            "SELECT COUNT(DISTINCT pid) AS cnt FROM insurance_data",
+        ),
+    ]
 
     try:
         with openemr_cursor() as cur:
-            cur.execute(clinical_sql)
-            rows = cur.fetchall()
-        for row in rows:
-            counts[row["metric"]] = int(row["cnt"])
+            for metric, sql in _clinical_queries:
+                try:
+                    cur.execute(sql)
+                    row = cur.fetchone()
+                    counts[metric] = int(row["cnt"]) if row else 0
+                except Exception as _qexc:
+                    # Table may not exist in this OpenEMR version — default to 0
+                    logger.debug(
+                        "data_completeness: query for %s failed (table may be absent): %s",
+                        metric, _qexc,
+                    )
+                    counts[metric] = 0
     except NoActiveEMRConnection:
         # No EMR available — clinical categories from OpenEMR are unavailable,
         # but we still return total_patients and zero-filled categories so the
@@ -796,8 +826,9 @@ def workflow_summary(
                     """
                     SELECT COUNT(DISTINCT ea.pid) AS cnt
                     FROM raf_encounter_analysis ea
-                    WHERE ea.pid IN (SELECT id FROM patients WHERE is_active = 1)
-                    """
+                    WHERE ea.pid IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
+                    """,
+                    (tenant_id,),
                 )
                 row = cur.fetchone()
                 analyzed_count = int(row["cnt"]) if row else 0

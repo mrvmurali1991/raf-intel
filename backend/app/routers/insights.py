@@ -353,9 +353,12 @@ def _unanalyzed_patient_coverage(now: str, tenant_id: str | None = None) -> dict
             logger.debug("insights: patients table unavailable for coverage check: %s", exc)
             total_emr = None
 
+        _tid_cov = int(tenant_id) if tenant_id is not None else 1
+        _sf_cov, _sp_cov = active_patients_subquery(_tid_cov, patient_id_column="pid")
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT COUNT(DISTINCT pid) AS analyzed FROM raf_encounter_analysis WHERE {_ACTIVE_PIDS_SUBQUERY}"
+                f"SELECT COUNT(DISTINCT pid) AS analyzed FROM raf_encounter_analysis WHERE {_sf_cov}",
+                _sp_cov,
             )
             raf_row = cur.fetchone()
         analyzed = int(raf_row["analyzed"]) if raf_row else 0
@@ -501,8 +504,10 @@ def _data_freshness(now: str) -> dict | None:
         return None
 
 
-def _top_revenue_patient(now: str) -> dict | None:
+def _top_revenue_patient(now: str, tenant_id: str | None = None) -> dict | None:
     """Insight 8: Single patient with the highest revenue gap (AI RAF vs billed RAF)."""
+    _tid = int(tenant_id) if tenant_id is not None else 1
+    _sf, _sp = active_patients_subquery(_tid, patient_id_column="ea.pid")
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -518,10 +523,11 @@ def _top_revenue_patient(now: str) -> dict | None:
                   ON rs.patient_id       = ea.pid
                  AND rs.measurement_year = YEAR(CURDATE())
                 WHERE ea.overall_score > COALESCE(rs.final_raf, 0)
-                  AND {_ACTIVE_PIDS_SUBQUERY.replace("pid IN", "ea.pid IN")}
+                  AND {_sf}
                 ORDER BY raf_gap DESC
                 LIMIT 1
-                """
+                """,
+                _sp,
             )
             row = cur.fetchone()
 

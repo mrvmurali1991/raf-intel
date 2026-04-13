@@ -87,12 +87,16 @@ def list_providers(
     search: str | None = None,
     limit: int = 100,
     offset: int = 0,
+    tenant_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Return providers filtered by optional specialty, status, and name search."""
+    """Return providers filtered by optional specialty, status, name search, and tenant."""
 
     conditions: list[str] = []
     params: list[Any] = []
 
+    if tenant_id is not None:
+        conditions.append("tenant_id = %s")
+        params.append(int(tenant_id))
     if status:
         conditions.append("status = %s")
         params.append(status)
@@ -722,6 +726,10 @@ def get_latest_scorecard(provider_id: int, year: int) -> dict[str, Any] | None:
     if not row:
         return None
 
+    # Treat snapshots with zero patients as invalid (computed without tenant_id)
+    if not row.get("total_patients"):
+        return None
+
     calculated_at = row.get("calculated_at")
     if calculated_at:
         if isinstance(calculated_at, str):
@@ -1185,11 +1193,19 @@ def _serialize_alert(row: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def get_leaderboard(year: int) -> list[dict[str, Any]]:
+def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, Any]]:
     """
     Return all providers ranked by average_raf descending for the given year.
     Uses the latest scorecard snapshot per provider.
+    Filters by tenant_id via the providers table.
     """
+
+    if tenant_id is None:
+        raise ValueError(
+            "provider_service.get_leaderboard: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
+        )
+    tid = int(tenant_id)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -1202,18 +1218,19 @@ def get_leaderboard(year: int) -> list[dict[str, Any]]:
                 p.npi,
                 pss.meat_completeness_avg
             FROM provider_scorecard_snapshots pss
-            JOIN providers p ON p.id = pss.provider_id
+            JOIN providers p ON p.id = pss.provider_id AND p.tenant_id = %s
             INNER JOIN (
-                SELECT provider_id, MAX(calculated_at) AS latest
-                FROM provider_scorecard_snapshots
-                WHERE measurement_year = %s
-                GROUP BY provider_id
+                SELECT pss2.provider_id, MAX(pss2.calculated_at) AS latest
+                FROM provider_scorecard_snapshots pss2
+                JOIN providers p2 ON p2.id = pss2.provider_id AND p2.tenant_id = %s
+                WHERE pss2.measurement_year = %s
+                GROUP BY pss2.provider_id
             ) lx ON pss.provider_id = lx.provider_id
                AND pss.calculated_at = lx.latest
             WHERE pss.measurement_year = %s
             ORDER BY pss.average_raf DESC
             """,
-            (year, year),
+            (tid, tid, year, year),
         )
         rows = cur.fetchall()
 
@@ -1286,7 +1303,10 @@ def get_providers_summary(tenant_id: int) -> dict[str, Any]:
     year = date.today().year
 
     with raf_cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS cnt FROM providers WHERE status = 'active'")
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM providers WHERE status = 'active' AND tenant_id = %s",
+            (tid,),
+        )
         row = cur.fetchone()
         total_providers = int(row["cnt"]) if row else 0
 
@@ -1309,16 +1329,18 @@ def get_providers_summary(tenant_id: int) -> dict[str, Any]:
                 SUM(revenue_opportunity)        AS total_revenue_opp,
                 AVG(documentation_quality_score) AS avg_doc_quality
             FROM provider_scorecard_snapshots pss
+            JOIN providers p ON p.id = pss.provider_id AND p.tenant_id = %s
             INNER JOIN (
-                SELECT provider_id, MAX(calculated_at) AS latest
-                FROM provider_scorecard_snapshots
-                WHERE measurement_year = %s
-                GROUP BY provider_id
+                SELECT pss2.provider_id, MAX(pss2.calculated_at) AS latest
+                FROM provider_scorecard_snapshots pss2
+                JOIN providers p2 ON p2.id = pss2.provider_id AND p2.tenant_id = %s
+                WHERE pss2.measurement_year = %s
+                GROUP BY pss2.provider_id
             ) lx ON pss.provider_id = lx.provider_id
                AND pss.calculated_at = lx.latest
             WHERE pss.measurement_year = %s
             """,
-            (year, year),
+            (tid, tid, year, year),
         )
         row = cur.fetchone()
 

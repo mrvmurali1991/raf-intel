@@ -732,14 +732,14 @@ def task_calculate_provider_scorecards(
             calculate_provider_scorecard,
         )
 
-        providers = list_providers()
+        providers = list_providers(tenant_id=tenant_id)
         total = len(providers)
         processed = 0
         errors = 0
 
         for i, provider in enumerate(providers, start=1):
             try:
-                calculate_provider_scorecard(provider["id"], year)
+                calculate_provider_scorecard(provider["id"], year, tenant_id=tenant_id)
                 processed += 1
             except Exception as exc:  # noqa: BLE001
                 task_logger.warning(

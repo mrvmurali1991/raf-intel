@@ -1243,25 +1243,23 @@ def get_population_health_metrics(
         )
         cohort_counts = {r["status"]: r["cnt"] for r in (cur.fetchall() or [])}
 
-    if not all_patient_ids:
-        return {
-            "tenant_id": tenant_id,
-            "total_unique_patients": 0,
-            "avg_raf_score": None,
-            "total_raf_revenue": None,
-            "risk_tier_distribution": {},
-            "top_hccs": [],
-            "cohort_counts": cohort_counts,
-        }
-
-    ids_fmt = ",".join(["%s"] * len(all_patient_ids))
+    # If no cohort members exist, fall back to all active patients for this tenant
+    # so the dashboard shows real data even before any cohorts are created.
+    use_cohort_filter = bool(all_patient_ids)
+    ids_fmt = ",".join(["%s"] * len(all_patient_ids)) if use_cohort_filter else None
 
     with raf_cursor() as cur:
         active_frag, active_params = active_patients_subquery(tid)
-        cur.execute(
-            f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE patient_id IN ({ids_fmt}) AND {active_frag}",
-            [*all_patient_ids, *active_params],
-        )
+        if use_cohort_filter:
+            cur.execute(
+                f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE patient_id IN ({ids_fmt}) AND {active_frag}",
+                [*all_patient_ids, *active_params],
+            )
+        else:
+            cur.execute(
+                f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE {active_frag}",
+                [*active_params],
+            )
         avg_row = cur.fetchone()
         avg_raf = (
             round(float(avg_row["avg_raf"]), 4)
@@ -1270,24 +1268,53 @@ def get_population_health_metrics(
         )
 
         active_frag2, active_params2 = active_patients_subquery(tid)
-        cur.execute(
-            f"""
-            SELECT risk_tier, COUNT(*) AS cnt
-            FROM raf_scores
-            WHERE patient_id IN ({ids_fmt}) AND {active_frag2}
-            GROUP BY risk_tier
-            """,
-            [*all_patient_ids, *active_params2],
-        )
+        if use_cohort_filter:
+            cur.execute(
+                f"""
+                SELECT risk_tier, COUNT(*) AS cnt
+                FROM raf_scores
+                WHERE patient_id IN ({ids_fmt}) AND {active_frag2}
+                GROUP BY risk_tier
+                """,
+                [*all_patient_ids, *active_params2],
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT risk_tier, COUNT(*) AS cnt
+                FROM raf_scores
+                WHERE {active_frag2}
+                GROUP BY risk_tier
+                """,
+                [*active_params2],
+            )
         risk_rows = cur.fetchall() or []
         risk_dist = {r["risk_tier"]: r["cnt"] for r in risk_rows if r["risk_tier"]}
 
         active_frag3, active_params3 = active_patients_subquery(tid)
-        cur.execute(
-            f"SELECT hcc_codes FROM raf_scores WHERE patient_id IN ({ids_fmt}) AND hcc_codes IS NOT NULL AND {active_frag3}",
-            [*all_patient_ids, *active_params3],
-        )
+        if use_cohort_filter:
+            cur.execute(
+                f"SELECT hcc_codes FROM raf_scores WHERE patient_id IN ({ids_fmt}) AND hcc_codes IS NOT NULL AND {active_frag3}",
+                [*all_patient_ids, *active_params3],
+            )
+        else:
+            cur.execute(
+                f"SELECT hcc_codes FROM raf_scores WHERE hcc_codes IS NOT NULL AND {active_frag3}",
+                [*active_params3],
+            )
         hcc_raw = cur.fetchall() or []
+
+        # When no cohort filter, count distinct active patients directly
+        if not use_cohort_filter:
+            active_frag4, active_params4 = active_patients_subquery(tid)
+            cur.execute(
+                f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM raf_scores WHERE {active_frag4}",
+                [*active_params4],
+            )
+            count_row = cur.fetchone()
+            fallback_patient_count = int(count_row["cnt"]) if count_row and count_row["cnt"] else 0
+        else:
+            fallback_patient_count = len(all_patient_ids)
 
     hcc_counter: dict[str, int] = {}
     for row in hcc_raw:
@@ -1301,10 +1328,10 @@ def get_population_health_metrics(
             for code in codes:
                 hcc_counter[str(code)] = hcc_counter.get(str(code), 0) + 1
 
-    n = len(all_patient_ids)
+    n = fallback_patient_count
     top_hccs = sorted(
         [
-            {"code": code, "count": cnt, "prevalence": round(cnt / n, 4)}
+            {"code": code, "count": cnt, "prevalence": round(cnt / n, 4) if n else 0.0}
             for code, cnt in hcc_counter.items()
         ],
         key=lambda x: x["count"],
