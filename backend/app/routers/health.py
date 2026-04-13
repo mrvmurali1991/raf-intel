@@ -257,15 +257,17 @@ def dashboard_stats(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
-                (*_score_params, int(tenant_id), measurement_year),
-            )
-            analyzed = cur.fetchone()["cnt"]
-            cur.execute(
-                f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
+                f"""SELECT COUNT(*) AS cnt, ROUND(AVG(final_raf), 4) AS avg_raf
+                    FROM (
+                        SELECT patient_id, final_raf,
+                               ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY calculated_at DESC) AS rn
+                        FROM raf_scores
+                        WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s
+                    ) latest WHERE rn = 1""",
                 (*_score_params, int(tenant_id), measurement_year),
             )
             row = cur.fetchone()
+            analyzed = row["cnt"]
             avg_raf = round(float(row["avg_raf"] or 0), 4)
     except Exception:
         pass
@@ -297,11 +299,16 @@ def dashboard_stats(
                         WHEN final_raf < 3.0 THEN '2.0-3.0'
                         ELSE '3.0+'
                     END AS `range`,
-                    COUNT(DISTINCT patient_id) AS count
-                FROM raf_scores
-                WHERE {_score_filter}
-                  AND raf_scores.tenant_id = %s
-                  AND measurement_year = %s
+                    COUNT(*) AS count
+                FROM (
+                    SELECT patient_id, final_raf,
+                           ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY calculated_at DESC) AS rn
+                    FROM raf_scores
+                    WHERE {_score_filter}
+                      AND raf_scores.tenant_id = %s
+                      AND measurement_year = %s
+                ) latest
+                WHERE rn = 1
                 GROUP BY `range`
                 ORDER BY `range`
                 """,
