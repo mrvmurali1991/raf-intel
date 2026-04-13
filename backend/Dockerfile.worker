@@ -36,7 +36,8 @@ COPY --from=builder /install /usr/local
 COPY app/ ./app/
 
 RUN groupadd --gid 1001 celery && \
-    useradd  --uid 1001 --gid celery --no-create-home celery
+    useradd  --uid 1001 --gid celery --no-create-home celery && \
+    mkdir -p /app/data && chown celery:celery /app/data
 
 USER celery
 
@@ -52,4 +53,5 @@ CMD ["sh", "-c", \
       --without-gossip \
       --without-mingle \
       --hostname=worker@%h \
-      -B"]
+      -B \
+      --schedule=/app/data/celerybeat-schedule"]
