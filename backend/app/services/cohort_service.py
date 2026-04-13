@@ -1267,39 +1267,46 @@ def get_population_health_metrics(
             else None
         )
 
+        # Derive risk tiers from final_raf (no risk_tier column in raf_scores)
         active_frag2, active_params2 = active_patients_subquery(tid)
+        _tier_sql = """
+            SELECT
+                CASE
+                    WHEN final_raf < 0.5 THEN 'Low'
+                    WHEN final_raf < 1.0 THEN 'Moderate'
+                    WHEN final_raf < 2.0 THEN 'High'
+                    ELSE 'Very High'
+                END AS risk_tier,
+                COUNT(DISTINCT patient_id) AS cnt
+            FROM raf_scores rs
+            INNER JOIN (
+                SELECT patient_id AS pid, MAX(calculated_at) AS latest
+                FROM raf_scores GROUP BY patient_id
+            ) lx ON rs.patient_id = lx.pid AND rs.calculated_at = lx.latest
+        """
         if use_cohort_filter:
             cur.execute(
-                f"""
-                SELECT risk_tier, COUNT(*) AS cnt
-                FROM raf_scores
-                WHERE patient_id IN ({ids_fmt}) AND {active_frag2}
-                GROUP BY risk_tier
-                """,
+                f"{_tier_sql} WHERE rs.patient_id IN ({ids_fmt}) AND {active_frag2} GROUP BY risk_tier",
                 [*all_patient_ids, *active_params2],
             )
         else:
             cur.execute(
-                f"""
-                SELECT risk_tier, COUNT(*) AS cnt
-                FROM raf_scores
-                WHERE {active_frag2}
-                GROUP BY risk_tier
-                """,
+                f"{_tier_sql} WHERE {active_frag2} GROUP BY risk_tier",
                 [*active_params2],
             )
         risk_rows = cur.fetchall() or []
         risk_dist = {r["risk_tier"]: r["cnt"] for r in risk_rows if r["risk_tier"]}
 
+        # Get HCC codes from raf_patient_hcc (not raf_scores)
         active_frag3, active_params3 = active_patients_subquery(tid)
         if use_cohort_filter:
             cur.execute(
-                f"SELECT hcc_codes FROM raf_scores WHERE patient_id IN ({ids_fmt}) AND hcc_codes IS NOT NULL AND {active_frag3}",
+                f"SELECT hcc_code FROM raf_patient_hcc WHERE patient_id IN ({ids_fmt}) AND {active_frag3}",
                 [*all_patient_ids, *active_params3],
             )
         else:
             cur.execute(
-                f"SELECT hcc_codes FROM raf_scores WHERE hcc_codes IS NOT NULL AND {active_frag3}",
+                f"SELECT hcc_code FROM raf_patient_hcc WHERE {active_frag3}",
                 [*active_params3],
             )
         hcc_raw = cur.fetchall() or []
@@ -1318,15 +1325,9 @@ def get_population_health_metrics(
 
     hcc_counter: dict[str, int] = {}
     for row in hcc_raw:
-        codes = row.get("hcc_codes")
-        if isinstance(codes, str):
-            try:
-                codes = json.loads(codes)
-            except Exception:
-                codes = []
-        if isinstance(codes, list):
-            for code in codes:
-                hcc_counter[str(code)] = hcc_counter.get(str(code), 0) + 1
+        code = row.get("hcc_code")
+        if code:
+            hcc_counter[str(code)] = hcc_counter.get(str(code), 0) + 1
 
     n = fallback_patient_count
     top_hccs = sorted(
