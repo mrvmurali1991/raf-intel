@@ -306,7 +306,7 @@ def task_calculate_raf_batch(
 
         for i, pid in enumerate(patient_ids, start=1):
             try:
-                score = calculate_raf_score(pid, year)
+                score = calculate_raf_score(pid, year, tenant_id=tenant_id)
                 results.append({"patient_id": pid, "raf_score": score})
             except Exception as exc:  # noqa: BLE001
                 task_logger.warning(
