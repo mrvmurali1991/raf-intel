@@ -13,7 +13,7 @@
  * Can be re-triggered from Settings.
  */
 
-import { useEffect, useState, CSSProperties } from "react";
+import { useEffect, useState, useRef, useCallback, CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,6 +44,21 @@ import api from "@/lib/api";
 // ---------------------------------------------------------------------------
 
 export const ONBOARDING_KEY = "raf_onboarding_complete";
+export const GETTING_STARTED_KEY = "raf_getting_started";
+
+export interface GettingStartedState {
+  connect_emr: boolean;
+  upload_document: boolean;
+  review_suspects: boolean;
+  configure_worklists: boolean;
+}
+
+export const GETTING_STARTED_DEFAULT: GettingStartedState = {
+  connect_emr: false,
+  upload_document: false,
+  review_suspects: false,
+  configure_worklists: false,
+};
 
 // ---------------------------------------------------------------------------
 // API helpers
@@ -207,6 +222,10 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
 
   function complete() {
     localStorage.setItem(ONBOARDING_KEY, "true");
+    // Initialize getting started checklist if not already present
+    if (!localStorage.getItem(GETTING_STARTED_KEY)) {
+      localStorage.setItem(GETTING_STARTED_KEY, JSON.stringify(GETTING_STARTED_DEFAULT));
+    }
     setVisible(false);
     qc.invalidateQueries();
     onClose?.();
@@ -261,19 +280,52 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
     }
   }
 
+  // Focus trap
+  const wizardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!visible) return;
+    const el = wizardRef.current;
+    if (!el) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    // Focus first focusable element
+    const firstFocusable = el.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    firstFocusable?.focus();
+
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [visible, step]);
+
   if (!visible) return null;
 
   const totalSteps = 4;
 
   return (
     <div
+      ref={wizardRef}
       style={{
         position: "fixed", inset: 0, zIndex: 9998,
         display: "flex", alignItems: "center", justifyContent: "center",
         background: "linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
-      role="dialog" aria-modal="true" aria-label="Setup wizard"
+      role="dialog" aria-modal="true" aria-label={`Setup wizard — step ${step + 1} of ${totalSteps}`}
     >
       {/* Background pattern */}
       <div style={{ position: "absolute", inset: 0, opacity: 0.03, backgroundImage: "radial-gradient(circle at 25% 25%, #3B82F6 1px, transparent 1px), radial-gradient(circle at 75% 75%, #3B82F6 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
@@ -670,6 +722,132 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Getting Started Checklist — render on dashboard after onboarding
+// ---------------------------------------------------------------------------
+
+const CHECKLIST_ITEMS: { key: keyof GettingStartedState; label: string; href: string }[] = [
+  { key: "connect_emr", label: "Connect your EMR", href: "/settings" },
+  { key: "upload_document", label: "Upload your first document", href: "/uploads" },
+  { key: "review_suspects", label: "Review suspect conditions", href: "/analysis" },
+  { key: "configure_worklists", label: "Configure provider worklists", href: "/coder-worklist" },
+];
+
+export function GettingStartedChecklist() {
+  const router = useRouter();
+  const [state, setState] = useState<GettingStartedState | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(GETTING_STARTED_KEY);
+    if (raw) {
+      try { setState(JSON.parse(raw)); } catch { setState(null); }
+    }
+  }, []);
+
+  if (!state || dismissed) return null;
+
+  const completed = Object.values(state).filter(Boolean).length;
+  const total = CHECKLIST_ITEMS.length;
+  if (completed >= total) return null;
+
+  function toggle(key: keyof GettingStartedState) {
+    setState((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem(GETTING_STARTED_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function dismiss() {
+    localStorage.removeItem(GETTING_STARTED_KEY);
+    setDismissed(true);
+  }
+
+  return (
+    <div
+      style={{
+        background: BG, border: `1px solid ${BORDER}`, borderRadius: 16,
+        padding: "24px 28px", marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+      }}
+      role="region"
+      aria-label="Getting started checklist"
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: TEXT, margin: 0 }}>Getting Started</h3>
+          <p style={{ fontSize: 13, color: TEXT_SEC, margin: "4px 0 0" }}>
+            {completed} of {total} complete
+          </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 120, height: 6, borderRadius: 3, background: "#E2E8F0", overflow: "hidden" }}>
+            <div style={{ width: `${(completed / total) * 100}%`, height: "100%", background: SUCCESS, borderRadius: 3, transition: "width 300ms" }} />
+          </div>
+          <button
+            onClick={dismiss}
+            style={{ background: "none", border: "none", cursor: "pointer", color: TEXT_MUTED, fontSize: 12 }}
+            aria-label="Dismiss getting started checklist"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {CHECKLIST_ITEMS.map((item) => {
+          const checked = state[item.key];
+          return (
+            <div
+              key={item.key}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 14px", borderRadius: 10,
+                background: checked ? SUCCESS_LIGHT : BG_SUBTLE,
+                border: `1px solid ${checked ? `${SUCCESS}30` : BORDER}`,
+                transition: "all 200ms",
+              }}
+            >
+              <button
+                onClick={() => toggle(item.key)}
+                style={{
+                  width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                  border: `2px solid ${checked ? SUCCESS : "#CBD5E1"}`,
+                  background: checked ? SUCCESS : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", transition: "all 150ms",
+                }}
+                aria-label={`Mark "${item.label}" as ${checked ? "incomplete" : "complete"}`}
+              >
+                {checked && <Check size={14} color="#FFF" />}
+              </button>
+              <span style={{
+                fontSize: 14, fontWeight: 500, flex: 1,
+                color: checked ? TEXT_MUTED : TEXT,
+                textDecoration: checked ? "line-through" : "none",
+              }}>
+                {item.label}
+              </span>
+              {!checked && (
+                <button
+                  onClick={() => router.push(item.href)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    color: PRIMARY, fontSize: 12, fontWeight: 600,
+                    display: "flex", alignItems: "center", gap: 4,
+                  }}
+                >
+                  Go <ArrowRight size={12} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

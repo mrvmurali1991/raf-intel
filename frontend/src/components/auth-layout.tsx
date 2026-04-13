@@ -13,7 +13,7 @@ import { WelcomeWizard } from "@/components/WelcomeWizard";
 import { DemoBanner } from "@/components/DemoBanner";
 import { EmrDeactivatedBanner } from "@/components/EmrDeactivatedBanner";
 import { SessionTimeoutWarning } from "@/components/SessionTimeoutWarning";
-import { Loader2 } from "lucide-react";
+import { PageLoader } from "@/components/ui/loading";
 import { initErrorTracking } from "@/lib/error-tracking";
 
 // NOTE: ThemeProvider and QueryProvider are intentionally NOT imported here.
@@ -22,7 +22,7 @@ import { initErrorTracking } from "@/lib/error-tracking";
 // auth-state transition (login → dashboard), resetting query cache and theme.
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
+  const { isAuthenticated, isLoading, mustChangePassword, user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [commandOpen, setCommandOpen] = useState(false);
@@ -78,17 +78,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   // While the auth context is bootstrapping (checking stored refresh token),
   // show a full-page spinner. ThemeProvider wraps this so dark mode applies.
   if (isLoading) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800"
-        role="status"
-        aria-label="Loading application"
-        aria-busy="true"
-      >
-        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-        <span className="sr-only">Loading…</span>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   // Login page — no sidebar, no shell, no redirect loop risk.
@@ -106,11 +96,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       return null;
     }
     // Auth cookie exists but state hasn't caught up — show loading instead of redirecting
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   // Authenticated — full app shell with Sidebar.
@@ -125,7 +111,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         >
           <EmrDeactivatedBanner />
           <DemoBanner />
-          <ErrorBoundary>
+          <ErrorBoundary isAdmin={user?.role === "admin"}>
             {children}
           </ErrorBoundary>
         </main>

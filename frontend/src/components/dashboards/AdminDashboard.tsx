@@ -119,6 +119,32 @@ function timeAgo(dateStr: string | null | undefined): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** Convert a date-range key into query params for the API. */
+function dateRangeToParams(
+  range: string,
+  customStart?: string,
+  customEnd?: string
+): Record<string, string | number> {
+  switch (range) {
+    case "7d":
+      return { days_back: 7 };
+    case "30d":
+      return { days_back: 30 };
+    case "90d":
+      return { days_back: 90 };
+    case "1y":
+      return { days_back: 365 };
+    case "custom":
+      if (customStart && customEnd) {
+        return { start_date: customStart, end_date: customEnd };
+      }
+      return {};
+    case "ytd":
+    default:
+      return {};
+  }
+}
+
 function generateSparklineData(center: number, count: number): number[] {
   if (!center || isNaN(center)) return Array(count).fill(0);
   const data: number[] = [];
@@ -128,6 +154,47 @@ function generateSparklineData(center: number, count: number): number[] {
     data.push(center + offset);
   }
   return data;
+}
+
+/** Export dashboard data as CSV download */
+function exportDashboardCsv(data: {
+  totalPop: number;
+  analyzed: number;
+  avgRaf: number;
+  revenueOpp: number;
+  tiers: { high: number; med: number; low: number };
+  topOpps: Array<{ name: string; billing_raf?: number; ai_raf?: number; gap?: number; revenue_opportunity?: number }>;
+  providers: Array<{ name: string; specialty: string; patients: number; avgRaf: string; codingRate: string | number }>;
+}) {
+  const lines: string[] = [];
+  lines.push("Section,Metric,Value");
+  lines.push(`Summary,Total Members,${data.totalPop}`);
+  lines.push(`Summary,Patients Analyzed,${data.analyzed}`);
+  lines.push(`Summary,Average RAF Score,${data.avgRaf.toFixed(3)}`);
+  lines.push(`Summary,Revenue Opportunity,${data.revenueOpp}`);
+  lines.push(`Risk Tiers,High Risk (RAF >= 2.0),${data.tiers.high}`);
+  lines.push(`Risk Tiers,Medium Risk (RAF 1.0-2.0),${data.tiers.med}`);
+  lines.push(`Risk Tiers,Low Risk (RAF < 1.0),${data.tiers.low}`);
+  lines.push("");
+  lines.push("Patient,Billing RAF,TMIAB RAF,Gap,Revenue Opportunity");
+  for (const p of data.topOpps) {
+    const gap = Math.abs(p.gap ?? 0);
+    const rev = Math.abs((p.revenue_opportunity as number) ?? gap * 12000);
+    lines.push(`"${p.name}",${(p.billing_raf ?? 0).toFixed(3)},${(p.ai_raf ?? 0).toFixed(3)},${gap.toFixed(3)},${rev.toFixed(0)}`);
+  }
+  lines.push("");
+  lines.push("Provider,Specialty,Patients,Avg RAF,Coding Rate");
+  for (const prov of data.providers) {
+    lines.push(`"${prov.name}","${prov.specialty}",${prov.patients},${prov.avgRaf},${prov.codingRate}`);
+  }
+
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `raf-dashboard-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ---------------------------------------------------------------------------
@@ -153,56 +220,9 @@ const hoverCard = (e: React.MouseEvent<HTMLDivElement>, enter: boolean) => {
 };
 
 // ---------------------------------------------------------------------------
-// Skeleton Primitives
+// Skeleton Primitives — imported from unified loading components
 // ---------------------------------------------------------------------------
-
-function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
-  return (
-    <div
-      style={{
-        width: w,
-        height: h,
-        borderRadius: r,
-        background: "linear-gradient(90deg, #E2E8F0 25%, #EDF2F7 50%, #E2E8F0 75%)",
-        backgroundSize: "200% 100%",
-        animation: "shimmer 1.5s ease-in-out infinite",
-      }}
-    />
-  );
-}
-
-function KPISkeleton() {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} style={card}>
-          <Pulse w={100} h={14} />
-          <div style={{ height: 12 }} />
-          <Pulse w={80} h={32} />
-          <div style={{ height: 8 }} />
-          <Pulse w={120} h={12} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CardSkeleton({ rows = 5 }: { rows?: number }) {
-  return (
-    <div style={card}>
-      <Pulse w={180} h={18} />
-      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <Pulse w={60} h={14} />
-            <Pulse w="100%" h={18} />
-            <Pulse w={40} h={14} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { SkeletonCard as KPISkeleton, CardSkeleton, Pulse } from "@/components/ui/loading";
 
 // ---------------------------------------------------------------------------
 // InfoMetricBox — small metric card with info tooltip
@@ -336,12 +356,19 @@ export function AdminDashboard() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
+  // Memoize range params so query keys are stable
+  const rangeParams = useMemo(
+    () => dateRangeToParams(dateRange, customStart, customEnd),
+    [dateRange, customStart, customEnd]
+  );
+  const rangeKey = useMemo(() => JSON.stringify(rangeParams), [rangeParams]);
+
   // ---- Batch 1: Core stats (critical, loads first) ----
   const [emrStatusQ, statsQ, popQ] = useQueries({
     queries: [
       { queryKey: ["emr-status"], queryFn: getEmrStatus, retry: 1, staleTime: 60_000 },
-      { queryKey: ["dashboard-stats"], queryFn: getDashboardStats, retry: 1, staleTime: 60_000 },
-      { queryKey: ["population-summary", new Date().getFullYear()], queryFn: () => getPopulationSummary(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
+      { queryKey: ["dashboard-stats", rangeKey], queryFn: getDashboardStats, retry: 1, staleTime: 60_000 },
+      { queryKey: ["population-summary", new Date().getFullYear(), rangeKey], queryFn: () => getPopulationSummary(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
     ],
   });
   const emrStatus = emrStatusQ.data;
@@ -373,10 +400,10 @@ export function AdminDashboard() {
   // ---- Batch 2: Analytics (secondary) ----
   const [revQ, dcQ, scorecardQ, trendsQ] = useQueries({
     queries: [
-      { queryKey: ["revenue-opportunity", new Date().getFullYear()], queryFn: () => getRevenueOpportunity(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
-      { queryKey: ["data-completeness"], queryFn: getDataCompleteness, retry: 1, staleTime: 60_000 },
-      { queryKey: ["patient-scorecard"], queryFn: () => getPatientScorecard(), retry: 1, staleTime: 60_000 },
-      { queryKey: ["dashboard-trends"], queryFn: getDashboardTrends, retry: 1, staleTime: 60_000 },
+      { queryKey: ["revenue-opportunity", new Date().getFullYear(), rangeKey], queryFn: () => getRevenueOpportunity(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
+      { queryKey: ["data-completeness", rangeKey], queryFn: getDataCompleteness, retry: 1, staleTime: 60_000 },
+      { queryKey: ["patient-scorecard", rangeKey], queryFn: () => getPatientScorecard(), retry: 1, staleTime: 60_000 },
+      { queryKey: ["dashboard-trends", rangeKey], queryFn: getDashboardTrends, retry: 1, staleTime: 60_000 },
     ],
   });
   const rev = revQ.data;
@@ -654,7 +681,11 @@ export function AdminDashboard() {
             <RefreshCw size={14} />
             Refresh
           </button>
-          <ExportButton onExport={() => { /* future export */ }} label="Export Dashboard" />
+          <ExportButton onExport={() => exportDashboardCsv({
+            totalPop, analyzed, avgRaf, revenueOpp,
+            tiers, topOpps: topOpps as Array<{ name: string; billing_raf?: number; ai_raf?: number; gap?: number; revenue_opportunity?: number }>,
+            providers,
+          })} label="Export Dashboard" />
         </div>
       </div>
 
@@ -956,19 +987,19 @@ export function AdminDashboard() {
         >
           <StatCard
             label="Total Members"
-            value={<AnimatedNumber value={totalPop} format="number" />}
-            subtitle="Patients in system"
+            value={totalPop > 0 ? <AnimatedNumber value={totalPop} format="number" /> : "--"}
+            subtitle={totalPop > 0 ? "Patients in system" : "Import or connect EMR to begin"}
             icon={<Users size={20} />}
-            color="#3B82F6"
+            color={totalPop > 0 ? "#3B82F6" : "#94A3B8"}
             href="/patients"
             info="Total number of patients imported from your connected EMR system. This includes all active patients regardless of analysis status."
           />
           <StatCard
             label="Patients Analyzed"
-            value={<AnimatedNumber value={analyzed} format="number" />}
-            subtitle={totalPop > 0 ? `${Math.round((analyzed / totalPop) * 100)}% coverage` : "No data"}
+            value={analyzed > 0 ? <AnimatedNumber value={analyzed} format="number" /> : "--"}
+            subtitle={analyzed > 0 && totalPop > 0 ? `${Math.round((analyzed / totalPop) * 100)}% coverage` : "Run analysis to get started"}
             icon={<CheckCircle size={20} />}
-            color="#10B981"
+            color={analyzed > 0 ? "#10B981" : "#94A3B8"}
             trend={analyzedTrend}
             href="/analysis"
             info="Patients whose clinical encounters have been analyzed by the AI engine to identify HCC coding opportunities. 100% coverage means every patient has at least one analyzed encounter."

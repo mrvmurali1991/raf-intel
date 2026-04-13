@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Spinner } from "@/components/ui/loading";
 import {
   Upload,
   FileText,
@@ -254,7 +255,7 @@ export default function UploadsPage() {
       {uploadMut.isPending && (
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.textMuted }}>
-            <RefreshCw size={16} className="animate-spin" />
+            <Spinner size="sm" />
             <span>Uploading and processing file…</span>
           </div>
         </div>

@@ -95,19 +95,23 @@ export interface SparklineProps {
   height?: number;
   color?: string;
   showArea?: boolean;
+  labels?: string[];
+  ariaLabel?: string;
+  formatValue?: (v: number) => string;
 }
 
-export function Sparkline({ data, width = 80, height = 28, color = colors.primary, showArea = false }: SparklineProps) {
+export function Sparkline({ data, width = 80, height = 28, color = colors.primary, showArea = false, labels, ariaLabel, formatValue }: SparklineProps) {
   const reactId = useId();
   const pathId = `sparkline-${reactId.replace(/:/g, "")}`;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
-    return <svg width={width} height={height} />;
+    return <svg width={width} height={height} role="img" aria-label={ariaLabel || "Empty sparkline chart"} />;
   }
 
   if (data.length === 1) {
     return (
-      <svg width={width} height={height}>
+      <svg width={width} height={height} role="img" aria-label={ariaLabel || `Sparkline chart: value ${data[0]}`}>
         <circle cx={width / 2} cy={height / 2} r={2} fill={color} />
       </svg>
     );
@@ -121,6 +125,7 @@ export function Sparkline({ data, width = 80, height = 28, color = colors.primar
   const points = data.map((v, i) => ({
     x: padding + (i / (data.length - 1)) * (width - padding * 2),
     y: padding + (1 - (v - min) / range) * (height - padding * 2),
+    value: v,
   }));
 
   // Build quadratic bezier path
@@ -143,15 +148,25 @@ export function Sparkline({ data, width = 80, height = 28, color = colors.primar
 
   const pathLength = width * 2;
 
+  const defaultFormat = (v: number) => v % 1 === 0 ? v.toLocaleString("en-US") : v.toFixed(2);
+  const fmt = formatValue || defaultFormat;
+
   return (
-    <>
+    <div style={{ position: "relative", display: "inline-block", width, height }}>
       <style>{`
         @keyframes sparkline-draw-${pathId} {
           from { stroke-dashoffset: ${pathLength}; }
           to { stroke-dashoffset: 0; }
         }
       `}</style>
-      <svg width={width} height={height} style={{ overflow: "visible" }}>
+      <svg
+        width={width}
+        height={height}
+        style={{ overflow: "visible" }}
+        role="img"
+        aria-label={ariaLabel || `Sparkline chart with ${data.length} data points, range ${fmt(min)} to ${fmt(max)}`}
+        onMouseLeave={() => setHoveredIndex(null)}
+      >
         {showArea && (
           <path d={areaD} fill={color} opacity={0.15} />
         )}
@@ -168,8 +183,56 @@ export function Sparkline({ data, width = 80, height = 28, color = colors.primar
             animation: `sparkline-draw-${pathId} 600ms ease-out forwards`,
           }}
         />
+        {/* Invisible hit areas + visible hover dots */}
+        {points.map((pt, i) => (
+          <g key={i}>
+            <rect
+              x={pt.x - (width / data.length) / 2}
+              y={0}
+              width={width / data.length}
+              height={height}
+              fill="transparent"
+              onMouseEnter={() => setHoveredIndex(i)}
+            />
+            {hoveredIndex === i && (
+              <circle
+                cx={pt.x}
+                cy={pt.y}
+                r={3}
+                fill={color}
+                stroke={colors.white}
+                strokeWidth={1.5}
+              />
+            )}
+          </g>
+        ))}
       </svg>
-    </>
+      {hoveredIndex !== null && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            left: Math.min(Math.max(points[hoveredIndex].x, 30), width - 30),
+            transform: "translateX(-50%)",
+            marginBottom: 4,
+            padding: "3px 7px",
+            borderRadius: 5,
+            backgroundColor: colors.slate900,
+            color: colors.white,
+            fontSize: 10,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            zIndex: 10,
+            lineHeight: 1.3,
+            textAlign: "center",
+          }}
+        >
+          {labels?.[hoveredIndex] ? <div style={{ fontSize: 9, opacity: 0.7 }}>{labels[hoveredIndex]}</div> : null}
+          <div>{fmt(points[hoveredIndex].value)}</div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -197,7 +260,7 @@ export function MiniBarChart({ data, height = 24, showValues = true, animate = t
   const maxValue = Math.max(...data.map((d) => d.value), 1);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+    <div role="img" aria-label={`Bar chart with ${data.length} items: ${data.map(d => `${d.label} ${d.value}`).join(", ")}`} style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
       {data.map((item, i) => {
         const pct = (item.value / maxValue) * 100;
         return (
@@ -287,7 +350,7 @@ export function WaterfallChart({ data, totalLabel = "Total", height = 36 }: Wate
   const allItems = [...data, { label: totalLabel, value: total, color: colors.primary }];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
+    <div role="img" aria-label={`Waterfall chart: ${allItems.map(d => `${d.label} ${formatCurrency(d.value)}`).join(", ")}`} style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
       {allItems.map((item, i) => {
         const isTotal = i === allItems.length - 1;
         const pct = (Math.abs(item.value) / maxValue) * 100;
@@ -397,7 +460,7 @@ export function CircularGauge({ value, size = 120, strokeWidth = 10, color = col
 
   return (
     <div style={{ position: "relative", width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)", position: "absolute" }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)", position: "absolute" }} role="img" aria-label={`Circular gauge showing ${Math.round(value)}%${label ? ` for ${label}` : ""}`}>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -438,12 +501,16 @@ export interface TrendBadgeProps {
   value: number;
   label?: string;
   size?: "sm" | "md";
+  /** When true, an upward trend is bad (red) and downward is good (green). Use for metrics like high-risk patient count. */
+  invertTrend?: boolean;
 }
 
-export function TrendBadge({ value, label, size = "md" }: TrendBadgeProps) {
+export function TrendBadge({ value, label, size = "md", invertTrend = false }: TrendBadgeProps) {
   const isPositive = value >= 0;
-  const c = isPositive ? colors.greenDark : colors.red;
-  const bgColor = isPositive ? `${colors.green}1A` : `${colors.red}1A`;
+  // With invertTrend, going up is bad (red) and going down is good (green)
+  const isGood = invertTrend ? !isPositive : isPositive;
+  const c = isGood ? colors.greenDark : colors.red;
+  const bgColor = isGood ? `${colors.green}1A` : `${colors.red}1A`;
   const fontSize = size === "sm" ? 11 : 12;
   const iconSize = size === "sm" ? 12 : 14;
   const py = size === "sm" ? 2 : 4;
@@ -483,6 +550,7 @@ export interface DateRangeSelectorProps {
 }
 
 const dateRangeOptions = [
+  { key: "7d", label: "7D" },
   { key: "30d", label: "30D" },
   { key: "90d", label: "90D" },
   { key: "ytd", label: "YTD" },

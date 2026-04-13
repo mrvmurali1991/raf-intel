@@ -23,6 +23,19 @@ export const tokens = {
   riskMediumSoft: "#FFFBEB",
   riskLow:        "#059669", // emerald / green
   riskLowSoft:    "#ECFDF5",
+
+  // Brand / primary
+  primary:        "#0f766e", // teal-700
+  primarySoft:    "#0f766e1A",
+
+  // Semantic
+  red600:         "#e11d48",
+  amber500:       "#d97706",
+  emerald500:     "#059669",
+  gray400:        "#9CA3AF",
+  gray200:        "#E5E7EB",
+  subtleText:     "#64748B",
+  violet500:      "#8B5CF6",
 } as const;
 
 export type Tokens = typeof tokens;

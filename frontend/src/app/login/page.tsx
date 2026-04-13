@@ -11,6 +11,7 @@ import {
   Activity, FileCheck, Lock, ChevronRight,
   KeyRound, RotateCcw, HeartPulse, Stethoscope, FileText, Zap
 } from "lucide-react";
+import { PageLoader } from "@/components/ui/loading";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
@@ -26,7 +27,12 @@ function getApiError(err: unknown): string {
     if (res?.status === 403) return "Your account is locked. Please contact your administrator.";
     if (res?.status === 429) return "Too many login attempts. Please wait and try again.";
   }
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    if (err.message === "Network Error" || err.message.includes("ERR_CONNECTION")) {
+      return "Server unavailable. Please check your connection and try again.";
+    }
+    return err.message;
+  }
   return "Login failed. Please try again.";
 }
 
@@ -432,9 +438,16 @@ const features = [
 type LoginStep = "credentials" | "mfa";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("raf_remembered_email") || "";
+  });
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("raf_remember_me") === "true";
+  });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
@@ -466,6 +479,14 @@ export default function LoginPage() {
     setError("");
     setIsSubmitting(true);
     try {
+      // Persist remember-me preference
+      if (rememberMe) {
+        localStorage.setItem("raf_remember_me", "true");
+        localStorage.setItem("raf_remembered_email", email);
+      } else {
+        localStorage.removeItem("raf_remember_me");
+        localStorage.removeItem("raf_remembered_email");
+      }
       const result = await login(email, password);
       if (result.mfa_required && result.mfa_token) {
         setPendingMfaToken(result.mfa_token);
@@ -494,17 +515,7 @@ export default function LoginPage() {
   };
 
   if (isLoading) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950"
-        aria-live="assertive"
-        role="status"
-        aria-label="Signing in"
-      >
-        <Loader2 className="h-8 w-8 animate-spin text-teal-600" aria-hidden="true" />
-        <span className="sr-only">Signing in, please wait…</span>
-      </div>
-    );
+    return <PageLoader message="Signing in, please wait\u2026" />;
   }
 
   return (
@@ -715,6 +726,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    aria-label="Professional email address"
                     className="h-12 rounded-xl border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-900 login-input-focus transition-all duration-300 text-base"
                     autoComplete="email"
                   />
@@ -741,6 +753,7 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                      aria-label="Password"
                       className="h-12 pr-10 rounded-xl border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-900 login-input-focus transition-all duration-300 text-base"
                       autoComplete="current-password"
                     />
@@ -757,6 +770,20 @@ export default function LoginPage() {
                       )}
                     </button>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                    aria-label="Remember me"
+                  />
+                  <label htmlFor="remember-me" className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                    Remember me
+                  </label>
                 </div>
 
                 <Button
