@@ -1936,8 +1936,8 @@ export async function uploadDocument(
   documentType: string,
   encounterDate: string,
   notes?: string,
-  onUploadProgress?: (progressEvent: any) => void
-): Promise<any> {
+  onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void,
+) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("document_type", documentType);
