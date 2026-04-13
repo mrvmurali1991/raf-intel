@@ -1930,23 +1930,3 @@ export async function calculateRAFFull(req: RAFCalcRequest): Promise<RAFCalcResp
 
 /** @deprecated Use acceptSuspect */
 export { acceptSuspect as updateSuspect };
-
-export async function uploadDocument(
-  file: File,
-  documentType: string,
-  encounterDate: string,
-  notes?: string,
-  onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void,
-) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("document_type", documentType);
-  formData.append("encounter_date", encounterDate);
-  if (notes) formData.append("notes", notes);
-
-  const { data } = await api.post("/api/documents/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-    onUploadProgress,
-  });
-  return data;
-}
