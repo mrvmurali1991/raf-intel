@@ -523,26 +523,14 @@ def _handle_emr_sync_completed(payload: dict[str, Any]) -> None:
     combined_stats = {**enc_stats, **diag_stats, "diag_step_failed": diag_failed}
     _update_run(run_id, stats=combined_stats, current_step="raf_calculation")
 
-    if diag_failed:
-        # sync_diagnoses did not get to emit "normalization_completed"; we must
-        # do so ourselves, carrying the run_id so the next handler can continue
-        # updating the same tracking row.
-        from app.services.event_emitter import emit_internal
-
-        emit_internal(
-            "normalization_completed",
-            {
-                "tenant_id": tenant_id,
-                "patient_ids": [],
-                "pipeline_run_id": run_id,
-                "partial": True,
-            },
-        )
-    else:
-        # sync_diagnoses already emitted "normalization_completed" but we could
-        # not inject the run_id into that payload.  Stash it so the next
-        # handler can pick it up.
-        _stash_run_id(tenant_id, run_id)
+    # Call the next phase directly rather than relying on emit_internal,
+    # which uses a ThreadPoolExecutor that doesn't work in Celery's forked workers.
+    _handle_normalization_completed({
+        "tenant_id": tenant_id,
+        "patient_ids": [],
+        "pipeline_run_id": run_id,
+        "partial": diag_failed,
+    })
 
 
 def _handle_normalization_completed(payload: dict[str, Any]) -> None:
@@ -557,7 +545,6 @@ def _handle_normalization_completed(payload: dict[str, Any]) -> None:
     pipeline_run_id: int        — (optional) propagated tracking row id
     """
     from app.services.raf_calculator import calculate_raf_for_all_patients
-    from app.services.event_emitter import emit_internal
 
     tenant_id: str = payload.get("tenant_id") or ""
     if not tenant_id:
@@ -584,7 +571,7 @@ def _handle_normalization_completed(payload: dict[str, Any]) -> None:
         )
         _update_run(run_id, current_step="ai_analysis")
         _stash_run_id(tenant_id, run_id)
-        emit_internal("analysis_requested", {
+        _handle_analysis_requested({
             "tenant_id": tenant_id,
             "patient_ids": patient_ids,
             "pipeline_run_id": run_id,
@@ -624,16 +611,13 @@ def _handle_normalization_completed(payload: dict[str, Any]) -> None:
                 "raf_errors": error_count,
             },
         )
-        emit_internal(
-            "raf_calculation_completed",
-            {
-                "tenant_id": tenant_id,
-                "total": len(results),
-                "success": success_count,
-                "errors": error_count,
-                "pipeline_run_id": run_id,
-            },
-        )
+        _handle_raf_calculation_completed({
+            "tenant_id": tenant_id,
+            "total": len(results),
+            "success": success_count,
+            "errors": error_count,
+            "pipeline_run_id": run_id,
+        })
     except Exception as exc:
         logger.error(
             "pipeline_chain: RAF batch recalculation FAILED [tenant=%s]: %s",
@@ -665,7 +649,7 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
         get_medication_diagnoses,
     )
     from app.services.suspect_engine import save_suspects_from_analysis
-    from app.services.event_emitter import emit_internal
+
     from app.services.raf_calculator import _calculate_age
     from app.db import raf_cursor
 
@@ -883,7 +867,7 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
     )
 
     _stash_run_id(tenant_id, run_id)
-    emit_internal("analysis_completed", {
+    _handle_analysis_completed({
         "tenant_id": tenant_id,
         "analyzed_count": analyzed_count,
         "pipeline_run_id": run_id,
@@ -897,7 +881,7 @@ def _handle_analysis_completed(payload: dict[str, Any]) -> None:
     Emits ``"raf_calculation_completed"`` on success.
     """
     from app.services.raf_calculator import calculate_raf_for_all_patients
-    from app.services.event_emitter import emit_internal
+
 
     tenant_id: str = payload.get("tenant_id") or ""
     if not tenant_id:
@@ -965,7 +949,7 @@ def _handle_analysis_completed(payload: dict[str, Any]) -> None:
         },
     )
 
-    emit_internal("raf_calculation_completed", {
+    _handle_raf_calculation_completed({
         "tenant_id": tenant_id,
         "total": len(results),
         "success": success_count,
@@ -980,7 +964,7 @@ def _handle_raf_calculation_completed(payload: dict[str, Any]) -> None:
     Triggered by the ``"raf_calculation_completed"`` internal event.
     Emits ``"suspect_scan_completed"`` when done (or skipped).
     """
-    from app.services.event_emitter import emit_internal
+
 
     tenant_id: str = payload.get("tenant_id") or ""
     if not tenant_id:
@@ -1004,7 +988,7 @@ def _handle_raf_calculation_completed(payload: dict[str, Any]) -> None:
         logger.info(
             "pipeline_chain: suspect scan disabled, skipping to gaps [tenant=%s]", tenant_id
         )
-        emit_internal("suspect_scan_completed", {"tenant_id": tenant_id, "pipeline_run_id": run_id})
+        _handle_suspect_scan_completed({"tenant_id": tenant_id, "pipeline_run_id": run_id})
         return
 
     _update_run(run_id, current_step="suspect_scan")
@@ -1042,7 +1026,7 @@ def _handle_raf_calculation_completed(payload: dict[str, Any]) -> None:
         )
         _update_run(run_id, step_completed="suspect_scan_failed")
 
-    emit_internal("suspect_scan_completed", {
+    _handle_suspect_scan_completed({
         "tenant_id": tenant_id,
         "pipeline_run_id": run_id,
     })
@@ -1054,7 +1038,7 @@ def _handle_suspect_scan_completed(payload: dict[str, Any]) -> None:
     Triggered by the ``"suspect_scan_completed"`` internal event.
     Emits ``"pipeline_completed"`` when done (or skipped).
     """
-    from app.services.event_emitter import emit_internal
+
 
     tenant_id: str = payload.get("tenant_id") or ""
     if not tenant_id:
@@ -1070,7 +1054,7 @@ def _handle_suspect_scan_completed(payload: dict[str, Any]) -> None:
         logger.info(
             "pipeline_chain: gap generation disabled [tenant=%s]", tenant_id
         )
-        emit_internal("pipeline_completed", {"tenant_id": tenant_id, "pipeline_run_id": run_id})
+        _handle_pipeline_completed({"tenant_id": tenant_id, "pipeline_run_id": run_id})
         return
 
     _update_run(run_id, current_step="gap_generation")
@@ -1094,7 +1078,7 @@ def _handle_suspect_scan_completed(payload: dict[str, Any]) -> None:
         )
         _update_run(run_id, step_completed="gap_generation_failed")
 
-    emit_internal("pipeline_completed", {
+    _handle_pipeline_completed({
         "tenant_id": tenant_id,
         "pipeline_run_id": run_id,
         "gaps_created": gaps_created,
