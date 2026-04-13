@@ -465,7 +465,8 @@ def _get_or_create_dynamic_pool(
     )
     # ssl_context is not supported by all mysql-connector-python versions;
     # skip for internal/private hosts to avoid "Unsupported argument" errors.
-    _dynamic_pools[key] = MySQLConnectionPool(**kwargs)
+    pool = MySQLConnectionPool(**kwargs)
+    _dynamic_pools[key] = pool
     logger.debug(
         "Created dynamic pool '%s' for %s:%s/%s (cache size: %d)",
         pool_name,
