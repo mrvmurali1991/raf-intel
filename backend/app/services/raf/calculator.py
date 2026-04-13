@@ -1529,7 +1529,10 @@ def calculate_raf_for_all_patients(
             "refusing to batch-calculate RAF without tenant scope (HIPAA multi-tenant isolation)"
         )
     with raf_cursor() as cur:
-        cur.execute("SELECT id FROM patients WHERE is_active = 1 ORDER BY id")
+        cur.execute(
+            "SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s ORDER BY id",
+            (tenant_id,),
+        )
         patients = cur.fetchall()
 
     results = []

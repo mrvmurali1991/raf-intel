@@ -19,12 +19,9 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.db import openemr_cursor, raf_cursor
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
-
-# Variant of ACTIVE_PATIENTS_SUBQUERY for OpenEMR tables that use "pid" column.
-_ACTIVE_PIDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "pid IN")
 
 
 # ---------------------------------------------------------------------------
@@ -678,11 +675,11 @@ def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
             "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
     tid = tenant_id
-    _ACTIVE_IDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "id IN")
+    _sf, _sp = active_patients_subquery(int(tid), patient_id_column="id")
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE is_active = 1 AND {_ACTIVE_IDS_SUBQUERY} AND tenant_id = %s ORDER BY id",
-            (tid,),
+            f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id",
+            (*_sp, tid),
         )
         patients = cur.fetchall()
 
@@ -788,11 +785,11 @@ def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, 
             "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
     tid = tenant_id
-    _ACTIVE_IDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "id IN")
+    _sf, _sp = active_patients_subquery(int(tid), patient_id_column="id")
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE is_active = 1 AND {_ACTIVE_IDS_SUBQUERY} AND tenant_id = %s ORDER BY id LIMIT %s",
-            (tid, limit),
+            f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id LIMIT %s",
+            (*_sp, tid, limit),
         )
         patients = cur.fetchall()
 

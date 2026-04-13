@@ -112,8 +112,11 @@ def list_suspects(
     so each record includes ``patient_name``.  Records are sorted by
     ``confidence_score`` descending (highest confidence first).
     """
+    tenant_id: str = current_user.get("tenant_id") or ""
     try:
-        suspects: list[dict[str, Any]] = get_all_open_suspects(limit=limit, offset=offset)
+        suspects: list[dict[str, Any]] = get_all_open_suspects(
+            limit=limit, offset=offset, tenant_id=tenant_id
+        )
     except Exception as exc:
         logger.error("list_suspects – get_all_open_suspects failed: %s", exc)
         raise HTTPException(
@@ -181,7 +184,9 @@ def scan_all_patients(
         if not pid:
             continue
         try:
-            found = run_full_suspect_scan(pid, year=year)
+            found = run_full_suspect_scan(
+            pid, year=year, tenant_id=current_user.get("tenant_id") or None
+        )
             new_count = len(found)
             total_new += new_count
             per_patient.append({"pid": pid, "new_suspects": new_count})
@@ -286,8 +291,11 @@ def get_patient_suspects(
             status_code=404, detail=f"Patient {pid} not found in OpenEMR"
         )
 
+    tenant_id: str = current_user.get("tenant_id") or ""
     try:
-        suspects: list[dict[str, Any]] = get_suspects_for_patient(pid, year=year)
+        suspects: list[dict[str, Any]] = get_suspects_for_patient(
+            pid, year=year, tenant_id=tenant_id or None
+        )
     except Exception as exc:
         logger.error("get_patient_suspects pid=%s: %s", pid, exc)
         raise HTTPException(
@@ -345,8 +353,11 @@ def scan_patient(
             status_code=404, detail=f"Patient {pid} not found in OpenEMR"
         )
 
+    tenant_id: str = current_user.get("tenant_id") or ""
     try:
-        new_suspects: list[dict[str, Any]] = run_full_suspect_scan(pid, year=year)
+        new_suspects: list[dict[str, Any]] = run_full_suspect_scan(
+            pid, year=year, tenant_id=tenant_id or None
+        )
     except Exception as exc:
         logger.error("scan_patient pid=%s: %s", pid, exc)
         raise HTTPException(

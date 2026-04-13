@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import type { AnalysisResult, AIDiagnosis } from "@/types";
 import type { PatientEncountersResponse } from "@/lib/api";
 import {
@@ -27,22 +27,76 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
 }) {
   const [expandedEnc, setExpandedEnc] = useState<number | null>(null);
 
+  // Compute available years from encounter data
+  const availableYears = useMemo(() => {
+    if (!encounters?.encounters) return [];
+    const years = new Set<number>();
+    encounters.encounters.forEach((enc: EncounterItem) => {
+      const encDate = enc.date || enc.encounter_date;
+      if (encDate) years.add(new Date(encDate).getFullYear());
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [encounters]);
+
+  // Default to "all" if selected year has no encounters, otherwise use parent's year
+  const [yearFilter, setYearFilter] = useState<number | "all">("all");
+
+  // On first load, pick a sensible default year
+  const [initialized, setInitialized] = useState(false);
+  useEffect(() => {
+    if (!encounters?.encounters?.length || initialized) return;
+    setInitialized(true);
+    if (availableYears.includes(selectedYear)) {
+      setYearFilter(selectedYear);
+    } else if (availableYears.length > 0) {
+      setYearFilter(availableYears[0]);
+    } else {
+      setYearFilter("all");
+    }
+  }, [encounters, availableYears, selectedYear, initialized]);
+
   const filteredEncounters = useMemo(() => {
     if (!encounters?.encounters) return [];
+    if (yearFilter === "all") return encounters.encounters;
     return encounters.encounters.filter((enc: EncounterItem) => {
       const encDate = enc.date || enc.encounter_date;
       if (!encDate) return true;
-      const encYear = new Date(encDate).getFullYear();
-      return encYear === selectedYear;
+      return new Date(encDate).getFullYear() === yearFilter;
     });
-  }, [encounters, selectedYear]);
+  }, [encounters, yearFilter]);
 
   if (encountersLoading) return <SectionLoader label="Loading encounters..." />;
   if (!filteredEncounters.length) {
     return (
       <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 16px", borderBottom: `1px solid #e2e8f0` }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
+          <button
+            onClick={() => setYearFilter("all")}
+            style={{
+              padding: "4px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", transition: "all 0.15s",
+              fontWeight: yearFilter === "all" ? 700 : 500,
+              color: yearFilter === "all" ? "#fff" : "#64748b",
+              background: yearFilter === "all" ? "#2563eb" : "transparent",
+              border: yearFilter === "all" ? "none" : "1px solid #e2e8f0",
+            }}
+          >All Years</button>
+          {availableYears.map((yr) => (
+            <button
+              key={yr}
+              onClick={() => setYearFilter(yr)}
+              style={{
+                padding: "4px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", transition: "all 0.15s",
+                fontWeight: yearFilter === yr ? 700 : 500,
+                color: yearFilter === yr ? "#fff" : "#64748b",
+                background: yearFilter === yr ? "#2563eb" : "transparent",
+                border: yearFilter === yr ? "none" : "1px solid #e2e8f0",
+              }}
+            >{yr}</button>
+          ))}
+        </div>
         <EmptyState
-          title={`No encounters found for ${selectedYear}`}
+          title={`No encounters found${yearFilter !== "all" ? ` for ${yearFilter}` : ""}`}
           icon={
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -55,6 +109,33 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Year filter */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
+        <button
+          onClick={() => setYearFilter("all")}
+          style={{
+            padding: "4px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", transition: "all 0.15s",
+            fontWeight: yearFilter === "all" ? 700 : 500,
+            color: yearFilter === "all" ? "#fff" : "#64748b",
+            background: yearFilter === "all" ? "#2563eb" : "transparent",
+            border: yearFilter === "all" ? "none" : "1px solid #e2e8f0",
+          }}
+        >All Years</button>
+        {availableYears.map((yr) => (
+          <button
+            key={yr}
+            onClick={() => setYearFilter(yr)}
+            style={{
+              padding: "4px 10px", fontSize: 11, borderRadius: 5, cursor: "pointer", transition: "all 0.15s",
+              fontWeight: yearFilter === yr ? 700 : 500,
+              color: yearFilter === yr ? "#fff" : "#64748b",
+              background: yearFilter === yr ? "#2563eb" : "transparent",
+              border: yearFilter === yr ? "none" : "1px solid #e2e8f0",
+            }}
+          >{yr}</button>
+        ))}
+      </div>
       {filteredEncounters.map((enc: EncounterItem) => {
         const isExpanded = expandedEnc === enc.encounter_id;
         const hasNotes = !!enc.notes || !!enc.has_notes;

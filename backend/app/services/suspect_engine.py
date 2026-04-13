@@ -125,6 +125,7 @@ def _map_evidence_type(source: str) -> str:
 def _store_suspect(
     suspect: dict[str, Any],
     measurement_year: int | None = None,
+    tenant_id: str | None = None,
 ) -> int | None:
     """
     Insert or update a suspect condition row.  Returns the row id.
@@ -146,18 +147,19 @@ def _store_suspect(
         updated_at       DATETIME
     """
     evidence_json = json.dumps(suspect.get("evidence") or {})
+    _tenant = tenant_id or suspect.get("tenant_id") or "1"
     try:
         with raf_cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO raf_suspect_conditions (
-                    patient_id, measurement_year, suspect_icd10,
-                    suspect_hcc, evidence_type,
+                    patient_id, measurement_year, tenant_id,
+                    suspect_icd10, suspect_hcc, evidence_type,
                     evidence_detail, confidence_score, status,
                     created_at, updated_at
                 ) VALUES (
                     %s, %s, %s,
-                    %s, %s,
+                    %s, %s, %s,
                     %s, %s, 'open',
                     NOW(), NOW()
                 )
@@ -170,6 +172,7 @@ def _store_suspect(
                 (
                     suspect["patient_id"],
                     measurement_year or suspect.get("measurement_year") or date.today().year,
+                    _tenant,
                     suspect.get("suspected_icd") or "",
                     suspect.get("suspected_hcc") or "",
                     _map_evidence_type(suspect.get("source") or "medication"),
@@ -583,11 +586,19 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
 # Full scan
 # ---------------------------------------------------------------------------
 
-def run_full_suspect_scan(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
+def run_full_suspect_scan(
+    patient_id: int,
+    year: int | None = None,
+    tenant_id: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Execute all four scans, deduplicate on fingerprint (keeping highest
     confidence when same fingerprint appears in multiple scans), persist
     each suspect to raf_suspect_conditions, and return the stored list.
+
+    *tenant_id* must be supplied so that stored rows carry the correct tenant
+    scope; without it the suspects will not be visible in any tenant-filtered
+    read path (dashboards, reports, insights).
     """
     all_suspects: list[dict[str, Any]] = []
     all_suspects.extend(scan_medications(patient_id, year=year))
@@ -606,7 +617,7 @@ def run_full_suspect_scan(patient_id: int, year: int | None = None) -> list[dict
 
     stored: list[dict[str, Any]] = []
     for suspect in deduped:
-        row_id = _store_suspect(suspect)
+        row_id = _store_suspect(suspect, tenant_id=tenant_id)
         suspect["id"] = row_id
         stored.append(suspect)
 
@@ -625,12 +636,16 @@ def save_suspects_from_analysis(
     patient_id: int,
     encounter_id: int | None,
     suspect_conditions: list[dict[str, Any]],
+    tenant_id: str | None = None,
 ) -> int:
     """
     Persist suspect conditions returned by the skill pipeline.
 
     Each item in *suspect_conditions* is expected to have at least:
         condition, icd10, confidence, evidence_type, evidence
+
+    *tenant_id* should be provided so that stored rows carry the correct
+    tenant scope for all downstream tenant-filtered queries.
 
     Returns the number of suspects successfully stored.
     """
@@ -651,16 +666,19 @@ def save_suspects_from_analysis(
             "evidence_text": sc.get("evidence") or "",
             "source": source,
         }
-        row_id = _store_suspect({
-            "patient_id": patient_id,
-            "fingerprint": fp,
-            "source": source,
-            "suspected_icd": icd,
-            "suspected_hcc": hcc,
-            "description": description,
-            "confidence": confidence,
-            "evidence": evidence,
-        })
+        row_id = _store_suspect(
+            {
+                "patient_id": patient_id,
+                "fingerprint": fp,
+                "source": source,
+                "suspected_icd": icd,
+                "suspected_hcc": hcc,
+                "description": description,
+                "confidence": confidence,
+                "evidence": evidence,
+            },
+            tenant_id=tenant_id,
+        )
         if row_id is not None:
             stored += 1
 
@@ -671,14 +689,19 @@ def save_suspects_from_analysis(
     return stored
 
 
-def get_suspects_for_patient(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
+def get_suspects_for_patient(
+    patient_id: int,
+    year: int | None = None,
+    tenant_id: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Return all suspect conditions for a patient, sorted by confidence desc.
     Reads directly from raf_suspect_conditions.
 
     When ``year`` is provided the query is filtered at the SQL level using
     ``measurement_year = %s``, avoiding a full table scan followed by
-    in-memory filtering.
+    in-memory filtering.  When ``tenant_id`` is provided the result is
+    scoped to that tenant.
     """
     try:
         with raf_cursor() as cur:
@@ -687,12 +710,15 @@ def get_suspects_for_patient(patient_id: int, year: int | None = None) -> list[d
                 FROM raf_suspect_conditions
                 WHERE patient_id = %s
             """
-            params: tuple = (patient_id,)
+            params: list = [patient_id]
             if year is not None:
                 sql += " AND measurement_year = %s"
-                params = (patient_id, year)
+                params.append(year)
+            if tenant_id is not None:
+                sql += " AND tenant_id = %s"
+                params.append(tenant_id)
             sql += " ORDER BY confidence_score DESC, created_at DESC"
-            cur.execute(sql, params)
+            cur.execute(sql, tuple(params))
             rows = cur.fetchall()
         return [_serialize_suspect(r) for r in rows]
     except Exception as exc:
@@ -700,25 +726,41 @@ def get_suspects_for_patient(patient_id: int, year: int | None = None) -> list[d
         return []
 
 
-def get_all_open_suspects(limit: int = 1000, offset: int = 0) -> list[dict[str, Any]]:
+def get_all_open_suspects(
+    limit: int = 1000,
+    offset: int = 0,
+    tenant_id: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Return all open (unreviewed) suspects across all patients, sorted by
     confidence descending.  Patient name is joined from OpenEMR when available.
 
     Pagination is performed at the DB level via LIMIT/OFFSET to avoid loading
     the entire suspect table into memory.
+
+    *tenant_id* must be supplied to enforce tenant isolation; without it the
+    query would return suspects for every tenant in the database.
     """
-    sql_plain = """
-        SELECT sc.*
-        FROM raf_suspect_conditions sc
-        WHERE sc.status = 'open'
-          AND sc.patient_id IN (SELECT id FROM patients WHERE is_active = 1)
-        ORDER BY sc.confidence_score DESC, sc.patient_id ASC, sc.created_at DESC
-        LIMIT %s OFFSET %s
-    """
+    if not tenant_id:
+        logger.warning("get_all_open_suspects called without tenant_id — returning empty list")
+        return []
+
     try:
         with raf_cursor() as cur:
-            cur.execute(sql_plain, (int(limit), int(offset)))
+            cur.execute(
+                """
+                SELECT sc.*
+                FROM raf_suspect_conditions sc
+                WHERE sc.status = 'open'
+                  AND sc.tenant_id = %s
+                  AND sc.patient_id IN (
+                      SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                  )
+                ORDER BY sc.confidence_score DESC, sc.patient_id ASC, sc.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (tenant_id, tenant_id, int(limit), int(offset)),
+            )
             rows = cur.fetchall()
     except Exception as exc:
         logger.error("get_all_open_suspects failed: %s", exc)

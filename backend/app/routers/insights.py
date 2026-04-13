@@ -21,12 +21,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import get_current_user
 from app.db import NoActiveEMRConnection, openemr_cursor, raf_cursor
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
-
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY as _BASE_SUBQUERY  # noqa: E402
-
-# Variant for tables using "pid" instead of "patient_id"
-_ACTIVE_PIDS_SUBQUERY = _BASE_SUBQUERY.replace("patient_id IN", "pid IN")
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +56,8 @@ def _uid() -> str:
 
 def _suspect_conditions_summary(now: str, tenant_id: str | None = None) -> dict | None:
     """Insight 1: Open suspect conditions — total count, patients, revenue."""
+    _tid = int(tenant_id) if tenant_id is not None else 1
+    _sf, _sp = active_patients_subquery(_tid)
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -72,10 +69,10 @@ def _suspect_conditions_summary(now: str, tenant_id: str | None = None) -> dict 
                     COUNT(DISTINCT evidence_type)        AS evidence_types
                 FROM raf_suspect_conditions
                 WHERE status = 'open'
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                   AND raf_suspect_conditions.tenant_id = %s
                 """,
-                (int(tenant_id) if tenant_id is not None else 1,),
+                (*_sp, _tid),
             )
             row = cur.fetchone()
 
@@ -285,6 +282,8 @@ def _provider_coding_variation(now: str, tenant_id: str | None = None) -> dict |
 
 def _ckd_stage_upgrades(now: str, tenant_id: str | None = None) -> dict | None:
     """Insight 5: CKD staging upgrade opportunities (N18.x suspect conditions)."""
+    _tid = int(tenant_id) if tenant_id is not None else 1
+    _sf, _sp = active_patients_subquery(_tid)
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -296,10 +295,10 @@ def _ckd_stage_upgrades(now: str, tenant_id: str | None = None) -> dict | None:
                 FROM raf_suspect_conditions
                 WHERE suspect_icd10 LIKE 'N18%'
                   AND status = 'open'
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                   AND raf_suspect_conditions.tenant_id = %s
                 """,
-                (int(tenant_id) if tenant_id is not None else 1,),
+                (*_sp, _tid),
             )
             row = cur.fetchone()
 
@@ -559,6 +558,8 @@ def _top_revenue_patient(now: str) -> dict | None:
 
 def _medication_signal_alerts(now: str, tenant_id: str | None = None) -> dict | None:
     """Insight 9: Medication-based suspect conditions — high-confidence signals."""
+    _tid = int(tenant_id) if tenant_id is not None else 1
+    _sf, _sp = active_patients_subquery(_tid)
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -571,10 +572,10 @@ def _medication_signal_alerts(now: str, tenant_id: str | None = None) -> dict | 
                 FROM raf_suspect_conditions
                 WHERE evidence_type = 'medication'
                   AND status        = 'open'
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                   AND raf_suspect_conditions.tenant_id = %s
                 """,
-                (int(tenant_id) if tenant_id is not None else 1,),
+                (*_sp, _tid),
             )
             row = cur.fetchone()
 

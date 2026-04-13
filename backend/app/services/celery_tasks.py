@@ -525,7 +525,7 @@ def task_analyze_encounters_batch(
                 # Save suspects
                 suspects = result.get("suspect_conditions", [])
                 if suspects:
-                    save_suspects_from_analysis(patient_id, encounter_id, suspects)
+                    save_suspects_from_analysis(patient_id, encounter_id, suspects, tenant_id=tenant_id)
 
                 # Save MEAT evidence
                 try:

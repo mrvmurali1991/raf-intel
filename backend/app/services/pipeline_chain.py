@@ -117,16 +117,17 @@ PIPELINE_AUTO_CHAIN_ENABLED: bool = _auto_chain_enabled()
 # ---------------------------------------------------------------------------
 
 
-def _ensure_pipeline_runs_table() -> None:
-    """CREATE TABLE IF NOT EXISTS pipeline_runs.
+def _ensure_pipeline_tables() -> None:
+    """CREATE TABLE IF NOT EXISTS for pipeline_runs and pipeline_settings.
 
-    This is a last-resort guard for environments where the Alembic migration
-    003_pipeline_runs_table has not been run yet.  In normal deployments the
-    table is created by the migration before the app starts.
+    Last-resort guard for environments where the Alembic migrations
+    003_pipeline_runs_table and 005_pipeline_settings_table have not been run
+    yet.  In normal deployments the tables are created by the migrations before
+    the app starts.
     """
     from app.db import raf_cursor
 
-    ddl = """
+    pipeline_runs_ddl = """
     CREATE TABLE IF NOT EXISTS pipeline_runs (
         id            BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
         tenant_id     VARCHAR(64)  NOT NULL,
@@ -148,14 +149,49 @@ def _ensure_pipeline_runs_table() -> None:
         KEY ix_pipeline_runs_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """
+
+    pipeline_settings_ddl = """
+    CREATE TABLE IF NOT EXISTS pipeline_settings (
+        id                     INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        tenant_id              VARCHAR(64)  NOT NULL,
+        pipeline_mode          ENUM('auto_basic','auto_ai','manual')
+                               NOT NULL DEFAULT 'auto_basic',
+        ai_analysis_enabled    TINYINT(1)   NOT NULL DEFAULT 0,
+        suspect_scan_enabled   TINYINT(1)   NOT NULL DEFAULT 1,
+        gap_generation_enabled TINYINT(1)   NOT NULL DEFAULT 1,
+        hierarchy_enabled      TINYINT(1)   NOT NULL DEFAULT 1,
+        webhook_enabled        TINYINT(1)   NOT NULL DEFAULT 0,
+        gemini_max_concurrent  INT          NOT NULL DEFAULT 5,
+        updated_by             VARCHAR(100) NULL,
+        updated_at             DATETIME     NOT NULL
+                               DEFAULT CURRENT_TIMESTAMP
+                               ON UPDATE CURRENT_TIMESTAMP,
+        created_at             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_pipeline_settings_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """
+
     try:
         with raf_cursor() as cur:
-            cur.execute(ddl)
+            cur.execute(pipeline_runs_ddl)
         logger.debug("pipeline_chain: pipeline_runs table ensured.")
     except Exception as exc:
         logger.warning(
             "pipeline_chain: could not ensure pipeline_runs table: %s", exc
         )
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(pipeline_settings_ddl)
+        logger.debug("pipeline_chain: pipeline_settings table ensured.")
+    except Exception as exc:
+        logger.warning(
+            "pipeline_chain: could not ensure pipeline_settings table: %s", exc
+        )
+
+
+# Backward-compat alias so external callers are not broken.
+_ensure_pipeline_runs_table = _ensure_pipeline_tables
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -761,9 +797,58 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 # Persist suspects
                 suspect_conditions = result.get("suspect_conditions", [])
                 if suspect_conditions:
-                    save_suspects_from_analysis(patient_id, encounter_id, suspect_conditions)
+                    save_suspects_from_analysis(
+                        patient_id, encounter_id, suspect_conditions, tenant_id=tenant_id
+                    )
 
                 analyzed_count += 1
+
+                # Route the analysis result to auto-accept / human-review / full-audit
+                try:
+                    from app.services import confidence_router
+                    from app.services import coder_worklist_service
+
+                    routing = confidence_router.route_analysis_result(
+                        medcat_entities=[],
+                        gemini_diagnoses=result.get("diagnoses") or [],
+                        negation_results=result.get("negated_conditions") or [],
+                        candidate_codes=[],
+                    )
+                    routing_decision = routing.get("routing")
+                    logger.info(
+                        "pipeline_chain: routing=%s confidence=%.3f encounter=%s patient=%s",
+                        routing_decision,
+                        routing.get("overall_confidence", 0.0),
+                        encounter_id,
+                        patient_id,
+                    )
+
+                    if routing_decision in (
+                        confidence_router.RoutingDecision.HUMAN_REVIEW,
+                        confidence_router.RoutingDecision.FULL_AUDIT,
+                    ):
+                        hcc_codes = [
+                            int(dx["hcc_code"])
+                            for dx in (routing.get("review_codes") or [])
+                            if dx.get("hcc_code") and str(dx["hcc_code"]).isdigit()
+                        ]
+                        coder_worklist_service.auto_queue_from_nlp(
+                            nlp_results=[{
+                                "patient_id": patient_id,
+                                "encounter_id": encounter_id,
+                                "hcc_codes": hcc_codes,
+                                "priority": 2 if routing_decision == confidence_router.RoutingDecision.FULL_AUDIT else 3,
+                            }],
+                            assigning_user_id=1,
+                            tenant_id=tenant_id,
+                        )
+                except Exception as routing_exc:
+                    logger.warning(
+                        "pipeline_chain: confidence routing failed for encounter %s: %s",
+                        encounter_id,
+                        routing_exc,
+                    )
+
                 logger.info(
                     "pipeline_chain: analyzed encounter %s for patient %s",
                     encounter_id,
@@ -856,7 +941,10 @@ def _handle_analysis_completed(payload: dict[str, Any]) -> None:
         try:
             from app.services.hcc_hierarchy import apply_hierarchy_to_all_patients
             _update_run(run_id, current_step="hcc_hierarchy")
-            apply_hierarchy_to_all_patients(measurement_year=date.today().year)
+            apply_hierarchy_to_all_patients(
+                measurement_year=date.today().year,
+                tenant_id=tenant_id,
+            )
             _update_run(run_id, step_completed="hcc_hierarchy")
             logger.info("pipeline_chain: HCC hierarchy applied [tenant=%s]", tenant_id)
         except Exception as exc:
@@ -928,7 +1016,9 @@ def _handle_raf_calculation_completed(payload: dict[str, Any]) -> None:
         patient_ids = _fetch_active_patient_ids(tenant_id)
         for pid_str in patient_ids:
             try:
-                suspects = run_full_suspect_scan(int(pid_str), year=date.today().year)
+                suspects = run_full_suspect_scan(
+                    int(pid_str), year=date.today().year, tenant_id=tenant_id
+                )
                 total_suspects += len(suspects)
             except Exception as exc:
                 logger.warning(
@@ -1170,6 +1260,40 @@ def _parse_run_row(row: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Stale run cleanup
+# ---------------------------------------------------------------------------
+
+
+def cleanup_stale_runs() -> int:
+    """Mark pipeline_runs stuck in 'running' or 'pending' for over 1 hour as failed.
+
+    Returns the number of rows updated.  Safe to call from an admin endpoint
+    as well as from ``setup_pipeline_chain()`` at startup.
+    """
+    from app.db import raf_cursor
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            UPDATE pipeline_runs
+               SET status        = 'failed',
+                   error_message = 'Stale run cleaned up (exceeded 1 hour timeout)',
+                   finished_at   = NOW()
+             WHERE status IN ('running', 'pending')
+               AND created_at < NOW() - INTERVAL 1 HOUR
+            """
+        )
+        count: int = cur.rowcount
+
+    if count:
+        logger.warning("pipeline_chain: cleaned up %d stale pipeline_run(s)", count)
+    else:
+        logger.debug("pipeline_chain: no stale pipeline_runs found")
+
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Public setup entry point
 # ---------------------------------------------------------------------------
 
@@ -1198,7 +1322,10 @@ def setup_pipeline_chain() -> None:
     from app.services.event_emitter import register_handler
 
     # Best-effort: ensure the tracking table exists even if Alembic has not run.
-    _ensure_pipeline_runs_table()
+    _ensure_pipeline_tables()
+
+    # Clean up any runs that were left in-flight before the last process exit.
+    cleanup_stale_runs()
 
     # Phase ① → ②: EMR sync → normalization
     register_handler("emr_sync_completed", _handle_emr_sync_completed)

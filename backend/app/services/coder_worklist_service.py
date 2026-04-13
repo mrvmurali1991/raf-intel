@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Active EMR patient filter
 # ---------------------------------------------------------------------------
 
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY  # noqa: E402
+from app.services.emr_manager import active_patients_subquery  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -98,8 +98,9 @@ def get_worklist(
     limit / offset:
         Pagination.
     """
-    conditions: list[str] = ["coder_user_id = %s", "tenant_id = %s", ACTIVE_PATIENTS_SUBQUERY]
-    params: list[Any] = [coder_user_id, tenant_id]
+    _sf, _sp = active_patients_subquery(int(tenant_id))
+    conditions: list[str] = ["coder_user_id = %s", "tenant_id = %s", _sf]
+    params: list[Any] = [coder_user_id, tenant_id, *_sp]
 
     if status:
         conditions.append("status = %s")

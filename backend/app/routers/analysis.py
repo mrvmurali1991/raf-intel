@@ -265,6 +265,73 @@ def _save_encounter_analysis(
                 "Retry save also failed for encounter %s: %s", encounter_id, exc2
             )
 
+    # --- Persist HCC codes discovered by AI into raf_patient_hcc ---
+    try:
+        measurement_year = _date.today().year
+        hcc_diagnoses = [
+            d for d in analysis.get("diagnoses", [])
+            if d.get("hcc")
+        ]
+        if hcc_diagnoses:
+            with raf_cursor() as cur:
+                for dx in hcc_diagnoses:
+                    hcc_code = str(dx["hcc"]).strip()
+                    icd10 = str(dx.get("icd10", "")).strip()
+
+                    # Check for existing row (same patient + hcc + year)
+                    cur.execute(
+                        "SELECT id, icd10_codes, source_encounter_ids "
+                        "FROM raf_patient_hcc "
+                        "WHERE patient_id = %s AND hcc_code = %s AND measurement_year = %s "
+                        "LIMIT 1",
+                        (pid, hcc_code, measurement_year),
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        # Merge ICD-10 codes array
+                        try:
+                            old_codes = json.loads(existing["icd10_codes"] or "[]")
+                        except (ValueError, TypeError):
+                            old_codes = []
+                        merged_codes = list(set(old_codes + ([icd10] if icd10 else [])))
+
+                        # Merge source encounter IDs array
+                        try:
+                            old_enc = json.loads(existing["source_encounter_ids"] or "[]")
+                        except (ValueError, TypeError):
+                            old_enc = []
+                        merged_enc = list(set(old_enc + [encounter_id]))
+
+                        cur.execute(
+                            "UPDATE raf_patient_hcc "
+                            "SET icd10_codes = %s, source_encounter_ids = %s, updated_at = NOW() "
+                            "WHERE id = %s",
+                            (json.dumps(merged_codes), json.dumps(merged_enc), existing["id"]),
+                        )
+                    else:
+                        cur.execute(
+                            """INSERT INTO raf_patient_hcc
+                               (patient_id, measurement_year, hcc_code, icd10_codes,
+                                source_encounter_ids, raf_coefficient, meat_status, is_trumped)
+                               VALUES (%s, %s, %s, %s, %s, 0, 'pending', 0)""",
+                            (
+                                pid,
+                                measurement_year,
+                                hcc_code,
+                                json.dumps([icd10] if icd10 else []),
+                                json.dumps([encounter_id]),
+                            ),
+                        )
+            logger.info(
+                "Persisted %d HCC code(s) to raf_patient_hcc for patient_id=%s encounter_id=%s",
+                len(hcc_diagnoses), pid, encounter_id,
+            )
+    except Exception as hcc_exc:
+        logger.warning(
+            "Failed to persist HCC codes to raf_patient_hcc for encounter %s: %s",
+            encounter_id, hcc_exc,
+        )
+
     # MEAT evidence — requires raf_patient_hcc rows to already exist;
     # use the existing store_analysis_meat which accepts (patient_id, year, gemini_result).
     # We inject encounter metadata via the _meta block.
@@ -505,7 +572,7 @@ def analyze_encounter(
         try:
             from app.services.suspect_engine import save_suspects_from_analysis
 
-            save_suspects_from_analysis(pid, encounter_id, suspects)
+            save_suspects_from_analysis(pid, encounter_id, suspects, tenant_id=tenant_id)
         except Exception as exc:
             logger.warning("Failed to save suspects: %s", exc)
 
@@ -813,7 +880,7 @@ def analyze_note(
         try:
             from app.services.suspect_engine import save_suspects_from_analysis
 
-            save_suspects_from_analysis(pid, None, note_suspects)
+            save_suspects_from_analysis(pid, None, note_suspects, tenant_id=tenant_id)
         except Exception as exc:
             logger.warning("Note endpoint: failed to save suspects: %s", exc)
 
@@ -841,7 +908,7 @@ def analyze_note(
 # ---------------------------------------------------------------------------
 
 
-def _run_batch_job(job_id: str, pid: int, save_results: bool) -> None:
+def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | None = None) -> None:
     """Background task: analyze all encounters for a patient (DB-backed)."""
     _upsert_job(job_id, status="RUNNING", started_at=datetime.utcnow())
     try:
@@ -913,7 +980,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool) -> None:
                             save_suspects_from_analysis,
                         )
 
-                        save_suspects_from_analysis(pid, enc_id, batch_suspects)
+                        save_suspects_from_analysis(pid, enc_id, batch_suspects, tenant_id=tenant_id)
                     except Exception as s_exc:
                         logger.warning("Batch: failed to save suspects: %s", s_exc)
 
@@ -977,7 +1044,7 @@ def batch_analysis(
         submitted_by=current_user.get("id"),
         args_json=json.dumps({"pid": pid, "save_results": save_results}),
     )
-    background_tasks.add_task(_run_batch_job, job_id, pid, save_results)
+    background_tasks.add_task(_run_batch_job, job_id, pid, save_results, tenant_id)
 
     log_phi_access(
         action="batch_analyze",

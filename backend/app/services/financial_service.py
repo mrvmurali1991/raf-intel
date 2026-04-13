@@ -387,7 +387,7 @@ def run_reconciliation(
 
     patient_ids = list(cms_data.keys())
 
-    # Pull projected RAF from raf_scores (most recent score per patient)
+    # Pull projected RAF from raf_scores (most recent score per patient, scoped to tenant)
     projected_data: dict[int, float] = {}
     with raf_cursor() as cur:
         fmt = ",".join(["%s"] * len(patient_ids))
@@ -398,12 +398,14 @@ def run_reconciliation(
              INNER JOIN (
                SELECT patient_id, MAX(calculated_at) AS latest
                  FROM raf_scores
-                WHERE patient_id IN ({fmt})
+                WHERE tenant_id = %s
+                  AND patient_id IN ({fmt})
                 GROUP BY patient_id
              ) latest_rs ON rs.patient_id = latest_rs.patient_id
                         AND rs.calculated_at = latest_rs.latest
+             WHERE rs.tenant_id = %s
             """,
-            patient_ids,
+            [tenant_id] + patient_ids + [tenant_id],
         )
         for row in cur.fetchall():
             projected_data[row["patient_id"]] = float(row["final_raf"] or 0)
@@ -681,7 +683,7 @@ def generate_forecast(
     """
     year = _period_to_year(forecast_period)
 
-    # Pull current RAF scores
+    # Pull current RAF scores scoped to this tenant
     with raf_cursor() as cur:
         cur.execute(
             """
@@ -691,10 +693,13 @@ def generate_forecast(
              INNER JOIN (
                SELECT patient_id, MAX(calculated_at) AS latest
                  FROM raf_scores
+                WHERE tenant_id = %s
                 GROUP BY patient_id
              ) latest ON rs.patient_id = latest.patient_id
                     AND rs.calculated_at = latest.latest
-            """
+             WHERE rs.tenant_id = %s
+            """,
+            (tenant_id, tenant_id),
         )
         raf_row = cur.fetchone()
 
@@ -720,8 +725,10 @@ def generate_forecast(
                 """
                 SELECT COUNT(*) AS open_gaps
                   FROM suspect_conditions
-                 WHERE status IN ('suspected', 'open')
-                """
+                 WHERE tenant_id = %s
+                   AND status IN ('suspected', 'open')
+                """,
+                (tenant_id,),
             )
             row = cur.fetchone()
             open_gaps = int(row["open_gaps"] or 0)

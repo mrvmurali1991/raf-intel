@@ -1,20 +1,7 @@
 # ---------------------------------------------------------------------------
-# WARNING: NOT FOR PRODUCTION USE
-# ---------------------------------------------------------------------------
-# This Docker Compose file is for development and demonstration purposes only.
-# It lacks critical components for production-level scalability and
-# performance, specifically background workers (Celery) and a message
-# broker (Redis). Running NLP tasks without workers will block the API
-# and lead to request timeouts.
+# RAF Intelligence — Simple Production Compose (with Celery/Redis)
 #
-# For production or performance testing, use the production-ready compose file:
-#   docker compose -f docker-compose.prod.yml up -d
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# RAF Intelligence — Simple Production Compose (no Celery/Redis)
-#
-# For the full production stack with Celery workers and Redis, use:
+# For the hardened production stack with nginx/TLS, use:
 #   docker compose -f docker-compose.prod.yml up -d
 #
 # This file is suitable for single-server deployments where the backend
@@ -22,6 +9,33 @@
 # ---------------------------------------------------------------------------
 
 services:
+  redis:
+    image: redis:7.2.7-alpine
+    container_name: raf-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --save 60 1000
+        --loglevel warning
+        --requirepass ${REDIS_PASSWORD:-rafredis123}
+    volumes:
+      - redis_data:/data
+    networks:
+      - raf-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-rafredis123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
   backend:
     build:
       context: ./backend
@@ -38,6 +52,7 @@ services:
       OPENEMR_DB_HOST: ${OPENEMR_DB_HOST:-mysql}
       OPENEMR_DB_PORT: ${OPENEMR_DB_PORT:-3306}
       OPENEMR_URL: http://openemr:80
+      REDIS_URL: redis://:${REDIS_PASSWORD:-rafredis123}@redis:6379/0
       STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
       PHI_FERNET_KEY: ${PHI_FERNET_KEY:-}
       PHI_AES256_KEY: ${PHI_AES256_KEY:-}
@@ -50,6 +65,9 @@ services:
       - ./data/logs:/app/logs
     networks:
       - raf-net
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test:
         - "CMD"
@@ -60,6 +78,45 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: raf-worker:${IMAGE_TAG:-latest}
+    container_name: raf-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      RAF_DB_HOST: ${RAF_DB_HOST:-host.docker.internal}
+      RAF_DB_PORT: ${RAF_DB_PORT:-3306}
+      OPENEMR_DB_HOST: ${OPENEMR_DB_HOST:-mysql}
+      OPENEMR_DB_PORT: ${OPENEMR_DB_PORT:-3306}
+      OPENEMR_URL: http://openemr:80
+      REDIS_URL: redis://:${REDIS_PASSWORD:-rafredis123}@redis:6379/0
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend/app:/app/app
+      - ./data/uploads:/app/uploads
+      - ./data/logs:/app/logs
+    networks:
+      - raf-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.services.job_service inspect ping --destination celery@$$HOSTNAME --timeout 10"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -151,6 +208,7 @@ networks:
     driver: bridge
 
 volumes:
+  redis_data:
   mysql_data:
   openemr_sites:
   openemr_logs:

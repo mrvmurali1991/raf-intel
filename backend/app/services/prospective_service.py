@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 from app.config import settings
 from app.db import raf_cursor, openemr_cursor
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -949,6 +949,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
         patients_not_seen = max(0, total_patients - seen_this_year)
 
         # Open suspects (total count + revenue) — only active patients
+        _sf, _sp = active_patients_subquery(tid)
         with raf_cursor() as cur:
             cur.execute(
                 f"""
@@ -956,10 +957,10 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
                        SUM(0.15) AS total_raf_at_risk
                 FROM raf_suspect_conditions
                 WHERE status = 'open'
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                   AND tenant_id = %s
                 """,
-                (tid,),
+                (*_sp, tid),
             )
             susp_row = cur.fetchone()
         total_open_suspects = _coerce_int(susp_row["cnt"]) if susp_row else 0

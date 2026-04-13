@@ -93,10 +93,11 @@ def generate_audit(
                     """SELECT sc.*, sc.suspect_icd10 as suggested_icd10
                        FROM raf_suspect_conditions sc
                        WHERE sc.patient_id = %s
-                       ORDER BY sc.confidence_score DESC""", (pid,))
+                         AND sc.tenant_id = %s
+                       ORDER BY sc.confidence_score DESC""", (pid, tenant_id))
                 suspects = [dict(r) for r in _susp_cur.fetchall()]
         except Exception:
-            suspects = get_suspects_for_patient(patient_id=pid)
+            suspects = get_suspects_for_patient(patient_id=pid, tenant_id=tenant_id)
     encounters = emr.get_encounters(pid)
     medications = emr.get_medications(pid)
     diagnoses = emr.get_billing_codes(pid)

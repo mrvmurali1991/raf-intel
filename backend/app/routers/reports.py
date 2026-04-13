@@ -24,7 +24,7 @@ from collections import Counter
 
 from app.db import raf_cursor, openemr_cursor, NoActiveEMRConnection
 from app.auth import get_current_user, get_tenant_id, require_permission
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 from app.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
@@ -338,6 +338,7 @@ def hcc_distribution(year: int = Query(default=None),
     if _cached is not None:
         return _cached
 
+    _sf, _sp = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -348,11 +349,11 @@ def hcc_distribution(year: int = Query(default=None),
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND tenant_id = %s
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                 GROUP BY hcc_code
                 ORDER BY patient_count DESC
                 """,
-                (calc_year, tenant_id),
+                (calc_year, int(tenant_id), *_sp),
             )
             rows = cur.fetchall()
     except Exception as exc:
@@ -394,6 +395,7 @@ def suspects_summary(
             status_code=400,
             detail=f"Invalid status {status!r}. Allowed values: {', '.join(sorted(_ALLOWED_STATUSES))}",
         )
+    _sf, _sp = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             if status.lower() == "all":
@@ -403,12 +405,12 @@ def suspects_summary(
                         patient_id, suspect_icd10 AS `condition`, suspect_icd10 AS icd10_code, suspect_hcc AS hcc_code,
                         confidence_score, status, evidence_detail AS rationale
                     FROM raf_suspect_conditions
-                    WHERE {ACTIVE_PATIENTS_SUBQUERY}
+                    WHERE {_sf}
                       AND raf_suspect_conditions.tenant_id = %s
                     ORDER BY confidence_score DESC, patient_id
                     LIMIT %s OFFSET %s
                     """,
-                    (tenant_id, limit, offset),
+                    (*_sp, int(tenant_id), limit, offset),
                 )
             else:
                 cur.execute(
@@ -418,12 +420,12 @@ def suspects_summary(
                         confidence_score, status, evidence_detail AS rationale
                     FROM raf_suspect_conditions
                     WHERE status = %s
-                      AND {ACTIVE_PATIENTS_SUBQUERY}
+                      AND {_sf}
                       AND raf_suspect_conditions.tenant_id = %s
                     ORDER BY confidence_score DESC, patient_id
                     LIMIT %s OFFSET %s
                     """,
-                    (status.lower(), tenant_id, limit, offset),
+                    (status.lower(), *_sp, int(tenant_id), limit, offset),
                 )
             rows = cur.fetchall()
     except Exception as exc:
@@ -547,6 +549,7 @@ def recapture_gaps_report(year: int = Query(default=None),
     # open suspect conditions as recapture opportunities.
     if not gaps:
         try:
+            _rcap_sf, _rcap_sp = active_patients_subquery(int(tenant_id))
             with raf_cursor() as cur:
                 cur.execute(
                     f"""
@@ -556,12 +559,12 @@ def recapture_gaps_report(year: int = Query(default=None),
                     FROM raf_suspect_conditions sc
                     JOIN patients p ON p.id = sc.patient_id
                     WHERE sc.status = 'open'
-                      AND {ACTIVE_PATIENTS_SUBQUERY}
+                      AND {_rcap_sf}
                       AND sc.tenant_id = %s
                     ORDER BY sc.confidence_score DESC
                     LIMIT 1000
                     """,
-                    (tenant_id,),
+                    (*_rcap_sp, int(tenant_id)),
                 )
                 sc_rows = cur.fetchall()
             for row in sc_rows:
@@ -751,12 +754,14 @@ def workflow_summary(
     last_sync_at: str | None = None
     last_analysis_at: str | None = None
 
+    _wf_sf, _wf_sp = active_patients_subquery(int(tenant_id))
+
     # 1. open_suspects — scoped to active-connection patients only
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT COUNT(*) AS cnt FROM raf_suspect_conditions WHERE status = 'open' AND {ACTIVE_PATIENTS_SUBQUERY} AND raf_suspect_conditions.tenant_id = %s",
-                (tenant_id,),
+                f"SELECT COUNT(*) AS cnt FROM raf_suspect_conditions WHERE status = 'open' AND {_wf_sf} AND raf_suspect_conditions.tenant_id = %s",
+                (*_wf_sp, int(tenant_id)),
             )
             row = cur.fetchone()
             open_suspects = int(row["cnt"]) if row else 0
@@ -767,8 +772,8 @@ def workflow_summary(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT COUNT(*) AS cnt FROM raf_suspect_conditions WHERE status = 'open' AND confidence_score >= 0.85 AND {ACTIVE_PATIENTS_SUBQUERY} AND raf_suspect_conditions.tenant_id = %s",
-                (tenant_id,),
+                f"SELECT COUNT(*) AS cnt FROM raf_suspect_conditions WHERE status = 'open' AND confidence_score >= 0.85 AND {_wf_sf} AND raf_suspect_conditions.tenant_id = %s",
+                (*_wf_sp, int(tenant_id)),
             )
             row = cur.fetchone()
             high_confidence_suspects = int(row["cnt"]) if row else 0
@@ -835,8 +840,8 @@ def workflow_summary(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT AVG(confidence_score) AS avg_conf FROM raf_suspect_conditions WHERE status = 'open' AND {ACTIVE_PATIENTS_SUBQUERY} AND raf_suspect_conditions.tenant_id = %s",
-                (tenant_id,),
+                f"SELECT AVG(confidence_score) AS avg_conf FROM raf_suspect_conditions WHERE status = 'open' AND {_wf_sf} AND raf_suspect_conditions.tenant_id = %s",
+                (*_wf_sp, int(tenant_id)),
             )
             row = cur.fetchone()
             raw = row["avg_conf"] if row else None

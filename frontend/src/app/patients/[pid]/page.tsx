@@ -111,8 +111,8 @@ export default function PatientDetailPage({
   });
 
   const encountersQ = useQuery({
-    queryKey: ["patient-encounters", pid, selectedYear],
-    queryFn: () => getPatientEncounters(pid, selectedYear),
+    queryKey: ["patient-encounters", pid],
+    queryFn: () => getPatientEncounters(pid),
   });
 
   const problemsQ = useQuery({
@@ -255,7 +255,7 @@ export default function PatientDetailPage({
       try {
         await calculateRAF(pid, { year: selectedYear });
       } catch { /* ignore */ }
-      queryClient.invalidateQueries({ queryKey: ["patient-encounters", pid, selectedYear] });
+      queryClient.invalidateQueries({ queryKey: ["patient-encounters", pid] });
       queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });
       queryClient.invalidateQueries({ queryKey: ["patient-problems", pid, selectedYear] });
       queryClient.invalidateQueries({ queryKey: ["raf-breakdown", pid, selectedYear] });
@@ -303,7 +303,7 @@ export default function PatientDetailPage({
             } catch {
               toast.info("Note", "Analysis complete. Click 'Calculate RAF' to update the score.");
             }
-            queryClient.invalidateQueries({ queryKey: ["patient-encounters", pid, selectedYear] });
+            queryClient.invalidateQueries({ queryKey: ["patient-encounters", pid] });
             queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });
             queryClient.invalidateQueries({ queryKey: ["patient-problems", pid, selectedYear] });
             queryClient.invalidateQueries({ queryKey: ["raf-breakdown", pid, selectedYear] });

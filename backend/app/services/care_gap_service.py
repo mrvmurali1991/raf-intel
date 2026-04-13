@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Active EMR patient filter
 # ---------------------------------------------------------------------------
 
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY  # noqa: E402
+from app.services.emr_manager import active_patients_subquery  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Valid status transition graph
@@ -109,8 +109,9 @@ def list_gap_tasks(
             "list_gap_tasks: tenant_id is required — "
             "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-    conditions: list[str] = ["tenant_id = %s", ACTIVE_PATIENTS_SUBQUERY]
-    params: list[Any] = [tenant_id]
+    _sf, _sp = active_patients_subquery(int(tenant_id))
+    conditions: list[str] = ["tenant_id = %s", _sf]
+    params: list[Any] = [tenant_id, *_sp]
 
     if provider_id is not None:
         conditions.append("provider_id = %s")
@@ -476,8 +477,9 @@ def get_dashboard_stats(
     - Breakdown by gap_type
     - Top 10 providers by open task count (aggregate view only)
     """
-    base_conditions = ["tenant_id = %s", ACTIVE_PATIENTS_SUBQUERY]
-    base_params: list[Any] = [tenant_id]
+    _sf, _sp = active_patients_subquery(int(tenant_id))
+    base_conditions = ["tenant_id = %s", _sf]
+    base_params: list[Any] = [tenant_id, *_sp]
     if provider_id is not None:
         base_conditions.append("provider_id = %s")
         base_params.append(provider_id)
@@ -544,12 +546,12 @@ def get_dashboard_stats(
                 f"""
                 SELECT provider_id, COUNT(*) AS open_tasks
                 FROM care_gap_tasks
-                WHERE tenant_id = %s AND {ACTIVE_PATIENTS_SUBQUERY} AND status IN ('open','in_progress','scheduled')
+                WHERE tenant_id = %s AND {_sf} AND status IN ('open','in_progress','scheduled')
                 GROUP BY provider_id
                 ORDER BY open_tasks DESC
                 LIMIT 10
                 """,
-                [tenant_id],
+                [tenant_id, *_sp],
             )
             top_providers = cur.fetchall() or []
 
@@ -622,12 +624,13 @@ def generate_gaps_from_suspects(
 
     Returns a summary dict with counts of created and skipped tasks.
     """
+    _sf, _sp = active_patients_subquery(int(tenant_id), patient_id_column="sc.patient_id")
     conditions: list[str] = [
         "sc.status = 'open'",
         "sc.confidence_score >= %s",
-        ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "sc.patient_id IN"),
+        _sf,
     ]
-    params: list[Any] = [min_confidence]
+    params: list[Any] = [min_confidence, *_sp]
 
     if patient_id is not None:
         conditions.append("sc.patient_id = %s")

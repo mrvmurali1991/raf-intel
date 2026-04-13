@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Active EMR patient filter
 # ---------------------------------------------------------------------------
 
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY, active_patients_subquery  # noqa: E402
+from app.services.emr_manager import active_patients_subquery  # noqa: E402
 
 # Base annual revenue per RAF point (CMS MA benchmark) — configurable via env CMS_REVENUE_PER_RAF_POINT
 _ANNUAL_REVENUE_PER_RAF_POINT = settings.cms_revenue_per_raf_point
@@ -266,18 +266,19 @@ def get_panel_patients(
         )
     tid = int(tenant_id)
 
+    _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
         cur.execute(
             f"""
             SELECT patient_id, attribution, assigned_at
             FROM provider_patient_panel
             WHERE provider_id = %s
-              AND {ACTIVE_PATIENTS_SUBQUERY}
+              AND {_sf}
               AND tenant_id = %s
             ORDER BY assigned_at DESC
             LIMIT %s OFFSET %s
             """,
-            (provider_id, tid, limit, offset),
+            (provider_id, *_sp, tid, limit, offset),
         )
         rows = cur.fetchall()
 
@@ -449,10 +450,11 @@ def calculate_provider_scorecard(
     tid = int(tenant_id)
 
     # --- 1. Get panel patient IDs (active EMR connections only) ---
+    _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY}",
-            (provider_id,),
+            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {_sf}",
+            (provider_id, *_sp),
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 
@@ -844,10 +846,11 @@ def calculate_hcc_performance(
         )
     tid = int(tenant_id)
 
+    _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY}",
-            (provider_id,),
+            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {_sf}",
+            (provider_id, *_sp),
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 
@@ -961,10 +964,11 @@ def generate_provider_alerts(
 
     year = date.today().year
 
+    _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {ACTIVE_PATIENTS_SUBQUERY}",
-            (provider_id,),
+            f"SELECT patient_id FROM provider_patient_panel WHERE provider_id = %s AND {_sf}",
+            (provider_id, *_sp),
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 

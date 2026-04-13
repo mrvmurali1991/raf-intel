@@ -31,7 +31,7 @@ from typing import Any, Optional
 from app.db import raf_cursor
 from app.services import openemr_connector as emr
 from app.services.raf_calculator import get_raf_breakdown
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +351,7 @@ def svc_list_patients(
             placeholders = ",".join(["%s"] * len(pids))
             with raf_cursor() as cur:
                 _tid = int(tenant_id)
+                _sf, _sp = active_patients_subquery(_tid)
                 cur.execute(
                     f"""
                     SELECT patient_id, final_raf, hcc_count,
@@ -358,11 +359,11 @@ def svc_list_patients(
                     FROM raf_scores
                     WHERE patient_id IN ({placeholders})
                       AND measurement_year = %s
-                      AND {ACTIVE_PATIENTS_SUBQUERY}
+                      AND {_sf}
                       AND raf_scores.tenant_id = %s
                     ORDER BY calculated_at DESC
                     """,
-                    (*pids, year or _date.today().year, _tid),
+                    (*pids, year or _date.today().year, *_sp, _tid),
                 )
                 raf_map: dict[int, dict] = {}
                 for row in cur.fetchall():

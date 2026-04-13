@@ -657,7 +657,7 @@ def task_scan_suspects_all(self, tenant_id: int, year: int) -> dict[str, Any]:
 
         for i, pid in enumerate(patient_ids, start=1):
             try:
-                suspects = run_full_suspect_scan(pid)
+                suspects = run_full_suspect_scan(pid, tenant_id=str(tenant_id))
                 suspects_found += len(suspects)
                 high_confidence += sum(
                     1 for s in suspects if s.get("confidence", 0) >= 0.8

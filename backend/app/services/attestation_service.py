@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 from app.config import settings
 from app.db import raf_cursor
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +147,7 @@ def create_attestations_from_suspects(
         )
 
     placeholders = ",".join(["%s"] * len(suspect_ids))
+    _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
         cur.execute(
             f"""
@@ -154,10 +155,10 @@ def create_attestations_from_suspects(
             FROM   raf_suspect_conditions
             WHERE  id IN ({placeholders})
               AND  status = 'open'
-              AND  {ACTIVE_PATIENTS_SUBQUERY}
+              AND  {_sf}
               AND  tenant_id = %s
             """,
-            list(suspect_ids) + [tid],
+            list(suspect_ids) + [*_sp, tid],
         )
         suspects = cur.fetchall()
 
@@ -230,8 +231,9 @@ def list_attestations(
             f"attestation_service.list_attestations: tenant_id must be numeric, got {tenant_id!r}"
         )
 
-    conditions: list[str] = [ACTIVE_PATIENTS_SUBQUERY, "tenant_id = %s"]
-    params: list[Any] = [_tid]
+    _sf, _sp = active_patients_subquery(_tid)
+    conditions: list[str] = [_sf, "tenant_id = %s"]
+    params: list[Any] = [*_sp, _tid]
 
     if provider_user_id is not None:
         conditions.append("provider_user_id = %s")
@@ -678,6 +680,7 @@ def generate_reminders(
     tenant_clause = "AND pa.tenant_id = %s" if tenant_id else ""
     tenant_param: list[Any] = [tenant_id] if tenant_id else []
 
+    _sf, _sp = active_patients_subquery(_tid, patient_id_column="pa.patient_id")
     with raf_cursor() as cur:
         cur.execute(
             f"""
@@ -689,7 +692,7 @@ def generate_reminders(
             FROM   provider_attestations pa
             WHERE  pa.status = 'pending'
               AND  pa.created_at <= %s
-              AND  pa.{ACTIVE_PATIENTS_SUBQUERY}
+              AND  {_sf}
               AND  pa.tenant_id = %s
               {tenant_clause}
               AND  pa.id NOT IN (
@@ -699,7 +702,7 @@ def generate_reminders(
                     AND  ar.sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
               )
             """,
-            [cutoff, _tid] + tenant_param + [reminder_type],
+            [cutoff, *_sp, _tid] + tenant_param + [reminder_type],
         )
         candidates = cur.fetchall()
 
@@ -780,8 +783,9 @@ def get_dashboard_stats(
             f"attestation_service.get_dashboard_stats: tenant_id must be numeric, got {tenant_id!r}"
         )
 
-    conditions: list[str] = ["created_at >= %s", ACTIVE_PATIENTS_SUBQUERY, "tenant_id = %s"]
-    params: list[Any] = [since, _tid]
+    _sf2, _sp2 = active_patients_subquery(_tid)
+    conditions: list[str] = ["created_at >= %s", _sf2, "tenant_id = %s"]
+    params: list[Any] = [since, *_sp2, _tid]
     if provider_user_id is not None:
         conditions.append("provider_user_id = %s")
         params.append(provider_user_id)

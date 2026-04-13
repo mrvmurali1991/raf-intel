@@ -52,7 +52,7 @@ from app.services.openemr_connector import (
 from app.db import raf_cursor, run_in_db_executor
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -415,6 +415,8 @@ async def get_scores(
     calc_year = year or date.today().year
     _tid = int(tenant_id)
 
+    _sf, _sp = active_patients_subquery(_tid)
+
     def _fetch_score() -> dict | None:
         with raf_cursor() as cur:
             cur.execute(
@@ -425,12 +427,12 @@ async def get_scores(
                     total_raw, final_raf, hcc_count, calculated_at
                 FROM raf_scores
                 WHERE patient_id = %s AND measurement_year = %s
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                   AND raf_scores.tenant_id = %s
                 ORDER BY calculated_at DESC
                 LIMIT 1
                 """,
-                (pid, calc_year, _tid),
+                (pid, calc_year, *_sp, _tid),
             )
             return cur.fetchone()
 
@@ -753,11 +755,11 @@ def population_summary(
             total_patients = 0
 
     # When EMR off but uploads exist, scope scores to uploaded patients
-    _pop_score_filter = (
-        "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
-        if (not has_active and total_patients > 0)
-        else ACTIVE_PATIENTS_SUBQUERY
-    )
+    if not has_active and total_patients > 0:
+        _pop_score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
+        _pop_score_params: tuple = ()
+    else:
+        _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -769,7 +771,7 @@ def population_summary(
                   AND raf_scores.tenant_id = %s
                 ORDER BY calculated_at DESC
                 """,
-                (calc_year, int(tenant_id)),
+                (calc_year, *_pop_score_params, int(tenant_id)),
             )
             score_rows = cur.fetchall()
     except Exception as exc:
@@ -799,6 +801,7 @@ def population_summary(
         raf_distribution.append({"range": label, "count": count})
 
     try:
+        _hcc_sf, _hcc_sp = active_patients_subquery(int(tenant_id))
         with raf_cursor() as cur:
             cur.execute(
                 f"""
@@ -806,12 +809,12 @@ def population_summary(
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND tenant_id = %s
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_hcc_sf}
                 GROUP BY hcc_code
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,
-                (calc_year, tenant_id),
+                (calc_year, int(tenant_id), *_hcc_sp),
             )
             hcc_rows = cur.fetchall()
     except Exception as exc:
@@ -882,6 +885,7 @@ def get_score_history(
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
+    _sf, _sp = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -899,13 +903,13 @@ def get_score_history(
                     calculated_at
                 FROM raf_scores
                 WHERE patient_id = %s
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf}
                   AND raf_scores.tenant_id = %s
                 ORDER BY
                     measurement_year DESC,
                     calculated_at DESC
                 """,
-                (pid, int(tenant_id)),
+                (pid, *_sp, int(tenant_id)),
             )
             rows = cur.fetchall()
     except Exception as exc:
@@ -1220,6 +1224,7 @@ def get_multi_model_scores(
 
     # Get stored CMS-HCC score from DB
     stored_cms: dict[str, Any] | None = None
+    _sf2, _sp2 = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -1230,12 +1235,12 @@ def get_multi_model_scores(
                     total_raw, final_raf, hcc_count, calculated_at
                 FROM raf_scores
                 WHERE patient_id = %s AND measurement_year = %s
-                  AND {ACTIVE_PATIENTS_SUBQUERY}
+                  AND {_sf2}
                   AND raf_scores.tenant_id = %s
                 ORDER BY calculated_at DESC
                 LIMIT 1
                 """,
-                (pid, calc_year, int(tenant_id)),
+                (pid, calc_year, *_sp2, int(tenant_id)),
             )
             row = cur.fetchone()
 

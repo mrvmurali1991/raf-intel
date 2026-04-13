@@ -27,10 +27,7 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 from app.db import raf_cursor, openemr_cursor
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
-
-# Variant of ACTIVE_PATIENTS_SUBQUERY for OpenEMR tables that use "pid" column.
-_ACTIVE_PIDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "pid IN")
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +190,7 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
     excluded_pids = billed_pids | completed_pids
 
     # All patients from raf_intelligence.patients
-    _ACTIVE_IDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "id IN")
+    _sf, _sp = active_patients_subquery(tid, patient_id_column="id")
     with raf_cursor() as cur:
         cur.execute(
             f"""
@@ -204,11 +201,11 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
                    p.zip AS postal_code, pp.provider_id AS providerID
             FROM patients p
             LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
-            WHERE p.is_active = 1 AND {_ACTIVE_IDS_SUBQUERY}
+            WHERE p.is_active = 1 AND {_sf}
               AND p.tenant_id = %s
             ORDER BY p.last_name, p.first_name
             """,
-            (tid,),
+            (*_sp, tid),
         )
         all_patients = cur.fetchall()
 

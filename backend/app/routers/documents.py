@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor, openemr_cursor
-from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+from app.services.emr_manager import active_patients_subquery
 from app.rate_limit import limiter
 from app.services.icd_validator import get_hcc_mapping
 from app.services.document_service import (
@@ -982,10 +982,11 @@ def draft_raf_score(
     calc_year = date.today().year
 
     # Verify the patient belongs to an active EMR connection
+    _sf, _sp = active_patients_subquery(int(tenant_id))
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT 1 FROM raf_scores WHERE patient_id = %s AND {ACTIVE_PATIENTS_SUBQUERY} AND raf_scores.tenant_id = %s LIMIT 1",
-            (patient_id, int(tenant_id)),
+            f"SELECT 1 FROM raf_scores WHERE patient_id = %s AND {_sf} AND raf_scores.tenant_id = %s LIMIT 1",
+            (patient_id, *_sp, int(tenant_id)),
         )
         if not cur.fetchone():
             raise HTTPException(
@@ -1346,10 +1347,11 @@ def approve_and_update_raf(
     patient_id = int(doc["patient_id"])
 
     # Verify the patient belongs to an active EMR connection
+    _sf2, _sp2 = active_patients_subquery(int(tenant_id))
     with raf_cursor() as cur:
         cur.execute(
-            f"SELECT 1 FROM raf_scores WHERE patient_id = %s AND {ACTIVE_PATIENTS_SUBQUERY} AND raf_scores.tenant_id = %s LIMIT 1",
-            (patient_id, int(tenant_id)),
+            f"SELECT 1 FROM raf_scores WHERE patient_id = %s AND {_sf2} AND raf_scores.tenant_id = %s LIMIT 1",
+            (patient_id, *_sp2, int(tenant_id)),
         )
         if not cur.fetchone():
             raise HTTPException(

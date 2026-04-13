@@ -73,11 +73,15 @@ def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]
             WHERE p.tenant_id = %(tenant_id)s
               AND NOT EXISTS (
                     SELECT 1 FROM raf_patient_hcc h
+                    JOIN patients ph ON ph.id = h.patient_id
                     WHERE h.patient_id = p.id
+                      AND ph.tenant_id = %(tenant_id)s
               )
               AND NOT EXISTS (
                     SELECT 1 FROM diagnoses d
+                    JOIN patients pd ON pd.id = d.patient_id
                     WHERE d.patient_id = p.id
+                      AND pd.tenant_id = %(tenant_id)s
                       AND d.diagnosis_date >= (CURRENT_DATE - INTERVAL 365 DAY)
               )
             ORDER BY p.id
@@ -273,33 +277,19 @@ def check_orphaned_hccs(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
     """raf_patient_hcc rows whose patient_id has no matching patients row."""
     check = "orphaned_hccs"
     try:
-        try:
-            cursor.execute(
-                """
-                SELECT h.id
-                FROM raf_patient_hcc h
-                LEFT JOIN patients p ON p.id = h.patient_id
-                WHERE p.id IS NULL
-                  AND (h.tenant_id = %(tenant_id)s OR %(tenant_id)s IS NULL)
-                ORDER BY h.id
-                LIMIT 1000
-                """,
-                {"tenant_id": tenant_id},
-            )
-            rows = [r["id"] for r in cursor.fetchall()]
-        except Exception:
-            # Fallback if raf_patient_hcc has no tenant_id column
-            cursor.execute(
-                """
-                SELECT h.id
-                FROM raf_patient_hcc h
-                LEFT JOIN patients p ON p.id = h.patient_id
-                WHERE p.id IS NULL
-                ORDER BY h.id
-                LIMIT 1000
-                """
-            )
-            rows = [r["id"] for r in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT h.id
+            FROM raf_patient_hcc h
+            LEFT JOIN patients p ON p.id = h.patient_id
+            WHERE p.id IS NULL
+              AND h.tenant_id = %(tenant_id)s
+            ORDER BY h.id
+            LIMIT 1000
+            """,
+            {"tenant_id": tenant_id},
+        )
+        rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
             "severity": "error",

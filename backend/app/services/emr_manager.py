@@ -124,6 +124,8 @@ _DEFAULT_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 #   frag, params = active_patients_subquery(tenant_id)
 #   sql = f"SELECT ... FROM raf_scores WHERE {frag} AND ..."
 #   cursor.execute(sql, (*params, ...other params...))
+# DEPRECATED: use active_patients_subquery(tenant_id) for all new code.
+# Kept for backwards compatibility only — do NOT add new usages of this constant.
 ACTIVE_PATIENTS_SUBQUERY = """(
     patient_id IN (
         SELECT id FROM patients WHERE is_active = 1
