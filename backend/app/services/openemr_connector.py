@@ -655,8 +655,10 @@ def get_vitals_history(pid: int, year: Optional[int] = None) -> list[dict[str, A
             fv.pid,
             fv.bps,
             fv.bpd,
-            fv.weight_metric AS weight,
-            fv.height_metric AS height
+            fv.weight AS weight,
+            fv.height AS height,
+            fv.BMI,
+            fv.oxygen_saturation
         FROM form_vitals fv
         WHERE fv.pid = %s
         {year_clause}
