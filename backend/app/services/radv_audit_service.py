@@ -205,7 +205,7 @@ def get_hcc_audit_trail(
             cur.execute(
                 f"""
                 SELECT DISTINCT
-                    ne.id              AS encounter_id,
+                    ne.encounter_id              AS encounter_id,
                     ne.encounter_date,
                     ne.encounter_type,
                     ne.facility_name,
@@ -214,7 +214,7 @@ def get_hcc_audit_trail(
                     ne.tenant_id
                 FROM normalized_encounters ne
                 JOIN normalized_diagnoses nd
-                   ON nd.encounter_id = ne.id
+                   ON nd.encounter_id = ne.encounter_id
                 WHERE ne.patient_id      = %s
                   AND ne.tenant_id       = %s
                   AND YEAR(ne.encounter_date) = %s

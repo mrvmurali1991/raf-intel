@@ -261,12 +261,12 @@ def get_coding_accuracy_metrics(tenant_id: str) -> dict[str, Any]:
             cur.execute(
                 """
                 SELECT
-                    COUNT(DISTINCT ne.id)                               AS total_encounters,
+                    COUNT(DISTINCT ne.encounter_id)                               AS total_encounters,
                     COUNT(DISTINCT CASE WHEN rh.encounter_id IS NOT NULL
-                                        THEN ne.id END)                 AS coded_encounters
+                                        THEN ne.encounter_id END)                 AS coded_encounters
                 FROM normalized_encounters ne
                 JOIN patients p ON p.id = ne.patient_id
-                LEFT JOIN raf_patient_hcc rh ON rh.encounter_id = ne.id
+                LEFT JOIN raf_patient_hcc rh ON rh.encounter_id = ne.encounter_id
                 WHERE p.is_active = 1
                   AND p.tenant_id = %s
                 """,
@@ -383,9 +383,9 @@ def get_provider_performance(tenant_id: str) -> list[dict[str, Any]]:
                     prov.specialty,
                     COUNT(DISTINCT pp.patient_id)                       AS patient_count,
                     AVG(rs.raf_score)                                   AS avg_raf_score,
-                    COUNT(DISTINCT ne.id)                               AS total_encounters,
+                    COUNT(DISTINCT ne.encounter_id)                               AS total_encounters,
                     COUNT(DISTINCT CASE WHEN rh.encounter_id IS NOT NULL
-                                        THEN ne.id END)                 AS coded_encounters
+                                        THEN ne.encounter_id END)                 AS coded_encounters
                 FROM providers prov
                 JOIN provider_patients pp ON pp.provider_id = prov.id
                 JOIN patients p ON p.id = pp.patient_id
@@ -393,7 +393,7 @@ def get_provider_performance(tenant_id: str) -> list[dict[str, Any]]:
                                        AND rs.measurement_year = %s
                                        AND rs.score_type = 'prospective'
                 LEFT JOIN normalized_encounters ne ON ne.patient_id = p.id
-                LEFT JOIN raf_patient_hcc rh ON rh.encounter_id = ne.id
+                LEFT JOIN raf_patient_hcc rh ON rh.encounter_id = ne.encounter_id
                 WHERE prov.tenant_id = %s
                   AND prov.status = 'active'
                   AND p.is_active = 1

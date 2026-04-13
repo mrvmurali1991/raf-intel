@@ -41,14 +41,15 @@ RUN groupadd --gid 1001 celery && \
 USER celery
 
 HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
-    CMD celery -A app.services.job_service inspect ping --timeout 10 || exit 1
+    CMD celery -A app.services.celery_tasks inspect ping --timeout 10 || exit 1
 
 CMD ["sh", "-c", \
-     "celery -A app.services.job_service worker \
+     "celery -A app.services.celery_tasks worker \
       --loglevel=info \
       --concurrency=${CELERY_CONCURRENCY:-4} \
       -Q default,heavy \
       --max-tasks-per-child=50 \
       --without-gossip \
       --without-mingle \
-      --hostname=worker@%h"]
+      --hostname=worker@%h \
+      -B"]

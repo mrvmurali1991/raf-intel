@@ -210,14 +210,14 @@ _ENC_DIAG_COLS = [
 # Primary source: normalised encounter/diagnosis tables
 _ENC_DIAG_PRIMARY_SQL = """
     SELECT
-        ne.id                           AS encounter_id,
+        ne.encounter_id                           AS encounter_id,
         ne.patient_id,
         ne.encounter_date               AS dos,
         ne.provider_npi,
         nd.icd10_code,
         nd.primary_flag
     FROM normalized_encounters ne
-    JOIN normalized_diagnoses nd ON nd.encounter_id = ne.id
+    JOIN normalized_diagnoses nd ON nd.encounter_id = ne.encounter_id
     WHERE ne.tenant_id = %s
     ORDER BY ne.encounter_date DESC
 """
