@@ -1408,7 +1408,6 @@ function ProviderDetailPanel({
                     ].map((h) => (
                       <th
                         key={h}
-                        scope="col"
                         style={{
                           padding: "8px 10px",
                           textAlign: "left",
@@ -1649,12 +1648,6 @@ export default function ProvidersPage() {
         }
         @media (max-width: 640px) {
           .providers-stats { grid-template-columns: 1fr !important; }
-        }
-        .providers-table-desktop { display: block; }
-        .providers-cards-mobile { display: none; }
-        @media (max-width: 768px) {
-          .providers-table-desktop { display: none; }
-          .providers-cards-mobile { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
         }
       `}</style>
 
@@ -1950,105 +1943,8 @@ export default function ProvidersPage() {
           </div>
         </div>
 
-        {/* Mobile card view */}
-        <div className="providers-cards-mobile">
-          {lbLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  background: C.white,
-                  borderRadius: 12,
-                  padding: 16,
-                  border: `1px solid ${C.border}`,
-                }}
-              >
-                <div style={{ height: 14, borderRadius: 4, background: C.gray200, animation: "pulse 1.5s ease-in-out infinite", width: "60%", marginBottom: 12 }} />
-                <div style={{ height: 12, borderRadius: 4, background: C.gray200, animation: "pulse 1.5s ease-in-out infinite", width: "40%", marginBottom: 8 }} />
-                <div style={{ height: 12, borderRadius: 4, background: C.gray200, animation: "pulse 1.5s ease-in-out infinite", width: "50%" }} />
-              </div>
-            ))
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: C.textMuted }}>
-              <Users size={32} color={C.gray300} style={{ display: "block", margin: "0 auto 8px" }} />
-              {leaderboard.length === 0
-                ? "No providers found. Add a provider or use Auto-Discover."
-                : "No providers match your search filters."}
-            </div>
-          ) : (
-            filtered.map((row, idx) => (
-              <div
-                key={row.provider_id}
-                onClick={() => setExpandedId(expandedId === row.provider_id ? null : row.provider_id)}
-                role="button"
-                tabIndex={0}
-                aria-expanded={expandedId === row.provider_id}
-                aria-label={`Provider ${providerName(row)}`}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedId(expandedId === row.provider_id ? null : row.provider_id); } }}
-                style={{
-                  background: expandedId === row.provider_id ? C.primaryLight : C.white,
-                  borderRadius: 12,
-                  padding: 16,
-                  border: `1px solid ${expandedId === row.provider_id ? C.primary : C.border}`,
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                  <RankBadge rank={idx + 1} />
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      background: initialsColor(providerName(row)),
-                      color: C.white,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {((row.first_name || "").trim()[0] || "\u2022").toUpperCase()}{(row.last_name || "").trim()[0]?.toUpperCase() || ""}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: C.text, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {providerName(row)}
-                    </div>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>
-                      {row.specialty} <SpecialtyTag cat={row.specialty_category} />
-                    </div>
-                  </div>
-                  {expandedId === row.provider_id ? <ChevronUp size={16} color={C.primary} /> : <ChevronDown size={16} color={C.textSub} />}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>
-                    Patients: <strong style={{ color: C.text }}>{row.patient_count.toLocaleString()}</strong>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>
-                    Avg RAF: <strong style={{ color: C.text }}>{fmtN(row.average_raf_score, 3)}</strong>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>
-                    Capture: <CaptureBadge rate={row.hcc_capture_rate} />
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>
-                    Revenue: <strong style={{ color: C.emeraldDark }}>{fmt$(row.revenue_opportunity)}</strong>
-                  </div>
-                </div>
-                {expandedId === row.provider_id && (
-                  <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                    <ProviderDetailPanel providerId={row.provider_id} onClose={() => setExpandedId(null)} />
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Desktop table */}
-        <div className="providers-table-desktop" style={{ overflowX: "auto" }}>
+        {/* Table */}
+        <div style={{ overflowX: "auto" }}>
           <table
             style={{
               width: "100%",
@@ -2058,9 +1954,8 @@ export default function ProvidersPage() {
           >
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.border}`, background: C.gray50 }}>
-                <th scope="col" style={thStyleStatic}>Rank</th>
+                <th style={thStyleStatic}>Rank</th>
                 <th
-                  scope="col"
                   style={thStyle("name")}
                   onClick={() => handleSort("name")}
                 >
@@ -2068,9 +1963,8 @@ export default function ProvidersPage() {
                     Provider <SortIcon field="name" activeField={sortField} activeDir={sortDir} />
                   </div>
                 </th>
-                <th scope="col" style={thStyleStatic}>Specialty</th>
+                <th style={thStyleStatic}>Specialty</th>
                 <th
-                  scope="col"
                   style={thStyle("patient_count")}
                   onClick={() => handleSort("patient_count")}
                 >
@@ -2079,7 +1973,6 @@ export default function ProvidersPage() {
                   </div>
                 </th>
                 <th
-                  scope="col"
                   style={thStyle("average_raf_score")}
                   onClick={() => handleSort("average_raf_score")}
                 >
@@ -2088,7 +1981,6 @@ export default function ProvidersPage() {
                   </div>
                 </th>
                 <th
-                  scope="col"
                   style={thStyle("hcc_capture_rate")}
                   onClick={() => handleSort("hcc_capture_rate")}
                 >
@@ -2097,7 +1989,6 @@ export default function ProvidersPage() {
                   </div>
                 </th>
                 <th
-                  scope="col"
                   style={thStyle("recapture_rate")}
                   onClick={() => handleSort("recapture_rate")}
                 >
@@ -2106,7 +1997,6 @@ export default function ProvidersPage() {
                   </div>
                 </th>
                 <th
-                  scope="col"
                   style={thStyle("meat_score")}
                   onClick={() => handleSort("meat_score")}
                 >
@@ -2115,7 +2005,6 @@ export default function ProvidersPage() {
                   </div>
                 </th>
                 <th
-                  scope="col"
                   style={thStyle("revenue_opportunity")}
                   onClick={() => handleSort("revenue_opportunity")}
                 >
@@ -2123,7 +2012,7 @@ export default function ProvidersPage() {
                     Revenue Opp. <SortIcon field="revenue_opportunity" activeField={sortField} activeDir={sortDir} />
                   </div>
                 </th>
-                <th scope="col" style={thStyleStatic}>Actions</th>
+                <th style={thStyleStatic}>Actions</th>
               </tr>
             </thead>
             <tbody>

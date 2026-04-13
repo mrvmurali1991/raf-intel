@@ -4,25 +4,24 @@ import React from "react";
 import { ArrowUp, ArrowDown, ChevronLeft, Info, X } from "lucide-react";
 import Link from "next/link";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { tokens } from "@/styles/tokens";
 
-// ─── Design Tokens (derived from shared tokens) ────────────────────────────
+// ─── Design Tokens ───────────────────────────────────────────────────────────
 
 const colors = {
-  primary: tokens.primary,
-  slate900: tokens.slate900,
-  slate600: tokens.slate600,
-  slate400: tokens.slate400,
-  slate200: tokens.slate200,
-  slate100: tokens.slate100,
-  slate50: tokens.slate50,
-  white: tokens.white,
-  red600: tokens.red600,
-  amber500: tokens.amber500,
-  emerald500: tokens.emerald500,
-  gray400: tokens.gray400,
-  gray200: tokens.gray200,
-  subtleText: tokens.subtleText,
+  primary: "#0f766e",
+  slate900: "#0F172A",
+  slate600: "#475569",
+  slate400: "#94A3B8",
+  slate200: "#f1f5f9",
+  slate100: "#F1F5F9",
+  slate50: "#F8FAFC",
+  white: "#FFFFFF",
+  red600: "#e11d48",
+  amber500: "#d97706",
+  emerald500: "#059669",
+  gray400: "#9CA3AF",
+  gray200: "#E5E7EB",
+  subtleText: "#64748B",
 };
 
 function riskColor(score: number | null): string {
@@ -44,7 +43,7 @@ function riskLabel(score: number | null): string {
 // ─── 1. StatCard ─────────────────────────────────────────────────────────────
 
 export interface StatCardProps {
-  label: React.ReactNode;
+  label: string;
   value: React.ReactNode;
   subtitle?: string;
   icon?: React.ReactNode;
@@ -57,31 +56,40 @@ export interface StatCardProps {
 
 export function StatCard({ label, value, subtitle, icon, trend, color = colors.primary, loading, href, info }: StatCardProps) {
   const [showInfo, setShowInfo] = React.useState(false);
-  const infoId = React.useId();
   const iconBg: React.CSSProperties = {
     width: 44,
     height: 44,
     borderRadius: 12,
     backgroundColor: `${color}1A`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     color,
+    flexShrink: 0,
   };
 
   if (loading) {
     return (
       <div
-        className="animate-fade-in stat-card-gradient-border flex flex-col gap-3 rounded-3xl bg-white p-6"
+        className="animate-fade-in stat-card-gradient-border"
         style={{
+          background: colors.white,
           border: `1px solid ${colors.slate200}`,
+          borderRadius: 24,
           boxShadow: "0 25px 50px -12px rgba(226, 232, 240, 0.5)",
+          padding: 24,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
         }}
       >
-        <div className="flex items-center justify-between">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div className="skeleton" style={{ width: 80, height: 14, borderRadius: 6 }} />
           <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 12 }} />
         </div>
         <div>
           <div className="skeleton" style={{ width: 100, height: 28, borderRadius: 8 }} />
-          <div className="skeleton mt-2" style={{ width: 140, height: 12, borderRadius: 6 }} />
+          <div className="skeleton" style={{ width: 140, height: 12, borderRadius: 6, marginTop: 8 }} />
         </div>
       </div>
     );
@@ -89,50 +97,52 @@ export function StatCard({ label, value, subtitle, icon, trend, color = colors.p
 
   const cardContent = (
     <div
-      className="animate-fade-in hover-lift stat-card-gradient-border flex flex-col gap-3 rounded-3xl bg-white p-6"
+      className="animate-fade-in hover-lift stat-card-gradient-border"
       style={{
+        background: colors.white,
         border: `1px solid ${colors.slate200}`,
+        borderRadius: 24,
         boxShadow: "0 25px 50px -12px rgba(226, 232, 240, 0.5)",
+        padding: 24,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
         cursor: href ? "pointer" : undefined,
       }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: colors.slate400 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.slate400 }}>
             {label}
           </span>
           {info && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowInfo(!showInfo); }}
-              className="flex items-center border-none bg-transparent p-0.5 transition-colors"
               style={{
-                cursor: "pointer",
-                color: showInfo ? color : colors.slate400,
+                border: "none", background: "none", cursor: "pointer", padding: 2,
+                color: showInfo ? color : colors.slate400, display: "flex", alignItems: "center",
+                transition: "color 0.15s",
               }}
               aria-label={`Info about ${label}`}
-              aria-expanded={showInfo}
-              aria-controls={infoId}
             >
               <Info size={14} />
             </button>
           )}
         </div>
-        {icon && <div className="flex shrink-0 items-center justify-center" style={iconBg} aria-hidden="true">{icon}</div>}
+        {icon && <div style={iconBg} aria-hidden="true">{icon}</div>}
       </div>
       {info && showInfo && (
-        <div
-          id={infoId}
-          role="tooltip"
-          className="relative mb-1 rounded-lg text-xs leading-relaxed"
-          style={{
-            background: colors.slate50, border: `1px solid ${colors.slate200}`,
-            padding: "10px 14px", color: colors.slate600,
-          }}
-        >
+        <div style={{
+          background: "#F8FAFC", border: `1px solid ${colors.slate200}`, borderRadius: 10,
+          padding: "10px 14px", fontSize: 12, lineHeight: 1.6, color: colors.slate600,
+          position: "relative", marginBottom: 4,
+        }}>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowInfo(false); }}
-            className="absolute right-1.5 top-1.5 flex border-none bg-transparent p-0.5"
-            style={{ cursor: "pointer", color: colors.slate400 }}
+            style={{
+              position: "absolute", top: 6, right: 6, border: "none", background: "none",
+              cursor: "pointer", color: colors.slate400, padding: 2, display: "flex",
+            }}
           >
             <X size={12} />
           </button>
@@ -140,17 +150,17 @@ export function StatCard({ label, value, subtitle, icon, trend, color = colors.p
         </div>
       )}
       <div>
-        <div className="tabular-nums text-[28px] font-bold leading-none" style={{ color: colors.slate900 }}>{value}</div>
-        {subtitle && <div className="mt-1 text-xs" style={{ color: colors.subtleText }}>{subtitle}</div>}
+        <div className="tabular-nums" style={{ fontSize: 28, fontWeight: 700, color: colors.slate900, lineHeight: 1.1 }}>{value}</div>
+        {subtitle && <div style={{ fontSize: 12, color: colors.subtleText, marginTop: 4 }}>{subtitle}</div>}
       </div>
       {trend && (
-        <div className="flex items-center gap-1 text-xs">
+        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
           {trend.value >= 0 ? (
             <ArrowUp size={14} style={{ color: colors.emerald500 }} aria-hidden="true" />
           ) : (
             <ArrowDown size={14} style={{ color: colors.red600 }} aria-hidden="true" />
           )}
-          <span className="font-semibold" style={{ color: trend.value >= 0 ? colors.emerald500 : colors.red600 }}>
+          <span style={{ fontWeight: 600, color: trend.value >= 0 ? colors.emerald500 : colors.red600 }}>
             {trend.value >= 0 ? "+" : ""}
             {trend.value}%
           </span>
@@ -161,7 +171,7 @@ export function StatCard({ label, value, subtitle, icon, trend, color = colors.p
   );
 
   if (href) {
-    return <Link href={href} className="no-underline" style={{ color: "inherit" }}>{cardContent}</Link>;
+    return <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>{cardContent}</Link>;
   }
   return cardContent;
 }
@@ -194,14 +204,10 @@ export function RiskBadge({ score, size = "md" }: RiskBadgeProps) {
     whiteSpace: "nowrap",
   };
 
-  const ariaLabel = score !== null
-    ? `Risk level: ${label}, RAF score ${score.toFixed(3)}`
-    : "Risk level: not scored";
-
   return (
     <Tooltip>
       <TooltipTrigger>
-        <span style={style} className={isHighRisk ? "soft-pulse cursor-help" : "cursor-help"} aria-label={ariaLabel} role="status">
+        <span style={style} className={isHighRisk ? "soft-pulse cursor-help" : "cursor-help"}>
           <span
             style={{
               width: dotSize,
@@ -238,7 +244,7 @@ export function RiskGauge({ score, size = 120, label = "RAF Score" }: RiskGaugeP
   const offset = circumference * (1 - fraction);
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} role="img" aria-label={`RAF Score: ${score ?? 'Not scored'}`}>
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={colors.slate200} strokeWidth={strokeWidth} />
         <circle
@@ -255,17 +261,18 @@ export function RiskGauge({ score, size = 120, label = "RAF Score" }: RiskGaugeP
         />
       </svg>
       <div
-        className="relative text-center"
         style={{
+          position: "relative",
           marginTop: -size * 0.65,
           marginBottom: size * 0.65 - 40,
+          textAlign: "center",
         }}
       >
-        <div className="tabular-nums font-bold leading-none" style={{ fontSize: size * 0.28, color: c }}>
+        <div className="tabular-nums" style={{ fontSize: size * 0.28, fontWeight: 700, color: c, lineHeight: 1 }}>
           {score !== null ? score.toFixed(2) : "\u2014"}
         </div>
       </div>
-      <span className="text-xs font-medium" style={{ color: colors.slate400 }}>{label}</span>
+      <span style={{ fontSize: 12, color: colors.slate400, fontWeight: 500 }}>{label}</span>
     </div>
   );
 }
@@ -284,16 +291,15 @@ export function ProgressBar({ value, label, color = colors.primary, showPercent 
   const clamped = Math.max(0, Math.min(100, value));
 
   return (
-    <div className="flex w-full flex-col gap-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
       {(label || showPercent) && (
-        <div className="flex justify-between text-xs">
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
           {label && <span style={{ color: colors.subtleText }}>{label}</span>}
-          {showPercent && <span className="tabular-nums font-semibold" style={{ color: colors.slate900 }}>{Math.round(clamped)}%</span>}
+          {showPercent && <span className="tabular-nums" style={{ color: colors.slate900, fontWeight: 600 }}>{Math.round(clamped)}%</span>}
         </div>
       )}
       <div
-        className="w-full overflow-hidden"
-        style={{ height, borderRadius: height, backgroundColor: colors.slate200 }}
+        style={{ height, borderRadius: height, backgroundColor: colors.slate200, overflow: "hidden", width: "100%" }}
         role="progressbar"
         aria-valuenow={clamped}
         aria-valuemin={0}
@@ -326,11 +332,11 @@ export function ConfidencePill({ value }: ConfidencePillProps) {
   const pct = Math.round(value * 100);
 
   return (
-    <div className="inline-flex items-center gap-1.5">
-      <div className="overflow-hidden" style={{ width: 48, height: 6, borderRadius: 3, backgroundColor: colors.slate200 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <div style={{ width: 48, height: 6, borderRadius: 3, backgroundColor: colors.slate200, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${pct}%`, borderRadius: 3, backgroundColor: c, transition: "width 0.3s ease" }} />
       </div>
-      <span className="tabular-nums text-xs font-semibold" style={{ color: c }}>{pct}%</span>
+      <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: c }}>{pct}%</span>
     </div>
   );
 }
@@ -342,50 +348,43 @@ export interface MeatIndicatorProps {
 }
 
 const meatColors: Record<string, string> = {
-  M: tokens.primary,
-  E: tokens.violet500,
-  A: tokens.amber500,
-  T: tokens.emerald500,
-};
-
-const meatTooltips: Record<string, string> = {
-  M: "Monitoring — ongoing patient monitoring",
-  E: "Evaluation — clinical evaluation performed",
-  A: "Assessment — diagnosis assessment documented",
-  T: "Treatment — treatment plan in place",
+  M: colors.primary,
+  E: "#8B5CF6",
+  A: colors.amber500,
+  T: colors.emerald500,
 };
 
 export function MeatIndicator({ meat }: MeatIndicatorProps) {
   const letters = ["M", "E", "A", "T"] as const;
 
   return (
-    <div className="inline-flex gap-1">
+    <div style={{ display: "inline-flex", gap: 4 }}>
       {letters.map((l) => {
         const filled = meat ? !!meat[l] : false;
         const c = meatColors[l];
-        const detail = filled && meat?.[l] ? meat[l] : `${l} not documented`;
-        const tooltipText = `${meatTooltips[l]}${filled ? ` — ${detail}` : " (not documented)"}`;
         return (
           <Tooltip key={l}>
             <TooltipTrigger>
               <div
-                title={meatTooltips[l]}
-                className="flex cursor-help items-center justify-center"
                 style={{
                   width: 22,
                   height: 22,
                   borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontSize: 11,
                   fontWeight: 700,
                   backgroundColor: filled ? `${c}1A` : "transparent",
                   color: filled ? c : colors.gray400,
                   border: filled ? `1.5px solid ${c}` : `1.5px solid ${colors.gray200}`,
+                  cursor: "help",
                 }}
               >
                 {l}
               </div>
             </TooltipTrigger>
-            <TooltipContent>{tooltipText}</TooltipContent>
+            <TooltipContent>{filled && meat?.[l] ? meat[l] : `${l} not documented`}</TooltipContent>
           </Tooltip>
         );
       })}
@@ -403,11 +402,16 @@ export interface DataRowProps {
 export function DataRow({ label, value }: DataRowProps) {
   return (
     <div
-      className="flex items-center justify-between py-2.5"
-      style={{ borderBottom: `1px solid ${colors.slate100}` }}
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "10px 0",
+        borderBottom: `1px solid ${colors.slate100}`,
+      }}
     >
-      <span className="text-[13px]" style={{ color: colors.subtleText }}>{label}</span>
-      <span className="text-right text-[13px] font-semibold" style={{ color: colors.slate900 }}>{value}</span>
+      <span style={{ fontSize: 13, color: colors.subtleText }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: colors.slate900, textAlign: "right" }}>{value}</span>
     </div>
   );
 }
@@ -423,28 +427,31 @@ export interface SectionHeaderProps {
 
 export function SectionHeader({ title, icon, count, action }: SectionHeaderProps) {
   return (
-    <div className="mb-4 flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        {icon && <span className="flex" style={{ color: colors.primary }}>{icon}</span>}
-        <div className="flex flex-col">
-          <h3 className="m-0 text-base font-bold" style={{ color: colors.slate900 }}>{title}</h3>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {icon && <span style={{ color: colors.primary, display: "flex" }}>{icon}</span>}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.slate900 }}>{title}</h3>
           <div
-            className="mt-1 opacity-70"
             style={{
               width: 32,
               height: 3,
               borderRadius: 2,
               backgroundColor: colors.primary,
+              marginTop: 4,
+              opacity: 0.7,
             }}
           />
         </div>
         {count !== undefined && (
           <span
-            className="rounded-full text-[11px] font-semibold"
             style={{
+              fontSize: 11,
+              fontWeight: 600,
               color: colors.primary,
               backgroundColor: `${colors.primary}1A`,
               padding: "2px 8px",
+              borderRadius: 999,
             }}
           >
             {count}
@@ -467,29 +474,38 @@ export interface EmptyStateProps {
 export function EmptyState({ icon, title, description }: EmptyStateProps) {
   return (
     <div
-      className="animate-fade-in flex flex-col items-center justify-center rounded-2xl text-center"
+      className="animate-fade-in"
       style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
         padding: "48px 24px",
+        textAlign: "center",
         border: `2px dashed ${colors.gray200}`,
+        borderRadius: 16,
       }}
-      role="status"
     >
       {icon && (
         <div
-          className="animate-gentle-bounce mb-4 flex items-center justify-center"
+          className="animate-gentle-bounce"
           style={{
             width: 56,
             height: 56,
             borderRadius: 16,
             backgroundColor: colors.slate100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             color: colors.slate400,
+            marginBottom: 16,
           }}
         >
           {icon}
         </div>
       )}
-      <h4 className="m-0 text-[15px] font-semibold" style={{ color: colors.slate900 }}>{title}</h4>
-      {description && <p className="mx-0 mt-2 max-w-xs leading-relaxed" style={{ fontSize: 13, color: colors.subtleText }}>{description}</p>}
+      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: colors.slate900 }}>{title}</h4>
+      {description && <p style={{ margin: "8px 0 0", fontSize: 13, color: colors.subtleText, maxWidth: 320, lineHeight: 1.5 }}>{description}</p>}
     </div>
   );
 }
@@ -507,20 +523,33 @@ export interface PageHeaderProps {
 export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHeaderProps) {
   return (
     <div
-      className="mb-6 flex flex-wrap items-start justify-between gap-4 pb-5"
-      style={{ borderBottom: `1px solid ${colors.slate200}` }}
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        marginBottom: 24,
+        paddingBottom: 20,
+        borderBottom: `1px solid ${colors.slate200}`,
+        gap: 16,
+        flexWrap: "wrap",
+      }}
     >
-      <div className="flex items-center gap-3">
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {backHref && (
           <Link
             href={backHref}
-            className="hover-lift flex shrink-0 items-center justify-center no-underline"
+            className="hover-lift"
             style={{
               width: 36,
               height: 36,
               borderRadius: 10,
               border: `1px solid ${colors.slate200}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               color: colors.slate600,
+              textDecoration: "none",
+              flexShrink: 0,
             }}
           >
             <ChevronLeft size={18} />
@@ -528,13 +557,16 @@ export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHea
         )}
         {icon && (
           <div
-            className="flex shrink-0 items-center justify-center"
             style={{
               width: 44,
               height: 44,
               borderRadius: 12,
               backgroundColor: `${colors.primary}1A`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               color: colors.primary,
+              flexShrink: 0,
               boxShadow: `0 2px 8px ${colors.primary}20`,
             }}
           >
@@ -542,11 +574,11 @@ export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHea
           </div>
         )}
         <div>
-          <h1 className="m-0 text-h1" style={{ color: colors.slate900 }}>{title}</h1>
-          {subtitle && <p className="mt-1 text-body-sm" style={{ margin: "4px 0 0", color: colors.subtleText }}>{subtitle}</p>}
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: colors.slate900, lineHeight: 1.2 }}>{title}</h1>
+          {subtitle && <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.subtleText }}>{subtitle}</p>}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>{actions}</div>}
     </div>
   );
 }

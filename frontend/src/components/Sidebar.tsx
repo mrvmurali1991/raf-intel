@@ -2,16 +2,29 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useRef, useCallback, CSSProperties } from "react";
+import { useState, useEffect, CSSProperties } from "react";
 import {
   LayoutDashboard,
   Users,
   ClipboardCheck,
+  CalendarClock,
+  Target,
   Microscope,
+  Layers,
+  FileImage,
+  FileText,
   Workflow,
-  Upload,
+  Plug,
   BarChart3,
+  UserCheck,
+  Star,
+  Send,
+  Calculator,
   ShieldCheck,
+  UsersRound,
+  Code,
+  Settings,
+  Database,
   Moon,
   Sun,
   PanelLeftClose,
@@ -19,18 +32,31 @@ import {
   Menu,
   X,
   LogOut,
+  HeartPulse,
+  Search,
+  ArrowLeftRight,
+  Activity,
+  Upload,
 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
 import { useAuth } from "@/contexts/auth-context";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import api, { getEmrStatus } from "@/lib/api";
+import { NotificationCenter } from "@/components/NotificationCenter";
+import { hasUsedKeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { Building2, ChevronDown } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string; style?: CSSProperties }>;
   badge?: string | number;
-  /** Show a notification dot indicator when there are pending items */
-  notificationDot?: boolean;
+  /** Keyboard shortcut hint, e.g. "g h". Shown when sidebar is expanded and user has used shortcuts before. */
+  shortcut?: string;
 }
 
 interface NavGroup {
@@ -38,72 +64,299 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// ---------------------------------------------------------------------------
+// Navigation structure — all 21 pages present in /app
+// ---------------------------------------------------------------------------
+
 const navGroups: NavGroup[] = [
   {
     title: "MAIN",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/patients", label: "Patients", icon: Users },
-      { href: "/suspects", label: "Review Queue", icon: ClipboardCheck },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
+      { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
+      { href: "/uploads", label: "Data Uploads", icon: Upload },
+      { href: "/suspects", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
+      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
+      { href: "/prospective", label: "Prospective", icon: Target },
     ],
   },
   {
     title: "ANALYSIS",
     items: [
-      { href: "/analysis", label: "Clinical Analysis", icon: Microscope },
+      { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
+      { href: "/batch", label: "Batch Analysis", icon: Layers },
+      { href: "/documents", label: "Documents", icon: FileImage },
+      { href: "/claims", label: "Claims", icon: FileText },
       { href: "/demo", label: "Pipeline Demo", icon: Workflow },
-      { href: "/uploads", label: "Upload Document", icon: Upload },
+      { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
+      { href: "/integrations", label: "Integrations", icon: Plug },
     ],
   },
   {
     title: "REPORTS",
     items: [
-      { href: "/reports", label: "Analytics", icon: BarChart3 },
+      { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
+      { href: "/providers", label: "Provider Performance", icon: UserCheck },
+      { href: "/quality", label: "Quality & STARS", icon: Star },
+      { href: "/submissions", label: "CMS Submissions", icon: Send },
+      { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
+      { href: "/roi", label: "ROI Calculator", icon: Calculator },
       { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
     ],
   },
+  {
+    title: "ADMIN",
+    items: [
+      { href: "/users",      label: "Users",          icon: UsersRound },
+      { href: "/system",     label: "System Health",  icon: Activity },
+      { href: "/developer",  label: "Developer",      icon: Code },
+      { href: "/emr-config", label: "EMR Config",     icon: Database, shortcut: "g e" },
+    ],
+  },
+  {
+    title: "ACCOUNT",
+    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+  },
 ];
 
-function getUserInitials(name?: string): string {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+// ---------------------------------------------------------------------------
+// Design tokens
+// ---------------------------------------------------------------------------
 
 const EXPANDED_WIDTH = 240;
 const COLLAPSED_WIDTH = 64;
-const BG = "#0F172A";
-const BG_HOVER = "#1E293B";
-const BG_ACTIVE = "#1E293B";
-const TEXT_DEFAULT = "#94A3B8";
-const TEXT_ACTIVE = "#FFFFFF";
-const TEXT_SECTION = "#475569";
-const TEXT_SUBTLE = "#64748B";
-const ACCENT = "#2563EB";
-const ACCENT_LIGHT = "#60A5FA";
-const BORDER_COLOR = "#1E293B";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getUserInitials(firstName?: string, lastName?: string): string {
+  const first = firstName?.[0] ?? "";
+  const last = lastName?.[0] ?? "";
+  return (first + last).toUpperCase() || "\u2022";
+}
+
+function getUserDisplayName(
+  user: { first_name?: string; last_name?: string; email?: string } | null
+): string {
+  if (!user) return "Guest";
+  const full = [user.first_name, user.last_name].filter(Boolean).join(" ");
+  return full || user.email || "User";
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+interface TenantInfo {
+  tenant_id: string;
+  name: string;
+  patient_count: number;
+}
+
+function TenantSwitcher({ isDark }: { isDark: boolean }) {
+  const { user, switchTenant } = useAuth();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  const { data } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ tenants: TenantInfo[]; current_tenant_id: string }>(
+          "/api/auth/tenants"
+        );
+        return res.data;
+      } catch (err: unknown) {
+        // 404 means the backend version doesn't expose this endpoint yet.
+        // Return an empty result so the UI degrades gracefully (switcher stays hidden).
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) return { tenants: [], current_tenant_id: "1" };
+        throw err;
+      }
+    },
+    enabled: user?.role === "admin",
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const tenants = data?.tenants || [];
+  const currentTid = user?.tenant_id || "1";
+  const currentTenant = tenants.find((t) => t.tenant_id === currentTid);
+  const displayName = currentTenant?.name || `Tenant ${currentTid}`;
+
+  async function handleSwitch(tid: string) {
+    if (tid === currentTid || switching) return;
+    setSwitching(true);
+    try {
+      await switchTenant(tid);
+      queryClient.clear();
+      window.location.reload();
+    } catch {
+      setSwitching(false);
+    }
+  }
+
+  if (tenants.length < 2) return null;
+
+  return (
+    <div style={{ position: "relative", marginTop: 6, marginBottom: 2 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 10px",
+          borderRadius: 10,
+          border: `1px solid ${isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.8)"}`,
+          backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "rgba(241,245,249,0.7)",
+          cursor: "pointer",
+          color: isDark ? "#e2e8f0" : "#334155",
+          fontSize: 12,
+          fontWeight: 500,
+          transition: "all 200ms",
+        }}
+      >
+        <Building2 style={{ width: 14, height: 14, flexShrink: 0, opacity: 0.7 }} />
+        <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {displayName}
+        </span>
+        <ChevronDown
+          style={{
+            width: 12,
+            height: 12,
+            opacity: 0.5,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 200ms",
+          }}
+        />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            backgroundColor: isDark ? "#1e293b" : "#ffffff",
+            border: `1px solid ${isDark ? "#334155" : "#e2e8f0"}`,
+            borderRadius: 10,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 50,
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "8px 10px 4px", fontSize: 10, fontWeight: 600, color: isDark ? "#64748b" : "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Switch Tenant
+          </div>
+          {tenants.map((t) => (
+            <button
+              key={t.tenant_id}
+              onClick={() => handleSwitch(t.tenant_id)}
+              disabled={switching}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 10px",
+                border: "none",
+                backgroundColor: t.tenant_id === currentTid
+                  ? (isDark ? "rgba(15,118,110,0.2)" : "rgba(240,253,250,1)")
+                  : "transparent",
+                cursor: t.tenant_id === currentTid ? "default" : "pointer",
+                color: isDark ? "#e2e8f0" : "#334155",
+                fontSize: 12,
+                textAlign: "left",
+                transition: "background-color 150ms",
+              }}
+              onMouseEnter={(e) => {
+                if (t.tenant_id !== currentTid)
+                  e.currentTarget.style.backgroundColor = isDark ? "rgba(51,65,85,0.5)" : "#f8fafc";
+              }}
+              onMouseLeave={(e) => {
+                if (t.tenant_id !== currentTid)
+                  e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              <Building2 style={{ width: 13, height: 13, opacity: 0.6 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {t.name}
+                </div>
+                <div style={{ fontSize: 10, opacity: 0.6 }}>
+                  {t.patient_count} patients
+                </div>
+              </div>
+              {t.tenant_id === currentTid && (
+                <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#10b981" }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggle } = useTheme();
   const { user, logout, isAuthenticated } = useAuth();
+  
+  const { data: emrStatus, isLoading: emrLoading } = useQuery({
+    queryKey: ["emr-status"],
+    queryFn: () => getEmrStatus(),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+
+  const isDark = theme === "dark";
+  const BG = isDark ? "#0f172a" : "#ffffff";
+  const BG_GRADIENT = isDark
+    ? "linear-gradient(180deg, #0f172a 0%, #0c1222 50%, #0f172a 100%)"
+    : "linear-gradient(180deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)";
+  const BG_HOVER = isDark ? "#1e293b" : "#f8fafc";
+  const BG_ACTIVE = isDark ? "#0f766e20" : "#f0fdfa";
+  const TEXT_DEFAULT = isDark ? "#94a3b8" : "#64748b";
+  const TEXT_ACTIVE = isDark ? "#ffffff" : "#0f766e";
+  const TEXT_SECTION = isDark ? "#64748b" : "#cbd5e1";
+  const TEXT_SUBTLE = isDark ? "#64748b" : "#94a3b8";
+  const ACCENT = isDark ? "#0f766e" : "#0d9488";
+  const ACCENT_LIGHT = isDark ? "#2dd4bf" : "#0f766e";
+  const BORDER_COLOR = isDark ? "#1e293b" : "#f1f5f9";
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-
-  // Enrich nav groups with notification dots based on pathname heuristics
-  // (In a full build this would use API data like dashboard stats)
-  const enrichedNavGroups = navGroups;
+  // Only show shortcut hint badges after the user has triggered at least one shortcut
+  const [showShortcutHints, setShowShortcutHints] = useState(false);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+    // Check on mount, then re-check whenever a shortcut fires (storage event
+    // covers cross-tab; custom event covers same-tab from KeyboardShortcuts).
+    const refresh = () => setShowShortcutHints(hasUsedKeyboardShortcuts());
+    refresh();
+    window.addEventListener("raf-kb-used", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("raf-kb-used", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
 
+  // Close mobile menu on route change
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    if (mobileOpen) setMobileOpen(false);
+  }
+
+  // Close mobile menu on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMobileOpen(false);
@@ -112,31 +365,20 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  // Swipe-to-close gesture for mobile sidebar
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  }, []);
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
-    // Swipe left with enough horizontal movement and not too vertical
-    if (dx < -60 && dy < 100) {
-      setMobileOpen(false);
-    }
-    touchStartX.current = null;
-    touchStartY.current = null;
-  }, []);
+  function isActive(href: string): boolean {
+    if (href === "/") return pathname === "/";
+    // Match /patients as active for /patients/[pid] sub-pages
+    return pathname === href || pathname.startsWith(href + "/");
+  }
 
-  function isActive(href: string) {
-    return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  function handleLogout() {
+    // logout() handles navigation to /login internally — no need to push here.
+    logout();
   }
 
   const width = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
 
+  // ----- Nav item renderer -----
   function renderNavItem(item: NavItem) {
     const active = isActive(item.href);
     const hovered = hoveredItem === item.href;
@@ -146,7 +388,7 @@ export function Sidebar() {
       alignItems: "center",
       gap: collapsed ? 0 : 10,
       justifyContent: collapsed ? "center" : "flex-start",
-      height: 42,
+      height: 38,
       fontSize: 13,
       fontWeight: 500,
       color: active ? TEXT_ACTIVE : TEXT_DEFAULT,
@@ -162,7 +404,9 @@ export function Sidebar() {
       position: "relative",
       cursor: "pointer",
       boxShadow: active
-        ? "0 0 12px rgba(37,99,235,0.15), inset 0 0 0 1px rgba(37,99,235,0.1)"
+        ? isDark
+          ? `0 0 12px ${ACCENT}25, inset 0 0 0 1px ${ACCENT}15`
+          : `0 0 10px ${ACCENT}15, inset 0 0 0 1px ${ACCENT}10`
         : "none",
     };
 
@@ -175,42 +419,28 @@ export function Sidebar() {
       transform: hovered ? "scale(1.15)" : "scale(1)",
     };
 
-    const linkContent = (
+    return (
       <Link
         key={item.href}
         href={item.href}
         style={itemStyle}
-        aria-label={collapsed ? item.label : undefined}
+        // Tooltip shown in collapsed mode instead of label text
+        title={collapsed ? item.label : undefined}
         aria-current={active ? "page" : undefined}
         onMouseEnter={() => setHoveredItem(item.href)}
         onMouseLeave={() => setHoveredItem(null)}
-        onClick={() => {
-          // Close sidebar on mobile when a nav item is clicked
-          if (mobileOpen) setMobileOpen(false);
-        }}
       >
-        <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
-          <item.icon style={iconStyle} />
-          {/* Notification dot */}
-          {item.notificationDot && (
-            <span
-              style={{
-                position: "absolute",
-                top: -2,
-                right: -2,
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                backgroundColor: "#ef4444",
-                border: `2px solid ${active ? BG_ACTIVE : BG}`,
-              }}
-              aria-label="Has pending items"
-            />
-          )}
-        </span>
+        <item.icon style={iconStyle} />
         {!collapsed && (
           <>
-            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {item.label}
             </span>
             {item.badge !== undefined && (
@@ -228,47 +458,96 @@ export function Sidebar() {
                 {item.badge}
               </span>
             )}
+            {showShortcutHints && item.shortcut && item.badge === undefined && (
+              <span
+                aria-label={`Shortcut: ${item.shortcut}`}
+                title={`Shortcut: ${item.shortcut}`}
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  gap: 3,
+                  flexShrink: 0,
+                  opacity: hovered || active ? 1 : 0.45,
+                  transition: "opacity 150ms",
+                }}
+              >
+                {item.shortcut.split(" ").map((k, i) => (
+                  <kbd
+                    key={i}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      fontFamily: "inherit",
+                      color: isDark ? "#64748b" : "#94a3b8",
+                      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                      border: `1px solid ${BORDER_COLOR}`,
+                      borderRadius: 3,
+                      padding: "1px 4px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {k}
+                  </kbd>
+                ))}
+              </span>
+            )}
           </>
         )}
       </Link>
     );
-
-    // Wrap in proper Tooltip when collapsed (icon-only mode)
-    if (collapsed) {
-      return (
-        <Tooltip key={item.href}>
-          <TooltipTrigger render={linkContent}></TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            {item.label}
-          </TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    return linkContent;
   }
 
+  // ----- Nav group renderer -----
   function renderNavGroup(group: NavGroup, index: number) {
-    const headerStyle: CSSProperties = {
-      fontSize: 11,
-      fontWeight: 600,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em",
-      color: TEXT_SECTION,
-      marginTop: index > 0 ? 20 : 8,
-      marginBottom: 4,
-      paddingLeft: collapsed ? 0 : 16,
-      textAlign: collapsed ? "center" : "left",
-    };
-
     return (
       <div key={group.title}>
         {!collapsed ? (
-          <div style={headerStyle}>{group.title}</div>
+          <>
+            {index > 0 && (
+              <div
+                style={{
+                  height: 1,
+                  margin: "12px 16px 0",
+                  background: isDark
+                    ? "linear-gradient(90deg, transparent, #1e293b 30%, #334155 50%, #1e293b 70%, transparent)"
+                    : "linear-gradient(90deg, transparent, #e2e8f0 30%, #cbd5e1 50%, #e2e8f0 70%, transparent)",
+                }}
+              />
+            )}
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: TEXT_SECTION,
+                marginTop: index > 0 ? 10 : 8,
+                marginBottom: 4,
+                paddingLeft: 16,
+              }}
+            >
+              {group.title}
+            </div>
+          </>
         ) : (
           index > 0 && (
-            <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 8px" }}>
-              <div style={{ width: 24, height: 1, backgroundColor: BORDER_COLOR }} />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                margin: "12px 0 8px",
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 1,
+                  background: isDark
+                    ? "linear-gradient(90deg, transparent, #334155, transparent)"
+                    : "linear-gradient(90deg, transparent, #cbd5e1, transparent)",
+                  borderRadius: 1,
+                }}
+              />
             </div>
           )
         )}
@@ -277,16 +556,17 @@ export function Sidebar() {
     );
   }
 
+  // ----- Shared sidebar content (used by both desktop and mobile) -----
   const sidebarContent = (
     <>
-      {/* Logo area */}
+      {/* Logo */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: collapsed ? 0 : 10,
+          gap: collapsed ? 0 : 8,
           justifyContent: collapsed ? "center" : "flex-start",
-          height: 56,
+          height: 64,
           flexShrink: 0,
           borderBottom: `1px solid ${BORDER_COLOR}`,
           paddingLeft: collapsed ? 0 : 16,
@@ -294,35 +574,127 @@ export function Sidebar() {
         }}
       >
         {collapsed ? (
-          <span style={{ fontSize: 16, fontWeight: 800, color: TEXT_ACTIVE, letterSpacing: "-0.02em" }}>R</span>
-        ) : (
-          <div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 18, fontWeight: 800, color: TEXT_ACTIVE, letterSpacing: "-0.02em" }}>
-                TMIAB
-              </span>
-              <span style={{ fontSize: 18, fontWeight: 800, color: ACCENT_LIGHT, letterSpacing: "-0.02em" }}>
-                RAF
-              </span>
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -4, borderRadius: 12, background: `radial-gradient(circle, ${ACCENT}40, transparent 70%)`, filter: "blur(6px)" }} />
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff" }}>
+              <HeartPulse size={18} />
             </div>
-            <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 500, marginTop: -2 }}>
-              Risk Adjustment
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -6, borderRadius: 14, background: `radial-gradient(circle, ${ACCENT}50, transparent 70%)`, filter: "blur(8px)" }} />
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff", boxShadow: `0 2px 12px ${ACCENT}40` }}>
+                <HeartPulse size={18} />
+              </div>
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 17, fontWeight: 800, color: TEXT_ACTIVE, letterSpacing: "-0.02em" }}>
+                  TMIAB
+                </span>
+                <span style={{ fontSize: 17, fontWeight: 800, color: ACCENT_LIGHT, letterSpacing: "-0.02em" }}>
+                  RAF
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 600, marginTop: -2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Clinical Intelligence
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Collapse toggle - desktop only */}
+      {/* Search + Notifications row */}
       <div
         style={{
           display: "flex",
+          alignItems: "center",
+          gap: collapsed ? 0 : 6,
+          margin: collapsed ? "8px 8px 0" : "8px 10px 0",
+          flexShrink: 0,
+        }}
+      >
+        {/* Search button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+          title="Search (⌘K)"
+          aria-label="Open command palette (Cmd+K)"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: collapsed ? 0 : 8,
+            justifyContent: collapsed ? "center" : "flex-start",
+            height: 38,
+            flex: collapsed ? "0 0 auto" : 1,
+            width: collapsed ? 32 : undefined,
+            padding: collapsed ? "0" : "0 10px",
+            borderRadius: 7,
+            background: isDark
+              ? "rgba(15,23,42,0.6)"
+              : "rgba(248,250,252,0.8)",
+            border: `1px solid ${BORDER_COLOR}`,
+            boxShadow: isDark
+              ? "inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 transparent"
+              : "inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0 transparent",
+            cursor: "pointer",
+            color: TEXT_DEFAULT,
+            fontSize: 13,
+            transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+          onMouseEnter={(e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            btn.style.borderColor = isDark ? "#334155" : "#cbd5e1";
+            btn.style.background = isDark ? "rgba(30,41,59,0.8)" : "rgba(241,245,249,0.9)";
+            btn.style.boxShadow = isDark
+              ? `inset 0 1px 3px rgba(0,0,0,0.3), 0 0 8px ${ACCENT}20`
+              : `inset 0 1px 3px rgba(0,0,0,0.06), 0 0 8px ${ACCENT}15`;
+          }}
+          onMouseLeave={(e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            btn.style.borderColor = BORDER_COLOR;
+            btn.style.background = isDark ? "rgba(15,23,42,0.6)" : "rgba(248,250,252,0.8)";
+            btn.style.boxShadow = isDark
+              ? "inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 transparent"
+              : "inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0 transparent";
+          }}
+        >
+          <Search style={{ width: 15, height: 15, flexShrink: 0, color: TEXT_DEFAULT }} aria-hidden />
+          {!collapsed && (
+            <>
+              <span style={{ flex: 1, textAlign: "left", color: TEXT_DEFAULT }}>Search…</span>
+              <kbd
+                style={{
+                  fontSize: 10,
+                  color: TEXT_SUBTLE,
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${BORDER_COLOR}`,
+                  borderRadius: 3,
+                  padding: "1px 5px",
+                  fontFamily: "inherit",
+                  flexShrink: 0,
+                }}
+              >
+                ⌘K
+              </kbd>
+            </>
+          )}
+        </button>
+
+        {/* Notification bell */}
+        <NotificationCenter collapsed={collapsed} />
+      </div>
+
+      {/* Collapse toggle — desktop only (hidden on mobile via className) */}
+      <div
+        className="hidden lg:flex"
+        style={{
           justifyContent: collapsed ? "center" : "flex-end",
           alignItems: "center",
           height: 36,
           flexShrink: 0,
           paddingRight: collapsed ? 0 : 8,
         }}
-        className="hidden lg:flex"
       >
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -339,7 +711,11 @@ export function Sidebar() {
           }}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? <PanelLeft style={{ width: 16, height: 16 }} /> : <PanelLeftClose style={{ width: 16, height: 16 }} />}
+          {collapsed ? (
+            <PanelLeft style={{ width: 16, height: 16 }} />
+          ) : (
+            <PanelLeftClose style={{ width: 16, height: 16 }} />
+          )}
         </button>
       </div>
 
@@ -349,10 +725,10 @@ export function Sidebar() {
         role="navigation"
         aria-label="Main navigation"
       >
-        {enrichedNavGroups.map((group, i) => renderNavGroup(group, i))}
+        {navGroups.map((group, i) => renderNavGroup(group, i))}
       </nav>
 
-      {/* Bottom section */}
+      {/* Bottom section: theme toggle + user profile + version */}
       <div
         style={{
           flexShrink: 0,
@@ -360,6 +736,49 @@ export function Sidebar() {
           padding: collapsed ? "8px 4px" : "8px 12px",
         }}
       >
+        {/* EMR Connection Status */}
+        <Link
+          href="/emr-config"
+          title={collapsed ? (emrLoading ? "EMR: Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected") : undefined}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
+            gap: 8,
+            width: "100%",
+            height: 32,
+            background: "none",
+            textDecoration: "none",
+            cursor: "pointer",
+            color: TEXT_DEFAULT,
+            fontSize: 12,
+            borderRadius: 4,
+            paddingLeft: collapsed ? 0 : 4,
+            marginBottom: 4,
+          }}
+        >
+          <span
+            className={emrStatus?.connected ? "emr-pulse" : undefined}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              flexShrink: 0,
+              backgroundColor: emrLoading
+                ? (isDark ? "#64748b" : "#94a3b8")
+                : emrStatus?.connected
+                  ? "#22c55e"
+                  : "#ef4444",
+              transition: "background-color 300ms",
+            }}
+          />
+          {!collapsed && (
+            <span style={{ fontSize: 12, color: TEXT_DEFAULT }}>
+              {emrLoading ? "EMR Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected"}
+            </span>
+          )}
+        </Link>
+
         {/* Theme toggle */}
         <button
           onClick={toggle}
@@ -378,27 +797,46 @@ export function Sidebar() {
             borderRadius: 4,
             paddingLeft: collapsed ? 0 : 4,
           }}
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          title={collapsed ? (theme === "dark" ? "Light mode" : "Dark mode") : undefined}
+          aria-label={
+            theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+          }
+          title={
+            collapsed
+              ? theme === "dark"
+                ? "Light mode"
+                : "Dark mode"
+              : undefined
+          }
         >
           {theme === "dark" ? (
             <Sun style={{ width: 16, height: 16 }} />
           ) : (
             <Moon style={{ width: 16, height: 16 }} />
           )}
+          {!collapsed && (
+            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          )}
         </button>
 
-        {/* User profile */}
+        {/* Tenant switcher (admin only) */}
+        {user?.role === "admin" && !collapsed && <TenantSwitcher isDark={isDark} />}
+
+        {/* User profile row */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: collapsed ? 0 : 8,
             justifyContent: collapsed ? "center" : "flex-start",
-            padding: "6px 4px",
-            marginTop: 4,
+            padding: collapsed ? "6px 4px" : "8px 8px",
+            marginTop: 6,
+            borderRadius: 10,
+            backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "rgba(241,245,249,0.7)",
+            border: `1px solid ${isDark ? "rgba(51,65,85,0.3)" : "rgba(226,232,240,0.6)"}`,
+            transition: "background-color 200ms",
           }}
         >
+          {/* Avatar */}
           <div
             style={{
               width: 32,
@@ -414,17 +852,25 @@ export function Sidebar() {
               flexShrink: 0,
               overflow: "hidden",
             }}
+            title={collapsed ? getUserDisplayName(user) : undefined}
           >
-            {user?.avatar_url ? (
+            {user?.avatar_url && user.avatar_url.startsWith("https://") ? (
               <img
                 src={user.avatar_url}
-                alt={user.full_name}
-                style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }}
+                alt={getUserDisplayName(user)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
               />
             ) : (
-              getUserInitials(user?.full_name)
+              getUserInitials(user?.first_name, user?.last_name)
             )}
           </div>
+
+          {/* Name + role (expanded only) */}
           {!collapsed && (
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
@@ -437,7 +883,7 @@ export function Sidebar() {
                   whiteSpace: "nowrap",
                 }}
               >
-                {user?.full_name || "Guest"}
+                {getUserDisplayName(user)}
               </div>
               <div
                 style={{
@@ -448,16 +894,15 @@ export function Sidebar() {
                   whiteSpace: "nowrap",
                 }}
               >
-                {user?.role || "User"}
+                {(user as { role?: string } | null)?.role ?? "User"}
               </div>
             </div>
           )}
+
+          {/* Logout button — inline when expanded */}
           {!collapsed && isAuthenticated && (
             <button
-              onClick={() => {
-                logout();
-                router.push("/login");
-              }}
+              onClick={handleLogout}
               style={{
                 background: "none",
                 border: "none",
@@ -476,13 +921,10 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Collapsed logout */}
+        {/* Logout button — standalone row when collapsed */}
         {collapsed && isAuthenticated && (
           <button
-            onClick={() => {
-              logout();
-              router.push("/login");
-            }}
+            onClick={handleLogout}
             style={{
               display: "flex",
               alignItems: "center",
@@ -510,14 +952,14 @@ export function Sidebar() {
             paddingTop: 6,
           }}
         >
-          <span style={{ fontSize: 10, color: TEXT_SECTION }}>v1.0</span>
+          <span style={{ fontSize: 10, color: TEXT_SECTION }}>v2.0</span>
         </div>
       </div>
     </>
   );
 
   const sidebarBaseStyle: CSSProperties = {
-    backgroundColor: BG,
+    background: BG_GRADIENT,
     display: "flex",
     flexDirection: "column",
     height: "100%",
@@ -527,7 +969,25 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile hamburger */}
+      {/* Keyframe animations for sidebar */}
+      <style>{`
+        @keyframes sidebarLogoGlow {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
+        .sidebar-logo-glow {
+          animation: sidebarLogoGlow 3s ease-in-out infinite;
+        }
+        @keyframes emrPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+          50% { box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+        }
+        .emr-pulse {
+          animation: emrPulse 2s ease-in-out infinite;
+        }
+      `}</style>
+
+      {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg shadow-lg lg:hidden"
@@ -536,10 +996,10 @@ export function Sidebar() {
         aria-expanded={mobileOpen}
         aria-controls="mobile-sidebar"
       >
-        <Menu className="h-5 w-5 text-white" />
+        <Menu className="h-5 w-5" style={{ color: TEXT_ACTIVE }} />
       </button>
 
-      {/* Mobile overlay */}
+      {/* Mobile backdrop */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
@@ -551,8 +1011,6 @@ export function Sidebar() {
       {/* Mobile sidebar */}
       <aside
         id="mobile-sidebar"
-        role="dialog"
-        aria-modal={mobileOpen ? "true" : undefined}
         className="fixed left-0 top-0 z-50 lg:hidden transition-transform duration-300 ease-out"
         style={{
           ...sidebarBaseStyle,
@@ -561,9 +1019,8 @@ export function Sidebar() {
         }}
         aria-label="Mobile navigation"
         aria-hidden={!mobileOpen}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
+        {/* Close button */}
         <div style={{ position: "absolute", right: 10, top: 10, zIndex: 10 }}>
           <button
             onClick={() => setMobileOpen(false)}
@@ -591,7 +1048,6 @@ export function Sidebar() {
           width,
           transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
         }}
-        role="navigation"
         aria-label="Main navigation sidebar"
       >
         {sidebarContent}
@@ -600,14 +1056,19 @@ export function Sidebar() {
   );
 }
 
-/** Hook to get the sidebar width for main content offset */
-export function useSidebarWidth() {
+// ---------------------------------------------------------------------------
+// Hook — returns the current desktop sidebar width for main-content offsetting
+// ---------------------------------------------------------------------------
+
+export function useSidebarWidth(): number {
   const [width, setWidth] = useState(EXPANDED_WIDTH);
+
   useEffect(() => {
     const sidebar = document.querySelector(
       "aside.lg\\:flex"
     ) as HTMLElement | null;
     if (!sidebar) return;
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setWidth(entry.contentRect.width);
@@ -616,5 +1077,6 @@ export function useSidebarWidth() {
     observer.observe(sidebar);
     return () => observer.disconnect();
   }, []);
+
   return width;
 }

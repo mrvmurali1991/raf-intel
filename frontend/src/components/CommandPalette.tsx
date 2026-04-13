@@ -387,7 +387,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               color: TEXT_PRIMARY,
               caretColor: ACCENT,
             }}
-            aria-label="Search patients, pages, and actions"
+            aria-label="Search"
             aria-autocomplete="list"
             aria-controls="command-results"
             role="combobox"
@@ -469,9 +469,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               }}
             >
               No results for &quot;{query}&quot;
-              <div style={{ marginTop: 8, fontSize: 12, color: TEXT_CATEGORY }}>
-                Try different keywords, a patient name, or a page like &quot;Dashboard&quot;
-              </div>
             </div>
           )}
 
@@ -480,7 +477,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             if (!items || items.length === 0) return null;
 
             return (
-              <div key={cat} role="group" aria-label={CATEGORY_LABELS[cat]}>
+              <div key={cat}>
                 {!showRecent && (
                   <div
                     style={{

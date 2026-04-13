@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { authApi } from "@/contexts/auth-context";
@@ -22,7 +22,6 @@ import {
   Copy,
   Eye,
   EyeOff,
-  X,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -42,96 +41,6 @@ interface MfaSetupData {
   qr_code_url: string;   // data URI or external URL for QR image
   secret: string;        // base32 secret for manual entry
   recovery_codes: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Toast component (self-contained)
-// ---------------------------------------------------------------------------
-
-interface ToastMessage {
-  id: number;
-  type: "success" | "error";
-  message: string;
-}
-
-let toastIdCounter = 0;
-let globalSetToasts: React.Dispatch<React.SetStateAction<ToastMessage[]>> | null = null;
-
-function showToast(type: "success" | "error", message: string) {
-  const id = ++toastIdCounter;
-  globalSetToasts?.((prev) => [...prev, { id, type, message }]);
-  setTimeout(() => {
-    globalSetToasts?.((prev) => prev.filter((t) => t.id !== id));
-  }, 4000);
-}
-
-function ToastContainer() {
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  globalSetToasts = setToasts;
-
-  if (toasts.length === 0) return null;
-  return (
-    <div className="fixed top-5 right-5 z-[100] flex flex-col gap-2 max-w-sm">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          role="status"
-          className={`flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg border animate-slide-up ${
-            t.type === "success"
-              ? "bg-emerald-50 dark:bg-emerald-950/90 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300"
-              : "bg-red-50 dark:bg-red-950/90 border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-300"
-          }`}
-        >
-          {t.type === "success" ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-          ) : (
-            <AlertCircle className="h-4 w-4 shrink-0" />
-          )}
-          <span className="flex-1">{t.message}</span>
-          <button
-            onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-            className="shrink-0 text-current opacity-60 hover:opacity-100 transition-opacity"
-            aria-label="Dismiss"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Unsaved changes banner
-// ---------------------------------------------------------------------------
-
-function UnsavedChangesBanner({ visible }: { visible: boolean }) {
-  if (!visible) return null;
-  return (
-    <div
-      role="alert"
-      className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 animate-scale-in"
-    >
-      <AlertCircle className="h-4 w-4 shrink-0" />
-      You have unsaved changes
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Navigation guard hook
-// ---------------------------------------------------------------------------
-
-function useNavigationGuard(dirty: boolean) {
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty]);
 }
 
 // ---------------------------------------------------------------------------
@@ -293,70 +202,11 @@ function Feedback({
 }
 
 // ---------------------------------------------------------------------------
-// Form error summary
-// ---------------------------------------------------------------------------
-
-function ErrorSummary({ errors }: { errors: string[] }) {
-  if (errors.length === 0) return null;
-  return (
-    <div
-      role="alert"
-      className="rounded-xl border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/40 p-4 space-y-1.5 animate-scale-in"
-    >
-      <p className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-center gap-2">
-        <AlertCircle className="h-4 w-4 shrink-0" />
-        Please fix the following errors:
-      </p>
-      <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400 space-y-0.5 ml-6">
-        {errors.map((err, i) => (
-          <li key={i}>{err}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Password requirements inline indicator
-// ---------------------------------------------------------------------------
-
-function PasswordRequirements({ password }: { password: string }) {
-  const requirements = [
-    { label: "At least 8 characters", met: password.length >= 8 },
-    { label: "One uppercase letter", met: /[A-Z]/.test(password) },
-    { label: "One number", met: /[0-9]/.test(password) },
-    { label: "One special character (!@#$%...)", met: /[^A-Za-z0-9]/.test(password) },
-  ];
-
-  if (!password) return null;
-
-  return (
-    <div className="space-y-1 mt-2">
-      {requirements.map((req) => (
-        <div key={req.label} className="flex items-center gap-2 text-xs">
-          {req.met ? (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-          ) : (
-            <AlertCircle className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-          )}
-          <span className={req.met ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}>
-            {req.label}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Gradient primary button classes
 // ---------------------------------------------------------------------------
 
 const primaryBtnClasses =
   "h-10 rounded-xl font-semibold text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all duration-200 btn-press";
-
-const disabledPrimaryBtnClasses =
-  "h-10 rounded-xl font-semibold text-sm bg-gradient-to-r from-blue-600 to-blue-500 shadow-lg shadow-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none";
 
 const outlineBtnClasses =
   "h-9 rounded-xl text-sm font-medium border-2 border-border/60 text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 btn-press";
@@ -375,38 +225,14 @@ function ProfileSection() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
     null
   );
-  const [errors, setErrors] = useState<string[]>([]);
-
-  const isDirty = useMemo(() => {
-    return (
-      firstName !== (user?.first_name ?? "") ||
-      lastName !== (user?.last_name ?? "") ||
-      title !== (user?.title ?? "") ||
-      avatarUrl !== (user?.avatar_url ?? "")
-    );
-  }, [firstName, lastName, title, avatarUrl, user]);
-
-  useNavigationGuard(isDirty);
-
-  const validate = (): string[] => {
-    const errs: string[] = [];
-    if (!firstName.trim()) errs.push("First name is required.");
-    if (!lastName.trim()) errs.push("Last name is required.");
-    return errs;
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
-    const validationErrors = validate();
-    setErrors(validationErrors);
-    if (validationErrors.length > 0) return;
-
     setSaving(true);
     try {
       await updateProfile({ first_name: firstName, last_name: lastName, title, avatar_url: avatarUrl });
       setFeedback({ type: "success", message: "Profile updated successfully." });
-      showToast("success", "Settings saved successfully");
     } catch (err: any) {
       setFeedback({
         type: "error",
@@ -420,9 +246,6 @@ function ProfileSection() {
   return (
     <Section id="profile" icon={User} title="Profile" description="Update your personal information." staggerIndex={1}>
       <form onSubmit={handleSave} className="space-y-5">
-        <ErrorSummary errors={errors} />
-        <UnsavedChangesBanner visible={isDirty} />
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="First name" htmlFor="profile-first-name">
             <Input
@@ -479,18 +302,14 @@ function ProfileSection() {
         {feedback && <Feedback type={feedback.type} message={feedback.message} />}
 
         <div className="flex items-center gap-3 pt-1">
-          <Button
-            type="submit"
-            disabled={saving || !isDirty}
-            className={isDirty ? primaryBtnClasses : disabledPrimaryBtnClasses}
-          >
+          <Button type="submit" disabled={saving} className={primaryBtnClasses}>
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Saving...
               </>
             ) : (
-              "Save Changes"
+              "Save Profile"
             )}
           </Button>
         </div>
@@ -512,39 +331,25 @@ function ChangePasswordSection({ forceChange = false }: { forceChange?: boolean 
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
     null
   );
-  const [errors, setErrors] = useState<string[]>([]);
-
-  const isDirty = current !== "" || next !== "" || confirm !== "";
-
-  useNavigationGuard(isDirty);
-
-  const validate = (): string[] => {
-    const errs: string[] = [];
-    if (!current) errs.push("Current password is required.");
-    if (next.length < 8) errs.push("Password must be at least 8 characters.");
-    if (!/[A-Z]/.test(next)) errs.push("Password must contain at least one uppercase letter.");
-    if (!/[0-9]/.test(next)) errs.push("Password must contain at least one number.");
-    if (!/[^A-Za-z0-9]/.test(next)) errs.push("Password must contain at least one special character.");
-    if (next !== confirm) errs.push("New passwords do not match.");
-    return errs;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
-    const validationErrors = validate();
-    setErrors(validationErrors);
-    if (validationErrors.length > 0) return;
-
+    if (next !== confirm) {
+      setFeedback({ type: "error", message: "New passwords do not match." });
+      return;
+    }
+    if (next.length < 8) {
+      setFeedback({ type: "error", message: "Password must be at least 8 characters." });
+      return;
+    }
     setSaving(true);
     try {
       await changePassword(current, next);
       setFeedback({ type: "success", message: "Password changed successfully." });
-      showToast("success", "Settings saved successfully");
       setCurrent("");
       setNext("");
       setConfirm("");
-      setErrors([]);
     } catch (err: any) {
       setFeedback({
         type: "error",
@@ -572,9 +377,6 @@ function ChangePasswordSection({ forceChange = false }: { forceChange?: boolean 
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <ErrorSummary errors={errors} />
-        <UnsavedChangesBanner visible={isDirty} />
-
         <FormField label="Current password" htmlFor="pwd-current">
           <Input
             id="pwd-current"
@@ -600,10 +402,9 @@ function ChangePasswordSection({ forceChange = false }: { forceChange?: boolean 
             autoComplete="new-password"
             aria-describedby="pwd-hint"
           />
-          <PasswordRequirements password={next} />
         </FormField>
 
-        <FormField label="Confirm new password" htmlFor="pwd-confirm">
+        <FormField label="Confirm new password" htmlFor="pwd-confirm" hint="Minimum 8 characters. Use a mix of letters, numbers, and symbols.">
           <Input
             id="pwd-confirm"
             type="password"
@@ -614,29 +415,19 @@ function ChangePasswordSection({ forceChange = false }: { forceChange?: boolean 
             required
             autoComplete="new-password"
           />
-          {confirm && next !== confirm && (
-            <p className="text-xs text-red-500 mt-1 flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5" />
-              Passwords do not match
-            </p>
-          )}
         </FormField>
 
         {feedback && <Feedback type={feedback.type} message={feedback.message} />}
 
         <div className="pt-1">
-          <Button
-            type="submit"
-            disabled={saving || !isDirty}
-            className={isDirty ? primaryBtnClasses : disabledPrimaryBtnClasses}
-          >
+          <Button type="submit" disabled={saving} className={primaryBtnClasses}>
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Changing...
               </>
             ) : (
-              "Save Changes"
+              "Change Password"
             )}
           </Button>
         </div>
@@ -690,7 +481,6 @@ function MfaSection() {
       await authApi.post("/api/auth/mfa/activate", { code: activateCode });
       setActivated(true);
       setFeedback({ type: "success", message: "Two-factor authentication enabled successfully." });
-      showToast("success", "Settings saved successfully");
     } catch (err: any) {
       setFeedback({ type: "error", message: err?.response?.data?.detail ?? "Invalid code. Please try again." });
     } finally {
@@ -706,7 +496,6 @@ function MfaSection() {
       await authApi.post("/api/auth/mfa/disable", { password: disablePassword });
       setDisablePassword("");
       setFeedback({ type: "success", message: "Two-factor authentication has been disabled." });
-      showToast("success", "Settings saved successfully");
       router.refresh();
     } catch (err: any) {
       setFeedback({ type: "error", message: err?.response?.data?.detail ?? "Failed to disable MFA." });
@@ -1156,7 +945,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-5">
-      <ToastContainer />
       <PageHeader />
       <SectionNav tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="space-y-5">
