@@ -281,6 +281,27 @@ def task_sync_emr_connection(
             connection_id,
             result,
         )
+
+        # Directly invoke pipeline chain if sync succeeded (the in-process
+        # event emitter does not work reliably in Celery's prefork workers).
+        if result.get("status") not in ("failed",):
+            try:
+                from app.services.pipeline_chain import _handle_emr_sync_completed
+                task_logger.info(
+                    "sync_emr_connection: triggering pipeline chain for tenant=%s",
+                    tenant_id,
+                )
+                _handle_emr_sync_completed({
+                    "tenant_id": tenant_id,
+                    "connection_id": connection_id,
+                    "sync_type": sync_type,
+                    "sync_id": result.get("sync_id"),
+                })
+            except Exception as chain_exc:
+                task_logger.error(
+                    "sync_emr_connection: pipeline chain failed: %s", chain_exc, exc_info=True
+                )
+
         return outcome
 
     except Exception as exc:
