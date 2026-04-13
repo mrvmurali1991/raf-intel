@@ -109,9 +109,15 @@ def task_check_due_syncs(self) -> dict[str, Any]:
     """
     task_logger.info("check_due_syncs: scanning EMR connections")
     try:
-        from app.services import emr_manager as emr_mgr
+        from app.db import raf_cursor
 
-        connections = emr_mgr.list_connections()
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, tenant_id, sync_enabled, is_active, "
+                "sync_interval_minutes, last_sync_at "
+                "FROM emr_connections WHERE sync_enabled = 1 AND is_active = 1"
+            )
+            connections = cur.fetchall()
         now = datetime.now(timezone.utc)
         dispatched: list[int] = []
         skipped: list[int] = []
