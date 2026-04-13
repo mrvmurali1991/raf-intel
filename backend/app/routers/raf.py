@@ -764,20 +764,32 @@ def population_summary(
         except Exception:
             total_patients = 0
 
-    # Scope RAF scores to tenant-active patients regardless of EMR mode
+    # Scope RAF scores to tenant-active patients regardless of EMR mode.
+    # Use MAX(final_raf) per patient so the best score (with HCCs) wins
+    # over demographic-only recalculations.
     _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             cur.execute(
                 f"""
-                SELECT patient_id, final_raf, score_type
-                FROM raf_scores
-                WHERE measurement_year = %s
+                SELECT rs.patient_id,
+                       rs.final_raf,
+                       rs.score_type
+                FROM raf_scores rs
+                INNER JOIN (
+                    SELECT patient_id, MAX(final_raf) AS max_raf
+                    FROM raf_scores
+                    WHERE measurement_year = %s
+                      AND tenant_id = %s
+                    GROUP BY patient_id
+                ) best ON best.patient_id = rs.patient_id
+                         AND best.max_raf = rs.final_raf
+                WHERE rs.measurement_year = %s
                   AND {_pop_score_filter}
-                  AND raf_scores.tenant_id = %s
-                ORDER BY calculated_at DESC
+                  AND rs.tenant_id = %s
+                ORDER BY rs.final_raf DESC
                 """,
-                (calc_year, *_pop_score_params, int(tenant_id)),
+                (calc_year, int(tenant_id), calc_year, *_pop_score_params, int(tenant_id)),
             )
             score_rows = cur.fetchall()
     except Exception as exc:
