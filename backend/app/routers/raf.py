@@ -770,26 +770,23 @@ def population_summary(
     _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
+            # Use a subquery to get the best (highest) score per patient,
+            # then filter by active-patient tenant scope.
             cur.execute(
                 f"""
-                SELECT rs.patient_id,
-                       rs.final_raf,
-                       rs.score_type
-                FROM raf_scores rs
-                INNER JOIN (
-                    SELECT patient_id, MAX(final_raf) AS max_raf
+                SELECT patient_id, final_raf, score_type
+                FROM (
+                    SELECT patient_id, final_raf, score_type,
+                           ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY final_raf DESC) AS rn
                     FROM raf_scores
                     WHERE measurement_year = %s
                       AND tenant_id = %s
-                    GROUP BY patient_id
-                ) best ON best.patient_id = rs.patient_id
-                         AND best.max_raf = rs.final_raf
-                WHERE rs.measurement_year = %s
+                ) ranked
+                WHERE rn = 1
                   AND {_pop_score_filter}
-                  AND rs.tenant_id = %s
-                ORDER BY rs.final_raf DESC
+                ORDER BY final_raf DESC
                 """,
-                (calc_year, int(tenant_id), calc_year, *_pop_score_params, int(tenant_id)),
+                (calc_year, int(tenant_id), *_pop_score_params),
             )
             score_rows = cur.fetchall()
     except Exception as exc:
