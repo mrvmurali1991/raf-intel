@@ -232,7 +232,7 @@ def dashboard_stats(
     analyzed = 0
     avg_raf = 0.0
 
-    from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+    from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY, active_patients_subquery
 
     _ds_filter = (
         " AND data_source = 'upload'" if (not has_active and has_uploaded_data) else ""
@@ -247,21 +247,23 @@ def dashboard_stats(
     except Exception:
         pass
 
-    _score_filter = (
-        "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
-        if (not has_active and has_uploaded_data)
-        else ACTIVE_PATIENTS_SUBQUERY
-    )
+    if not has_active and has_uploaded_data:
+        _score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' AND tenant_id = %s)"
+        _score_params: tuple = (int(tenant_id),)
+    else:
+        _sf, _sp = active_patients_subquery(int(tenant_id))
+        _score_filter = _sf
+        _score_params = _sp
     try:
         with raf_cursor() as cur:
             cur.execute(
                 f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
-                (int(tenant_id), measurement_year),
+                (*_score_params, int(tenant_id), measurement_year),
             )
             analyzed = cur.fetchone()["cnt"]
             cur.execute(
                 f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
-                (int(tenant_id), measurement_year),
+                (*_score_params, int(tenant_id), measurement_year),
             )
             row = cur.fetchone()
             avg_raf = round(float(row["avg_raf"] or 0), 4)
@@ -303,7 +305,7 @@ def dashboard_stats(
                 GROUP BY `range`
                 ORDER BY `range`
                 """,
-                (int(tenant_id), measurement_year),
+                (*_score_params, int(tenant_id), measurement_year),
             )
             raf_distribution = [dict(r) for r in cur.fetchall()]
     except Exception:
