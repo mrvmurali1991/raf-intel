@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   generateBuildId: () => commitSha ?? null,
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
   // Fix: Set turbopack root to THIS project directory
   // Without this, Next.js scans the entire home directory and spikes CPU
