@@ -61,6 +61,7 @@ interface AuthContextType {
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   completeMfaVerify: (mfaToken: string, code: string, isRecovery?: boolean) => Promise<void>;
   clearMustChangePassword: () => void;
+  switchTenant: (tenantId: string) => Promise<void>;
   /** The axios instance pre-configured for auth endpoints. */
   authApi: typeof authApi;
 }
@@ -74,13 +75,13 @@ export interface LoginResult {
 // ---------------------------------------------------------------------------
 // authApi — dedicated axios instance for /api/auth/* calls.
 // Auth-route calls use this directly so they are never caught by the 401
+import { API_BASE } from "@/lib/api";
+
 // retry interceptor (which would create an infinite loop on /api/auth/refresh).
 // ---------------------------------------------------------------------------
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8500";
-
 export const authApi = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
   timeout: 30_000,
   withCredentials: true,
@@ -494,6 +495,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMustChangePassword(false);
   }, []);
 
+  const switchTenant = useCallback(async (tenantId: string) => {
+    const { data } = await authApi.post<{
+      access_token: string;
+      tenant_id: string;
+    }>("/api/auth/switch-tenant", { tenant_id: tenantId });
+    setAccessToken(data.access_token);
+    scheduleRefresh(data.access_token);
+    // Update user with new tenant_id
+    setUser((prev) => prev ? { ...prev, tenant_id: data.tenant_id } : prev);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -508,6 +520,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         changePassword,
         completeMfaVerify,
         clearMustChangePassword,
+        switchTenant,
         authApi,
       }}
     >

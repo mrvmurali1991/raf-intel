@@ -15,6 +15,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ import httpx
 
 from app.db import raf_cursor, openemr_cursor
 from app.services.encryption_service import decrypt, encrypt
+from app.services.circuit_breaker import fhir_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -74,35 +76,62 @@ def _safe_str(val: Any, max_len: int = 500) -> str:
     return str(val)[:max_len]
 
 
+def _safe_date(val: Any) -> str | None:
+    """Sanitize a FHIR date/dateTime to YYYY-MM-DD or None."""
+    if not val:
+        return None
+    s = str(val)[:10]  # take just YYYY-MM-DD
+    if s.startswith("-") or s < "0001":
+        return None
+    return s if len(s) >= 10 else None
+
+
 # ---------------------------------------------------------------------------
 # OAuth2 token acquisition
 # ---------------------------------------------------------------------------
 
 async def _fetch_token_async(connection: dict[str, Any]) -> str:
     """
-    Fetch an OAuth2 access token using the client_credentials flow and cache it.
-    Returns the raw access_token string.
+    Fetch an OAuth2 access token and cache it.
+    Supports client_credentials (default) and password grant (OpenEMR).
     """
     conn_id: int = connection["id"]
     token_url: str = connection.get("token_url", "") or ""
     client_id: str = connection.get("client_id", "") or ""
     client_secret: str = connection.get("client_secret", "") or ""
     scope: str = connection.get("scope", "system/*.read") or "system/*.read"
+    vendor: str = (connection.get("vendor") or "").lower()
 
     if not token_url:
         raise ValueError(f"Connection {conn_id} has no token_url configured")
 
-    credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    # OpenEMR uses password grant with client_secret_post auth method
+    if vendor == "openemr":
+        oauth_username: str = connection.get("oauth_username", "") or os.environ.get("OPENEMR_USERNAME", "admin")
+        oauth_password: str = connection.get("oauth_password", "") or os.environ.get("OPENEMR_PASSWORD", "")
+        post_data = {
+            "grant_type": "password",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "username": oauth_username,
+            "password": oauth_password,
+            "scope": scope,
+            "user_role": "users",
+        }
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "RAF-Intelligence/1.0",
+        }
+    else:
+        credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        post_data = {"grant_type": "client_credentials", "scope": scope}
+        headers = {
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
 
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
-        resp = await client.post(
-            token_url,
-            headers={
-                "Authorization": f"Basic {credentials}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={"grant_type": "client_credentials", "scope": scope},
-        )
+        resp = await client.post(token_url, headers=headers, data=post_data)
         resp.raise_for_status()
         data = resp.json()
 
@@ -308,8 +337,8 @@ def parse_condition(resource: dict[str, Any]) -> dict[str, Any]:
         "display": _safe_str(display),
         "clinical_status": clinical_status,
         "verification_status": verification_status,
-        "onset_date": _safe_str(onset, 30),
-        "recorded_date": _safe_str(recorded_date, 30),
+        "onset_date": _safe_date(onset),
+        "recorded_date": _safe_date(recorded_date),
         "raw_json": json.dumps(resource),
     }
 
@@ -380,8 +409,8 @@ def parse_encounter(resource: dict[str, Any]) -> dict[str, Any]:
         "encounter_class_display": _safe_str(encounter_class_display, 100),
         "status": status,
         "type_display": _safe_str(type_display, 200),
-        "period_start": _safe_str(period_start, 30),
-        "period_end": _safe_str(period_end, 30),
+        "period_start": _safe_str(period_start, 30) or None,
+        "period_end": _safe_str(period_end, 30) or None,
         "provider_name": _safe_str(provider_name, 200),
         "provider_ref": _safe_str(provider_ref, 200),
         "reason_codes": json.dumps(reason_codes),
@@ -1153,6 +1182,7 @@ async def test_connection_async(connection: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+@fhir_breaker
 def test_connection(connection: dict[str, Any]) -> dict[str, Any]:
     """Synchronous wrapper around test_connection_async."""
     return asyncio.run(test_connection_async(connection))
@@ -1469,6 +1499,7 @@ async def run_sync_async(
         raise
 
 
+@fhir_breaker
 def run_sync(
     connection_id: int,
     sync_type: str = "incremental",

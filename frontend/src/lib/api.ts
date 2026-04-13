@@ -38,7 +38,7 @@ import type {
 // Axios instance
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8500";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8500";
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE,
@@ -291,12 +291,16 @@ export interface RafBreakdown {
 export interface PopulationSummary {
   year: number;
   total_patients: number;
-  avg_raf_score: number;
+  patients_with_scores: number;
+  average_raf_score: number;
+  median_raf_score: number;
   total_revenue_opportunity: number;
   patients_with_gaps: number;
   hcc_capture_rate: number;
   top_hccs?: Array<Record<string, unknown>>;
-  raf_distribution?: unknown[];
+  raf_distribution?: Array<{ range: string; count: number }>;
+  blend_weights?: Record<string, number>;
+  score_type_breakdown?: Record<string, number>;
 }
 
 export interface DataCompleteness {
@@ -392,7 +396,7 @@ export interface ProviderScorecard {
   provider_id: number;
   npi: string;
   name: string;
-  avg_raf_score: number;
+  average_raf_score: number;
   capture_rate: number;
   patients_with_gaps: number;
   revenue_opportunity: number;
@@ -600,7 +604,7 @@ export interface TrendMetric {
 export interface DashboardTrends {
   period: string;
   patients_analyzed?: TrendMetric;
-  average_raf?: TrendMetric;
+  average_raf_score?: TrendMetric;
   error?: boolean;
 }
 
@@ -649,16 +653,30 @@ export async function getPatientEncounters(
   pid: string | number,
   year?: number
 ): Promise<PatientEncountersResponse> {
-  const params: Record<string, any> = {};
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (year) params.year = year;
   const { data } = await api.get(`/api/patients/${pid}/encounters`, { params });
   return data;
 }
 
 export interface PatientProfile {
-  billing?: { raf_score?: number; hcc_codes?: string[] };
+  billing?: {
+    raf_score?: number;
+    hcc_codes?: string[];
+    icd10_codes?: Array<string | { code?: string; icd10_code?: string }>;
+    diagnoses?: Array<string | { code?: string; icd10_code?: string }>;
+  };
+  enrollment?: Record<string, string> & { source?: string };
+  vitals?: {
+    latest?: {
+      weight?: number; height?: number; bps?: number; bpd?: number;
+      temperature?: number; pulse?: number; respiration?: number;
+      oxygen_saturation?: number; date?: string;
+    };
+  };
   data_completeness?: Record<string, boolean | number | null> & { completeness_pct?: number };
   demographics?: Record<string, unknown>;
+  immunizations?: Array<{ title?: string; date?: string }>;
   problems?: Array<{ title?: string; icd10_code?: string; begdate?: string }>;
   medications?: Array<{ drug?: string; dosage?: string; frequency?: string; begdate?: string }>;
   [key: string]: unknown;
@@ -686,7 +704,7 @@ export async function getPatientMedications(
   pid: string | number,
   year?: number
 ): Promise<MedicationsResponse> {
-  const params: Record<string, any> = {};
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (year) params.year = year;
   const { data } = await api.get(`/api/patients/${pid}/medications`, { params });
   return data;
@@ -715,7 +733,7 @@ export async function getPatientProblemList(
   pid: string | number,
   year?: number
 ): Promise<ProblemListResponse> {
-  const params: Record<string, any> = {};
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (year) params.year = year;
   const { data } = await api.get(`/api/patients/${pid}/problem-list`, { params });
   return data;
@@ -757,7 +775,7 @@ export async function getPatientVitalsSuspects(
   pid: string | number,
   year?: number
 ): Promise<ClinicalFindingsResponse> {
-  const params: Record<string, any> = {};
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (year) params.year = year;
   const { data } = await api.get(`/api/patients/${pid}/vitals-suspects`, { params });
   return data;
@@ -767,7 +785,7 @@ export async function getPatientLabSuspects(
   pid: string | number,
   year?: number
 ): Promise<ClinicalFindingsResponse> {
-  const params: Record<string, any> = {};
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (year) params.year = year;
   const { data } = await api.get(`/api/patients/${pid}/lab-suspects`, { params });
   return data;
@@ -841,8 +859,9 @@ export async function getPatientEnrollment(
 
 export interface MedicationGapsResponse {
   gaps?: Array<{
-    medication?: string; condition?: string; gap_type?: string;
-    recommendation?: string; severity?: string;
+    medication?: string; drug?: string; condition?: string; gap_type?: string;
+    recommendation?: string; severity?: string; description?: string; gap?: string;
+    icd_code?: string; icd10_code?: string; evidence?: string; rationale?: string;
   }>;
 }
 
@@ -911,7 +930,7 @@ export async function getPatientSuspects(
   status: string = "open",
   year?: number
 ): Promise<PatientSuspectsResponse> {
-  const params: Record<string, any> = { status };
+  const params: Record<string, string | number | boolean | undefined> = { status };
   if (year) params.year = year;
   const { data } = await api.get(`/api/suspects/${pid}`, { params });
   return data;
@@ -992,11 +1011,27 @@ export interface ModelComparisonResponse {
   models?: Array<{ model: string; raf_score: number; hcc_count: number }>;
 }
 
+export interface HCCRow {
+  hcc_code: string;
+  description: string;
+  v24_coefficient: number | null;
+  v28_coefficient: number | null;
+  in_v24: boolean;
+  in_v28: boolean;
+}
+
+export interface ModelComparisonResult {
+  v24_score: number | null;
+  v28_score: number | null;
+  blended_score: number | null;
+  hcc_comparison: HCCRow[];
+}
+
 export async function getModelComparison(
   pid: string | number,
   year?: number
-): Promise<any> {
-  const params: Record<string, any> = {};
+): Promise<ModelComparisonResult> {
+  const params: Record<string, string | number | boolean | undefined> = {};
   if (year) params.year = year;
   const { data } = await api.get(`/api/raf/scores/${pid}/model-comparison`, { params });
 
@@ -1022,7 +1057,7 @@ export async function getModelComparison(
   }
 
   // Flatten hcc_comparison into HCCRow[]
-  const hccRows: any[] = [];
+  const hccRows: HCCRow[] = [];
   for (const h of cmp.in_both_annotated || []) {
     hccRows.push({
       hcc_code: h.hcc_code,
@@ -1763,18 +1798,17 @@ export async function downloadAuditPackage(
     res = await api.get(`/api/audit/packages/${packageId}/download`, {
       responseType: "blob",
     });
-  } catch (err: any) {
-    // Blob responses mean error.response.data is a Blob — read it as text so
-    // callers get a useful message instead of "[object Blob]".
-    const data = err?.response?.data;
-    if (data instanceof Blob) {
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { data?: unknown }; message?: string };
+    const responseData = axiosErr.response?.data;
+    if (responseData instanceof Blob) {
       try {
-        const text = await data.text();
+        const text = await responseData.text();
         try {
           const parsed = JSON.parse(text);
-          if (parsed?.detail) err.message = parsed.detail;
+          if (parsed?.detail) axiosErr.message = parsed.detail;
         } catch {
-          if (text) err.message = text;
+          if (text) axiosErr.message = text;
         }
       } catch {
         /* ignore */

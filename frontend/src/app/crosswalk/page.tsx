@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2, Download, AlertCircle, Info } from "lucide-react";
 import { calculateRAFFull, RAFCalcResponse } from "@/lib/api";
+import { FONT_SYS, FONT_MONO } from "@/lib/ui-utils";
 
 /* ================================================================== */
 /*  Design tokens — match patients / suspects pages                    */
@@ -28,11 +29,6 @@ const C = {
   low: "#059669",
   white: "#FFFFFF",
 };
-
-const FONT_SYS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif';
-const FONT_MONO =
-  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace';
 
 /* ================================================================== */
 /*  Constants                                                          */

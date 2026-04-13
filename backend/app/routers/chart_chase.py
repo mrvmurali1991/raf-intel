@@ -28,7 +28,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services import chart_chase_service as svc
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,6 @@ class ChaseCreateRequest(BaseModel):
     request_date: date | None = None
     due_date: date | None = None
     notes: str | None = None
-    tenant_id: str = Field(default="default", max_length=50)
 
 
 class ChaseUpdateRequest(BaseModel):
@@ -118,7 +117,6 @@ class TemplateCreateRequest(BaseModel):
     type: Literal["fax_cover", "email", "letter"]
     subject: str | None = Field(None, max_length=500, description="Required for email templates")
     body: str = Field(..., min_length=1)
-    tenant_id: str = Field(default="default", max_length=50)
 
 
 class BulkChaseItem(BaseModel):
@@ -149,7 +147,6 @@ class BulkChaseRequest(BaseModel):
         default=30, ge=1, le=365,
         description="Days from today to set due_date when not explicitly provided",
     )
-    tenant_id: str = Field(default="default", max_length=50)
 
 
 # ---------------------------------------------------------------------------
@@ -164,10 +161,10 @@ def list_chases(
     provider_npi: str | None = Query(None),
     reason: str | None = Query(None),
     due_before: date | None = Query(None, description="ISO date — return chases due on or before this date"),
-    tenant_id: str = Query(default="default"),
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "read")),
 ) -> dict[str, Any]:
     """
@@ -201,8 +198,8 @@ def list_chases(
 
 @router.get("/dashboard", summary="Chart chase dashboard — aging report and stats")
 def dashboard(
-    tenant_id: str = Query(default="default"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "read")),
 ) -> dict[str, Any]:
     """
@@ -227,8 +224,8 @@ def dashboard(
 
 @router.get("/templates", summary="List outreach templates")
 def list_templates(
-    tenant_id: str = Query(default="default"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "read")),
 ) -> dict[str, Any]:
     """Return all fax / email / letter templates for the tenant."""
@@ -249,6 +246,7 @@ def list_templates(
 def create_template(
     body: TemplateCreateRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -263,7 +261,7 @@ def create_template(
         }
     """
     try:
-        template = svc.create_template(body.model_dump())
+        template = svc.create_template({**body.model_dump(), "tenant_id": tenant_id})
     except Exception as exc:
         logger.error("create_template failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -279,6 +277,7 @@ def create_template(
 def bulk_create(
     body: BulkChaseRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -302,7 +301,7 @@ def bulk_create(
         result = svc.bulk_create_chases(
             [item.model_dump() for item in body.items],
             requesting_user_id=int(current_user.get("user_id") or current_user.get("id") or 0),
-            tenant_id=body.tenant_id,
+            tenant_id=tenant_id,
             default_priority=body.default_priority,
             default_due_days=body.default_due_days,
         )
@@ -321,6 +320,7 @@ def bulk_create(
 def create_chase(
     body: ChaseCreateRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -342,6 +342,7 @@ def create_chase(
     data["requesting_user_id"] = int(
         current_user.get("user_id") or current_user.get("id") or 0
     )
+    data["tenant_id"] = tenant_id
     try:
         chase = svc.create_chase(data)
     except Exception as exc:

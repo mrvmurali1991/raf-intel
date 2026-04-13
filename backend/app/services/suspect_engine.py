@@ -49,15 +49,14 @@ def _coded_icd_set(patient_id: int, year: int | None = None) -> set[str]:
         with raf_cursor() as cur:
             cur.execute(
                 """
-                SELECT DISTINCT b.code
-                FROM openemr.billing b
-                JOIN openemr.form_encounter fe
-                    ON fe.encounter = b.encounter
-                WHERE b.pid = %s
-                  AND b.code_type = 'ICD10'
-                  AND YEAR(fe.date) = %s
-                  AND b.code IS NOT NULL
-                  AND b.code != ''
+                SELECT DISTINCT nd.icd10_code AS code
+                FROM normalized_diagnoses nd
+                JOIN normalized_encounters ne
+                    ON ne.encounter_id = nd.encounter_id
+                WHERE nd.patient_id = %s
+                  AND YEAR(ne.encounter_date) = %s
+                  AND nd.icd10_code IS NOT NULL
+                  AND nd.icd10_code != ''
                 """,
                 (patient_id, year),
             )
@@ -91,7 +90,7 @@ def _coded_hcc_set(patient_id: int, year: int | None = None) -> set[str]:
                     (patient_id,),
                 )
             rows = cur.fetchall()
-        return {r["hcc_code"].strip().upper() for r in rows if r.get("hcc_code")}
+        return {str(r["hcc_code"]).strip().upper() for r in rows if r.get("hcc_code") is not None}
     except Exception as exc:
         logger.error("_coded_hcc_set failed pid=%s: %s", patient_id, exc)
         return set()
@@ -101,6 +100,26 @@ def _suspect_fingerprint(patient_id: int, source: str, code: str) -> str:
     """Stable SHA-256 dedup key for a suspect (patient + source + code)."""
     raw = f"{patient_id}|{source}|{code}".lower()
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+_EVIDENCE_TYPE_MAP = {
+    "medication": "medication",
+    "medication_signal": "medication",
+    "lab": "lab",
+    "lab_signal": "lab",
+    "history": "historical",
+    "historical": "historical",
+    "historical_hcc": "historical",
+    "nlp": "referral",
+    "note_vs_billing": "referral",
+    "imaging": "imaging",
+    "referral": "referral",
+}
+
+
+def _map_evidence_type(source: str) -> str:
+    """Map internal source names to the evidence_type ENUM values."""
+    return _EVIDENCE_TYPE_MAP.get(source, "medication")
 
 
 def _store_suspect(
@@ -153,7 +172,7 @@ def _store_suspect(
                     measurement_year or suspect.get("measurement_year") or date.today().year,
                     suspect.get("suspected_icd") or "",
                     suspect.get("suspected_hcc") or "",
-                    suspect.get("source") or "medication",
+                    _map_evidence_type(suspect.get("source") or "medication"),
                     evidence_json,
                     suspect.get("confidence", 0.5),
                 ),
@@ -390,7 +409,7 @@ def scan_historical_hccs(
                 LEFT JOIN hcc_raf_coefficients rc
                     ON  rc.hcc_code      = rph.hcc_code
                     AND rc.model_segment = 'CNA'
-                    AND rc.year          = %s
+                    AND rc.model_year    = %s
                 WHERE rph.patient_id      = %s
                   AND rph.measurement_year = %s
                 """,
@@ -402,7 +421,7 @@ def scan_historical_hccs(
         return []
 
     for row in prior_rows:
-        hcc = (row.get("hcc_code") or "").strip().upper()
+        hcc = str(row.get("hcc_code") or "").strip().upper()
         if not hcc or hcc in current_hccs:
             continue
 
@@ -465,11 +484,16 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
             if year is not None:
                 cur.execute(
                     """
-                    SELECT id, encounter_id, result_json, created_at
+                    SELECT id, target_id AS encounter_id,
+                           result_summary AS result_json, created_at
                     FROM raf_nlp_jobs
-                    WHERE patient_id = %s
-                      AND status      = 'completed'
-                      AND result_json IS NOT NULL
+                    WHERE target_id IN (
+                        SELECT encounter_id FROM normalized_encounters
+                        WHERE patient_id = %s
+                    )
+                      AND target_type   = 'encounter'
+                      AND status        = 'completed'
+                      AND result_summary IS NOT NULL
                       AND YEAR(created_at) = %s
                     ORDER BY created_at DESC
                     """,
@@ -478,11 +502,16 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
             else:
                 cur.execute(
                     """
-                    SELECT id, encounter_id, result_json, created_at
+                    SELECT id, target_id AS encounter_id,
+                           result_summary AS result_json, created_at
                     FROM raf_nlp_jobs
-                    WHERE patient_id = %s
-                      AND status      = 'completed'
-                      AND result_json IS NOT NULL
+                    WHERE target_id IN (
+                        SELECT encounter_id FROM normalized_encounters
+                        WHERE patient_id = %s
+                    )
+                      AND target_type   = 'encounter'
+                      AND status        = 'completed'
+                      AND result_summary IS NOT NULL
                     ORDER BY created_at DESC
                     """,
                     (patient_id,),
@@ -732,6 +761,7 @@ def get_all_open_suspects(limit: int = 1000, offset: int = 0) -> list[dict[str, 
 def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
     """
     Mark a suspect as accepted (provider agrees the condition should be coded).
+    Also inserts the accepted HCC into raf_patient_hcc and recalculates RAF score.
     Returns the updated record.
     """
     try:
@@ -751,6 +781,67 @@ def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
                 (suspect_id,),
             )
             row = cur.fetchone()
+
+            if row and row.get("suspect_hcc"):
+                # Insert accepted HCC into raf_patient_hcc
+                from datetime import date as _date
+                _year = _date.today().year
+                _pid = row["patient_id"]
+                _hcc = row["suspect_hcc"]
+                _icd = row.get("suspect_icd10") or ""
+                _desc = row.get("description") or ""
+                _tenant = row.get("tenant_id") or "1"
+
+                # HCC coefficient lookup
+                _HCC_COEFFICIENTS = {
+                    9: 0.309, 18: 0.166, 19: 0.088, 22: 0.236, 35: 0.346, 36: 0.346,
+                    37: 0.166, 55: 0.395, 85: 0.360, 96: 0.299, 108: 0.288,
+                    111: 0.335, 137: 0.289, 138: 0.069, 226: 0.360, 238: 0.299, 280: 0.319,
+                }
+                _coeff = _HCC_COEFFICIENTS.get(_hcc, 0.100)
+
+                # Check if already exists
+                cur.execute(
+                    "SELECT id FROM raf_patient_hcc WHERE patient_id = %s AND hcc_code = %s AND measurement_year = %s AND tenant_id = %s",
+                    (_pid, _hcc, _year, _tenant),
+                )
+                if not cur.fetchone():
+                    cur.execute("""
+                        INSERT INTO raf_patient_hcc
+                            (patient_id, measurement_year, tenant_id, hcc_code, hcc_description,
+                             icd10_codes, icd10_code, icd_code, raf_coefficient, raf_weight,
+                             meat_status, is_trumped, source, source_encounter_ids, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'missing', 0, 'suspect_accepted', '[]', NOW(), NOW())
+                    """, (_pid, _year, _tenant, _hcc, _desc,
+                          json.dumps([_icd]), _icd, _icd, _coeff, _coeff))
+                    logger.info("Inserted HCC %s into raf_patient_hcc for patient %s", _hcc, _pid)
+
+                # Recalculate RAF score
+                cur.execute(
+                    "SELECT hcc_code, raf_coefficient FROM raf_patient_hcc WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s AND (is_trumped = 0 OR is_trumped IS NULL)",
+                    (_pid, _year, _tenant),
+                )
+                all_hccs = cur.fetchall()
+                new_disease_score = sum(float(h.get("raf_coefficient") or 0) for h in all_hccs)
+                new_hcc_count = len(all_hccs)
+
+                cur.execute(
+                    """UPDATE raf_scores
+                       SET disease_score = %s, hcc_count = %s,
+                           final_raf = demographic_score + %s + interaction_score,
+                           updated_at = NOW()
+                       WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s""",
+                    (new_disease_score, new_hcc_count, new_disease_score, _pid, _year, _tenant),
+                )
+                logger.info("Recalculated RAF for patient %s: disease_score=%.3f, hcc_count=%d",
+                           _pid, new_disease_score, new_hcc_count)
+
+                # Push to EMR
+                try:
+                    emr.push_medical_problem(_pid, _desc, _icd)
+                except Exception as e:
+                    logger.warning("Failed to push suspect %s to EMR for patient %s: %s", suspect_id, _pid, e)
+
         if not row:
             raise ValueError(f"Suspect {suspect_id} not found")
         logger.info("Suspect %s accepted by %s", suspect_id, reviewed_by)

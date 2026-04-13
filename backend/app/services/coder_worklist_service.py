@@ -72,7 +72,7 @@ def _fetch_item(worklist_id: int) -> dict[str, Any] | None:
 
 def get_worklist(
     coder_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
     status: str | None = None,
     review_type: str | None = None,
     limit: int = 50,
@@ -154,7 +154,7 @@ def get_worklist(
 
 def claim_next(
     coder_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
     review_type: str | None = None,
 ) -> dict[str, Any] | None:
     """
@@ -165,9 +165,12 @@ def claim_next(
 
     Returns the claimed worklist item dict, or None when the queue is empty.
     """
-    tid = tenant_id if tenant_id is not None else 1
     if tenant_id is None:
-        logger.warning("coder_worklist_service.claim_next: no tenant_id provided, defaulting to 1")
+        raise ValueError(
+            "coder_worklist_service.claim_next: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tid = tenant_id
     _active_patients_frag = (
         "(patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s))"
     )
@@ -457,7 +460,7 @@ def assign_item(
     due_date: date | None = None,
     hcc_codes: list[int] | None = None,
     notes: str | None = None,
-    tenant_id: str = "default",
+    tenant_id: str = "",  # Required — empty string will raise below
     source: str = "manual",
 ) -> dict[str, Any]:
     """
@@ -468,6 +471,11 @@ def assign_item(
 
     Returns the newly created worklist row.
     """
+    if not tenant_id:
+        raise ValueError(
+            "assign_item: tenant_id is required — "
+            "refusing to create worklist item without tenant scope (HIPAA multi-tenant isolation)"
+        )
     now = _now()
     with raf_cursor() as cur:
         # Validate that the target user exists and has the coder role
@@ -538,7 +546,7 @@ def assign_item(
 def auto_queue_from_nlp(
     nlp_results: list[dict[str, Any]],
     assigning_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """
     Feed NLP analysis results into the worklist using round-robin assignment.
@@ -601,7 +609,7 @@ def auto_queue_from_nlp(
 def auto_queue_from_claims(
     claims_results: list[dict[str, Any]],
     assigning_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """
     Feed claims analysis results into the worklist using round-robin assignment.
@@ -670,9 +678,12 @@ def _round_robin_coder(tenant_id: str) -> int | None:
 
     The users table is expected to carry a ``role`` column (see migration 005).
     """
-    tid = tenant_id if tenant_id is not None else 1
     if tenant_id is None:
-        logger.warning("coder_worklist_service._round_robin_coder: no tenant_id provided, defaulting to 1")
+        raise ValueError(
+            "coder_worklist_service._round_robin_coder: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tid = tenant_id
     _active_patients_frag = (
         "(w.patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s))"
     )
@@ -705,7 +716,7 @@ def _round_robin_coder(tenant_id: str) -> int | None:
 
 def get_productivity_stats(
     coder_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
     days: int = 30,
 ) -> dict[str, Any]:
     """
@@ -748,9 +759,12 @@ def get_productivity_stats(
         agg = cur.fetchone()
 
         # Current queue depth
-        tid = tenant_id if tenant_id is not None else 1
         if tenant_id is None:
-            logger.warning("coder_worklist_service.get_productivity_stats: no tenant_id provided, defaulting to 1")
+            raise ValueError(
+                "coder_worklist_service.get_productivity_stats: tenant_id is required — "
+                "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+            )
+        tid = tenant_id
         _active_patients_frag = (
             "(patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s))"
         )
@@ -798,7 +812,12 @@ def _update_productivity(
     the QA reviewer workflow).
     """
     today = date.today()
-    tenant_id: str = completed_item.get("tenant_id", "default")
+    tenant_id: str | None = completed_item.get("tenant_id")
+    if not tenant_id:
+        raise ValueError(
+            "_update_productivity: completed_item has no tenant_id — "
+            "refusing to update productivity without tenant scope (HIPAA multi-tenant isolation)"
+        )
 
     started_at = completed_item.get("started_at")
     completed_at = completed_item.get("completed_at") or _now()

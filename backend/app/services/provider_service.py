@@ -260,12 +260,11 @@ def get_panel_patients(
     """Return all patients attributed to a provider's panel."""
 
     if tenant_id is None:
-        logger.warning(
-            "provider_service.get_panel_patients: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "provider_service.get_panel_patients: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -443,12 +442,11 @@ def calculate_provider_scorecard(
     """
 
     if tenant_id is None:
-        logger.warning(
-            "provider_service.calculate_provider_scorecard: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "provider_service.calculate_provider_scorecard: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     # --- 1. Get panel patient IDs (active EMR connections only) ---
     with raf_cursor() as cur:
@@ -840,12 +838,11 @@ def calculate_hcc_performance(
     """
 
     if tenant_id is None:
-        logger.warning(
-            "provider_service.calculate_hcc_performance: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "provider_service.calculate_hcc_performance: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -956,12 +953,11 @@ def generate_provider_alerts(
     """
 
     if tenant_id is None:
-        logger.warning(
-            "provider_service.generate_provider_alerts: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "provider_service.generate_provider_alerts: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     year = date.today().year
 
@@ -1246,7 +1242,7 @@ def get_leaderboard(year: int) -> list[dict[str, Any]]:
                 "practice_name": "Sunrise Health Partners",
                 "npi": row.get("npi"),
                 "patient_count": row["total_patients"],
-                "avg_raf_score": float(row["average_raf"])
+                "average_raf_score": float(row["average_raf"])
                 if row["average_raf"] is not None
                 else None,
                 "hcc_capture_rate": float(row["hcc_capture_rate"])
@@ -1273,16 +1269,15 @@ def get_leaderboard(year: int) -> list[dict[str, Any]]:
     return result
 
 
-def get_providers_summary(tenant_id: Optional[int] = None) -> dict[str, Any]:
+def get_providers_summary(tenant_id: int) -> dict[str, Any]:
     """Return aggregate statistics across all active providers."""
 
     if tenant_id is None:
-        logger.warning(
-            "provider_service.get_providers_summary: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "provider_service.get_providers_summary: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     year = date.today().year
 
@@ -1333,17 +1328,11 @@ def get_providers_summary(tenant_id: Optional[int] = None) -> dict[str, Any]:
 
     return {
         "measurement_year": year,
-        # Names the frontend expects
         "total_providers": total_providers,
-        "avg_raf_score": avg_raf,
+        "total_active_providers": total_providers,
+        "total_attributed_patients": total_attributed,
+        "average_raf_score": avg_raf,
         "avg_capture_rate": avg_capture,
         "total_revenue_opportunity": total_rev,
         "avg_meat_completeness": avg_doc,
-        # Keep legacy names for backward compatibility
-        "total_active_providers": total_providers,
-        "total_attributed_patients": total_attributed,
-        "average_raf_across_providers": avg_raf,
-        "average_hcc_capture_rate": avg_capture,
-        "average_recapture_rate": _f(row["avg_recapture"]) if row else None,
-        "average_documentation_quality": avg_doc,
     }

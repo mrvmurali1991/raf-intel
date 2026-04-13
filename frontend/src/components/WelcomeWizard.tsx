@@ -616,7 +616,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                 {[
                   { label: "Total Patients", value: previewData?.total_patients ?? "...", color: PRIMARY },
                   { label: "Analyzed", value: previewData?.patients_analyzed ?? "0", color: SUCCESS },
-                  { label: "Avg RAF Score", value: previewData?.avg_raf_score ? Number(previewData.avg_raf_score).toFixed(2) : "--", color: WARNING },
+                  { label: "Avg RAF Score", value: previewData?.average_raf_score ? Number(previewData.average_raf_score).toFixed(2) : "--", color: WARNING },
                 ].map((m) => (
                   <div key={m.label} style={{ padding: 20, background: BG_SUBTLE, borderRadius: 14, border: `1px solid ${BORDER}` }}>
                     <div style={{ fontSize: 28, fontWeight: 800, color: m.color }}>{m.value}</div>

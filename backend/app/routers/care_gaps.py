@@ -26,7 +26,7 @@ from typing import Any, Literal
 from fastapi import Depends, APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.care_gap_service import (
     add_comment,
     assign_gap_task,
@@ -65,7 +65,6 @@ class GapTaskCreate(BaseModel):
     evidence_summary: str | None = None
     assigned_to: int | None = None
     suspect_condition_id: int | None = None
-    tenant_id: str = Field(default="default", max_length=50)
 
 
 class GapTaskUpdate(BaseModel):
@@ -128,7 +127,6 @@ class GenerateGapsRequest(BaseModel):
         le=1.0,
         description="Suspects at or above this confidence score receive 'high' priority",
     )
-    tenant_id: str = Field(default="default", max_length=50)
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +147,8 @@ def _get_or_404(task_id: int) -> dict[str, Any]:
 @router.get("/dashboard", summary="Care gap dashboard statistics")
 def dashboard(
     provider_id: int | None = Query(default=None, description="Scope stats to a single provider"),
-    tenant_id: str = Query(default="default", description="Tenant scope"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("care_gaps", "read")),
 ) -> dict[str, Any]:
     """
@@ -200,6 +198,7 @@ def bulk_assign(
 def generate_gaps(
     body: GenerateGapsRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("care_gaps", "write")),
 ) -> dict[str, Any]:
     """
@@ -221,7 +220,7 @@ def generate_gaps(
             min_confidence=body.min_confidence,
             priority_threshold=body.priority_threshold,
             created_by=user_id,
-            tenant_id=body.tenant_id,
+            tenant_id=tenant_id,
         )
     except Exception as exc:
         logger.error("generate_gaps error: %s", exc, exc_info=True)
@@ -251,10 +250,10 @@ def list_tasks(
     ),
     due_before: date | None = Query(default=None, description="Tasks due on or before this date (YYYY-MM-DD)"),
     due_after: date | None = Query(default=None, description="Tasks due on or after this date (YYYY-MM-DD)"),
-    tenant_id: str = Query(default="default", description="Tenant scope"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("care_gaps", "read")),
 ) -> dict[str, Any]:
     """
@@ -294,6 +293,7 @@ def list_tasks(
 def create_task(
     body: GapTaskCreate,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("care_gaps", "write")),
 ) -> dict[str, Any]:
     """
@@ -327,7 +327,7 @@ def create_task(
             assigned_to=body.assigned_to,
             suspect_condition_id=body.suspect_condition_id,
             created_by=user_id,
-            tenant_id=body.tenant_id,
+            tenant_id=tenant_id,
         )
     except Exception as exc:
         logger.error("create_task error: %s", exc, exc_info=True)

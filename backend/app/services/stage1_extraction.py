@@ -153,6 +153,12 @@ def _classify_assertion(preceding: str) -> tuple[bool, bool, str | None]:
         # "prehistory ofx".  Simple substring is acceptable because the
         # window is already small and sentence-bounded.
         if trig in preceding:
+            # --- Special refinement for 'without' false positives ---
+            # E11.9 is "Type 2 diabetes mellitus without complications".
+            # If 'without' is followed by 'complications', it's likely part of a
+            # diagnosis name, not a negation of that diagnosis.
+            if trig == "without" and "without complications" in preceding:
+                continue
             return True, False, trig
     for trig in UNCERTAIN_TRIGGERS:
         if trig == "vs" or trig == "versus":

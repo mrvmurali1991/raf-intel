@@ -46,6 +46,40 @@ import httpx
 from app.db import raf_cursor
 from app.services.encryption_service import decrypt, encrypt
 from app.services.vendor_adapters.registry import get_adapter, get_fhir_adapter
+from app.services.hcc_mapping_service import map_icd10_batch, get_hcc_coefficient as _hcc_coefficient
+
+# ---------------------------------------------------------------------------
+# Pipeline event helpers
+# ---------------------------------------------------------------------------
+
+def _emit_sync_completed(
+    sync_result: dict,
+    tenant_id: str | None,
+    connection_id: int,
+    sync_type: str,
+) -> None:
+    """Fire the internal ``emr_sync_completed`` pipeline event (non-blocking).
+
+    Only fires when the sync finished with a non-failure status so the
+    normalization chain is not triggered on error results.
+    """
+    status = sync_result.get("status", "")
+    if status in ("failed",):
+        return  # do not chain on explicit failures
+    try:
+        from app.services.event_emitter import emit_internal
+        emit_internal(
+            "emr_sync_completed",
+            {
+                "tenant_id": tenant_id or "default",
+                "connection_id": connection_id,
+                "sync_type": sync_type,
+                "sync_id": sync_result.get("sync_id"),
+                "status": status,
+            },
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.error("emr_manager: failed to emit emr_sync_completed: %s", exc)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +132,7 @@ ACTIVE_PATIENTS_SUBQUERY = """(
 
 
 def active_patients_subquery(
-    tenant_id: Optional[int] = None,
+    tenant_id: int,
     *,
     patient_id_column: str = "patient_id",
 ) -> tuple[str, tuple[int, ...]]:
@@ -111,16 +145,15 @@ def active_patients_subquery(
     caller must include them in the query's params tuple in positional
     order matching the fragment.
 
-    If ``tenant_id`` is None, defaults to 1 with a warning log. This
-    keeps existing callers working during rollout.
+    Raises ValueError if tenant_id is None — never falls back to a default,
+    as that would silently serve cross-tenant data (HIPAA violation).
     """
     if tenant_id is None:
-        logger.warning(
-            "active_patients_subquery: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "active_patients_subquery: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
     frag = (
         f"({patient_id_column} IN ("
         f"SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s"
@@ -346,7 +379,7 @@ def _seed_vendor_presets() -> None:
 # ---------------------------------------------------------------------------
 
 
-def list_connections(tenant_id: str = "default") -> list[dict]:
+def list_connections(tenant_id: str) -> list[dict]:
     """Return all EMR connections for *tenant_id*, with credentials masked."""
     _ensure_tables()
     with raf_cursor() as cur:
@@ -469,7 +502,7 @@ def get_connection_with_credentials(
     return _decrypt_credentials(dict(row))
 
 
-def get_active_direct_db_credentials(tenant_id: str = "default") -> dict | None:
+def get_active_direct_db_credentials(tenant_id: str) -> dict | None:
     """Return decrypted credentials for the first active direct_db connection.
 
     Returns a dict with keys ``db_host``, ``db_port``, ``db_name``,
@@ -541,7 +574,12 @@ def create_connection(data: dict) -> dict:
         )
 
     encrypted = _encrypt_credentials(data)
-    tenant_id = encrypted.get("tenant_id", "default") or "default"
+    tenant_id = encrypted.get("tenant_id") or ""
+    if not tenant_id:
+        raise ValueError(
+            "register_connection: tenant_id is required — "
+            "refusing to register EMR connection without tenant scope (HIPAA multi-tenant isolation)"
+        )
 
     with raf_cursor() as cur:
         cur.execute(
@@ -1112,10 +1150,10 @@ def trigger_sync(
     with raf_cursor() as cur:
         cur.execute(
             """
-            INSERT INTO emr_sync_log (sync_id, connection_id, sync_type, status, started_at)
-            VALUES (%s, %s, %s, 'pending', %s)
+            INSERT INTO emr_sync_log (sync_id, emr_connection_id, connection_id, sync_type, status, started_at)
+            VALUES (%s, %s, %s, %s, 'pending', %s)
             """,
-            (sync_id, connection_id, sync_type, _now_utc()),
+            (sync_id, connection_id, connection_id, sync_type, _now_utc()),
         )
 
     logger.info(
@@ -1137,7 +1175,7 @@ def trigger_sync(
             patients_synced_f: int = summary.get("patients_synced", 0)
             conditions_found_f: int = summary.get("conditions_found", 0)
             adapter_errors_f: list[str] = summary.get("errors", [])
-            status_f = "success" if not adapter_errors_f else "partial"
+            status_f = "completed" if not adapter_errors_f else "failed"
             error_msg_f: str | None = "; ".join(adapter_errors_f) if adapter_errors_f else None
             log_sync_result(
                 sync_id, status=status_f,
@@ -1146,13 +1184,15 @@ def trigger_sync(
                 records_failed=len(adapter_errors_f),
                 error_message=error_msg_f,
             )
-            return {
+            _fhir_result = {
                 "sync_id": sync_id, "connection_id": connection_id,
                 "sync_type": sync_type, "status": status_f,
                 "patients_synced": patients_synced_f,
                 "conditions_found": conditions_found_f,
                 "errors": adapter_errors_f,
             }
+            _emit_sync_completed(_fhir_result, tenant_id, connection_id, sync_type)
+            return _fhir_result
         except Exception as exc:
             logger.exception("FHIR sync failed sync_id=%s connection_id=%s", sync_id, connection_id)
             log_sync_result(sync_id, status="failed", records_fetched=0, records_processed=0, records_failed=1, error_message=str(exc))
@@ -1168,7 +1208,7 @@ def trigger_sync(
             patients_synced: int = summary.get("patients_synced", 0)
             conditions_found: int = summary.get("conditions_found", 0)
             adapter_errors: list[str] = summary.get("errors", [])
-            status = "completed" if not adapter_errors else "completed_with_errors"
+            status = "completed" if not adapter_errors else "failed"
             error_msg: str | None = (
                 "; ".join(adapter_errors) if adapter_errors else None
             )
@@ -1180,7 +1220,7 @@ def trigger_sync(
                 records_failed=len(adapter_errors),
                 error_message=error_msg,
             )
-            return {
+            _rest_result = {
                 "sync_id": sync_id,
                 "connection_id": connection_id,
                 "sync_type": sync_type,
@@ -1189,6 +1229,8 @@ def trigger_sync(
                 "conditions_found": conditions_found,
                 "errors": adapter_errors,
             }
+            _emit_sync_completed(_rest_result, tenant_id, connection_id, sync_type)
+            return _rest_result
         except ValueError as exc:
             # No adapter registered for this vendor; fall back to pending state.
             logger.warning(
@@ -1223,6 +1265,7 @@ def trigger_sync(
         # Run direct DB sync using the openemr_connector.
         try:
             result = _sync_direct_db(connection_id, sync_id, sync_type)
+            _emit_sync_completed(result, tenant_id, connection_id, sync_type)
             return result
         except Exception as exc:
             logger.exception(
@@ -1252,6 +1295,12 @@ def _sync_direct_db(connection_id: int, sync_id: str, sync_type: str) -> dict:
     from datetime import date as _date
     from app.services import openemr_connector as oe
 
+    # Resolve tenant_id for this connection once before the loop
+    with raf_cursor() as _cur:
+        _cur.execute("SELECT tenant_id FROM emr_connections WHERE id = %s", (connection_id,))
+        _conn_row = _cur.fetchone()
+    tenant_id: int | None = _conn_row["tenant_id"] if _conn_row else None
+
     patients = oe.get_patients(limit=10000, offset=0)
     patients_synced = 0
     conditions_found = 0
@@ -1263,7 +1312,7 @@ def _sync_direct_db(connection_id: int, sync_id: str, sync_type: str) -> dict:
         if not pid:
             continue
         try:
-            _upsert_patient_demographics(pid, pt, measurement_year)
+            _upsert_patient_demographics(pid, pt, measurement_year, connection_id, tenant_id)
             patients_synced += 1
 
             billing = oe.get_billing_codes(pid)
@@ -1274,7 +1323,7 @@ def _sync_direct_db(connection_id: int, sync_id: str, sync_type: str) -> dict:
         except Exception as exc:
             errors.append(f"pid={pid}: {exc}")
 
-    sync_status = "success" if not errors else "partial"
+    sync_status = "completed" if not errors else "failed"
     error_msg = "; ".join(errors[:10]) if errors else None
 
     log_sync_result(
@@ -1337,8 +1386,19 @@ def _cms_age_band(dob_str: str | None) -> str:
     return "95+"
 
 
-def _upsert_patient_demographics(pid: int, pt: dict, measurement_year: int) -> None:
-    """Insert or update a patient in raf_patient_demographics from OpenEMR data."""
+def _upsert_patient_demographics(
+    pid: int,
+    pt: dict,
+    measurement_year: int,
+    connection_id: int | None = None,
+    tenant_id: int | None = None,
+) -> None:
+    """Insert or update a patient in raf_patient_demographics from OpenEMR data.
+
+    When connection_id and tenant_id are provided, also upserts into the `patients`
+    table and `emr_patient_matches` table so the downstream normalization pipeline
+    can resolve internal patient IDs from OpenEMR pids.
+    """
     sex = (pt.get("sex") or "Male")[0].upper()  # M or F
     if sex not in ("M", "F"):
         sex = "M"
@@ -1346,6 +1406,7 @@ def _upsert_patient_demographics(pid: int, pt: dict, measurement_year: int) -> N
     age_band = _cms_age_band(dob)
 
     with raf_cursor() as cur:
+        # --- raf_patient_demographics (original logic) ---
         cur.execute(
             "SELECT id FROM raf_patient_demographics WHERE patient_id = %s AND measurement_year = %s",
             (pid, measurement_year),
@@ -1366,35 +1427,151 @@ def _upsert_patient_demographics(pid: int, pt: dict, measurement_year: int) -> N
                 (pid, measurement_year, age_band, sex),
             )
 
+        # --- patients table (only when connection context is known) ---
+        if connection_id is not None and tenant_id is not None:
+            cur.execute(
+                """INSERT INTO patients
+                       (tenant_id, first_name, last_name, dob, gender,
+                        emr_pid, emr_connection_id, data_source, is_active,
+                        street, city, state, zip, phone, email,
+                        created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'direct_db', 1,
+                           %s, %s, %s, %s, %s, %s,
+                           NOW(), NOW())
+                   ON DUPLICATE KEY UPDATE
+                       first_name      = VALUES(first_name),
+                       last_name       = VALUES(last_name),
+                       dob             = VALUES(dob),
+                       gender          = VALUES(gender),
+                       street          = VALUES(street),
+                       city            = VALUES(city),
+                       state           = VALUES(state),
+                       zip             = VALUES(zip),
+                       phone           = VALUES(phone),
+                       email           = VALUES(email),
+                       updated_at      = NOW()""",
+                (
+                    tenant_id,
+                    pt.get("fname") or pt.get("first_name"),
+                    pt.get("lname") or pt.get("last_name"),
+                    dob,
+                    sex,
+                    pid,
+                    connection_id,
+                    pt.get("street"),
+                    pt.get("city"),
+                    pt.get("state"),
+                    pt.get("postal_code") or pt.get("zip"),
+                    pt.get("phone_home") or pt.get("phone"),
+                    pt.get("email"),
+                ),
+            )
+            # Retrieve the internal patient.id (whether just inserted or already existing)
+            cur.execute(
+                """SELECT id FROM patients
+                   WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s
+                   LIMIT 1""",
+                (pid, connection_id, tenant_id),
+            )
+            patient_row = cur.fetchone()
+            if patient_row:
+                internal_patient_id = patient_row["id"]
+                # --- emr_patient_matches table ---
+                cur.execute(
+                    """INSERT INTO emr_patient_matches
+                           (patient_id, emr_patient_id, emr_pid, emr_connection_id, tenant_id,
+                            match_status, match_method, match_score,
+                            created_at, updated_at)
+                       VALUES (%s, %s, %s, %s, %s, 'matched', 'exact_sync', 1.0, NOW(), NOW())
+                       ON DUPLICATE KEY UPDATE
+                           match_status = 'matched',
+                           match_method = 'exact_sync',
+                           match_score  = 1.0,
+                           updated_at   = NOW()""",
+                    (
+                        internal_patient_id,
+                        str(pid),
+                        pid,
+                        connection_id,
+                        tenant_id,
+                    ),
+                )
+
 
 def _upsert_patient_hcc(pid: int, icd_codes: list[str], measurement_year: int) -> None:
-    """Insert ICD-10 codes into raf_patient_hcc (grouped by patient, not per-code rows)."""
-    icd_json = json.dumps(icd_codes)
+    """Map ICD-10 codes to HCCs via hccinfhir and upsert into raf_patient_hcc.
+
+    One row per (patient_id, hcc_code, measurement_year) triplet.  ICD-10 codes
+    that do not map to any HCC in V28 are stored in a catch-all NULL-hcc_code
+    row so they are not silently lost.
+
+    Uses map_icd10_batch (hccinfhir) as the authoritative ICD→HCC engine.
+    """
+    if not icd_codes:
+        return
+
+    # ------------------------------------------------------------------
+    # 1. Resolve ICD-10 → HCC mappings in a single batch call.
+    # ------------------------------------------------------------------
+    try:
+        hcc_map = map_icd10_batch(icd_codes, model_version="V28")
+    except Exception as exc:
+        logger.warning("_upsert_patient_hcc: map_icd10_batch failed — %s", exc)
+        hcc_map = {}
+
+    # Group ICD-10 codes by the primary HCC they resolve to.
+    # Codes with no mapping are collected under the None key.
+    hcc_to_codes: dict[str | None, list[str]] = {}
+    for code in icd_codes:
+        normalised = code.strip().upper().replace(".", "")
+        entry = hcc_map.get(normalised)
+        hcc_key: str | None = entry["hcc_code"] if entry else None
+        hcc_to_codes.setdefault(hcc_key, []).append(code)
+
+    # ------------------------------------------------------------------
+    # 2. Upsert one raf_patient_hcc row per HCC group.
+    # ------------------------------------------------------------------
     with raf_cursor() as cur:
-        # Check if patient already has an entry for this year
-        cur.execute(
-            "SELECT id, icd10_codes FROM raf_patient_hcc WHERE patient_id = %s AND measurement_year = %s LIMIT 1",
-            (pid, measurement_year),
-        )
-        existing = cur.fetchone()
-        if existing:
-            # Merge new codes with existing
-            try:
-                old_codes = json.loads(existing["icd10_codes"] or "[]")
-            except (json.JSONDecodeError, TypeError):
-                old_codes = []
-            merged = list(set(old_codes + icd_codes))
+        for hcc_code, codes_for_hcc in hcc_to_codes.items():
+            # Skip ICD-10 codes that don't map to any HCC — the DB column
+            # is NOT NULL so we cannot store them.
+            if hcc_code is None:
+                continue
+
+            # Retrieve the coefficient from hccinfhir for non-null HCCs.
+            raf_coefficient: float = 0.0
+            if hcc_code is not None:
+                try:
+                    raf_coefficient = _hcc_coefficient(int(hcc_code), model_version="V28", segment="CNA")
+                except Exception:
+                    pass
+
             cur.execute(
-                "UPDATE raf_patient_hcc SET icd10_codes = %s, updated_at = NOW() WHERE id = %s",
-                (json.dumps(merged), existing["id"]),
+                "SELECT id, icd10_codes FROM raf_patient_hcc "
+                "WHERE patient_id = %s AND hcc_code <=> %s AND measurement_year = %s LIMIT 1",
+                (pid, hcc_code, measurement_year),
             )
-        else:
-            cur.execute(
-                """INSERT INTO raf_patient_hcc
-                   (patient_id, measurement_year, hcc_code, icd10_codes, source_encounter_ids, raf_coefficient, meat_status, is_trumped)
-                   VALUES (%s, %s, '', %s, '[]', 0, 'pending', 0)""",
-                (pid, measurement_year, icd_json),
-            )
+            existing = cur.fetchone()
+            if existing:
+                try:
+                    old_codes = json.loads(existing["icd10_codes"] or "[]")
+                except (json.JSONDecodeError, TypeError):
+                    old_codes = []
+                merged = list(set(old_codes + codes_for_hcc))
+                cur.execute(
+                    "UPDATE raf_patient_hcc "
+                    "SET icd10_codes = %s, raf_coefficient = %s, updated_at = NOW() "
+                    "WHERE id = %s",
+                    (json.dumps(merged), raf_coefficient, existing["id"]),
+                )
+            else:
+                cur.execute(
+                    """INSERT INTO raf_patient_hcc
+                       (patient_id, measurement_year, hcc_code, icd10_codes,
+                        source_encounter_ids, raf_coefficient, meat_status, is_trumped)
+                       VALUES (%s, %s, %s, %s, '[]', %s, 'pending', 0)""",
+                    (pid, measurement_year, hcc_code, json.dumps(codes_for_hcc), raf_coefficient),
+                )
 
 
 def log_sync_result(
@@ -1633,7 +1810,14 @@ def auto_register_openemr() -> dict | None:
         logger.debug("emr_manager: OPENEMR_DB_HOST not set – skipping auto-register")
         return None
 
-    tenant_id = os.getenv("OPENEMR_TENANT_ID", "default")
+    tenant_id = os.getenv("OPENEMR_TENANT_ID", "")
+    if not tenant_id:
+        logger.error(
+            "emr_manager: OPENEMR_TENANT_ID env var is not set — "
+            "refusing to auto-register OpenEMR connection without tenant scope "
+            "(HIPAA multi-tenant isolation)"
+        )
+        return None
 
     # Check if an openemr connection already exists for this tenant.
     with raf_cursor() as cur:
@@ -1751,7 +1935,7 @@ def store_oauth2_tokens(
     logger.info("emr_manager: stored OAuth2 tokens for connection %s (expires in %ss)", connection_id, expires_in)
 
 
-def deactivate_other_connections(connection_id: int, tenant_id: str = "default") -> None:
+def deactivate_other_connections(connection_id: int, tenant_id: str) -> None:
     """Atomically deactivate every other connection for *tenant_id* and activate
     the specified one in a single cursor block.
 

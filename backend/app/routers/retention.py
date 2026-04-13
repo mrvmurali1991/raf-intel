@@ -9,13 +9,14 @@ authenticated user.  In a production deployment you should add
 role-based access control (e.g. require an "admin" role) before
 these endpoints are reachable.
 """
+
 import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 from app.services.data_retention import (
     DEFAULT_POLICIES,
     get_retention_status,
@@ -52,7 +53,7 @@ class RetentionUpdateRequest(BaseModel):
     response_model=dict[str, Any],
 )
 def get_retention_status_endpoint(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """
     Return the current retention status for every configured policy table.
@@ -69,7 +70,9 @@ def get_retention_status_endpoint(
         }
     except Exception as exc:
         logger.error("Failed to retrieve retention status: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve retention status")
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve retention status"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +86,7 @@ def get_retention_status_endpoint(
     response_model=dict[str, Any],
 )
 def trigger_retention_sweep(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """
     Immediately execute a retention sweep across all policy tables.
@@ -119,7 +122,7 @@ def trigger_retention_sweep(
 def update_table_retention(
     table: str,
     body: RetentionUpdateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """
     Override the in-process retention period for *table*.

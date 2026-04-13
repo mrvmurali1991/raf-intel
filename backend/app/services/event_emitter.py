@@ -11,16 +11,105 @@ The call returns immediately.  A daemon thread is spawned that calls
 webhook_service.fire_event(), which handles retries and delivery logging.
 Any exception inside the thread is caught and logged so it can never
 surface as an unhandled thread exception.
+
+Internal pipeline events
+------------------------
+Internal handlers (non-webhook) can be registered with ``register_handler``
+and fired with ``emit_internal``.  This powers the auto-chaining pipeline
+where EMR sync completion triggers normalization, which in turn triggers RAF
+recalculation — all without blocking the caller and without Celery.
+
+Pipeline event types
+~~~~~~~~~~~~~~~~~~~~
+* ``"emr_sync_completed"``         – Phase ①: fired after a successful EMR sync
+* ``"normalization_completed"``    – Phase ②: fired after encounter/diagnosis normalization
+* ``"analysis_requested"``         – Phase ③: triggers AI/NLP analysis of encounters
+* ``"analysis_completed"``         – Phase ③→④: AI analysis done, triggers RAF calc
+* ``"raf_calculation_completed"``  – Phase ④: fired after batch RAF recalculation + hierarchy
+* ``"suspect_scan_completed"``     – Phase ⑤: fired after suspect detection scan
+* ``"pipeline_completed"``         – Phase ⑧: full pipeline run finished
 """
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="webhook")
+
+# ---------------------------------------------------------------------------
+# Internal handler registry (pipeline auto-chain)
+# ---------------------------------------------------------------------------
+
+# Maps event_type -> list of callables(payload: dict) -> None
+_internal_handlers: dict[str, list[Callable[[dict[str, Any]], None]]] = defaultdict(list)
+
+# Dedicated thread pool for internal pipeline steps (separate from webhooks so
+# a slow pipeline stage does not starve webhook delivery and vice-versa).
+_pipeline_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pipeline")
+
+
+def register_handler(event_type: str, handler: Callable[[dict[str, Any]], None]) -> None:
+    """Register an internal pipeline handler for *event_type*.
+
+    Handlers are called in registration order inside a background thread when
+    ``emit_internal`` is called with a matching *event_type*.
+
+    Parameters
+    ----------
+    event_type : str
+        Internal pipeline event name (e.g. ``"emr_sync_completed"``).
+    handler : Callable[[dict], None]
+        A callable that accepts a single ``payload`` dict argument.  Any
+        exception it raises will be caught, logged, and swallowed so the
+        remaining handlers in the chain still run.
+    """
+    _internal_handlers[event_type].append(handler)
+    logger.debug(
+        "event_emitter: registered internal handler %s for event '%s'",
+        getattr(handler, "__name__", repr(handler)),
+        event_type,
+    )
+
+
+def emit_internal(event_type: str, payload: dict[str, Any]) -> None:
+    """Fire all registered internal handlers for *event_type* in a background thread.
+
+    Returns immediately; handlers are executed asynchronously in the pipeline
+    thread pool.  Each handler is wrapped in a try/except so a failure in one
+    handler does not prevent subsequent handlers from running.
+
+    Parameters
+    ----------
+    event_type : str
+        Internal pipeline event name.
+    payload : dict
+        Arbitrary data describing the event.
+    """
+    handlers = list(_internal_handlers.get(event_type, []))
+    if not handlers:
+        logger.debug("event_emitter: no internal handlers for event '%s'", event_type)
+        return
+
+    def _run() -> None:
+        for handler in handlers:
+            name = getattr(handler, "__name__", repr(handler))
+            try:
+                handler(payload)
+            except Exception as exc:
+                logger.error(
+                    "event_emitter: internal handler %s raised for event '%s': %s",
+                    name, event_type, exc,
+                )
+
+    _pipeline_executor.submit(_run)
+    logger.debug(
+        "event_emitter: dispatched internal event '%s' to %d handler(s)",
+        event_type, len(handlers),
+    )
 
 
 def emit(event_type: str, tenant_id: str, payload: dict[str, Any]) -> None:

@@ -309,6 +309,10 @@ class TestSecurityHeaders:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.security
+@pytest.mark.skipif(
+    os.getenv("RATE_LIMITING_ENABLED", "true").lower() in ("false", "0", "no"),
+    reason="Rate limiting is disabled via RATE_LIMITING_ENABLED=false",
+)
 class TestRateLimiting:
     """
     The login endpoint is decorated with @limiter.limit("5/minute").

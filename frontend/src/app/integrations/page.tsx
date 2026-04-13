@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { FocusTrap } from "@/components/ui/focus-trap";
 import {
   Plug,
   Plus,
@@ -296,12 +297,13 @@ function AddConnectionModal({ onClose, onSuccess }: AddConnectionModalProps) {
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="animate-scale-in" style={{
-        backgroundColor: "#FFFFFF", borderRadius: 20,
-        width: "100%", maxWidth: 560,
-        maxHeight: "90vh", overflowY: "auto",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.3)",
-      }}>
+      <FocusTrap>
+        <div className="animate-scale-in" style={{
+          backgroundColor: "#FFFFFF", borderRadius: 20,
+          width: "100%", maxWidth: 560,
+          maxHeight: "90vh", overflowY: "auto",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.3)",
+        }} role="dialog" aria-modal="true" aria-label="Add connection">
         {/* Modal header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -495,6 +497,7 @@ function AddConnectionModal({ onClose, onSuccess }: AddConnectionModalProps) {
           </div>
         </form>
       </div>
+      </FocusTrap>
     </div>
   );
 }
@@ -594,6 +597,35 @@ function ConnectionCard({ conn }: { conn: FhirConnection }) {
   const [expanded, setExpanded] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [syncingId, setSyncingId] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState<ConnectionStatus>(conn.status);
+  const prevStatusRef = useRef<ConnectionStatus>(conn.status);
+
+  // Poll for status updates when syncing
+  useEffect(() => {
+    if (currentStatus !== "syncing") return;
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/api/fhir/connections/${conn.id}`);
+        if (data?.status && data.status !== currentStatus) {
+          setCurrentStatus(data.status);
+          queryClient.setQueryData(["fhir-connections"], (old: FhirConnection[] | undefined) =>
+            old?.map((c) => (c.id === conn.id ? { ...c, status: data.status } : c))
+          );
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [currentStatus, conn.id, queryClient]);
+
+  // Sync local status when conn prop changes
+  useEffect(() => {
+    if (conn.status !== prevStatusRef.current) {
+      setCurrentStatus(conn.status);
+      prevStatusRef.current = conn.status;
+    }
+  }, [conn.status]);
 
   const testMutation = useMutation({
     mutationFn: () => testConnection(conn.id),

@@ -136,7 +136,6 @@ function toBackendPayload(form: ConnectionFormData | Partial<ConnectionFormData>
 
 async function createEmrConnection(body: ConnectionFormData): Promise<EmrConnection> {
   const payload = toBackendPayload(body);
-  console.log("[DEBUG] createEmrConnection payload:", JSON.stringify(payload, null, 2));
   const { data } = await api.post("/api/emr/connections", payload);
   return data;
 }

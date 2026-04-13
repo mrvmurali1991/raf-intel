@@ -310,6 +310,56 @@ def _edps_claim_segment(
 
 
 # ---------------------------------------------------------------------------
+# Idempotency helpers
+# ---------------------------------------------------------------------------
+
+_IDEMPOTENCY_TERMINAL_STATUSES = frozenset({"generated", "submitted", "transmitted"})
+
+
+def _compute_idempotency_key(
+    tenant_id: str,
+    payment_year: int,
+    sweep_type: str,
+    file_type: str,
+    patient_ids: list[int],
+) -> str:
+    """
+    Return a deterministic 32-character hex key for the given submission parameters.
+
+    The key encodes (tenant, year, sweep, format, sorted patient set) so that
+    re-triggering generation for the exact same data set produces the same key.
+    """
+    sorted_ids_hash = hashlib.sha256(
+        ",".join(str(pid) for pid in sorted(patient_ids)).encode()
+    ).hexdigest()
+    key_input = f"{tenant_id}:{payment_year}:{sweep_type}:{file_type}:{sorted_ids_hash}"
+    return hashlib.sha256(key_input.encode()).hexdigest()[:32]
+
+
+def _find_existing_batch(idempotency_key: str) -> dict[str, Any] | None:
+    """
+    Return an existing submission_batches row whose idempotency_key matches
+    and whose status is one of the terminal statuses, or None if not found.
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM submission_batches
+                WHERE idempotency_key = %s
+                  AND status IN ('generated', 'submitted', 'transmitted', 'pending', 'validated')
+                LIMIT 1
+                """,
+                (idempotency_key,),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.warning("_find_existing_batch query error (non-fatal): %s", exc)
+        return None
+    return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
 # Core service functions
 # ---------------------------------------------------------------------------
 
@@ -366,6 +416,20 @@ def generate_raps_file(
     except Exception as exc:
         logger.error("generate_raps_file HCC query error: %s", exc, exc_info=True)
         raise RuntimeError(f"Failed to query HCC data: {exc}") from exc
+
+    # -- Idempotency check ----------------------------------------------------
+    patient_ids = list({row["patient_id"] for row in hcc_rows})
+    idempotency_key = _compute_idempotency_key(
+        tenant_id, payment_year, sweep_type, "RAPS", patient_ids
+    )
+    existing = _find_existing_batch(idempotency_key)
+    if existing:
+        logger.info(
+            "generate_raps_file: duplicate detected idempotency_key=%s batch=%s",
+            idempotency_key,
+            existing.get("id"),
+        )
+        return {**dict(existing), "duplicate": True}
 
     if not hcc_rows:
         logger.warning(
@@ -449,6 +513,7 @@ def generate_raps_file(
         record_count=detail_count,
         file_path=str(file_path),
         file_hash=file_hash,
+        idempotency_key=idempotency_key,
     )
     _insert_records(batch_id, tenant_id, record_rows)
 
@@ -520,6 +585,20 @@ def generate_edps_file(
     except Exception as exc:
         logger.error("generate_edps_file query error: %s", exc, exc_info=True)
         raise RuntimeError(f"Failed to query encounter data: {exc}") from exc
+
+    # -- Idempotency check ----------------------------------------------------
+    patient_ids = list({row["patient_id"] for row in hcc_rows})
+    idempotency_key = _compute_idempotency_key(
+        tenant_id, payment_year, sweep_type, "EDPS", patient_ids
+    )
+    existing = _find_existing_batch(idempotency_key)
+    if existing:
+        logger.info(
+            "generate_edps_file: duplicate detected idempotency_key=%s batch=%s",
+            idempotency_key,
+            existing.get("id"),
+        )
+        return {**dict(existing), "duplicate": True}
 
     # -- Build 837P content ---------------------------------------------------
     lines: list[str] = [
@@ -599,6 +678,7 @@ def generate_edps_file(
         record_count=tx_count,
         file_path=str(file_path),
         file_hash=file_hash,
+        idempotency_key=idempotency_key,
     )
     _insert_records(batch_id, tenant_id, record_rows)
 
@@ -1672,14 +1752,15 @@ def _insert_batch(
     record_count: int,
     file_path: str,
     file_hash: str,
+    idempotency_key: str | None = None,
 ) -> None:
     with raf_cursor() as cur:
         cur.execute(
             """
             INSERT INTO submission_batches
                 (id, tenant_id, file_type, payment_year, sweep_type,
-                 record_count, file_path, file_hash, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+                 record_count, file_path, file_hash, status, idempotency_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
             """,
             (
                 batch_id,
@@ -1690,6 +1771,7 @@ def _insert_batch(
                 record_count,
                 file_path,
                 file_hash,
+                idempotency_key,
             ),
         )
 

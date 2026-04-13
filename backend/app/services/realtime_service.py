@@ -395,6 +395,11 @@ def get_alerts(
 
 
 def get_unread_count(user_id: int, tenant_id: str) -> int:
+    if not tenant_id:
+        raise ValueError(
+            "get_unread_count: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     """Return count of unread alerts for badge display."""
     try:
         with raf_cursor() as cur:
@@ -411,6 +416,11 @@ def get_unread_count(user_id: int, tenant_id: str) -> int:
 
 
 def mark_alert_read(alert_id: int, user_id: int, tenant_id: str) -> bool:
+    if not tenant_id:
+        raise ValueError(
+            "mark_alert_read: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     """Mark a single alert as read. Returns True if a row was updated."""
     try:
         with raf_cursor() as cur:
@@ -429,6 +439,11 @@ def mark_alert_read(alert_id: int, user_id: int, tenant_id: str) -> bool:
 
 
 def mark_all_alerts_read(user_id: int, tenant_id: str) -> int:
+    if not tenant_id:
+        raise ValueError(
+            "mark_all_alerts_read: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     """Mark all unread alerts as read. Returns count of updated rows."""
     try:
         with raf_cursor() as cur:
@@ -495,6 +510,11 @@ def save_dashboard_config(
 
 
 def list_dashboard_configs(user_id: int, tenant_id: str) -> list[dict[str, Any]]:
+    if not tenant_id:
+        raise ValueError(
+            "list_dashboard_configs: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     """Return all saved dashboard configs for a user, default first."""
     try:
         with raf_cursor() as cur:
@@ -577,6 +597,11 @@ def update_dashboard_config(
 
 
 def delete_dashboard_config(config_id: int, user_id: int, tenant_id: str) -> bool:
+    if not tenant_id:
+        raise ValueError(
+            "delete_dashboard_config: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     """Delete a dashboard config. Returns True if a row was deleted."""
     try:
         with raf_cursor() as cur:
@@ -595,6 +620,11 @@ def delete_dashboard_config(config_id: int, user_id: int, tenant_id: str) -> boo
 # ---------------------------------------------------------------------------
 
 def get_live_kpi(tenant_id: str) -> dict[str, Any]:
+    if not tenant_id:
+        raise ValueError(
+            "get_live_kpi: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     """
     Aggregate live KPI values for the dashboard.
 
@@ -708,7 +738,7 @@ def emit_event(
     event_type: str,
     payload: dict[str, Any],
     *,
-    tenant_id: str = "default",
+    tenant_id: str,
     user_id: int | None = None,
     title: str | None = None,
     message: str | None = None,

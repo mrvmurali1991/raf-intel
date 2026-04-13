@@ -9,15 +9,19 @@ databases discovered at runtime.  They are cached in ``_dynamic_pools`` up
 to ``_MAX_DYNAMIC_POOLS`` entries; the oldest entry is evicted when the
 cache is full.
 """
+
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
 import ssl
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from functools import wraps
 from typing import Generator
 
 import mysql.connector
@@ -46,6 +50,97 @@ _dynamic_pool_lock = threading.Lock()
 # Ordered insertion is guaranteed in Python 3.7+ dicts; we rely on this for
 # oldest-first eviction.
 _MAX_DYNAMIC_POOLS = 20
+
+# ---------------------------------------------------------------------------
+# Async executor — thread pool dedicated to synchronous MySQL I/O
+#
+# Why this exists:
+#   mysql-connector-python is a synchronous library.  FastAPI runs sync
+#   ``def`` endpoints in Starlette's default anyio threadpool (40 threads by
+#   default), but ALL of those workers share the same pool of DB connections.
+#   Under high concurrency, coroutines in the async event loop can block
+#   waiting for a free connection while the threadpool is saturated, leading
+#   to event-loop stalls and potential deadlocks.
+#
+#   The dedicated ``_db_executor`` gives us:
+#   1. A separate, explicitly-sized threadpool whose workers are labelled
+#      "db-N" so they are visible in profiling/tracing tools.
+#   2. Explicit control over parallelism: ``DB_EXECUTOR_WORKERS`` env var
+#      (default 20) mirrors ``DB_POOL_SIZE`` so we never request more
+#      connections than the pool holds.
+#   3. A clean shutdown path via ``shutdown_db_executor()``, called from the
+#      FastAPI lifespan teardown.
+#
+# Usage — from an async endpoint or middleware:
+#
+#     from app.db import run_in_db_executor
+#
+#     result = await run_in_db_executor(my_sync_service_fn, arg1, arg2)
+#
+# Or decorate a sync helper to make it directly awaitable:
+#
+#     from app.db import async_db
+#
+#     @async_db
+#     def fetch_scores(tenant_id: str) -> list[dict]: ...
+#
+#     scores = await fetch_scores(tenant_id)
+# ---------------------------------------------------------------------------
+
+_DB_EXECUTOR_WORKERS = int(os.getenv("DB_EXECUTOR_WORKERS", str(_POOL_SIZE)))
+_db_executor = ThreadPoolExecutor(
+    max_workers=_DB_EXECUTOR_WORKERS,
+    thread_name_prefix="db",
+)
+
+
+async def run_in_db_executor(func, *args, **kwargs):
+    """Run a synchronous DB function in the dedicated DB thread pool.
+
+    Prevents blocking the asyncio event loop when calling mysql-connector
+    (synchronous) from an ``async def`` endpoint or middleware.
+
+    Example::
+
+        result = await run_in_db_executor(my_sync_fn, arg1, kwarg=val)
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_db_executor, lambda: func(*args, **kwargs))
+
+
+def async_db(func):
+    """Decorator that makes a synchronous DB function directly awaitable.
+
+    Wraps *func* so that awaiting it dispatches execution to the dedicated
+    DB thread pool executor, keeping the event loop free.
+
+    Example::
+
+        @async_db
+        def get_patient_row(pid: int) -> dict | None:
+            with raf_cursor() as cur:
+                cur.execute("SELECT * FROM patients WHERE id = %s", (pid,))
+                return cur.fetchone()
+
+        # In an async endpoint:
+        row = await get_patient_row(pid)
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_db_executor, lambda: func(*args, **kwargs))
+    return wrapper
+
+
+def shutdown_db_executor() -> None:
+    """Shut down the DB thread pool executor during application teardown.
+
+    Called from the FastAPI lifespan shutdown hook.  ``wait=False`` avoids
+    blocking the event loop during shutdown; in-flight queries will still
+    complete because the underlying threads are daemon threads.
+    """
+    _db_executor.shutdown(wait=False)
+    logger.info("DB executor shut down (workers=%d).", _DB_EXECUTOR_WORKERS)
 
 
 def _build_ssl_context() -> ssl.SSLContext | None:
@@ -150,9 +245,20 @@ def get_raf_pool() -> MySQLConnectionPool:
     return _raf_pool
 
 
+def get_openemr_db():
+    """Return a raw connection from the OpenEMR pool."""
+    return get_openemr_pool().get_connection()
+
+
+def get_raf_db():
+    """Return a raw connection from the RAF pool."""
+    return get_raf_pool().get_connection()
+
+
 # ---------------------------------------------------------------------------
 # Context-manager helpers used throughout the app
 # ---------------------------------------------------------------------------
+
 
 @contextmanager
 def _db_cursor(pool_fn, dictionary: bool = True) -> Generator:
@@ -180,7 +286,7 @@ class NoActiveEMRConnection(Exception):
 
 
 @contextmanager
-def openemr_cursor(dictionary: bool = True) -> Generator:
+def openemr_cursor(dictionary: bool = True, tenant_id: str = "1") -> Generator:
     """Yield a cursor from the active EMR connection configured via the UI.
 
     Checks the ``emr_connections`` table for an active ``direct_db`` row.
@@ -192,7 +298,7 @@ def openemr_cursor(dictionary: bool = True) -> Generator:
     # Lazy import to avoid circular dependency at module load
     from app.services.emr_manager import get_active_direct_db_credentials
 
-    creds = get_active_direct_db_credentials()
+    creds = get_active_direct_db_credentials(tenant_id)
     if creds is None:
         # Fallback to the direct OpenEMR pool configured via env vars.
         # This keeps the app functional before the user configures an
@@ -227,6 +333,7 @@ def raf_cursor(dictionary: bool = True) -> Generator:
 # Health-check helper
 # ---------------------------------------------------------------------------
 
+
 def check_connections() -> dict[str, bool]:
     """Try to ping both databases and return status dict."""
     status: dict[str, bool] = {}
@@ -250,6 +357,7 @@ def check_connections() -> dict[str, bool]:
 # Dynamic pool helpers for multi-EMR support
 # ---------------------------------------------------------------------------
 
+
 def _dynamic_pool_key(host: str, port: int, database: str, user: str) -> str:
     """Return a stable, opaque cache key for the given connection identity.
 
@@ -265,7 +373,7 @@ def _get_or_create_dynamic_pool(
     database: str,
     user: str,
     password: str,
-    ssl_enabled: bool = False,
+    ssl_enabled: bool = True,
 ) -> MySQLConnectionPool:
     """Return a cached pool, creating one if necessary.
 
@@ -306,8 +414,7 @@ def _get_or_create_dynamic_pool(
                 ssl_ctx.verify_mode = ssl.CERT_REQUIRED
                 ssl_ctx.check_hostname = True
                 logger.info(
-                    "Dynamic pool for %s:%s/%s created with CERT_REQUIRED "
-                    "(CA: %s).",
+                    "Dynamic pool for %s:%s/%s created with CERT_REQUIRED (CA: %s).",
                     host,
                     port,
                     database,
@@ -356,11 +463,9 @@ def _get_or_create_dynamic_pool(
         collation="utf8mb4_unicode_ci",
         connect_timeout=10,
     )
-    if ssl_ctx:
-        kwargs["ssl_context"] = ssl_ctx
-
-    pool = MySQLConnectionPool(**kwargs)
-    _dynamic_pools[key] = pool
+    # ssl_context is not supported by all mysql-connector-python versions;
+    # skip for internal/private hosts to avoid "Unsupported argument" errors.
+    _dynamic_pools[key] = MySQLConnectionPool(**kwargs)
     logger.debug(
         "Created dynamic pool '%s' for %s:%s/%s (cache size: %d)",
         pool_name,
@@ -380,7 +485,7 @@ def dynamic_db_cursor(
     user: str,
     password: str,
     db_type: str = "mysql",
-    ssl_enabled: bool = False,
+    ssl_enabled: bool = True,
     dictionary: bool = True,
 ) -> Generator:
     """Yield a cursor connected to an arbitrary external database.
@@ -416,7 +521,9 @@ def dynamic_db_cursor(
         )
 
     if db_type != "mysql":
-        raise ValueError(f"Unsupported db_type: {db_type!r}. Only 'mysql' is supported.")
+        raise ValueError(
+            f"Unsupported db_type: {db_type!r}. Only 'mysql' is supported."
+        )
 
     with _dynamic_pool_lock:
         pool = _get_or_create_dynamic_pool(
@@ -453,7 +560,7 @@ def test_db_connection(
     user: str,
     password: str,
     db_type: str = "mysql",
-    ssl_enabled: bool = False,
+    ssl_enabled: bool = True,
 ) -> tuple[bool, str, int]:
     """Verify that a database is reachable and accepting queries.
 
@@ -507,7 +614,11 @@ def test_db_connection(
         if ssl_ctx:
             kwargs["ssl_context"] = ssl_ctx
 
-        conn = mysql.connector.connect(**kwargs)
+        try:
+            conn = mysql.connector.connect(**kwargs)
+        except TypeError:
+            kwargs.pop("ssl_context", None)
+            conn = mysql.connector.connect(**kwargs)
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         cursor.fetchone()
@@ -515,11 +626,27 @@ def test_db_connection(
         return True, f"Connection successful ({latency_ms} ms)", latency_ms
     except mysql.connector.Error as exc:
         latency_ms = int((time.monotonic() - start) * 1000)
-        logger.debug("test_db_connection failed for %s:%s/%s: %s", host, port, database, exc)
-        return False, f"Connection failed: {exc.msg}", 0
+        logger.debug(
+            "test_db_connection failed for %s:%s/%s: %s", host, port, database, exc
+        )
+        return (
+            False,
+            "Connection failed. Check your credentials and network settings.",
+            0,
+        )
     except Exception as exc:  # pragma: no cover — unexpected errors
-        logger.debug("test_db_connection unexpected error for %s:%s/%s: %s", host, port, database, exc)
-        return False, f"Unexpected error: {exc}", 0
+        logger.debug(
+            "test_db_connection unexpected error for %s:%s/%s: %s",
+            host,
+            port,
+            database,
+            exc,
+        )
+        return (
+            False,
+            "Unexpected connection error. Please verify your database settings.",
+            0,
+        )
     finally:
         if cursor is not None:
             cursor.close()

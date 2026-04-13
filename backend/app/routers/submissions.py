@@ -157,6 +157,8 @@ def generate_submission(
 
     Run POST /api/submissions/batches/{id}/validate before submitting.
     """
+    from fastapi.responses import JSONResponse
+
     tenant_id = _tenant(current_user)
     try:
         if body.file_type == "RAPS":
@@ -178,6 +180,15 @@ def generate_submission(
     except RuntimeError as exc:
         logger.error("generate_submission error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+    if result.get("duplicate"):
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                **{k: (str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v) for k, v in result.items()},
+                "message": "Submission already exists for this data set",
+            },
+        )
 
     return result
 

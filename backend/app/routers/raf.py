@@ -49,7 +49,7 @@ from app.services.openemr_connector import (
     get_all_patients,
     get_patient_count,
 )
-from app.db import raf_cursor
+from app.db import raf_cursor, run_in_db_executor
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
 from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
@@ -189,7 +189,7 @@ class CalculateRequest(BaseModel):
 
 @router.post("/calculate/{pid}", summary="Calculate RAF score for a patient")
 @limiter.limit("10/minute")
-def calculate_raf(
+async def calculate_raf(
     request: Request,
     pid: int,
     body: CalculateRequest = CalculateRequest(),
@@ -219,8 +219,13 @@ def calculate_raf(
 
     Response includes `blend_weights`, `v24_score`, `v28_score`, `new_enrollee`,
     `frailty_addend`, `sweep_period`, and all standard fields.
+
+    Converted to ``async def`` — ``calculate_raf_score`` does multiple
+    synchronous MySQL round-trips (patient fetch, ICD-10 lookup, score persist).
+    Dispatching via ``run_in_db_executor`` keeps the event loop responsive under
+    concurrent calculation requests.
     """
-    patient = get_patient(pid)
+    patient = await run_in_db_executor(get_patient, pid)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
@@ -240,8 +245,8 @@ def calculate_raf(
         body.sweep_period if body.sweep_period and body.sweep_period != "none" else None
     )
 
-    try:
-        result = calculate_raf_score(
+    def _run_calculation() -> dict:
+        return calculate_raf_score(
             patient_id=pid,
             measurement_year=calc_year,
             enrollment_override=enrollment_override,
@@ -252,6 +257,9 @@ def calculate_raf(
             plan_type=body.plan_type,
             tenant_id=tenant_id,
         )
+
+    try:
+        result = await run_in_db_executor(_run_calculation)
     except Exception as exc:
         logger.error("calculate_raf error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -383,7 +391,7 @@ def calculate_all(
 
 
 @router.get("/scores/{pid}", summary="Get stored RAF score for a patient")
-def get_scores(
+async def get_scores(
     pid: int,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
@@ -395,13 +403,19 @@ def get_scores(
 
     If *year* is omitted, defaults to the current year. Use
     GET /api/raf/scores/{pid}/history for scores across all years.
+
+    Converted to ``async def`` — the patient existence check and the
+    ``raf_scores`` SELECT are both dispatched to the dedicated DB thread pool
+    so neither blocks the event loop.
     """
-    patient = get_patient(pid)
+    patient = await run_in_db_executor(get_patient, pid)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
     calc_year = year or date.today().year
-    try:
+    _tid = int(tenant_id)
+
+    def _fetch_score() -> dict | None:
         with raf_cursor() as cur:
             cur.execute(
                 f"""
@@ -416,9 +430,12 @@ def get_scores(
                 ORDER BY calculated_at DESC
                 LIMIT 1
                 """,
-                (pid, calc_year, int(tenant_id)),
+                (pid, calc_year, _tid),
             )
-            row = cur.fetchone()
+            return cur.fetchone()
+
+    try:
+        row = await run_in_db_executor(_fetch_score)
     except Exception as exc:
         logger.error("get_scores db error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -456,7 +473,7 @@ def get_scores(
 @router.get(
     "/scores/{pid}/breakdown", summary="Detailed HCC breakdown with MEAT status"
 )
-def get_breakdown(
+async def get_breakdown(
     pid: int,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
@@ -469,15 +486,19 @@ def get_breakdown(
       - Per-HCC contributions with ICD-10 codes
       - MEAT documentation status for each HCC
       - Model version and blend info for the stored score
+
+    Converted to ``async def`` — patient lookup and ``get_raf_breakdown``
+    both touch MySQL; dispatching them to the DB executor prevents event-loop
+    stalls on the highest-traffic HCC detail endpoint.
     """
-    patient = get_patient(pid)
+    patient = await run_in_db_executor(get_patient, pid)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
     logger.debug("get_breakdown pid=%s tenant=%s user=%s", pid, tenant_id, current_user.get("id"))
     calc_year = year or date.today().year
     try:
-        breakdown = get_raf_breakdown(pid, calc_year, tenant_id=tenant_id)
+        breakdown = await run_in_db_executor(get_raf_breakdown, pid, calc_year, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("get_breakdown error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -808,16 +829,34 @@ def population_summary(
 
     v24_w, v28_w = _BLEND_WEIGHTS.get(calc_year, (0.0, 1.0))
 
+    # patients_with_gaps & hcc_capture_rate for frontend
+    patients_with_gaps = 0
+    hcc_capture_rate = 0.0
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(DISTINCT patient_id) AS cnt FROM care_gap_tasks WHERE tenant_id = %s AND status != 'resolved'",
+                (tenant_id,),
+            )
+            patients_with_gaps = cur.fetchone()["cnt"]
+            if total_patients:
+                hcc_capture_rate = round(patients_with_scores / total_patients * 100, 1)
+    except Exception:
+        pass
+
     return {
-        "measurement_year": calc_year,
-        "blend_weights": {"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
-        "score_type_breakdown": dict(score_type_counts),
+        "year": calc_year,
         "total_patients": total_patients,
         "patients_with_scores": patients_with_scores,
-        "average_raf": average_raf,
-        "median_raf": median_raf,
+        "average_raf_score": average_raf,
+        "median_raf_score": median_raf,
+        "patients_with_gaps": patients_with_gaps,
+        "hcc_capture_rate": hcc_capture_rate,
+        "total_revenue_opportunity": 0,
         "raf_distribution": raf_distribution,
         "top_hccs": top_hccs,
+        "blend_weights": {"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
+        "score_type_breakdown": dict(score_type_counts),
     }
 
 

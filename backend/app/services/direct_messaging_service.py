@@ -44,6 +44,7 @@ DIRECT_SMTP_HOST, DIRECT_SMTP_PORT, DIRECT_SMTP_USER,
 DIRECT_SMTP_PASSWORD, DIRECT_IMAP_HOST, DIRECT_IMAP_PORT,
 DIRECT_IMAP_USER, DIRECT_IMAP_PASSWORD
 """
+
 from __future__ import annotations
 
 import base64
@@ -79,10 +80,15 @@ _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="direct_msg")
 
 try:
     from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, hmac as crypto_hmac, serialization
+    from cryptography.hazmat.primitives import (
+        hashes,
+        hmac as crypto_hmac,
+        serialization,
+    )
     from cryptography.hazmat.primitives.asymmetric import padding as asym_padding, rsa
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     from cryptography.x509.oid import NameOID
+
     _CRYPTO_AVAILABLE = True
 except ImportError:
     _CRYPTO_AVAILABLE = False
@@ -97,6 +103,7 @@ except ImportError:
 # Key-encryption helpers (private keys at rest)
 # ---------------------------------------------------------------------------
 
+
 def _derive_kek() -> bytes:
     """
     Derive a 32-byte key-encryption key from the application JWT secret.
@@ -104,7 +111,11 @@ def _derive_kek() -> bytes:
     Uses SHA-256 so the output length is always exactly 32 bytes regardless
     of the secret length.
     """
-    secret = os.getenv("JWT_SECRET", "change-me-in-production")
+    secret = os.getenv("JWT_SECRET")
+    if not secret:
+        raise RuntimeError(
+            "JWT_SECRET environment variable must be set for Direct messaging key encryption"
+        )
     return hashlib.sha256(secret.encode()).digest()
 
 
@@ -134,6 +145,7 @@ def _decrypt_private_key(encrypted_b64: str) -> bytes:
 # Certificate generation
 # ---------------------------------------------------------------------------
 
+
 def generate_self_signed_certificate(
     direct_address: str,
     display_name: str,
@@ -161,10 +173,12 @@ def generate_self_signed_certificate(
 
     key = crsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-    subject = issuer = cx509.Name([
-        cx509.NameAttribute(NameOID.COMMON_NAME, display_name or direct_address),
-        cx509.NameAttribute(NameOID.EMAIL_ADDRESS, direct_address),
-    ])
+    subject = issuer = cx509.Name(
+        [
+            cx509.NameAttribute(NameOID.COMMON_NAME, display_name or direct_address),
+            cx509.NameAttribute(NameOID.EMAIL_ADDRESS, direct_address),
+        ]
+    )
 
     cert = (
         cx509.CertificateBuilder()
@@ -173,7 +187,9 @@ def generate_self_signed_certificate(
         .public_key(key.public_key())
         .serial_number(cx509.random_serial_number())
         .not_valid_before(_dt.datetime.now(_dt.timezone.utc))
-        .not_valid_after(_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=valid_days))
+        .not_valid_after(
+            _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=valid_days)
+        )
         .add_extension(
             cx509.SubjectAlternativeName([cx509.RFC822Name(direct_address)]),
             critical=False,
@@ -209,6 +225,7 @@ def generate_self_signed_certificate(
 # S/MIME helpers
 # ---------------------------------------------------------------------------
 
+
 def _sign_message(
     payload: bytes,
     cert_pem: str,
@@ -239,7 +256,10 @@ def _sign_message(
             pkcs7.PKCS7SignatureBuilder()
             .set_data(payload)
             .add_signer(cert, private_key, hashes.SHA256())
-            .sign(serialization.Encoding.DER, options=[pkcs7.PKCS7Options.DetachedSignature])
+            .sign(
+                serialization.Encoding.DER,
+                options=[pkcs7.PKCS7Options.DetachedSignature],
+            )
         )
         return signed
     except Exception as exc:
@@ -309,6 +329,7 @@ def _decrypt_message(
 # Trust anchor validation
 # ---------------------------------------------------------------------------
 
+
 def validate_sender_certificate(
     sender_cert_pem: str,
     tenant_id: str,
@@ -321,7 +342,9 @@ def validate_sender_certificate(
     production, full chain validation with CRL/OCSP should be implemented.
     """
     if not _CRYPTO_AVAILABLE:
-        logger.warning("Certificate validation skipped — cryptography package unavailable")
+        logger.warning(
+            "Certificate validation skipped — cryptography package unavailable"
+        )
         return True  # Fail-open during development
 
     try:
@@ -361,6 +384,7 @@ def validate_sender_certificate(
 # ---------------------------------------------------------------------------
 # Database helpers — trust anchors
 # ---------------------------------------------------------------------------
+
 
 def list_trust_anchors(tenant_id: str) -> list[dict[str, Any]]:
     """Return all trust anchors for the given tenant."""
@@ -416,8 +440,12 @@ def create_trust_anchor(
             VALUES (%s, %s, %s, %s, %s, 'trusted', %s)
             """,
             (
-                tenant_id, name, organization, certificate_pem,
-                trust_bundle_url, expires_at,
+                tenant_id,
+                name,
+                organization,
+                certificate_pem,
+                trust_bundle_url,
+                expires_at,
             ),
         )
         return cur.lastrowid
@@ -426,6 +454,7 @@ def create_trust_anchor(
 # ---------------------------------------------------------------------------
 # Database helpers — Direct addresses
 # ---------------------------------------------------------------------------
+
 
 def list_direct_addresses(tenant_id: str) -> list[dict[str, Any]]:
     """Return all Direct addresses for the tenant (private key excluded)."""
@@ -495,8 +524,14 @@ def create_direct_address(
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending_verification')
             """,
             (
-                tenant_id, user_id, provider_npi, direct_address,
-                display_name, cert_pem, encrypted_key, trust_anchor_id,
+                tenant_id,
+                user_id,
+                provider_npi,
+                direct_address,
+                display_name,
+                cert_pem,
+                encrypted_key,
+                trust_anchor_id,
             ),
         )
         return cur.lastrowid
@@ -514,8 +549,13 @@ def update_direct_address(
     Returns True if a row was updated.
     """
     allowed = {
-        "display_name", "provider_npi", "status", "certificate_pem",
-        "private_key_encrypted", "trust_anchor_id", "verified_at",
+        "display_name",
+        "provider_npi",
+        "status",
+        "certificate_pem",
+        "private_key_encrypted",
+        "trust_anchor_id",
+        "verified_at",
     }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
@@ -537,10 +577,13 @@ def update_direct_address(
 # Database helpers — messages
 # ---------------------------------------------------------------------------
 
+
 def _row_to_message(row: dict[str, Any]) -> dict[str, Any]:
     """Sanitise a raw DB row for API consumption."""
     return {k: v for k, v in row.items() if k not in ("error_message",)} | {
-        "error_message": row.get("error_message") if row.get("status") == "failed" else None
+        "error_message": row.get("error_message")
+        if row.get("status") == "failed"
+        else None
     }
 
 
@@ -686,9 +729,17 @@ def _create_message_record(
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                tenant_id, direction, from_address, to_address, subject,
-                body, int(has_attachments), patient_id,
-                message_id_header, in_reply_to, status,
+                tenant_id,
+                direction,
+                from_address,
+                to_address,
+                subject,
+                body,
+                int(has_attachments),
+                patient_id,
+                message_id_header,
+                in_reply_to,
+                status,
             ),
         )
         return cur.lastrowid
@@ -732,8 +783,13 @@ def _insert_attachment(
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                tenant_id, db_message_id, filename, content_type,
-                file_size, file_path, attachment_type,
+                tenant_id,
+                db_message_id,
+                filename,
+                content_type,
+                file_size,
+                file_path,
+                attachment_type,
             ),
         )
         return cur.lastrowid
@@ -742,6 +798,7 @@ def _insert_attachment(
 # ---------------------------------------------------------------------------
 # SMTP delivery
 # ---------------------------------------------------------------------------
+
 
 def _get_smtp_config() -> dict[str, Any]:
     return {
@@ -784,7 +841,9 @@ def _deliver_smtp(
         )
         logger.info(
             "direct_messaging: message %d delivered from %s to %s",
-            db_message_id, from_address, to_address,
+            db_message_id,
+            from_address,
+            to_address,
         )
     except Exception as exc:
         error_msg = str(exc)[:1000]
@@ -795,13 +854,15 @@ def _deliver_smtp(
         )
         logger.error(
             "direct_messaging: SMTP delivery failed for message %d: %s",
-            db_message_id, exc,
+            db_message_id,
+            exc,
         )
 
 
 # ---------------------------------------------------------------------------
 # Public send API
 # ---------------------------------------------------------------------------
+
 
 def send_direct_message(
     tenant_id: str,
@@ -982,6 +1043,7 @@ def _build_mime_message(
 # Inbound message processing (IMAP)
 # ---------------------------------------------------------------------------
 
+
 def _get_imap_config() -> dict[str, Any]:
     return {
         "host": os.getenv("DIRECT_IMAP_HOST", ""),
@@ -1037,7 +1099,9 @@ def fetch_inbound_messages(tenant_id: str) -> list[dict[str, Any]]:
                     # Mark as seen in IMAP
                     imap.store(uid, "+FLAGS", "\\Seen")
             except Exception as exc:
-                logger.error("direct_messaging: error processing IMAP message %s: %s", uid, exc)
+                logger.error(
+                    "direct_messaging: error processing IMAP message %s: %s", uid, exc
+                )
                 continue
 
         imap.logout()
@@ -1081,13 +1145,17 @@ def _process_inbound_raw(
                 ct = part.get_content_type()
                 disp = part.get("Content-Disposition", "")
                 if ct == "text/plain" and "attachment" not in disp:
-                    body = part.get_payload(decode=True).decode("utf-8", errors="replace")
+                    body = part.get_payload(decode=True).decode(
+                        "utf-8", errors="replace"
+                    )
                 elif "attachment" in disp or part.get_filename():
-                    attachments.append({
-                        "filename": part.get_filename() or "attachment",
-                        "content_type": ct,
-                        "content": part.get_payload(decode=True) or b"",
-                    })
+                    attachments.append(
+                        {
+                            "filename": part.get_filename() or "attachment",
+                            "content_type": ct,
+                            "content": part.get_payload(decode=True) or b"",
+                        }
+                    )
         else:
             body = msg.get_payload(decode=True).decode("utf-8", errors="replace")
 
@@ -1156,6 +1224,7 @@ def _decode_header_value(value: str) -> str:
 # C-CDA auto-parse integration
 # ---------------------------------------------------------------------------
 
+
 def _parse_ccda_attachment(
     attachment_db_id: int,
     content: bytes,
@@ -1193,13 +1262,15 @@ def _parse_ccda_attachment(
     except Exception as exc:
         logger.error(
             "direct_messaging: C-CDA parse failed for attachment %d: %s",
-            attachment_db_id, exc,
+            attachment_db_id,
+            exc,
         )
 
 
 # ---------------------------------------------------------------------------
 # Address book / directory lookup
 # ---------------------------------------------------------------------------
+
 
 def lookup_direct_address(address: str, tenant_id: str) -> dict[str, Any] | None:
     """
@@ -1249,6 +1320,7 @@ def search_address_book(
 # MDN — Message Disposition Notifications
 # ---------------------------------------------------------------------------
 
+
 def process_mdn(raw_mdn: bytes, tenant_id: str) -> bool:
     """
     Parse an incoming MDN and update the corresponding outbound message status.
@@ -1265,7 +1337,9 @@ def process_mdn(raw_mdn: bytes, tenant_id: str) -> bool:
         if not original_id:
             return False
 
-        disposition = "delivered"  # Assume positive MDN; parse body for errors if needed
+        disposition = (
+            "delivered"  # Assume positive MDN; parse body for errors if needed
+        )
 
         with raf_cursor() as cur:
             cur.execute(
@@ -1281,7 +1355,8 @@ def process_mdn(raw_mdn: bytes, tenant_id: str) -> bool:
         if updated:
             logger.info(
                 "direct_messaging: MDN processed for message_id=%s → %s",
-                original_id, disposition,
+                original_id,
+                disposition,
             )
         return updated
     except Exception as exc:
@@ -1292,6 +1367,7 @@ def process_mdn(raw_mdn: bytes, tenant_id: str) -> bool:
 # ---------------------------------------------------------------------------
 # Dashboard statistics
 # ---------------------------------------------------------------------------
+
 
 def get_dashboard_stats(tenant_id: str) -> dict[str, Any]:
     """

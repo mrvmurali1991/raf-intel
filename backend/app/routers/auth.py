@@ -249,7 +249,9 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
             response_status=401,
             details={"email": body.email, "reason": str(exc)},
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
 
     log_audit(
         action="login_success",
@@ -790,4 +792,123 @@ def get_audit_log(
     return {
         "count": len(rows),
         "entries": [_serialize_row(r) for r in rows],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tenant switcher (super-admin only)
+# ---------------------------------------------------------------------------
+
+
+class SwitchTenantRequest(BaseModel):
+    tenant_id: str
+
+
+@router.get("/tenants", summary="List all tenants (admin only)")
+def list_tenants(
+    current_user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """Return all distinct tenants with metadata for the tenant switcher."""
+    with raf_cursor() as cur:
+        cur.execute("""
+            SELECT
+                p.tenant_id,
+                COALESCE(e.display_name, CONCAT('Tenant ', p.tenant_id)) AS name,
+                COUNT(DISTINCT p.id) AS patient_count,
+                COUNT(DISTINCT u.id) AS user_count
+            FROM patients p
+            LEFT JOIN emr_connections e ON e.tenant_id = p.tenant_id AND e.is_active = 1
+            LEFT JOIN users u ON u.tenant_id = p.tenant_id AND u.is_active = 1
+            GROUP BY p.tenant_id, e.display_name
+            ORDER BY p.tenant_id
+        """)
+        rows = cur.fetchall()
+
+    tenants = []
+    for row in rows:
+        tenants.append(
+            {
+                "tenant_id": str(row["tenant_id"]),
+                "name": row["name"],
+                "patient_count": row["patient_count"],
+                "user_count": row["user_count"],
+            }
+        )
+
+    # Include tenants that have no patients but have users
+    seen = {t["tenant_id"] for t in tenants}
+    with raf_cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT tenant_id FROM users WHERE is_active = 1
+        """)
+        for row in cur.fetchall():
+            tid = str(row["tenant_id"])
+            if tid not in seen:
+                tenants.append(
+                    {
+                        "tenant_id": tid,
+                        "name": f"Tenant {tid}",
+                        "patient_count": 0,
+                        "user_count": 0,
+                    }
+                )
+
+    return {
+        "tenants": tenants,
+        "current_tenant_id": str(current_user.get("tenant_id", "1")),
+    }
+
+
+@router.post("/switch-tenant", summary="Switch active tenant (admin only)")
+def switch_tenant(
+    body: SwitchTenantRequest,
+    current_user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """
+    Issue a new access token scoped to a different tenant.
+    Only admins can switch tenants. The user record stays on their
+    original tenant — only the JWT tenant_id claim changes.
+    """
+    target_tid = body.tenant_id
+
+    # Verify target tenant exists
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM users WHERE tenant_id = %s AND is_active = 1",
+            (target_tid,),
+        )
+        if cur.fetchone()["cnt"] == 0:
+            # Also check patients table
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM patients WHERE tenant_id = %s",
+                (target_tid,),
+            )
+            if cur.fetchone()["cnt"] == 0:
+                raise HTTPException(
+                    status_code=404, detail=f"Tenant {target_tid} not found"
+                )
+
+    from app.services.auth_service import create_access_token
+
+    # Issue new token with switched tenant
+    new_token = create_access_token(
+        user_id=current_user["id"],
+        email=current_user["email"],
+        role=current_user["role"],
+        tenant_id=target_tid,
+        session_id=current_user.get("session_id", ""),
+    )
+
+    log_audit(
+        user_id=current_user["id"],
+        action="switch_tenant",
+        resource_type="tenant",
+        resource_id=target_tid,
+        details=f"Switched from tenant {current_user.get('tenant_id')} to {target_tid}",
+    )
+
+    return {
+        "access_token": new_token,
+        "tenant_id": target_tid,
+        "message": f"Switched to tenant {target_tid}",
     }

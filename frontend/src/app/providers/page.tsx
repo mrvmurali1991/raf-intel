@@ -32,6 +32,7 @@ import {
   FileDown,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
+import { initialsColor } from "@/lib/ui-utils";
 import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
 
 // ── API base ──────────────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ async function getProviderSummary() {
   return data as {
     total_providers: number;
     avg_capture_rate: number;
-    avg_raf_score: number;
+    average_raf_score: number;
     total_revenue_opportunity: number;
     avg_meat_completeness: number;
   };
@@ -126,7 +127,7 @@ type ProviderRow = {
   practice_name: string | null;
   npi: string | null;
   patient_count: number;
-  avg_raf_score: number | null;
+  average_raf_score: number | null;
   hcc_capture_rate: number | null;
   recapture_rate: number | null;
   meat_score: number | null;
@@ -196,7 +197,7 @@ type DiscoveredProvider = {
 type SortField =
   | "name"
   | "patient_count"
-  | "avg_raf_score"
+  | "average_raf_score"
   | "hcc_capture_rate"
   | "recapture_rate"
   | "meat_score"
@@ -238,16 +239,6 @@ function captureBg(rate: number | null): string {
   if (rate >= 0.85) return C.emeraldLight;
   if (rate >= 0.70) return C.amberLight;
   return C.redLight;
-}
-
-function initialsColor(name: string): string {
-  const palette = [
-    "#2563EB","#7C3AED","#DB2777","#DC2626",
-    "#EA580C","#D97706","#059669","#0891B2",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return palette[Math.abs(hash) % palette.length];
 }
 
 // ── Capture Rate Badge ────────────────────────────────────────────────────────
@@ -1563,9 +1554,9 @@ export default function ProvidersPage() {
           av = a.patient_count;
           bv = b.patient_count;
           break;
-        case "avg_raf_score":
-          av = a.avg_raf_score ?? 0;
-          bv = b.avg_raf_score ?? 0;
+        case "average_raf_score":
+          av = a.average_raf_score ?? 0;
+          bv = b.average_raf_score ?? 0;
           break;
         case "hcc_capture_rate":
           av = a.hcc_capture_rate ?? 0;
@@ -1607,7 +1598,7 @@ export default function ProvidersPage() {
       "Name": providerName(p),
       "Specialty": p.specialty,
       "Patient Count": p.patient_count,
-      "Avg RAF": p.avg_raf_score != null ? Number(p.avg_raf_score).toFixed(2) : "",
+      "Avg RAF": p.average_raf_score != null ? Number(p.average_raf_score).toFixed(2) : "",
       "Capture Rate": p.hcc_capture_rate != null ? `${Math.round(p.hcc_capture_rate * 100)}%` : "",
     })), "providers");
   }
@@ -1769,7 +1760,7 @@ export default function ProvidersPage() {
           <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "120ms" }}>
           <StatCard
             label="Avg RAF Score"
-            value={summary ? fmtN(summary.avg_raf_score, 3) : "—"}
+            value={summary ? fmtN(summary.average_raf_score, 3) : "—"}
             subtitle="Population average"
             icon={<TrendingUp size={18} />}
             color={C.amber}
@@ -1982,11 +1973,11 @@ export default function ProvidersPage() {
                   </div>
                 </th>
                 <th
-                  style={thStyle("avg_raf_score")}
-                  onClick={() => handleSort("avg_raf_score")}
+                  style={thStyle("average_raf_score")}
+                  onClick={() => handleSort("average_raf_score")}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    Avg RAF <SortIcon field="avg_raf_score" activeField={sortField} activeDir={sortDir} />
+                    Avg RAF <SortIcon field="average_raf_score" activeField={sortField} activeDir={sortDir} />
                   </div>
                 </th>
                 <th
@@ -2149,7 +2140,7 @@ export default function ProvidersPage() {
                         </td>
                         {/* Avg RAF */}
                         <td style={{ padding: "12px 12px", fontWeight: 600, color: C.text }}>
-                          {fmtN(row.avg_raf_score, 3)}
+                          {fmtN(row.average_raf_score, 3)}
                         </td>
                         {/* HCC Capture */}
                         <td style={{ padding: "12px 12px" }}>

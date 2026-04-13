@@ -6,3 +6,7 @@
 __pycache__/
 .venv/
 *.pyc
+
+# Ignore sensitive key files
+*.phi_key
+*.phi_aes256_key

@@ -710,12 +710,14 @@ def _store_message(
     processed_data: dict | None = None,
 ) -> int:
     """Insert a row into adt_messages and return the new ``id``."""
-    # Obtain tenant_id from the connection row
-    try:
-        conn_row = get_connection(connection_id)
-        tenant_id = conn_row["tenant_id"] if conn_row else "default"
-    except Exception:
-        tenant_id = "default"
+    # Obtain tenant_id from the connection row — fail loud if not resolvable.
+    conn_row = get_connection(connection_id)
+    if not conn_row or not conn_row.get("tenant_id"):
+        raise ValueError(
+            f"_store_adt_message: cannot resolve tenant_id for connection {connection_id} — "
+            "refusing to store ADT message without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id = conn_row["tenant_id"]
 
     with raf_cursor() as cur:
         cur.execute(

@@ -39,7 +39,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id
 from app.db import raf_cursor
 from app.services.meat_validator import validate_meat, validate_meat_batch
 
@@ -117,7 +117,7 @@ def validate_single(
 @router.post("/run-for-patient/{patient_id}", response_model=RunForPatientResponse)
 def run_for_patient(
     patient_id: int,
-    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> RunForPatientResponse:
     """
     Run MEAT validation across every HCC assigned to *patient_id*,
@@ -127,11 +127,6 @@ def run_for_patient(
     TODO: replace this with an async celery/cron batch job so the
     HTTP request is not blocked on per-HCC NLP work.
     """
-    tenant_id = getattr(current_user, "tenant_id", None)
-    if tenant_id is None and isinstance(current_user, dict):
-        tenant_id = current_user.get("tenant_id", 1)
-    if tenant_id is None:
-        tenant_id = 1
 
     try:
         # 1. Fetch most-recent note for the patient (tenant-scoped).

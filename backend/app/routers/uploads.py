@@ -64,32 +64,93 @@ SHEET_MEAT = "MEAT_Evidence"
 SHEET_SUSPECTS = "Suspect_Conditions"
 
 PATIENTS_COLUMNS = [
-    "mrn", "first_name", "middle_name", "last_name", "dob", "sex", "birth_sex",
-    "gender_identity", "pronouns", "race", "ethnicity", "preferred_language",
-    "phone", "email", "address", "city", "state", "zip", "ssn", "mbi",
-    "insurance_type", "emergency_contact_name", "emergency_contact_phone",
-    "pcp_provider", "measurement_year",
+    "mrn",
+    "first_name",
+    "middle_name",
+    "last_name",
+    "dob",
+    "sex",
+    "birth_sex",
+    "gender_identity",
+    "pronouns",
+    "race",
+    "ethnicity",
+    "preferred_language",
+    "phone",
+    "email",
+    "address",
+    "city",
+    "state",
+    "zip",
+    "ssn",
+    "mbi",
+    "insurance_type",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+    "pcp_provider",
+    "measurement_year",
 ]
 HCC_COLUMNS = [
-    "mrn", "measurement_year", "hcc_code", "icd10_code",
-    "diagnosis_description", "raf_coefficient", "meat_status",
+    "mrn",
+    "measurement_year",
+    "hcc_code",
+    "icd10_code",
+    "diagnosis_description",
+    "raf_coefficient",
+    "meat_status",
 ]
 MEAT_COLUMNS = [
-    "mrn", "hcc_code", "encounter_date", "meat_m", "meat_e", "meat_a",
-    "meat_t", "raw_note_excerpt",
+    "mrn",
+    "hcc_code",
+    "encounter_date",
+    "meat_m",
+    "meat_e",
+    "meat_a",
+    "meat_t",
+    "raw_note_excerpt",
 ]
 SUSPECTS_COLUMNS = [
-    "mrn", "measurement_year", "suspect_hcc", "suspect_icd10", "evidence_type",
-    "evidence_detail", "confidence_score", "rationale",
+    "mrn",
+    "measurement_year",
+    "suspect_hcc",
+    "suspect_icd10",
+    "evidence_type",
+    "evidence_detail",
+    "confidence_score",
+    "rationale",
 ]
 
 # DB column list for `patients` inserts — defined once so we don't duplicate.
 PATIENT_DB_INSERT_COLUMNS = [
-    "mrn", "first_name", "middle_name", "last_name", "dob", "sex", "birth_sex",
-    "gender_identity", "pronouns", "race", "ethnicity", "preferred_language",
-    "phone", "email", "address", "city", "state", "zip", "ssn", "mbi",
-    "insurance_type", "emergency_contact_name", "emergency_contact_phone",
-    "source", "status", "is_active", "tenant_id", "data_source", "upload_id",
+    "mrn",
+    "first_name",
+    "middle_name",
+    "last_name",
+    "dob",
+    "sex",
+    "birth_sex",
+    "gender_identity",
+    "pronouns",
+    "race",
+    "ethnicity",
+    "preferred_language",
+    "phone",
+    "email",
+    "address",
+    "city",
+    "state",
+    "zip",
+    "ssn",
+    "mbi",
+    "insurance_type",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+    "source",
+    "status",
+    "is_active",
+    "tenant_id",
+    "data_source",
+    "upload_id",
 ]
 
 _VALID_MEAT_STATUS = {"complete", "partial", "missing"}
@@ -99,6 +160,7 @@ _VALID_EVIDENCE_TYPE = {"medication", "lab", "imaging", "referral", "historical"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _norm_header(v: Any) -> str:
     if v is None:
@@ -237,6 +299,7 @@ def _age_band(age: int | None) -> str:
 # Multi-sheet importer
 # ---------------------------------------------------------------------------
 
+
 def _is_multi_sheet_template(wb) -> bool:
     names = set(wb.sheetnames)
     return SHEET_PATIENTS in names and SHEET_HCC in names
@@ -307,13 +370,12 @@ def _import_multi_sheet(
 
         # Build the list of updatable columns (everything except keys).
         update_cols = [
-            c for c in PATIENT_DB_INSERT_COLUMNS
+            c
+            for c in PATIENT_DB_INSERT_COLUMNS
             if c not in ("mrn", "tenant_id", "is_active")
         ]
         update_set = ", ".join(f"`{c}` = %s" for c in update_cols)
-        patient_update_sql = (
-            f"UPDATE patients SET {update_set} WHERE id = %s"
-        )
+        patient_update_sql = f"UPDATE patients SET {update_set} WHERE id = %s"
 
         current_year = datetime.utcnow().year
 
@@ -358,12 +420,12 @@ def _import_multi_sheet(
                     (_cell_str(raw.get("insurance_type"))[:50] or None),
                     (_cell_str(raw.get("emergency_contact_name"))[:200] or None),
                     (_cell_str(raw.get("emergency_contact_phone"))[:20] or None),
-                    "excel",          # source
-                    "active",         # status
-                    1,                # is_active
-                    str(tenant_id),   # tenant_id
-                    "upload",         # data_source
-                    upload_id,        # upload_id
+                    "excel",  # source
+                    "active",  # status
+                    1,  # is_active
+                    str(tenant_id),  # tenant_id
+                    "upload",  # data_source
+                    upload_id,  # upload_id
                 ]
 
                 # Look up existing patient by (tenant_id, mrn).
@@ -413,7 +475,9 @@ def _import_multi_sheet(
                     )
                     continue
                 pid = mrn_to_pid[mrn]
-                year = _parse_int(raw.get("measurement_year"), pid_to_year.get(pid, current_year))
+                year = _parse_int(
+                    raw.get("measurement_year"), pid_to_year.get(pid, current_year)
+                )
                 hcc_code = _parse_int(raw.get("hcc_code"))
                 if hcc_code <= 0:
                     errors.append(f"HCC_Conditions row {idx}: invalid hcc_code")
@@ -469,7 +533,13 @@ def _import_multi_sheet(
                                tenant_id = %s
                          WHERE id = %s
                         """,
-                        (json.dumps(merged), raf_coef, meat_status, str(tenant_id), phcc_id),
+                        (
+                            json.dumps(merged),
+                            raf_coef,
+                            meat_status,
+                            str(tenant_id),
+                            phcc_id,
+                        ),
                     )
                 else:
                     cur.execute(
@@ -479,8 +549,16 @@ def _import_multi_sheet(
                              source_encounter_ids, raf_coefficient, meat_status, tenant_id)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """,
-                        (pid, year, hcc_code, icd10_json, src_enc_json,
-                         raf_coef, meat_status, str(tenant_id)),
+                        (
+                            pid,
+                            year,
+                            hcc_code,
+                            icd10_json,
+                            src_enc_json,
+                            raf_coef,
+                            meat_status,
+                            str(tenant_id),
+                        ),
                     )
                     phcc_id = int(cur.lastrowid)
                     hcc_inserted += 1
@@ -529,8 +607,20 @@ def _import_multi_sheet(
                          completeness_score, raw_note_excerpt)
                     VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (phcc_id, enc_date, m or None, e or None, a or None, t or None,
-                     m_p, e_p, a_p, t_p, completeness, excerpt),
+                    (
+                        phcc_id,
+                        enc_date,
+                        m or None,
+                        e or None,
+                        a or None,
+                        t or None,
+                        m_p,
+                        e_p,
+                        a_p,
+                        t_p,
+                        completeness,
+                        excerpt,
+                    ),
                 )
                 meat_inserted += 1
             except Exception as exc:
@@ -546,7 +636,9 @@ def _import_multi_sheet(
                     )
                     continue
                 pid = mrn_to_pid[mrn]
-                year = _parse_int(raw.get("measurement_year"), pid_to_year.get(pid, current_year))
+                year = _parse_int(
+                    raw.get("measurement_year"), pid_to_year.get(pid, current_year)
+                )
                 suspect_hcc = _parse_int(raw.get("suspect_hcc"))
                 suspect_icd = _cell_str(raw.get("suspect_icd10")).upper()[:10]
                 ev_type = _cell_str(raw.get("evidence_type")).lower()
@@ -565,9 +657,19 @@ def _import_multi_sheet(
                          tenant_id, hcc_coefficient, confidence, rationale)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 'open', %s, %s, %s, %s)
                     """,
-                    (pid, year, suspect_hcc, suspect_icd or "N/A",
-                     ev_type, ev_detail_json, confidence, str(tenant_id),
-                     0.15, confidence, rationale),
+                    (
+                        pid,
+                        year,
+                        suspect_hcc,
+                        suspect_icd or "N/A",
+                        ev_type,
+                        ev_detail_json,
+                        confidence,
+                        str(tenant_id),
+                        0.15,
+                        confidence,
+                        rationale,
+                    ),
                 )
                 suspects_inserted += 1
             except Exception as exc:
@@ -603,8 +705,17 @@ def _import_multi_sheet(
                         tenant_id         = VALUES(tenant_id),
                         calculated_at     = NOW()
                     """,
-                    (pid, year, demo_score, disease_score, interaction_score,
-                     total_raw, final_raf, hcc_count, str(tenant_id)),
+                    (
+                        pid,
+                        year,
+                        demo_score,
+                        disease_score,
+                        interaction_score,
+                        total_raw,
+                        final_raf,
+                        hcc_count,
+                        str(tenant_id),
+                    ),
                 )
                 scores_computed += 1
             except Exception as exc:
@@ -615,8 +726,11 @@ def _import_multi_sheet(
             len(patients_rows) + len(hcc_rows) + len(meat_rows) + len(suspect_rows)
         )
         imported_rows = (
-            patients_inserted + patients_updated + hcc_inserted
-            + meat_inserted + suspects_inserted
+            patients_inserted
+            + patients_updated
+            + hcc_inserted
+            + meat_inserted
+            + suspects_inserted
         )
         failed_rows = len(errors)
         status = "completed" if failed_rows == 0 else "partial"
@@ -632,8 +746,15 @@ def _import_multi_sheet(
                    completed_at = %s
              WHERE id = %s
             """,
-            (status, total_rows, imported_rows, failed_rows, err_summary,
-             datetime.utcnow(), upload_id),
+            (
+                status,
+                total_rows,
+                imported_rows,
+                failed_rows,
+                err_summary,
+                datetime.utcnow(),
+                upload_id,
+            ),
         )
 
     return {
@@ -652,6 +773,7 @@ def _import_multi_sheet(
 # ---------------------------------------------------------------------------
 # Legacy single-sheet session helpers (kept for CSV / legacy XLSX path)
 # ---------------------------------------------------------------------------
+
 
 def _create_upload_session(
     tenant_id: str,
@@ -721,6 +843,7 @@ def _tag_uploaded_rows(tenant_id: str, upload_id: int, since_id: int) -> int:
 # Template download — serve the static multi-sheet template
 # ---------------------------------------------------------------------------
 
+
 @router.get("/template", summary="Download patient upload template")
 def download_template(
     format: str = Query("xlsx", regex="^(csv|xlsx)$"),
@@ -736,6 +859,7 @@ def download_template(
     """
     if format == "csv":
         from app.services.patient_import_service import get_import_template as _csv_tpl
+
         return Response(
             content=_csv_tpl(),
             media_type="text/csv",
@@ -758,10 +882,15 @@ def download_template(
                 },
             )
         except Exception as exc:
-            logger.warning("Failed to serve static template %s: %s", _TEMPLATE_PATH, exc)
+            logger.warning(
+                "Failed to serve static template %s: %s", _TEMPLATE_PATH, exc
+            )
 
     # Fallback: generate on the fly using the legacy single-sheet template.
-    from app.services.patient_import_service import get_import_template_xlsx as _xlsx_tpl
+    from app.services.patient_import_service import (
+        get_import_template_xlsx as _xlsx_tpl,
+    )
+
     return Response(
         content=_xlsx_tpl(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -776,6 +905,7 @@ def download_template(
 # ---------------------------------------------------------------------------
 # Upload (patients)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/patients", summary="Upload a CSV/XLSX file of patients")
 @limiter.limit("10/minute")
@@ -800,7 +930,7 @@ async def upload_patients(
     if len(content) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Max {_MAX_UPLOAD_BYTES // (1024*1024)} MB.",
+            detail=f"File too large. Max {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
         )
 
     tenant_id = get_tenant_id(current_user)
@@ -809,8 +939,11 @@ async def upload_patients(
     # ---- Multi-sheet XLSX path -------------------------------------------
     if file_type == "xlsx":
         import openpyxl  # lazy import — only needed for XLSX uploads
+
         try:
-            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+            wb = openpyxl.load_workbook(
+                io.BytesIO(content), data_only=True, read_only=True
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=422,
@@ -832,7 +965,7 @@ async def upload_patients(
                 logger.exception("Multi-sheet import failed: %s", exc)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Multi-sheet import failed: {exc}",
+                    detail="Multi-sheet import failed. Please check your file format and try again.",
                 ) from exc
 
             log_phi_access(
@@ -871,7 +1004,10 @@ async def upload_patients(
     if parse_errors and not rows:
         raise HTTPException(
             status_code=422,
-            detail={"message": "Could not parse uploaded file.", "errors": parse_errors},
+            detail={
+                "message": "Could not parse uploaded file.",
+                "errors": parse_errors,
+            },
         )
 
     upload_id = _create_upload_session(
@@ -916,7 +1052,9 @@ async def upload_patients(
         raise HTTPException(status_code=500, detail="Import failed") from exc
 
     try:
-        _tag_uploaded_rows(tenant_id=str(tenant_id), upload_id=upload_id, since_id=since_id)
+        _tag_uploaded_rows(
+            tenant_id=str(tenant_id), upload_id=upload_id, since_id=since_id
+        )
     except Exception as exc:
         logger.warning("uploads: tag rows failed: %s", exc)
 
@@ -935,7 +1073,9 @@ async def upload_patients(
     elif failed:
         status = "partial"
 
-    error_summary_str = "\n".join(str(e) for e in error_details[:50]) if error_details else None
+    error_summary_str = (
+        "\n".join(str(e) for e in error_details[:50]) if error_details else None
+    )
     _finalize_upload_session(
         upload_id=upload_id,
         status=status,
@@ -975,6 +1115,7 @@ async def upload_patients(
 # ---------------------------------------------------------------------------
 # List / detail / delete
 # ---------------------------------------------------------------------------
+
 
 @router.get("", summary="List past patient uploads")
 def list_uploads(

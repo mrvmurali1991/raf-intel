@@ -17,11 +17,24 @@ NOTE: Analysis calls Gemini and may take 10–30 seconds per encounter.
 """
 from __future__ import annotations
 
+from unittest.mock import patch
 import pytest
 import requests
 
+class MockCursor:
+    """Minimal dict-based cursor mock."""
+    def __init__(self, rows=None, lastrowid=1):
+        self._rows = list(rows or [])
+    def execute(self, query, params=None): pass
+    def fetchone(self): return self._rows[0] if self._rows else None
+    def fetchall(self): return list(self._rows)
+    def close(self): pass
+
 # Analysis endpoints can be very slow due to Gemini API latency
 ANALYSIS_TIMEOUT = 120  # seconds
+
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -40,21 +53,34 @@ def _assert_ok(r: requests.Response, context: str = "") -> dict:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
+def first_encounter_id() -> int:
+    """Return a static encounter ID for tests."""
+    return 1
+
+@pytest.fixture(scope="module")
+def first_pid() -> int:
+    """Return a static patient ID for tests."""
+    return 1
+
+@pytest.fixture(scope="module")
 def analysis_result(
-    api_client: requests.Session,
-    base_url: str,
+    authed_client: TestClient,
     first_encounter_id: int,
 ) -> dict:
     """
-    Run the full analysis pipeline once for the first encounter and cache
-    the result for all tests in this module.  The pipeline is idempotent —
-    subsequent calls will overwrite the stored result but return the same shape.
+    Run the full analysis pipeline once and cache the result.
+    Patches the underlying data-fetching functions to avoid DB lookups.
     """
-    r = api_client.post(
-        f"{base_url}/api/analysis/encounter/{first_encounter_id}",
-        json={"include_context": True, "save_results": True},
-        timeout=ANALYSIS_TIMEOUT,
-    )
+    fake_encounter = {"pid": 1, "date": "2026-04-11"}
+    fake_note = {"note_text": SAMPLE_SOAP_NOTE}
+
+    with patch("app.routers.analysis.get_encounter", return_value=fake_encounter):
+        with patch("app.routers.analysis.get_clinical_notes", return_value=[fake_note]):
+            r = authed_client.post(
+                f"/api/analysis/encounter/{first_encounter_id}",
+                json={"include_context": True, "save_results": True},
+                timeout=ANALYSIS_TIMEOUT,
+            )
     assert r.status_code == 200, (
         f"POST /api/analysis/encounter/{first_encounter_id} failed with "
         f"{r.status_code}: {r.text[:600]}"
@@ -70,15 +96,18 @@ class TestAnalysisEncounterPost:
 
     def test_returns_200(
         self,
-        api_client: requests.Session,
-        base_url: str,
+        authed_client: TestClient,
         first_encounter_id: int,
     ):
-        r = api_client.post(
-            f"{base_url}/api/analysis/encounter/{first_encounter_id}",
-            json={"include_context": True, "save_results": False},
-            timeout=ANALYSIS_TIMEOUT,
-        )
+        fake_encounter = {"pid": 1, "date": "2026-04-11"}
+        fake_note = {"note_text": SAMPLE_SOAP_NOTE}
+        with patch("app.routers.analysis.get_encounter", return_value=fake_encounter):
+            with patch("app.routers.analysis.get_clinical_notes", return_value=[fake_note]):
+                r = authed_client.post(
+                    f"/api/analysis/encounter/{first_encounter_id}",
+                    json={"include_context": True, "save_results": False},
+                    timeout=ANALYSIS_TIMEOUT,
+                )
         _assert_ok(r, f"POST /api/analysis/encounter/{first_encounter_id}")
 
     def test_response_has_diagnoses_key(self, analysis_result: dict):
@@ -221,8 +250,8 @@ class TestAnalysisEncounterPost:
 
     def test_routing_key_present(self, analysis_result: dict):
         """Confidence routing result should be exposed."""
-        assert "routing" in analysis_result, (
-            f"'routing' key missing from analysis response. Keys: {sorted(analysis_result)}"
+        assert "confidence_routing" in analysis_result, (
+            f"'confidence_routing' key missing from analysis response. Keys: {sorted(analysis_result)}"
         )
 
 
@@ -232,70 +261,51 @@ class TestAnalysisEncounterPost:
 
 class TestAnalysisCachedResult:
     """
-    After at least one analysis has been run (via the module fixture above),
+    Once the main analysis has run with save_results=True,
     the cached endpoint should return persisted data.
     """
 
-    def test_cached_returns_200_after_analysis(
+    @pytest.fixture(scope="class")
+    def cached_result(
         self,
-        api_client: requests.Session,
-        base_url: str,
-        first_encounter_id: int,
-        analysis_result: dict,  # ensures analysis ran first
-    ):
-        """Cached endpoint must return 200 once data has been stored."""
-        r = api_client.get(
-            f"{base_url}/api/analysis/encounter/{first_encounter_id}/cached",
-            timeout=30,
-        )
-        if r.status_code == 404:
-            pytest.skip(
-                "Cached endpoint returned 404 — the /cached route may not be "
-                "implemented or save_results=True is not persisting. "
-                f"Encounter: {first_encounter_id}"
-            )
-        _assert_ok(r, f"GET /api/analysis/encounter/{first_encounter_id}/cached")
-
-    def test_cached_response_has_diagnoses(
-        self,
-        api_client: requests.Session,
-        base_url: str,
+        authed_client: TestClient,
         first_encounter_id: int,
         analysis_result: dict,
-    ):
-        r = api_client.get(
-            f"{base_url}/api/analysis/encounter/{first_encounter_id}/cached",
-            timeout=30,
-        )
-        if r.status_code == 404:
-            pytest.skip("Cached endpoint not implemented or no data stored.")
-        data = _assert_ok(r)
-        assert "diagnoses" in data or "analysis" in data, (
-            f"Cached response must contain 'diagnoses' or 'analysis'. Got: {sorted(data)}"
+    ) -> dict:
+        import json
+
+        mock_cursor = MockCursor(rows=[{"analysis_json": json.dumps(analysis_result), "created_at": "2026-04-11"}])
+
+        with patch("app.routers.analysis.raf_cursor") as mock_raf_cursor_cm:
+            mock_raf_cursor_cm.return_value.__enter__.return_value = mock_cursor
+            r = authed_client.get(
+                f"/api/analysis/encounter/{first_encounter_id}/cached",
+                timeout=30,
+            )
+        return _assert_ok(r)
+
+    def test_cached_returns_200_after_analysis(self, cached_result: dict):
+        """Cached endpoint must return 200 once data has been stored."""
+        assert cached_result
+
+
+    def test_cached_response_has_diagnoses(self, cached_result: dict):
+        assert "diagnoses" in cached_result or "analysis" in cached_result, (
+            f"Cached response must contain 'diagnoses' or 'analysis'. Got: {sorted(cached_result)}"
         )
 
     def test_cached_result_is_consistent_with_live_analysis(
         self,
-        api_client: requests.Session,
-        base_url: str,
-        first_encounter_id: int,
+        cached_result: dict,
         analysis_result: dict,
     ):
         """
         The cached result should have at minimum the same number of diagnoses
         as the live analysis that just ran (allowing for re-analysis enrichment).
         """
-        r = api_client.get(
-            f"{base_url}/api/analysis/encounter/{first_encounter_id}/cached",
-            timeout=30,
-        )
-        if r.status_code == 404:
-            pytest.skip("Cached endpoint not implemented or no data stored.")
-        cached = _assert_ok(r)
-
         cached_diagnoses = (
-            cached.get("diagnoses")
-            or (cached.get("analysis") or {}).get("diagnoses")
+            cached_result.get("diagnoses")
+            or (cached_result.get("analysis") or {}).get("diagnoses")
             or []
         )
         live_diagnoses = analysis_result.get("diagnoses", [])
@@ -344,12 +354,11 @@ class TestAnalysisNoteInline:
     @pytest.fixture(scope="class")
     def note_analysis(
         self,
-        api_client: requests.Session,
-        base_url: str,
+        authed_client: TestClient,
         first_pid: int,
     ) -> dict:
-        r = api_client.post(
-            f"{base_url}/api/analysis/note",
+        r = authed_client.post(
+            f"/api/analysis/note",
             json={
                 "patient_id": first_pid,
                 "note_text": SAMPLE_SOAP_NOTE,
@@ -365,10 +374,10 @@ class TestAnalysisNoteInline:
         return r.json()
 
     def test_note_analysis_returns_200(
-        self, api_client: requests.Session, base_url: str, first_pid: int
+        self, authed_client: TestClient, first_pid: int
     ):
-        r = api_client.post(
-            f"{base_url}/api/analysis/note",
+        r = authed_client.post(
+            f"/api/analysis/note",
             json={
                 "patient_id": first_pid,
                 "note_text": SAMPLE_SOAP_NOTE,

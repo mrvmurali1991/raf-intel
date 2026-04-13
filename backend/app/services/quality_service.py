@@ -658,7 +658,7 @@ def get_patient_measures(patient_id: int, year: int) -> dict[str, Any]:
 # Population-level quality summary
 # ---------------------------------------------------------------------------
 
-def get_quality_summary(year: int, tenant_id: int | None = None) -> dict[str, Any]:
+def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
     """
     Population-level HEDIS measure compliance rates.
 
@@ -672,9 +672,12 @@ def get_quality_summary(year: int, tenant_id: int | None = None) -> dict[str, An
         overall_compliance_rate: mean compliance across all measures with eligible patients
     """
     # Load all patients from raf_intelligence.patients
-    tid = tenant_id if tenant_id is not None else 1
     if tenant_id is None:
-        logger.warning("quality_service.get_quality_summary: no tenant_id provided, defaulting to 1")
+        raise ValueError(
+            "quality_service.get_quality_summary: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
+        )
+    tid = tenant_id
     _ACTIVE_IDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "id IN")
     with raf_cursor() as cur:
         cur.execute(
@@ -765,7 +768,7 @@ def _is_in_denominator_fast(
 # Care gap patients (population-level)
 # ---------------------------------------------------------------------------
 
-def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, tenant_id: int | None = None) -> list[dict[str, Any]]:
+def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, *, tenant_id: int) -> list[dict[str, Any]]:
     """
     Return patients with open HEDIS care gaps.
 
@@ -779,9 +782,12 @@ def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, 
         if mc not in HEDIS_MEASURES:
             raise ValueError(f"Unknown measure code: {mc}")
 
-    tid = tenant_id if tenant_id is not None else 1
     if tenant_id is None:
-        logger.warning("quality_service.get_care_gaps: no tenant_id provided, defaulting to 1")
+        raise ValueError(
+            "quality_service.get_care_gaps: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
+        )
+    tid = tenant_id
     _ACTIVE_IDS_SUBQUERY = ACTIVE_PATIENTS_SUBQUERY.replace("patient_id IN", "id IN")
     with raf_cursor() as cur:
         cur.execute(

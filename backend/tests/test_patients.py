@@ -143,7 +143,7 @@ class TestListPatients:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _as_admin(),
-            patch("app.routers.patients._has_active_emr_connection", return_value=False),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=False),
         ):
             resp = client.get(
                 "/api/patients",
@@ -160,7 +160,7 @@ class TestListPatients:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._has_active_emr_connection", return_value=True),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
             patch("app.services.openemr_connector.get_patients", return_value=patients),
             patch("app.services.openemr_connector.get_patient_count", return_value=1),
             patch("app.db.raf_cursor", noop_cm),
@@ -181,7 +181,7 @@ class TestListPatients:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _as_admin(),
-            patch("app.routers.patients._has_active_emr_connection", return_value=False),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=False),
         ):
             resp = client.get(
                 "/api/patients?limit=10&offset=20",
@@ -215,7 +215,7 @@ class TestListPatients:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._has_active_emr_connection", return_value=True),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
             patch("app.services.openemr_connector.search_patients", return_value=([], 0)) as mock_search,
             patch("app.db.raf_cursor", noop_cm),
         ):
@@ -230,7 +230,7 @@ class TestListPatients:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _as_admin(),
-            patch("app.routers.patients._has_active_emr_connection", return_value=True),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
             patch(
                 "app.services.openemr_connector.get_patients",
                 side_effect=RuntimeError("DB crash"),
@@ -254,9 +254,9 @@ class TestGetPatient:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._patient_in_active_connection", return_value=True),
+            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
             patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
-            patch("app.routers.patients.get_raf_breakdown", return_value={}),
+            patch("app.services.patient_service.get_raf_breakdown", return_value={}),
             patch("app.db.raf_cursor", noop_cm),
         ):
             resp = client.get(
@@ -272,9 +272,9 @@ class TestGetPatient:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._patient_in_active_connection", return_value=True),
+            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
             patch("app.services.openemr_connector.get_patient", return_value=None),
-            patch("app.routers.patients.get_raf_breakdown", return_value={}),
+            patch("app.services.patient_service.get_raf_breakdown", return_value={}),
             patch("app.db.raf_cursor", noop_cm),
         ):
             resp = client.get(
@@ -307,7 +307,7 @@ class TestPatientEncounters:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._patient_in_active_connection", return_value=True),
+            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
             patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
             patch("app.services.openemr_connector.get_encounters", return_value=[MOCK_ENCOUNTER]),
             patch("app.db.raf_cursor", noop_cm),
@@ -335,7 +335,7 @@ class TestPatientDiagnoses:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._patient_in_active_connection", return_value=True),
+            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
             patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
             patch("app.services.openemr_connector.get_billing_codes", return_value=[MOCK_DIAGNOSIS]),
             patch("app.db.raf_cursor", noop_cm),
@@ -361,7 +361,7 @@ class TestPatientMedications:
         noop_cm, _ = make_cursor_cm()
         with (
             _as_admin(),
-            patch("app.routers.patients._patient_in_active_connection", return_value=True),
+            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
             patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
             patch("app.services.openemr_connector.get_medications", return_value=[MOCK_MEDICATION]),
             patch("app.db.raf_cursor", noop_cm),
@@ -431,7 +431,7 @@ class TestPatientResponseSanitization:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _as_admin(),
-            patch("app.routers.patients._has_active_emr_connection", return_value=True),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
             patch(
                 "app.services.openemr_connector.get_patients",
                 side_effect=Exception("SQL syntax error near 'SELECT *'"),

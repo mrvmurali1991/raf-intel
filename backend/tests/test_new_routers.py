@@ -105,12 +105,12 @@ class TestAuthenticatedAccess:
     def test_authenticated_does_not_return_401(
         self,
         client: TestClient,
-        auth_headers: dict,
+        admin_headers: dict,
         method: str,
         path: str,
         description: str,
     ):
-        r = client.request(method, path, headers=auth_headers)
+        r = client.request(method, path, headers=admin_headers)
         assert r.status_code != 401, (
             f"[{description}] {method} {path} — "
             f"received 401 with a valid token. Check router registration and auth dependency. "

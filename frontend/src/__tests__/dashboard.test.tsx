@@ -25,7 +25,7 @@ vi.mock("next/link", () => ({
 const mockApiData = {
   getDashboardStats: vi.fn().mockResolvedValue({
     total_patients: 120,
-    avg_raf_score: 1.23,
+    average_raf_score: 1.23,
     high_risk_patients: 30,
     revenue_opportunity: 45000,
   }),

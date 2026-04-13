@@ -87,11 +87,26 @@ def revenue_opportunity(year: int = Query(default=None),
                 """
                 SELECT COUNT(DISTINCT ea.pid) AS cnt
                 FROM raf_encounter_analysis ea
-                WHERE ea.pid IN (SELECT id FROM patients WHERE is_active = 1)
-                """
+                WHERE ea.pid IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
+                """,
+                (tenant_id,),
             )
             row = cur.fetchone()
             total_patients_analyzed = int(row["cnt"]) if row else 0
+
+            # Fall back to raf_scores count if no AI analysis yet
+            if total_patients_analyzed == 0:
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT patient_id) AS cnt
+                    FROM raf_scores
+                    WHERE measurement_year = %s
+                      AND patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
+                    """,
+                    (calc_year, tenant_id),
+                )
+                row = cur.fetchone()
+                total_patients_analyzed = int(row["cnt"]) if row else 0
 
         # Sum billing RAF — one prospective score per patient for the year,
         # restricted to patients from active EMR connections.

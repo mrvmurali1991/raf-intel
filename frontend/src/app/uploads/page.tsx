@@ -23,6 +23,7 @@ import {
   type UploadRecord,
 } from "@/lib/api";
 import { tokens } from "@/styles/tokens";
+import { FONT_SYS } from "@/lib/ui-utils";
 
 // Match the patients page palette so the upload page blends with the rest of
 // the product without introducing a new design system.
@@ -44,9 +45,6 @@ const C = {
   warning: "#D97706",
   success: "#047857",
 };
-
-const FONT_SYS =
-  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 function formatBytes(n: number | null | undefined): string {
   if (!n || n <= 0) return "—";

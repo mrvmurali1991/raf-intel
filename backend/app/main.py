@@ -35,7 +35,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth import get_current_user, get_tenant_id
 from app.config import settings
-from app.db import check_connections, NoActiveEMRConnection
+from app.db import check_connections, NoActiveEMRConnection, shutdown_db_executor
 from app.monitoring import (
     capture_error,
     get_error_stats,
@@ -44,6 +44,8 @@ from app.monitoring import (
 )
 from app.rate_limit import limiter
 from app.services.auth_service import decode_token, log_audit
+from app.audit_middleware import AuditRequestContextMiddleware
+from app.phi_access_logger import PHIAccessLoggingMiddleware
 from app.routers import (
     adt,
     admin,
@@ -79,11 +81,20 @@ from app.routers import (
 from app.routers import auth as auth_router
 from app.routers import bi_export
 from app.routers import coder_worklist
+from app.routers import provider_worklist as provider_worklist_router
 from app.routers import insights as insights_router
 from app.routers import realtime as realtime_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import meat as meat_router
+from app.routers import radv_audit as radv_audit_router
 from app.routers import data_quality as data_quality_router
+from app.routers import health as health_router
+from app.routers import icd10 as icd10_router
+from app.routers import bundles, cms_transmission
+from app.routers import pipeline as pipeline_router
+from app.routers import pipeline_settings as pipeline_settings_router
+from app.routers import recapture_gaps as recapture_gaps_router
+from app.routers import dashboard_analytics as dashboard_analytics_router
 
 # ---------------------------------------------------------------------------
 # Logging — structured JSON in production, human-readable in development
@@ -231,6 +242,7 @@ async def lifespan(app: FastAPI):
         for mod_name, func_name in _seeds:
             try:
                 import importlib
+
                 mod = importlib.import_module(f"app.{mod_name}")
                 getattr(mod, func_name)()
             except Exception as exc:
@@ -243,13 +255,34 @@ async def lifespan(app: FastAPI):
     # NER uses Gemini API (no local models to preload)
     logger.info("NER mode: Gemini API (no local models needed)")
 
+    # ------------------------------------------------------------------
+    # Background / periodic work — Celery Beat (external process)
+    # ------------------------------------------------------------------
+    # The EMR sync scheduler and HIPAA retention sweep are now driven by
+    # Celery Beat, NOT a daemon thread inside this process.
+    #
+    # You must start these two processes alongside uvicorn/gunicorn:
+    #
+    #   # Celery worker (processes tasks from default + heavy queues):
+    #   celery -A app.services.celery_tasks worker \
+    #       --loglevel=info --concurrency=4 -Q default,heavy
+    #
+    #   # Celery Beat (fires periodic tasks every 60 s / 1 h):
+    #   celery -A app.services.celery_tasks beat --loglevel=info
+    #
+    # Both commands must run from the backend/ directory.
+    #
+    # start_scheduler() is kept as a no-op for health-endpoint compatibility.
     from app.services.sync_scheduler import start_scheduler, stop_scheduler
+    from app.services.pipeline_chain import setup_pipeline_chain
 
-    start_scheduler()
+    setup_pipeline_chain()
+    start_scheduler()  # logs a reminder; no thread is started
 
     yield  # application runs
 
-    stop_scheduler()
+    stop_scheduler()  # no-op; Beat is an external process
+    shutdown_db_executor()
     logger.info("RAF Intelligence backend shutting down.")
 
 
@@ -296,6 +329,10 @@ tags_metadata = [
         "description": "Care gap closure workflow and provider task assignment",
     },
     {
+        "name": "recapture_gaps",
+        "description": "HCC recapture gap analysis — prior-year HCCs not yet documented in the current measurement year",
+    },
+    {
         "name": "cohorts",
         "description": "Cohort analysis and population health management — dynamic patient populations, snapshots, and cohort comparisons",
     },
@@ -313,8 +350,14 @@ tags_metadata = [
         "description": "Direct Messaging — S/MIME secure provider-to-provider clinical data exchange",
     },
     {"name": "jobs", "description": "Background job management"},
+    {"name": "pipeline", "description": "Pipeline auto-chain run status and history"},
     {"name": "reports", "description": "Analytics and reporting"},
     {"name": "audit", "description": "Compliance and audit packages"},
+    {
+        "name": "radv",
+        "description": "RADV (Risk Adjustment Data Validation) audit trail, "
+        "MEAT compliance checks, and population-level readiness reports",
+    },
     {
         "name": "bi_export",
         "description": "BI Tools Export — Tableau, PowerBI, Looker, Metabase, OData, CSV/JSON/Excel",
@@ -412,33 +455,39 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "camera=(), microphone=(), geolocation=()"
         )
         # Content-Security-Policy: restrict resource loading to same-origin.
-        # 'unsafe-inline' is retained in script-src and style-src because
-        # Next.js currently injects inline scripts and styles; replace it with
-        # per-request nonces (next.config.js → headers + generateNonce()) once
-        # the frontend supports them.
-        # 'unsafe-eval' has been removed — it was never required by Next.js in
-        # production mode and opens the door to XSS via eval/Function().
+        # Nonce-based CSP for script-src/style-src replaces 'unsafe-inline'.
+        # Each response gets a unique nonce that the frontend must include
+        # in its inline <script> and <style> tags.
+        _csp_nonce = os.urandom(16).hex()
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "font-src 'self'; "
+            f"default-src 'self'; "
+            f"script-src 'self' 'nonce-{_csp_nonce}'; "
+            f"style-src 'self' 'nonce-{_csp_nonce}'; "
+            f"img-src 'self' data: blob:; "
+            f"font-src 'self'; "
             f"connect-src 'self' {os.environ.get('FRONTEND_URL', '')} {os.environ.get('NEXT_PUBLIC_API_URL', '')}; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'"
+            f"frame-ancestors 'none'; "
+            f"base-uri 'self'; "
+            f"form-action 'self'"
         )
+        response.headers["X-CSP-Nonce"] = _csp_nonce
         return response
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(PHIAccessLoggingMiddleware)
+app.add_middleware(AuditRequestContextMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
 async def _validation_error_handler(request: Request, exc: RequestValidationError):
-    logger.error("Validation error on %s %s: %s", request.method, request.url.path, exc.errors())
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    logger.error(
+        "Validation error on %s %s: %s", request.method, request.url.path, exc.errors()
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validation error. Check your request parameters."},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -473,9 +522,19 @@ app.add_middleware(RequestIDMiddleware)
 # ---------------------------------------------------------------------------
 
 _PHI_KEYS = {
-    "ssn", "dob", "DOB", "date_of_birth",
-    "fname", "lname", "first_name", "last_name",
-    "address", "phone", "email", "mbi", "medicare_id",
+    "ssn",
+    "dob",
+    "DOB",
+    "date_of_birth",
+    "fname",
+    "lname",
+    "first_name",
+    "last_name",
+    "address",
+    "phone",
+    "email",
+    "mbi",
+    "medicare_id",
 }
 
 
@@ -483,7 +542,9 @@ def _scrub_phi(data: dict) -> dict:
     """Return a copy of *data* with PHI-sensitive keys replaced by '***REDACTED***'."""
     if not isinstance(data, dict):
         return data
-    return {k: "***REDACTED***" if k.lower() in _PHI_KEYS else v for k, v in data.items()}
+    return {
+        k: "***REDACTED***" if k.lower() in _PHI_KEYS else v for k, v in data.items()
+    }
 
 
 class AuditLoggingMiddleware(BaseHTTPMiddleware):
@@ -558,7 +619,7 @@ if settings.app_env == "production":
     if _frontend_url.startswith("http://"):
         raise RuntimeError("FRONTEND_URL must use https:// in production")
 _cors_origins: list[str] = []
-if settings.app_env == "development":
+if settings.app_env in ("development", "testing"):
     _cors_origins = [
         "http://localhost:3500",
         "http://localhost:3000",
@@ -602,7 +663,8 @@ async def add_process_time_header(request: Request, call_next):
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.1f}"
+    if os.getenv("APP_ENV", "production") != "production":
+        response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.1f}"
     logger.debug("%s %s  %.1f ms", request.method, request.url.path, elapsed_ms)
     # Increment the global request counter (best-effort; non-atomic under high
     # concurrency but accurate enough for operational dashboards).
@@ -751,6 +813,7 @@ _EMR_GATE_ALLOWED_PREFIXES = (
     "/api/emr",
     "/api/admin",
     "/api/notifications",
+    "/api/pipeline",
     "/api/uploads",
     "/health",
     "/docs",
@@ -783,6 +846,7 @@ async def emr_gate(request: Request, call_next):
     # return 401 as usual.
     try:
         from app.auth import _resolve_user
+
         user = await _resolve_user(request)
     except Exception:
         user = None
@@ -794,6 +858,7 @@ async def emr_gate(request: Request, call_next):
 
     try:
         from app.services import emr_manager
+
         conns = emr_manager.list_connections(tenant_id=tenant_id)
         active_count = sum(1 for c in conns if int(c.get("is_active") or 0) == 1)
     except Exception as exc:
@@ -806,6 +871,7 @@ async def emr_gate(request: Request, call_next):
     if active_count == 0:
         try:
             from app.db import raf_cursor as _raf_cursor
+
             with _raf_cursor() as cur:
                 cur.execute(
                     "SELECT 1 FROM patients WHERE tenant_id = %s AND data_source = 'upload' AND is_active = 1 LIMIT 1",
@@ -859,6 +925,8 @@ app.include_router(uploads.router)
 # Payer / claims workflows
 app.include_router(claims.router)
 app.include_router(submissions.router)
+app.include_router(bundles.router)
+app.include_router(cms_transmission.router)
 
 # Integrations
 app.include_router(fhir.router)
@@ -876,13 +944,17 @@ app.include_router(quality.router)
 app.include_router(prospective.router)
 app.include_router(benchmarks.router)
 app.include_router(care_gaps.router)
+app.include_router(recapture_gaps_router.router)
 app.include_router(awv.router)
 
 # Population health cohort analysis
 app.include_router(cohorts.router)
 # Operations and compliance
 app.include_router(jobs.router)
+app.include_router(pipeline_router.router)
+app.include_router(pipeline_settings_router.router)
 app.include_router(reports.router)
+app.include_router(dashboard_analytics_router.router)
 app.include_router(audit.router)
 
 # BI Tools Export
@@ -891,432 +963,22 @@ app.include_router(bi_export.router)
 # Coder worklist / review queue
 app.include_router(coder_worklist.router)
 
+# Provider worklist — prioritized patient lists and action items for RAF optimization
+app.include_router(provider_worklist_router.router)
+
 # Real-time clinical intelligence insights
 app.include_router(insights_router.router)
 
 # Real-time dashboards
 app.include_router(realtime_router.router)
 
+# Health and info
+app.include_router(health_router.router)
+app.include_router(icd10_router.router)
+
 # Admin
 app.include_router(retention.router)
 app.include_router(admin.router)
 app.include_router(meat_router.router)
+app.include_router(radv_audit_router.router)
 app.include_router(data_quality_router.router)
-
-
-# ---------------------------------------------------------------------------
-# Health / info endpoints
-# ---------------------------------------------------------------------------
-
-
-@app.get("/", tags=["health"], summary="Root")
-def root() -> dict[str, str]:
-    return {
-        "service": "RAF Intelligence API",
-        "version": "2.0.0",
-        "status": "running",
-        "docs": "/docs",
-    }
-
-
-@app.get("/api/dashboard/stats", tags=["health"], summary="Dashboard summary stats")
-def dashboard_stats(
-    current_user: dict = Depends(get_current_user),
-    tenant_id: str = Depends(get_tenant_id),
-    year: int = Query(default=None, description="Measurement year to filter by (defaults to current year)"),
-) -> dict[str, Any]:
-    """Quick population stats for the dashboard."""
-    from app.db import raf_cursor
-    from datetime import date as _date
-
-    measurement_year = year if year is not None else _date.today().year
-
-    ZERO_RESPONSE = {
-        "total_patients": 0,
-        "patients_analyzed": 0,
-        "average_raf": 0.0,
-        "coverage_pct": 0.0,
-    }
-
-    # 1. Check for an active EMR connection
-    try:
-        with raf_cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS cnt FROM emr_connections WHERE is_active = 1")
-            has_active = cur.fetchone()["cnt"] > 0
-    except Exception as exc:
-        logger.error("Dashboard stats — emr_connections query error: %s", exc)
-        return ZERO_RESPONSE
-
-    # If no active EMR, check if uploaded data exists — still show dashboard
-    has_uploaded_data = False
-    if not has_active:
-        try:
-            with raf_cursor() as cur:
-                cur.execute(
-                    "SELECT 1 FROM patients WHERE data_source = 'upload' AND is_active = 1 LIMIT 1"
-                )
-                has_uploaded_data = cur.fetchone() is not None
-        except Exception:
-            pass
-        if not has_uploaded_data:
-            return ZERO_RESPONSE
-
-    total_patients = 0
-    analyzed = 0
-    avg_raf = 0.0
-
-    from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
-
-    # Total patients = the active cohort in raf_intelligence.patients.
-    # This respects the activate/deactivate pattern used by CSV upload and
-    # EMR reactivation flows, so deactivated patients are correctly excluded.
-    # When EMR is off, only count uploaded patients
-    _ds_filter = " AND data_source = 'upload'" if (not has_active and has_uploaded_data) else ""
-    try:
-        with raf_cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1{_ds_filter}")
-            total_patients = cur.fetchone()["cnt"]
-    except Exception as exc:
-        logger.error("Dashboard stats — active patients query error: %s", exc)
-
-    # Query RAF database for scoring stats — when EMR off, scope to uploaded patients only
-    _score_filter = (
-        "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload')"
-        if (not has_active and has_uploaded_data)
-        else ACTIVE_PATIENTS_SUBQUERY
-    )
-    try:
-        with raf_cursor() as cur:
-            cur.execute(
-                f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
-                (int(tenant_id), measurement_year),
-            )
-            analyzed = cur.fetchone()["cnt"]
-            cur.execute(
-                f"SELECT AVG(final_raf) AS avg_raf FROM raf_scores WHERE {_score_filter} AND raf_scores.tenant_id = %s AND measurement_year = %s",
-                (int(tenant_id), measurement_year),
-            )
-            row = cur.fetchone()
-            avg_raf = round(float(row["avg_raf"] or 0), 4)
-    except Exception as exc:
-        logger.error("Dashboard stats — RAF query error: %s", exc)
-
-    return {
-        "total_patients": total_patients,
-        "patients_analyzed": analyzed,
-        "average_raf": avg_raf,
-        "coverage_pct": round(analyzed / total_patients * 100, 1)
-        if total_patients
-        else 0,
-    }
-
-
-@app.get("/api/dashboard/trends", tags=["health"], summary="Dashboard trend data")
-def dashboard_trends(
-    current_user: dict = Depends(get_current_user),
-    year: int = Query(default=None, description="Measurement year to filter by (defaults to current year)"),
-) -> dict[str, Any]:
-    """
-    Compute real period-over-period trend data for the dashboard KPI cards.
-
-    Compares the current 30-day window against the prior 30-day window for:
-    - patients_analyzed: number of unique patients with RAF scores
-    - average_raf: mean RAF score
-    - revenue_opportunity: estimated revenue from open suspect conditions
-
-    Returns the raw values and the calculated percentage change.
-    """
-    try:
-        from app.db import raf_cursor
-        from datetime import date as _date
-
-        measurement_year = year if year is not None else _date.today().year
-
-        with raf_cursor() as cur:
-            # Current 30 days vs prior 30 days, scoped to the requested measurement year
-            cur.execute(
-                """
-                SELECT
-                    COUNT(DISTINCT CASE WHEN calculated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN patient_id END) AS current_analyzed,
-                    COUNT(DISTINCT CASE WHEN calculated_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
-                                        AND calculated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) THEN patient_id END) AS prior_analyzed,
-                    AVG(CASE WHEN calculated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN final_raf END) AS current_avg_raf,
-                    AVG(CASE WHEN calculated_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
-                             AND calculated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) THEN final_raf END) AS prior_avg_raf
-                FROM raf_scores
-                WHERE calculated_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
-                  AND measurement_year = %s
-                """,
-                (measurement_year,),
-            )
-            row = cur.fetchone()
-
-        current_analyzed = int(row["current_analyzed"] or 0)
-        prior_analyzed = int(row["prior_analyzed"] or 0)
-        current_avg_raf = float(row["current_avg_raf"] or 0)
-        prior_avg_raf = float(row["prior_avg_raf"] or 0)
-
-        def _pct_change(current: float, prior: float) -> float | None:
-            if prior == 0:
-                return None
-            return round(((current - prior) / prior) * 100, 1)
-
-        return {
-            "period": "30d",
-            "patients_analyzed": {
-                "current": current_analyzed,
-                "prior": prior_analyzed,
-                "change_pct": _pct_change(current_analyzed, prior_analyzed),
-            },
-            "average_raf": {
-                "current": round(current_avg_raf, 4),
-                "prior": round(prior_avg_raf, 4),
-                "change_pct": _pct_change(current_avg_raf, prior_avg_raf),
-            },
-        }
-
-    except Exception as exc:
-        logger.error("Dashboard trends error: %s", exc)
-        return {"period": "30d", "error": True}
-
-
-@app.get("/health", tags=["health"], summary="Health check")
-def health_check(request: Request) -> dict[str, Any]:
-    """
-    Returns 200 when all dependencies are healthy, 503 otherwise.
-    Suitable for load-balancer / Kubernetes readiness probes.
-    """
-    db_status = check_connections()
-    all_healthy = all(db_status.values())
-
-    from app.services.sync_scheduler import get_scheduler_status
-
-    payload: dict[str, Any] = {
-        "status": "healthy" if all_healthy else "degraded",
-        "request_id": getattr(request.state, "request_id", None),
-        "databases": db_status,
-        "gemini_model": settings.gemini_model,
-        "sync_scheduler": get_scheduler_status(),
-        "monitoring": get_error_stats(),
-    }
-
-    if not all_healthy:
-        return JSONResponse(status_code=503, content=payload)
-    return payload
-
-
-@app.get("/health/ready", tags=["health"], summary="Readiness probe")
-def readiness_probe() -> dict[str, Any]:
-    """
-    Kubernetes-style readiness probe.
-    Returns 200 only when ALL critical dependencies are healthy.
-    Unlike /health, this returns 503 if ANY check fails.
-    """
-    checks: dict[str, bool] = {}
-
-    # Database connections
-    db_status = check_connections()
-    checks["databases"] = all(db_status.values())
-
-    # Redis (Celery broker/backend)
-    try:
-        import redis
-
-        r = redis.from_url(settings.redis_url, socket_timeout=2)
-        r.ping()
-        checks["redis"] = True
-    except Exception:
-        checks["redis"] = False
-
-    # Gemini API key present
-    checks["gemini_api_key"] = bool(settings.gemini_api_key)
-
-    all_healthy = all(checks.values())
-    payload = {
-        "ready": all_healthy,
-        "checks": checks,
-    }
-    if not all_healthy:
-        return JSONResponse(status_code=503, content=payload)
-    return payload
-
-
-@app.get("/metrics", tags=["health"], include_in_schema=False)
-async def metrics(request: Request) -> dict[str, Any]:
-    """
-    Lightweight application metrics for operational monitoring.
-
-    Returns uptime, total request count, and — when psutil is installed —
-    process memory and CPU usage.  The endpoint is intentionally excluded
-    from the OpenAPI schema so it does not appear in Swagger UI.
-
-    Suitable for polling by Prometheus (via a JSON exporter), Datadog, or
-    any simple HTTP monitor.  No authentication is required so that external
-    probes can reach it without a token.
-    """
-    start_time: datetime = getattr(app.state, "start_time", datetime.now(timezone.utc))
-    uptime_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
-    request_count: int = getattr(app.state, "request_count", 0)
-
-    payload: dict[str, Any] = {
-        "uptime_seconds": round(uptime_seconds, 1),
-        "requests_total": request_count,
-        "app_env": settings.app_env,
-    }
-
-    # Opportunistically add process metrics when psutil is available.
-    try:
-        import psutil  # type: ignore[import]
-
-        proc = psutil.Process()
-        payload["memory_mb"] = round(proc.memory_info().rss / 1024 / 1024, 1)
-        payload["cpu_percent"] = proc.cpu_percent(interval=None)
-    except ImportError:
-        # psutil not installed — skip process-level stats.
-        pass
-    except Exception:
-        pass
-
-    return payload
-
-
-# ---------------------------------------------------------------------------
-# ICD-10-CM endpoints (auth-guarded)
-# ---------------------------------------------------------------------------
-
-
-@app.get(
-    "/api/icd10/validate/{code}", tags=["icd10"], summary="Validate an ICD-10-CM code"
-)
-def validate_icd10(
-    code: str,
-    current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Check whether *code* is a valid, billable (leaf) ICD-10-CM code."""
-    from app.services.icd_validator import (
-        get_code_description,
-        normalize_code,
-        validate_code,
-    )
-
-    normalized = normalize_code(code)
-    valid = validate_code(normalized)
-    info = get_code_description(normalized) if valid else {}
-
-    return {
-        "code": normalized,
-        "input": code,
-        "valid": valid,
-        "info": info,
-    }
-
-
-@app.get("/api/icd10/search", tags=["icd10"], summary="Search ICD-10-CM codes")
-def search_icd10(
-    query: str,
-    max_results: int = Query(default=20, ge=1, le=200),
-    current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Full-text search across ICD-10-CM descriptions."""
-    from app.services.icd_validator import search_codes
-
-    results = search_codes(query, max_results=max_results)
-    return {
-        "query": query,
-        "count": len(results),
-        "results": results,
-    }
-
-
-# ---------------------------------------------------------------------------
-# HIPAA compliance status (auth-guarded, dynamic checks)
-# ---------------------------------------------------------------------------
-
-
-@app.get(
-    "/api/compliance/status", tags=["compliance"], summary="HIPAA compliance status"
-)
-def compliance_status(current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
-    """
-    Returns the current HIPAA compliance posture of this deployment.
-
-    Intended for ops dashboards and audit evidence packages.  The Google BAA
-    covers all Gemini API calls made by this service.  Security headers are
-    injected by SecurityHeadersMiddleware on every response.  PHI access is
-    logged to the phi_audit logger on every patient data endpoint.
-    """
-    checks: dict[str, Any] = {
-        "jwt_secret_configured": bool(os.getenv("JWT_SECRET")),
-        "tls_enforced": bool(os.getenv("TLS_ENABLED", "")),
-        "mfa_available": True,
-        "audit_logging": True,
-        "rbac_enforced": True,
-        "rate_limiting": True,
-        "idle_timeout_minutes": (
-            settings.idle_timeout_minutes
-            if hasattr(settings, "idle_timeout_minutes")
-            else None
-        ),
-        "access_token_expiry_minutes": settings.access_token_expire_minutes,
-        "encryption_in_transit": True,
-        "security_headers": True,
-        "phi_access_logging": True,
-        "baa_provider": "Google Cloud (Gemini)",
-    }
-    all_passing = all(v for v in checks.values() if isinstance(v, bool))
-    return {
-        "hipaa_compliant": all_passing,
-        "status": "compliant" if all_passing else "non_compliant",
-        "checks": checks,
-        "assessed_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Admin — error monitoring endpoints
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/admin/errors", tags=["health"], summary="List recent errors")
-def admin_list_errors(
-    limit: int = Query(default=50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Return the most recent captured errors (newest first). Requires authentication."""
-    return {
-        "errors": get_recent_errors(limit=limit),
-        "count": len(get_recent_errors(limit=limit)),
-    }
-
-
-@app.get("/api/admin/errors/stats", tags=["health"], summary="Error statistics")
-def admin_error_stats(
-    current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Return aggregate error counts by type. Requires authentication."""
-    return get_error_stats()
-
-
-@app.post(
-    "/api/admin/errors/report", tags=["health"], summary="Report a client-side error"
-)
-async def admin_report_error(request: Request) -> dict[str, str]:
-    """
-    Accept client-side error reports from the frontend error-tracking module.
-    No authentication required so errors can be captured before login completes.
-    """
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-
-    from app.monitoring import capture_error as _capture
-    from datetime import datetime, timezone
-
-    # Wrap the client payload as a synthetic exception for the in-memory store
-    class ClientError(Exception):
-        pass
-
-    exc = ClientError(payload.get("message", "unknown client error"))
-    _capture(exc, context={"source": "frontend", **payload})
-    return {"status": "recorded"}

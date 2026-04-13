@@ -253,34 +253,37 @@ class TestPatientsEndpoint:
 
         user = dict(MOCK_ADMIN_USER)
         mock_patients = [
-            {"pid": 1, "fname": "Alice", "lname": "Smith", "DOB": "1955-03-10"},
-            {"pid": 2, "fname": "Bob", "lname": "Jones", "DOB": "1948-07-22"},
+            {"pid": 1, "fname": "Alice", "lname": "Smith", "DOB": "1955-03-10", "is_active": 1, "data_source": "upload", "tenant_id": "1"},
+            {"pid": 2, "fname": "Bob", "lname": "Jones", "DOB": "1948-07-22", "is_active": 1, "data_source": "upload", "tenant_id": "1"},
         ]
 
         @contextmanager
-        def _mock_openemr(*a, **kw):
+        def _mock_raf_cursor_cm(*a, **kw):
             from tests.conftest import MockCursor
-            yield MockCursor(rows=mock_patients)
-
-        @contextmanager
-        def _mock_raf(*a, **kw):
-            from tests.conftest import MockCursor
-            yield MockCursor(rows=[])
+            # This cursor will be used for multiple queries.
+            # The first is the COUNT, the second is the SELECT.
+            # We can't know which is which without more complex mocking,
+            # so we'll just make both return something valid.
+            mock_cursor = MockCursor(rows=mock_patients)
+            # Patch fetchone to handle the COUNT query
+            mock_cursor.fetchone = MagicMock(return_value={'cnt': 2})
+            mock_cursor.fetchall = MagicMock(return_value=mock_patients)
+            yield mock_cursor
 
         with (
             _auth_mocks(user),
-            patch("app.db.openemr_cursor", _mock_openemr),
-            patch("app.db.raf_cursor", _mock_raf),
-            patch("app.services.openemr_connector.get_all_patients", return_value=mock_patients),
-            patch("app.services.openemr_connector.get_patient_count", return_value=2),
-            patch("app.routers.patients._has_active_emr_connection", return_value=True),
+            patch("app.services.patient_service.raf_cursor", _mock_raf_cursor_cm),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=False), # Force it to use _list_raf_patients
             patch("app.auth.check_permission", return_value=True),
         ):
             resp = client.get("/api/patients", headers=admin_headers)
 
-        assert resp.status_code in (200, 404, 503), (
+        assert resp.status_code == 200, (
             f"Unexpected status {resp.status_code}: {resp.text[:200]}"
         )
+        data = resp.json()
+        assert data.get("total") == 2
+        assert len(data.get("patients")) == 2
 
     def test_patients_response_does_not_expose_ssn(self, client, admin_headers):
         from tests.conftest import MOCK_ADMIN_USER
@@ -300,7 +303,7 @@ class TestPatientsEndpoint:
             patch("app.db.openemr_cursor", _mock_cursor),
             patch("app.db.raf_cursor", _mock_cursor),
             patch("app.services.openemr_connector.get_all_patients", return_value=mock_patients),
-            patch("app.routers.patients._has_active_emr_connection", return_value=True),
+            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
             patch("app.auth.check_permission", return_value=True),
         ):
             resp = client.get("/api/patients", headers=admin_headers)

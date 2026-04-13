@@ -233,11 +233,14 @@ export interface AuditPackage {
 
 export interface DashboardStats {
   total_patients: number;
+  patients_analyzed: number;
   average_raf_score: number;
+  coverage_pct: number;
   total_suspects_open: number;
   meat_compliance_pct: number;
   raf_distribution: RAFDistributionBucket[];
   top_undercoded: PatientSummary[];
+  pipeline?: Record<string, unknown>;
 }
 
 export interface RAFDistributionBucket {

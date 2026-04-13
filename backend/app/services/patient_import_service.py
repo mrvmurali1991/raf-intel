@@ -878,7 +878,7 @@ def _find_existing_patient(
     dob: date | None,
     first_name: str | None,
     last_name: str | None,
-    tenant_id: Optional[int] = None,
+    tenant_id: int,
 ) -> tuple[int | None, str | None]:
     """
     Look up an existing active patient by, in order:
@@ -890,12 +890,11 @@ def _find_existing_patient(
     ``db`` is expected to be an open DB cursor.
     """
     if tenant_id is None:
-        logger.warning(
-            "no tenant_id provided, defaulting to 1 — caller: _find_existing_patient"
+        raise ValueError(
+            "_find_existing_patient: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     # (a) MBI exact
     if mbi:
@@ -951,16 +950,15 @@ def _find_existing_pid(
     last_name: str,
     dob: date,
     mrn: str | None,
-    tenant_id: Optional[int] = None,
+    tenant_id: int,
 ) -> int | None:
     """Return the id of an existing patient record, or None if not found."""
     if tenant_id is None:
-        logger.warning(
-            "no tenant_id provided, defaulting to 1 — caller: _find_existing_pid"
+        raise ValueError(
+            "_find_existing_pid: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
     # Only match against ACTIVE patients — deactivated EMR patients don't count.
     if mrn:
         cur.execute(
@@ -999,7 +997,7 @@ def import_patients(
     uploaded_by: str,
     on_duplicate: str = "skip",
     source: str = "csv",
-    tenant_id: Optional[int] = None,
+    tenant_id: Optional[int] = None,  # Will raise below if None
 ) -> dict[str, Any]:
     """
     Validate, deduplicate, and insert patients from parsed rows.
@@ -1027,12 +1025,11 @@ def import_patients(
         Stored in the ``source`` column of the ``patients`` table.
     """
     if tenant_id is None:
-        logger.warning(
-            "no tenant_id provided, defaulting to 1 — caller: import_patients"
+        raise ValueError(
+            "import_patients: tenant_id is required — "
+            "refusing to import patients without tenant scope (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     total_rows = len(rows)
     imported = 0

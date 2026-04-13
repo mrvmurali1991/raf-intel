@@ -61,26 +61,61 @@ class CreateConnectionRequest(BaseModel):
     All types require: name, vendor, connection_type
     """
 
-    name: str = Field(..., min_length=1, max_length=200, description="Human-readable label for this connection")
-    vendor: str = Field(..., min_length=1, max_length=100, description="EMR vendor identifier, e.g. 'openemr', 'epic', 'cerner'")
-    connection_type: ConnectionType = Field(..., description="Transport mechanism for this connection")
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Human-readable label for this connection",
+    )
+    vendor: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="EMR vendor identifier, e.g. 'openemr', 'epic', 'cerner'",
+    )
+    connection_type: ConnectionType = Field(
+        ..., description="Transport mechanism for this connection"
+    )
     is_active: bool = Field(True, description="Whether this connection is enabled")
 
     # fhir_r4 fields
-    fhir_base_url: str | None = Field(None, description="FHIR R4 base URL (required for fhir_r4)")
-    fhir_auth_type: Literal["none", "oauth2", "api_key"] | None = Field(None, description="FHIR auth mechanism")
-    fhir_token_url: str | None = Field(None, description="OAuth2 token endpoint (fhir_r4 + oauth2)")
-    fhir_client_id: str | None = Field(None, description="OAuth2 client_id (fhir_r4 + oauth2)")
-    fhir_client_secret: str | None = Field(None, description="OAuth2 client_secret (fhir_r4 + oauth2)")
+    fhir_base_url: str | None = Field(
+        None, description="FHIR R4 base URL (required for fhir_r4)"
+    )
+    fhir_auth_type: Literal["none", "oauth2", "api_key"] | None = Field(
+        None, description="FHIR auth mechanism"
+    )
+    fhir_token_url: str | None = Field(
+        None, description="OAuth2 token endpoint (fhir_r4 + oauth2)"
+    )
+    fhir_client_id: str | None = Field(
+        None, description="OAuth2 client_id (fhir_r4 + oauth2)"
+    )
+    fhir_client_secret: str | None = Field(
+        None, description="OAuth2 client_secret (fhir_r4 + oauth2)"
+    )
     fhir_api_key: str | None = Field(None, description="API key (fhir_r4 + api_key)")
 
     # rest_api fields
-    api_base_url: str | None = Field(None, description="REST API base URL (required for rest_api)")
-    api_auth_type: Literal["none", "basic", "bearer", "api_key"] | None = Field(None, description="REST API auth mechanism")
-    api_username: str | None = Field(None, description="Basic auth username (rest_api + basic)")
-    api_password: str | None = Field(None, description="Basic auth password (rest_api + basic)")
-    api_token: str | None = Field(None, description="Bearer token or API key (rest_api + bearer/api_key)")
-    api_key_header: str | None = Field(None, description="Header name for API key, e.g. 'X-Api-Key' (rest_api + api_key)")
+    api_base_url: str | None = Field(
+        None, description="REST API base URL (required for rest_api)"
+    )
+    api_auth_type: Literal["none", "basic", "bearer", "api_key"] | None = Field(
+        None, description="REST API auth mechanism"
+    )
+    api_username: str | None = Field(
+        None, description="Basic auth username (rest_api + basic)"
+    )
+    api_password: str | None = Field(
+        None, description="Basic auth password (rest_api + basic)"
+    )
+    api_token: str | None = Field(
+        None, description="Bearer token or API key (rest_api + bearer/api_key)"
+    )
+    api_key_header: str | None = Field(
+        None,
+        description="Header name for API key, e.g. 'X-Api-Key' (rest_api + api_key)",
+    )
 
     @field_validator("fhir_base_url", "api_base_url")
     @classmethod
@@ -151,7 +186,9 @@ class ConnectionResponse(BaseModel):
     fhir_auth_type: str | None = None
     fhir_token_url: str | None = None
     fhir_client_id: str | None = None
-    fhir_client_secret: str | None = Field(None, description="Always masked in responses")
+    fhir_client_secret: str | None = Field(
+        None, description="Always masked in responses"
+    )
     fhir_api_key: str | None = Field(None, description="Always masked in responses")
 
     # rest_api — credentials masked
@@ -165,6 +202,7 @@ class ConnectionResponse(BaseModel):
 
 class VendorPresetResponse(BaseModel):
     """Vendor preset configuration with default values."""
+
     model_config = {"extra": "allow"}
 
     vendor: str
@@ -198,7 +236,9 @@ class FieldMappingsRequest(BaseModel):
 class UpdateSyncScheduleRequest(BaseModel):
     """Payload for enabling/disabling automatic sync and configuring its interval."""
 
-    sync_enabled: bool = Field(..., description="Whether automatic syncing is active for this connection")
+    sync_enabled: bool = Field(
+        ..., description="Whether automatic syncing is active for this connection"
+    )
     sync_interval_minutes: int = Field(
         60,
         ge=1,
@@ -223,15 +263,19 @@ class ManualMatchRequest(BaseModel):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_CREDENTIAL_FIELDS = frozenset({
-    "fhir_client_secret",
-    "fhir_api_key",
-    "api_password",
-    "api_token",
-})
+_CREDENTIAL_FIELDS = frozenset(
+    {
+        "fhir_client_secret",
+        "fhir_api_key",
+        "api_password",
+        "api_token",
+    }
+)
 
 
-def _require_connection(connection_id: int, tenant_id: str | None = None) -> dict[str, Any]:
+def _require_connection(
+    connection_id: int, tenant_id: str | None = None
+) -> dict[str, Any]:
     """Fetch connection by ID (scoped to tenant when supplied) or raise HTTP 404."""
     conn = emr_mgr.get_connection(connection_id, tenant_id=tenant_id)
     if not conn:
@@ -245,15 +289,17 @@ def _require_connection(connection_id: int, tenant_id: str | None = None) -> dic
 def _mask_credentials(conn: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of the connection dict with sensitive fields masked
     and normalized field names for the frontend."""
-    out = {
-        k: ("***" if k in _CREDENTIAL_FIELDS and v else v)
-        for k, v in conn.items()
-    }
+    out = {k: ("***" if k in _CREDENTIAL_FIELDS and v else v) for k, v in conn.items()}
     # Mask private keys in extra_config
     if out.get("extra_config") and "private_key" in str(out["extra_config"]):
         import json as _json
+
         try:
-            ec = _json.loads(out["extra_config"]) if isinstance(out["extra_config"], str) else out["extra_config"]
+            ec = (
+                _json.loads(out["extra_config"])
+                if isinstance(out["extra_config"], str)
+                else out["extra_config"]
+            )
             for key in list(ec):
                 if "private" in key.lower() or "secret" in key.lower():
                     ec[key] = "***"
@@ -278,6 +324,7 @@ def _mask_credentials(conn: dict[str, Any]) -> dict[str, Any]:
 def emr_status(
     request: Request,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """Return whether at least one active EMR connection exists, plus vendor metadata."""
     vendor: str | None = None
@@ -285,8 +332,6 @@ def emr_status(
     display_name: str | None = None
     connection_count: int = 0
     connected = False
-
-    tenant_id = current_user.get("tenant_id") or "default"
 
     try:
         conns = emr_mgr.list_connections(tenant_id=tenant_id)
@@ -315,6 +360,7 @@ def emr_status(
 def demo_connect(
     request: Request,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """Connect to the bundled OpenEMR demo instance.
 
@@ -322,8 +368,6 @@ def demo_connect(
     If no connection exists, attempts auto-registration from environment variables.
     """
     import os
-
-    tenant_id = current_user.get("tenant_id") or "default"
 
     # Check if already connected — return any active OpenEMR connection
     try:
@@ -499,13 +543,19 @@ def create_connection(
         new_id = emr_mgr.create_connection(data)
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input"
+        )
     except Exception as exc:
         logger.error("create_connection error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     # create_connection returns the full connection dict
-    conn = new_id if isinstance(new_id, dict) else (emr_mgr.get_connection(new_id, tenant_id=tenant_id) or {})
+    conn = (
+        new_id
+        if isinstance(new_id, dict)
+        else (emr_mgr.get_connection(new_id, tenant_id=tenant_id) or {})
+    )
     conn_id = conn.get("id", new_id) if isinstance(conn, dict) else new_id
     return {
         "id": conn_id,
@@ -600,6 +650,7 @@ def update_connection(
         # it (CSV uploads only deactivate; nothing is destroyed).
         try:
             from app.db import raf_cursor
+
             with raf_cursor() as cur:
                 cur.execute(
                     "UPDATE patients SET is_active = 0 WHERE is_active = 1 AND tenant_id = %s",
@@ -616,7 +667,8 @@ def update_connection(
         except Exception as exc:
             logger.error(
                 "Failed to flip patient activation for connection %s: %s",
-                connection_id, exc,
+                connection_id,
+                exc,
             )
 
     # Map router field names to emr_manager expected names
@@ -636,7 +688,9 @@ def update_connection(
         emr_mgr.update_connection(connection_id, updates, tenant_id=tenant_id)
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input"
+        )
     except Exception as exc:
         logger.error("update_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -702,9 +756,7 @@ def reactivate_connection(
 
     try:
         emr_mgr.deactivate_other_connections(connection_id, tenant_id=tenant_id)
-        emr_mgr.update_connection(
-            connection_id, {"is_active": 1}, tenant_id=tenant_id
-        )
+        emr_mgr.update_connection(connection_id, {"is_active": 1}, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("reactivate_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Failed to reactivate connection")
@@ -712,6 +764,7 @@ def reactivate_connection(
     restored = 0
     try:
         from app.db import raf_cursor
+
         with raf_cursor() as cur:
             cur.execute(
                 "UPDATE patients SET is_active = 0 WHERE is_active = 1 AND tenant_id = %s",
@@ -725,11 +778,10 @@ def reactivate_connection(
     except Exception as exc:
         logger.error(
             "reactivate_connection: failed to flip patients for %s: %s",
-            connection_id, exc,
+            connection_id,
+            exc,
         )
-        raise HTTPException(
-            status_code=500, detail="Failed to restore patient cohort"
-        )
+        raise HTTPException(status_code=500, detail="Failed to restore patient cohort")
 
     return {
         "message": "Connection reactivated",
@@ -797,10 +849,13 @@ class OAuth2CallbackBody(BaseModel):
     state: str
 
 
-def _build_client_assertion_jwt(client_id: str, token_url: str, private_key_pem: str) -> str:
+def _build_client_assertion_jwt(
+    client_id: str, token_url: str, private_key_pem: str
+) -> str:
     """Build a signed JWT for private_key_jwt client authentication (RFC 7523)."""
     import jwt as _pyjwt
     import time as _time
+
     now = int(_time.time())
     payload = {
         "iss": client_id,
@@ -810,8 +865,9 @@ def _build_client_assertion_jwt(client_id: str, token_url: str, private_key_pem:
         "exp": now + 300,
         "jti": _secrets.token_hex(16),
     }
-    return _pyjwt.encode(payload, private_key_pem, algorithm="RS384",
-                         headers={"kid": "ovXW4xFVHBo"})
+    return _pyjwt.encode(
+        payload, private_key_pem, algorithm="RS384", headers={"kid": "ovXW4xFVHBo"}
+    )
 
 
 @router.get(
@@ -828,7 +884,9 @@ def oauth2_authorize(
     """Generate an OAuth2 authorization URL with PKCE for the given EMR connection.
     The frontend should redirect the user's browser to the returned URL."""
     conn = _require_connection(connection_id, tenant_id)
-    full_conn = emr_mgr.get_connection_with_credentials(connection_id, tenant_id=tenant_id)
+    full_conn = emr_mgr.get_connection_with_credentials(
+        connection_id, tenant_id=tenant_id
+    )
 
     # PKCE: generate code_verifier and code_challenge
     code_verifier = _secrets.token_urlsafe(64)
@@ -845,21 +903,32 @@ def oauth2_authorize(
         # Derive from base_url: extract scheme+host, append /oauth2/default/authorize
         base = (conn.get("base_url") or "").rstrip("/")
         from urllib.parse import urlparse as _urlparse
+
         parsed = _urlparse(base)
         authorize_url = f"{parsed.scheme}://{parsed.netloc}/oauth2/default/authorize"
 
     if not authorize_url:
-        raise HTTPException(400, "Cannot determine authorize URL. Set it in the connection config.")
+        raise HTTPException(
+            400, "Cannot determine authorize URL. Set it in the connection config."
+        )
 
     # Build redirect_uri from Origin/Referer header or fallback
     origin = request.headers.get("origin") or request.headers.get("referer") or ""
     if origin:
         origin = origin.split("/emr-config")[0].split("/api/")[0].rstrip("/")
-    redirect_uri = f"{origin}/emr-config/callback" if origin else "http://localhost:3444/emr-config/callback"
+    redirect_uri = (
+        f"{origin}/emr-config/callback"
+        if origin
+        else "http://localhost:3444/emr-config/callback"
+    )
 
     # Store state for callback verification (redirect_uri stored so callback uses the same one)
     emr_mgr.store_oauth2_state(connection_id, state, code_verifier, redirect_uri)
-    scope = conn.get("scope") or full_conn.get("scope") or "openid api:fhir user/Patient.read user/Condition.read user/Encounter.read"
+    scope = (
+        conn.get("scope")
+        or full_conn.get("scope")
+        or "openid api:fhir user/Patient.read user/Condition.read user/Encounter.read"
+    )
     client_id = full_conn.get("client_id") or conn.get("client_id") or ""
 
     params = {
@@ -890,11 +959,15 @@ def oauth2_callback(
     # Look up and consume the state (one-time use)
     state_data = emr_mgr.pop_oauth2_state(body.state)
     if not state_data:
-        raise HTTPException(400, "Invalid or expired state parameter. Please try authorizing again.")
+        raise HTTPException(
+            400, "Invalid or expired state parameter. Please try authorizing again."
+        )
 
     connection_id = state_data["connection_id"]
     code_verifier = state_data["code_verifier"]
-    redirect_uri = state_data.get("redirect_uri") or "http://localhost:3444/emr-config/callback"
+    redirect_uri = (
+        state_data.get("redirect_uri") or "http://localhost:3444/emr-config/callback"
+    )
 
     conn = emr_mgr.get_connection_with_credentials(connection_id)
     if not conn:
@@ -906,6 +979,7 @@ def oauth2_callback(
 
     # Exchange code for tokens
     import httpx as _httpx
+
     client_id = conn.get("client_id") or ""
     client_secret = conn.get("client_secret") or ""
 
@@ -921,6 +995,7 @@ def oauth2_callback(
     extra_config = conn.get("extra_config") or {}
     if isinstance(extra_config, str):
         import json as _json
+
         try:
             extra_config = _json.loads(extra_config)
         except Exception:
@@ -930,19 +1005,26 @@ def oauth2_callback(
     if jwks_private_key_pem:
         # Generate client_assertion JWT
         try:
-            client_assertion = _build_client_assertion_jwt(client_id, token_url, jwks_private_key_pem)
-            token_data["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            client_assertion = _build_client_assertion_jwt(
+                client_id, token_url, jwks_private_key_pem
+            )
+            token_data["client_assertion_type"] = (
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            )
             token_data["client_assertion"] = client_assertion
             logger.info("Using private_key_jwt authentication for token exchange")
         except Exception as exc:
-            logger.warning("Failed to build client assertion, falling back to client_secret: %s", exc)
+            logger.warning(
+                "Failed to build client assertion, falling back to client_secret: %s",
+                exc,
+            )
             if client_secret:
                 token_data["client_secret"] = client_secret
     elif client_secret:
         token_data["client_secret"] = client_secret
 
     try:
-        with _httpx.Client(timeout=30, verify=False) as client:
+        with _httpx.Client(timeout=30, verify=True) as client:
             resp = client.post(
                 token_url,
                 data=token_data,
@@ -956,21 +1038,33 @@ def oauth2_callback(
         raise HTTPException(502, "Failed to reach token endpoint")
 
     if resp.status_code != 200:
-        logger.error("OAuth2 token exchange failed (%s): %s", resp.status_code, resp.text[:300])
-        raise HTTPException(502, f"Token exchange failed ({resp.status_code}): {resp.text[:300]}")
+        logger.error(
+            "OAuth2 token exchange failed (%s): %s", resp.status_code, resp.text[:300]
+        )
+        raise HTTPException(
+            502, f"Token exchange failed ({resp.status_code}): {resp.text[:300]}"
+        )
 
     tokens = resp.json()
-    logger.info("OAuth2 token response keys: %s, scope: %s, token_type: %s",
-                list(tokens.keys()), tokens.get("scope", "N/A"), tokens.get("token_type", "N/A"))
+    logger.info(
+        "OAuth2 token response keys: %s, scope: %s, token_type: %s",
+        list(tokens.keys()),
+        tokens.get("scope", "N/A"),
+        tokens.get("token_type", "N/A"),
+    )
     # Decode JWT to see actual claims
     _at = tokens.get("access_token", "")
-    if _at and _at.count('.') == 2:
+    if _at and _at.count(".") == 2:
         try:
             import base64 as _b64
-            _parts = _at.split('.')
-            _padded = _parts[1] + '=' * (4 - len(_parts[1]) % 4)
+
+            _parts = _at.split(".")
+            _padded = _parts[1] + "=" * (4 - len(_parts[1]) % 4)
             _payload = json.loads(_b64.urlsafe_b64decode(_padded))
-            logger.info("OAuth2 JWT claims: %s", {k: v for k, v in _payload.items() if k not in ('jti',)})
+            logger.info(
+                "OAuth2 JWT claims: %s",
+                {k: v for k, v in _payload.items() if k not in ("jti",)},
+            )
         except Exception:
             pass
     access_token = tokens.get("access_token", "")
@@ -1028,10 +1122,14 @@ def trigger_sync(
         )
 
     try:
-        result = emr_mgr.trigger_sync(connection_id, sync_type=sync_type, tenant_id=tenant_id)
+        result = emr_mgr.trigger_sync(
+            connection_id, sync_type=sync_type, tenant_id=tenant_id
+        )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bad request")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Bad request"
+        )
     except Exception as exc:
         logger.error("trigger_sync %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1053,7 +1151,9 @@ def trigger_sync(
 def get_sync_history(
     request: Request,
     connection_id: int,
-    limit: int = Query(20, ge=1, le=100, description="Maximum number of history entries to return"),
+    limit: int = Query(
+        20, ge=1, le=100, description="Maximum number of history entries to return"
+    ),
     tenant_id: str = Depends(get_tenant_id),
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -1066,7 +1166,9 @@ def get_sync_history(
     _require_connection(connection_id, tenant_id)
 
     try:
-        history = emr_mgr.get_sync_history(connection_id, limit=limit, tenant_id=tenant_id)
+        history = emr_mgr.get_sync_history(
+            connection_id, limit=limit, tenant_id=tenant_id
+        )
     except Exception as exc:
         logger.error("get_sync_history %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1120,7 +1222,9 @@ def update_sync_schedule(
         )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input"
+        )
     except Exception as exc:
         logger.error("update_sync_schedule %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1202,7 +1306,9 @@ def update_field_mappings(
         emr_mgr.update_mappings(connection_id, body.mappings)
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input"
+        )
     except Exception as exc:
         logger.error("update_field_mappings %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1300,7 +1406,9 @@ def manual_match_patient(
         )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input"
+        )
     except Exception as exc:
         logger.error("manual_match_patient %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1622,9 +1730,7 @@ def parse_hl7(
         observations = extract_observations(msg)
     except Exception as exc:
         logger.error("parse_hl7: extraction error: %s", exc)
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
         "message_type": msg.message_type,

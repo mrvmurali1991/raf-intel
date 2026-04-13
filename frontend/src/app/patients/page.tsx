@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { FocusTrap } from "@/components/ui/focus-trap";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { searchPatients, isEmrDeactivatedError } from "@/lib/api";
@@ -31,7 +32,7 @@ import {
   Activity,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
-import { tokens } from "@/styles/tokens";
+import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials, riskAccentColor, riskTone } from "@/lib/ui-utils";
 
 // ---------------------------------------------------------------------------
 // Constants & Types
@@ -43,36 +44,6 @@ type SortKey = "name" | "age" | "raf_score" | "hcc_count";
 type SortDir = "asc" | "desc";
 type RiskFilter = "all" | "high" | "medium" | "low" | "unscored";
 
-// ---------------------------------------------------------------------------
-// Design tokens — shared slate palette and risk colors imported from
-// @/styles/tokens. Page-specific brand accents remain local.
-// ---------------------------------------------------------------------------
-
-// Neutral palette
-const C = {
-  text: tokens.slate900,
-  textMuted: tokens.slate600,
-  textSubtle: tokens.slate500,
-  label: tokens.slate400,
-  border: tokens.slate200,
-  borderSoft: "#EEF2F6",
-  rowDivider: tokens.slate100,
-  bgPage: tokens.slate50,
-  bgCard: tokens.white,
-  bgSubtle: tokens.slate50,
-  bgBand: "#FAFBFC",
-  bgBandHover: tokens.slate100,
-  brand: "#0F766E",
-  brandSoft: "rgba(15, 118, 110, 0.06)",
-  brandRing: "rgba(15, 118, 110, 0.18)",
-  high: tokens.riskHigh,
-  medium: tokens.riskMedium,
-  low: tokens.riskLow,
-  highSoft: tokens.riskHighSoft,
-  mediumSoft: tokens.riskMediumSoft,
-  lowSoft: tokens.riskLowSoft,
-};
-
 // Worklist grid template — single source of truth so header, body rows,
 // skeleton, column-filter row and group super-header all stay perfectly aligned.
 // 9 cells: Patient | Age/Sex | RAF Score | Demo | Disease | Interact | HCCs | Status | ›
@@ -82,11 +53,6 @@ const WORKLIST_GAP = 12;
 const WORKLIST_PAD_X = 24;
 const ROW_HEIGHT = 76;
 const SUBSCORE_BAND_BG = C.bgBand;
-
-const FONT_SYS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif';
-const FONT_MONO =
-  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,45 +64,6 @@ function formatLocation(p: Patient): string {
   if (p.state) parts.push(p.state);
   if (parts.length === 0 && p.postal_code) return p.postal_code;
   return parts.join(", ") || "\u2014";
-}
-
-function initialsColor(name: string): string {
-  const colors = [
-    "#2563EB", "#7C3AED", "#DB2777", "#0EA5E9",
-    "#9333EA", "#0891B2", "#4F46E5", "#0D9488",
-    "#0F766E", "#7C3AED", "#1D4ED8", "#0369A1",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
-
-function riskAccentColor(score: number | null | undefined): string {
-  if (score == null || score === 0) return C.borderSoft;
-  if (score >= 2.0) return C.high;
-  if (score >= 1.0) return C.medium;
-  if (score >= 0.5) return C.low;
-  return C.borderSoft;
-}
-
-function riskTone(score: number | null | undefined): { fg: string; bg: string; label: string } {
-  if (score == null || score === 0) return { fg: C.label, bg: "#F1F5F9", label: "Unscored" };
-  if (score >= 2.0) return { fg: C.high, bg: C.highSoft, label: "High" };
-  if (score >= 1.0) return { fg: C.medium, bg: C.mediumSoft, label: "Medium" };
-  return { fg: C.low, bg: C.lowSoft, label: "Low" };
-}
-
-function deriveInitials(fname?: string | null, lname?: string | null, pid?: string | number | null): string {
-  const f = (fname || "").trim();
-  const l = (lname || "").trim();
-  const a = f ? f[0] : "";
-  const b = l ? l[0] : "";
-  const out = (a + b).toUpperCase();
-  if (out) return out;
-  // Fallback to PID digit if name unavailable; never render "?".
-  const pidStr = pid != null ? String(pid).replace(/\D/g, "") : "";
-  if (pidStr) return pidStr.slice(-2).padStart(2, "0");
-  return "\u2022";
 }
 
 // ---------------------------------------------------------------------------
@@ -441,7 +368,8 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
   return (
     <div style={OVERLAY} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={MODAL} role="dialog" aria-modal="true" aria-label="Import patients">
+      <FocusTrap>
+        <div style={MODAL} role="dialog" aria-modal="true" aria-label="Import patients">
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0F172A" }}>Import Patients</h2>
@@ -790,6 +718,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
           )}
         </div>
       </div>
+      </FocusTrap>
     </div>
   );
 }
@@ -1191,7 +1120,7 @@ export default function PatientsPage() {
             }}>
               {isLoading
                 ? "Loading registry…"
-                : `${totalPatients.toLocaleString()} patients in registry · CMS-HCC V28 risk model`}
+                : `${totalPatients.toLocaleString()} patients in registry · CMS-HCC V28 · MY ${measurementYear}`}
             </p>
           </div>
         </div>
@@ -1296,7 +1225,7 @@ export default function PatientsPage() {
           {
             label: "Average RAF",
             value: stats.avgRaf > 0 ? stats.avgRaf.toFixed(3) : "\u2014",
-            sub: `Across ${(stats.all - stats.unscored).toLocaleString()} scored`,
+            sub: `${measurementYear} · ${(stats.all - stats.unscored).toLocaleString()} scored`,
             icon: Activity,
             tone: "#0EA5E9",
           },

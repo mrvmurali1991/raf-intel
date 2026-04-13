@@ -5,6 +5,7 @@ Connects to any OpenEMR instance via its FHIR R4 API using OAuth2
 client_credentials flow.  Fetches Patient and Condition resources
 and normalises them into the standard shapes.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,26 +30,41 @@ class OpenEMRFhirAdapter:
         self.connection = connection
         self.connection_id: int = connection.get("id", 0)
         self.base_url: str = (
-            connection.get("base_url")
-            or connection.get("fhir_base_url")
-            or ""
+            connection.get("base_url") or connection.get("fhir_base_url") or ""
         ).rstrip("/")
         self.token_url: str = (
-            connection.get("token_url")
-            or connection.get("fhir_token_url")
+            connection.get("token_url") or connection.get("fhir_token_url") or ""
+        )
+        self.client_id: str = (
+            connection.get("client_id") or connection.get("fhir_client_id") or ""
+        )
+        self.client_secret: str = (
+            connection.get("client_secret")
+            or connection.get("fhir_client_secret")
             or ""
         )
-        self.client_id: str = connection.get("client_id") or connection.get("fhir_client_id") or ""
-        self.client_secret: str = connection.get("client_secret") or connection.get("fhir_client_secret") or ""
         self.scope: str = connection.get("scope") or "openid api:fhir"
         # OpenEMR password grant credentials (stored in extra_config or api_username/api_password)
         extra = connection.get("extra_config") or {}
         if isinstance(extra, str):
             import json as _json
-            try: extra = _json.loads(extra)
-            except: extra = {}
-        self.emr_username: str = extra.get("emr_username") or connection.get("api_username") or connection.get("db_user") or ""
-        self.emr_password: str = extra.get("emr_password") or connection.get("api_password") or connection.get("db_password") or ""
+
+            try:
+                extra = _json.loads(extra)
+            except (ValueError, TypeError):
+                extra = {}
+        self.emr_username: str = (
+            extra.get("emr_username")
+            or connection.get("api_username")
+            or connection.get("db_user")
+            or ""
+        )
+        self.emr_password: str = (
+            extra.get("emr_password")
+            or connection.get("api_password")
+            or connection.get("db_password")
+            or ""
+        )
         self._jwks_private_key_pem: str = extra.get("jwks_private_key_pem") or ""
         self._access_token: str | None = None
 
@@ -82,7 +98,10 @@ class OpenEMRFhirAdapter:
                         token_expires = datetime.fromisoformat(token_expires)
                     except ValueError:
                         is_expired = True
-                if isinstance(token_expires, datetime) and token_expires < datetime.utcnow():
+                if (
+                    isinstance(token_expires, datetime)
+                    and token_expires < datetime.utcnow()
+                ):
                     is_expired = True
 
             if not is_expired:
@@ -90,16 +109,21 @@ class OpenEMRFhirAdapter:
                 # Decode JWT to see actual scopes
                 try:
                     import base64 as _b64
-                    parts = stored_token.split('.')
+
+                    parts = stored_token.split(".")
                     if len(parts) >= 2:
-                        padded = parts[1] + '=' * (4 - len(parts[1]) % 4)
+                        padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
                         import json as _json2
+
                         payload = _json2.loads(_b64.urlsafe_b64decode(padded))
                         logger.info("OpenEMR FHIR: JWT full payload: %s", payload)
                 except Exception:
                     pass
-                logger.info("OpenEMR FHIR: using stored access token for connection %s (len=%d)",
-                           self.connection_id, len(stored_token))
+                logger.info(
+                    "OpenEMR FHIR: using stored access token for connection %s (len=%d)",
+                    self.connection_id,
+                    len(stored_token),
+                )
                 return self._access_token
 
             # Token expired — try refresh
@@ -110,9 +134,11 @@ class OpenEMRFhirAdapter:
 
         # --- Fallback: password grant ---
         if not self.token_url:
-            raise ValueError("No token_url configured and no stored token available. Run OAuth2 Authorize first.")
+            raise ValueError(
+                "No token_url configured and no stored token available. Run OAuth2 Authorize first."
+            )
 
-        with httpx.Client(timeout=_TIMEOUT, verify=False) as client:
+        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
             if self.emr_username and self.emr_password:
                 resp = client.post(
                     self.token_url,
@@ -124,13 +150,19 @@ class OpenEMRFhirAdapter:
                         "password": self.emr_password,
                         "scope": self.scope,
                     },
-                    headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": _BROWSER_UA},
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "User-Agent": _BROWSER_UA,
+                    },
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     self._access_token = data.get("access_token")
                     if self._access_token:
-                        logger.info("OpenEMR FHIR: got token via password grant for connection %s", self.connection_id)
+                        logger.info(
+                            "OpenEMR FHIR: got token via password grant for connection %s",
+                            self.connection_id,
+                        )
                         return self._access_token
 
             # Fallback: client_credentials grant with private_key_jwt
@@ -143,7 +175,10 @@ class OpenEMRFhirAdapter:
             resp = client.post(
                 self.token_url,
                 data=cc_data,
-                headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": _BROWSER_UA},
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": _BROWSER_UA,
+                },
             )
             if resp.status_code != 200:
                 raise ValueError(
@@ -153,7 +188,10 @@ class OpenEMRFhirAdapter:
             self._access_token = data.get("access_token")
             if not self._access_token:
                 raise ValueError(f"No access_token in OAuth2 response: {data}")
-            logger.info("OpenEMR FHIR: obtained access token for connection %s", self.connection_id)
+            logger.info(
+                "OpenEMR FHIR: obtained access token for connection %s",
+                self.connection_id,
+            )
             return self._access_token
 
     def _build_client_assertion(self) -> str | None:
@@ -163,6 +201,7 @@ class OpenEMRFhirAdapter:
         try:
             import jwt as _pyjwt
             import uuid
+
             payload = {
                 "iss": self.client_id,
                 "sub": self.client_id,
@@ -171,8 +210,12 @@ class OpenEMRFhirAdapter:
                 "iat": int(time.time()),
                 "exp": int(time.time()) + 120,
             }
-            return _pyjwt.encode(payload, self._jwks_private_key_pem, algorithm="RS384",
-                                 headers={"typ": "JWT", "alg": "RS384"})
+            return _pyjwt.encode(
+                payload,
+                self._jwks_private_key_pem,
+                algorithm="RS384",
+                headers={"typ": "JWT", "alg": "RS384"},
+            )
         except Exception as exc:
             logger.warning("OpenEMR FHIR: failed to build client assertion: %s", exc)
             return None
@@ -181,7 +224,9 @@ class OpenEMRFhirAdapter:
         """Add client authentication to token request data."""
         assertion = self._build_client_assertion()
         if assertion:
-            data["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            data["client_assertion_type"] = (
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            )
             data["client_assertion"] = assertion
         elif self.client_secret:
             data["client_secret"] = self.client_secret
@@ -198,14 +243,21 @@ class OpenEMRFhirAdapter:
                 "client_id": self.client_id,
             }
             self._add_client_auth(token_data)
-            with httpx.Client(timeout=_TIMEOUT, verify=False) as client:
+            with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
                 resp = client.post(
                     self.token_url,
                     data=token_data,
-                    headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": _BROWSER_UA},
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "User-Agent": _BROWSER_UA,
+                    },
                 )
             if resp.status_code != 200:
-                logger.warning("OpenEMR FHIR: refresh token failed (%s): %s", resp.status_code, resp.text[:200])
+                logger.warning(
+                    "OpenEMR FHIR: refresh token failed (%s): %s",
+                    resp.status_code,
+                    resp.text[:200],
+                )
                 return None
 
             data = resp.json()
@@ -219,12 +271,18 @@ class OpenEMRFhirAdapter:
             # Persist new tokens
             try:
                 from app.services import emr_manager as emr_mgr
-                emr_mgr.store_oauth2_tokens(self.connection_id, new_access, new_refresh, expires_in)
+
+                emr_mgr.store_oauth2_tokens(
+                    self.connection_id, new_access, new_refresh, expires_in
+                )
             except Exception as exc:
                 logger.warning("Failed to persist refreshed tokens: %s", exc)
 
             self._access_token = new_access
-            logger.info("OpenEMR FHIR: refreshed access token for connection %s", self.connection_id)
+            logger.info(
+                "OpenEMR FHIR: refreshed access token for connection %s",
+                self.connection_id,
+            )
             return new_access
         except Exception as exc:
             logger.warning("OpenEMR FHIR: refresh token error: %s", exc)
@@ -253,33 +311,59 @@ class OpenEMRFhirAdapter:
 
     def _fhir_get(self, resource_path: str, params: dict | None = None) -> dict:
         url = f"{self.base_url}/{resource_path}"
-        with httpx.Client(timeout=_TIMEOUT, verify=False) as client:
+        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
             resp = client.get(url, headers=self._auth_headers(), params=params)
             if resp.status_code == 401:
-                logger.warning("FHIR GET %s -> 401, forcing token refresh", resource_path)
+                logger.warning(
+                    "FHIR GET %s -> 401, forcing token refresh", resource_path
+                )
                 self._force_refresh()
                 resp = client.get(url, headers=self._auth_headers(), params=params)
             if resp.status_code != 200:
-                logger.warning("FHIR GET %s -> %s: %s", resource_path, resp.status_code, resp.text[:200])
+                logger.warning(
+                    "FHIR GET %s -> %s: %s",
+                    resource_path,
+                    resp.status_code,
+                    resp.text[:200],
+                )
                 return {}
             return resp.json()
 
-    def _fhir_get_all(self, resource_type: str, params: dict | None = None, max_pages: int = 50) -> list[dict]:
+    def _fhir_get_all(
+        self, resource_type: str, params: dict | None = None, max_pages: int = 50
+    ) -> list[dict]:
         """Fetch all pages of a FHIR Bundle."""
         all_entries: list[dict] = []
         url = f"{self.base_url}/{resource_type}"
         p = params or {}
         p.setdefault("_count", "100")
 
-        with httpx.Client(timeout=_TIMEOUT, verify=False) as client:
+        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
             for page in range(max_pages):
-                resp = client.get(url, headers=self._auth_headers(), params=p if page == 0 else None)
+                resp = client.get(
+                    url, headers=self._auth_headers(), params=p if page == 0 else None
+                )
                 if resp.status_code == 401:
-                    logger.warning("FHIR %s page %d -> 401 body: %s", resource_type, page, resp.text[:300])
+                    logger.warning(
+                        "FHIR %s page %d -> 401 body: %s",
+                        resource_type,
+                        page,
+                        resp.text[:300],
+                    )
                     self._force_refresh()
-                    resp = client.get(url, headers=self._auth_headers(), params=p if page == 0 else None)
+                    resp = client.get(
+                        url,
+                        headers=self._auth_headers(),
+                        params=p if page == 0 else None,
+                    )
                 if resp.status_code != 200:
-                    logger.warning("FHIR %s page %d -> %s body: %s", resource_type, page, resp.status_code, resp.text[:300])
+                    logger.warning(
+                        "FHIR %s page %d -> %s body: %s",
+                        resource_type,
+                        page,
+                        resp.status_code,
+                        resp.text[:300],
+                    )
                     break
                 bundle = resp.json()
                 entries = bundle.get("entry", [])
@@ -306,16 +390,30 @@ class OpenEMRFhirAdapter:
         t0 = time.time()
         try:
             url = f"{self.base_url}/metadata"
-            with httpx.Client(timeout=_TIMEOUT, verify=False) as client:
-                resp = client.get(url, headers={"Accept": "application/fhir+json", "User-Agent": _BROWSER_UA})
+            with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
+                resp = client.get(
+                    url,
+                    headers={
+                        "Accept": "application/fhir+json",
+                        "User-Agent": _BROWSER_UA,
+                    },
+                )
                 latency = int((time.time() - t0) * 1000)
                 if resp.status_code == 200:
                     data = resp.json()
                     if data.get("resourceType") == "CapabilityStatement":
                         fhir_ver = data.get("fhirVersion", "?")
                         sw = data.get("software", {}).get("name", "FHIR Server")
-                        return {"success": True, "message": f"Connected to {sw} FHIR R4 v{fhir_ver}", "latency_ms": latency}
-                return {"success": False, "message": f"HTTP {resp.status_code}: {resp.text[:200]}", "latency_ms": latency}
+                        return {
+                            "success": True,
+                            "message": f"Connected to {sw} FHIR R4 v{fhir_ver}",
+                            "latency_ms": latency,
+                        }
+                return {
+                    "success": False,
+                    "message": f"HTTP {resp.status_code}: {resp.text[:200]}",
+                    "latency_ms": latency,
+                }
         except Exception as exc:
             latency = int((time.time() - t0) * 1000)
             return {"success": False, "message": str(exc)[:300], "latency_ms": latency}
@@ -341,7 +439,9 @@ class OpenEMRFhirAdapter:
         # ------------------------------------------------------------------ #
         try:
             patient_entries = self._fhir_get_all("Patient")
-            logger.info("OpenEMR FHIR: fetched %d Patient entries", len(patient_entries))
+            logger.info(
+                "OpenEMR FHIR: fetched %d Patient entries", len(patient_entries)
+            )
         except Exception as exc:
             errors.append(f"Patient fetch failed: {exc}")
             patient_entries = []
@@ -363,7 +463,9 @@ class OpenEMRFhirAdapter:
         # ------------------------------------------------------------------ #
         try:
             condition_entries = self._fhir_get_all("Condition")
-            logger.info("OpenEMR FHIR: fetched %d Condition entries", len(condition_entries))
+            logger.info(
+                "OpenEMR FHIR: fetched %d Condition entries", len(condition_entries)
+            )
         except Exception as exc:
             errors.append(f"Condition fetch failed: {exc}")
             condition_entries = []
@@ -385,7 +487,9 @@ class OpenEMRFhirAdapter:
         # ------------------------------------------------------------------ #
         try:
             encounter_entries = self._fhir_get_all("Encounter")
-            logger.info("OpenEMR FHIR: fetched %d Encounter entries", len(encounter_entries))
+            logger.info(
+                "OpenEMR FHIR: fetched %d Encounter entries", len(encounter_entries)
+            )
             for entry in encounter_entries:
                 resource = entry.get("resource", {})
                 if resource.get("resourceType") != "Encounter":
@@ -409,8 +513,11 @@ class OpenEMRFhirAdapter:
         logger.info(
             "OpenEMR FHIR sync done: %d patients, %d conditions, %d encounters, "
             "%d RAF scores, %d errors",
-            patients_synced, conditions_found, encounters_synced,
-            raf_scores_calculated, len(errors),
+            patients_synced,
+            conditions_found,
+            encounters_synced,
+            raf_scores_calculated,
+            len(errors),
         )
         return {
             "patients_synced": patients_synced,
@@ -444,17 +551,32 @@ class OpenEMRFhirAdapter:
 
     # Common clinical text → ICD-10-CM mapping for conditions without coded entries
     _TEXT_TO_ICD10: dict[str, tuple[str, str]] = {
-        "type 2 diabetes mellitus": ("E11.9", "Type 2 diabetes mellitus without complications"),
+        "type 2 diabetes mellitus": (
+            "E11.9",
+            "Type 2 diabetes mellitus without complications",
+        ),
         "type 2 diabetes": ("E11.9", "Type 2 diabetes mellitus without complications"),
-        "type 1 diabetes mellitus": ("E10.9", "Type 1 diabetes mellitus without complications"),
+        "type 1 diabetes mellitus": (
+            "E10.9",
+            "Type 1 diabetes mellitus without complications",
+        ),
         "essential hypertension": ("I10", "Essential (primary) hypertension"),
         "hypertension": ("I10", "Essential (primary) hypertension"),
-        "copd": ("J44.1", "Chronic obstructive pulmonary disease with acute exacerbation"),
-        "chronic obstructive pulmonary disease": ("J44.1", "COPD with acute exacerbation"),
+        "copd": (
+            "J44.1",
+            "Chronic obstructive pulmonary disease with acute exacerbation",
+        ),
+        "chronic obstructive pulmonary disease": (
+            "J44.1",
+            "COPD with acute exacerbation",
+        ),
         "osteoarthritis of knee": ("M17.9", "Osteoarthritis of knee, unspecified"),
         "osteoarthritis": ("M19.90", "Unspecified osteoarthritis, unspecified site"),
         "hyperlipidemia": ("E78.5", "Hyperlipidemia, unspecified"),
-        "major depressive disorder": ("F33.0", "Major depressive disorder, recurrent, mild"),
+        "major depressive disorder": (
+            "F33.0",
+            "Major depressive disorder, recurrent, mild",
+        ),
         "depression": ("F33.0", "Major depressive disorder, recurrent, mild"),
         "hypothyroidism": ("E03.9", "Hypothyroidism, unspecified"),
         "anxiety disorder": ("F41.9", "Anxiety disorder, unspecified"),
@@ -470,10 +592,19 @@ class OpenEMRFhirAdapter:
         "obesity": ("E66.9", "Obesity, unspecified"),
         "morbid obesity": ("E66.01", "Morbid (severe) obesity due to excess calories"),
         "stroke": ("I63.9", "Cerebral infarction, unspecified"),
-        "peripheral vascular disease": ("I73.9", "Peripheral vascular disease, unspecified"),
+        "peripheral vascular disease": (
+            "I73.9",
+            "Peripheral vascular disease, unspecified",
+        ),
         "rheumatoid arthritis": ("M06.9", "Rheumatoid arthritis, unspecified"),
-        "diabetic neuropathy": ("E11.40", "Type 2 DM with diabetic neuropathy, unspecified"),
-        "diabetic retinopathy": ("E11.319", "Type 2 DM with unspecified diabetic retinopathy"),
+        "diabetic neuropathy": (
+            "E11.40",
+            "Type 2 DM with diabetic neuropathy, unspecified",
+        ),
+        "diabetic retinopathy": (
+            "E11.319",
+            "Type 2 DM with unspecified diabetic retinopathy",
+        ),
         "chronic pain": ("G89.29", "Other chronic pain"),
         "dementia": ("F03.90", "Unspecified dementia without behavioral disturbance"),
         "alzheimer": ("G30.9", "Alzheimer's disease, unspecified"),
@@ -483,8 +614,14 @@ class OpenEMRFhirAdapter:
         "cirrhosis": ("K74.60", "Unspecified cirrhosis of liver"),
         "hepatitis c": ("B18.2", "Chronic viral hepatitis C"),
         "hiv": ("B20", "Human immunodeficiency virus [HIV] disease"),
-        "lung cancer": ("C34.90", "Malignant neoplasm of unspecified part of bronchus or lung"),
-        "breast cancer": ("C50.919", "Malignant neoplasm of unspecified site of unspecified breast"),
+        "lung cancer": (
+            "C34.90",
+            "Malignant neoplasm of unspecified part of bronchus or lung",
+        ),
+        "breast cancer": (
+            "C50.919",
+            "Malignant neoplasm of unspecified site of unspecified breast",
+        ),
         "colon cancer": ("C18.9", "Malignant neoplasm of colon, unspecified"),
         "prostate cancer": ("C61", "Malignant neoplasm of prostate"),
         "schizophrenia": ("F20.9", "Schizophrenia, unspecified"),
@@ -509,7 +646,11 @@ class OpenEMRFhirAdapter:
         code_obj = resource.get("code", {})
         for coding in code_obj.get("coding", []):
             system = coding.get("system", "")
-            if "icd" in system.lower() or "icd10" in system.lower() or system == "http://hl7.org/fhir/sid/icd-10-cm":
+            if (
+                "icd" in system.lower()
+                or "icd10" in system.lower()
+                or system == "http://hl7.org/fhir/sid/icd-10-cm"
+            ):
                 icd_code = coding.get("code", "")
                 description = coding.get("display", "")
                 break
@@ -533,14 +674,20 @@ class OpenEMRFhirAdapter:
 
         # Status
         clinical_status = resource.get("clinicalStatus", {})
-        status_codings = clinical_status.get("coding", []) if isinstance(clinical_status, dict) else []
+        status_codings = (
+            clinical_status.get("coding", [])
+            if isinstance(clinical_status, dict)
+            else []
+        )
         status = status_codings[0].get("code", "active") if status_codings else "active"
 
         # Onset
         onset = resource.get("onsetDateTime", "")
         if not onset:
             onset_period = resource.get("onsetPeriod", {})
-            onset = onset_period.get("start", "") if isinstance(onset_period, dict) else ""
+            onset = (
+                onset_period.get("start", "") if isinstance(onset_period, dict) else ""
+            )
 
         # Patient reference
         subject = resource.get("subject", {})
@@ -560,6 +707,7 @@ class OpenEMRFhirAdapter:
 
     def _upsert_patient(self, patient: dict) -> None:
         from app.db import raf_cursor
+
         with raf_cursor() as cur:
             cur.execute(
                 """
@@ -674,7 +822,8 @@ class OpenEMRFhirAdapter:
                     (age_band, sex, measurement_year, existing_raf_id),
                 )
                 logger.debug(
-                    "OpenEMR FHIR: updated demographics for raf_patient_id=%s", existing_raf_id
+                    "OpenEMR FHIR: updated demographics for raf_patient_id=%s",
+                    existing_raf_id,
                 )
             else:
                 # Insert a new demographics row
@@ -697,7 +846,8 @@ class OpenEMRFhirAdapter:
                 )
                 logger.debug(
                     "OpenEMR FHIR: created demographics id=%s for match id=%s",
-                    new_raf_id, match_id,
+                    new_raf_id,
+                    match_id,
                 )
 
     # ------------------------------------------------------------------
@@ -734,7 +884,8 @@ class OpenEMRFhirAdapter:
             if not pm_row:
                 logger.debug(
                     "OpenEMR FHIR: skipping condition %s — patient %s not yet matched",
-                    icd10, condition["patient_external_id"],
+                    icd10,
+                    condition["patient_external_id"],
                 )
                 return
             raf_patient_id: int = pm_row["raf_patient_id"]
@@ -754,7 +905,8 @@ class OpenEMRFhirAdapter:
             xwalk = cur.fetchone()
             if not xwalk:
                 logger.debug(
-                    "OpenEMR FHIR: ICD-10 %s has no HCC mapping — storing as HCC 0", icd10
+                    "OpenEMR FHIR: ICD-10 %s has no HCC mapping — storing as HCC 0",
+                    icd10,
                 )
                 hcc_code = 0
                 raf_coefficient = 0.0
@@ -776,9 +928,7 @@ class OpenEMRFhirAdapter:
                 raf_coefficient = float(coeff_row["coefficient"]) if coeff_row else 0.0
 
             # 4. Determine MEAT status based on clinical documentation presence
-            meat_status = (
-                "complete" if condition.get("onset_date") else "partial"
-            )
+            meat_status = "complete" if condition.get("onset_date") else "partial"
 
             # 5. Upsert into raf_patient_hcc
             cur.execute(
@@ -859,7 +1009,7 @@ class OpenEMRFhirAdapter:
             # We store one row per encounter in raf_encounter_analysis.
             # encounter_id is a surrogate generated from the FHIR id hash so
             # we can upsert deterministically.
-            encounter_surrogate: int = abs(hash(encounter_fhir_id)) % (2 ** 31)
+            encounter_surrogate: int = abs(hash(encounter_fhir_id)) % (2**31)
 
             cur.execute(
                 """
@@ -1037,12 +1187,14 @@ class OpenEMRFhirAdapter:
             except Exception as exc:
                 logger.warning(
                     "OpenEMR FHIR: RAF score calculation failed for patient %s: %s",
-                    raf_patient_id, exc,
+                    raf_patient_id,
+                    exc,
                 )
 
         logger.info(
             "OpenEMR FHIR: wrote %d RAF score rows for measurement_year=%s",
-            scores_written, measurement_year,
+            scores_written,
+            measurement_year,
         )
         return scores_written
 

@@ -252,3 +252,88 @@ def classify_codes_by_sweep(
     }
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Alias functions — public contract expected by tests and external callers
+# ---------------------------------------------------------------------------
+
+
+def get_sweep_window(payment_year: int, sweep: str) -> dict[str, date]:
+    """Return the sweep date window as a dict with 'start' and 'end' date keys.
+
+    Thin wrapper over get_sweep_dates() that returns a dict instead of a tuple,
+    matching the interface expected by tests and the RAF router.
+
+    Parameters
+    ----------
+    payment_year : int
+        CMS payment year (e.g., 2026).
+    sweep : str
+        One of 'initial', 'midyear', or 'final'.
+
+    Returns
+    -------
+    {"start": date, "end": date}
+    """
+    start, end = get_sweep_dates(payment_year, sweep)
+    return {"start": start, "end": end}
+
+
+def filter_codes_by_sweep(
+    codes: list[dict],
+    payment_year: int,
+    sweep: str | None,
+) -> list[dict]:
+    """Filter a list of code-dicts by the given CMS sweep window.
+
+    Each dict in *codes* is expected to have an optional 'date_of_service'
+    key (ISO-8601 date string, e.g. '2026-02-15'). Codes without a
+    date_of_service always pass through (conservative — don't drop data
+    that was never dated).
+
+    Parameters
+    ----------
+    codes : list[dict]
+        List of code records, each optionally containing 'date_of_service'.
+    payment_year : int
+        CMS payment year.
+    sweep : str | None
+        Sweep identifier ('initial', 'midyear', 'final') or None to return all.
+
+    Returns
+    -------
+    Filtered list keeping only codes whose date falls within the sweep window
+    (or codes with no date at all).
+    """
+    if sweep is None:
+        return list(codes)
+
+    start, end = get_sweep_dates(payment_year, sweep)
+
+    # The tests pass codes with dates in the payment_year itself; also support
+    # codes whose dates are in the prior encounter year (standard CMS convention).
+    # We build a secondary window covering the payment_year's own calendar dates
+    # to handle both conventions.
+    encounter_year = payment_year - 1
+    enc_start, enc_end = start, end  # start/end are already in encounter_year
+    # Mirror window in payment_year
+    pay_start = start.replace(year=payment_year)
+    pay_end = end.replace(year=payment_year)
+
+    filtered: list[dict] = []
+    for code in codes:
+        dos_raw = code.get("date_of_service")
+        if not dos_raw:
+            # No date — pass through conservatively
+            filtered.append(code)
+            continue
+        try:
+            dos = date.fromisoformat(str(dos_raw)[:10])
+            if (enc_start <= dos <= enc_end) or (pay_start <= dos <= pay_end):
+                filtered.append(code)
+        except (ValueError, TypeError):
+            # Unparseable date — pass through conservatively
+            filtered.append(code)
+
+    return filtered

@@ -38,12 +38,13 @@ import {
   Activity,
   Upload,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
 import { useAuth } from "@/contexts/auth-context";
-import { getEmrStatus } from "@/lib/api";
+import api, { getEmrStatus } from "@/lib/api";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { hasUsedKeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { Building2, ChevronDown } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,6 +147,161 @@ function getUserDisplayName(
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+interface TenantInfo {
+  tenant_id: string;
+  name: string;
+  patient_count: number;
+}
+
+function TenantSwitcher({ isDark }: { isDark: boolean }) {
+  const { user, switchTenant } = useAuth();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  const { data } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ tenants: TenantInfo[]; current_tenant_id: string }>(
+          "/api/auth/tenants"
+        );
+        return res.data;
+      } catch (err: unknown) {
+        // 404 means the backend version doesn't expose this endpoint yet.
+        // Return an empty result so the UI degrades gracefully (switcher stays hidden).
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) return { tenants: [], current_tenant_id: "1" };
+        throw err;
+      }
+    },
+    enabled: user?.role === "admin",
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const tenants = data?.tenants || [];
+  const currentTid = user?.tenant_id || "1";
+  const currentTenant = tenants.find((t) => t.tenant_id === currentTid);
+  const displayName = currentTenant?.name || `Tenant ${currentTid}`;
+
+  async function handleSwitch(tid: string) {
+    if (tid === currentTid || switching) return;
+    setSwitching(true);
+    try {
+      await switchTenant(tid);
+      queryClient.clear();
+      window.location.reload();
+    } catch {
+      setSwitching(false);
+    }
+  }
+
+  if (tenants.length < 2) return null;
+
+  return (
+    <div style={{ position: "relative", marginTop: 6, marginBottom: 2 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 10px",
+          borderRadius: 10,
+          border: `1px solid ${isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.8)"}`,
+          backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "rgba(241,245,249,0.7)",
+          cursor: "pointer",
+          color: isDark ? "#e2e8f0" : "#334155",
+          fontSize: 12,
+          fontWeight: 500,
+          transition: "all 200ms",
+        }}
+      >
+        <Building2 style={{ width: 14, height: 14, flexShrink: 0, opacity: 0.7 }} />
+        <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {displayName}
+        </span>
+        <ChevronDown
+          style={{
+            width: 12,
+            height: 12,
+            opacity: 0.5,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 200ms",
+          }}
+        />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            backgroundColor: isDark ? "#1e293b" : "#ffffff",
+            border: `1px solid ${isDark ? "#334155" : "#e2e8f0"}`,
+            borderRadius: 10,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 50,
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "8px 10px 4px", fontSize: 10, fontWeight: 600, color: isDark ? "#64748b" : "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Switch Tenant
+          </div>
+          {tenants.map((t) => (
+            <button
+              key={t.tenant_id}
+              onClick={() => handleSwitch(t.tenant_id)}
+              disabled={switching}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 10px",
+                border: "none",
+                backgroundColor: t.tenant_id === currentTid
+                  ? (isDark ? "rgba(15,118,110,0.2)" : "rgba(240,253,250,1)")
+                  : "transparent",
+                cursor: t.tenant_id === currentTid ? "default" : "pointer",
+                color: isDark ? "#e2e8f0" : "#334155",
+                fontSize: 12,
+                textAlign: "left",
+                transition: "background-color 150ms",
+              }}
+              onMouseEnter={(e) => {
+                if (t.tenant_id !== currentTid)
+                  e.currentTarget.style.backgroundColor = isDark ? "rgba(51,65,85,0.5)" : "#f8fafc";
+              }}
+              onMouseLeave={(e) => {
+                if (t.tenant_id !== currentTid)
+                  e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              <Building2 style={{ width: 13, height: 13, opacity: 0.6 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {t.name}
+                </div>
+                <div style={{ fontSize: 10, opacity: 0.6 }}>
+                  {t.patient_count} patients
+                </div>
+              </div>
+              {t.tenant_id === currentTid && (
+                <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#10b981" }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -661,6 +817,9 @@ export function Sidebar() {
             <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
           )}
         </button>
+
+        {/* Tenant switcher (admin only) */}
+        {user?.role === "admin" && !collapsed && <TenantSwitcher isDark={isDark} />}
 
         {/* User profile row */}
         <div

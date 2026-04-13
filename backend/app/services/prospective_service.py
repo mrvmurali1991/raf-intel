@@ -916,18 +916,16 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
     year_start = date(calc_year, 1, 1)
 
     if tenant_id is None:
-        logger.warning(
-            "prospective_service.get_prospective_summary: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "prospective_service.get_prospective_summary: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        try:
-            tid = int(tenant_id)
-        except (TypeError, ValueError):
-            logger.warning(
-                "prospective_service.get_prospective_summary: no tenant_id provided, defaulting to 1"
-            )
-            tid = 1
+    try:
+        tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"prospective_service.get_prospective_summary: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     try:
         # Fetch active patient IDs once for this function

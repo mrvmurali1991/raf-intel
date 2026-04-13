@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.quality_service import (
     HEDIS_MEASURES,
     evaluate_measure,
@@ -80,6 +80,7 @@ def measure_detail(
     code: str,
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -94,7 +95,7 @@ def measure_detail(
     calc_year = year or date.today().year
 
     try:
-        summary = get_quality_summary(calc_year)
+        summary = get_quality_summary(calc_year, tenant_id=int(tenant_id))
     except Exception as exc:
         logger.error("measure_detail summary error [%s]: %s", code, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -175,6 +176,7 @@ def care_gaps(
     measure: str = Query(default=None, description="Filter to a specific measure code (e.g. CDC, CBP)"),
     limit: int = Query(default=200, ge=1, le=1000, description="Maximum number of patients to scan"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -198,7 +200,7 @@ def care_gaps(
             )
 
     try:
-        gaps = get_care_gaps(calc_year, measure, limit=limit)
+        gaps = get_care_gaps(calc_year, measure, limit=limit, tenant_id=int(tenant_id))
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
         raise HTTPException(status_code=400, detail="Bad request")
@@ -233,6 +235,7 @@ def care_gaps(
 def quality_summary(
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -248,7 +251,7 @@ def quality_summary(
     calc_year = year or date.today().year
 
     try:
-        summary = get_quality_summary(calc_year)
+        summary = get_quality_summary(calc_year, tenant_id=int(tenant_id))
     except Exception as exc:
         logger.error("quality_summary error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

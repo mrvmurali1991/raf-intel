@@ -92,7 +92,7 @@ def _active_patient_ids(cur, cohort_id: int) -> list[int]:
 
 def _resolve_criteria_patient_ids(
     criteria: dict[str, Any],
-    tenant_id: int | None = None,
+    tenant_id: int,
 ) -> list[int]:
     """
     Translate a criteria dict into a de-duplicated list of patient IDs by
@@ -113,12 +113,11 @@ def _resolve_criteria_patient_ids(
       states          list[str]   – two-letter state abbreviations
     """
     if tenant_id is None:
-        logger.warning(
-            "cohort_service._resolve_criteria_patient_ids: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "cohort_service._resolve_criteria_patient_ids: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     patient_sets: list[set[int]] = []
 
@@ -329,7 +328,7 @@ def create_cohort(
     cohort_type: str = "custom",
     criteria: dict[str, Any],
     created_by: int | None = None,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """Create a new cohort definition and immediately populate its membership."""
     criteria_json = json.dumps(criteria)
@@ -364,7 +363,7 @@ def list_cohorts(
     *,
     cohort_type: str | None = None,
     status: str = "active",
-    tenant_id: str = "default",
+    tenant_id: str,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -481,7 +480,7 @@ def get_cohort_members(
 
 def refresh_cohort_membership(
     cohort_id: int,
-    tenant_id: int | None = None,
+    tenant_id: int,
 ) -> dict[str, Any]:
     """
     Re-evaluate the cohort criteria and synchronise cohort_members accordingly.
@@ -498,12 +497,11 @@ def refresh_cohort_membership(
         raise ValueError(f"Cohort {cohort_id} not found")
 
     if tenant_id is None:
-        logger.warning(
-            "cohort_service.refresh_cohort_membership: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "cohort_service.refresh_cohort_membership: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     criteria: dict[str, Any] = cohort.get("criteria") or {}
     new_patient_ids: set[int] = set(_resolve_criteria_patient_ids(criteria, tenant_id=tid))
@@ -606,7 +604,7 @@ def refresh_cohort_membership(
 # ---------------------------------------------------------------------------
 
 
-def take_snapshot(cohort_id: int, tenant_id: str = "default") -> dict[str, Any]:
+def take_snapshot(cohort_id: int, tenant_id: str) -> dict[str, Any]:
     """
     Compute and persist a point-in-time snapshot of cohort aggregate metrics.
 
@@ -621,13 +619,18 @@ def take_snapshot(cohort_id: int, tenant_id: str = "default") -> dict[str, Any]:
     if not cohort:
         raise ValueError(f"Cohort {cohort_id} not found")
 
-    # ``tenant_id`` here is a legacy string label persisted on snapshots;
-    # numeric tenant FK for active-patient filtering is not plumbed through,
-    # so default to 1 with a warning until callers are updated.
-    logger.warning(
-        "cohort_service.take_snapshot: no numeric tenant_id provided, defaulting to 1"
-    )
-    tid = 1
+    if not tenant_id:
+        raise ValueError(
+            "cohort_service.take_snapshot: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    # Convert string tenant_id to numeric for active-patient filtering.
+    try:
+        tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"cohort_service.take_snapshot: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     with raf_cursor() as cur:
         patient_ids = _active_patient_ids(cur, cohort_id)
@@ -965,16 +968,15 @@ def _chi_square_p_value(dist_a: dict[str, int], dist_b: dict[str, int]) -> float
 
 def _build_cohort_metrics(
     patient_ids: list[int],
-    tenant_id: int | None = None,
+    tenant_id: int,
 ) -> dict[str, Any]:
     """Gather aggregate metrics for a list of patient IDs."""
     if tenant_id is None:
-        logger.warning(
-            "cohort_service._build_cohort_metrics: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "cohort_service._build_cohort_metrics: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     if not patient_ids:
         return {
@@ -1052,7 +1054,7 @@ def compare_cohorts(
     cohort_b_id: int,
     name: str | None = None,
     created_by: int | None = None,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """
     Compare two cohorts across key population health metrics and persist the
@@ -1195,8 +1197,7 @@ def get_comparison(comparison_id: int) -> dict[str, Any] | None:
 
 
 def get_population_health_metrics(
-    tenant_id: str = "default",
-    numeric_tenant_id: int | None = None,
+    tenant_id: str,
 ) -> dict[str, Any]:
     """
     Return population-wide health metrics across all active cohorts in a tenant.
@@ -1209,13 +1210,17 @@ def get_population_health_metrics(
     - Active / archived cohort counts
     - Estimated total RAF revenue
     """
-    if numeric_tenant_id is None:
-        logger.warning(
-            "cohort_service.get_population_health_metrics: no numeric_tenant_id provided, defaulting to 1"
+    if not tenant_id:
+        raise ValueError(
+            "cohort_service.get_population_health_metrics: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(numeric_tenant_id)
+    try:
+        tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"cohort_service.get_population_health_metrics: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     with raf_cursor() as cur:
         # All active cohort patient IDs for this tenant
@@ -1326,7 +1331,7 @@ def get_population_health_metrics(
 
 def export_cohort_csv(
     cohort_id: int,
-    tenant_id: int | None = None,
+    tenant_id: int,
 ) -> str:
     """
     Return a CSV string of all active cohort members with key clinical metrics.
@@ -1338,12 +1343,11 @@ def export_cohort_csv(
         raise ValueError(f"Cohort {cohort_id} not found")
 
     if tenant_id is None:
-        logger.warning(
-            "cohort_service.export_cohort_csv: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "cohort_service.export_cohort_csv: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        tid = int(tenant_id)
+    tid = int(tenant_id)
 
     with raf_cursor() as cur:
         patient_ids = _active_patient_ids(cur, cohort_id)

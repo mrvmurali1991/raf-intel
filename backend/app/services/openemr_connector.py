@@ -27,6 +27,7 @@ from typing import Any, Optional
 import mysql.connector
 
 from app.db import openemr_cursor, NoActiveEMRConnection
+from app.services.circuit_breaker import openemr_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,7 @@ def _resolve_pos(pos_code: str | None) -> dict:
 # Patients
 # ---------------------------------------------------------------------------
 
+@openemr_breaker
 @_empty_on_no_emr()
 def get_patients(limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
     """Return all active patients from patient_data."""
@@ -273,6 +275,7 @@ def get_patient_count() -> int:
 # Encounters
 # ---------------------------------------------------------------------------
 
+@openemr_breaker
 @_empty_on_no_emr()
 def get_encounters(pid: int) -> list[dict[str, Any]]:
     """
@@ -484,6 +487,7 @@ CPT_CONDITION_HINTS: dict[str, dict] = {
 }
 
 
+@openemr_breaker
 @_empty_on_no_emr()
 def get_billing_codes(pid: int) -> list[dict[str, Any]]:
     """Return all billing rows (ICD-10 codes) for a patient."""
@@ -1246,11 +1250,11 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
                 id.type,
                 id.provider,
                 id.plan_name,
-                id.created_at AS date
+                id.date
             FROM insurance_data id
             WHERE id.pid = %s
               AND id.activity = 1
-            ORDER BY id.type, id.created_at DESC
+            ORDER BY id.type, id.date DESC
         """
         with openemr_cursor() as cur:
             cur.execute(ins_sql, (pid,))
@@ -1547,6 +1551,33 @@ def get_recapture_gaps(pid: int, year: int) -> list[dict[str, Any]]:
             "get_recapture_gaps failed for pid=%s year=%s", pid, year
         )
         return []
+
+
+def push_medical_problem(pid: int, title: str, diagnosis_code: str) -> bool:
+    """
+    Insert a medical problem directly into the OpenEMR lists table.
+    Used for Bi-Directional Suspect Sync (EMR Write-Back).
+    """
+    try:
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sql = """
+            INSERT INTO lists (
+                date, type, title, begdate, pid, activity, diagnosis
+            ) VALUES (
+                %s, 'medical_problem', %s, %s, %s, 1, %s
+            )
+        """
+        # Note: In OpenEMR, the diagnosis column usually stores 'ICD10:code' if it's ICD-10.
+        formatted_diagnosis = f"ICD10:{diagnosis_code}" if not diagnosis_code.startswith("ICD10:") else diagnosis_code
+        with openemr_cursor() as cur:
+            cur.execute(sql, (now_str, title, now_str, pid, formatted_diagnosis))
+        logger.info("Pushed condition %s (%s) for pid=%s", title, formatted_diagnosis, pid)
+        return True
+    except Exception as exc:
+        logger.error("Failed to push medical problem for pid=%s: %s", pid, exc)
+        return False
+
 
 
 @_empty_on_no_emr(default=None)

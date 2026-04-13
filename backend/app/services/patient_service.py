@@ -1,0 +1,1363 @@
+"""
+patient_service.py
+
+Business logic extracted from app/routers/patients.py.
+
+The router is responsible for:
+  - FastAPI dependency injection (auth, permissions, rate limiting)
+  - Raising HTTPException on error codes returned here
+  - Calling log_phi_access after successful service calls
+
+This module is responsible for:
+  - All database queries against raf_intelligence (via raf_cursor)
+  - All calls to openemr_connector (emr.*)
+  - All data transformation, enrichment, and fallback logic
+  - Tenant-scoping and IDOR checks (returns False / None instead of 404)
+
+Public surface
+--------------
+Every function beginning with ``svc_`` is called by the router.  The internal
+helpers (prefixed ``_``) are module-private implementation details.
+"""
+
+from __future__ import annotations
+
+import json as _json
+import logging
+from datetime import date as _date
+from datetime import datetime as _datetime
+from typing import Any, Optional
+
+from app.db import raf_cursor
+from app.services import openemr_connector as emr
+from app.services.raf_calculator import get_raf_breakdown
+from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers — tenant / connection guards
+# ---------------------------------------------------------------------------
+
+
+def _has_active_emr_connection() -> bool:
+    """Return True if at least one EMR connection with is_active=1 exists."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute("SELECT 1 FROM emr_connections WHERE is_active = 1 LIMIT 1")
+            return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _active_connection_type() -> str | None:
+    """Return the connection_type of the active EMR connection, or None."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT connection_type FROM emr_connections WHERE is_active = 1 LIMIT 1"
+            )
+            row = cur.fetchone()
+            return row["connection_type"] if row else None
+    except Exception:
+        return None
+
+
+def _tenant_of(current_user: dict) -> str:
+    """Extract tenant_id from current_user — raises if not present.
+
+    Raises:
+        ValueError: If current_user has no tenant_id (misconfigured account).
+    """
+    tid = current_user.get("tenant_id") if current_user else None
+    if tid is None:
+        raise ValueError(
+            "_tenant_of: current_user has no tenant_id — user account is misconfigured; "
+            "contact administrator (HIPAA multi-tenant isolation)"
+        )
+    return str(tid)
+
+
+def _patient_belongs_to_tenant(pid: int, tenant_id: str) -> bool:
+    """Return True if *pid* exists in raf_intelligence.patients for this tenant."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM patients WHERE id = %s AND tenant_id = %s LIMIT 1",
+                (pid, tenant_id),
+            )
+            return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _patient_in_active_connection(pid: int, tenant_id: str | None = None) -> bool:
+    """Return True if *pid* is linked to an active EMR connection."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM emr_patient_matches pm "
+                "JOIN emr_connections ec ON ec.id = pm.connection_id "
+                "WHERE ec.is_active = 1 AND pm.raf_patient_id = %s LIMIT 1",
+                (pid,),
+            )
+            if cur.fetchone() is not None:
+                return True
+            cur.execute(
+                "SELECT 1 FROM emr_connections "
+                "WHERE is_active = 1 AND connection_type = 'direct_db' LIMIT 1",
+            )
+            if cur.fetchone() is not None:
+                if tenant_id is not None:
+                    cur.execute(
+                        "SELECT 1 FROM patients WHERE id = %s AND tenant_id = %s",
+                        (pid, tenant_id),
+                    )
+                else:
+                    cur.execute("SELECT 1 FROM patients WHERE id = %s", (pid,))
+                return cur.fetchone() is not None
+        return False
+    except Exception:
+        return False
+
+
+def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | None:
+    """Look up the emr_pid for a patient in raf_intelligence.patients."""
+    try:
+        with raf_cursor() as cur:
+            if tenant_id is not None:
+                cur.execute(
+                    "SELECT emr_pid FROM patients WHERE id = %s AND tenant_id = %s",
+                    (pid, tenant_id),
+                )
+            else:
+                cur.execute("SELECT emr_pid FROM patients WHERE id = %s", (pid,))
+            row = cur.fetchone()
+            if row and row.get("emr_pid"):
+                return int(row["emr_pid"])
+    except Exception:
+        pass
+    return None
+
+
+def _safe_call(label: str, fn, *args, default=None, **kwargs):
+    """Call *fn* and return result; on any exception log and return *default*."""
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        logger.warning("patient_service [%s] failed: %s", label, exc)
+        return default
+
+
+def _calculate_age(dob_raw: str | None) -> int | None:
+    """Return current age in years from a DOB string, or None."""
+    if not dob_raw:
+        return None
+    try:
+        dob = _datetime.strptime(str(dob_raw)[:10], "%Y-%m-%d").date()
+        today = _date.today()
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    except (ValueError, TypeError):
+        return None
+
+
+def patient_is_accessible(pid: int, tenant_id: str) -> bool:
+    """Return True when the router should allow access to *pid*.
+
+    Combines the two tenant/connection guards used throughout the router.
+    """
+    return _patient_belongs_to_tenant(pid, tenant_id) or _patient_in_active_connection(
+        pid, tenant_id=tenant_id
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal list helpers
+# ---------------------------------------------------------------------------
+
+
+def _list_fhir_patients(
+    limit: int, offset: int, search: str = "", tenant_id: str | None = None
+) -> tuple[list[dict], int]:
+    """List patients from emr_patient_matches for FHIR/REST connections."""
+    with raf_cursor() as cur:
+        where = "WHERE ec.is_active = 1"
+        params: list = []
+        if tenant_id is not None:
+            where += " AND ec.tenant_id = %s"
+            params.append(tenant_id)
+        if search:
+            where += " AND (epm.first_name LIKE %s OR epm.last_name LIKE %s OR CAST(epm.id AS CHAR) LIKE %s)"
+            like = f"%{search}%"
+            params.extend([like, like, like])
+
+        cur.execute(
+            f"SELECT COUNT(DISTINCT epm.id) AS cnt FROM emr_patient_matches epm "
+            f"JOIN emr_connections ec ON ec.id = epm.connection_id {where}",
+            params,
+        )
+        total = (cur.fetchone() or {}).get("cnt", 0)
+
+        cur.execute(
+            f"""SELECT epm.id AS pid, epm.external_id, epm.first_name AS fname,
+                       epm.last_name AS lname, epm.date_of_birth AS DOB,
+                       epm.sex, epm.mrn, epm.raf_patient_id
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                {where}
+                ORDER BY epm.last_name, epm.first_name
+                LIMIT %s OFFSET %s""",
+            (*params, limit, offset),
+        )
+        rows = cur.fetchall()
+
+    patients = []
+    for r in rows:
+        patients.append(
+            {
+                "pid": r["raf_patient_id"] or r["pid"],
+                "fname": r["fname"] or "",
+                "lname": r["lname"] or "",
+                "DOB": str(r["DOB"]) if r["DOB"] else "",
+                "sex": r["sex"] or "",
+                "mrn": r.get("mrn") or "",
+                "external_id": r["external_id"],
+            }
+        )
+    return patients, total
+
+
+def _list_raf_patients(
+    limit: int,
+    offset: int,
+    search: str = "",
+    tenant_id: str | None = None,
+    only_uploaded: bool = False,
+) -> tuple[list[dict], int]:
+    """List patients from the raf_intelligence.patients table."""
+    with raf_cursor() as cur:
+        where = "WHERE is_active = 1"
+        params: list = []
+        if tenant_id is not None:
+            where += " AND tenant_id = %s"
+            params.append(tenant_id)
+        if only_uploaded:
+            where += " AND data_source = 'upload'"
+        if search:
+            if search.isdigit():
+                where += " AND id = %s"
+                params.append(int(search))
+            else:
+                like = f"%{search}%"
+                where += (
+                    " AND (CONCAT(first_name, ' ', last_name) LIKE %s"
+                    " OR first_name LIKE %s"
+                    " OR last_name LIKE %s"
+                    " OR mrn LIKE %s)"
+                )
+                params.extend([like, like, like, like])
+
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM patients {where}", params)
+        total = (cur.fetchone() or {}).get("cnt", 0)
+
+        cur.execute(
+            f"""SELECT id AS pid,
+                       first_name AS fname,
+                       last_name AS lname,
+                       middle_name AS mname,
+                       dob AS DOB,
+                       sex,
+                       race,
+                       ethnicity,
+                       preferred_language AS language,
+                       address AS street,
+                       city,
+                       state,
+                       zip AS postal_code,
+                       phone AS phone_cell,
+                       phone AS phone_home,
+                       email,
+                       mrn,
+                       insurance_type,
+                       data_source,
+                       created_at AS created_date
+                FROM patients
+                {where}
+                ORDER BY last_name, first_name
+                LIMIT %s OFFSET %s""",
+            (*params, limit, offset),
+        )
+        rows = cur.fetchall()
+
+    from decimal import Decimal
+    _PHI_EXCLUDED_FIELDS = {"ssn", "social_security_number", "ssn_last4"}
+    patients = []
+    for r in rows:
+        p: dict[str, Any] = {}
+        for k, v in r.items():
+            if k.lower() in _PHI_EXCLUDED_FIELDS:
+                continue
+            if hasattr(v, "isoformat"):
+                p[k] = v.isoformat()
+            elif isinstance(v, Decimal):
+                p[k] = float(v)
+            elif isinstance(v, int):
+                p[k] = v
+            else:
+                p[k] = v if v is not None else ""
+        patients.append(p)
+    return patients, total
+
+
+# ---------------------------------------------------------------------------
+# svc_list_patients
+# ---------------------------------------------------------------------------
+
+
+def svc_list_patients(
+    limit: int,
+    offset: int,
+    search: str,
+    year: Optional[int],
+    tenant_id: str,
+) -> dict[str, Any]:
+    """Fetch paginated patient list and enrich with RAF scores.
+
+    Raises RuntimeError on unrecoverable database errors (router converts to 500).
+    """
+    try:
+        conn_type = _active_connection_type()
+        if conn_type in ("fhir_r4", "rest_api"):
+            patients, total = _list_fhir_patients(limit, offset, search, tenant_id=tenant_id)
+        elif _has_active_emr_connection():
+            # Use raf_intelligence.patients (synced data) — querying OpenEMR
+            # directly would miss patients already synced into raf DB.
+            patients, total = _list_raf_patients(
+                limit, offset, search, tenant_id=tenant_id
+            )
+        else:
+            patients, total = _list_raf_patients(
+                limit, offset, search, tenant_id=tenant_id, only_uploaded=True
+            )
+    except Exception as exc:
+        logger.error("svc_list_patients error: %s", exc)
+        raise RuntimeError("Internal server error") from exc
+
+    # Enrich with RAF scores
+    try:
+        pids = [p["pid"] for p in patients if p.get("pid")]
+        if pids:
+            placeholders = ",".join(["%s"] * len(pids))
+            with raf_cursor() as cur:
+                _tid = int(tenant_id)
+                cur.execute(
+                    f"""
+                    SELECT patient_id, final_raf, hcc_count,
+                           demographic_score, disease_score, interaction_score
+                    FROM raf_scores
+                    WHERE patient_id IN ({placeholders})
+                      AND measurement_year = %s
+                      AND {ACTIVE_PATIENTS_SUBQUERY}
+                      AND raf_scores.tenant_id = %s
+                    ORDER BY calculated_at DESC
+                    """,
+                    (*pids, year or _date.today().year, _tid),
+                )
+                raf_map: dict[int, dict] = {}
+                for row in cur.fetchall():
+                    pid_val = int(row["patient_id"])
+                    if pid_val not in raf_map:
+                        raf_map[pid_val] = row
+            for p in patients:
+                r = raf_map.get(p["pid"])
+                if r:
+                    p["raf_score"] = float(r["final_raf"]) if r.get("final_raf") else None
+                    p["hcc_count"] = int(r["hcc_count"]) if r.get("hcc_count") else 0
+                    p["demographic_score"] = (
+                        float(r["demographic_score"]) if r.get("demographic_score") else None
+                    )
+                    p["disease_score"] = (
+                        float(r["disease_score"]) if r.get("disease_score") else None
+                    )
+                    p["interaction_score"] = (
+                        float(r["interaction_score"]) if r.get("interaction_score") else None
+                    )
+    except Exception as exc:
+        logger.warning("svc_list_patients: RAF enrichment failed: %s", exc)
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "search": search,
+        "patients": patients,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_patients_with_encounters
+# ---------------------------------------------------------------------------
+
+
+def svc_patients_with_encounters(limit: int) -> dict[str, Any]:
+    """Return patients that have at least one encounter."""
+    if _has_active_emr_connection():
+        patients = emr.get_patients_with_encounters(limit=limit)
+        return {"total": len(patients), "patients": patients}
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT p.id AS pid, p.first_name AS fname, p.last_name AS lname,
+                       p.dob AS DOB, p.sex
+                FROM patients p
+                JOIN raf_encounter_analysis ea ON ea.pid = p.id
+                WHERE p.is_active = 1 AND p.data_source = 'upload'
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            patients = [dict(r) for r in cur.fetchall()]
+        return {"total": len(patients), "patients": patients}
+    except Exception as exc:
+        logger.error("svc_patients_with_encounters (upload fallback) error: %s", exc)
+        return {"total": 0, "patients": []}
+
+
+# ---------------------------------------------------------------------------
+# svc_get_patient
+# ---------------------------------------------------------------------------
+
+
+def svc_get_patient(pid: int, tenant_id: str) -> dict[str, Any] | None:
+    """Return patient demographics enriched with the latest RAF score.
+
+    Returns None when the patient is not found.
+    """
+    patient = emr.get_patient(pid)
+    if not patient:
+        # Fallback: look up in raf_intelligence.patients (synced data)
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """SELECT id AS pid, first_name AS fname, last_name AS lname,
+                              middle_name AS mname, dob AS DOB, sex, race, ethnicity,
+                              preferred_language AS language, address AS street,
+                              city, state, zip AS postal_code, phone AS phone_cell,
+                              phone AS phone_home, email, mrn, insurance_type,
+                              data_source, created_at AS created_date
+                       FROM patients WHERE id = %s AND is_active = 1""",
+                    (pid,),
+                )
+                row = cur.fetchone()
+                if row:
+                    patient = {}
+                    for k, v in row.items():
+                        if hasattr(v, "isoformat"):
+                            patient[k] = v.isoformat()
+                        elif hasattr(v, "__float__"):
+                            patient[k] = float(v)
+                        else:
+                            patient[k] = v if v is not None else ""
+        except Exception:
+            pass
+    if not patient:
+        return None
+
+    raf_data: dict = {}
+    for yr in [_date.today().year, _date.today().year - 1]:
+        raf_data = get_raf_breakdown(pid, yr, tenant_id=tenant_id)
+        if raf_data:
+            break
+    patient["raf_score"] = raf_data.get("raf_score")
+    patient["raf_score_date"] = raf_data.get("calculated_at")
+    patient["raf_score_year"] = raf_data.get("measurement_year")
+    return patient
+
+
+# ---------------------------------------------------------------------------
+# svc_get_clinical_notes
+# ---------------------------------------------------------------------------
+
+
+def svc_get_clinical_notes(pid: int, encounter_id: int) -> list[dict]:
+    """Return clinical notes for a specific encounter."""
+    return emr.get_clinical_notes(encounter_id)
+
+
+# ---------------------------------------------------------------------------
+# svc_get_encounters
+# ---------------------------------------------------------------------------
+
+
+def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+    """Return all encounters for *pid*, with enrichment from cached analysis."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    try:
+        encounters = emr.get_encounters(emr_pid)
+    except Exception as exc:
+        logger.error("svc_get_encounters error pid=%s: %s", pid, exc)
+        encounters = []
+
+    # Fallback: load from raf_intelligence.encounters
+    if not encounters:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """SELECT e.id AS encounter_id, e.patient_id AS pid,
+                              e.encounter_date AS date, e.encounter_type AS reason,
+                              e.facility, e.provider_id, e.notes, e.status,
+                              pr.first_name AS provider_fname, pr.last_name AS provider_lname
+                       FROM encounters e
+                       LEFT JOIN providers pr ON pr.id = e.provider_id
+                       WHERE e.patient_id = %s
+                       ORDER BY e.encounter_date DESC""",
+                    (pid,),
+                )
+                raf_rows = cur.fetchall()
+            encounters = []
+            for r in raf_rows:
+                encounters.append(
+                    {
+                        "encounter_id": r["encounter_id"],
+                        "pid": r["pid"],
+                        "date": str(r["date"]) if r["date"] else None,
+                        "reason": r["reason"],
+                        "facility": r["facility"],
+                        "provider_id": r["provider_id"],
+                        "provider_fname": r.get("provider_fname", ""),
+                        "provider_lname": r.get("provider_lname", ""),
+                        "has_notes": 1 if r.get("notes") else 0,
+                        "notes": r.get("notes", ""),
+                        "note_text": r.get("notes", ""),
+                        "status": r.get("status", "completed"),
+                    }
+                )
+        except Exception as exc2:
+            logger.error("svc_get_encounters fallback error pid=%s: %s", pid, exc2)
+
+    if year is not None:
+        encounters = [e for e in encounters if str(e.get("date", ""))[:4] == str(year)]
+
+    # Enrich encounters with cached analysis results and SOAP note text
+    try:
+        analysis_map: dict[int, dict] = {}
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT encounter_id, analysis_json, overall_score, dx_count, "
+                    "suspect_count, hcc_opportunity_count, created_at "
+                    "FROM raf_encounter_analysis WHERE patient_id = %s",
+                    (pid,),
+                )
+                for row in cur.fetchall():
+                    eid = row["encounter_id"]
+                    analysis_data = {}
+                    if row.get("analysis_json"):
+                        try:
+                            analysis_data = (
+                                _json.loads(row["analysis_json"])
+                                if isinstance(row["analysis_json"], str)
+                                else row["analysis_json"]
+                            )
+                        except Exception:
+                            pass
+                    analysis_map[eid] = {
+                        "diagnoses": analysis_data.get("diagnoses", []),
+                        "pipeline": analysis_data.get("pipeline", {}),
+                        "_meta": analysis_data.get("_meta", {}),
+                        "overall_score": float(row["overall_score"])
+                        if row.get("overall_score")
+                        else None,
+                        "dx_count": row.get("dx_count", 0),
+                        "suspect_count": row.get("suspect_count", 0),
+                        "hcc_opportunity_count": row.get("hcc_opportunity_count", 0),
+                        "analyzed_at": row["created_at"].isoformat()
+                        if hasattr(row.get("created_at"), "isoformat")
+                        else str(row.get("created_at", "")),
+                    }
+        except Exception as ae:
+            logger.debug("Could not load cached analysis for pid=%s: %s", pid, ae)
+
+        # Fetch actual SOAP note text per encounter
+        notes_map: dict[int, str] = {}
+        try:
+            from app.db import openemr_cursor
+
+            with openemr_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT f.encounter,
+                           CONCAT_WS('\\n\\n',
+                               IF(fs.subjective <> '', CONCAT('S: ', fs.subjective), NULL),
+                               IF(fs.objective  <> '', CONCAT('O: ', fs.objective),  NULL),
+                               IF(fs.assessment <> '', CONCAT('A: ', fs.assessment), NULL),
+                               IF(fs.plan       <> '', CONCAT('P: ', fs.plan),       NULL)
+                           ) AS note_text
+                    FROM form_soap fs
+                    JOIN forms f ON f.form_id = fs.id AND f.formdir = 'soap'
+                    WHERE fs.pid = %s AND fs.activity = 1
+                    ORDER BY f.date DESC
+                    """,
+                    (emr_pid,),
+                )
+                for row in cur.fetchall():
+                    eid = row["encounter"]
+                    if eid not in notes_map:
+                        notes_map[eid] = row.get("note_text") or ""
+        except Exception:
+            pass
+
+        for enc in encounters:
+            eid = enc.get("encounter_id") or enc.get("encounter")
+            if eid and eid in analysis_map:
+                enc["cached_analysis"] = analysis_map[eid]
+                enc["analysis"] = analysis_map[eid]
+            if eid and eid in notes_map:
+                enc["has_notes"] = True
+                enc["notes"] = notes_map[eid]
+            else:
+                enc["has_notes"] = enc.get("has_notes", False)
+    except Exception as enrich_exc:
+        logger.debug("Encounter enrichment failed pid=%s: %s", pid, enrich_exc)
+
+    return {
+        "pid": pid,
+        "count": len(encounters),
+        "encounters": encounters,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_medications
+# ---------------------------------------------------------------------------
+
+
+def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+    """Return all prescriptions for *pid*, with RAF DB fallback."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    try:
+        medications = emr.get_medications(emr_pid, year=year)
+    except Exception as exc:
+        logger.error("svc_get_medications error pid=%s: %s", pid, exc)
+        medications = []
+
+    if not medications:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT medication_name AS drug, dosage, form, frequency, "
+                    "purpose AS note, start_date, status, "
+                    "prescriber_id FROM patient_medications "
+                    "WHERE patient_id = %s AND status = 'active' ORDER BY medication_name",
+                    (pid,),
+                )
+                for r in cur.fetchall():
+                    medications.append(
+                        {
+                            "drug": r["drug"],
+                            "dosage": r.get("dosage", ""),
+                            "form": r.get("form", ""),
+                            "frequency": r.get("frequency", ""),
+                            "note": r.get("note", ""),
+                            "start_date": str(r["start_date"]) if r.get("start_date") else None,
+                            "active": 1,
+                        }
+                    )
+        except Exception:
+            pass
+
+    response: dict[str, Any] = {
+        "pid": pid,
+        "count": len(medications),
+        "medications": medications,
+    }
+    if year is not None:
+        response["year"] = year
+    return response
+
+
+# ---------------------------------------------------------------------------
+# svc_get_medication_gaps
+# ---------------------------------------------------------------------------
+
+
+def svc_get_medication_gaps(pid: int, year: int, tenant_id: str) -> dict[str, Any]:
+    """Return medication-linked diagnoses not billed in *year*."""
+    from app.services.icd_validator import get_description, validate_code
+
+    if not year:
+        year = _date.today().year
+
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    gaps = emr.get_medication_diagnosis_gaps(emr_pid, year)
+
+    for gap in gaps:
+        code = gap.get("icd_code", "")
+        if code:
+            gap["description"] = get_description(code) or ""
+            gap["valid_icd10"] = validate_code(code)
+
+    return {
+        "pid": pid,
+        "year": year,
+        "gap_count": len(gaps),
+        "gaps": gaps,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_diagnoses
+# ---------------------------------------------------------------------------
+
+
+def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return all ICD-10 billing codes for *pid*, enriched with descriptions."""
+    from app.services.icd_validator import get_description, validate_code
+
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    try:
+        codes = emr.get_billing_codes(emr_pid)
+    except Exception as exc:
+        logger.error("svc_get_diagnoses error pid=%s: %s", pid, exc)
+        codes = []
+
+    if not codes:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT DISTINCT ed.icd10_code AS code, ed.description AS code_text, "
+                    "ed.hcc_code, ed.is_primary, e.encounter_date "
+                    "FROM encounter_diagnoses ed "
+                    "JOIN encounters e ON e.id = ed.encounter_id "
+                    "WHERE ed.patient_id = %s ORDER BY e.encounter_date DESC, ed.is_primary DESC",
+                    (pid,),
+                )
+                for r in cur.fetchall():
+                    codes.append(
+                        {
+                            "code": r["code"],
+                            "code_text": r["code_text"],
+                            "code_type": "ICD10",
+                            "hcc_code": r.get("hcc_code"),
+                            "encounter_date": str(r["encounter_date"])
+                            if r.get("encounter_date")
+                            else None,
+                        }
+                    )
+        except Exception:
+            pass
+
+    for row in codes:
+        code = row.get("code", "")
+        if code:
+            row["description"] = get_description(code) or row.get("code_text", "")
+            row["valid_icd10"] = validate_code(code)
+
+    return {
+        "pid": pid,
+        "count": len(codes),
+        "diagnoses": codes,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_procedures
+# ---------------------------------------------------------------------------
+
+
+def svc_get_procedures(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return CPT procedure codes with condition hints for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    cpt_rows = emr.get_cpt_codes(emr_pid)
+
+    hints = emr.CPT_CONDITION_HINTS
+    for row in cpt_rows:
+        code = str(row.get("code") or "").strip()
+        row["condition_hint"] = hints.get(code)
+
+    return {
+        "pid": pid,
+        "count": len(cpt_rows),
+        "procedures": cpt_rows,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_problem_list
+# ---------------------------------------------------------------------------
+
+
+def svc_get_problem_list(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+    """Return active medical problems for *pid*, with RAF DB fallback."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    try:
+        problems = emr.get_problem_list(emr_pid, year=year)
+    except Exception as exc:
+        logger.error("svc_get_problem_list error pid=%s: %s", pid, exc)
+        problems = []
+
+    if not problems:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT icd10_code AS diagnosis, description AS title, "
+                    "hcc_code, onset_date AS begdate, status, severity "
+                    "FROM patient_conditions WHERE patient_id = %s ORDER BY onset_date DESC",
+                    (pid,),
+                )
+                for r in cur.fetchall():
+                    problems.append(
+                        {
+                            "title": r["title"],
+                            "diagnosis": f"ICD10:{r['diagnosis']}" if r.get("diagnosis") else "",
+                            "begdate": str(r["begdate"]) if r.get("begdate") else None,
+                            "activity": "1",
+                            "icd10_code": r.get("diagnosis"),
+                            "diagnosis_code": r.get("diagnosis"),
+                            "has_icd_code": bool(r.get("diagnosis")),
+                            "hcc_code": r.get("hcc_code"),
+                            "severity": r.get("severity"),
+                        }
+                    )
+        except Exception:
+            pass
+
+    for p in problems:
+        if "icd10_code" not in p:
+            raw_dx = p.get("diagnosis") or ""
+            icd10 = raw_dx.split(":")[-1].strip() if ":" in raw_dx else raw_dx.strip()
+            p["icd10_code"] = icd10 or None
+            p["diagnosis_code"] = icd10 or None
+            p["has_icd_code"] = bool(icd10)
+
+    return {
+        "pid": pid,
+        "count": len(problems),
+        "problems": problems,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_recapture_gaps
+# ---------------------------------------------------------------------------
+
+
+def svc_get_recapture_gaps(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+    """Return active problems not billed in *year*."""
+    if year is None:
+        year = _date.today().year
+
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    gaps = emr.get_recapture_gaps(emr_pid, year)
+
+    return {
+        "pid": pid,
+        "year": year,
+        "count": len(gaps),
+        "recapture_gaps": gaps,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_vitals_suspects
+# ---------------------------------------------------------------------------
+
+
+def svc_get_vitals_suspects(
+    pid: int, year: Optional[int], tenant_id: str, patient: dict
+) -> dict[str, Any]:
+    """Return vitals-based suspect conditions for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    try:
+        all_diagnoses = emr.get_all_patient_diagnoses(emr_pid)
+        existing_codes = [d.get("icd_code", "") for d in all_diagnoses]
+    except Exception as exc:
+        logger.warning("svc_get_vitals_suspects: could not fetch diagnoses pid=%s: %s", pid, exc)
+        existing_codes = []
+
+    suspects = emr.detect_vitals_suspects(emr_pid, existing_diagnoses=existing_codes, year=year)
+
+    try:
+        trends = emr.get_vitals_trends(emr_pid, year=year)  # type: ignore[attr-defined]
+        latest_vitals: dict[str, Any] = trends.get("latest_vitals") or {}
+    except Exception as exc:
+        logger.warning("svc_get_vitals_suspects: could not fetch trends pid=%s: %s", pid, exc)
+        latest_vitals = {}
+
+    patient_name = (
+        f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
+        or f"Patient {pid}"
+    )
+
+    suspects.sort(key=lambda s: s.get("confidence", 0), reverse=True)
+
+    return {
+        "pid": pid,
+        "patient_name": patient_name,
+        "count": len(suspects),
+        "vitals_suspects": suspects,
+        "latest_vitals": latest_vitals,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_lab_suspects
+# ---------------------------------------------------------------------------
+
+
+def svc_get_lab_suspects(
+    pid: int, year: Optional[int], tenant_id: str, patient: dict
+) -> dict[str, Any]:
+    """Return rule-based lab/vitals suspect conditions for *pid*."""
+    from app.services.lab_suspect_engine import run_lab_suspect_scan
+
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+
+    result = run_lab_suspect_scan(emr_pid, year=year)
+
+    patient_name = (
+        f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
+        or f"Patient {pid}"
+    )
+
+    return {
+        "pid": pid,
+        "patient_name": patient_name,
+        "year_filter": year,
+        "notes_scanned": result["notes_scanned"],
+        "vitals_rows_checked": result["vitals_rows_checked"],
+        "existing_diagnosis_count": result["existing_diagnosis_count"],
+        "note_suspects_count": len(result["note_suspects"]),
+        "vitals_suspects_count": len(result["vitals_suspects"]),
+        "total_suspects": len(result["all_suspects"]),
+        "suspects": result["all_suspects"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_comprehensive_profile
+# ---------------------------------------------------------------------------
+
+
+def svc_get_comprehensive_profile(
+    pid: int, tenant_id: str, patient: dict
+) -> dict[str, Any]:
+    """Aggregate all available data sources into a single profile response."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    current_year = _date.today().year
+
+    # --- Billing ----------------------------------------------------------
+    icd10_codes = _safe_call("billing.icd10", emr.get_billing_codes, emr_pid, default=[])
+    if not icd10_codes:
+        try:
+            with raf_cursor() as _bl_cur:
+                _bl_cur.execute(
+                    "SELECT DISTINCT ed.icd10_code AS code, ed.description AS code_text, "
+                    "ed.hcc_code, e.encounter_date "
+                    "FROM encounter_diagnoses ed "
+                    "JOIN encounters e ON e.id = ed.encounter_id "
+                    "WHERE ed.patient_id = %s ORDER BY e.encounter_date DESC",
+                    (pid,),
+                )
+                for r in _bl_cur.fetchall():
+                    icd10_codes.append(
+                        {
+                            "code": r["code"],
+                            "code_text": r["code_text"],
+                            "code_type": "ICD10",
+                            "hcc_code": r.get("hcc_code"),
+                            "encounter_date": str(r["encounter_date"])
+                            if r.get("encounter_date")
+                            else None,
+                        }
+                    )
+        except Exception:
+            pass
+
+    cpt_codes = _safe_call("billing.cpt", emr.get_cpt_codes, emr_pid, default=[])
+    hints = emr.CPT_CONDITION_HINTS
+    for row in cpt_codes:
+        code = str(row.get("code") or "").strip()
+        row.setdefault("condition_hint", hints.get(code))
+
+    # --- Problem list -----------------------------------------------------
+    problem_list = _safe_call("problem_list", emr.get_problem_list, emr_pid, default=[])
+    if not problem_list:
+        try:
+            with raf_cursor() as _pl_cur:
+                _pl_cur.execute(
+                    """SELECT description AS title, icd10_code AS diagnosis,
+                              hcc_code, severity, onset_date, status
+                       FROM patient_conditions
+                       WHERE patient_id = %s AND status = 'active'
+                       ORDER BY description""",
+                    (pid,),
+                )
+                for r in _pl_cur.fetchall():
+                    icd = r.get("diagnosis") or ""
+                    problem_list.append(
+                        {
+                            "title": r.get("title") or "",
+                            "diagnosis": icd,
+                            "icd10_code": icd,
+                            "diagnosis_code": icd,
+                            "has_icd_code": bool(icd),
+                            "hcc_code": r.get("hcc_code"),
+                            "severity": r.get("severity") or "",
+                            "begdate": str(r["onset_date"]) if r.get("onset_date") else None,
+                            "activity": "1",
+                            "source": "raf_db",
+                        }
+                    )
+        except Exception:
+            pass
+    for p in problem_list:
+        raw_dx = p.get("diagnosis") or ""
+        icd10 = raw_dx.split(":")[-1].strip() if ":" in raw_dx else raw_dx.strip()
+        p["icd10_code"] = icd10 or None
+        p["diagnosis_code"] = icd10 or None
+        p["has_icd_code"] = bool(icd10)
+
+    # --- Recapture gaps --------------------------------------------------
+    recapture_gaps = _safe_call(
+        "recapture_gaps", emr.get_recapture_gaps, emr_pid, current_year, default=[]
+    )
+
+    # --- Medications -----------------------------------------------------
+    medications = _safe_call("medications", emr.get_medications, emr_pid, default=[])
+    if not medications:
+        try:
+            with raf_cursor() as _med_cur:
+                _med_cur.execute(
+                    """SELECT medication_name AS drug, dosage, frequency, purpose,
+                              start_date, prescriber AS provider
+                       FROM patient_medications
+                       WHERE patient_id = %s AND is_active = 1
+                       ORDER BY medication_name""",
+                    (pid,),
+                )
+                for r in _med_cur.fetchall():
+                    medications.append(
+                        {
+                            "drug": r.get("drug") or "",
+                            "dosage": r.get("dosage") or "",
+                            "frequency": r.get("frequency") or "",
+                            "purpose": r.get("purpose") or "",
+                            "start_date": str(r["start_date"]) if r.get("start_date") else None,
+                            "provider": r.get("provider") or "",
+                            "source": "raf_db",
+                        }
+                    )
+        except Exception:
+            pass
+
+    medication_diagnosis_gaps = _safe_call(
+        "medication_diagnosis_gaps",
+        emr.get_medication_diagnosis_gaps,  # type: ignore[attr-defined]
+        emr_pid,
+        current_year,
+        default=[],
+    )
+
+    # --- Encounters ------------------------------------------------------
+    encounters: list[dict] = []
+    try:
+        with raf_cursor() as _enc_cur:
+            _enc_cur.execute(
+                """SELECT e.id AS encounter_id, e.patient_id AS pid,
+                          e.encounter_date AS date, e.encounter_type AS reason,
+                          e.facility, e.provider_id, e.notes, e.status,
+                          pr.first_name AS provider_fname, pr.last_name AS provider_lname
+                   FROM encounters e
+                   LEFT JOIN providers pr ON pr.id = e.provider_id
+                   WHERE e.patient_id = %s
+                   ORDER BY e.encounter_date DESC""",
+                (pid,),
+            )
+            for r in _enc_cur.fetchall():
+                pname = ""
+                if r.get("provider_fname") or r.get("provider_lname"):
+                    pname = f"{r.get('provider_fname', '')} {r.get('provider_lname', '')}".strip()
+                encounters.append(
+                    {
+                        "encounter_id": r["encounter_id"],
+                        "pid": r["pid"],
+                        "date": str(r["date"]) if r.get("date") else None,
+                        "reason": r.get("reason") or "Office Visit",
+                        "provider": pname,
+                        "provider_id": r.get("provider_id"),
+                        "provider_fname": r.get("provider_fname", ""),
+                        "provider_lname": r.get("provider_lname", ""),
+                        "facility": r.get("facility") or "",
+                        "has_notes": 1 if r.get("notes") else 0,
+                        "notes": r.get("notes") or "",
+                        "note_text": r.get("notes") or "",
+                        "source": "raf_db",
+                    }
+                )
+    except Exception as _enc_exc2:
+        logger.error("svc_get_comprehensive_profile RAF DB encounters error pid=%s: %s", pid, _enc_exc2, exc_info=True)
+    if not encounters:
+        encounters = _safe_call("encounters", emr.get_encounters, emr_pid, default=[])
+
+    # --- Vitals ----------------------------------------------------------
+    latest_vitals = _safe_call("vitals.latest", emr.get_latest_vitals, emr_pid, default=None)  # type: ignore[attr-defined]
+    if latest_vitals is None:
+        all_vitals = _safe_call("vitals.all", emr.get_vitals, emr_pid, default=[])
+        latest_vitals = all_vitals[0] if all_vitals else None
+
+    vitals_suspects: list[dict[str, Any]] = []
+    lab_suspects_list: list[dict[str, Any]] = []
+    try:
+        from app.services.lab_suspect_engine import run_lab_suspect_scan  # type: ignore
+
+        lab_scan = run_lab_suspect_scan(emr_pid)
+        vitals_suspects = lab_scan.get("vitals_suspects", [])
+        lab_suspects_list = lab_scan.get("all_suspects", [])
+    except Exception as exc:
+        logger.warning("svc_get_comprehensive_profile [lab_suspect_engine] failed: %s", exc)
+
+    # --- Immunizations ---------------------------------------------------
+    immunizations = _safe_call("immunizations", emr.get_immunizations, emr_pid, default=[])  # type: ignore[attr-defined]
+
+    # --- Enrollment info -------------------------------------------------
+    enrollment = _safe_call(
+        "enrollment",
+        emr.get_patient_enrollment_info,
+        emr_pid,
+        default={
+            "dual_status": "non_dual",
+            "orec": "0",
+            "institutional": False,
+            "source": "unavailable",
+        },
+    )
+    try:
+        with raf_cursor() as _enr_cur:
+            _enr_cur.execute(
+                "SELECT insurance_plan, insurance_type, enrollment_months, dob FROM patients WHERE id = %s",
+                (pid,),
+            )
+            _enr_row = _enr_cur.fetchone()
+            if _enr_row:
+                if not enrollment.get("plan_type") and _enr_row.get("insurance_plan"):
+                    enrollment["plan_type"] = _enr_row["insurance_plan"]
+                if not enrollment.get("plan_type") and _enr_row.get("insurance_type"):
+                    enrollment["plan_type"] = _enr_row["insurance_type"]
+                if not enrollment.get("enrolled_since") and _enr_row.get("enrollment_months"):
+                    from datetime import datetime, timedelta
+
+                    months = int(_enr_row["enrollment_months"])
+                    enrolled_date = datetime.now() - timedelta(days=months * 30)
+                    enrollment["enrolled_since"] = enrolled_date.strftime("%Y-%m-%d")
+    except Exception:
+        pass
+
+    # --- HEDIS -----------------------------------------------------------
+    hedis: dict[str, Any] = _safe_call(
+        "hedis",
+        emr.get_hedis_compliance,  # type: ignore[attr-defined]
+        emr_pid,
+        current_year,
+        default={},
+    )
+
+    # --- Family history --------------------------------------------------
+    family_history = _safe_call("family_history", emr.get_family_history, emr_pid, default=[])  # type: ignore[attr-defined]
+
+    # --- Allergies -------------------------------------------------------
+    allergies = _safe_call("allergies", emr.get_allergies, emr_pid, default=[])  # type: ignore[attr-defined]
+
+    # --- Referrals -------------------------------------------------------
+    referrals = _safe_call("referrals", emr.get_referrals, emr_pid, default=[])  # type: ignore[attr-defined]
+
+    # --- RAF score + breakdown ------------------------------------------
+    raf_current_score: float | None = None
+    raf_breakdown: dict[str, Any] | None = None
+    for yr in [current_year, current_year - 1]:
+        raf_data = _safe_call(
+            "raf_breakdown", get_raf_breakdown, pid, yr, tenant_id=tenant_id, default={}
+        )
+        if raf_data:
+            raf_current_score = raf_data.get("raf_score")
+            raf_breakdown = raf_data
+            break
+
+    # --- Actual labs -----------------------------------------------------
+    actual_labs = _safe_call("labs", emr.get_labs, emr_pid, default=[])
+
+    # --- Data completeness -----------------------------------------------
+    has_clinical_notes = any(bool(enc.get("has_notes")) for enc in encounters)
+    has_insurance = enrollment.get("source") not in (None, "default", "unavailable")
+
+    completeness_flags: dict[str, bool] = {
+        "has_billing": bool(icd10_codes),
+        "has_problems": bool(problem_list),
+        "has_clinical_notes": has_clinical_notes,
+        "has_vitals": latest_vitals is not None,
+        "has_labs": bool(actual_labs),
+        "has_immunizations": bool(immunizations),
+        "has_insurance": has_insurance,
+        "has_medications": bool(medications),
+        "has_encounters": bool(encounters),
+        "has_allergies": bool(allergies),
+        "has_family_history": bool(family_history) and family_history != {},
+        "has_referrals": bool(referrals),
+        "has_demographics": bool(patient.get("race")) and bool(patient.get("language")),
+    }
+    completeness_pct = round(sum(completeness_flags.values()) / len(completeness_flags) * 100)
+
+    return {
+        "pid": pid,
+        "patient": patient,
+        "demographics": {
+            "age": _calculate_age(patient.get("DOB")),
+            "sex": patient.get("sex"),
+            "race": patient.get("race"),
+            "ethnicity": patient.get("ethnicity"),
+            "language": patient.get("language"),
+        },
+        "billing": {
+            "icd10_codes": icd10_codes,
+            "cpt_codes": cpt_codes,
+        },
+        "problem_list": problem_list,
+        "recapture_gaps": recapture_gaps,
+        "medications": {
+            "active": medications,
+            "diagnosis_gaps": medication_diagnosis_gaps,
+        },
+        "encounters": encounters,
+        "vitals": {
+            "latest": latest_vitals,
+            "suspects": vitals_suspects,
+        },
+        "labs": {
+            "results": actual_labs,
+            "suspects": lab_suspects_list,
+        },
+        "immunizations": immunizations,
+        "enrollment": enrollment,
+        "hedis": hedis,
+        "family_history": family_history,
+        "allergies": allergies,
+        "referrals": referrals,
+        "raf": {
+            "current_score": raf_current_score,
+            "breakdown": raf_breakdown,
+        },
+        "data_completeness": {
+            **completeness_flags,
+            "completeness_pct": completeness_pct,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_family_history
+# ---------------------------------------------------------------------------
+
+
+def svc_get_family_history(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return family history for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    family_history = emr.get_family_history(emr_pid)
+    return {"pid": pid, "family_history": family_history}
+
+
+# ---------------------------------------------------------------------------
+# svc_get_sdoh
+# ---------------------------------------------------------------------------
+
+
+def svc_get_sdoh(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return SDOH data for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    return emr.get_sdoh_data(emr_pid)
+
+
+# ---------------------------------------------------------------------------
+# svc_get_allergies
+# ---------------------------------------------------------------------------
+
+
+def svc_get_allergies(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return active allergies for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    allergies = emr.get_allergies(emr_pid)
+    return {"pid": pid, "count": len(allergies), "allergies": allergies}
+
+
+# ---------------------------------------------------------------------------
+# svc_get_referrals
+# ---------------------------------------------------------------------------
+
+
+def svc_get_referrals(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return referral transactions for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    referrals = emr.get_referrals(emr_pid)
+    return {"pid": pid, "count": len(referrals), "referrals": referrals}
+
+
+# ---------------------------------------------------------------------------
+# svc_get_immunizations
+# ---------------------------------------------------------------------------
+
+
+def svc_get_immunizations(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return immunization history for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    immunizations = emr.get_immunizations(emr_pid)
+    return {"pid": pid, "count": len(immunizations), "immunizations": immunizations}
+
+
+# ---------------------------------------------------------------------------
+# svc_get_hedis_compliance
+# ---------------------------------------------------------------------------
+
+
+def svc_get_hedis_compliance(pid: int, year: int, tenant_id: str) -> dict[str, Any]:
+    """Return HEDIS/Stars quality measure compliance for *pid*."""
+    if not year:
+        year = _date.today().year
+
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    measures = emr.get_hedis_compliance(emr_pid, year)
+
+    due_count = sum(1 for m in measures.values() if m.get("due"))
+    compliant_count = sum(1 for m in measures.values() if m.get("due") and m.get("compliant"))
+
+    return {
+        "pid": pid,
+        "year": year,
+        "summary": {
+            "measures_due": due_count,
+            "measures_compliant": compliant_count,
+            "compliance_rate": round(compliant_count / due_count, 2) if due_count else None,
+        },
+        "measures": measures,
+    }
+
+
+# ---------------------------------------------------------------------------
+# svc_get_patient_enrollment
+# ---------------------------------------------------------------------------
+
+
+def svc_get_patient_enrollment(pid: int, tenant_id: str) -> dict[str, Any]:
+    """Return enrollment and insurance metadata for *pid*."""
+    emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    enrollment = emr.get_patient_enrollment_info(emr_pid)
+    return {"pid": pid, "enrollment": enrollment}

@@ -29,6 +29,9 @@ import time
 import requests
 from typing import Any
 
+from app.services.api_rate_limiter import gemini_limiter
+from app.services.circuit_breaker import gemini_breaker
+
 from app.config import settings
 from app.services.icd_validator import validate_code_set
 
@@ -900,6 +903,7 @@ Return your final answer as JSON with this structure:
 # Pipeline entry point
 # ---------------------------------------------------------------------------
 
+@gemini_breaker
 def run_pipeline(
     clinical_note: str,
     *,
@@ -1069,6 +1073,19 @@ Analyze this note completely. Use ALL context provided above (problem list, reca
         # Multi-turn: keep calling until Gemini returns text (not tool calls)
         max_turns = 10
         for turn in range(max_turns):
+            # Acquire a rate-limit token before every Gemini HTTP request.
+            # This covers both the initial turn and any subsequent tool-call
+            # turns so that batch processing cannot exceed the configured quota.
+            if not gemini_limiter.acquire(timeout=30.0):
+                logger.warning(
+                    "[Skill Pipeline] Gemini rate-limit token not acquired within "
+                    "30 s on turn %d — falling back to Stage 1 rule-based result.",
+                    turn,
+                )
+                raise RuntimeError(
+                    "Gemini rate-limit timeout: request queue is saturated. "
+                    "Increase GEMINI_RATE_LIMIT_RPS or reduce batch concurrency."
+                )
             t_start = time.time()
             resp = requests.post(
                 url,

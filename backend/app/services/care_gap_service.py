@@ -99,11 +99,16 @@ def list_gap_tasks(
     gap_type: str | None = None,
     due_before: date | None = None,
     due_after: date | None = None,
-    tenant_id: str = "default",
+    tenant_id: str = "",  # Required — empty string will raise below
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Return care gap tasks filtered by the supplied criteria."""
+    if not tenant_id:
+        raise ValueError(
+            "list_gap_tasks: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
+        )
     conditions: list[str] = ["tenant_id = %s", ACTIVE_PATIENTS_SUBQUERY]
     params: list[Any] = [tenant_id]
 
@@ -171,7 +176,7 @@ def create_gap_task(
     assigned_to: int | None = None,
     suspect_condition_id: int | None = None,
     created_by: int | None = None,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """Create a new care gap task and record the creation event in history."""
     with raf_cursor() as cur:
@@ -456,7 +461,7 @@ def get_history(task_id: int) -> list[dict[str, Any]]:
 def get_dashboard_stats(
     *,
     provider_id: int | None = None,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """
     Return summary counts for the care gap dashboard.
@@ -600,7 +605,7 @@ def generate_gaps_from_suspects(
     min_confidence: float = 0.5,
     priority_threshold: float = 0.8,
     created_by: int | None = None,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """
     Query ``raf_suspect_conditions`` for open suspects and create gap tasks for
@@ -769,5 +774,192 @@ def generate_gaps_from_suspects(
         "suspects_evaluated": len(suspects),
         "tasks_created": created_count,
         "skipped_already_exists": skipped_count,
+        "errors": errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Pipeline-facing alias — called by pipeline_chain.py
+# ---------------------------------------------------------------------------
+
+
+def generate_care_gaps(tenant_id: str) -> dict[str, Any]:
+    """
+    Pipeline entry point for care gap auto-generation.
+
+    Reads all open ``raf_suspect_conditions`` for *tenant_id*, then creates a
+    ``care_gap_tasks`` row for each suspect that does not already have a gap
+    for the same ``(patient_id, hcc_code)`` pair.
+
+    Deduplication is intentionally keyed on ``(patient_id, hcc_code)`` rather
+    than ``suspect_condition_id`` so that manually created or re-opened suspects
+    that share an HCC with an existing task are not duplicated.
+
+    Returns a dict with the following keys:
+      - gaps_created   : number of new care_gap_tasks rows inserted
+      - gaps_skipped   : number of suspects skipped (gap already present)
+      - suspects_total : total open suspects evaluated
+      - errors         : list of per-suspect error dicts (suspect_id, error)
+    """
+    if not tenant_id:
+        raise ValueError("generate_care_gaps: tenant_id is required")
+
+    created_count = 0
+    skipped_count = 0
+    errors: list[dict[str, Any]] = []
+
+    with raf_cursor() as cur:
+        # 1. Fetch all open suspects for this tenant
+        cur.execute(
+            """
+            SELECT sc.id              AS suspect_id,
+                   sc.patient_id,
+                   sc.suspect_hcc     AS hcc_code,
+                   sc.suspect_icd10   AS icd10_code,
+                   sc.evidence_type,
+                   sc.confidence_score,
+                   sc.evidence_detail,
+                   sc.tenant_id
+            FROM raf_suspect_conditions sc
+            WHERE sc.status = 'open'
+              AND sc.tenant_id = %s
+            ORDER BY sc.confidence_score DESC
+            """,
+            (tenant_id,),
+        )
+        suspects: list[dict[str, Any]] = cur.fetchall() or []
+
+        if not suspects:
+            return {
+                "gaps_created": 0,
+                "gaps_skipped": 0,
+                "suspects_total": 0,
+                "errors": [],
+            }
+
+        # 2. Build set of (patient_id, hcc_code) pairs that already have gaps
+        cur.execute(
+            """
+            SELECT patient_id, hcc_code
+            FROM care_gap_tasks
+            WHERE tenant_id = %s AND status != 'rejected'
+            """,
+            (tenant_id,),
+        )
+        existing_pairs: set[tuple[int, str]] = {
+            (row["patient_id"], row["hcc_code"])
+            for row in (cur.fetchall() or [])
+        }
+
+        for suspect in suspects:
+            patient_id: int = suspect["patient_id"]
+            hcc_code: str = str(suspect.get("hcc_code") or "")
+            pair = (patient_id, hcc_code)
+
+            if pair in existing_pairs:
+                skipped_count += 1
+                continue
+
+            # 3. Derive priority from confidence_score
+            confidence = float(suspect.get("confidence_score") or 0)
+            if confidence >= 0.85:
+                priority = "critical"
+            elif confidence >= 0.7:
+                priority = "high"
+            elif confidence >= 0.5:
+                priority = "medium"
+            else:
+                priority = "low"
+
+            # Map evidence_type to valid gap_type ENUM ('suspect','recapture','new')
+            raw_evidence_type: str = suspect.get("evidence_type") or ""
+            if raw_evidence_type == "historical_hcc":
+                gap_type = "recapture"
+            else:
+                gap_type = "suspect"
+            icd10: str = suspect.get("icd10_code") or ""
+            evidence_summary = (
+                f"Evidence type: {gap_type}. "
+                f"Confidence: {confidence:.1%}. "
+                f"ICD-10: {icd10}."
+            )
+
+            # 4. Resolve provider from panel (best-effort; NULL if not found)
+            cur.execute(
+                """
+                SELECT provider_id
+                FROM provider_patient_panel
+                WHERE patient_id = %s
+                ORDER BY assigned_at DESC
+                LIMIT 1
+                """,
+                (patient_id,),
+            )
+            panel_row = cur.fetchone()
+            target_provider: int = panel_row["provider_id"] if panel_row else 0
+
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO care_gap_tasks
+                        (patient_id, provider_id, hcc_code, hcc_description,
+                         gap_type, priority, evidence_summary,
+                         suspect_condition_id, created_by, tenant_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, %s)
+                    ON DUPLICATE KEY UPDATE id = id
+                    """,
+                    (
+                        patient_id,
+                        target_provider,
+                        hcc_code,
+                        f"HCC {hcc_code} — auto-generated from suspect",
+                        gap_type,
+                        priority,
+                        evidence_summary,
+                        suspect["suspect_id"],
+                        tenant_id,
+                    ),
+                )
+                if cur.rowcount > 0:
+                    new_task_id: int = cur.lastrowid
+                    _record_history(
+                        cur,
+                        new_task_id,
+                        "auto_generated",
+                        user_id=0,
+                        new_status="open",
+                        note=f"auto-generated by pipeline from suspect_condition {suspect['suspect_id']}",
+                    )
+                    existing_pairs.add(pair)  # prevent duplicates within this batch
+                    created_count += 1
+                    logger.info(
+                        "generate_care_gaps: created task=%s suspect=%s patient=%s hcc=%s",
+                        new_task_id,
+                        suspect["suspect_id"],
+                        patient_id,
+                        hcc_code,
+                    )
+                else:
+                    skipped_count += 1
+
+            except Exception as exc:
+                logger.warning(
+                    "generate_care_gaps: suspect=%s failed: %s",
+                    suspect["suspect_id"],
+                    exc,
+                )
+                errors.append({"suspect_id": suspect["suspect_id"], "error": str(exc)})
+
+    logger.info(
+        "generate_care_gaps: tenant=%s created=%s skipped=%s errors=%s",
+        tenant_id,
+        created_count,
+        skipped_count,
+        len(errors),
+    )
+    return {
+        "gaps_created": created_count,
+        "gaps_skipped": skipped_count,
+        "suspects_total": len(suspects),
         "errors": errors,
     }

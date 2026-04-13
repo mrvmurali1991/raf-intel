@@ -2207,16 +2207,13 @@ export default function DemoPage() {
       }, 1000);
 
       let result: AnalysisResult;
-      console.log(`[Pipeline] inputMode=${inputMode} patientId=${selectedPatientId} encounterId=${selectedEncounterId} noteLength=${note.length}`);
       try {
         if (inputMode === "patient" && selectedEncounterId) {
           try {
-            console.log(`[Pipeline] Calling /api/analysis/encounter/${selectedEncounterId}`);
             const { data } = await api.post(`/api/analysis/encounter/${selectedEncounterId}`, {
               include_context: true,
               save_results: false,
             });
-            console.log(`[Pipeline] Got ${data?.diagnoses?.length ?? 0} diagnoses from encounter ${selectedEncounterId}`);
             result = data;
           } catch (encErr: any) {
             const msg = encErr?.response?.data?.detail || encErr?.message || "Unknown error";
@@ -2232,8 +2229,6 @@ export default function DemoPage() {
             return;
           }
         } else {
-          console.log(`[Pipeline] ELSE branch: calling analyzeNote(${selectedPatientId ?? 0}, noteLength=${note.length})`);
-          console.log(`[Pipeline] Note preview: "${note.substring(0, 80)}..."`);
           result = await analyzeNote(selectedPatientId ?? 0, note);
         }
       } catch {
@@ -2375,8 +2370,6 @@ export default function DemoPage() {
       let raf: Record<string, any> | null = null;
       try {
         const rafToolCall = toolCalls.find((tc: any) => tc.function === "calculate_raf_score");
-        console.log("[RAF Debug] rafToolCall found:", !!rafToolCall, "raf_score:", rafToolCall?.result?.raf_score);
-        console.log("[RAF Debug] toolCalls count:", toolCalls.length, "functions:", toolCalls.map((tc: any) => tc.function));
         if (rafToolCall?.result?.raf_score) {
           const serverRaf = rafToolCall.result;
           const rafArgs = rafToolCall.args ?? {};
@@ -2398,8 +2391,6 @@ export default function DemoPage() {
               };
             });
           }
-          console.log("[RAF Debug] hcc_details count:", hccDetails.length, "hcc_list:", serverRaf.hcc_list);
-
           // Interaction handling: prefer interaction_details from backend (contains real
           // coefficients and human-readable labels). Fall back to coefficient-scraping for
           // older responses that pre-date the interaction_details field.
@@ -2446,7 +2437,6 @@ export default function DemoPage() {
               ...interactionComponents,
             ],
           };
-          console.log("[RAF Debug] Final raf:", JSON.stringify({ score: raf.raf_score, components: raf.components.length }));
         } else {
           // Fallback: client-side RAF calculation
           const HCC_COEFFICIENTS: Record<string, number> = {

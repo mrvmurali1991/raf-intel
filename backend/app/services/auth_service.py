@@ -793,7 +793,7 @@ def create_session(
                 user_id,
                 session_token_hash,
                 refresh_token_hash,
-                ip_address,
+                ip_address or "unknown",
                 user_agent,
                 expires_at.strftime("%Y-%m-%d %H:%M:%S"),
             ),
@@ -931,8 +931,8 @@ def authenticate_user(
         raise ValueError("Account is inactive. Contact your administrator.")
 
     # Check lockout
-    locked_until = user["locked_until"]
-    if locked_until:
+    locked_until = user.get("locked_until")
+    if locked_until and isinstance(locked_until, (str, datetime)):
         if isinstance(locked_until, str):
             locked_until = datetime.fromisoformat(locked_until)
         if locked_until.replace(tzinfo=timezone.utc) > _utcnow():
@@ -1035,7 +1035,7 @@ def _issue_tokens(
                 user["id"],
                 session_token_hash,
                 refresh_token_hash,
-                ip_address,
+                ip_address or "unknown",
                 user_agent,
                 expires_at.strftime("%Y-%m-%d %H:%M:%S"),
             ),

@@ -29,7 +29,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services import attestation_service as svc
 
 logger = logging.getLogger(__name__)
@@ -167,6 +167,7 @@ def list_attestations(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "read")),
 ) -> dict[str, Any]:
     """
@@ -176,7 +177,6 @@ def list_attestations(
     provider_user_id.  Admins may supply a provider_npi to view any
     provider's queue.
     """
-    tenant_id: str = str(current_user.get("tenant_id") or "default")
     user_role: str = current_user.get("role", "")
     provider_user_id: int | None = None
 
@@ -208,6 +208,7 @@ def list_attestations(
 def create_attestation(
     body: CreateAttestationRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "write")),
 ) -> dict[str, Any]:
     """
@@ -216,7 +217,6 @@ def create_attestation(
     The ``provider_user_id`` is always taken from the authenticated session,
     not from the request body, to prevent impersonation.
     """
-    tenant_id: str = str(current_user.get("tenant_id") or "default")
     provider_user_id: int = current_user["id"]
 
     try:
@@ -248,13 +248,13 @@ def create_attestation(
 def attestation_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Look-back window in days"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "read")),
 ) -> dict[str, Any]:
     """
     Return attestation KPIs for the requesting provider (or all providers
     for admin users) over the specified look-back window.
     """
-    tenant_id: str = str(current_user.get("tenant_id") or "default")
     user_role: str = current_user.get("role", "")
     provider_user_id: int | None = (
         None if user_role in ("admin", "superadmin") else current_user["id"]
@@ -281,6 +281,7 @@ def attestation_dashboard(
 def send_reminders(
     body: RemindRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "write")),
 ) -> dict[str, Any]:
     """
@@ -290,7 +291,6 @@ def send_reminders(
     Attestations that already received a reminder of the same type within
     the last 24 hours are skipped automatically.
     """
-    tenant_id: str = str(current_user.get("tenant_id") or "default")
 
     try:
         reminders = svc.generate_reminders(
@@ -318,6 +318,7 @@ def send_reminders(
 def create_batch(
     body: CreateBatchRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "write")),
 ) -> dict[str, Any]:
     """
@@ -326,7 +327,6 @@ def create_batch(
     The provider reviews all conditions and then submits all decisions at
     once via ``PUT /api/attestations/batch/{id}/submit``.
     """
-    tenant_id: str = str(current_user.get("tenant_id") or "default")
     provider_user_id: int = current_user["id"]
 
     try:

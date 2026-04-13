@@ -1,0 +1,1038 @@
+"""
+Financial Reconciliation Service.
+
+Compares projected RAF-based revenue against actual CMS payment records to
+identify underpayments, overpayments, and variance drivers.  Also provides
+revenue forecasting and period-over-period trend analysis.
+
+Key capabilities:
+  1. CMS payment file import (CSV capitation reports, sweep files)
+  2. Member matching — links CMS member_id / MBI to internal patient records
+  3. Reconciliation run — computes RAF and revenue variance per patient
+  4. Variance driver analysis — surfaces HCCs that explain differences
+  5. Revenue forecasting — projects future revenue from the current RAF pipeline
+  6. Sweep adjustment modeling — mid-year and final sweep deltas
+  7. Period-over-period comparisons
+  8. Executive financial summary dashboard
+
+DISCLAIMER: Revenue calculations use hccinfhir-derived RAF scores.  Verify
+against official CMS SAS output before use in any payment determination.
+"""
+from __future__ import annotations
+
+import csv
+import io
+import json
+import logging
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+
+from app.db import raf_cursor, openemr_cursor
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# CMS revenue multiplier — annual MA capitation rate per 1.0 RAF point.
+# Plans should override this with their actual benchmark rate.
+# ---------------------------------------------------------------------------
+_ANNUAL_REVENUE_PER_RAF_POINT: float = 11_015.04
+_MONTHLY_REVENUE_PER_RAF_POINT: float = _ANNUAL_REVENUE_PER_RAF_POINT / 12.0
+
+# Thresholds for determining match quality
+_VARIANCE_THRESHOLD_MATCHED: float = 0.005   # ±0.005 RAF — considered matched
+_VARIANCE_THRESHOLD_SIGNIFICANT: float = 0.10  # |variance| >= 0.10 — flag for review
+
+
+# ---------------------------------------------------------------------------
+# Payment file import
+# ---------------------------------------------------------------------------
+
+def parse_payment_csv(content: bytes | str) -> list[dict[str, Any]]:
+    """
+    Parse a CMS capitation or sweep CSV file into normalised payment dicts.
+
+    Accepted column names (case-insensitive, extra columns ignored):
+      member_id / mbi, plan_id, payment_year, payment_month,
+      cms_raf_score / raf_score, payment_amount / cms_payment_amount,
+      payment_type, adjustment_reason, received_date, file_source
+
+    Returns a list of payment record dicts ready for persistence.
+    """
+    if isinstance(content, bytes):
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("latin-1")
+    else:
+        text = content
+
+    reader = csv.DictReader(io.StringIO(text))
+    records: list[dict[str, Any]] = []
+
+    for row_num, raw_row in enumerate(reader, start=2):
+        # Normalise keys
+        row: dict[str, str] = {k.strip().lower().replace(" ", "_"): (v or "").strip()
+                                for k, v in raw_row.items()}
+
+        member_id = (row.get("member_id") or row.get("mbi") or "").strip()
+        if not member_id:
+            logger.debug("Row %d: missing member_id / mbi — skipped", row_num)
+            continue
+
+        def _float(key: str, default: float = 0.0) -> float | None:
+            for k in (key, key.replace("_", "")):
+                val = row.get(k, "").replace(",", "").strip()
+                if val:
+                    try:
+                        return float(val)
+                    except ValueError:
+                        pass
+            return default
+
+        def _int(key: str, default: int | None = None) -> int | None:
+            val = row.get(key, "").strip()
+            if val:
+                try:
+                    return int(val)
+                except ValueError:
+                    pass
+            return default
+
+        raw_type = (row.get("payment_type") or "monthly_capitation").lower().replace(" ", "_")
+        valid_types = {"monthly_capitation", "mid_year_sweep", "final_sweep", "retroactive"}
+        payment_type = raw_type if raw_type in valid_types else "monthly_capitation"
+
+        # Parse received_date if present
+        received_date: str | None = None
+        raw_date = row.get("received_date", "").strip()
+        if raw_date:
+            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y"):
+                try:
+                    received_date = datetime.strptime(raw_date, fmt).date().isoformat()
+                    break
+                except ValueError:
+                    pass
+
+        records.append({
+            "member_id": member_id,
+            "plan_id": row.get("plan_id") or None,
+            "payment_year": _int("payment_year") or date.today().year,
+            "payment_month": _int("payment_month"),
+            "cms_raf_score": _float("cms_raf_score") or _float("raf_score"),
+            "cms_payment_amount": _float("payment_amount") or _float("cms_payment_amount") or 0.0,
+            "payment_type": payment_type,
+            "adjustment_reason": row.get("adjustment_reason") or None,
+            "received_date": received_date,
+            "file_source": row.get("file_source") or None,
+        })
+
+    return records
+
+
+def create_import_batch(
+    if not tenant_id:
+        raise ValueError(
+            "create_import_batch: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    filename: str,
+    file_type: str,
+    payment_period: str | None,
+    imported_by: int | None,
+    tenant_id: str,
+) -> int:
+    """Insert a payment_import_batches row and return its id."""
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO payment_import_batches
+              (tenant_id, filename, file_type, payment_period, imported_by)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (tenant_id, filename, file_type, payment_period, imported_by),
+        )
+        return cur.lastrowid
+
+
+def store_payment_records(
+    if not tenant_id:
+        raise ValueError(
+            "store_payment_records: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    batch_id: int,
+    records: list[dict[str, Any]],
+    tenant_id: str,
+) -> int:
+    """
+    Persist parsed payment records, match to internal patients, and update the
+    batch summary counters.  Returns the count of rows inserted.
+    """
+    if not records:
+        return 0
+
+    # Pre-load member_id → patient_id map for matching
+    member_ids = list({r["member_id"] for r in records})
+    patient_map: dict[str, int] = {}
+
+    # Try matching on claims_data.member_id first
+    try:
+        with raf_cursor() as cur:
+            fmt = ",".join(["%s"] * len(member_ids))
+            cur.execute(
+                f"SELECT DISTINCT member_id, patient_id FROM claims_data "
+                f"WHERE member_id IN ({fmt})",
+                member_ids,
+            )
+            for row in cur.fetchall():
+                if row["member_id"] and row["patient_id"]:
+                    patient_map[row["member_id"]] = row["patient_id"]
+    except Exception as exc:
+        logger.warning("Member-id patient lookup failed: %s", exc)
+
+    # Fallback: try OpenEMR patient insurance table
+    unmatched = [m for m in member_ids if m not in patient_map]
+    if unmatched:
+        try:
+            with openemr_cursor() as cur:
+                fmt = ",".join(["%s"] * len(unmatched))
+                cur.execute(
+                    f"SELECT pid, policy_number FROM insurance_data "
+                    f"WHERE policy_number IN ({fmt})",
+                    unmatched,
+                )
+                for row in cur.fetchall():
+                    if row["policy_number"] and row["pid"]:
+                        patient_map[row["policy_number"]] = row["pid"]
+        except Exception as exc:
+            logger.warning("Insurance-data member lookup failed: %s", exc)
+
+    inserted = 0
+    total_amount = 0.0
+    with raf_cursor() as cur:
+        for rec in records:
+            patient_id = patient_map.get(rec["member_id"])
+            cur.execute(
+                """
+                INSERT INTO cms_payment_records
+                  (tenant_id, batch_id, payment_year, payment_month,
+                   patient_id, member_id, plan_id,
+                   cms_raf_score, cms_payment_amount,
+                   payment_type, adjustment_reason, received_date, file_source)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    tenant_id, batch_id,
+                    rec["payment_year"], rec["payment_month"],
+                    patient_id, rec["member_id"], rec["plan_id"],
+                    rec["cms_raf_score"], rec["cms_payment_amount"],
+                    rec["payment_type"], rec["adjustment_reason"],
+                    rec["received_date"], rec["file_source"],
+                ),
+            )
+            inserted += 1
+            total_amount += float(rec["cms_payment_amount"] or 0)
+
+        # Update batch totals
+        cur.execute(
+            """
+            UPDATE payment_import_batches
+               SET record_count = %s,
+                   total_amount = %s,
+                   status = 'completed'
+             WHERE id = %s
+            """,
+            (inserted, total_amount, batch_id),
+        )
+
+    return inserted
+
+
+def update_batch_status(batch_id: int, status: str, error_message: str | None = None) -> None:
+    with raf_cursor() as cur:
+        cur.execute(
+            "UPDATE payment_import_batches SET status=%s, error_message=%s WHERE id=%s",
+            (status, error_message, batch_id),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Payment record queries
+# ---------------------------------------------------------------------------
+
+def list_payments(
+    if not tenant_id:
+        raise ValueError(
+            "list_payments: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id: str,
+    payment_year: int | None = None,
+    payment_type: str | None = None,
+    batch_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    filters = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+
+    if payment_year:
+        filters.append("payment_year = %s")
+        params.append(payment_year)
+    if payment_type:
+        filters.append("payment_type = %s")
+        params.append(payment_type)
+    if batch_id:
+        filters.append("batch_id = %s")
+        params.append(batch_id)
+
+    where = " AND ".join(filters)
+
+    with raf_cursor() as cur:
+        cur.execute(
+            f"SELECT COUNT(*) AS cnt FROM cms_payment_records WHERE {where}", params
+        )
+        total = cur.fetchone()["cnt"]
+
+        cur.execute(
+            f"SELECT * FROM cms_payment_records WHERE {where} "
+            f"ORDER BY payment_year DESC, payment_month DESC, id DESC "
+            f"LIMIT %s OFFSET %s",
+            params + [limit, offset],
+        )
+        rows = cur.fetchall()
+
+    return {"total": total, "records": _serialize(rows)}
+
+
+def get_payment_by_id(payment_id: int, tenant_id: str) -> dict[str, Any] | None:
+    if not tenant_id:
+        raise ValueError(
+            "get_payment_by_id: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM cms_payment_records WHERE id=%s AND tenant_id=%s",
+            (payment_id, tenant_id),
+        )
+        row = cur.fetchone()
+    return _serialize(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation
+# ---------------------------------------------------------------------------
+
+def run_reconciliation(
+    if not tenant_id:
+        raise ValueError(
+            "run_reconciliation: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    reconciliation_period: str,
+    tenant_id: str,
+    payment_year: int | None = None,
+    payment_month: int | None = None,
+) -> dict[str, Any]:
+    """
+    Compare projected RAF scores (from raf_scores table) with CMS-reported RAF
+    scores for a given period.  Upserts one financial_reconciliation row per
+    matched patient.
+
+    reconciliation_period examples: '2025-01', '2025-Q2', '2025'
+
+    Returns a summary dict with counts and aggregate variance.
+    """
+    year = payment_year or _period_to_year(reconciliation_period)
+    month = payment_month or _period_to_month(reconciliation_period)
+
+    # Pull CMS payments for the period
+    payment_filter = ["cpr.tenant_id = %s", "cpr.payment_year = %s"]
+    payment_params: list[Any] = [tenant_id, year]
+    if month:
+        payment_filter.append("cpr.payment_month = %s")
+        payment_params.append(month)
+
+    cms_data: dict[int, dict[str, Any]] = {}  # patient_id → cms row
+    with raf_cursor() as cur:
+        where = " AND ".join(payment_filter)
+        cur.execute(
+            f"""
+            SELECT patient_id,
+                   AVG(cms_raf_score)        AS avg_cms_raf,
+                   SUM(cms_payment_amount)   AS total_payment
+              FROM cms_payment_records cpr
+             WHERE {where}
+               AND patient_id IS NOT NULL
+             GROUP BY patient_id
+            """,
+            payment_params,
+        )
+        for row in cur.fetchall():
+            cms_data[row["patient_id"]] = row
+
+    if not cms_data:
+        return {
+            "reconciliation_period": reconciliation_period,
+            "patients_processed": 0,
+            "matched": 0,
+            "underpaid": 0,
+            "overpaid": 0,
+            "unreconciled": 0,
+            "total_revenue_variance": 0.0,
+            "message": "No CMS payment records found for this period with matched patients.",
+        }
+
+    patient_ids = list(cms_data.keys())
+
+    # Pull projected RAF from raf_scores (most recent score per patient)
+    projected_data: dict[int, float] = {}
+    with raf_cursor() as cur:
+        fmt = ",".join(["%s"] * len(patient_ids))
+        cur.execute(
+            f"""
+            SELECT rs.patient_id, rs.final_raf
+              FROM raf_scores rs
+             INNER JOIN (
+               SELECT patient_id, MAX(calculated_at) AS latest
+                 FROM raf_scores
+                WHERE patient_id IN ({fmt})
+                GROUP BY patient_id
+             ) latest_rs ON rs.patient_id = latest_rs.patient_id
+                        AND rs.calculated_at = latest_rs.latest
+            """,
+            patient_ids,
+        )
+        for row in cur.fetchall():
+            projected_data[row["patient_id"]] = float(row["final_raf"] or 0)
+
+    # Write reconciliation rows
+    counts = {"matched": 0, "underpaid": 0, "overpaid": 0, "unreconciled": 0}
+    total_revenue_variance = 0.0
+
+    with raf_cursor() as cur:
+        for patient_id, cms_row in cms_data.items():
+            cms_raf = float(cms_row["avg_cms_raf"] or 0)
+            actual_revenue = float(cms_row["total_payment"] or 0)
+            projected_raf = projected_data.get(patient_id)
+
+            if projected_raf is None:
+                status = "unreconciled"
+                projected_revenue = None
+                raf_variance = None
+                revenue_variance = None
+            else:
+                projected_revenue = projected_raf * _ANNUAL_REVENUE_PER_RAF_POINT / 12.0
+                raf_variance = round(projected_raf - cms_raf, 4)
+                revenue_variance = round(projected_revenue - actual_revenue, 2)
+                total_revenue_variance += revenue_variance
+
+                abs_raf_var = abs(raf_variance)
+                if abs_raf_var <= _VARIANCE_THRESHOLD_MATCHED:
+                    status = "matched"
+                elif raf_variance > 0:
+                    status = "underpaid"
+                else:
+                    status = "overpaid"
+
+            counts[status] += 1
+
+            # Upsert
+            cur.execute(
+                """
+                INSERT INTO financial_reconciliation
+                  (tenant_id, reconciliation_period, patient_id,
+                   projected_raf, actual_cms_raf, raf_variance,
+                   projected_revenue, actual_revenue, revenue_variance, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON DUPLICATE KEY UPDATE
+                  projected_raf      = VALUES(projected_raf),
+                  actual_cms_raf     = VALUES(actual_cms_raf),
+                  raf_variance       = VALUES(raf_variance),
+                  projected_revenue  = VALUES(projected_revenue),
+                  actual_revenue     = VALUES(actual_revenue),
+                  revenue_variance   = VALUES(revenue_variance),
+                  status             = VALUES(status),
+                  updated_at         = CURRENT_TIMESTAMP
+                """,
+                (
+                    tenant_id, reconciliation_period, patient_id,
+                    projected_raf, cms_raf, raf_variance,
+                    projected_revenue, actual_revenue, revenue_variance,
+                    status,
+                ),
+            )
+
+    return {
+        "reconciliation_period": reconciliation_period,
+        "patients_processed": len(cms_data),
+        **counts,
+        "total_revenue_variance": round(total_revenue_variance, 2),
+    }
+
+
+def list_reconciliation(
+    if not tenant_id:
+        raise ValueError(
+            "list_reconciliation: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id: str,
+    period: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    filters = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+
+    if period:
+        filters.append("reconciliation_period = %s")
+        params.append(period)
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+
+    where = " AND ".join(filters)
+
+    with raf_cursor() as cur:
+        cur.execute(
+            f"SELECT COUNT(*) AS cnt FROM financial_reconciliation WHERE {where}", params
+        )
+        total = cur.fetchone()["cnt"]
+
+        cur.execute(
+            f"SELECT * FROM financial_reconciliation WHERE {where} "
+            f"ORDER BY ABS(revenue_variance) DESC "
+            f"LIMIT %s OFFSET %s",
+            params + [limit, offset],
+        )
+        rows = cur.fetchall()
+
+    return {"total": total, "records": _serialize(rows)}
+
+
+def get_patient_reconciliation(
+    if not tenant_id:
+        raise ValueError(
+            "get_patient_reconciliation: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    patient_id: int,
+    tenant_id: str,
+    limit: int = 24,
+) -> dict[str, Any]:
+    """Return all reconciliation periods for a single patient, newest first."""
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            SELECT * FROM financial_reconciliation
+             WHERE patient_id=%s AND tenant_id=%s
+             ORDER BY reconciliation_period DESC
+             LIMIT %s
+            """,
+            (patient_id, tenant_id, limit),
+        )
+        rows = cur.fetchall()
+
+    # Also pull CMS payment totals per period
+    periods = [r["reconciliation_period"] for r in rows]
+    payment_totals: dict[str, float] = {}
+    if periods:
+        with raf_cursor() as cur:
+            fmt = ",".join(["%s"] * len(periods))
+            cur.execute(
+                f"""
+                SELECT payment_year, payment_month,
+                       SUM(cms_payment_amount) AS total
+                  FROM cms_payment_records
+                 WHERE patient_id=%s AND tenant_id=%s
+                 GROUP BY payment_year, payment_month
+                """,
+                (patient_id, tenant_id),
+            )
+            for r in cur.fetchall():
+                key = f"{r['payment_year']}-{str(r['payment_month'] or 0).zfill(2)}"
+                payment_totals[key] = float(r["total"] or 0)
+
+    return {
+        "patient_id": patient_id,
+        "periods": _serialize(rows),
+        "payment_totals_by_period": payment_totals,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Variance analysis
+# ---------------------------------------------------------------------------
+
+def get_variance_analysis(
+    if not tenant_id:
+        raise ValueError(
+            "get_variance_analysis: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id: str,
+    period: str | None = None,
+    top_n: int = 20,
+) -> dict[str, Any]:
+    """
+    Return the top patients and variance reasons driving financial discrepancy.
+
+    Also returns an HCC-level breakdown where data is available by joining
+    against raf_hcc_details.
+    """
+    filters = ["fr.tenant_id = %s", "fr.status != 'matched'"]
+    params: list[Any] = [tenant_id]
+
+    if period:
+        filters.append("fr.reconciliation_period = %s")
+        params.append(period)
+
+    where = " AND ".join(filters)
+
+    with raf_cursor() as cur:
+        # Top patients by absolute revenue variance
+        cur.execute(
+            f"""
+            SELECT fr.patient_id,
+                   fr.reconciliation_period,
+                   fr.projected_raf,
+                   fr.actual_cms_raf,
+                   fr.raf_variance,
+                   fr.projected_revenue,
+                   fr.actual_revenue,
+                   fr.revenue_variance,
+                   fr.status,
+                   fr.variance_reason
+              FROM financial_reconciliation fr
+             WHERE {where}
+             ORDER BY ABS(fr.revenue_variance) DESC
+             LIMIT %s
+            """,
+            params + [top_n],
+        )
+        top_patients = _serialize(cur.fetchall())
+
+        # Aggregate by variance reason
+        cur.execute(
+            f"""
+            SELECT variance_reason,
+                   COUNT(*)                          AS patient_count,
+                   SUM(revenue_variance)             AS total_variance,
+                   AVG(raf_variance)                 AS avg_raf_variance
+              FROM financial_reconciliation fr
+             WHERE {where}
+             GROUP BY variance_reason
+             ORDER BY ABS(SUM(revenue_variance)) DESC
+            """,
+            params,
+        )
+        reason_breakdown = _serialize(cur.fetchall())
+
+        # Status distribution
+        cur.execute(
+            f"""
+            SELECT status,
+                   COUNT(*)              AS count,
+                   SUM(revenue_variance) AS total_variance
+              FROM financial_reconciliation fr
+             WHERE {where}
+             GROUP BY status
+            """,
+            params,
+        )
+        status_dist = _serialize(cur.fetchall())
+
+    return {
+        "period": period,
+        "top_variance_patients": top_patients,
+        "variance_by_reason": reason_breakdown,
+        "status_distribution": status_dist,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Revenue forecasting
+# ---------------------------------------------------------------------------
+
+def generate_forecast(
+    if not tenant_id:
+        raise ValueError(
+            "generate_forecast: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    forecast_period: str,
+    forecast_type: str,
+    tenant_id: str,
+    gap_closure_rate: float = 0.30,
+    sweep_adjustment_pct: float = 0.02,
+    confidence_level: str = "medium",
+    created_by: int | None = None,
+) -> dict[str, Any]:
+    """
+    Build a revenue forecast for forecast_period.
+
+    Base revenue is derived from current RAF scores.
+    Gap closure revenue applies gap_closure_rate against open HCC suspects.
+    Sweep adjustment models expected mid-year/final sweep as a % of base.
+    """
+    year = _period_to_year(forecast_period)
+
+    # Pull current RAF scores
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT rs.patient_id) AS patient_count,
+                   AVG(rs.final_raf)              AS avg_raf
+              FROM raf_scores rs
+             INNER JOIN (
+               SELECT patient_id, MAX(calculated_at) AS latest
+                 FROM raf_scores
+                GROUP BY patient_id
+             ) latest ON rs.patient_id = latest.patient_id
+                    AND rs.calculated_at = latest.latest
+            """
+        )
+        raf_row = cur.fetchone()
+
+    patient_count = int(raf_row["patient_count"] or 0)
+    avg_raf = float(raf_row["avg_raf"] or 0)
+
+    # Scale revenue based on forecast type
+    if forecast_type == "annual":
+        multiplier = 12
+    elif forecast_type == "quarterly":
+        multiplier = 3
+    else:
+        multiplier = 1
+
+    base_revenue_per_patient = avg_raf * _ANNUAL_REVENUE_PER_RAF_POINT / 12.0 * multiplier
+    total_projected_revenue = round(base_revenue_per_patient * patient_count, 2)
+
+    # Gap closure estimate: pull open suspect conditions
+    gap_closure_revenue = 0.0
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS open_gaps
+                  FROM suspect_conditions
+                 WHERE status IN ('suspected', 'open')
+                """
+            )
+            row = cur.fetchone()
+            open_gaps = int(row["open_gaps"] or 0)
+        # Each closed gap adds ~0.3 RAF on average (rough industry estimate)
+        avg_hcc_raf_value = 0.30
+        gap_closure_revenue = round(
+            open_gaps * gap_closure_rate * avg_hcc_raf_value
+            * _ANNUAL_REVENUE_PER_RAF_POINT / 12.0 * multiplier,
+            2,
+        )
+    except Exception as exc:
+        logger.warning("Could not compute gap closure revenue: %s", exc)
+
+    sweep_adjustment = round(total_projected_revenue * sweep_adjustment_pct, 2)
+    net_forecast = round(total_projected_revenue + gap_closure_revenue + sweep_adjustment, 2)
+
+    assumptions = {
+        "gap_closure_rate": gap_closure_rate,
+        "sweep_adjustment_pct": sweep_adjustment_pct,
+        "revenue_per_raf_point_annual": _ANNUAL_REVENUE_PER_RAF_POINT,
+        "avg_hcc_raf_value_per_gap": 0.30,
+        "forecast_multiplier_months": multiplier,
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO revenue_forecasts
+              (tenant_id, forecast_period, forecast_type,
+               patient_count, avg_projected_raf,
+               total_projected_revenue, gap_closure_revenue,
+               sweep_adjustment, net_forecast,
+               confidence_level, assumptions, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                tenant_id, forecast_period, forecast_type,
+                patient_count, avg_raf,
+                total_projected_revenue, gap_closure_revenue,
+                sweep_adjustment, net_forecast,
+                confidence_level, json.dumps(assumptions), created_by,
+            ),
+        )
+        forecast_id = cur.lastrowid
+
+    return {
+        "id": forecast_id,
+        "forecast_period": forecast_period,
+        "forecast_type": forecast_type,
+        "patient_count": patient_count,
+        "avg_projected_raf": round(avg_raf, 4),
+        "total_projected_revenue": total_projected_revenue,
+        "gap_closure_revenue": gap_closure_revenue,
+        "sweep_adjustment": sweep_adjustment,
+        "net_forecast": net_forecast,
+        "confidence_level": confidence_level,
+        "assumptions": assumptions,
+    }
+
+
+def list_forecasts(
+    if not tenant_id:
+        raise ValueError(
+            "list_forecasts: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id: str,
+    forecast_type: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> dict[str, Any]:
+    filters = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+
+    if forecast_type:
+        filters.append("forecast_type = %s")
+        params.append(forecast_type)
+
+    where = " AND ".join(filters)
+
+    with raf_cursor() as cur:
+        cur.execute(
+            f"SELECT COUNT(*) AS cnt FROM revenue_forecasts WHERE {where}", params
+        )
+        total = cur.fetchone()["cnt"]
+
+        cur.execute(
+            f"SELECT * FROM revenue_forecasts WHERE {where} "
+            f"ORDER BY created_at DESC LIMIT %s OFFSET %s",
+            params + [limit, offset],
+        )
+        rows = cur.fetchall()
+
+    return {"total": total, "forecasts": _serialize(rows)}
+
+
+def get_forecast_by_id(forecast_id: int, tenant_id: str) -> dict[str, Any] | None:
+    if not tenant_id:
+        raise ValueError(
+            "get_forecast_by_id: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM revenue_forecasts WHERE id=%s AND tenant_id=%s",
+            (forecast_id, tenant_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    result = _serialize(row)
+    # Deserialise assumptions JSON if stored as string
+    if isinstance(result.get("assumptions"), str):
+        try:
+            result["assumptions"] = json.loads(result["assumptions"])
+        except (ValueError, TypeError):
+            pass
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Executive financial summary
+# ---------------------------------------------------------------------------
+
+def get_financial_summary(
+    if not tenant_id:
+        raise ValueError(
+            "get_financial_summary: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id: str,
+    year: int | None = None,
+) -> dict[str, Any]:
+    """
+    Dashboard-level financial overview:
+    - Total CMS payments received YTD
+    - Total projected revenue YTD
+    - Net revenue variance (underpaid / overpaid split)
+    - Reconciliation status distribution
+    - Latest forecast
+    """
+    target_year = year or date.today().year
+
+    with raf_cursor() as cur:
+        # CMS payments YTD
+        cur.execute(
+            """
+            SELECT COALESCE(SUM(cms_payment_amount), 0) AS total_cms,
+                   COUNT(DISTINCT patient_id)            AS paid_patients
+              FROM cms_payment_records
+             WHERE tenant_id=%s AND payment_year=%s
+            """,
+            (tenant_id, target_year),
+        )
+        payment_row = cur.fetchone()
+
+        # Reconciliation summary for the year (any period matching the year)
+        cur.execute(
+            """
+            SELECT status,
+                   COUNT(*)              AS count,
+                   SUM(revenue_variance) AS total_variance,
+                   AVG(raf_variance)     AS avg_raf_variance
+              FROM financial_reconciliation
+             WHERE tenant_id=%s
+               AND reconciliation_period LIKE %s
+             GROUP BY status
+            """,
+            (tenant_id, f"{target_year}%"),
+        )
+        status_rows = cur.fetchall()
+
+        # Latest forecast
+        cur.execute(
+            """
+            SELECT * FROM revenue_forecasts
+             WHERE tenant_id=%s
+             ORDER BY created_at DESC
+             LIMIT 1
+            """,
+            (tenant_id,),
+        )
+        latest_forecast = cur.fetchone()
+
+    total_cms = float(payment_row["total_cms"] or 0)
+    paid_patients = int(payment_row["paid_patients"] or 0)
+
+    total_underpaid = 0.0
+    total_overpaid = 0.0
+    reconciliation_dist: list[dict[str, Any]] = []
+    for r in status_rows:
+        reconciliation_dist.append(_serialize(r))
+        if r["status"] == "underpaid":
+            total_underpaid = float(r["total_variance"] or 0)
+        elif r["status"] == "overpaid":
+            total_overpaid = float(r["total_variance"] or 0)
+
+    net_variance = round(total_underpaid + total_overpaid, 2)
+
+    result: dict[str, Any] = {
+        "year": target_year,
+        "total_cms_payments": round(total_cms, 2),
+        "paid_patient_count": paid_patients,
+        "net_revenue_variance": net_variance,
+        "total_underpaid": round(total_underpaid, 2),
+        "total_overpaid": round(total_overpaid, 2),
+        "reconciliation_status_distribution": reconciliation_dist,
+        "latest_forecast": _serialize(latest_forecast) if latest_forecast else None,
+    }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Revenue trends
+# ---------------------------------------------------------------------------
+
+def get_revenue_trends(
+    if not tenant_id:
+        raise ValueError(
+            "get_revenue_trends: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
+    tenant_id: str,
+    periods: int = 12,
+) -> dict[str, Any]:
+    """
+    Return month-by-month CMS payment totals and reconciliation variance
+    for the most recent N months.
+    """
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            SELECT payment_year,
+                   payment_month,
+                   SUM(cms_payment_amount)   AS total_payment,
+                   COUNT(DISTINCT patient_id) AS patient_count,
+                   AVG(cms_raf_score)         AS avg_cms_raf
+              FROM cms_payment_records
+             WHERE tenant_id=%s
+               AND payment_month IS NOT NULL
+             GROUP BY payment_year, payment_month
+             ORDER BY payment_year DESC, payment_month DESC
+             LIMIT %s
+            """,
+            (tenant_id, periods),
+        )
+        payment_trends = _serialize(cur.fetchall())
+
+        cur.execute(
+            """
+            SELECT reconciliation_period,
+                   COUNT(*)                   AS total_patients,
+                   SUM(revenue_variance)      AS net_variance,
+                   AVG(raf_variance)          AS avg_raf_variance,
+                   SUM(CASE WHEN status='underpaid'  THEN 1 ELSE 0 END) AS underpaid_count,
+                   SUM(CASE WHEN status='overpaid'   THEN 1 ELSE 0 END) AS overpaid_count,
+                   SUM(CASE WHEN status='matched'    THEN 1 ELSE 0 END) AS matched_count
+              FROM financial_reconciliation
+             WHERE tenant_id=%s
+             GROUP BY reconciliation_period
+             ORDER BY reconciliation_period DESC
+             LIMIT %s
+            """,
+            (tenant_id, periods),
+        )
+        recon_trends = _serialize(cur.fetchall())
+
+    return {
+        "payment_trends": payment_trends,
+        "reconciliation_trends": recon_trends,
+        "periods_requested": periods,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _period_to_year(period: str) -> int:
+    """Extract the year component from a period string like '2025-01' or '2025-Q2'."""
+    try:
+        return int(period[:4])
+    except (ValueError, IndexError):
+        return date.today().year
+
+
+def _period_to_month(period: str) -> int | None:
+    """Extract month from '2025-03'; returns None for annual or quarterly periods."""
+    parts = period.split("-")
+    if len(parts) == 2:
+        try:
+            month = int(parts[1])
+            if 1 <= month <= 12:
+                return month
+        except ValueError:
+            pass
+    return None
+
+
+def _serialize(obj: Any) -> Any:
+    """Recursively convert MySQL result types to JSON-serialisable Python types."""
+    if obj is None:
+        return None
+    if isinstance(obj, list):
+        return [_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return obj

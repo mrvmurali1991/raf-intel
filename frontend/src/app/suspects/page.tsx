@@ -34,43 +34,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
+import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
 
 /* ================================================================== */
-/*  Design tokens — match patients page                                */
+/*  Page-specific constants                                            */
 /* ================================================================== */
-
-const C = {
-  text: "#0F172A",
-  textMuted: "#475569",
-  textSubtle: "#64748B",
-  label: "#94A3B8",
-  border: "#E2E8F0",
-  borderSoft: "#EEF2F6",
-  rowDivider: "#F1F5F9",
-  bgPage: "#F8FAFC",
-  bgCard: "#FFFFFF",
-  bgSubtle: "#F8FAFC",
-  bgBand: "#FAFBFC",
-  bgBandHover: "#F1F5F9",
-  brand: "#0F766E",
-  brandDark: "#134E4A",
-  brandSoft: "rgba(15, 118, 110, 0.06)",
-  brandRing: "rgba(15, 118, 110, 0.18)",
-  high: "#DC2626",
-  medium: "#D97706",
-  low: "#059669",
-  highSoft: "#FEF2F2",
-  mediumSoft: "#FFFBEB",
-  lowSoft: "#ECFDF5",
-  blue: "#0EA5E9",
-  blueSoft: "rgba(14, 165, 233, 0.10)",
-  white: "#FFFFFF",
-};
-
-const FONT_SYS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif';
-const FONT_MONO =
-  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace';
 
 /* Single-source-of-truth grid for header / filter / skeleton / rows */
 /* Patient | Condition + rationale | Evidence | Confidence | RAF | Revenue | Status | Actions */
@@ -188,29 +156,6 @@ function getCoefficient(s: DBSuspect): number {
   return 0.25;
 }
 
-function deriveInitials(name: string | undefined, pid: number | string | undefined): string {
-  const n = (name || "").trim();
-  if (n) {
-    const parts = n.split(/[\s,]+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
-  }
-  const pidStr = pid != null ? String(pid).replace(/\D/g, "") : "";
-  if (pidStr) return pidStr.slice(-2).padStart(2, "0");
-  return "\u2022";
-}
-
-function avatarColor(seed: string): string {
-  const colors = [
-    "#0F766E", "#0EA5E9", "#7C3AED", "#DB2777",
-    "#0891B2", "#4F46E5", "#0D9488", "#9333EA",
-    "#1D4ED8", "#0369A1", "#2563EB", "#7E22CE",
-  ];
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
-
 function formatCurrency(n: number): string {
   if (!isFinite(n)) return "$0";
   return `$${Math.round(n).toLocaleString()}`;
@@ -297,7 +242,7 @@ export default function SuspectsPage() {
 
   const { data: suspectsData, isLoading, isError } = useQuery({
     queryKey: ["suspects", statusFilter],
-    queryFn: () => getSuspects(statusFilter === "coded" ? "all" : statusFilter),
+    queryFn: () => getSuspects(statusFilter === "coded" ? "all" : statusFilter, 500),
   });
 
   const allSuspects: DBSuspect[] = useMemo(
@@ -398,7 +343,7 @@ export default function SuspectsPage() {
     mutationFn: (id: number) => acceptSuspect(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suspects"] });
-      toast.success("Accepted", "Suspect condition accepted.");
+      toast.success("Accepted via EMR", "Suspect condition accepted & written to OpenEMR.");
     },
     onError: () => toast.error("Error", "Failed to accept suspect."),
   });
@@ -421,7 +366,7 @@ export default function SuspectsPage() {
       setBulkAction(null);
       toast.success(
         "Bulk Update",
-        `${data.succeeded} suspects ${vars.action === "accept" ? "accepted" : "dismissed"}.`
+        `${data.succeeded} suspects ${vars.action === "accept" ? "accepted & written to OpenEMR" : "dismissed"}.`
       );
     },
     onError: () => {
@@ -1193,9 +1138,9 @@ export default function SuspectsPage() {
           const pill = statusPill(s.status);
           const coef = getCoefficient(s);
           const revenue = coef * REVENUE_PER_RAF;
-          const initials = deriveInitials(s.patient_name, s.patient_id);
+          const initials = deriveInitials(s.patient_name, undefined, s.patient_id);
           const seed = (s.patient_name || String(s.patient_id) || "x").trim();
-          const aColor = avatarColor(seed);
+          const aColor = initialsColor(seed);
           const conditionLabel =
             s.suspected_condition ||
             (s.suspect_hcc ? `HCC ${s.suspect_hcc}` : "Suspected Condition");
@@ -1507,8 +1452,8 @@ export default function SuspectsPage() {
                       className="row-action-btn"
                       disabled={acceptMut.isPending}
                       onClick={() => acceptMut.mutate(s.id)}
-                      aria-label="Accept suspect"
-                      title="Accept"
+                      aria-label="Push to EMR"
+                      title="Push to EMR"
                       style={{
                         width: 32,
                         height: 32,
@@ -2130,7 +2075,7 @@ function SuspectDrawer({
               }}
             >
               <Check size={15} strokeWidth={2.5} />
-              Accept
+              Push to EMR
             </button>
             <button
               onClick={onDismiss}

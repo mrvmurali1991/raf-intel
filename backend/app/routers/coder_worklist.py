@@ -28,7 +28,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.coder_worklist_service import (
     assign_item,
     auto_queue_from_claims,
@@ -123,7 +123,6 @@ class AutoQueueRequest(BaseModel):
     items: list[NlpEntry | ClaimsEntry] = Field(
         ..., min_length=1, description="List of items to auto-queue"
     )
-    tenant_id: str = Field(default="default")
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +143,7 @@ def list_worklist(
     limit: int = Query(default=50, ge=1, le=200, description="Page size"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("worklist", "read")),
 ) -> dict[str, Any]:
     """
@@ -152,7 +152,6 @@ def list_worklist(
     for cross-coder views.
     """
     coder_id: int = int(current_user["id"])
-    tenant_id: str = current_user.get("tenant_id", "default")
 
     try:
         return get_worklist(
@@ -179,6 +178,7 @@ def get_next_item(
         description="Optionally restrict to a specific review type",
     ),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("worklist", "write")),
 ) -> dict[str, Any]:
     """
@@ -189,7 +189,6 @@ def get_next_item(
     is empty (`{"message": "Queue is empty", "item": null}`).
     """
     coder_id: int = int(current_user["id"])
-    tenant_id: str = current_user.get("tenant_id", "default")
 
     try:
         item = claim_next(
@@ -215,6 +214,7 @@ def get_next_item(
 def worklist_stats(
     days: int = Query(default=30, ge=1, le=365, description="Rolling window in calendar days"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("worklist", "read")),
 ) -> dict[str, Any]:
     """
@@ -222,7 +222,6 @@ def worklist_stats(
     total completed, average cycle time, accuracy rate, and daily history.
     """
     coder_id: int = int(current_user["id"])
-    tenant_id: str = current_user.get("tenant_id", "default")
 
     try:
         return get_productivity_stats(
@@ -243,6 +242,7 @@ def worklist_stats(
 def get_item(
     item_id: int,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("worklist", "read")),
 ) -> dict[str, Any]:
     """
@@ -257,14 +257,13 @@ def get_item(
 
     coder_id: int = int(current_user["id"])
     role: str = current_user.get("role", "coder")
-    tenant_id: str = current_user.get("tenant_id", "default")
 
     # Coders can only see their own items
     if role == "coder" and item["coder_user_id"] != coder_id:
         raise HTTPException(status_code=403, detail="Access denied to this worklist item")
 
     # Tenant boundary check
-    if item.get("tenant_id", "default") != tenant_id and role not in ("admin", "super_admin"):
+    if item.get("tenant_id") != tenant_id and role not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Access denied to this worklist item")
 
     return item
@@ -418,6 +417,7 @@ def return_for_info(
 def manual_assign(
     body: AssignRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("worklist", "manage")),
 ) -> dict[str, Any]:
     """
@@ -437,7 +437,6 @@ def manual_assign(
         }
     """
     assigning_user_id: int = int(current_user["id"])
-    tenant_id: str = current_user.get("tenant_id", "default")
 
     try:
         item = assign_item(
@@ -468,6 +467,7 @@ def manual_assign(
 def auto_queue(
     body: AutoQueueRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("worklist", "manage")),
 ) -> dict[str, Any]:
     """
@@ -494,13 +494,13 @@ def auto_queue(
             result = auto_queue_from_nlp(
                 nlp_results=items_raw,
                 assigning_user_id=assigning_user_id,
-                tenant_id=body.tenant_id,
+                tenant_id=tenant_id,
             )
         else:
             result = auto_queue_from_claims(
                 claims_results=items_raw,
                 assigning_user_id=assigning_user_id,
-                tenant_id=body.tenant_id,
+                tenant_id=tenant_id,
             )
     except Exception as exc:
         logger.error("auto_queue user=%s source=%s: %s", assigning_user_id, body.source, exc)

@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 import pytest
 import requests
+from fastapi.testclient import TestClient
 
 # Analysis can take up to 2 minutes with Gemini
 ANALYSIS_TIMEOUT = 120
@@ -335,25 +336,23 @@ class TestNegationHandling:
     included in the active diagnosis list.
     """
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def negation_analysis(
         self,
-        api_client: requests.Session,
-        base_url: str,
-        first_pid: int,
+        client: TestClient,
+        admin_headers: dict,
     ) -> dict:
         """Run the pipeline on a note that explicitly negates several conditions."""
-        r = api_client.post(
-            f"{base_url}/api/analysis/note",
+        r = client.post(
+            "/api/analysis/note",
             json={
-                "patient_id": first_pid,
+                "patient_id": 1,
                 "note_text": NEGATION_TEST_NOTE,
                 "save_results": False,
             },
+            headers=admin_headers,
             timeout=ANALYSIS_TIMEOUT,
         )
-        if r.status_code == 404:
-            pytest.skip("POST /api/analysis/note endpoint not implemented.")
         assert r.status_code == 200, (
             f"Analysis note endpoint failed: {r.status_code} — {r.text[:400]}"
         )

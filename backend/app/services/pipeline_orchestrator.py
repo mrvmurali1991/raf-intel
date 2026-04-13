@@ -14,12 +14,27 @@ Coordinates the multi-stage verification pipeline:
 Design reference: docs/MULTI_STAGE_PIPELINE_DESIGN.md
 """
 
+import os
+import threading
 import time
 import logging
 from dataclasses import asdict
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Concurrency guard — limits the number of pipeline runs that can be
+# executing Stage 2 (Gemini LLM) simultaneously.  This is the primary
+# backpressure knob for batch processing: if 10,000 encounters are queued,
+# at most MAX_CONCURRENT_ANALYSES will be live at once, preventing token
+# exhaustion and OOM conditions.
+#
+# Tune via the PIPELINE_MAX_CONCURRENT_ANALYSES environment variable.
+# Default 5 is conservative; raise to 20-50 for high-throughput paid quotas.
+# ---------------------------------------------------------------------------
+_MAX_CONCURRENT = int(os.environ.get("PIPELINE_MAX_CONCURRENT_ANALYSES", "5"))
+_pipeline_semaphore = threading.Semaphore(_MAX_CONCURRENT)
 
 
 # ---------------------------------------------------------------------------
@@ -180,17 +195,31 @@ def run_verified_pipeline(
     t2 = time.time()
     try:
         from app.services.skill_pipeline import run_pipeline as llm_pipeline
-        stage2_result = llm_pipeline(
-            clinical_note=clinical_note,
-            patient_age=resolved_age,
-            patient_sex=resolved_sex,
-            medications=medications,
-            existing_hccs=existing_hccs,
-            problem_list=problem_list,
-            recapture_gaps=recapture_gaps,
-            latest_vitals=latest_vitals,
-            med_diagnoses=med_diagnoses,
-        )
+
+        # Acquire the concurrency semaphore before starting the Gemini call.
+        # This limits the number of simultaneous LLM requests regardless of
+        # how many threads/workers are processing a batch.
+        acquired = _pipeline_semaphore.acquire(timeout=60)
+        if not acquired:
+            raise RuntimeError(
+                f"Pipeline concurrency limit ({_MAX_CONCURRENT}) reached and "
+                "semaphore was not released within 60 s. "
+                "Increase PIPELINE_MAX_CONCURRENT_ANALYSES or reduce batch size."
+            )
+        try:
+            stage2_result = llm_pipeline(
+                clinical_note=clinical_note,
+                patient_age=resolved_age,
+                patient_sex=resolved_sex,
+                medications=medications,
+                existing_hccs=existing_hccs,
+                problem_list=problem_list,
+                recapture_gaps=recapture_gaps,
+                latest_vitals=latest_vitals,
+                med_diagnoses=med_diagnoses,
+            )
+        finally:
+            _pipeline_semaphore.release()
     except Exception as exc:
         # Stage 2 (LLM) failure: fall back to a minimal Stage-1-only result
         # (design doc §4.5) so Stages 3 and 4 still run and produce a quality

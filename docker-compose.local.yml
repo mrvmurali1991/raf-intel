@@ -46,6 +46,7 @@ services:
       OPENEMR_URL: http://openemr:80
       APP_ENV: development
     volumes:
+      - ./backend/app:/app/app:ro
       - ./models:/app/models:ro
       - ./data/uploads:/app/uploads
       - ./data/submissions:/app/data/submissions

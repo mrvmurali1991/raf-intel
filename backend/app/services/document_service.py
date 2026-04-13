@@ -1119,27 +1119,25 @@ def match_patient_from_analysis(document_id: str) -> dict[str, Any]:
 
 def get_document(
     document_id: str,
-    tenant_id: Optional[int] = None,
+    tenant_id: int,
 ) -> dict[str, Any] | None:
     """Return the document row or None, scoped to ``tenant_id``."""
     if tenant_id is None:
-        logger.warning(
-            "no tenant_id provided, defaulting to 1 — caller: get_document"
+        raise ValueError(
+            "get_document: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid: Any = 1
-    else:
-        tid = tenant_id
     with raf_cursor() as cur:
         cur.execute(
             "SELECT * FROM documents WHERE id = %s AND tenant_id = %s LIMIT 1",
-            (document_id, tid),
+            (document_id, tenant_id),
         )
         return cur.fetchone()
 
 
 def list_documents(
     *,
-    tenant_id: str = "default",
+    tenant_id: str,
     patient_id: str | None = None,
     status: str | None = None,
     document_type: str | None = None,
@@ -1172,7 +1170,7 @@ def list_documents(
 
     with raf_cursor() as cur:
         cur.execute(f"SELECT COUNT(*) AS cnt FROM documents WHERE {where}", params)
-        total = cur.fetchone()["cnt"]
+        total = (cur.fetchone() or {}).get("cnt", 0)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -1236,7 +1234,7 @@ def set_diagnosis_review_status(
 
 def delete_document(
     document_id: str,
-    tenant_id: Optional[int] = None,
+    tenant_id: int,
 ) -> bool:
     """Delete the document record (and cascading analysis/diagnoses) plus file on disk.
 
@@ -1244,14 +1242,12 @@ def delete_document(
     supplied value will be removed.
     """
     if tenant_id is None:
-        logger.warning(
-            "no tenant_id provided, defaulting to 1 — caller: delete_document"
+        raise ValueError(
+            "delete_document: tenant_id is required — "
+            "refusing to delete across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid: Any = 1
-    else:
-        tid = tenant_id
 
-    doc = get_document(document_id, tenant_id=tid)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         return False
 
@@ -1265,13 +1261,13 @@ def delete_document(
     with raf_cursor() as cur:
         cur.execute(
             "DELETE FROM documents WHERE id = %s AND tenant_id = %s",
-            (document_id, tid),
+            (document_id, tenant_id),
         )
 
     return True
 
 
-def get_document_stats(tenant_id: str = "default") -> dict[str, Any]:
+def get_document_stats(tenant_id: str) -> dict[str, Any]:
     """Return aggregate statistics for the document store."""
     with raf_cursor() as cur:
         cur.execute(
@@ -1323,7 +1319,7 @@ def get_document_stats(tenant_id: str = "default") -> dict[str, Any]:
 
 
 def list_batches(
-    tenant_id: str = "default", limit: int = 50, offset: int = 0
+    tenant_id: str, limit: int = 50, offset: int = 0
 ) -> tuple[list[dict], int]:
     """Return paginated batch list and total count."""
     with raf_cursor() as cur:
@@ -1331,7 +1327,7 @@ def list_batches(
             "SELECT COUNT(*) AS cnt FROM document_batches WHERE tenant_id = %s",
             (tenant_id,),
         )
-        total = cur.fetchone()["cnt"]
+        total = (cur.fetchone() or {}).get("cnt", 0)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -1383,18 +1379,16 @@ def get_batch(batch_id: str) -> dict[str, Any] | None:
 def link_document_to_patient(
     document_id: str,
     patient_id: str,
-    tenant_id: Optional[int] = None,
+    tenant_id: int,
 ) -> None:
     """Set the *patient_id* column on a document row (tenant-scoped)."""
     if tenant_id is None:
-        logger.warning(
-            "no tenant_id provided, defaulting to 1 — caller: link_document_to_patient"
+        raise ValueError(
+            "link_document_to_patient: tenant_id is required — "
+            "refusing to update across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid: Any = 1
-    else:
-        tid = tenant_id
     with raf_cursor() as cur:
         cur.execute(
             "UPDATE documents SET patient_id = %s WHERE id = %s AND tenant_id = %s",
-            (patient_id, document_id, tid),
+            (patient_id, document_id, tenant_id),
         )

@@ -29,6 +29,7 @@ from app.auth import get_current_user, require_permission
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 import app.services.fhir_service as fhir_svc
+from app.services.circuit_breaker import CircuitBreakerError
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +295,13 @@ def test_connection(connection_id: int,
     conn = _require_connection(connection_id)
     try:
         result = fhir_svc.test_connection(conn)
+    except CircuitBreakerError as exc:
+        logger.warning("FHIR circuit breaker open for connection %s: %s", connection_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"FHIR service temporarily unavailable. {exc}",
+            headers={"Retry-After": str(int(exc.retry_after))},
+        ) from exc
     except Exception as exc:
         logger.error("test_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -370,6 +378,13 @@ def trigger_sync(connection_id: int, body: SyncRequest = SyncRequest(),
             resource_types=body.resource_types,
             use_bulk=body.use_bulk,
         )
+    except CircuitBreakerError as exc:
+        logger.warning("FHIR circuit breaker open for sync %s: %s", connection_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"FHIR service temporarily unavailable. {exc}",
+            headers={"Retry-After": str(int(exc.retry_after))},
+        ) from exc
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
         raise HTTPException(status_code=400, detail="Bad request")

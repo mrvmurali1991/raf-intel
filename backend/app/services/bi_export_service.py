@@ -19,6 +19,7 @@ Key responsibilities
 - Connection CRUD with AES-256-GCM key encryption mirroring the pattern used
   by direct_messaging_service.
 """
+
 from __future__ import annotations
 
 import csv
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 try:
     import openpyxl
     from openpyxl.styles import Font, PatternFill
+
     _OPENPYXL_AVAILABLE = True
 except ImportError:
     _OPENPYXL_AVAILABLE = False
@@ -50,6 +52,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 try:
     import requests as _requests
+
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _requests = None  # type: ignore[assignment]
@@ -61,10 +64,16 @@ from app.db import raf_cursor
 # Encryption helpers (reuses JWT_SECRET like direct_messaging_service)
 # ---------------------------------------------------------------------------
 
+
 def _derive_key() -> bytes:
     """Derive a 32-byte AES key from JWT_SECRET."""
     import hashlib
-    secret = os.getenv("JWT_SECRET", "dev-secret-change-me")
+
+    secret = os.getenv("JWT_SECRET")
+    if not secret:
+        raise RuntimeError(
+            "JWT_SECRET environment variable must be set for BI export encryption"
+        )
     return hashlib.sha256(secret.encode()).digest()
 
 
@@ -72,6 +81,7 @@ def _encrypt_value(plaintext: str) -> str:
     """AES-256-GCM encrypt and return a base64-encoded payload."""
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         key = _derive_key()
         nonce = secrets.token_bytes(12)
         ct = AESGCM(key).encrypt(nonce, plaintext.encode(), None)
@@ -85,6 +95,7 @@ def _decrypt_value(encoded: str) -> str:
     """Decrypt a value produced by _encrypt_value."""
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         raw = b64decode(encoded)
         nonce, ct = raw[:12], raw[12:]
         return AESGCM(_derive_key()).decrypt(nonce, ct, None).decode()
@@ -122,15 +133,60 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
             ORDER BY rs.patient_id, rs.payment_year DESC
         """,
         "columns_config": [
-            {"name": "patient_id",      "type": "integer",  "description": "Internal patient identifier", "phi": True},
-            {"name": "payment_year",    "type": "integer",  "description": "CMS payment year",             "phi": False},
-            {"name": "model_version",   "type": "string",   "description": "HCC model (V24/V28/RxHCC)",    "phi": False},
-            {"name": "final_raf",       "type": "decimal",  "description": "Total RAF score",               "phi": False},
-            {"name": "demographic_raf", "type": "decimal",  "description": "Demographic component",         "phi": False},
-            {"name": "disease_raf",     "type": "decimal",  "description": "Disease component",             "phi": False},
-            {"name": "hcc_count",       "type": "integer",  "description": "Number of mapped HCCs",         "phi": False},
-            {"name": "calculated_at",   "type": "datetime", "description": "Score calculation timestamp",   "phi": False},
-            {"name": "tenant_id",       "type": "string",   "description": "Tenant discriminator",          "phi": False},
+            {
+                "name": "patient_id",
+                "type": "integer",
+                "description": "Internal patient identifier",
+                "phi": True,
+            },
+            {
+                "name": "payment_year",
+                "type": "integer",
+                "description": "CMS payment year",
+                "phi": False,
+            },
+            {
+                "name": "model_version",
+                "type": "string",
+                "description": "HCC model (V24/V28/RxHCC)",
+                "phi": False,
+            },
+            {
+                "name": "final_raf",
+                "type": "decimal",
+                "description": "Total RAF score",
+                "phi": False,
+            },
+            {
+                "name": "demographic_raf",
+                "type": "decimal",
+                "description": "Demographic component",
+                "phi": False,
+            },
+            {
+                "name": "disease_raf",
+                "type": "decimal",
+                "description": "Disease component",
+                "phi": False,
+            },
+            {
+                "name": "hcc_count",
+                "type": "integer",
+                "description": "Number of mapped HCCs",
+                "phi": False,
+            },
+            {
+                "name": "calculated_at",
+                "type": "datetime",
+                "description": "Score calculation timestamp",
+                "phi": False,
+            },
+            {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant discriminator",
+                "phi": False,
+            },
         ],
     },
     "hcc_gaps": {
@@ -157,17 +213,72 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
             ORDER BY sc.revenue_impact DESC, sc.created_at DESC
         """,
         "columns_config": [
-            {"name": "gap_id",           "type": "integer",  "description": "Gap record identifier",        "phi": False},
-            {"name": "patient_id",       "type": "integer",  "description": "Patient identifier",           "phi": True},
-            {"name": "icd10_code",       "type": "string",   "description": "ICD-10-CM code",               "phi": False},
-            {"name": "hcc_code",         "type": "string",   "description": "Mapped HCC category",          "phi": False},
-            {"name": "status",           "type": "string",   "description": "open/closed/rejected",         "phi": False},
-            {"name": "revenue_impact",   "type": "decimal",  "description": "Estimated annual $ impact",    "phi": False},
-            {"name": "confidence_score", "type": "decimal",  "description": "ML confidence (0-1)",          "phi": False},
-            {"name": "source",           "type": "string",   "description": "Detection source",             "phi": False},
-            {"name": "created_at",       "type": "datetime", "description": "Gap identified timestamp",     "phi": False},
-            {"name": "resolved_at",      "type": "datetime", "description": "Gap resolution timestamp",     "phi": False},
-            {"name": "tenant_id",        "type": "string",   "description": "Tenant discriminator",         "phi": False},
+            {
+                "name": "gap_id",
+                "type": "integer",
+                "description": "Gap record identifier",
+                "phi": False,
+            },
+            {
+                "name": "patient_id",
+                "type": "integer",
+                "description": "Patient identifier",
+                "phi": True,
+            },
+            {
+                "name": "icd10_code",
+                "type": "string",
+                "description": "ICD-10-CM code",
+                "phi": False,
+            },
+            {
+                "name": "hcc_code",
+                "type": "string",
+                "description": "Mapped HCC category",
+                "phi": False,
+            },
+            {
+                "name": "status",
+                "type": "string",
+                "description": "open/closed/rejected",
+                "phi": False,
+            },
+            {
+                "name": "revenue_impact",
+                "type": "decimal",
+                "description": "Estimated annual $ impact",
+                "phi": False,
+            },
+            {
+                "name": "confidence_score",
+                "type": "decimal",
+                "description": "ML confidence (0-1)",
+                "phi": False,
+            },
+            {
+                "name": "source",
+                "type": "string",
+                "description": "Detection source",
+                "phi": False,
+            },
+            {
+                "name": "created_at",
+                "type": "datetime",
+                "description": "Gap identified timestamp",
+                "phi": False,
+            },
+            {
+                "name": "resolved_at",
+                "type": "datetime",
+                "description": "Gap resolution timestamp",
+                "phi": False,
+            },
+            {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant discriminator",
+                "phi": False,
+            },
         ],
     },
     "provider_performance": {
@@ -193,16 +304,66 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
             ORDER BY p.raf_capture_rate DESC
         """,
         "columns_config": [
-            {"name": "provider_id",          "type": "integer", "description": "Provider identifier",       "phi": False},
-            {"name": "provider_name",        "type": "string",  "description": "Provider full name",        "phi": False},
-            {"name": "npi",                  "type": "string",  "description": "NPI number",                "phi": False},
-            {"name": "specialty",            "type": "string",  "description": "Clinical specialty",        "phi": False},
-            {"name": "raf_capture_rate",     "type": "decimal", "description": "RAF capture rate %",        "phi": False},
-            {"name": "avg_raf_score",        "type": "decimal", "description": "Panel average RAF",         "phi": False},
-            {"name": "total_patients",       "type": "integer", "description": "Active patient panel size", "phi": False},
-            {"name": "hcc_gaps_identified",  "type": "integer", "description": "Open HCC gaps",             "phi": False},
-            {"name": "hcc_gaps_closed",      "type": "integer", "description": "Closed HCC gaps YTD",       "phi": False},
-            {"name": "tenant_id",            "type": "string",  "description": "Tenant discriminator",      "phi": False},
+            {
+                "name": "provider_id",
+                "type": "integer",
+                "description": "Provider identifier",
+                "phi": False,
+            },
+            {
+                "name": "provider_name",
+                "type": "string",
+                "description": "Provider full name",
+                "phi": False,
+            },
+            {
+                "name": "npi",
+                "type": "string",
+                "description": "NPI number",
+                "phi": False,
+            },
+            {
+                "name": "specialty",
+                "type": "string",
+                "description": "Clinical specialty",
+                "phi": False,
+            },
+            {
+                "name": "raf_capture_rate",
+                "type": "decimal",
+                "description": "RAF capture rate %",
+                "phi": False,
+            },
+            {
+                "name": "avg_raf_score",
+                "type": "decimal",
+                "description": "Panel average RAF",
+                "phi": False,
+            },
+            {
+                "name": "total_patients",
+                "type": "integer",
+                "description": "Active patient panel size",
+                "phi": False,
+            },
+            {
+                "name": "hcc_gaps_identified",
+                "type": "integer",
+                "description": "Open HCC gaps",
+                "phi": False,
+            },
+            {
+                "name": "hcc_gaps_closed",
+                "type": "integer",
+                "description": "Closed HCC gaps YTD",
+                "phi": False,
+            },
+            {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant discriminator",
+                "phi": False,
+            },
         ],
     },
     "claims_summary": {
@@ -230,18 +391,78 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
             ORDER BY c.service_date DESC
         """,
         "columns_config": [
-            {"name": "claim_id",      "type": "integer",  "description": "Claim identifier",            "phi": False},
-            {"name": "patient_id",    "type": "integer",  "description": "Patient identifier",          "phi": True},
-            {"name": "claim_type",    "type": "string",   "description": "837P / 837I / encounter",     "phi": False},
-            {"name": "service_date",  "type": "date",     "description": "Date of service",             "phi": False},
-            {"name": "icd10_codes",   "type": "string",   "description": "Comma-separated ICD codes",   "phi": False},
-            {"name": "hcc_codes",     "type": "string",   "description": "Mapped HCC categories",       "phi": False},
-            {"name": "total_charge",  "type": "decimal",  "description": "Total billed charge",         "phi": False},
-            {"name": "allowed_amount","type": "decimal",  "description": "Payer allowed amount",        "phi": False},
-            {"name": "paid_amount",   "type": "decimal",  "description": "Paid amount",                 "phi": False},
-            {"name": "status",        "type": "string",   "description": "adjudicated/denied/pending",  "phi": False},
-            {"name": "payer_name",    "type": "string",   "description": "Insurance payer name",        "phi": False},
-            {"name": "tenant_id",     "type": "string",   "description": "Tenant discriminator",        "phi": False},
+            {
+                "name": "claim_id",
+                "type": "integer",
+                "description": "Claim identifier",
+                "phi": False,
+            },
+            {
+                "name": "patient_id",
+                "type": "integer",
+                "description": "Patient identifier",
+                "phi": True,
+            },
+            {
+                "name": "claim_type",
+                "type": "string",
+                "description": "837P / 837I / encounter",
+                "phi": False,
+            },
+            {
+                "name": "service_date",
+                "type": "date",
+                "description": "Date of service",
+                "phi": False,
+            },
+            {
+                "name": "icd10_codes",
+                "type": "string",
+                "description": "Comma-separated ICD codes",
+                "phi": False,
+            },
+            {
+                "name": "hcc_codes",
+                "type": "string",
+                "description": "Mapped HCC categories",
+                "phi": False,
+            },
+            {
+                "name": "total_charge",
+                "type": "decimal",
+                "description": "Total billed charge",
+                "phi": False,
+            },
+            {
+                "name": "allowed_amount",
+                "type": "decimal",
+                "description": "Payer allowed amount",
+                "phi": False,
+            },
+            {
+                "name": "paid_amount",
+                "type": "decimal",
+                "description": "Paid amount",
+                "phi": False,
+            },
+            {
+                "name": "status",
+                "type": "string",
+                "description": "adjudicated/denied/pending",
+                "phi": False,
+            },
+            {
+                "name": "payer_name",
+                "type": "string",
+                "description": "Insurance payer name",
+                "phi": False,
+            },
+            {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant discriminator",
+                "phi": False,
+            },
         ],
     },
     "quality_metrics": {
@@ -267,16 +488,66 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
             ORDER BY qm.performance_year DESC, qm.measure_code
         """,
         "columns_config": [
-            {"name": "metric_id",       "type": "integer", "description": "Metric record identifier",  "phi": False},
-            {"name": "measure_code",    "type": "string",  "description": "HEDIS measure identifier",  "phi": False},
-            {"name": "measure_name",    "type": "string",  "description": "Measure full name",          "phi": False},
-            {"name": "numerator",       "type": "integer", "description": "Compliant member count",     "phi": False},
-            {"name": "denominator",     "type": "integer", "description": "Eligible member count",      "phi": False},
-            {"name": "rate",            "type": "decimal", "description": "Compliance rate (0-1)",      "phi": False},
-            {"name": "benchmark_rate",  "type": "decimal", "description": "NCQA benchmark rate",        "phi": False},
-            {"name": "performance_year","type": "integer", "description": "Measurement year",           "phi": False},
-            {"name": "provider_id",     "type": "integer", "description": "Provider identifier",        "phi": False},
-            {"name": "tenant_id",       "type": "string",  "description": "Tenant discriminator",       "phi": False},
+            {
+                "name": "metric_id",
+                "type": "integer",
+                "description": "Metric record identifier",
+                "phi": False,
+            },
+            {
+                "name": "measure_code",
+                "type": "string",
+                "description": "HEDIS measure identifier",
+                "phi": False,
+            },
+            {
+                "name": "measure_name",
+                "type": "string",
+                "description": "Measure full name",
+                "phi": False,
+            },
+            {
+                "name": "numerator",
+                "type": "integer",
+                "description": "Compliant member count",
+                "phi": False,
+            },
+            {
+                "name": "denominator",
+                "type": "integer",
+                "description": "Eligible member count",
+                "phi": False,
+            },
+            {
+                "name": "rate",
+                "type": "decimal",
+                "description": "Compliance rate (0-1)",
+                "phi": False,
+            },
+            {
+                "name": "benchmark_rate",
+                "type": "decimal",
+                "description": "NCQA benchmark rate",
+                "phi": False,
+            },
+            {
+                "name": "performance_year",
+                "type": "integer",
+                "description": "Measurement year",
+                "phi": False,
+            },
+            {
+                "name": "provider_id",
+                "type": "integer",
+                "description": "Provider identifier",
+                "phi": False,
+            },
+            {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant discriminator",
+                "phi": False,
+            },
         ],
     },
     "financial": {
@@ -301,14 +572,54 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
             ORDER BY rs.payment_year DESC
         """,
         "columns_config": [
-            {"name": "payment_year",       "type": "integer", "description": "CMS payment year",              "phi": False},
-            {"name": "model_version",      "type": "string",  "description": "HCC model version",             "phi": False},
-            {"name": "tenant_id",          "type": "string",  "description": "Tenant discriminator",          "phi": False},
-            {"name": "member_count",       "type": "integer", "description": "Unique member count",           "phi": False},
-            {"name": "avg_raf",            "type": "decimal", "description": "Average RAF score",             "phi": False},
-            {"name": "total_raf",          "type": "decimal", "description": "Sum of all RAF scores",         "phi": False},
-            {"name": "estimated_revenue_usd","type":"decimal","description": "Estimated revenue (placeholder)","phi": False},
-            {"name": "last_calculated",    "type": "datetime","description": "Most recent score timestamp",   "phi": False},
+            {
+                "name": "payment_year",
+                "type": "integer",
+                "description": "CMS payment year",
+                "phi": False,
+            },
+            {
+                "name": "model_version",
+                "type": "string",
+                "description": "HCC model version",
+                "phi": False,
+            },
+            {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant discriminator",
+                "phi": False,
+            },
+            {
+                "name": "member_count",
+                "type": "integer",
+                "description": "Unique member count",
+                "phi": False,
+            },
+            {
+                "name": "avg_raf",
+                "type": "decimal",
+                "description": "Average RAF score",
+                "phi": False,
+            },
+            {
+                "name": "total_raf",
+                "type": "decimal",
+                "description": "Sum of all RAF scores",
+                "phi": False,
+            },
+            {
+                "name": "estimated_revenue_usd",
+                "type": "decimal",
+                "description": "Estimated revenue (placeholder)",
+                "phi": False,
+            },
+            {
+                "name": "last_calculated",
+                "type": "datetime",
+                "description": "Most recent score timestamp",
+                "phi": False,
+            },
         ],
     },
 }
@@ -319,13 +630,28 @@ PREBUILT_DATASETS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 _PHI_COLUMNS: set[str] = {
-    "patient_id", "first_name", "last_name", "full_name", "dob", "date_of_birth",
-    "ssn", "mrn", "address", "city", "state", "zip", "phone", "email",
-    "member_id", "subscriber_id",
+    "patient_id",
+    "first_name",
+    "last_name",
+    "full_name",
+    "dob",
+    "date_of_birth",
+    "ssn",
+    "mrn",
+    "address",
+    "city",
+    "state",
+    "zip",
+    "phone",
+    "email",
+    "member_id",
+    "subscriber_id",
 }
 
 
-def _strip_phi(rows: list[dict[str, Any]], columns_config: list[dict]) -> list[dict[str, Any]]:
+def _strip_phi(
+    rows: list[dict[str, Any]], columns_config: list[dict]
+) -> list[dict[str, Any]]:
     """Replace PHI column values with anonymised tokens."""
     phi_names = {col["name"] for col in columns_config if col.get("phi")}
     phi_names |= _PHI_COLUMNS  # belt-and-suspenders: catch unlisted PHI columns
@@ -342,6 +668,7 @@ def _strip_phi(rows: list[dict[str, Any]], columns_config: list[dict]) -> list[d
 # Query execution
 # ---------------------------------------------------------------------------
 
+
 def _run_query(
     sql: str,
     params: dict[str, Any],
@@ -357,6 +684,7 @@ def _run_query(
     """
     # Convert :param_name → %(param_name)s
     import re
+
     def _rewrite(m: re.Match) -> str:
         return f"%({m.group(1)})s"
 
@@ -373,6 +701,7 @@ def _run_query(
 # ---------------------------------------------------------------------------
 # Connection CRUD helpers
 # ---------------------------------------------------------------------------
+
 
 def create_connection(
     name: str,
@@ -393,7 +722,8 @@ def create_connection(
             VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
-                name, bi_tool,
+                name,
+                bi_tool,
                 json.dumps(connection_config) if connection_config else None,
                 api_key_encrypted,
                 refresh_schedule,
@@ -494,6 +824,7 @@ def _update_connection_status(
 # Dataset CRUD helpers
 # ---------------------------------------------------------------------------
 
+
 def list_datasets(tenant_id: str) -> list[dict[str, Any]]:
     with raf_cursor() as cur:
         cur.execute(
@@ -565,9 +896,14 @@ def create_dataset(
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                name, description, dataset_type, query_template,
+                name,
+                description,
+                dataset_type,
+                query_template,
                 json.dumps(columns_config) if columns_config else None,
-                refresh_frequency, fmt, tenant_id,
+                refresh_frequency,
+                fmt,
+                tenant_id,
             ),
         )
         return cur.lastrowid
@@ -575,8 +911,12 @@ def create_dataset(
 
 def update_dataset(dataset_id: int, updates: dict[str, Any], tenant_id: str) -> bool:
     allowed = {
-        "name", "description", "query_template", "columns_config",
-        "refresh_frequency", "format",
+        "name",
+        "description",
+        "query_template",
+        "columns_config",
+        "refresh_frequency",
+        "format",
     }
     fields = {k: v for k, v in updates.items() if k in allowed}
     if not fields:
@@ -598,6 +938,7 @@ def update_dataset(dataset_id: int, updates: dict[str, Any], tenant_id: str) -> 
 # ---------------------------------------------------------------------------
 # Data extraction
 # ---------------------------------------------------------------------------
+
 
 def _resolve_query(dataset: dict[str, Any]) -> tuple[str, list[dict]]:
     """
@@ -672,6 +1013,7 @@ def fetch_dataset_rows(
 # Export formatters
 # ---------------------------------------------------------------------------
 
+
 def export_csv(rows: list[dict[str, Any]], columns: list[dict]) -> bytes:
     """Return UTF-8 encoded CSV bytes."""
     if not rows:
@@ -697,7 +1039,9 @@ def export_json(rows: list[dict[str, Any]], columns: list[dict]) -> bytes:
     return json.dumps(payload, default=str, indent=2).encode("utf-8")
 
 
-def export_excel(rows: list[dict[str, Any]], columns: list[dict], sheet_name: str = "Data") -> bytes:
+def export_excel(
+    rows: list[dict[str, Any]], columns: list[dict], sheet_name: str = "Data"
+) -> bytes:
     """
     Return Excel (.xlsx) bytes using openpyxl.
     Falls back to CSV content if openpyxl is not installed.
@@ -710,10 +1054,16 @@ def export_excel(rows: list[dict[str, Any]], columns: list[dict], sheet_name: st
     ws = wb.active
     ws.title = sheet_name[:31]  # Excel sheet name limit
 
-    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="1F4E79", end_color="1F4E79", fill_type="solid"
+    )
     header_font = Font(color="FFFFFF", bold=True)
 
-    col_names = [c["name"] for c in columns] if columns else (list(rows[0].keys()) if rows else [])
+    col_names = (
+        [c["name"] for c in columns]
+        if columns
+        else (list(rows[0].keys()) if rows else [])
+    )
 
     # Header row
     for col_idx, col_name in enumerate(col_names, start=1):
@@ -761,8 +1111,10 @@ def render_export(
     if fmt in ("xlsx", "excel"):
         content = export_excel(rows, columns, sheet_name=dataset_name[:31])
         ext = "csv" if not _OPENPYXL_AVAILABLE else "xlsx"
-        media = "text/csv" if not _OPENPYXL_AVAILABLE else (
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        media = (
+            "text/csv"
+            if not _OPENPYXL_AVAILABLE
+            else ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         )
         return content, media, f"{safe_name}_{ts}.{ext}"
 
@@ -773,6 +1125,7 @@ def render_export(
 # ---------------------------------------------------------------------------
 # Tableau WDC helpers
 # ---------------------------------------------------------------------------
+
 
 def build_tableau_wdc_schema(dataset: dict[str, Any]) -> dict[str, Any]:
     """
@@ -869,19 +1222,19 @@ def build_tableau_wdc_html(api_base_url: str) -> str:
 # ---------------------------------------------------------------------------
 
 _ODATA_TYPE_MAP = {
-    "string":   "Edm.String",
-    "integer":  "Edm.Int32",
-    "decimal":  "Edm.Decimal",
-    "date":     "Edm.Date",
+    "string": "Edm.String",
+    "integer": "Edm.Int32",
+    "decimal": "Edm.Decimal",
+    "date": "Edm.Date",
     "datetime": "Edm.DateTimeOffset",
-    "boolean":  "Edm.Boolean",
+    "boolean": "Edm.Boolean",
 }
 
 
 def build_odata_metadata(dataset_name: str, columns: list[dict]) -> str:
     """Return an OData $metadata CSDL XML document."""
     props = "\n".join(
-        f'          <Property Name="{c["name"]}" Type="{_ODATA_TYPE_MAP.get(c.get("type","string"), "Edm.String")}" />'
+        f'          <Property Name="{c["name"]}" Type="{_ODATA_TYPE_MAP.get(c.get("type", "string"), "Edm.String")}" />'
         for c in columns
     )
     entity_type = dataset_name.replace(" ", "_").replace("-", "_")
@@ -901,7 +1254,9 @@ def build_odata_metadata(dataset_name: str, columns: list[dict]) -> str:
 </edmx:Edmx>"""
 
 
-def build_odata_response(rows: list[dict[str, Any]], dataset_name: str, odata_base: str) -> dict:
+def build_odata_response(
+    rows: list[dict[str, Any]], dataset_name: str, odata_base: str
+) -> dict:
     """Wrap rows in an OData v4 JSON response envelope."""
     return {
         "@odata.context": f"{odata_base}/$metadata#{dataset_name.replace(' ', '_')}",
@@ -913,6 +1268,7 @@ def build_odata_response(rows: list[dict[str, Any]], dataset_name: str, odata_ba
 # ---------------------------------------------------------------------------
 # PowerBI REST API push
 # ---------------------------------------------------------------------------
+
 
 def push_to_powerbi(
     connection: dict[str, Any],
@@ -940,7 +1296,10 @@ def push_to_powerbi(
 
     push_url = cfg.get("push_url")
     if not push_url:
-        return {"success": False, "error": "push_url not configured in connection_config"}
+        return {
+            "success": False,
+            "error": "push_url not configured in connection_config",
+        }
 
     payload = {"rows": rows}
     try:
@@ -954,7 +1313,11 @@ def push_to_powerbi(
             timeout=30,
         )
         resp.raise_for_status()
-        return {"success": True, "status_code": resp.status_code, "rows_pushed": len(rows)}
+        return {
+            "success": True,
+            "status_code": resp.status_code,
+            "rows_pushed": len(rows),
+        }
     except Exception as exc:
         return {"success": False, "error": str(exc)}
 
@@ -962,6 +1325,7 @@ def push_to_powerbi(
 # ---------------------------------------------------------------------------
 # Dataset refresh
 # ---------------------------------------------------------------------------
+
 
 def refresh_dataset(dataset_id: int, tenant_id: str) -> dict[str, Any]:
     """
@@ -1005,7 +1369,9 @@ def refresh_dataset(dataset_id: int, tenant_id: str) -> dict[str, Any]:
             "duration_ms": elapsed_ms,
         }
     except Exception as exc:
-        logger.error("Dataset refresh failed (id=%s): %s", dataset_id, exc, exc_info=True)
+        logger.error(
+            "Dataset refresh failed (id=%s): %s", dataset_id, exc, exc_info=True
+        )
         with raf_cursor() as cur:
             cur.execute(
                 "UPDATE bi_datasets SET status = 'error', error_message = %s WHERE id = %s AND tenant_id = %s",
@@ -1017,6 +1383,7 @@ def refresh_dataset(dataset_id: int, tenant_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Export log helpers
 # ---------------------------------------------------------------------------
+
 
 def log_export(
     export_type: str,
@@ -1041,9 +1408,16 @@ def log_export(
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
-                    dataset_id, connection_id, export_type,
-                    row_count, file_size, duration_ms,
-                    status, error_message, exported_by, tenant_id,
+                    dataset_id,
+                    connection_id,
+                    export_type,
+                    row_count,
+                    file_size,
+                    duration_ms,
+                    status,
+                    error_message,
+                    exported_by,
+                    tenant_id,
                 ),
             )
     except Exception as exc:
@@ -1078,6 +1452,7 @@ def list_export_log(
 # ---------------------------------------------------------------------------
 # Seed pre-built datasets for a tenant (called on first access)
 # ---------------------------------------------------------------------------
+
 
 def seed_prebuilt_datasets(tenant_id: str) -> int:
     """

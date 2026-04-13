@@ -148,18 +148,16 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
     Returns patient demographics plus open HCC gap counts and estimated revenue.
     """
     if tenant_id is None:
-        logger.warning(
-            "awv_service.get_eligible_patients: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "awv_service.get_eligible_patients: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        try:
-            tid = int(tenant_id)
-        except (TypeError, ValueError):
-            logger.warning(
-                "awv_service.get_eligible_patients: no tenant_id provided, defaulting to 1"
-            )
-            tid = 1
+    try:
+        tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"awv_service.get_eligible_patients: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     awv_placeholders = ",".join(["%s"] * len(_AWV_CPT_CODES))
 

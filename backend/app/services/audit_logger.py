@@ -39,7 +39,8 @@ def log_phi_access(
     encounter_id: int | None = None,
     user: str = "system",
     details: str = "",
-    tenant_id: int | None = None,
+    *,
+    tenant_id: int | str = "unknown",
 ) -> None:
     """
     Emit a structured PHI-access audit record.
@@ -59,13 +60,7 @@ def log_phi_access(
         _app_logger.debug(
             "PHI access logged without user identity — caller should pass user_id"
         )
-    if tenant_id is None:
-        _app_logger.debug(
-            "no tenant_id provided, defaulting to 1 — caller: log_phi_access"
-        )
-        tid: int = 1
-    else:
-        tid = int(tenant_id)
+    tid = tenant_id
     phi_logger.info(
         "PHI_ACCESS | action=%s | resource=%s | patient_id=%s | encounter_id=%s"
         " | user=%s | tenant=%s | timestamp=%s | details=%s",
@@ -91,17 +86,29 @@ def log_phi_access(
 
         resource_id_str = str(patient_id) if patient_id is not None else None
 
+        # fetch context for audit logs
+        from app.audit_middleware import request_context
+        req_ctx = request_context.get()
+        ip_address = req_ctx.get("ip_address") if req_ctx else None
+        user_agent = req_ctx.get("user_agent") if req_ctx else None
+        request_method = req_ctx.get("method") if req_ctx else None
+        request_path = req_ctx.get("path") if req_ctx else None
+
         with raf_cursor() as cur:
             cur.execute(
                 "INSERT INTO audit_log"
-                " (user_id, action, resource_type, resource_id, patient_id, details, created_at)"
-                " VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+                " (user_id, action, resource_type, resource_id, patient_id, ip_address, user_agent, request_method, request_path, details, created_at)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())",
                 (
                     db_user_id,
                     f"phi_{action}",
                     resource,
                     resource_id_str,
                     patient_id,
+                    ip_address,
+                    user_agent,
+                    request_method,
+                    request_path,
                     json.dumps(
                         {
                             "details": details,

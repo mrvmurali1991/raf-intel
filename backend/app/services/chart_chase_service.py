@@ -73,7 +73,7 @@ def _fetch_chase(chase_id: int) -> dict[str, Any]:
 
 def list_chases(
     *,
-    tenant_id: str = "default",
+    tenant_id: str,
     status: str | None = None,
     priority: str | None = None,
     patient_id: int | None = None,
@@ -155,6 +155,11 @@ def create_chase(data: dict[str, Any]) -> dict[str, Any]:
     ``data`` keys mirror the ``chart_chase_requests`` columns.  ``request_date``
     defaults to today when not provided.  Returns the newly created row.
     """
+    if not data.get("tenant_id"):
+        raise ValueError(
+            "create_chase: data['tenant_id'] is required — "
+            "refusing to create chase request without tenant scope (HIPAA multi-tenant isolation)"
+        )
     request_date = data.get("request_date") or date.today()
     hcc_codes = data.get("hcc_codes")
     if hcc_codes is not None and not isinstance(hcc_codes, str):
@@ -178,7 +183,7 @@ def create_chase(data: dict[str, Any]) -> dict[str, Any]:
         )
     """
     params = (
-        data.get("tenant_id", "default"),
+        data["tenant_id"],
         data["patient_id"],
         data.get("provider_npi"),
         data["requesting_user_id"],
@@ -399,7 +404,7 @@ def receive_chase(
 # Dashboard & Reporting
 # ---------------------------------------------------------------------------
 
-def get_dashboard(tenant_id: str = "default") -> dict[str, Any]:
+def get_dashboard(tenant_id: str) -> dict[str, Any]:
     """Return aggregate statistics for the chart chase dashboard.
 
     Includes:
@@ -530,7 +535,7 @@ def bulk_create_chases(
     items: list[dict[str, Any]],
     *,
     requesting_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
     default_priority: str = "medium",
     default_due_days: int = 30,
 ) -> dict[str, Any]:
@@ -578,7 +583,7 @@ def bulk_create_chases(
 # Template Management
 # ---------------------------------------------------------------------------
 
-def list_templates(tenant_id: str = "default") -> list[dict[str, Any]]:
+def list_templates(tenant_id: str) -> list[dict[str, Any]]:
     """Return all templates for a tenant, ordered by type then name."""
     with raf_cursor() as cur:
         cur.execute(
@@ -595,12 +600,17 @@ def list_templates(tenant_id: str = "default") -> list[dict[str, Any]]:
 
 def create_template(data: dict[str, Any]) -> dict[str, Any]:
     """Insert a new outreach template.  Returns the created row."""
+    if not data.get("tenant_id"):
+        raise ValueError(
+            "create_template: data['tenant_id'] is required — "
+            "refusing to create template without tenant scope (HIPAA multi-tenant isolation)"
+        )
     sql = """
         INSERT INTO chart_chase_templates (tenant_id, name, type, subject, body)
         VALUES (%s, %s, %s, %s, %s)
     """
     params = (
-        data.get("tenant_id", "default"),
+        data["tenant_id"],
         data["name"],
         data["type"],
         data.get("subject"),

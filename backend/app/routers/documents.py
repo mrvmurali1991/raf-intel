@@ -80,7 +80,12 @@ def _doc_not_found(document_id: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"Document {document_id!r} not found")
 
 
-def _analyze_and_maybe_approve(document_id: str, auto_approve: bool, patient_id: str | None, tenant_id: str | None = None) -> None:
+def _analyze_and_maybe_approve(
+    document_id: str,
+    auto_approve: bool,
+    patient_id: str | None,
+    tenant_id: str | None = None,
+) -> None:
     """Background task: analyze document, then optionally auto-approve and update RAF."""
     try:
         analyze_document(document_id)
@@ -95,7 +100,12 @@ def _analyze_and_maybe_approve(document_id: str, auto_approve: bool, patient_id:
             logger.error("Auto-approve failed for %s: %s", document_id, exc)
 
 
-def _do_approve_and_score(document_id: str, patient_id: int, diagnosis_ids: list[str] | None = None, tenant_id: str | None = None) -> dict[str, Any]:
+def _do_approve_and_score(
+    document_id: str,
+    patient_id: int,
+    diagnosis_ids: list[str] | None = None,
+    tenant_id: str | None = None,
+) -> dict[str, Any]:
     """Approve all HCC-relevant diagnoses and recalculate RAF score."""
     from app.services.raf_calculator import calculate_raf_score
     from datetime import date as _d
@@ -121,10 +131,12 @@ def _do_approve_and_score(document_id: str, patient_id: int, diagnosis_ids: list
         return {"approved": 0}
 
     # Mark approved
-    ids = [str(l["id"]) for l in lines]
-    ph = ",".join(["%s"] * len(ids))
+    ids = [l["id"] for l in lines]
     with raf_cursor() as cur:
-        cur.execute(f"UPDATE document_diagnosis_lines SET review_status='approved' WHERE id IN ({ph})", ids)
+        cur.executemany(
+            "UPDATE document_diagnosis_lines SET review_status='approved' WHERE id = %s",
+            [(i,) for i in ids],
+        )
 
     # Insert into raf_patient_hcc
     inserted = []
@@ -148,7 +160,14 @@ def _do_approve_and_score(document_id: str, patient_id: int, diagnosis_ids: list
             cur.execute(
                 "INSERT INTO raf_patient_hcc (patient_id, hcc_code, icd10_code, hcc_description, measurement_year, source, tenant_id, created_at) "
                 "VALUES (%s,%s,%s,%s,%s,'document_analysis',%s,NOW())",
-                (patient_id, hcc, l.get("icd10_code"), l.get("description"), year, tenant_id),
+                (
+                    patient_id,
+                    hcc,
+                    l.get("icd10_code"),
+                    l.get("description"),
+                    year,
+                    tenant_id,
+                ),
             )
             inserted.append(hcc)
 
@@ -210,7 +229,8 @@ async def upload_document(
         False, description="Trigger Gemini Vision analysis automatically after upload"
     ),
     auto_approve: bool = Form(
-        False, description="Auto-approve extracted diagnoses and update RAF scores (disabled by default for compliance)"
+        False,
+        description="Auto-approve extracted diagnoses and update RAF scores (disabled by default for compliance)",
     ),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
@@ -392,6 +412,7 @@ def list_documents_endpoint(
             raw_dx = analysis.get("extracted_diagnoses") or []
             if isinstance(raw_dx, str):
                 import json as _j
+
                 try:
                     raw_dx = _j.loads(raw_dx)
                 except Exception:
@@ -399,21 +420,32 @@ def list_documents_endpoint(
             diagnoses = []
             for d in raw_dx:
                 if isinstance(d, str):
-                    diagnoses.append({"icd10_code": d, "description": "", "hcc_number": None, "confidence": 0})
+                    diagnoses.append(
+                        {
+                            "icd10_code": d,
+                            "description": "",
+                            "hcc_number": None,
+                            "confidence": 0,
+                        }
+                    )
                     continue
-                diagnoses.append({
-                    "icd10_code": d.get("icd10_code") or d.get("icd10", ""),
-                    "description": d.get("description") or d.get("desc", ""),
-                    "hcc_number": d.get("hcc_number") or d.get("hcc"),
-                    "confidence": d.get("confidence") or d.get("conf", 0),
-                    "page_number": d.get("page_number") or d.get("page"),
-                    "evidence_text": d.get("evidence_text") or d.get("evidence", ""),
-                    "confirmed": d.get("confirmed"),
-                })
+                diagnoses.append(
+                    {
+                        "icd10_code": d.get("icd10_code") or d.get("icd10", ""),
+                        "description": d.get("description") or d.get("desc", ""),
+                        "hcc_number": d.get("hcc_number") or d.get("hcc"),
+                        "confidence": d.get("confidence") or d.get("conf", 0),
+                        "page_number": d.get("page_number") or d.get("page"),
+                        "evidence_text": d.get("evidence_text")
+                        or d.get("evidence", ""),
+                        "confirmed": d.get("confirmed"),
+                    }
+                )
 
             raw_meds = analysis.get("extracted_medications") or []
             if isinstance(raw_meds, str):
                 import json as _j
+
                 try:
                     raw_meds = _j.loads(raw_meds)
                 except Exception:
@@ -422,6 +454,7 @@ def list_documents_endpoint(
             raw_labs = analysis.get("extracted_labs") or []
             if isinstance(raw_labs, str):
                 import json as _j
+
                 try:
                     raw_labs = _j.loads(raw_labs)
                 except Exception:
@@ -430,6 +463,7 @@ def list_documents_endpoint(
             raw_meat = analysis.get("meat_evidence")
             if isinstance(raw_meat, str):
                 import json as _j
+
                 try:
                     raw_meat = _j.loads(raw_meat)
                 except Exception:
@@ -583,7 +617,9 @@ def view_document_file(
 
     file_path = doc.get("file_path", "")
     if not file_path:
-        raise HTTPException(status_code=404, detail="No file path recorded for this document")
+        raise HTTPException(
+            status_code=404, detail="No file path recorded for this document"
+        )
 
     # Resolve relative to project root
     project_root = Path(__file__).resolve().parent.parent.parent
@@ -611,7 +647,9 @@ def view_document_file(
         path=str(full_path),
         media_type=media_type,
         filename=doc.get("document_name", full_path.name),
-        headers={"Content-Disposition": f'inline; filename="{doc.get("document_name", full_path.name)}"'},
+        headers={
+            "Content-Disposition": f'inline; filename="{doc.get("document_name", full_path.name)}"'
+        },
     )
 
 
@@ -828,7 +866,8 @@ def reject_diagnosis(
     document_id: str,
     diag_id: str,
     current_user: dict = Depends(get_current_user),
-    _perm: None = Depends(require_permission("documents", "write"))) -> dict[str, Any]:
+    _perm: None = Depends(require_permission("documents", "write")),
+) -> dict[str, Any]:
     reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
     doc = get_document(document_id)
     if not doc:
@@ -982,7 +1021,11 @@ def draft_raf_score(
             FROM raf_patient_hcc
             WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s
             """,
-            (patient_id, raf_row["measurement_year"] if raf_row else calc_year, tenant_id),
+            (
+                patient_id,
+                raf_row["measurement_year"] if raf_row else calc_year,
+                tenant_id,
+            ),
         )
         existing_hcc_rows = cur.fetchall()
 
@@ -1143,24 +1186,30 @@ def list_openemr_documents(
 
         documents = []
         for r in rows:
-            documents.append({
-                "openemr_doc_id": r["id"],
-                "name": r["name"],
-                "mimetype": r["mimetype"],
-                "size": r["size"],
-                "date": r["date"].isoformat() if r.get("date") else None,
-                "patient_id": r["patient_id"],
-                "patient_name": f"{r.get('fname', '')} {r.get('lname', '')}".strip(),
-                "category": r.get("category", "Uncategorized"),
-                "already_imported": r["id"] in imported_set,
-            })
+            documents.append(
+                {
+                    "openemr_doc_id": r["id"],
+                    "name": r["name"],
+                    "mimetype": r["mimetype"],
+                    "size": r["size"],
+                    "date": r["date"].isoformat() if r.get("date") else None,
+                    "patient_id": r["patient_id"],
+                    "patient_name": f"{r.get('fname', '')} {r.get('lname', '')}".strip(),
+                    "category": r.get("category", "Uncategorized"),
+                    "already_imported": r["id"] in imported_set,
+                }
+            )
 
         return {"total": len(documents), "documents": _serialize(documents)}
     except Exception as exc:
         err_msg = str(exc)
         if "doesn't exist" in err_msg or "1146" in err_msg:
             # OpenEMR documents table not available (minimal install)
-            return {"total": 0, "documents": [], "warning": "OpenEMR documents table not available"}
+            return {
+                "total": 0,
+                "documents": [],
+                "warning": "OpenEMR documents table not available",
+            }
         logger.error("list_openemr_documents error: %s", exc)
         raise HTTPException(status_code=500, detail="Could not connect to OpenEMR")
 
@@ -1174,8 +1223,12 @@ def list_openemr_documents(
 def pull_openemr_document(
     request: Request,
     openemr_doc_id: int,
-    auto_analyze: bool = Query(True, description="Auto-trigger Gemini analysis after pull"),
-    auto_approve: bool = Query(False, description="Auto-approve diagnoses and update RAF (disabled by default)"),
+    auto_analyze: bool = Query(
+        True, description="Auto-trigger Gemini analysis after pull"
+    ),
+    auto_approve: bool = Query(
+        False, description="Auto-approve diagnoses and update RAF (disabled by default)"
+    ),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "write")),
@@ -1191,11 +1244,15 @@ def pull_openemr_document(
         emr_doc = cur.fetchone()
 
     if not emr_doc:
-        raise HTTPException(status_code=404, detail=f"OpenEMR document {openemr_doc_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"OpenEMR document {openemr_doc_id} not found"
+        )
 
     file_bytes = emr_doc.get("document_data")
     if not file_bytes:
-        raise HTTPException(status_code=422, detail="Document has no content (empty blob)")
+        raise HTTPException(
+            status_code=422, detail="Document has no content (empty blob)"
+        )
 
     patient_id = str(emr_doc["foreign_id"]) if emr_doc.get("foreign_id") else None
     filename = emr_doc.get("name") or f"openemr_doc_{openemr_doc_id}.pdf"
@@ -1205,10 +1262,14 @@ def pull_openemr_document(
     result = store_upload(
         tenant_id=tenant_id,
         patient_id=patient_id,
-        file_bytes=file_bytes if isinstance(file_bytes, bytes) else file_bytes.encode("latin-1"),
+        file_bytes=file_bytes
+        if isinstance(file_bytes, bytes)
+        else file_bytes.encode("latin-1"),
         original_filename=filename,
         document_type="openemr_import",
-        encounter_date=emr_doc["date"].strftime("%Y-%m-%d") if emr_doc.get("date") else None,
+        encounter_date=emr_doc["date"].strftime("%Y-%m-%d")
+        if emr_doc.get("date")
+        else None,
     )
 
     response = {
@@ -1232,10 +1293,14 @@ def pull_openemr_document(
             }
             # Auto-approve if enabled
             if auto_approve and patient_id:
-                approve_result = _do_approve_and_score(result["document_id"], int(patient_id), tenant_id=tenant_id)
+                approve_result = _do_approve_and_score(
+                    result["document_id"], int(patient_id), tenant_id=tenant_id
+                )
                 response["auto_approved"] = approve_result
         except Exception as exc:
-            logger.error("Auto-analysis failed for pulled doc %s: %s", openemr_doc_id, exc)
+            logger.error(
+                "Auto-analysis failed for pulled doc %s: %s", openemr_doc_id, exc
+            )
             response["analysis_error"] = "Auto-analysis failed"
 
     response["auto_approve"] = auto_approve
@@ -1257,7 +1322,8 @@ def approve_and_update_raf(
     request: Request,
     document_id: str,
     diagnosis_ids: list[str] = Query(
-        None, description="Specific diagnosis line IDs to approve. If empty, approves all."
+        None,
+        description="Specific diagnosis line IDs to approve. If empty, approves all.",
     ),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
@@ -1291,12 +1357,16 @@ def approve_and_update_raf(
                 detail="Patient is not linked to an active EMR connection.",
             )
 
-    result = _do_approve_and_score(document_id, patient_id, diagnosis_ids, tenant_id=tenant_id)
+    result = _do_approve_and_score(
+        document_id, patient_id, diagnosis_ids, tenant_id=tenant_id
+    )
 
     return {
         "approved": result["approved"],
         "patient_id": patient_id,
         "new_hccs_added": result.get("new_hccs", []),
-        "new_raf_score": round(float(result["new_raf"]), 4) if result.get("new_raf") else None,
+        "new_raf_score": round(float(result["new_raf"]), 4)
+        if result.get("new_raf")
+        else None,
         "message": f"Approved {result['approved']} diagnoses, added {len(result.get('new_hccs', []))} new HCCs, RAF recalculated",
     }

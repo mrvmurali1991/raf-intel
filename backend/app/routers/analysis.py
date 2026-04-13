@@ -1,5 +1,5 @@
 """
-Clinical note analysis router — full MedCAT → Assertion → Retrieve-Rank → Gemini pipeline.
+Clinical note analysis router.
 
 Endpoints
 ---------
@@ -20,20 +20,12 @@ POST /api/analysis/batch/{pid}
 
 Pipeline stages
 ---------------
-1. MedCAT NER          – medcat_service.extract_entities()
-2. Assertion filter    – assertion_service.filter_negated_entities()
-3. Retrieve-Rank       – retrieve_rank_service.get_candidates()
-4. Gemini analysis     – gemini_service.analyze_clinical_note()
-5. Validation          – icd_validator (inside gemini_service)
-6. Confidence routing  – confidence_router.route_analysis_result()
-7. Persist             – meat_evidence_service.store_analysis_meat()
+1. Stage 1 extraction  – pipeline_orchestrator / stage1_extraction
+2. Gemini analysis     – skill_pipeline / stage2 Gemini
+3. Verification        – stage3_verification
+4. Confidence routing  – confidence_router.route_analysis_result()
+5. Persist             – meat_evidence_service.store_analysis_meat()
                          + raf_encounter_analysis table
-
-Fallback behavior
------------------
-If MedCAT or assertion_service raises an exception the pipeline falls back
-gracefully to Gemini-only mode (no candidate-code grounding).  The response
-``pipeline`` block marks which stages ran.
 """
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
@@ -71,21 +63,11 @@ from app.services.meat_evidence_service import (
     store_analysis_meat,
     update_hcc_meat_status,
 )
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
+from app.services.circuit_breaker import CircuitBreakerError
 
-# Legacy imports — kept for _run_pipeline_legacy fallback
-try:
-    from app.services._legacy import medcat_service, assertion_service
-    from app.services._legacy import retrieve_rank_service
-    from app.services._legacy import gemini_service
-    from app.services.confidence_router import route_analysis_result
-except ImportError:
-    medcat_service = None  # type: ignore
-    assertion_service = None  # type: ignore
-    retrieve_rank_service = None  # type: ignore
-    gemini_service = None  # type: ignore
-    route_analysis_result = None  # type: ignore
+from app.services.confidence_router import route_analysis_result
 
 logger = logging.getLogger(__name__)
 
@@ -182,373 +164,6 @@ def _run_pipeline(
             med_diagnoses=med_diagnoses,
         )
 
-
-# LEGACY — kept for fallback
-def _run_pipeline_legacy(
-    note_text: str,
-    *,
-    patient_age: int | None = None,
-    patient_sex: str | None = None,
-    existing_hccs: list[str] | None = None,
-    medications: list[str] | None = None,
-    labs: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """
-    Execute the full analysis pipeline on *note_text*.
-
-    Returns a dict shaped like the documented response format.  Pipeline
-    stage metadata is included under the ``pipeline`` key so the caller can
-    see exactly what each stage contributed.
-
-    Raises RuntimeError only if Gemini itself fails (all other stages have
-    internal fallbacks).
-    """
-    pipeline: dict[str, Any] = {
-        "medcat_entities": [],
-        "after_negation_filter": [],
-        "candidate_codes": [],
-        "gemini_selected": [],
-        "stages_run": [],
-        "fallback_mode": False,
-    }
-
-    # ------------------------------------------------------------------
-    # Stage 1: MedCAT NER
-    # ------------------------------------------------------------------
-    raw_entities: list[dict[str, Any]] = []
-    try:
-        raw_entities = medcat_service.extract_entities(note_text)
-        pipeline["medcat_entities"] = [
-            {
-                "text": e.get("text", ""),
-                "name": e.get("name", ""),
-                "icd10": e.get("icd10", ""),
-                "confidence": e.get("confidence", 0),
-                "negated": e.get("negated", False),
-                "category": e.get("category", ""),
-            }
-            for e in raw_entities
-        ]
-        pipeline["stages_run"].append("medcat")
-        logger.debug("MedCAT: %d entities extracted", len(raw_entities))
-    except Exception as exc:
-        logger.warning("MedCAT stage failed, using fallback: %s", exc)
-        pipeline["fallback_mode"] = True
-
-    # ------------------------------------------------------------------
-    # Stage 2: Assertion / negation filter
-    # ------------------------------------------------------------------
-    present_entities: list[dict[str, Any]] = []
-    try:
-        if raw_entities:
-            present_entities = assertion_service.filter_negated_entities(
-                raw_entities, note_text
-            )
-            pipeline["after_negation_filter"] = [
-                {
-                    "text": e.get("text", ""),
-                    "name": e.get("name", ""),
-                    "icd10": e.get("icd10", ""),
-                    "assertion": (e.get("assertion") or {}).get("assertion", "present"),
-                }
-                for e in present_entities
-            ]
-            pipeline["stages_run"].append("assertion_filter")
-            logger.debug(
-                "Assertion filter: %d → %d entities after removing negated/historical",
-                len(raw_entities),
-                len(present_entities),
-            )
-    except Exception as exc:
-        logger.warning("Assertion stage failed, using all entities: %s", exc)
-        present_entities = raw_entities
-
-    # ------------------------------------------------------------------
-    # Stage 3: Retrieve-Rank candidate ICD codes
-    # ------------------------------------------------------------------
-    candidate_codes: list[dict[str, Any]] = []
-    try:
-        if present_entities:
-            # retrieve_and_rank returns entities enriched with candidates
-            ranked_entities = retrieve_rank_service.retrieve_and_rank(
-                present_entities, clinical_note=note_text
-            )
-            # Flatten all candidates from all entities
-            for ent in ranked_entities:
-                for c in ent.get("candidates", []):
-                    candidate_codes.append(
-                        {
-                            "icd10_code": c.get("code", ""),
-                            "description": c.get("description", ""),
-                            "entity_source": ent.get("name", ""),
-                            "relevance_score": float(c.get("relevance_score", 0)),
-                        }
-                    )
-            pipeline["candidate_codes"] = [
-                {
-                    "icd10": c.get("icd10_code", c.get("code", "")),
-                    "description": c.get("description", ""),
-                    "entity": c.get("entity_source", ""),
-                    "relevance_score": round(float(c.get("relevance_score", 0)), 3),
-                }
-                for c in candidate_codes
-            ]
-            pipeline["stages_run"].append("retrieve_rank")
-            logger.debug("Retrieve-Rank: %d candidate codes", len(candidate_codes))
-    except Exception as exc:
-        logger.warning("Retrieve-Rank stage failed: %s", exc)
-
-    # ------------------------------------------------------------------
-    # Stage 4: Gemini analysis (with candidate codes as grounding context)
-    # ------------------------------------------------------------------
-    # Build the existing_hccs list from candidate codes + caller-supplied
-    existing_hcc_list: list[str] = list(existing_hccs or [])
-    for c in candidate_codes:
-        hcc = c.get("hcc_code", "")
-        if hcc and hcc not in existing_hcc_list:
-            existing_hcc_list.append(hcc)
-
-    gemini_result = gemini_service.analyze_clinical_note(
-        note_text=note_text,
-        patient_age=patient_age,
-        patient_sex=patient_sex,
-        existing_hccs=existing_hcc_list or None,
-        medications=medications,
-        lab_results=labs,
-    )
-    pipeline["stages_run"].append("gemini")
-
-    # Stage 5: collect what Gemini selected
-    pipeline["gemini_selected"] = [
-        {
-            "icd10": d.get("icd10", ""),
-            "description": d.get("description", ""),
-            "confidence": d.get("confidence", 0),
-        }
-        for d in gemini_result.get("diagnoses", [])
-    ]
-
-    # ------------------------------------------------------------------
-    # Stage 6: Enrich diagnoses with MEAT score integer and source tag
-    # ------------------------------------------------------------------
-    diagnoses: list[dict[str, Any]] = []
-    negated_conditions: list[dict[str, Any]] = []
-
-    for dx in gemini_result.get("diagnoses", []):
-        meat = dx.get("meat") or {}
-        # Normalise MEAT keys: Gemini may return M/E/A/T or monitoring/evaluation/…
-        normalised_meat = {
-            "M": meat.get("M") or meat.get("monitoring", ""),
-            "E": meat.get("E") or meat.get("evaluation", ""),
-            "A": meat.get("A") or meat.get("assessment", ""),
-            "T": meat.get("T") or meat.get("treatment", ""),
-        }
-        meat_score = sum(1 for v in normalised_meat.values() if v and v.strip())
-
-        # Determine source tag and fill missing ICD-10/description
-        icd10 = dx.get("icd10", "") or ""
-        description = dx.get("description", "") or ""
-        hcc = dx.get("hcc_code") or dx.get("hcc", "") or ""
-
-        # If ICD-10 is empty, try to find it from MedCAT entities matching this HCC
-        if not icd10 and hcc:
-            # Map HCC to common ICD-10 codes
-            hcc_to_icd = {
-                "HCC37": ("E11.22", "Type 2 DM with diabetic chronic kidney disease"),
-                "HCC38": ("E11.65", "Type 2 DM with hyperglycemia"),
-                "HCC85": ("I50.32", "Chronic diastolic heart failure"),
-                "HCC226": ("I50.30", "Chronic diastolic heart failure"),
-                "HCC329": ("N18.32", "Chronic kidney disease, stage 3b"),
-                "HCC328": ("N18.3", "Chronic kidney disease, stage 3"),
-                "HCC18": ("E11.22", "Type 2 DM with complications"),
-                "HCC19": ("E11.9", "Type 2 DM without complications"),
-                "HCC137": ("N18.4", "Chronic kidney disease, stage 4"),
-                "HCC111": ("J44.9", "COPD, unspecified"),
-                "HCC280": ("J44.9", "COPD, unspecified"),
-                "HCC96": ("I48.91", "Atrial fibrillation"),
-                "HCC238": ("I48.91", "Atrial fibrillation"),
-                "HCC52": ("F03.90", "Dementia, unspecified"),
-                "HCC127": ("G30.9", "Alzheimer disease"),
-                "HCC155": ("F32.9", "Major depressive disorder"),
-                "HCC8": ("C79.9", "Metastatic cancer"),
-                "HCC1": ("B20", "HIV disease"),
-            }
-            hcc_clean = hcc.replace("HCC", "").strip()
-            hcc_key = f"HCC{hcc_clean}" if not hcc.startswith("HCC") else hcc
-            if hcc_key in hcc_to_icd:
-                icd10, description = hcc_to_icd[hcc_key]
-            else:
-                # Try to match from MedCAT entities
-                for ent in present_entities:
-                    if ent.get("icd10"):
-                        icd10 = ent["icd10"]
-                        description = ent.get("name", "")
-                        break
-
-        # If description still empty, use MEAT assessment
-        if not description:
-            description = normalised_meat.get("A", "") or dx.get("condition", "")
-
-        matched_candidate = next(
-            (
-                c
-                for c in candidate_codes
-                if c.get("icd10_code") == icd10 or c.get("icd10") == icd10
-            ),
-            None,
-        )
-        source = "medcat+gemini" if matched_candidate else "gemini"
-
-        # Override HCC with official CMS-HCC V28 crosswalk lookup
-        crosswalk_hcc = ""
-        crosswalk_weight = None
-        if icd10:
-            from app.services.icd_validator import get_hcc_mapping
-
-            mapping = get_hcc_mapping(icd10)
-            if mapping:
-                crosswalk_hcc = f"HCC{mapping['hcc_code']}"
-                crosswalk_weight = mapping.get("raf_weight")
-            # If crosswalk says no HCC, clear it (Gemini may have hallucinated)
-            # If crosswalk has a different HCC, use the crosswalk
-            if crosswalk_hcc:
-                if hcc and hcc != crosswalk_hcc:
-                    logger.info(
-                        "HCC override: %s Gemini=%s → Crosswalk=%s",
-                        icd10,
-                        hcc,
-                        crosswalk_hcc,
-                    )
-                hcc = crosswalk_hcc
-            elif not crosswalk_hcc and mapping is None:
-                # Code not in crosswalk = not risk-adjusting
-                if hcc:
-                    logger.info(
-                        "HCC removed: %s Gemini=%s → NOT in V28 crosswalk", icd10, hcc
-                    )
-                hcc = ""
-
-        diagnoses.append(
-            {
-                "icd10": icd10,
-                "description": description,
-                "hcc": hcc,
-                "hcc_weight": crosswalk_weight,
-                "confidence": float(dx.get("confidence", 0.0)),
-                "meat": normalised_meat,
-                "meat_score": meat_score,
-                "source": source,
-            }
-        )
-
-    # ------------------------------------------------------------------
-    # Stage 6.5: Deduplicate diagnoses by ICD-10 code
-    # ------------------------------------------------------------------
-    if diagnoses:
-        seen_icd: dict[str, int] = {}
-        unique_diagnoses: list[dict[str, Any]] = []
-        for dx in diagnoses:
-            icd = dx.get("icd10", "").strip()
-            if not icd:
-                # Keep entries without ICD if they have a description
-                if dx.get("description"):
-                    unique_diagnoses.append(dx)
-                continue
-            if icd in seen_icd:
-                # Keep the one with higher confidence
-                existing_idx = seen_icd[icd]
-                if dx.get("confidence", 0) > unique_diagnoses[existing_idx].get(
-                    "confidence", 0
-                ):
-                    unique_diagnoses[existing_idx] = dx
-            else:
-                seen_icd[icd] = len(unique_diagnoses)
-                unique_diagnoses.append(dx)
-
-        if len(unique_diagnoses) < len(diagnoses):
-            logger.info(
-                "Deduplicated diagnoses: %d -> %d",
-                len(diagnoses),
-                len(unique_diagnoses),
-            )
-        diagnoses = unique_diagnoses
-
-    # Collect negated conditions from Gemini output
-    for nc in gemini_result.get("negated_conditions", []):
-        if isinstance(nc, str):
-            negated_conditions.append(
-                {"icd10": "", "description": nc, "reason": "negated"}
-            )
-        elif isinstance(nc, dict):
-            negated_conditions.append(
-                {
-                    "icd10": nc.get("icd10", ""),
-                    "description": nc.get("description", str(nc)),
-                    "reason": nc.get("reason", "negated"),
-                }
-            )
-        else:
-            negated_conditions.append(
-                {"icd10": "", "description": str(nc), "reason": "negated"}
-            )
-
-    # Also add assertion-filtered entities as negated_conditions
-    negated_entity_icds = {nc.get("icd10", "") for nc in negated_conditions}
-    for ent in raw_entities:
-        ent_icd = ent.get("icd10", "")
-        assertion = (ent.get("assertion") or {}).get("assertion", "present")
-        if (
-            assertion in ("absent", "historical", "family")
-            and ent_icd not in negated_entity_icds
-        ):
-            negated_conditions.append(
-                {
-                    "icd10": ent_icd if isinstance(ent_icd, str) else str(ent_icd),
-                    "description": ent.get("name", ""),
-                    "reason": assertion,
-                }
-            )
-
-    suspect_conditions = gemini_result.get("suspect_conditions", [])
-
-    # ------------------------------------------------------------------
-    # Stage 7: Confidence routing
-    # ------------------------------------------------------------------
-    overall_confidence = float(
-        gemini_result.get("overall_confidence", 0.0)
-        or gemini_result.get("overall_documentation_score", 0.0)
-        or (
-            sum(d["confidence"] for d in diagnoses) / len(diagnoses)
-            if diagnoses
-            else 0.0
-        )
-    )
-
-    try:
-        routing = route_analysis_result(
-            medcat_entities=pipeline.get("medcat_entities", []),
-            gemini_diagnoses=diagnoses,
-            negation_results=pipeline.get("negation_filtered", []),
-            candidate_codes=pipeline.get("candidate_codes", []),
-        )
-    except Exception as exc:
-        logger.warning("Confidence routing failed: %s", exc)
-        routing = {
-            "routing": "human_review",
-            "overall_confidence": overall_confidence,
-            "reasons": ["Routing error occurred"],
-        }
-    pipeline["stages_run"].append("confidence_routing")
-
-    return {
-        "pipeline": pipeline,
-        "diagnoses": diagnoses,
-        "suspect_conditions": suspect_conditions,
-        "negated_conditions": negated_conditions,
-        "routing": routing,
-        "overall_confidence": round(overall_confidence, 4),
-        "_meta": gemini_result.get("_meta", {}),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -736,6 +351,7 @@ def analyze_encounter(
     encounter_id: int,
     body: EncounterAnalysisRequest = EncounterAnalysisRequest(),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("encounters", "write")),
 ) -> dict[str, Any]:
     """
@@ -865,6 +481,13 @@ def analyze_encounter(
             latest_vitals=latest_vitals,
             med_diagnoses=med_diagnoses,
         )
+    except CircuitBreakerError as exc:
+        logger.warning("Gemini circuit breaker open for encounter %s: %s", encounter_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI analysis service temporarily unavailable. {exc}",
+            headers={"Retry-After": str(int(exc.retry_after))},
+        ) from exc
     except Exception as exc:
         logger.error(
             "Pipeline failed for encounter %s: %s", encounter_id, exc, exc_info=True
@@ -906,6 +529,7 @@ def analyze_encounter(
         patient_id=pid,
         encounter_id=encounter_id,
         details=f"dx_count={len(result.get('diagnoses', []))} saved={body.save_results}",
+        tenant_id=tenant_id,
     )
     return result
 
@@ -1026,6 +650,7 @@ def _parse_demographics_from_note(note: str) -> tuple[int | None, str | None]:
 def analyze_note(
     body: NoteAnalysisRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("encounters", "write")),
 ) -> dict[str, Any]:
     """
@@ -1123,6 +748,13 @@ def analyze_note(
             medications=medications,
             labs=labs,
         )
+    except CircuitBreakerError as exc:
+        logger.warning("Gemini circuit breaker open for patient %s: %s", pid, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI analysis service temporarily unavailable. {exc}",
+            headers={"Retry-After": str(int(exc.retry_after))},
+        ) from exc
     except Exception as exc:
         exc_str = str(exc)
         logger.error(
@@ -1199,6 +831,7 @@ def analyze_note(
         resource="clinical_note",
         patient_id=pid if pid else None,
         details=f"note_chars={len(note_text)} dx_count={len(result.get('diagnoses', []))}",
+        tenant_id=tenant_id,
     )
     return result
 
@@ -1325,6 +958,7 @@ def batch_analysis(
     background_tasks: BackgroundTasks,
     save_results: bool = True,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("encounters", "write")),
 ) -> dict[str, Any]:
     """
@@ -1350,6 +984,7 @@ def batch_analysis(
         resource="patient",
         patient_id=pid,
         details=f"job_id={job_id}",
+        tenant_id=tenant_id,
     )
     return {
         "job_id": job_id,

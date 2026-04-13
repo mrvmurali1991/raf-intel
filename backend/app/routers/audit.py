@@ -85,10 +85,61 @@ def generate_audit(
         )
 
     raf_data = get_raf_breakdown(pid, calc_year, tenant_id=tenant_id)
-    suspects = get_suspects_for_patient(patient_id=pid) if body.include_suspects else []
+    suspects = []
+    if body.include_suspects:
+        try:
+            with raf_cursor() as _susp_cur:
+                _susp_cur.execute(
+                    """SELECT sc.*, sc.suspect_icd10 as suggested_icd10
+                       FROM raf_suspect_conditions sc
+                       WHERE sc.patient_id = %s
+                       ORDER BY sc.confidence_score DESC""", (pid,))
+                suspects = [dict(r) for r in _susp_cur.fetchall()]
+        except Exception:
+            suspects = get_suspects_for_patient(patient_id=pid)
     encounters = emr.get_encounters(pid)
     medications = emr.get_medications(pid)
     diagnoses = emr.get_billing_codes(pid)
+
+    # --- RAF DB fallbacks for patients not in OpenEMR ---
+    if not encounters:
+        try:
+            with raf_cursor() as _cur:
+                _cur.execute(
+                    """SELECT e.id AS encounter_id, e.encounter_date AS date, e.encounter_type AS reason,
+                              e.facility, e.notes, pr.first_name, pr.last_name
+                       FROM encounters e LEFT JOIN providers pr ON pr.id = e.provider_id
+                       WHERE e.patient_id = %s ORDER BY e.encounter_date DESC""", (pid,))
+                encounters = []
+                for r in _cur.fetchall():
+                    pname = f"{r.get('first_name','')} {r.get('last_name','')}".strip()
+                    encounters.append({"encounter_id": r["encounter_id"], "date": str(r["date"]) if r.get("date") else None,
+                                       "reason": r.get("reason") or "Office Visit", "provider": pname,
+                                       "facility": r.get("facility") or "", "notes": r.get("notes") or ""})
+        except Exception:
+            pass
+
+    if not medications:
+        try:
+            with raf_cursor() as _cur:
+                _cur.execute("SELECT medication_name AS drug, dosage, frequency, purpose FROM patient_medications WHERE patient_id = %s AND is_active = 1", (pid,))
+                medications = [dict(r) for r in _cur.fetchall()]
+        except Exception:
+            pass
+
+    if not diagnoses:
+        try:
+            with raf_cursor() as _cur:
+                _cur.execute(
+                    """SELECT DISTINCT ed.icd10_code AS code, ed.description AS code_text,
+                              ed.hcc_code, e.encounter_date
+                       FROM encounter_diagnoses ed JOIN encounters e ON e.id = ed.encounter_id
+                       WHERE ed.patient_id = %s ORDER BY e.encounter_date DESC""", (pid,))
+                diagnoses = [{"code": r["code"], "code_text": r["code_text"], "code_type": "ICD10",
+                              "hcc_code": r.get("hcc_code"), "encounter_date": str(r["encounter_date"]) if r.get("encounter_date") else None}
+                             for r in _cur.fetchall()]
+        except Exception:
+            pass
 
     try:
         pdf_bytes = _build_audit_pdf(
@@ -376,7 +427,25 @@ def _build_audit_pdf(
     full_name = f"{patient.get('fname', '')} {patient.get('lname', '')}".strip() or "Unknown"
     dob = str(patient.get("DOB") or patient.get("dob") or "N/A")[:10]
     sex = patient.get("sex", "N/A")
-    provider_id = str(patient.get("providerID") or patient.get("provider_id") or "N/A")
+    _raw_pid = patient.get("pid", "")
+    _pid_str = str(int(_raw_pid)) if isinstance(_raw_pid, float) else str(_raw_pid)
+
+    # Resolve provider name from providers table
+    _prov_id = patient.get("providerID") or patient.get("provider_id") or ""
+    provider_display = "N/A"
+    if _prov_id:
+        try:
+            with raf_cursor() as _prov_cur:
+                _prov_cur.execute("SELECT first_name, last_name FROM providers WHERE id = %s", (int(_prov_id),))
+                _prow = _prov_cur.fetchone()
+                if _prow:
+                    _pname = f"{_prow.get('first_name', '')} {_prow.get('last_name', '')}".strip()
+                    provider_display = f"Dr. {_pname}" if _pname else "N/A"
+                if not provider_display or provider_display == "N/A":
+                    provider_display = f"Provider #{_prov_id}"
+        except Exception:
+            provider_display = f"Provider #{_prov_id}"
+
     gen_ts = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
 
     # ---- RAF data ----
@@ -385,7 +454,98 @@ def _build_audit_pdf(
     disease_score = raf_data.get("disease_score", 0.0)
     interaction_score = raf_data.get("interaction_score", 0.0)
     model_segment = raf_data.get("model_segment", "CNA")
-    hcc_detail: list[dict[str, Any]] = raf_data.get("hcc_detail") or raf_data.get("hcc_list") or []
+    hcc_detail: list[dict[str, Any]] = raf_data.get("hcc_details") or raf_data.get("hcc_detail") or raf_data.get("hcc_list") or []
+
+    # --- HCC description mapping (CMS HCC V28 common codes) ---
+    _HCC_DESCRIPTIONS = {
+        "9": "Chronic Myeloid Leukemia", "18": "Diabetes with Chronic Complications",
+        "19": "Diabetes without Complication", "22": "Morbid Obesity",
+        "35": "Acute Myocardial Infarction", "36": "Unstable Angina / Acute Ischemic Heart Disease",
+        "37": "Stable Angina / Chronic Ischemic Heart Disease",
+        "55": "Major Depressive, Bipolar, and Paranoid Disorders",
+        "85": "Congestive Heart Failure", "96": "Specified Heart Arrhythmias",
+        "108": "Vascular Disease", "111": "Aspiration and Specified Bacterial Pneumonias",
+        "137": "Chronic Kidney Disease, Stage 4", "138": "Chronic Kidney Disease, Stage 5",
+        "226": "Hip Fracture/Dislocation", "238": "Stroke / Cerebrovascular Disease",
+        "280": "Acute and Subacute Liver Failure/Disease",
+        "48": "Dementia, Severe", "49": "Dementia, Moderate",
+        "50": "Dementia, Mild or Unspecified",
+        "51": "Drug/Alcohol Psychosis", "52": "Drug/Alcohol Dependence",
+        "70": "Quadriplegia", "71": "Paraplegia",
+        "72": "Spinal Cord Disorders", "73": "Amyotrophic Lateral Sclerosis",
+        "74": "Cerebral Palsy", "75": "Myasthenia Gravis",
+        "100": "Ischemic or Unspecified Stroke", "101": "Hemorrhagic Stroke",
+        "115": "Aspiration and Specified Bacterial Pneumonias",
+        "125": "Respirator Dependence/Tracheostomy", "126": "Respiratory Arrest",
+        "135": "Acute Renal Failure", "136": "Chronic Kidney Disease, Stage 5",
+        "145": "Decubitus Ulcer of Skin", "161": "Chronic Ulcer of Skin",
+        "162": "Severe Skin Burn or Condition",
+        "189": "Amputation Status, Lower Limb", "211": "Artificial Openings for Feeding or Elimination",
+    }
+
+    # --- Enrich HCC details with descriptions and MEAT evidence from DB ---
+    _pid_int = int(_raw_pid) if isinstance(_raw_pid, float) else int(_raw_pid) if str(_raw_pid).isdigit() else 0
+    _meat_by_hcc: dict[str, list[dict]] = {}
+    _icd_desc_map: dict[str, str] = {}
+    try:
+        with raf_cursor() as _enrich_cur:
+            # Fetch MEAT evidence
+            _enrich_cur.execute(
+                """SELECT hcc_code, element, evidence_text, encounter_id, encounter_date, source
+                   FROM meat_evidence WHERE patient_id = %s AND measurement_year = %s
+                   ORDER BY hcc_code, element""",
+                (_pid_int, year))
+            for mr in _enrich_cur.fetchall():
+                hk = str(mr["hcc_code"])
+                _meat_by_hcc.setdefault(hk, []).append(dict(mr))
+
+            # Fetch ICD-10 descriptions from encounter_diagnoses
+            _enrich_cur.execute(
+                """SELECT DISTINCT ed.icd10_code, ed.description, ed.hcc_code, e.encounter_date, e.id as encounter_id
+                   FROM encounter_diagnoses ed
+                   JOIN encounters e ON e.id = ed.encounter_id
+                   WHERE ed.patient_id = %s ORDER BY e.encounter_date DESC""",
+                (_pid_int,))
+            _icd_evidence_by_hcc: dict[str, list[dict]] = {}
+            for ir in _enrich_cur.fetchall():
+                _icd_desc_map[ir["icd10_code"]] = ir.get("description") or ""
+                hk2 = str(ir.get("hcc_code") or "")
+                if hk2:
+                    _icd_evidence_by_hcc.setdefault(hk2, []).append({
+                        "code": ir["icd10_code"],
+                        "description": ir.get("description") or "",
+                        "encounter_date": str(ir["encounter_date"]) if ir.get("encounter_date") else "",
+                        "encounter_id": str(ir.get("encounter_id") or ""),
+                    })
+    except Exception as _enrich_exc:
+        logger.warning("Failed to enrich HCC details: %s", _enrich_exc)
+        _icd_evidence_by_hcc = {}
+
+    # Enrich each HCC entry
+    for h in hcc_detail:
+        _hcode = str(h.get("hcc_code") or h.get("hcc") or "")
+        # Add description if missing
+        if not h.get("hcc_description") and not h.get("description"):
+            h["hcc_description"] = _HCC_DESCRIPTIONS.get(_hcode, f"HCC Category {_hcode}")
+        # Add ICD evidence
+        if not h.get("icd_evidence") and _hcode in _icd_evidence_by_hcc:
+            h["icd_evidence"] = _icd_evidence_by_hcc[_hcode]
+        # Add MEAT evidence per category
+        _element_map = {"M": "monitoring", "E": "evaluation", "A": "assessment", "T": "treatment"}
+        if _hcode in _meat_by_hcc:
+            for mev in _meat_by_hcc[_hcode]:
+                cat_key = _element_map.get(mev.get("element", ""), "")
+                if cat_key:
+                    key_name = f"{cat_key}_evidence"
+                    if key_name not in h:
+                        h[key_name] = []
+                    h[key_name].append({
+                        "text": mev.get("evidence_text") or "",
+                        "encounter_id": str(mev.get("encounter_id") or ""),
+                        "encounter_date": str(mev.get("encounter_date") or ""),
+                        "provider_name": "",
+                        "source": mev.get("source") or "",
+                    })
 
     # ---- page-number canvas callback ----
     _page_info: dict[str, int] = {"n": 0}
@@ -410,7 +570,7 @@ def _build_audit_pdf(
             canvas.setFont("Helvetica", 7.5)
             canvas.setFillColor(text_muted)
             canvas.drawRightString(PAGE_W - MARGIN, PAGE_H - 0.45 * inch,
-                                   f"RAF Intelligence — Audit Package  |  PID {patient.get('pid', '')}  |  {year}")
+                                   f"RAF Intelligence — Audit Package  |  PID {_pid_str}  |  {year}")
         canvas.restoreState()
 
     # ---- table style helpers ----
@@ -456,8 +616,8 @@ def _build_audit_pdf(
         return red_light, red_dark
 
     def _meat_score_bar(score: int) -> str:
-        filled = "■" * score
-        empty = "□" * (4 - score)
+        filled = "●" * score
+        empty = "○" * (4 - score)
         return f"{filled}{empty}  ({score}/4)"
 
     def _hr() -> HRFlowable:
@@ -490,18 +650,23 @@ def _build_audit_pdf(
 
     # RAF score hero
     story.append(Paragraph(_fmt_score(raf_score, 4), S["raf_big"]))
+    story.append(Spacer(1, 4))
     story.append(Paragraph("Final RAF Score", S["raf_label"]))
     story.append(Spacer(1, 0.25 * inch))
     story.append(_hr())
     story.append(Spacer(1, 0.2 * inch))
 
     # Cover demographics table
+    _mbi = patient.get("mbi") or "N/A"
+    _insurance = patient.get("insurance_type") or "N/A"
     cover_kv = [
         ["Patient Name", full_name],
-        ["Patient ID (PID)", str(patient.get("pid", ""))],
+        ["Patient ID (PID)", _pid_str],
         ["Date of Birth", dob],
         ["Sex", sex],
-        ["Provider ID", provider_id],
+        ["MBI (Medicare ID)", _mbi],
+        ["Insurance", _insurance],
+        ["Provider", provider_display],
         ["Measurement Year", str(year)],
         ["Model Segment", model_segment],
         ["Document Generated", gen_ts],
@@ -627,8 +792,8 @@ def _build_audit_pdf(
     if hcc_detail:
         hcc_table_rows = [["HCC #", "Description", "ICD-10 Codes", "Coeff.", "MEAT Status"]]
         for h in hcc_detail:
-            hcc_num = str(h.get("hcc_number") or h.get("hcc") or "")
-            hcc_desc = _trunc(h.get("hcc_description") or h.get("description") or "", 55)
+            hcc_num = str(h.get("hcc_number") or h.get("hcc_code") or h.get("hcc") or "")
+            hcc_desc = _trunc(h.get("hcc_description") or h.get("description") or _HCC_DESCRIPTIONS.get(str(h.get("hcc_code") or h.get("hcc") or ""), "") or "", 55)
             icd_list = h.get("icd10_codes") or h.get("icd_codes") or []
             if isinstance(icd_list, str):
                 icd_list = [icd_list]
@@ -679,14 +844,15 @@ def _build_audit_pdf(
 
     if hcc_detail:
         for idx, h in enumerate(hcc_detail, start=1):
-            hcc_num = str(h.get("hcc_number") or h.get("hcc") or "")
+            hcc_num = str(h.get("hcc_number") or h.get("hcc_code") or h.get("hcc") or "")
             hcc_desc = h.get("hcc_description") or h.get("description") or ""
             icd_list = h.get("icd10_codes") or h.get("icd_codes") or []
             if isinstance(icd_list, str):
                 icd_list = [icd_list]
             coeff = _fmt_score(h.get("coefficient") or h.get("coeff") or 0.0, 4)
             meat_status = h.get("meat_status") or "missing"
-            meat_score_val = int(h.get("meat_score") or 0)
+            # Compute MEAT score from enriched evidence
+            meat_score_val = sum(1 for _ek in ("monitoring_evidence", "evaluation_evidence", "assessment_evidence", "treatment_evidence") if h.get(_ek))
 
             bg, fg = _meat_color(meat_status)
 
@@ -775,7 +941,7 @@ def _build_audit_pdf(
                 ]]
                 cat_t = Table(
                     cat_header_data,
-                    colWidths=[0.85 * inch, CONTENT_W - 1.85 * inch, 0.7 * inch],
+                    colWidths=[1.05 * inch, CONTENT_W - 1.85 * inch, 0.8 * inch],
                 )
                 cat_t.setStyle(TableStyle([
                     ("BACKGROUND", (0, 0), (-1, -1), s_bg),
@@ -854,22 +1020,21 @@ def _build_audit_pdf(
 
     if suspects:
         susp_rows = [["Trigger Type", "Trigger Value", "Suspected Condition",
-                      "Suggested ICD-10", "Confidence", "Priority"]]
+                      "Suggested ICD-10", "Confidence", "Status"]]
         for s in suspects[:60]:
             conf = s.get("confidence") or s.get("confidence_score") or 0.0
             try:
                 conf_str = f"{float(conf):.0%}"
             except (TypeError, ValueError):
                 conf_str = str(conf)
-            priority = s.get("priority") or ("HIGH" if float(conf or 0) >= 0.8 else
-                                              "MEDIUM" if float(conf or 0) >= 0.5 else "LOW")
+            status = (s.get("status") or "open").upper()
             susp_rows.append([
                 s.get("trigger_type") or "",
                 _trunc(s.get("trigger_value") or "", 35),
-                _trunc(s.get("suspected_condition") or "", 40),
-                s.get("suggested_icd10") or s.get("icd10") or "—",
+                _trunc(s.get("suspected_condition") or s.get("condition") or s.get("description") or "", 40),
+                s.get("suggested_icd10") or s.get("icd10") or s.get("suspect_icd10") or "—",
                 conf_str,
-                priority,
+                status,
             ])
 
         susp_t = Table(
@@ -879,9 +1044,9 @@ def _build_audit_pdf(
         susp_ts = _header_ts(header_color=C(_RED))
         # Color priority column
         for row_idx, s in enumerate(suspects[:60], start=1):
-            conf = float(s.get("confidence") or s.get("confidence_score") or 0.0)
-            p_bg, p_fg = (_GREEN_LIGHT, _GREEN_DARK) if conf >= 0.8 else (
-                (_YELLOW_LIGHT, _YELLOW_DARK) if conf >= 0.5 else (_RED_LIGHT, _RED))
+            _st = (s.get("status") or "open").lower()
+            p_bg, p_fg = (_GREEN_LIGHT, _GREEN_DARK) if _st == "accepted" else (
+                (_YELLOW_LIGHT, _YELLOW_DARK) if _st == "pending" else (_RED_LIGHT, _RED))
             susp_ts.add("BACKGROUND", (5, row_idx), (5, row_idx), C(p_bg))
             susp_ts.add("TEXTCOLOR", (5, row_idx), (5, row_idx), C(p_fg))
             susp_ts.add("FONTNAME", (5, row_idx), (5, row_idx), "Helvetica-Bold")
@@ -889,8 +1054,8 @@ def _build_audit_pdf(
         story.append(susp_t)
         story.append(Spacer(1, 0.1 * inch))
         story.append(Paragraph(
-            f"Total open suspects: {len(suspects)}  "
-            f"(showing first 60).  Review with treating provider before next encounter.",
+            f"Total suspect conditions: {len(suspects)}  |  "
+            f"Review with treating provider before next encounter.",
             S["small"],
         ))
     else:
@@ -938,7 +1103,7 @@ def _build_audit_pdf(
                 str(enc.get("encounter_id") or enc.get("id") or ""),
                 str(enc.get("date") or enc.get("encounter_date") or "")[:10],
                 _trunc(enc.get("reason") or enc.get("reason_description") or "", 40),
-                (f"{enc.get('provider_fname', '')} {enc.get('provider_lname', '')}").strip() or "—",
+                enc.get("provider") or (f"{enc.get('provider_fname', '')} {enc.get('provider_lname', '')}").strip() or "—",
                 _trunc(enc.get("facility") or enc.get("facility_name") or "", 25),
             ])
         enc_t = Table(
@@ -986,7 +1151,7 @@ def _build_audit_pdf(
     story.append(Spacer(1, 0.3 * inch))
 
     attest_rows = [
-        ["Patient Name:", full_name, "PID:", str(patient.get("pid", ""))],
+        ["Patient Name:", full_name, "PID:", _pid_str],
         ["Measurement Year:", str(year), "Model Segment:", model_segment],
         ["Final RAF Score:", _fmt_score(raf_score, 4), "HCC Count:", str(hcc_count)],
     ]
@@ -1049,7 +1214,7 @@ def _build_audit_pdf(
         leftMargin=MARGIN,
         topMargin=0.8 * inch,
         bottomMargin=0.7 * inch,
-        title=f"RAF Audit Package — PID {patient.get('pid', '')} — {year}",
+        title=f"RAF Audit Package — PID {_pid_str} — {year}",
         author="RAF Intelligence",
         subject="RADV Audit Package",
     )

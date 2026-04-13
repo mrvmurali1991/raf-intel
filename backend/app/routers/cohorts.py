@@ -30,7 +30,7 @@ from fastapi import Depends, APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
 from app.services.cohort_service import (
     archive_cohort,
@@ -82,9 +82,6 @@ class CohortCreate(BaseModel):
             "zip_codes (list[str]), states (list[str])"
         ),
     )
-    tenant_id: str = Field(default="default", max_length=50)
-
-
 class CohortUpdate(BaseModel):
     """Partial update payload — all fields optional."""
 
@@ -112,7 +109,6 @@ class CompareRequest(BaseModel):
     cohort_a_id: int = Field(..., description="Reference cohort ID")
     cohort_b_id: int = Field(..., description="Comparison cohort ID")
     name: str | None = Field(default=None, max_length=255, description="Optional label")
-    tenant_id: str = Field(default="default", max_length=50)
 
 
 # ---------------------------------------------------------------------------
@@ -134,8 +130,8 @@ def _get_or_404(cohort_id: int) -> dict[str, Any]:
 @limiter.limit("60/minute")
 def population_health(
     request: Request,
-    tenant_id: str = Query(default="default", description="Tenant scope"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "read")),
 ) -> dict[str, Any]:
     """
@@ -163,6 +159,7 @@ def compare(
     request: Request,
     body: CompareRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "read")),
 ) -> dict[str, Any]:
     """
@@ -191,7 +188,7 @@ def compare(
             cohort_b_id=body.cohort_b_id,
             name=body.name,
             created_by=user_id,
-            tenant_id=body.tenant_id,
+            tenant_id=tenant_id,
         )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
@@ -229,10 +226,10 @@ def list_cohorts_endpoint(
         description="Filter by type: custom | chronic_condition | risk_tier | provider_panel | payer | geographic | age_group",
     ),
     status: str = Query(default="active", description="Filter by status: active | archived"),
-    tenant_id: str = Query(default="default", description="Tenant scope"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "read")),
 ) -> dict[str, Any]:
     """
@@ -267,6 +264,7 @@ def create_cohort_endpoint(
     request: Request,
     body: CohortCreate,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "write")),
 ) -> dict[str, Any]:
     """
@@ -295,7 +293,7 @@ def create_cohort_endpoint(
             cohort_type=body.cohort_type,
             criteria=body.criteria,
             created_by=user_id,
-            tenant_id=body.tenant_id,
+            tenant_id=tenant_id,
         )
     except Exception as exc:
         logger.error("create_cohort error: %s", exc, exc_info=True)
@@ -449,8 +447,8 @@ def refresh_membership(
 def snapshot(
     request: Request,
     cohort_id: int,
-    tenant_id: str = Query(default="default"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "write")),
 ) -> dict[str, Any]:
     """

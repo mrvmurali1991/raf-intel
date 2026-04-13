@@ -87,9 +87,14 @@ def create_attestation(
     source: str = "suspect",
     encounter_id: int | None = None,
     evidence_references: list[dict[str, Any]] | None = None,
-    tenant_id: str = "default",
+    tenant_id: str = "",  # Required — empty string will raise below
 ) -> dict[str, Any]:
     """Insert a new pending attestation request and return the created row."""
+    if not tenant_id:
+        raise ValueError(
+            "create_attestation: tenant_id is required — "
+            "refusing to create attestation without tenant scope (HIPAA multi-tenant isolation)"
+        )
     evidence_json = json.dumps(evidence_references) if evidence_references else None
     now = _utcnow()
 
@@ -122,25 +127,24 @@ def create_attestations_from_suspects(
     suspect_ids: list[int],
     provider_npi: str,
     provider_user_id: int,
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> list[dict[str, Any]]:
     """Bulk-create pending attestations from raf_suspect_conditions rows."""
     if not suspect_ids:
         return []
 
     if tenant_id is None:
-        logger.warning(
-            "attestation_service.create_attestations_from_suspects: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "attestation_service.create_attestations_from_suspects: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-        tid = 1
-    else:
-        try:
-            tid = int(tenant_id)
-        except (TypeError, ValueError):
-            logger.warning(
-                "attestation_service.create_attestations_from_suspects: no tenant_id provided, defaulting to 1"
-            )
-            tid = 1
+    try:
+        tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"attestation_service.create_attestations_from_suspects: "
+            f"tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     placeholders = ",".join(["%s"] * len(suspect_ids))
     with raf_cursor() as cur:
@@ -209,24 +213,22 @@ def list_attestations(
     provider_npi: str | None = None,
     patient_id: int | None = None,
     status: str | None = None,
-    tenant_id: str | None = None,
+    tenant_id: str,
     limit: int = 200,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Return attestations filtered by the supplied criteria."""
     if tenant_id is None:
-        logger.warning(
-            "attestation_service.list_attestations: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "attestation_service.list_attestations: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        _tid = 1
-    else:
-        try:
-            _tid = int(tenant_id)
-        except (TypeError, ValueError):
-            logger.warning(
-                "attestation_service.list_attestations: no tenant_id provided, defaulting to 1"
-            )
-            _tid = 1
+    try:
+        _tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"attestation_service.list_attestations: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     conditions: list[str] = [ACTIVE_PATIENTS_SUBQUERY, "tenant_id = %s"]
     params: list[Any] = [_tid]
@@ -488,11 +490,16 @@ def create_batch(
     provider_npi: str,
     provider_user_id: int,
     attestation_ids: list[int],
-    tenant_id: str = "default",
+    tenant_id: str,
 ) -> dict[str, Any]:
     """Create a new batch and associate existing attestation IDs with it."""
     if not attestation_ids:
         raise ValueError("attestation_ids must not be empty")
+    if not tenant_id:
+        raise ValueError(
+            "create_batch: tenant_id is required — "
+            "refusing to create batch without tenant scope (HIPAA multi-tenant isolation)"
+        )
 
     now = _utcnow()
     with raf_cursor() as cur:
@@ -645,7 +652,7 @@ def generate_reminders(
     *,
     reminder_type: str = "in_app",
     overdue_days: int = 7,
-    tenant_id: str | None = None,
+    tenant_id: str,
 ) -> list[dict[str, Any]]:
     """Create reminder records for attestations pending for more than ``overdue_days``.
 
@@ -657,18 +664,16 @@ def generate_reminders(
     now = _utcnow()
 
     if tenant_id is None:
-        logger.warning(
-            "attestation_service.generate_reminders: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "attestation_service.generate_reminders: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-        _tid = 1
-    else:
-        try:
-            _tid = int(tenant_id)
-        except (TypeError, ValueError):
-            logger.warning(
-                "attestation_service.generate_reminders: no tenant_id provided, defaulting to 1"
-            )
-            _tid = 1
+    try:
+        _tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"attestation_service.generate_reminders: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     tenant_clause = "AND pa.tenant_id = %s" if tenant_id else ""
     tenant_param: list[Any] = [tenant_id] if tenant_id else []
@@ -749,7 +754,7 @@ def generate_reminders(
 def get_dashboard_stats(
     *,
     provider_user_id: int | None = None,
-    tenant_id: str | None = None,
+    tenant_id: str,
     days: int = 30,
 ) -> dict[str, Any]:
     """Return attestation KPIs for the dashboard.
@@ -764,18 +769,16 @@ def get_dashboard_stats(
     since = (_utcnow() - timedelta(days=days)).isoformat()
 
     if tenant_id is None:
-        logger.warning(
-            "attestation_service.get_dashboard_stats: no tenant_id provided, defaulting to 1"
+        raise ValueError(
+            "attestation_service.get_dashboard_stats: tenant_id is required — "
+            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
-        _tid = 1
-    else:
-        try:
-            _tid = int(tenant_id)
-        except (TypeError, ValueError):
-            logger.warning(
-                "attestation_service.get_dashboard_stats: no tenant_id provided, defaulting to 1"
-            )
-            _tid = 1
+    try:
+        _tid = int(tenant_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"attestation_service.get_dashboard_stats: tenant_id must be numeric, got {tenant_id!r}"
+        )
 
     conditions: list[str] = ["created_at >= %s", ACTIVE_PATIENTS_SUBQUERY, "tenant_id = %s"]
     params: list[Any] = [since, _tid]

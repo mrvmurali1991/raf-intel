@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "@/contexts/auth-context";
+import { initialsColor } from "@/lib/ui-utils";
 import {
   UsersRound,
   UserCheck,
@@ -229,13 +230,6 @@ function roleBadgeStyle(role: UserRole): React.CSSProperties {
     letterSpacing: "0.03em",
     border: `1px solid ${fg}20`,
   };
-}
-
-function initialsColor(name: string): string {
-  const palette = ["#2563EB","#7C3AED","#DB2777","#DC2626","#EA580C","#D97706","#059669","#0891B2"];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return palette[Math.abs(hash) % palette.length];
 }
 
 function initials(first?: string, last?: string): string {

@@ -1,4 +1,17 @@
 # ---------------------------------------------------------------------------
+# WARNING: NOT FOR PRODUCTION USE
+# ---------------------------------------------------------------------------
+# This Docker Compose file is for development and demonstration purposes only.
+# It lacks critical components for production-level scalability and
+# performance, specifically background workers (Celery) and a message
+# broker (Redis). Running NLP tasks without workers will block the API
+# and lead to request timeouts.
+#
+# For production or performance testing, use the production-ready compose file:
+#   docker compose -f docker-compose.prod.yml up -d
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # RAF Intelligence — Simple Production Compose (no Celery/Redis)
 #
 # For the full production stack with Celery workers and Redis, use:
@@ -26,6 +39,8 @@ services:
       OPENEMR_DB_PORT: ${OPENEMR_DB_PORT:-3306}
       OPENEMR_URL: http://openemr:80
       STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
+      PHI_FERNET_KEY: ${PHI_FERNET_KEY:-}
+      PHI_AES256_KEY: ${PHI_AES256_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
