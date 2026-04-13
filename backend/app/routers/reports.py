@@ -663,38 +663,56 @@ def data_completeness(
         logger.error("data_completeness patients count error: %s", exc, exc_info=True)
         counts["total_patients"] = 0
 
+    # First, get the OpenEMR PIDs that are mapped to our RAF patients so we
+    # only count clinical data for patients we actually manage.
+    _mapped_emr_pids: list[int] = []
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT emr_pid FROM patients WHERE is_active = 1 AND tenant_id = %s AND emr_pid IS NOT NULL",
+                (tenant_id,),
+            )
+            _mapped_emr_pids = [int(r["emr_pid"]) for r in cur.fetchall()]
+    except Exception:
+        pass
+
+    # Build a PID filter for OpenEMR queries.  If no mapped PIDs exist, we
+    # fall back to counting all OpenEMR patients (upload-only tenants won't
+    # have EMR data at all, so zeros are correct).
+    if _mapped_emr_pids:
+        _pid_list = ",".join(str(p) for p in _mapped_emr_pids)
+        _pid_filter = f"pid IN ({_pid_list})"
+        _patient_id_filter = f"patient_id IN ({_pid_list})"
+    else:
+        _pid_filter = "1=1"
+        _patient_id_filter = "1=1"
+
     # Run each clinical category as its own query so that a missing table
-    # (e.g. form_clinical_notes absent in some OpenEMR versions) or a column
-    # mismatch (form_vitals has no 'activity' column) only zeros out that one
-    # metric rather than silently aborting the entire UNION ALL.
-    #
-    # Note on form_vitals: OpenEMR's form_vitals table does not have an
-    # 'activity' column — the activity flag lives on the parent 'forms' row.
-    # We count all vitals rows directly without that filter.
+    # only zeros out that one metric rather than aborting the entire batch.
     _clinical_queries: list[tuple[str, str]] = [
         (
             "patients_with_billing",
-            "SELECT COUNT(DISTINCT pid) AS cnt FROM billing WHERE activity = 1",
+            f"SELECT COUNT(DISTINCT pid) AS cnt FROM billing WHERE activity = 1 AND {_pid_filter}",
         ),
         (
             "patients_with_problems",
-            "SELECT COUNT(DISTINCT pid) AS cnt FROM lists WHERE type = 'medical_problem' AND activity = 1",
+            f"SELECT COUNT(DISTINCT pid) AS cnt FROM lists WHERE type = 'medical_problem' AND activity = 1 AND {_pid_filter}",
         ),
         (
             "patients_with_clinical_notes",
-            "SELECT COUNT(DISTINCT pid) AS cnt FROM form_clinical_notes",
+            f"SELECT COUNT(DISTINCT pid) AS cnt FROM form_clinical_notes WHERE {_pid_filter}",
         ),
         (
             "patients_with_vitals",
-            "SELECT COUNT(DISTINCT pid) AS cnt FROM form_vitals",
+            f"SELECT COUNT(DISTINCT pid) AS cnt FROM form_vitals WHERE {_pid_filter}",
         ),
         (
             "patients_with_immunizations",
-            "SELECT COUNT(DISTINCT patient_id) AS cnt FROM immunizations WHERE added_erroneously = 0 OR added_erroneously IS NULL",
+            f"SELECT COUNT(DISTINCT patient_id) AS cnt FROM immunizations WHERE (added_erroneously = 0 OR added_erroneously IS NULL) AND {_patient_id_filter}",
         ),
         (
             "patients_with_insurance",
-            "SELECT COUNT(DISTINCT pid) AS cnt FROM insurance_data",
+            f"SELECT COUNT(DISTINCT pid) AS cnt FROM insurance_data WHERE {_pid_filter}",
         ),
     ]
 
@@ -706,7 +724,6 @@ def data_completeness(
                     row = cur.fetchone()
                     counts[metric] = int(row["cnt"]) if row else 0
                 except Exception as _qexc:
-                    # Table may not exist in this OpenEMR version — default to 0
                     logger.debug(
                         "data_completeness: query for %s failed (table may be absent): %s",
                         metric, _qexc,

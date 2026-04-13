@@ -1250,10 +1250,11 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
                 id.type,
                 id.provider,
                 id.plan_name,
-                id.date
+                id.date,
+                ic.name AS company_name
             FROM insurance_data id
+            LEFT JOIN insurance_companies ic ON ic.id = id.provider
             WHERE id.pid = %s
-              AND id.activity = 1
             ORDER BY id.type, id.date DESC
         """
         with openemr_cursor() as cur:
@@ -1280,13 +1281,13 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
             raw_type = str(row.get("type") or "").strip().lower()
             ins_type = _TYPE_MAP.get(raw_type, raw_type)
             plan     = str(row.get("plan_name")    or "")
-            provider = str(row.get("provider")     or "")
-            combined = f"{plan} {provider}"
+            company  = str(row.get("company_name") or "")
+            combined = f"{plan} {company}"
 
             is_medicare = _insurance_contains(combined, _MEDICARE_KEYWORDS)
             is_medicaid = _insurance_contains(combined, _MEDICAID_KEYWORDS)
 
-            display = (plan.strip() or provider.strip()) or None
+            display = (plan.strip() or company.strip()) or None
             if display and ins_type not in names_by_tier:
                 names_by_tier[ins_type] = display
 
