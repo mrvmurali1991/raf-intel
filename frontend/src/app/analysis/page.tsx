@@ -354,7 +354,7 @@ export default function AnalysisPage() {
   } = patientsQ;
   const encountersQ = useQuery({
     queryKey: ["encounters", selectedPatient?.pid, currentYear],
-    queryFn: () => getPatientEncounters(selectedPatient?.pid ?? 0, currentYear),
+    queryFn: () => getPatientEncounters(selectedPatient?.pid ?? 0),
     enabled: !!selectedPatient && mode === "encounter",
   });
   const {
