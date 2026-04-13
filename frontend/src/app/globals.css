@@ -2,71 +2,53 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@config "../../../tailwind.config.ts";
+
 @custom-variant dark (&:is(.dark *));
-
-/* ---- Login page animations ---- */
-
-@keyframes login-float-1 {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(30px, -40px); }
-  66% { transform: translate(-20px, 20px); }
-}
-
-@keyframes login-float-2 {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(-40px, 30px); }
-  66% { transform: translate(25px, -25px); }
-}
-
-@keyframes login-float-3 {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(20px, 35px); }
-  66% { transform: translate(-35px, -15px); }
-}
-
-@keyframes login-heartbeat-draw {
-  0% { stroke-dashoffset: 2400; }
-  100% { stroke-dashoffset: 0; }
-}
-
-.login-orb-1 {
-  top: -10%;
-  right: -5%;
-  animation: login-float-1 18s ease-in-out infinite;
-}
-
-.login-orb-2 {
-  bottom: 10%;
-  left: -8%;
-  animation: login-float-2 22s ease-in-out infinite;
-}
-
-.login-orb-3 {
-  top: 40%;
-  right: 20%;
-  animation: login-float-3 15s ease-in-out infinite;
-}
-
-.login-heartbeat {
-  stroke-dasharray: 2400;
-  stroke-dashoffset: 2400;
-  animation: login-heartbeat-draw 4s ease-in-out forwards, login-heartbeat-draw 4s ease-in-out 6s infinite alternate;
-}
-
-.login-input-focus:focus {
-  border-color: #14b8a6;
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15), 0 0 15px rgba(20, 184, 166, 0.1);
-  outline: none;
-}
-
-/* ---- End login page animations ---- */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-heading: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Brand */
+  --color-brand-teal: #0f766e;
+  --color-brand-teal-light: #14b8a6;
+  --color-brand-teal-dark: #0d5f58;
+  --color-brand-teal-soft: #ccfbf1;
+
+  /* Risk */
+  --color-risk-high: #DC2626;
+  --color-risk-high-soft: #FEE2E2;
+  --color-risk-high-fg: #991B1B;
+  --color-risk-medium: #D97706;
+  --color-risk-medium-soft: #FEF3C7;
+  --color-risk-medium-fg: #92400E;
+  --color-risk-low: #059669;
+  --color-risk-low-soft: #D1FAE5;
+  --color-risk-low-fg: #065F46;
+
+  /* RAF palette */
+  --color-raf-blue: #2563EB;
+  --color-raf-blue-soft: #DBEAFE;
+  --color-raf-cyan: #06B6D4;
+  --color-raf-cyan-soft: #CFFAFE;
+  --color-raf-emerald: #059669;
+  --color-raf-emerald-soft: #D1FAE5;
+  --color-raf-amber: #D97706;
+  --color-raf-amber-soft: #FEF3C7;
+  --color-raf-rose: #E11D48;
+  --color-raf-rose-soft: #FFE4E6;
+  --color-raf-violet: #8B5CF6;
+  --color-raf-violet-soft: #EDE9FE;
+
+  /* Custom animations */
+  --animate-fade-in: fadeIn 0.25s ease-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
+  --animate-scale-in: scaleIn 0.2s ease-out;
+  --animate-shimmer: shimmer 1.5s ease-in-out infinite;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -117,7 +99,7 @@
   --secondary: 210 30% 95%;
   --secondary-foreground: 220 20% 18%;
   --muted: 210 20% 95%;
-  --muted-foreground: 215 15% 38%;
+  --muted-foreground: 215 15% 47%;
   --accent: 210 30% 93%;
   --accent-foreground: 220 20% 18%;
   --destructive: 0 72% 51%;
@@ -152,7 +134,7 @@
   --secondary: 225 12% 16%;
   --secondary-foreground: 210 15% 95%;
   --muted: 225 12% 16%;
-  --muted-foreground: 215 12% 68%;
+  --muted-foreground: 215 12% 58%;
   --accent: 225 12% 18%;
   --accent-foreground: 210 15% 95%;
   --destructive: 0 65% 48%;
@@ -213,10 +195,9 @@
   }
 
   /* Theme transition */
-  @media (prefers-reduced-motion: no-preference) {
-    html, html * {
-      transition: background-color 0.2s ease, color 0.15s ease, border-color 0.2s ease;
-    }
+  html,
+  html * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
   }
 
   /* Better scrollbar styling */
@@ -343,95 +324,6 @@
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(59, 130, 246, 0.05);
 }
 
-/* Dashboard enhancements */
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-.animate-gradient-shift {
-  background-size: 200% 200%;
-  animation: gradient-shift 8s ease infinite;
-}
-
-@keyframes shimmer-border {
-  0% { border-color: rgba(14, 165, 233, 0.3); }
-  50% { border-color: rgba(20, 184, 166, 0.3); }
-  100% { border-color: rgba(14, 165, 233, 0.3); }
-}
-
-.animate-shimmer-border {
-  animation: shimmer-border 3s ease-in-out infinite;
-}
-
-@keyframes slide-up-fade {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-slide-up {
-  animation: slide-up-fade 0.5s ease-out forwards;
-}
-
-.stagger-1 { animation-delay: 0.05s; }
-.stagger-2 { animation-delay: 0.1s; }
-.stagger-3 { animation-delay: 0.15s; }
-.stagger-4 { animation-delay: 0.2s; }
-.stagger-5 { animation-delay: 0.25s; }
-.stagger-6 { animation-delay: 0.3s; }
-
-/* Animated gradient border for KPI cards */
-.kpi-card-glow {
-  position: relative;
-}
-
-.kpi-card-glow::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, transparent, rgba(14, 165, 233, 0.1), transparent);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.kpi-card-glow:hover::before {
-  opacity: 1;
-}
-
-/* Pulse dot for notifications */
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.5; }
-}
-
-.animate-pulse-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-/* Timeline connector line */
-.timeline-item {
-  position: relative;
-}
-
-.timeline-item::before {
-  content: '';
-  position: absolute;
-  left: 18px;
-  top: 36px;
-  bottom: -16px;
-  width: 2px;
-  background: linear-gradient(to bottom, hsl(var(--border)), transparent);
-}
-
-.timeline-item:last-child::before {
-  display: none;
-}
-
 /* Smooth hover scale */
 .hover-lift {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -482,12 +374,10 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .shimmer {
-    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.08) 50%, hsl(var(--muted)) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
+.shimmer {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.08) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 /* Subtle pulse animation for status indicators */
@@ -495,10 +385,8 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .soft-pulse {
-    animation: soft-pulse 2s ease-in-out infinite;
-  }
+.soft-pulse {
+  animation: soft-pulse 2s ease-in-out infinite;
 }
 
 /* Card hover glow variants */
@@ -584,533 +472,60 @@ select.appearance-none {
   background: linear-gradient(180deg, #3b82f6, #06b6d4);
 }
 
-/* ===== Print Styles ===== */
+/* ===== Animation Keyframes ===== */
 
-@media print {
-  /* Hide non-printable elements */
-  aside, nav, .sidebar, [data-sidebar],
-  button:not(.print-include),
-  .no-print { display: none !important; }
-
-  /* Reset layout — full width, no background colors that waste ink */
-  body { background: white !important; color: black !important; }
-  main { margin: 0 !important; padding: 20px !important; width: 100% !important; max-width: 100% !important; }
-
-  /* Ensure tables and cards print cleanly */
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 11px; }
-
-  /* Page breaks */
-  .page-break-before { page-break-before: always; }
-  .page-break-after { page-break-after: always; }
-  .no-page-break { page-break-inside: avoid; }
-
-  /* Cards should have borders not shadows */
-  [style*="boxShadow"], [style*="box-shadow"] {
-    box-shadow: none !important;
-    border: 1px solid #ddd !important;
-  }
-
-  /* Print header */
-  .print-header { display: block !important; text-align: center; margin-bottom: 20px; }
-  .print-footer { display: block !important; text-align: center; font-size: 10px; color: #666; margin-top: 20px; }
-
-  /* Ensure text is readable */
-  * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  /* Keep colored badges/indicators */
-  .print-color { color: inherit !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-}
-
-/* Hidden elements only visible when printing */
-.print-only { display: none; }
-@media print { .print-only { display: block !important; } }
-
-/* ================================================================
-   RESPONSIVE MOBILE LAYOUT
-   ================================================================ */
-
-/* Tablet breakpoint */
-@media (max-width: 1024px) {
-  main#main-content {
-    padding: 16px !important;
-  }
-
-  /* KPI grids — 2 columns on tablet */
-  .kpi-strip,
-  [style*="gridTemplateColumns: repeat(4"] {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-
-  /* Two-column layouts → single column */
-  .row-60-40,
-  [style*="gridTemplateColumns: 3fr 2fr"],
-  [style*="gridTemplateColumns: 2fr 1fr"] {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* Mobile breakpoint */
-@media (max-width: 640px) {
-  main#main-content {
-    padding: 12px !important;
-  }
-
-  /* KPI grids — 1 column on mobile */
-  .kpi-strip,
-  [style*="gridTemplateColumns: repeat(4"],
-  [style*="gridTemplateColumns: repeat(3"],
-  [style*="gridTemplateColumns: repeat(2"] {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* All multi-column grids → single column */
-  .row-60-40,
-  [style*="gridTemplateColumns: 3fr"],
-  [style*="gridTemplateColumns: 2fr"] {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Tables — horizontal scroll */
-  [style*="overflow: hidden"][style*="borderRadius"] {
-    overflow-x: auto !important;
-  }
-
-  /* Patient list grid — stack on mobile */
-  [style*="gridTemplateColumns: minmax(220px"] {
-    grid-template-columns: 1fr !important;
-    gap: 4px !important;
-  }
-
-  /* Reduce card padding */
-  [style*="padding: 32px"],
-  [style*="padding: 24px"] {
-    padding: 16px !important;
-  }
-
-  /* Font size adjustments for mobile */
-  h1 { font-size: 1.25rem !important; }
-  h2 { font-size: 1.1rem !important; }
-
-  /* Action buttons — stack vertically */
-  [style*="display: flex"][style*="gap: 10px"] {
-    flex-wrap: wrap !important;
-  }
-
-  /* Search inputs — full width */
-  input[type="text"][style*="width: 320px"],
-  input[type="text"][style*="width: 280px"] {
-    width: 100% !important;
-    min-width: 0 !important;
-  }
-}
-
-/* Touch-friendly tap targets */
-@media (pointer: coarse) {
-  button, a, [role="button"], [tabindex="0"] {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* ================================================================
-   DARK MODE OVERRIDES FOR HARDCODED INLINE STYLES
-   ================================================================
-   React renders inline styles as computed CSS values in the style
-   attribute, e.g. backgroundColor="#FFFFFF" becomes
-   style="background-color: rgb(255, 255, 255)". These selectors
-   match those rendered values so we can override them in dark mode
-   without modifying every page component.
-   ================================================================ */
-
-.dark {
-  color-scheme: dark;
-}
-
-/* ---------- Page / main content area ---------- */
-.dark main#main-content {
-  background-color: hsl(var(--background)) !important;
-  color: hsl(var(--foreground)) !important;
-}
-
-/* ---------- White card / container backgrounds ----------
-   #FFFFFF / #fff / #FFF → card background */
-.dark [style*="background-color: rgb(255, 255, 255)"],
-.dark [style*="background: rgb(255, 255, 255)"] {
-  background-color: hsl(var(--card)) !important;
-  color: hsl(var(--card-foreground)) !important;
-}
-
-/* ---------- Near-white page/section backgrounds ----------
-   #F8FAFC → muted */
-.dark [style*="background-color: rgb(248, 250, 252)"],
-.dark [style*="background: rgb(248, 250, 252)"] {
-  background-color: hsl(var(--muted)) !important;
-}
-
-/* #F1F5F9 → muted */
-.dark [style*="background-color: rgb(241, 245, 249)"],
-.dark [style*="background: rgb(241, 245, 249)"] {
-  background-color: hsl(var(--muted)) !important;
-}
-
-/* #F9FAFB → muted */
-.dark [style*="background-color: rgb(249, 250, 251)"],
-.dark [style*="background: rgb(249, 250, 251)"] {
-  background-color: hsl(var(--muted)) !important;
-}
-
-/* #F3F4F6 → muted */
-.dark [style*="background-color: rgb(243, 244, 246)"],
-.dark [style*="background: rgb(243, 244, 246)"] {
-  background-color: hsl(var(--muted)) !important;
-}
-
-/* ---------- Tinted badge / highlight backgrounds ----------
-   These light tints (#EFF6FF, #DBEAFE blue; #ECFDF5, #F0FDF4, #D1FAE5 green;
-   #FEF2F2, #FEE2E2 red; #FEF3C7, #FFFBEB amber) map to the accent surface
-   in dark mode so badges remain distinguishable but don't blind the eye. */
-
-/* Blue tints */
-.dark [style*="background-color: rgb(239, 246, 255)"],
-.dark [style*="background-color: rgb(219, 234, 254)"] {
-  background-color: hsl(210 50% 14%) !important;
-}
-
-/* Green tints */
-.dark [style*="background-color: rgb(236, 253, 245)"],
-.dark [style*="background-color: rgb(240, 253, 244)"],
-.dark [style*="background-color: rgb(209, 250, 229)"] {
-  background-color: hsl(160 40% 12%) !important;
-}
-
-/* Red tints */
-.dark [style*="background-color: rgb(254, 242, 242)"],
-.dark [style*="background-color: rgb(254, 226, 226)"] {
-  background-color: hsl(0 40% 13%) !important;
-}
-
-/* Amber tints */
-.dark [style*="background-color: rgb(254, 243, 199)"],
-.dark [style*="background-color: rgb(255, 251, 235)"] {
-  background-color: hsl(40 40% 12%) !important;
-}
-
-/* Purple tints */
-.dark [style*="background-color: rgb(245, 243, 255)"] {
-  background-color: hsl(270 40% 13%) !important;
-}
-
-/* ---------- Dark text that must flip to foreground ----------
-   Near-black slate/gray text: #0F172A, #1E293B, #111827 */
-.dark [style*="color: rgb(15, 23, 42)"],
-.dark [style*="color: rgb(30, 41, 59)"],
-.dark [style*="color: rgb(17, 24, 39)"] {
-  color: hsl(var(--foreground)) !important;
-}
-
-/* Mid-dark text: #374151, #475569 */
-.dark [style*="color: rgb(55, 65, 81)"],
-.dark [style*="color: rgb(71, 85, 105)"] {
-  color: hsl(var(--foreground)) !important;
-}
-
-/* Muted / secondary text: #64748B, #6B7280, #9CA3AF, #94A3B8 */
-.dark [style*="color: rgb(100, 116, 139)"],
-.dark [style*="color: rgb(107, 114, 128)"],
-.dark [style*="color: rgb(156, 163, 175)"],
-.dark [style*="color: rgb(148, 163, 184)"] {
-  color: hsl(var(--muted-foreground)) !important;
-}
-
-/* Very light gray text used on dark gradient cards (#CBD5E1, #D1D5DB) —
-   these are intentionally light, keep them but ensure readable contrast */
-.dark [style*="color: rgb(203, 213, 225)"],
-.dark [style*="color: rgb(209, 213, 219)"] {
-  color: hsl(210 15% 75%) !important;
-}
-
-/* ---------- Borders ----------
-   #E2E8F0, #e2e8f0 */
-.dark [style*="border-color: rgb(226, 232, 240)"],
-.dark [style*="border: 1px solid rgb(226, 232, 240)"],
-.dark [style*="border-bottom: 1px solid rgb(226, 232, 240)"],
-.dark [style*="border-top: 1px solid rgb(226, 232, 240)"] {
-  border-color: hsl(var(--border)) !important;
-}
-
-/* #E5E7EB */
-.dark [style*="border-color: rgb(229, 231, 235)"],
-.dark [style*="border: 1px solid rgb(229, 231, 235)"],
-.dark [style*="border-bottom: 1px solid rgb(229, 231, 235)"],
-.dark [style*="border-top: 1px solid rgb(229, 231, 235)"] {
-  border-color: hsl(var(--border)) !important;
-}
-
-/* #CBD5E1 */
-.dark [style*="border-color: rgb(203, 213, 225)"] {
-  border-color: hsl(var(--border)) !important;
-}
-
-/* Tinted borders from badge cards (FECACA red, BFDBFE blue, BBF7D0/A7F3D0/86EFAC green) */
-.dark [style*="border: 1px solid rgb(254, 202, 202)"],
-.dark [style*="border: 1px solid rgb(191, 219, 254)"],
-.dark [style*="border: 1px solid rgb(187, 247, 208)"],
-.dark [style*="border: 1px solid rgb(167, 243, 208)"],
-.dark [style*="border: 1px solid rgb(134, 239, 172)"],
-.dark [style*="border: 1px solid rgb(253, 230, 138)"] {
-  border-color: hsl(var(--border)) !important;
-}
-
-/* ---------- Native form controls ----------
-   Inputs/textareas/selects often have no Tailwind class and pick up
-   the browser's default white background in dark mode. */
-.dark input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
-.dark textarea,
-.dark select {
-  background-color: hsl(var(--input)) !important;
-  color: hsl(var(--foreground)) !important;
-  border-color: hsl(var(--border)) !important;
-}
-
-/* Placeholder text */
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: hsl(var(--muted-foreground)) !important;
-}
-
-/* ---------- Table striping & header rows ----------
-   Many tables use alternating #F8FAFC rows and a white header.
-   Override thead/tr backgrounds that would otherwise stay white. */
-.dark table thead tr,
-.dark table thead th {
-  background-color: hsl(var(--muted)) !important;
-  color: hsl(var(--foreground)) !important;
-  border-color: hsl(var(--border)) !important;
-}
-
-.dark table tbody tr {
-  border-color: hsl(var(--border)) !important;
-}
-
-.dark table tbody td {
-  border-color: hsl(var(--border)) !important;
-}
-
-/* ---------- Scrollable containers with white backgrounds ----------
-   div/section wrappers that have overflow scroll and inline white bg */
-.dark div[style*="background-color: rgb(255, 255, 255)"],
-.dark section[style*="background-color: rgb(255, 255, 255)"] {
-  background-color: hsl(var(--card)) !important;
-}
-
-/* ---------- Hover / active tint (light blue #f0fdfa, #eff6ff) ---------- */
-.dark [style*="background-color: rgb(240, 253, 250)"] {
-  background-color: hsl(var(--accent)) !important;
-}
-
-/* ---------- Box shadows — soften harsh light-mode shadows in dark mode --- */
-.dark [style*="box-shadow: 0px 1px 3px rgba(0, 0, 0"] {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
-}
-
-/* ================================================================
-   ANIMATIONS & MICRO-INTERACTIONS
-   ================================================================ */
-
-/* --- Keyframes --- */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-12px); }
-  to { opacity: 1; transform: translateX(0); }
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-@keyframes skeletonShimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
-/* --- Animation utility classes (respect reduced motion) --- */
-@media (prefers-reduced-motion: no-preference) {
-  .animate-fade-in {
-    animation: fadeIn 300ms ease-out both;
+/* ===== Healthcare Utility Classes ===== */
+
+@layer utilities {
+  /* Risk level indicators */
+  .risk-high {
+    color: var(--color-risk-high, #DC2626);
+    background-color: var(--color-risk-high-soft, #FEE2E2);
+    border-color: var(--color-risk-high, #DC2626);
   }
-  .animate-slide-up {
-    animation: slideUp 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  .risk-medium {
+    color: var(--color-risk-medium, #D97706);
+    background-color: var(--color-risk-medium-soft, #FEF3C7);
+    border-color: var(--color-risk-medium, #D97706);
   }
-  .animate-slide-in-left {
-    animation: slideInLeft 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .animate-scale-in {
-    animation: scaleIn 250ms ease-out both;
+  .risk-low {
+    color: var(--color-risk-low, #059669);
+    background-color: var(--color-risk-low-soft, #D1FAE5);
+    border-color: var(--color-risk-low, #059669);
   }
 
-  /* Staggered animation delays */
-  .stagger-1 { animation-delay: 50ms; }
-  .stagger-2 { animation-delay: 100ms; }
-  .stagger-3 { animation-delay: 150ms; }
-  .stagger-4 { animation-delay: 200ms; }
-  .stagger-5 { animation-delay: 250ms; }
-  .stagger-6 { animation-delay: 300ms; }
-}
-
-/* --- Polished skeleton loader (replaces basic pulse) --- */
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--muted)) 0%,
-    hsl(var(--muted-foreground) / 0.06) 40%,
-    hsl(var(--muted-foreground) / 0.1) 50%,
-    hsl(var(--muted-foreground) / 0.06) 60%,
-    hsl(var(--muted)) 100%
-  );
-  background-size: 800px 100%;
-  border-radius: var(--radius);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .skeleton {
-    animation: skeletonShimmer 1.8s ease-in-out infinite;
+  /* Stat typography */
+  .stat-value {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
   }
 }
 
-/* --- Animated gradient for hero / header sections --- */
-.animated-gradient {
-  background: linear-gradient(270deg, hsl(var(--primary)), hsl(var(--chart-2)), hsl(var(--primary)));
-  background-size: 200% 200%;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .animated-gradient {
-    animation: gradientShift 6s ease infinite;
-  }
-}
-
-/* --- Improved premium-card hover --- */
-.premium-card {
-  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
-}
-.premium-card:hover {
-  border-color: hsl(var(--primary) / 0.25);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
-}
-
-/* --- Card highlight with left accent border --- */
-.card-highlight {
-  border-left: 3px solid hsl(var(--primary));
-  padding-left: 16px;
-}
-
-/* --- Tabular nums for stat counters --- */
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-}
-
-/* --- Backdrop blur glass card --- */
-.backdrop-blur-card {
-  background: hsl(var(--card) / 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid hsl(var(--border) / 0.5);
-}
-.dark .backdrop-blur-card {
-  background: hsl(var(--card) / 0.6);
-  border: 1px solid hsl(var(--border) / 0.3);
-}
-
-/* --- Micro-interactions --- */
-.btn-press {
-  transition: transform 0.1s ease;
-}
-.btn-press:active {
-  transform: scale(0.97);
-}
-
-.link-underline {
-  position: relative;
-  text-decoration: none;
-}
-.link-underline::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -1px;
-  width: 0;
-  height: 1.5px;
-  background: currentColor;
-  transition: width 0.25s ease;
-}
-.link-underline:hover::after {
-  width: 100%;
-}
-
-/* --- StatCard animated gradient border on hover --- */
-.stat-card-gradient-border {
-  position: relative;
-  z-index: 0;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.stat-card-gradient-border::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: 25px;
-  padding: 1px;
-  background: linear-gradient(135deg, transparent, transparent);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.35s ease, background 0.35s ease;
-  z-index: -1;
-  pointer-events: none;
-}
-.stat-card-gradient-border:hover::before {
-  background: linear-gradient(135deg, #0f766e, #06b6d4, #8b5cf6, #0f766e);
-  background-size: 300% 300%;
-  opacity: 1;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .stat-card-gradient-border:hover::before {
-    animation: gradientShift 3s ease infinite;
-  }
-}
-
-/* --- Bounce animation for empty state icon --- */
-@keyframes gentleBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .animate-gentle-bounce {
-    animation: gentleBounce 2s ease-in-out infinite;
-  }
-}
-
-/* --- Progress bar gradient fill animation --- */
-@keyframes progressFillIn {
-  from { width: 0%; }
-}
-.progress-fill-animate {
-  animation: progressFillIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-/* ---- Typography Scale ---- */
-
+/* ===== Typography Scale ===== */
 .text-display { font-size: 28px; font-weight: 700; line-height: 1.2; }
 .text-h1 { font-size: 22px; font-weight: 700; line-height: 1.3; }
 .text-h2 { font-size: 18px; font-weight: 600; line-height: 1.4; }
@@ -1120,8 +535,7 @@ select.appearance-none {
 .text-caption { font-size: 12px; font-weight: 400; line-height: 1.4; }
 .text-overline { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 
-/* ---- Icon Size Utilities ---- */
-
+/* ===== Icon Size Scale ===== */
 .icon-sm { width: 16px; height: 16px; }
 .icon-md { width: 20px; height: 20px; }
 .icon-lg { width: 24px; height: 24px; }

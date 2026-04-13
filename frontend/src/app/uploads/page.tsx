@@ -1,552 +1,640 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Spinner } from "@/components/ui/loading";
+import { useState, useRef, useCallback, useId } from "react";
 import {
   Upload,
   FileText,
-  FileSpreadsheet,
-  Trash2,
-  CheckCircle,
-  AlertTriangle,
-  Download,
-  Eye,
-  EyeOff,
-  RefreshCw,
+  FileCode2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Loader2,
+  ExternalLink,
+  Info,
 } from "lucide-react";
-import {
-  uploadPatientFile,
-  listUploads,
-  deleteUpload,
-  downloadUploadTemplate,
-  type UploadResult,
-  type UploadRecord,
-} from "@/lib/api";
-import { tokens } from "@/styles/tokens";
-import { FONT_SYS } from "@/lib/ui-utils";
+import { PageHeader, ProgressBar } from "@/components/healthcare-ui";
+import { useToast } from "@/components/Toast";
+import api from "@/lib/api";
 
-// Match the patients page palette so the upload page blends with the rest of
-// the product without introducing a new design system.
-const C = {
-  text: tokens.slate900,
-  textMuted: tokens.slate600,
-  textSubtle: tokens.slate500,
-  label: tokens.slate400,
-  border: tokens.slate200,
-  borderSoft: "#EEF2F6",
-  rowDivider: tokens.slate100,
-  bgPage: tokens.slate50,
-  bgCard: tokens.white,
-  bgSubtle: tokens.slate50,
-  brand: "#0F766E",
-  brandSoft: "rgba(15, 118, 110, 0.06)",
-  brandRing: "rgba(15, 118, 110, 0.18)",
-  danger: "#DC2626",
-  warning: "#D97706",
-  success: "#047857",
+/* ───────────────────────── constants ───────────────────────── */
+
+const ACCEPTED_TYPES: Record<string, { label: string; extensions: string[] }> = {
+  "application/pdf": { label: "PDF", extensions: [".pdf"] },
+  "text/xml": { label: "C-CDA / XML", extensions: [".xml", ".cda", ".ccda"] },
+  "application/xml": { label: "C-CDA / XML", extensions: [".xml", ".cda", ".ccda"] },
 };
 
-function formatBytes(n: number | null | undefined): string {
-  if (!n || n <= 0) return "—";
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+const ACCEPTED_EXTENSIONS = Object.values(ACCEPTED_TYPES).flatMap((t) => t.extensions);
+const ACCEPT_STRING = Object.keys(ACCEPTED_TYPES).join(",") + "," + ACCEPTED_EXTENSIONS.join(",");
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const DOCUMENT_TYPES = [
+  { value: "", label: "Select document type..." },
+  { value: "clinical_note", label: "Clinical Note" },
+  { value: "lab_report", label: "Lab Report" },
+  { value: "radiology_report", label: "Radiology Report" },
+  { value: "discharge_summary", label: "Discharge Summary" },
+  { value: "progress_note", label: "Progress Note" },
+  { value: "consultation", label: "Consultation" },
+  { value: "operative_note", label: "Operative Note" },
+  { value: "other", label: "Other" },
+];
+
+/* ───────────────────────── design tokens ───────────────────────── */
+
+const colors = {
+  primary: "#2563EB",
+  slate900: "#0F172A",
+  slate600: "#475569",
+  slate400: "#94A3B8",
+  slate200: "#E2E8F0",
+  slate100: "#F1F5F9",
+  slate50: "#F8FAFC",
+  white: "#FFFFFF",
+  red600: "#DC2626",
+  red50: "#FEF2F2",
+  amber500: "#F59E0B",
+  emerald500: "#10B981",
+  emerald50: "#ECFDF5",
+};
+
+/* ───────────────────────── styles ───────────────────────── */
+
+const card: React.CSSProperties = {
+  background: colors.white,
+  border: `1px solid ${colors.slate200}`,
+  borderRadius: 12,
+  padding: 24,
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#374151",
+  marginBottom: 6,
+  display: "block",
+};
+
+const inputStyle = (hasError: boolean): React.CSSProperties => ({
+  width: "100%",
+  padding: "10px 12px",
+  fontSize: 14,
+  borderRadius: 8,
+  border: `1.5px solid ${hasError ? colors.red600 : colors.slate200}`,
+  outline: "none",
+  background: colors.white,
+  color: colors.slate900,
+  boxSizing: "border-box",
+  transition: "border-color 0.15s",
+});
+
+const btnPrimary = (disabled: boolean): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "12px 24px",
+  fontSize: 14,
+  fontWeight: 600,
+  borderRadius: 8,
+  border: "none",
+  background: disabled ? "#94A3B8" : colors.primary,
+  color: colors.white,
+  cursor: disabled ? "not-allowed" : "pointer",
+  transition: "all 0.15s",
+});
+
+const errorMsgStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: colors.red600,
+  marginTop: 4,
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+};
+
+/* ───────────────────────── helpers ───────────────────────── */
+
+function isAcceptedFile(file: File): boolean {
+  const ext = "." + file.name.split(".").pop()?.toLowerCase();
+  return ACCEPTED_EXTENSIONS.includes(ext);
 }
 
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
-      ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  } catch {
-    return iso;
-  }
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
-function statusPillStyle(status: string): React.CSSProperties {
-  const base: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "3px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
-    border: "1px solid",
-  };
-  if (status === "completed")
-    return { ...base, background: "#ECFDF5", color: C.success, borderColor: "#A7F3D0" };
-  if (status === "partial")
-    return { ...base, background: "#FFFBEB", color: C.warning, borderColor: "#FDE68A" };
-  if (status === "failed")
-    return { ...base, background: "#FEF2F2", color: C.danger, borderColor: "#FECACA" };
-  return { ...base, background: "#F1F5F9", color: C.textMuted, borderColor: C.border };
+function formatTime(date: Date): string {
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
+
+/* ───────────────────────── types ───────────────────────── */
+
+interface FieldErrors {
+  file?: string;
+  documentType?: string;
+  encounterDate?: string;
+}
+
+interface UploadSuccess {
+  filename: string;
+  uploadTime: Date;
+  documentId?: string | number;
+}
+
+/* ───────────────────────── page ───────────────────────── */
 
 export default function UploadsPage() {
-  const qc = useQueryClient();
+  const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formId = useId();
+
+  // form state
+  const [file, setFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState("");
+  const [encounterDate, setEncounterDate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  // validation
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  // upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null);
+
+  // drag state
   const [dragOver, setDragOver] = useState(false);
-  const [lastResult, setLastResult] = useState<UploadResult | null>(null);
-  const [showErrors, setShowErrors] = useState(false);
 
-  const { data: history, isLoading: histLoading, refetch } = useQuery({
-    queryKey: ["uploads-list"],
-    queryFn: listUploads,
-    refetchInterval: 30000,
-  });
+  /* ── ids for aria-describedby ── */
+  const fileErrorId = `${formId}-file-error`;
+  const docTypeErrorId = `${formId}-doctype-error`;
+  const dateErrorId = `${formId}-date-error`;
 
-  const uploadMut = useMutation({
-    mutationFn: (file: File) => uploadPatientFile(file),
-    onSuccess: (data) => {
-      setLastResult(data);
-      setShowErrors(false);
-      qc.invalidateQueries({ queryKey: ["uploads-list"] });
-      qc.invalidateQueries({ queryKey: ["patients"] });
-      qc.invalidateQueries({ queryKey: ["emr-status"] });
-    },
-    onError: (err: any) => {
-      const detail =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "Upload failed";
-      setLastResult({
-        upload_id: 0,
-        filename: "",
-        file_type: "csv",
-        row_count_total: 0,
-        row_count_imported: 0,
-        row_count_failed: 0,
-        status: "failed",
-        errors: [typeof detail === "string" ? detail : JSON.stringify(detail)],
-      });
-    },
-  });
+  /* ── file validation ── */
+  const validateFile = useCallback((f: File): string | undefined => {
+    if (!isAcceptedFile(f)) {
+      return `"${f.name}" is not a supported format. Please upload PDF or C-CDA/XML files.`;
+    }
+    if (f.size > MAX_FILE_SIZE_BYTES) {
+      return `File is ${formatFileSize(f.size)} which exceeds the ${MAX_FILE_SIZE_MB}MB limit.`;
+    }
+    return undefined;
+  }, []);
 
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteUpload(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["uploads-list"] });
-      qc.invalidateQueries({ queryKey: ["patients"] });
-    },
-  });
-
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files || files.length === 0) return;
-      const f = files[0];
-      const name = f.name.toLowerCase();
-      if (!name.endsWith(".csv") && !name.endsWith(".xlsx")) {
-        setLastResult({
-          upload_id: 0,
-          filename: f.name,
-          file_type: "csv",
-          row_count_total: 0,
-          row_count_imported: 0,
-          row_count_failed: 0,
-          status: "failed",
-          errors: ["Only .csv or .xlsx files are accepted."],
-        });
-        return;
+  const handleFileSelect = useCallback(
+    (f: File) => {
+      const error = validateFile(f);
+      if (error) {
+        setFieldErrors((prev) => ({ ...prev, file: error }));
+        setFile(null);
+      } else {
+        setFieldErrors((prev) => ({ ...prev, file: undefined }));
+        setFile(f);
       }
-      uploadMut.mutate(f);
+      setUploadSuccess(null);
     },
-    [uploadMut],
+    [validateFile]
   );
 
+  /* ── drop handlers ── */
   const onDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
-      handleFiles(e.dataTransfer?.files ?? null);
+      const f = e.dataTransfer.files?.[0];
+      if (f) handleFileSelect(f);
     },
-    [handleFiles],
+    [handleFileSelect]
   );
 
-  return (
-    <div style={{ fontFamily: FONT_SYS, padding: "28px 32px", maxWidth: 1120, margin: "0 auto" }}>
-      <header style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: 0 }}>
-          Patient Data Uploads
-        </h1>
-        <p style={{ marginTop: 6, fontSize: 14, color: C.textSubtle }}>
-          Upload a CSV or Excel file of patients to run the full RAF analysis — scoring, HCC mapping,
-          audit packages and dashboards — without connecting an EMR.
-        </p>
-      </header>
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
 
-      {/* Drop zone */}
+  const onDragLeave = useCallback(() => setDragOver(false), []);
+
+  const onInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (f) handleFileSelect(f);
+      // reset so same file can be re-selected
+      e.target.value = "";
+    },
+    [handleFileSelect]
+  );
+
+  /* ── field validation ── */
+  const validateAll = useCallback((): FieldErrors => {
+    const errors: FieldErrors = {};
+    if (!file) errors.file = "Please select a file to upload.";
+    if (!documentType) errors.documentType = "Document type is required.";
+    if (!encounterDate) errors.encounterDate = "Encounter date is required.";
+    return errors;
+  }, [file, documentType, encounterDate]);
+
+  /* ── submit ── */
+  const handleSubmit = useCallback(async () => {
+    setSubmitted(true);
+    const errors = validateAll();
+    setFieldErrors(errors);
+
+    if (Object.values(errors).some(Boolean)) return;
+    if (!file) return;
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("document_type", documentType);
+      formData.append("encounter_date", encounterDate);
+      if (notes.trim()) formData.append("notes", notes.trim());
+
+      const { data } = await api.post("/api/documents/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            setUploadProgress(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+          } else {
+            // indeterminate — pulse between 10-90
+            setUploadProgress(-1);
+          }
+        },
+      });
+
+      setUploadSuccess({
+        filename: file.name,
+        uploadTime: new Date(),
+        documentId: data?.id ?? data?.document_id,
+      });
+      toast.success("Upload complete", `${file.name} uploaded successfully.`);
+
+      // reset form
+      setFile(null);
+      setDocumentType("");
+      setEncounterDate("");
+      setNotes("");
+      setSubmitted(false);
+      setFieldErrors({});
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || "Upload failed";
+      toast.error("Upload failed", msg);
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  }, [file, documentType, encounterDate, notes, validateAll, toast]);
+
+  /* ── clear file ── */
+  const clearFile = useCallback(() => {
+    setFile(null);
+    setFieldErrors((prev) => ({ ...prev, file: undefined }));
+    setUploadSuccess(null);
+  }, []);
+
+  /* ── collect validation summary ── */
+  const validationSummary = submitted
+    ? Object.entries(fieldErrors)
+        .filter(([, v]) => !!v)
+        .map(([k, v]) => ({ field: k, message: v! }))
+    : [];
+
+  /* ───────────────────────── render ───────────────────────── */
+  return (
+    <div style={{ padding: "32px 32px 64px", maxWidth: 720, margin: "0 auto" }}>
+      <PageHeader
+        title="Upload Document"
+        subtitle="Upload clinical documents for HCC coding analysis"
+        icon={<Upload size={22} />}
+      />
+
+      {/* ── Accepted formats ── */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
-        }}
         style={{
-          border: `2px dashed ${dragOver ? C.brand : C.border}`,
-          borderRadius: 16,
-          background: dragOver ? C.brandSoft : C.bgCard,
-          padding: "48px 24px",
-          textAlign: "center",
-          cursor: "pointer",
-          transition: "all 120ms",
-          outline: "none",
+          display: "flex",
+          gap: 16,
+          marginBottom: 20,
+          flexWrap: "wrap",
         }}
       >
+        <FormatChip icon={<FileText size={16} />} label="PDF" extensions=".pdf" />
+        <FormatChip icon={<FileCode2 size={16} />} label="C-CDA / XML" extensions=".xml, .cda, .ccda" />
         <div
           style={{
-            display: "inline-flex",
+            display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            background: C.brandSoft,
-            color: C.brand,
-            marginBottom: 14,
+            gap: 6,
+            fontSize: 12,
+            color: colors.slate400,
+            marginLeft: "auto",
           }}
         >
-          <Upload size={26} />
+          <Info size={14} />
+          Max file size: {MAX_FILE_SIZE_MB}MB
         </div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
-          Drag a CSV or Excel file here, or click to browse
-        </div>
-        <div style={{ marginTop: 6, fontSize: 13, color: C.textSubtle }}>
-          Accepted formats: .csv, .xlsx — max 10 MB
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv,.xlsx"
-          style={{ display: "none" }}
-          onChange={(e) => handleFiles(e.target.files)}
-        />
       </div>
 
-      {/* Templates row */}
-      <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={() => downloadUploadTemplate("csv")}
-          style={btnSecondary}
+      {/* ── Validation summary ── */}
+      {validationSummary.length > 0 && (
+        <div
+          role="alert"
+          style={{
+            background: colors.red50,
+            border: `1px solid ${colors.red600}33`,
+            borderRadius: 8,
+            padding: "12px 16px",
+            marginBottom: 20,
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
         >
-          <Download size={14} /> Download CSV template
-        </button>
-        <button
-          type="button"
-          onClick={() => downloadUploadTemplate("xlsx")}
-          style={btnSecondary}
-        >
-          <Download size={14} /> Download Excel template
-        </button>
-      </div>
-
-      {/* Upload progress / result */}
-      {uploadMut.isPending && (
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.textMuted }}>
-            <Spinner size="sm" />
-            <span>Uploading and processing file…</span>
+          <div style={{ fontSize: 13, fontWeight: 600, color: colors.red600, display: "flex", alignItems: "center", gap: 6 }}>
+            <AlertCircle size={15} /> Please fix the following errors:
           </div>
+          <ul style={{ margin: "4px 0 0 20px", padding: 0, fontSize: 13, color: colors.red600 }}>
+            {validationSummary.map((e) => (
+              <li key={e.field}>{e.message}</li>
+            ))}
+          </ul>
         </div>
       )}
 
-      {lastResult && !uploadMut.isPending && (
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {lastResult.status === "completed" ? (
-              <CheckCircle size={20} color={C.success} />
-            ) : lastResult.status === "failed" ? (
-              <AlertTriangle size={20} color={C.danger} />
-            ) : (
-              <AlertTriangle size={20} color={C.warning} />
-            )}
-            <div style={{ fontWeight: 600, color: C.text }}>
-              {lastResult.status === "completed"
-                ? "Upload complete"
-                : lastResult.status === "failed"
-                  ? "Upload failed"
-                  : "Upload finished with some errors"}
+      {/* ── Success state ── */}
+      {uploadSuccess && (
+        <div
+          role="status"
+          style={{
+            background: colors.emerald50,
+            border: `1px solid ${colors.emerald500}33`,
+            borderRadius: 8,
+            padding: "16px 20px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <CheckCircle2 size={20} style={{ color: colors.emerald500, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: colors.slate900 }}>Upload successful</div>
+            <div style={{ fontSize: 13, color: colors.slate600, marginTop: 2 }}>
+              <strong>{uploadSuccess.filename}</strong> &mdash; {formatTime(uploadSuccess.uploadTime)}
             </div>
-            <span style={{ marginLeft: "auto", ...statusPillStyle(lastResult.status) }}>
-              {lastResult.status.charAt(0).toUpperCase() + lastResult.status.slice(1)}
-            </span>
           </div>
-          <div
-            style={{
-              marginTop: 14,
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 12,
-            }}
-          >
-            <MiniStat label="Imported" value={lastResult.row_count_imported} color={C.success} />
-            <MiniStat label="Failed" value={lastResult.row_count_failed} color={C.danger} />
-            <MiniStat label="Total rows" value={lastResult.row_count_total} color={C.textMuted} />
-          </div>
-          {lastResult.errors && lastResult.errors.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                style={btnLink}
-                onClick={() => setShowErrors((s) => !s)}
-              >
-                {showErrors ? <EyeOff size={14} /> : <Eye size={14} />}{" "}
-                {showErrors ? "Hide" : "View"} errors ({lastResult.errors.length})
-              </button>
-              {showErrors && (
-                <ul
-                  style={{
-                    marginTop: 8,
-                    padding: "10px 14px",
-                    listStyle: "none",
-                    background: "#FEF2F2",
-                    border: "1px solid #FECACA",
-                    borderRadius: 10,
-                    maxHeight: 220,
-                    overflow: "auto",
-                    fontSize: 12,
-                    color: "#7F1D1D",
-                  }}
-                >
-                  {lastResult.errors.map((e, i) => (
-                    <li key={i} style={{ padding: "2px 0" }}>
-                      {e}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          {uploadSuccess.documentId && (
+            <a
+              href={`/documents/${uploadSuccess.documentId}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 13,
+                fontWeight: 600,
+                color: colors.primary,
+                textDecoration: "none",
+              }}
+            >
+              View Document <ExternalLink size={14} />
+            </a>
           )}
         </div>
       )}
 
-      {/* Upload history */}
-      <section style={{ marginTop: 32 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>
-            Upload history
-          </h2>
-          <button type="button" onClick={() => refetch()} style={btnLink}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-        </div>
-
+      {/* ── Form card ── */}
+      <div style={card}>
+        {/* ── Drop zone ── */}
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload file drop zone. Click or press Enter to browse files."
+          aria-invalid={!!fieldErrors.file}
+          aria-describedby={fieldErrors.file ? fileErrorId : undefined}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           style={{
-            background: C.bgCard,
-            border: `1px solid ${C.border}`,
-            borderRadius: 14,
-            overflow: "hidden",
+            border: `2px dashed ${fieldErrors.file ? colors.red600 : dragOver ? colors.primary : colors.slate200}`,
+            borderRadius: 10,
+            padding: file ? "16px 20px" : "40px 20px",
+            textAlign: "center",
+            cursor: "pointer",
+            background: dragOver ? `${colors.primary}08` : fieldErrors.file ? colors.red50 : colors.slate50,
+            transition: "all 0.15s",
+            marginBottom: 20,
           }}
         >
-          {histLoading ? (
-            <div style={{ padding: 16 }}>
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="raf-skel"
-                  style={{
-                    height: 44,
-                    borderRadius: 8,
-                    marginBottom: i === 2 ? 0 : 8,
-                    background: `linear-gradient(90deg, ${C.bgSubtle} 0%, ${C.borderSoft} 50%, ${C.bgSubtle} 100%)`,
-                    backgroundSize: "200% 100%",
-                    animation: "rafSkelShimmer 1.4s ease-in-out infinite",
-                  }}
-                />
-              ))}
-              <style>{`@keyframes rafSkelShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
-            </div>
-          ) : !history?.uploads?.length ? (
-            <div style={{ padding: "44px 24px", textAlign: "center" }}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
-                  background: C.brandSoft,
-                  color: C.brand,
-                  marginBottom: 12,
-                }}
-              >
-                <FileSpreadsheet size={24} />
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-                No uploads yet
-              </div>
-              <div style={{ fontSize: 13, color: C.textSubtle, marginBottom: 14 }}>
-                Drop a CSV or Excel file above to import your first batch of patients.
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPT_STRING}
+            onChange={onInputChange}
+            style={{ display: "none" }}
+            aria-hidden="true"
+          />
+
+          {file ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <FileText size={20} style={{ color: colors.primary, flexShrink: 0 }} />
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: colors.slate900 }}>{file.name}</div>
+                <div style={{ fontSize: 12, color: colors.slate400 }}>{formatFileSize(file.size)}</div>
               </div>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                aria-label="Remove file"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearFile();
+                }}
                 style={{
-                  ...btnSecondary,
-                  borderColor: C.brand,
-                  color: C.brand,
-                  background: C.brandSoft,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: colors.slate400,
+                  padding: 4,
+                  borderRadius: 4,
+                  display: "flex",
                 }}
               >
-                <Upload size={14} /> Upload a file
+                <X size={18} />
               </button>
             </div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: C.bgSubtle, color: C.label, textAlign: "left" }}>
-                  <th style={th}>Filename</th>
-                  <th style={th}>Date</th>
-                  <th style={{ ...th, textAlign: "right" }}>Rows imported</th>
-                  <th style={th}>Status</th>
-                  <th style={{ ...th, textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.uploads.map((u: UploadRecord) => (
-                  <tr key={u.id} style={{ borderTop: `1px solid ${C.rowDivider}` }}>
-                    <td style={td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {u.file_type === "xlsx" ? (
-                          <FileSpreadsheet size={16} color={C.brand} />
-                        ) : (
-                          <FileText size={16} color={C.brand} />
-                        )}
-                        <div>
-                          <div style={{ color: C.text, fontWeight: 500 }}>{u.filename}</div>
-                          <div style={{ fontSize: 11, color: C.textSubtle }}>
-                            {formatBytes(u.file_size_bytes)}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ ...td, color: C.textMuted }}>{formatDate(u.created_at)}</td>
-                    <td style={{ ...td, textAlign: "right", color: C.text, fontWeight: 600 }}>
-                      {u.row_count_imported.toLocaleString("en-US")}
-                      <span style={{ color: C.textSubtle, fontWeight: 400 }}>
-                        {" "}
-                        / {u.row_count_total.toLocaleString("en-US")}
-                      </span>
-                    </td>
-                    <td style={td}>
-                      <span style={statusPillStyle(u.status)}>
-                        {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
-                      </span>
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <button
-                        type="button"
-                        disabled={deleteMut.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete upload "${u.filename}" and deactivate all ${u.row_count_imported} imported patients?`,
-                            )
-                          ) {
-                            deleteMut.mutate(u.id);
-                          }
-                        }}
-                        style={{
-                          ...btnSecondary,
-                          color: C.danger,
-                          borderColor: "#FECACA",
-                        }}
-                      >
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              <Upload size={28} style={{ color: colors.slate400, marginBottom: 8 }} />
+              <div style={{ fontSize: 14, fontWeight: 600, color: colors.slate900 }}>
+                Drop a file here or click to browse
+              </div>
+              <div style={{ fontSize: 12, color: colors.slate400, marginTop: 4 }}>
+                PDF or C-CDA/XML up to {MAX_FILE_SIZE_MB}MB
+              </div>
+            </>
           )}
         </div>
-      </section>
+        {fieldErrors.file && (
+          <div id={fileErrorId} style={errorMsgStyle}>
+            <AlertCircle size={13} /> {fieldErrors.file}
+          </div>
+        )}
+
+        {/* ── Upload progress ── */}
+        {uploading && (
+          <div style={{ marginBottom: 20 }}>
+            {uploadProgress !== null && uploadProgress >= 0 ? (
+              <ProgressBar value={uploadProgress} label="Uploading..." color={colors.primary} height={8} />
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: colors.slate600 }}>
+                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                Uploading...
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Document type ── */}
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor={`${formId}-doctype`} style={labelStyle}>
+            Document Type <span style={{ color: colors.red600 }}>*</span>
+          </label>
+          <select
+            id={`${formId}-doctype`}
+            value={documentType}
+            onChange={(e) => {
+              setDocumentType(e.target.value);
+              if (e.target.value) setFieldErrors((prev) => ({ ...prev, documentType: undefined }));
+            }}
+            aria-invalid={!!fieldErrors.documentType}
+            aria-describedby={fieldErrors.documentType ? docTypeErrorId : undefined}
+            style={{
+              ...inputStyle(!!fieldErrors.documentType),
+              appearance: "none",
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 12px center",
+              paddingRight: 36,
+            }}
+          >
+            {DOCUMENT_TYPES.map((dt) => (
+              <option key={dt.value} value={dt.value}>
+                {dt.label}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.documentType && (
+            <div id={docTypeErrorId} style={errorMsgStyle}>
+              <AlertCircle size={13} /> {fieldErrors.documentType}
+            </div>
+          )}
+        </div>
+
+        {/* ── Encounter date ── */}
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor={`${formId}-date`} style={labelStyle}>
+            Encounter Date <span style={{ color: colors.red600 }}>*</span>
+          </label>
+          <input
+            id={`${formId}-date`}
+            type="date"
+            value={encounterDate}
+            onChange={(e) => {
+              setEncounterDate(e.target.value);
+              if (e.target.value) setFieldErrors((prev) => ({ ...prev, encounterDate: undefined }));
+            }}
+            aria-invalid={!!fieldErrors.encounterDate}
+            aria-describedby={fieldErrors.encounterDate ? dateErrorId : undefined}
+            style={inputStyle(!!fieldErrors.encounterDate)}
+          />
+          {fieldErrors.encounterDate && (
+            <div id={dateErrorId} style={errorMsgStyle}>
+              <AlertCircle size={13} /> {fieldErrors.encounterDate}
+            </div>
+          )}
+        </div>
+
+        {/* ── Notes (optional) ── */}
+        <div style={{ marginBottom: 24 }}>
+          <label htmlFor={`${formId}-notes`} style={labelStyle}>
+            Notes <span style={{ fontSize: 11, fontWeight: 400, color: colors.slate400 }}>(optional)</span>
+          </label>
+          <textarea
+            id={`${formId}-notes`}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Additional context about this document..."
+            style={{
+              ...inputStyle(false),
+              resize: "vertical",
+              fontFamily: "inherit",
+            }}
+          />
+        </div>
+
+        {/* ── Submit ── */}
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={handleSubmit}
+          style={btnPrimary(uploading)}
+        >
+          {uploading ? (
+            <>
+              <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Uploading...
+            </>
+          ) : (
+            <>
+              <Upload size={16} /> Upload Document
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* spin keyframes */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tiny helpers
-// ---------------------------------------------------------------------------
+/* ───────────────────────── sub-components ───────────────────────── */
 
-function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
+function FormatChip({ icon, label, extensions }: { icon: React.ReactNode; label: string; extensions: string }) {
   return (
     <div
       style={{
-        padding: "10px 12px",
-        borderRadius: 10,
-        border: `1px solid ${C.border}`,
-        background: C.bgSubtle,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 12px",
+        borderRadius: 8,
+        background: colors.slate50,
+        border: `1px solid ${colors.slate200}`,
+        fontSize: 13,
+        color: colors.slate600,
       }}
     >
-      <div style={{ fontSize: 11, color: C.label, textTransform: "uppercase", letterSpacing: 0.5 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color, marginTop: 2 }}>
-        {value.toLocaleString("en-US")}
-      </div>
+      <span style={{ color: colors.primary, display: "flex" }}>{icon}</span>
+      <span style={{ fontWeight: 600 }}>{label}</span>
+      <span style={{ color: colors.slate400 }}>({extensions})</span>
     </div>
   );
 }
-
-const card: React.CSSProperties = {
-  marginTop: 20,
-  background: C.bgCard,
-  border: `1px solid ${C.border}`,
-  borderRadius: 14,
-  padding: 18,
-};
-
-const btnSecondary: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "8px 14px",
-  borderRadius: 10,
-  border: `1px solid ${C.border}`,
-  background: C.bgCard,
-  color: C.textMuted,
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: "pointer",
-};
-
-const btnLink: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "4px 8px",
-  border: "none",
-  background: "transparent",
-  color: C.brand,
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: "pointer",
-};
-
-const th: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
-};
-
-const td: React.CSSProperties = {
-  padding: "12px 14px",
-  verticalAlign: "middle",
-};

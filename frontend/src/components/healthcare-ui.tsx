@@ -49,15 +49,13 @@ export interface StatCardProps {
   subtitle?: string;
   icon?: React.ReactNode;
   trend?: { value: number; label: string };
-  /** When true, an upward trend is bad (red) and downward is good (green). */
-  invertTrend?: boolean;
   color?: string;
   loading?: boolean;
   href?: string;
   info?: string;
 }
 
-export function StatCard({ label, value, subtitle, icon, trend, invertTrend = false, color = colors.primary, loading, href, info }: StatCardProps) {
+export function StatCard({ label, value, subtitle, icon, trend, color = colors.primary, loading, href, info }: StatCardProps) {
   const [showInfo, setShowInfo] = React.useState(false);
   const infoId = React.useId();
   const iconBg: React.CSSProperties = {
@@ -130,7 +128,6 @@ export function StatCard({ label, value, subtitle, icon, trend, invertTrend = fa
             background: colors.slate50, border: `1px solid ${colors.slate200}`,
             padding: "10px 14px", color: colors.slate600,
           }}
-          aria-describedby={infoId}
         >
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowInfo(false); }}
@@ -146,25 +143,20 @@ export function StatCard({ label, value, subtitle, icon, trend, invertTrend = fa
         <div className="tabular-nums text-[28px] font-bold leading-none" style={{ color: colors.slate900 }}>{value}</div>
         {subtitle && <div className="mt-1 text-xs" style={{ color: colors.subtleText }}>{subtitle}</div>}
       </div>
-      {trend && (() => {
-        const isUp = trend.value >= 0;
-        const isGood = invertTrend ? !isUp : isUp;
-        const trendColor = isGood ? colors.emerald500 : colors.red600;
-        return (
-          <div className="flex items-center gap-1 text-xs">
-            {isUp ? (
-              <ArrowUp size={14} style={{ color: trendColor }} aria-hidden="true" />
-            ) : (
-              <ArrowDown size={14} style={{ color: trendColor }} aria-hidden="true" />
-            )}
-            <span className="font-semibold" style={{ color: trendColor }}>
-              {isUp ? "+" : ""}
-              {trend.value}%
-            </span>
-            <span style={{ color: colors.slate400 }}>{trend.label}</span>
-          </div>
-        );
-      })()}
+      {trend && (
+        <div className="flex items-center gap-1 text-xs">
+          {trend.value >= 0 ? (
+            <ArrowUp size={14} style={{ color: colors.emerald500 }} aria-hidden="true" />
+          ) : (
+            <ArrowDown size={14} style={{ color: colors.red600 }} aria-hidden="true" />
+          )}
+          <span className="font-semibold" style={{ color: trend.value >= 0 ? colors.emerald500 : colors.red600 }}>
+            {trend.value >= 0 ? "+" : ""}
+            {trend.value}%
+          </span>
+          <span style={{ color: colors.slate400 }}>{trend.label}</span>
+        </div>
+      )}
     </div>
   );
 
@@ -435,7 +427,7 @@ export function SectionHeader({ title, icon, count, action }: SectionHeaderProps
       <div className="flex items-center gap-2">
         {icon && <span className="flex" style={{ color: colors.primary }}>{icon}</span>}
         <div className="flex flex-col">
-          <h3 className="text-h3 m-0" style={{ color: colors.slate900 }}>{title}</h3>
+          <h3 className="m-0 text-base font-bold" style={{ color: colors.slate900 }}>{title}</h3>
           <div
             className="mt-1 opacity-70"
             style={{
@@ -448,7 +440,7 @@ export function SectionHeader({ title, icon, count, action }: SectionHeaderProps
         </div>
         {count !== undefined && (
           <span
-            className="text-caption rounded-full font-semibold"
+            className="rounded-full text-[11px] font-semibold"
             style={{
               color: colors.primary,
               backgroundColor: `${colors.primary}1A`,
@@ -550,8 +542,8 @@ export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHea
           </div>
         )}
         <div>
-          <h1 className="text-h1 m-0" style={{ color: colors.slate900 }}>{title}</h1>
-          {subtitle && <p className="text-body-sm mt-1" style={{ margin: "4px 0 0", color: colors.subtleText }}>{subtitle}</p>}
+          <h1 className="m-0 text-h1" style={{ color: colors.slate900 }}>{title}</h1>
+          {subtitle && <p className="mt-1 text-body-sm" style={{ margin: "4px 0 0", color: colors.subtleText }}>{subtitle}</p>}
         </div>
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
