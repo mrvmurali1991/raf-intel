@@ -66,6 +66,25 @@ task_logger = get_task_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Register pipeline chain handlers in the worker process so that
+# emit_internal("emr_sync_completed") triggers the full auto-chain
+# even when the sync runs inside a Celery worker (not the FastAPI process).
+# ---------------------------------------------------------------------------
+
+from celery.signals import worker_ready
+
+@worker_ready.connect
+def _setup_pipeline_on_worker_ready(**kwargs):
+    """Register pipeline chain event handlers when the Celery worker starts."""
+    try:
+        from app.services.pipeline_chain import setup_pipeline_chain
+        setup_pipeline_chain()
+        logger.info("celery_tasks: pipeline chain registered in worker process")
+    except Exception as exc:
+        logger.warning("celery_tasks: failed to register pipeline chain: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Beat schedule — all periodic work lives here so a single Beat process
 # drives everything without the FastAPI process being involved at all.
 # ---------------------------------------------------------------------------
