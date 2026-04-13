@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getSuspects,
@@ -223,19 +223,34 @@ function SkeletonRow({ index }: { index: number }) {
 
 export default function SuspectsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const toast = useToast();
 
+  // Initialize filters from URL params (restores state on back-navigation)
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<StatusTab>("open");
-  const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [confidenceBand, setConfidenceBand] = useState<ConfidenceBand>("all");
-  const [sortField, setSortField] = useState<SortField>("confidence");
+  const [statusFilter, setStatusFilter] = useState<StatusTab>((searchParams.get("status") as StatusTab) || "open");
+  const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>((searchParams.get("evidence") as EvidenceFilter) || "all");
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
+  const [confidenceBand, setConfidenceBand] = useState<ConfidenceBand>((searchParams.get("confidence") as ConfidenceBand) || "all");
+  const [sortField, setSortField] = useState<SortField>((searchParams.get("sort") as SortField) || "confidence");
   const [page, setPage] = useState(0);
+
+  // Sync filter state to URL (no history pollution)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (statusFilter !== "open") params.set("status", statusFilter);
+    if (evidenceFilter !== "all") params.set("evidence", evidenceFilter);
+    if (searchTerm) params.set("q", searchTerm);
+    if (confidenceBand !== "all") params.set("confidence", confidenceBand);
+    if (sortField !== "confidence") params.set("sort", sortField);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "/suspects", { scroll: false });
+  }, [statusFilter, evidenceFilter, searchTerm, confidenceBand, sortField, router]);
   const [bulkAction, setBulkAction] = useState<"accept" | "dismiss" | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedRationale, setExpandedRationale] = useState<Set<number>>(new Set());
   const [measurementYear, setMeasurementYear] = useState<number>(2026);
 
   /* --- Data -------------------------------------------------------- */
@@ -1282,18 +1297,26 @@ export default function SuspectsPage() {
                   {s.suspect_icd10 && <span>ICD {s.suspect_icd10}</span>}
                 </div>
                 <div
+                  onClick={() => setExpandedRationale(prev => {
+                    const next = new Set(prev);
+                    next.has(s.id) ? next.delete(s.id) : next.add(s.id);
+                    return next;
+                  })}
                   style={{
                     fontSize: 12,
                     color: C.textSubtle,
                     fontStyle: "italic",
                     fontFamily: FONT_SYS,
-                    overflow: "hidden",
-                    display: "-webkit-box",
-                    WebkitLineClamp: 1,
-                    WebkitBoxOrient: "vertical",
-                    textOverflow: "ellipsis",
+                    cursor: "pointer",
+                    ...(expandedRationale.has(s.id) ? {} : {
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 1,
+                      WebkitBoxOrient: "vertical",
+                      textOverflow: "ellipsis",
+                    }),
                   }}
-                  title={rationale}
+                  title={expandedRationale.has(s.id) ? "Click to collapse" : "Click to expand"}
                 >
                   &ldquo;{rationale}&rdquo;
                 </div>

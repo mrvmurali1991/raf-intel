@@ -207,7 +207,7 @@ export function RiskBadge({ score, size = "md" }: RiskBadgeProps) {
   return (
     <Tooltip>
       <TooltipTrigger>
-        <span style={style} className={isHighRisk ? "soft-pulse cursor-help" : "cursor-help"}>
+        <span style={style} className={isHighRisk ? "soft-pulse cursor-help" : "cursor-help"} aria-label={`Risk level: ${riskLabel(score)}, RAF score ${score?.toFixed(3) ?? "N/A"}`} role="status">
           <span
             style={{
               width: dotSize,
@@ -354,6 +354,13 @@ const meatColors: Record<string, string> = {
   T: colors.emerald500,
 };
 
+const meatLabels: Record<string, string> = {
+  M: "Monitoring",
+  E: "Evaluation",
+  A: "Assessment",
+  T: "Treatment",
+};
+
 export function MeatIndicator({ meat }: MeatIndicatorProps) {
   const letters = ["M", "E", "A", "T"] as const;
 
@@ -384,7 +391,7 @@ export function MeatIndicator({ meat }: MeatIndicatorProps) {
                 {l}
               </div>
             </TooltipTrigger>
-            <TooltipContent>{filled && meat?.[l] ? meat[l] : `${l} not documented`}</TooltipContent>
+            <TooltipContent>{meatLabels[l]}: {filled && meat?.[l] ? meat[l] : "Not documented"}</TooltipContent>
           </Tooltip>
         );
       })}
@@ -475,6 +482,7 @@ export function EmptyState({ icon, title, description }: EmptyStateProps) {
   return (
     <div
       className="animate-fade-in"
+      role="status"
       style={{
         display: "flex",
         flexDirection: "column",

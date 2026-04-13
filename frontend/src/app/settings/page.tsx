@@ -222,6 +222,22 @@ function ProfileSection() {
   const [title, setTitle] = useState(user?.title ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url ?? "");
   const [saving, setSaving] = useState(false);
+
+  // Warn before navigating away with unsaved changes
+  const isDirty =
+    firstName !== (user?.first_name ?? "") ||
+    lastName !== (user?.last_name ?? "") ||
+    title !== (user?.title ?? "") ||
+    avatarUrl !== (user?.avatar_url ?? "");
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
     null
   );

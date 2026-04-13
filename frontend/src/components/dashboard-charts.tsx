@@ -151,7 +151,7 @@ export function Sparkline({ data, width = 80, height = 28, color = colors.primar
           to { stroke-dashoffset: 0; }
         }
       `}</style>
-      <svg width={width} height={height} style={{ overflow: "visible" }}>
+      <svg width={width} height={height} style={{ overflow: "visible" }} role="img" aria-label={`Trend chart with ${data.length} data points`}>
         {showArea && (
           <path d={areaD} fill={color} opacity={0.15} />
         )}
@@ -197,7 +197,7 @@ export function MiniBarChart({ data, height = 24, showValues = true, animate = t
   const maxValue = Math.max(...data.map((d) => d.value), 1);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }} role="img" aria-label={`Bar chart: ${data.map(d => `${d.label} ${d.value}`).join(", ")}`}>
       {data.map((item, i) => {
         const pct = (item.value / maxValue) * 100;
         return (
@@ -287,7 +287,7 @@ export function WaterfallChart({ data, totalLabel = "Total", height = 36 }: Wate
   const allItems = [...data, { label: totalLabel, value: total, color: colors.primary }];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }} role="img" aria-label={`Waterfall chart: ${allItems.map(d => `${d.label} $${Math.abs(d.value).toLocaleString()}`).join(", ")}`}>
       {allItems.map((item, i) => {
         const isTotal = i === allItems.length - 1;
         const pct = (Math.abs(item.value) / maxValue) * 100;
@@ -397,7 +397,7 @@ export function CircularGauge({ value, size = 120, strokeWidth = 10, color = col
 
   return (
     <div style={{ position: "relative", width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)", position: "absolute" }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)", position: "absolute" }} role="img" aria-label={`${label}: ${Math.round(clamped)}%`}>
         <circle
           cx={size / 2}
           cy={size / 2}

@@ -151,6 +151,20 @@ export default function UploadsPage() {
         });
         return;
       }
+      const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+      if (f.size > MAX_SIZE) {
+        setLastResult({
+          upload_id: 0,
+          filename: f.name,
+          file_type: "csv",
+          row_count_total: 0,
+          row_count_imported: 0,
+          row_count_failed: 0,
+          status: "failed",
+          errors: [`File is too large (${(f.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed is 10 MB.`],
+        });
+        return;
+      }
       uploadMut.mutate(f);
     },
     [uploadMut],
