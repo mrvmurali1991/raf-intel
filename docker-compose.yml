@@ -170,7 +170,7 @@ services:
     command: >
       --innodb-buffer-pool-size=128M
       --innodb-log-file-size=32M
-      --max-connections=50
+      --max-connections=100
       --table-open-cache=200
       --performance-schema=OFF
     environment:
