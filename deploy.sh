@@ -35,7 +35,7 @@ done
 # Create bind-mount directories
 # ---------------------------------------------------------------------------
 log "Ensuring data directories exist..."
-mkdir -p "${SCRIPT_DIR}/data/redis" "${SCRIPT_DIR}/data/uploads" "${SCRIPT_DIR}/data/logs"
+mkdir -p "${SCRIPT_DIR}/data/redis" "${SCRIPT_DIR}/data/uploads" "${SCRIPT_DIR}/data/logs" "${SCRIPT_DIR}/data/submissions"
 
 # ---------------------------------------------------------------------------
 # Build images

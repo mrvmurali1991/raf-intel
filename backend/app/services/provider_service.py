@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import statistics
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from app.config import settings
@@ -462,14 +462,13 @@ def calculate_provider_scorecard(
         )
         panel = [r["patient_id"] for r in cur.fetchall()]
 
-    total_patients = len(panel)
-    if total_patients == 0:
-        return _empty_scorecard(provider_id, year)
+        total_patients = len(panel)
+        if total_patients == 0:
+            return _empty_scorecard(provider_id, year)
 
-    placeholders = ", ".join(["%s"] * total_patients)
+        placeholders = ", ".join(["%s"] * total_patients)
 
-    # --- 2. RAF scores ---
-    with raf_cursor() as cur:
+        # --- 2. RAF scores ---
         cur.execute(
             f"""
             SELECT rs.patient_id, rs.final_raf
@@ -485,21 +484,20 @@ def calculate_provider_scorecard(
         )
         score_rows = cur.fetchall()
 
-    # NOTE: Converting DECIMAL columns to float can introduce floating-point
-    # precision errors for values with many significant digits.  We round to
-    # 4 decimal places here to keep arithmetic stable.  If exact decimal
-    # arithmetic is required, use decimal.Decimal instead of float.
-    raf_by_patient: dict[int, float] = {
-        int(r["patient_id"]): round(float(r["final_raf"]), 4) for r in score_rows
-    }
-    patients_with_scores = len(raf_by_patient)
-    average_raf = (
-        round(statistics.mean(raf_by_patient.values()), 4) if raf_by_patient else None
-    )
+        # NOTE: Converting DECIMAL columns to float can introduce floating-point
+        # precision errors for values with many significant digits.  We round to
+        # 4 decimal places here to keep arithmetic stable.  If exact decimal
+        # arithmetic is required, use decimal.Decimal instead of float.
+        raf_by_patient: dict[int, float] = {
+            int(r["patient_id"]): round(float(r["final_raf"]), 4) for r in score_rows
+        }
+        patients_with_scores = len(raf_by_patient)
+        average_raf = (
+            round(statistics.mean(raf_by_patient.values()), 4) if raf_by_patient else None
+        )
 
-    # --- 3. HCC capture rate ---
-    # coded HCCs for this year
-    with raf_cursor() as cur:
+        # --- 3. HCC capture rate ---
+        # coded HCCs for this year
         cur.execute(
             f"""
             SELECT COUNT(DISTINCT CONCAT(patient_id, '-', hcc_code)) AS coded
@@ -511,8 +509,7 @@ def calculate_provider_scorecard(
         row = cur.fetchone()
         coded_hcc_count = int(row["coded"]) if row else 0
 
-    # open suspect HCCs (represent potential HCCs not yet coded)
-    with raf_cursor() as cur:
+        # open suspect HCCs (represent potential HCCs not yet coded)
         cur.execute(
             f"""
             SELECT COUNT(*) AS open_suspects
@@ -526,16 +523,15 @@ def calculate_provider_scorecard(
         row = cur.fetchone()
         open_suspect_hccs = int(row["open_suspects"]) if row else 0
 
-    possible_hcc_count = coded_hcc_count + open_suspect_hccs
-    hcc_capture_rate = (
-        round(coded_hcc_count / possible_hcc_count, 4)
-        if possible_hcc_count > 0
-        else None
-    )
+        possible_hcc_count = coded_hcc_count + open_suspect_hccs
+        hcc_capture_rate = (
+            round(coded_hcc_count / possible_hcc_count, 4)
+            if possible_hcc_count > 0
+            else None
+        )
 
-    # --- 4. Recapture rate ---
-    prior_year = year - 1
-    with raf_cursor() as cur:
+        # --- 4. Recapture rate ---
+        prior_year = year - 1
         cur.execute(
             f"""
             SELECT COUNT(DISTINCT CONCAT(patient_id, '-', hcc_code)) AS prior_cnt
@@ -547,7 +543,6 @@ def calculate_provider_scorecard(
         row = cur.fetchone()
         prior_year_hccs = int(row["prior_cnt"]) if row else 0
 
-    with raf_cursor() as cur:
         cur.execute(
             f"""
             SELECT COUNT(DISTINCT CONCAT(rph.patient_id, '-', rph.hcc_code)) AS recaptured
@@ -566,12 +561,11 @@ def calculate_provider_scorecard(
         row = cur.fetchone()
         recaptured_count = int(row["recaptured"]) if row else 0
 
-    recapture_rate = (
-        round(recaptured_count / prior_year_hccs, 4) if prior_year_hccs > 0 else None
-    )
+        recapture_rate = (
+            round(recaptured_count / prior_year_hccs, 4) if prior_year_hccs > 0 else None
+        )
 
-    # --- 5. Suspect conditions counts ---
-    with raf_cursor() as cur:
+        # --- 5. Suspect conditions counts ---
         cur.execute(
             f"""
             SELECT status, COUNT(*) AS cnt
@@ -583,18 +577,17 @@ def calculate_provider_scorecard(
         )
         suspect_rows = cur.fetchall()
 
-    suspect_counts: dict[str, int] = {}
-    for r in suspect_rows:
-        suspect_counts[r["status"]] = int(r["cnt"])
+        suspect_counts: dict[str, int] = {}
+        for r in suspect_rows:
+            suspect_counts[r["status"]] = int(r["cnt"])
 
-    suspects_open = suspect_counts.get("open", 0)
-    suspects_accepted = suspect_counts.get("accepted", 0)
-    suspects_dismissed = suspect_counts.get(
-        "dismissed", suspect_counts.get("rejected", 0)
-    )
+        suspects_open = suspect_counts.get("open", 0)
+        suspects_accepted = suspect_counts.get("accepted", 0)
+        suspects_dismissed = suspect_counts.get(
+            "dismissed", suspect_counts.get("rejected", 0)
+        )
 
-    # --- 6. Revenue opportunity from open suspects ---
-    with raf_cursor() as cur:
+        # --- 6. Revenue opportunity from open suspects ---
         cur.execute(
             f"""
             SELECT SUM(confidence_score) AS total_confidence
@@ -607,22 +600,21 @@ def calculate_provider_scorecard(
         row = cur.fetchone()
         total_confidence = float(row["total_confidence"] or 0) if row else 0.0
 
-    # Revenue opportunity = open suspects weighted by confidence * base rate
-    revenue_opportunity = (
-        round(
-            suspects_open
-            * _HCC_BASE_RATE
-            * (total_confidence / suspects_open if suspects_open else 0),
-            2,
+        # Revenue opportunity = open suspects weighted by confidence * base rate
+        revenue_opportunity = (
+            round(
+                suspects_open
+                * _HCC_BASE_RATE
+                * (total_confidence / suspects_open if suspects_open else 0),
+                2,
+            )
+            if suspects_open
+            else 0.0
         )
-        if suspects_open
-        else 0.0
-    )
 
-    # --- 7. MEAT completeness average ---
-    meat_avg: float | None = None
-    try:
-        with raf_cursor() as cur:
+        # --- 7. MEAT completeness average ---
+        meat_avg: float | None = None
+        try:
             cur.execute(
                 f"""
                 SELECT AVG(me.completeness_score) AS avg_meat
@@ -636,8 +628,8 @@ def calculate_provider_scorecard(
             row = cur.fetchone()
             if row and row["avg_meat"] is not None:
                 meat_avg = round(float(row["avg_meat"]), 4)
-    except Exception as exc:
-        logger.debug("MEAT completeness query failed (table may not exist): %s", exc)
+        except Exception as exc:
+            logger.debug("MEAT completeness query failed (table may not exist): %s", exc)
 
     # --- 8. Documentation quality composite ---
     # Weighted average: 40% capture rate + 30% recapture + 30% MEAT
@@ -700,7 +692,7 @@ def calculate_provider_scorecard(
         "meat_completeness_avg": meat_avg,
         "documentation_quality_score": doc_quality,
         "percentile_rank": percentile_rank,
-        "calculated_at": datetime.utcnow().isoformat(),
+        "calculated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -734,7 +726,7 @@ def get_latest_scorecard(provider_id: int, year: int) -> dict[str, Any] | None:
     if calculated_at:
         if isinstance(calculated_at, str):
             calculated_at = datetime.fromisoformat(calculated_at)
-        age_hours = (datetime.utcnow() - calculated_at).total_seconds() / 3600
+        age_hours = (datetime.now(timezone.utc) - calculated_at).total_seconds() / 3600
         if age_hours > _SCORECARD_STALE_HOURS:
             return None
 
@@ -792,7 +784,7 @@ def _empty_scorecard(provider_id: int, year: int) -> dict[str, Any]:
         "meat_completeness_avg": None,
         "documentation_quality_score": None,
         "percentile_rank": None,
-        "calculated_at": datetime.utcnow().isoformat(),
+        "calculated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

@@ -19,7 +19,7 @@ import {
   useState,
 } from "react";
 import { getAccessToken } from "@/contexts/auth-context";
-import api from "@/lib/api";
+import api, { API_BASE } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -245,8 +245,7 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
     // origin by default — but our backend lives on a different origin in
     // dev (localhost:8500), so we must prefix with NEXT_PUBLIC_API_URL.
     // EventSource doesn't support custom headers, hence token in query.
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8500";
+    const apiBase = API_BASE;
     const es = new EventSource(
       `${apiBase}/api/realtime/events?token=${token}`,
       { withCredentials: true }

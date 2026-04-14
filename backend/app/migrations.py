@@ -1747,7 +1747,51 @@ def _add_constraints_and_indexes() -> None:
     except Exception as exc:
         logger.warning("unique index uq_cohort_member skipped: %s", exc)
 
-    # 3b. emr_patient_matches(connection_id, emr_pid)
+    # 3b. emr_patient_matches — backfill all columns written by the FHIR adapter
+    try:
+        _add_column_if_missing("emr_patient_matches", "first_name", "VARCHAR(100)")
+    except Exception as exc:
+        logger.warning("column first_name on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "last_name", "VARCHAR(100)")
+    except Exception as exc:
+        logger.warning("column last_name on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "date_of_birth", "DATE")
+    except Exception as exc:
+        logger.warning("column date_of_birth on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "sex", "CHAR(1)")
+    except Exception as exc:
+        logger.warning("column sex on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "mrn", "VARCHAR(50)")
+    except Exception as exc:
+        logger.warning("column mrn on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "match_status", "VARCHAR(20) DEFAULT 'auto'")
+    except Exception as exc:
+        logger.warning("column match_status on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "tenant_id", "INT")
+    except Exception as exc:
+        logger.warning("column tenant_id on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "raf_patient_id", "INT")
+    except Exception as exc:
+        logger.warning("column raf_patient_id on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "emr_connection_id", "INT")
+    except Exception as exc:
+        logger.warning("column emr_connection_id on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "emr_patient_id", "VARCHAR(255)")
+    except Exception as exc:
+        logger.warning("column emr_patient_id on emr_patient_matches skipped: %s", exc)
+    try:
+        _add_column_if_missing("emr_patient_matches", "patient_id", "INT DEFAULT 0")
+    except Exception as exc:
+        logger.warning("column patient_id on emr_patient_matches skipped: %s", exc)
     try:
         _add_column_if_missing("emr_patient_matches", "connection_id", "INT")
     except Exception as exc:

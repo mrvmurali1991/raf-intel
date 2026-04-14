@@ -38,7 +38,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
@@ -1183,7 +1183,7 @@ def generate_ccda_export(patient_id: int, tenant_id: str) -> str:
         )
         results = cur.fetchall()
 
-    now_str = datetime.utcnow().strftime("%Y%m%d%H%M%S+0000")
+    now_str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S+0000")
     doc_id = str(uuid.uuid4())
 
     lines: list[str] = [

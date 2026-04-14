@@ -144,6 +144,7 @@ services:
         --access-logfile -
         --error-logfile -
         --log-level info
+    stop_grace_period: 40s
     deploy:
       resources:
         limits:

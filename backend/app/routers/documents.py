@@ -158,12 +158,12 @@ def _do_approve_and_score(
             if cur.fetchone():
                 continue
             cur.execute(
-                "INSERT INTO raf_patient_hcc (patient_id, hcc_code, icd10_code, hcc_description, measurement_year, source, tenant_id, created_at) "
+                "INSERT INTO raf_patient_hcc (patient_id, hcc_code, icd10_codes, hcc_description, measurement_year, source, tenant_id, created_at) "
                 "VALUES (%s,%s,%s,%s,%s,'document_analysis',%s,NOW())",
                 (
                     patient_id,
                     hcc,
-                    l.get("icd10_code"),
+                    _json.dumps([l.get("icd10_code")] if l.get("icd10_code") else []),
                     l.get("description"),
                     year,
                     tenant_id,
@@ -393,15 +393,30 @@ def list_documents_endpoint(
             doc["upload_date"] = str(doc["created_at"]) if doc["created_at"] else None
         if "file_size_bytes" in doc and "file_size" not in doc:
             doc["file_size"] = doc.get("file_size_bytes") or doc.get("file_size", 0)
-        # Resolve patient_name from raf_intelligence.patients if not set
+        # Resolve patient_name from raf_intelligence.patients if not set.
+        # patient_id in documents may be an internal patients.id (direct-DB / upload)
+        # or an OpenEMR emr_pid (FHIR auto-match). Try both lookups.
         if not doc.get("patient_name") and doc.get("patient_id"):
             try:
                 with raf_cursor() as _pc:
+                    # First: internal id lookup (most common path)
                     _pc.execute(
-                        "SELECT CONCAT(first_name, ' ', last_name) AS name FROM patients WHERE id = %s AND tenant_id = %s",
+                        "SELECT CONCAT(first_name, ' ', last_name) AS name"
+                        " FROM patients WHERE id = %s AND tenant_id = %s LIMIT 1",
                         (doc["patient_id"], tenant_id),
                     )
                     _pr = _pc.fetchone()
+                    if not _pr:
+                        # FHIR branch: patient_id may be an OpenEMR pid stored in
+                        # emr_patient_matches.emr_pid; resolve to internal patients.id
+                        _pc.execute(
+                            "SELECT CONCAT(p.first_name, ' ', p.last_name) AS name"
+                            " FROM emr_patient_matches epm"
+                            " JOIN patients p ON p.id = epm.patient_id"
+                            " WHERE epm.emr_pid = %s AND p.tenant_id = %s LIMIT 1",
+                            (doc["patient_id"], tenant_id),
+                        )
+                        _pr = _pc.fetchone()
                     doc["patient_name"] = _pr["name"] if _pr else ""
             except Exception:
                 doc["patient_name"] = ""
@@ -692,9 +707,14 @@ def trigger_analysis(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("documents", "write")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     doc = get_document(document_id)
     if not doc:
+        raise _doc_not_found(document_id)
+
+    # Enforce tenant isolation — reject if document belongs to a different tenant
+    if str(doc.get("tenant_id", "")) != str(tenant_id):
         raise _doc_not_found(document_id)
 
     if doc["status"] == "processing":
@@ -703,7 +723,7 @@ def trigger_analysis(
         )
 
     if run_in_background:
-        background_tasks.add_task(analyze_document, document_id)
+        background_tasks.add_task(analyze_document, document_id, tenant_id)
         return {
             "document_id": document_id,
             "status": "queued",
@@ -711,7 +731,7 @@ def trigger_analysis(
         }
 
     try:
-        result = analyze_document(document_id)
+        result = analyze_document(document_id, tenant_id=tenant_id)
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
         raise HTTPException(status_code=404, detail="Resource not found")

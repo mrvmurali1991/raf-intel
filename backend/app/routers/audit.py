@@ -13,7 +13,7 @@ import io
 import logging
 import os
 import textwrap
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from app.services import openemr_connector as emr
 from app.services.raf_calculator import get_raf_breakdown, calculate_raf_score
 from app.services.suspect_engine import get_suspects_for_patient
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.services.audit_logger import log_phi_access
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +72,24 @@ def generate_audit(
     - Provider attestation page
     - Table of contents
     """
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    # Verify the patient belongs to the authenticated tenant before generating
+    # any audit data.  This prevents cross-tenant audit package generation
+    # when a caller supplies an arbitrary pid value.
+    try:
+        with raf_cursor() as _tenant_cur:
+            _tenant_cur.execute(
+                "SELECT id FROM patients WHERE id = %s AND tenant_id = %s AND is_active = 1",
+                (pid, tenant_id),
+            )
+            if not _tenant_cur.fetchone():
+                raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    except HTTPException:
+        raise
+    except Exception as _te:
+        logger.error("audit tenant check failed pid=%s tenant=%s: %s", pid, tenant_id, _te)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    patient = emr.get_patient(pid) or {}
 
     calc_year = body.year or date.today().year
 
@@ -117,16 +133,16 @@ def generate_audit(
                     encounters.append({"encounter_id": r["encounter_id"], "date": str(r["date"]) if r.get("date") else None,
                                        "reason": r.get("reason") or "Office Visit", "provider": pname,
                                        "facility": r.get("facility") or "", "notes": r.get("notes") or ""})
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to fetch %s for audit package: %s", "encounters", exc)
 
     if not medications:
         try:
             with raf_cursor() as _cur:
                 _cur.execute("SELECT medication_name AS drug, dosage, frequency, purpose FROM patient_medications WHERE patient_id = %s AND is_active = 1", (pid,))
                 medications = [dict(r) for r in _cur.fetchall()]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to fetch %s for audit package: %s", "medications", exc)
 
     if not diagnoses:
         try:
@@ -139,8 +155,8 @@ def generate_audit(
                 diagnoses = [{"code": r["code"], "code_text": r["code_text"], "code_type": "ICD10",
                               "hcc_code": r.get("hcc_code"), "encounter_date": str(r["encounter_date"]) if r.get("encounter_date") else None}
                              for r in _cur.fetchall()]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to fetch %s for audit package: %s", "diagnoses", exc)
 
     try:
         pdf_bytes = _build_audit_pdf(
@@ -156,13 +172,20 @@ def generate_audit(
         logger.exception("PDF generation failed pid=%s", pid)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     filename = f"audit_pid{pid}_{calc_year}_{ts}.pdf"
     filepath = AUDIT_DIR / filename
     filepath.write_bytes(pdf_bytes)
 
     package_id = _save_package_record(pid, calc_year, str(filepath), len(pdf_bytes))
 
+    log_phi_access(
+        action="generate_audit_package",
+        resource="audit_package",
+        patient_id=pid,
+        details=f"year={calc_year} package_id={package_id} size_bytes={len(pdf_bytes)}",
+        tenant_id=tenant_id,
+    )
     return {
         "pid": pid,
         "year": calc_year,
@@ -215,6 +238,7 @@ def list_packages(
 @router.get("/download/{filename}", summary="Download an audit PDF by filename")
 def download_package(filename: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("audit", "read"))) -> FileResponse:
     """Stream the PDF for *filename*."""
     # Prevent path traversal
@@ -225,6 +249,13 @@ def download_package(filename: str,
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Audit file not found")
 
+    log_phi_access(
+        action="download_audit_package",
+        resource="audit_package",
+        patient_id=None,
+        details=f"filename={filename}",
+        tenant_id=tenant_id,
+    )
     return FileResponse(
         path=str(filepath),
         media_type="application/pdf",
@@ -239,6 +270,7 @@ def download_package(filename: str,
 def download_package_by_id(
     package_id: int,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("audit", "read")),
 ) -> FileResponse:
     """Stream the PDF for the given audit package id.
@@ -290,6 +322,13 @@ def download_package_by_id(
             ),
         )
 
+    log_phi_access(
+        action="download_audit_package",
+        resource="audit_package",
+        patient_id=row.get("patient_id"),
+        details=f"package_id={package_id} year={row.get('measurement_year')}",
+        tenant_id=tenant_id,
+    )
     return FileResponse(
         path=str(candidate),
         media_type="application/pdf",
@@ -447,7 +486,7 @@ def _build_audit_pdf(
         except Exception:
             provider_display = f"Provider #{_prov_id}"
 
-    gen_ts = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
+    gen_ts = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
 
     # ---- RAF data ----
     raf_score = raf_data.get("raf_score") or raf_data.get("total_raf") or 0.0

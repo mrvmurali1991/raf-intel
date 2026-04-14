@@ -62,6 +62,7 @@ def _calculate_age(dob: Any, as_of_year: int | None = None) -> int:
 @router.get("/revenue-opportunity", summary="Population-level RAF gap and revenue opportunity")
 def revenue_opportunity(year: int = Query(default=None),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read"))) -> dict[str, Any]:
     """
     Aggregate comparison of billing RAF scores vs AI-detected RAF scores.
@@ -71,7 +72,6 @@ def revenue_opportunity(year: int = Query(default=None),
     the CMS per-member rate of $11,015.04 per RAF point (2026 rate).
     """
     calc_year = year or date.today().year
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     # --- cache check ---
     _cache_key = f"report:revenue:{calc_year}:{tenant_id}"
@@ -205,6 +205,7 @@ def patient_scorecard(year: int = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read"))) -> list[dict[str, Any]]:
     """
     Return one row per patient with their billing RAF, AI RAF, gap, and
@@ -213,7 +214,6 @@ def patient_scorecard(year: int = Query(default=None),
     analyzed=false.
     """
     calc_year = year or date.today().year
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     try:
         # All patients from raf_intelligence.patients (tenant-scoped)
@@ -324,6 +324,7 @@ def patient_scorecard(year: int = Query(default=None),
 @router.get("/hcc-distribution", summary="HCC code frequency across the population")
 def hcc_distribution(year: int = Query(default=None),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read"))) -> list[dict[str, Any]]:
     """
     Return every HCC code present in raf_patient_hcc along with the count of
@@ -331,7 +332,6 @@ def hcc_distribution(year: int = Query(default=None),
     Results are ordered by patient count descending.
     """
     calc_year = year or date.today().year
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     # --- cache check ---
     _cache_key = f"report:hcc_distribution:{calc_year}:{tenant_id}"
@@ -454,6 +454,7 @@ def suspects_summary(
 @router.get("/recapture-gaps", summary="Recapture gap analysis across all patients")
 def recapture_gaps_report(year: int = Query(default=None),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read"))) -> dict[str, Any]:
     """
     Find active medical problems not billed in the current year.
@@ -480,7 +481,6 @@ def recapture_gaps_report(year: int = Query(default=None),
     # silently hiding every gap.  NOT EXISTS correctly ignores NULL-code rows.
 
     # Step 1: Build emr_pid→patient name map from raf_intelligence.patients
-    tenant_id = str(current_user.get("tenant_id", "1"))
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -526,7 +526,7 @@ def recapture_gaps_report(year: int = Query(default=None),
 
     gaps: list[dict[str, Any]] = []
     try:
-        with openemr_cursor() as cur:
+        with openemr_cursor(tenant_id=tenant_id) as cur:
             cur.execute(sql, (f"{calc_year}-01-01", f"{calc_year + 1}-01-01"))
             rows = cur.fetchall()
         for row in rows:
@@ -620,6 +620,7 @@ def recapture_gaps_report(year: int = Query(default=None),
 @router.get("/data-completeness", summary="Data quality metrics across the patient population")
 def data_completeness(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read"))) -> dict[str, Any]:
     """
     Report the presence of key clinical data categories across the patient
@@ -640,7 +641,6 @@ def data_completeness(
         completeness_score          – integer 0-100; mean fill-rate across the six
                                       clinical categories relative to total_patients
     """
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     # --- cache check ---
     _cache_key = f"report:data_completeness:{tenant_id}"
@@ -717,7 +717,7 @@ def data_completeness(
     ]
 
     try:
-        with openemr_cursor() as cur:
+        with openemr_cursor(tenant_id=tenant_id) as cur:
             for metric, sql in _clinical_queries:
                 try:
                     cur.execute(sql)
@@ -780,6 +780,7 @@ def data_completeness(
 @router.get("/workflow-summary", summary="Dashboard workflow queue counts")
 def workflow_summary(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -790,7 +791,6 @@ def workflow_summary(
     entire response.  Failures default to 0 for counts and None for
     timestamps.
     """
-    tenant_id = str(current_user.get("tenant_id", "1"))
     open_suspects: int = 0
     high_confidence_suspects: int = 0
     patients_unanalyzed: int = 0

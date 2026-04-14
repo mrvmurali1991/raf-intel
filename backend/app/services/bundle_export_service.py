@@ -28,7 +28,7 @@ Table name reference (from migrations.py and service-layer code):
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any
 
@@ -623,7 +623,7 @@ _AUDIT_SQL = """
 def export_audit_log(tenant_id: str, days: int = 90) -> Workbook:
     """Bundle 9: Audit Log — last *days* days of system audit events."""
     wb, ws = _new_workbook("Audit Log", _AUDIT_HEADERS)
-    cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     rows = _safe_query(_AUDIT_SQL, (cutoff,))
     _append_rows(ws, rows, _AUDIT_COLS)
     return wb

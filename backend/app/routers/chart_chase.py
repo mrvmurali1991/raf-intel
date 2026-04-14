@@ -452,8 +452,8 @@ def log_attempt(
             notes=body.notes,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("log_attempt chase_id=%s validation error: %s", chase_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("log_attempt chase_id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -494,8 +494,8 @@ def receive_chase(
             notes=body.notes,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("receive_chase id=%s validation error: %s", chase_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("receive_chase id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")

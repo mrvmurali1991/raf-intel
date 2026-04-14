@@ -53,6 +53,7 @@ from app.db import raf_cursor, run_in_db_executor
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
 from app.services.emr_manager import active_patients_subquery
+from app.services.audit_logger import log_phi_access
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +311,7 @@ def calculate_all(
         try:
             with raf_cursor() as cur:
                 cur.execute(
-                    "SELECT COALESCE(epm.raf_patient_id, epm.id) AS pid "
+                    "SELECT epm.id AS pid "
                     "FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 ORDER BY pid"
@@ -451,6 +452,13 @@ async def get_scores(
 
     v24_w, v28_w = _BLEND_WEIGHTS.get(calc_year, (0.0, 1.0))
 
+    log_phi_access(
+        action="view_raf_scores",
+        resource="raf_scores",
+        patient_id=pid,
+        details=f"year={calc_year}",
+        tenant_id=tenant_id,
+    )
     return {
         "patient_id": pid,
         "patient_name": f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
@@ -582,6 +590,14 @@ async def get_breakdown(
         result["engine_input"] = breakdown["engine_input"]
     if breakdown.get("engine_output"):
         result["engine_output"] = breakdown["engine_output"]
+
+    log_phi_access(
+        action="view_raf_breakdown",
+        resource="raf_scores",
+        patient_id=pid,
+        details=f"year={calc_year} hcc_count={len(annotated_hccs)}",
+        tenant_id=tenant_id,
+    )
     return result
 
 
@@ -682,6 +698,13 @@ def get_model_comparison(
         f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
     )
 
+    log_phi_access(
+        action="view_model_comparison",
+        resource="raf_scores",
+        patient_id=pid,
+        details=f"year={calc_year}",
+        tenant_id=tenant_id,
+    )
     return comparison
 
 
@@ -715,29 +738,29 @@ def population_summary(
 
     # Check if any EMR connection is active before querying OpenEMR
     has_active = False
+    _conn_type: str | None = None
     try:
         with raf_cursor() as _cur:
-            _cur.execute("SELECT COUNT(*) AS cnt FROM emr_connections WHERE is_active = 1")
-            has_active = _cur.fetchone()["cnt"] > 0
+            _cur.execute(
+                "SELECT COUNT(*) AS cnt, MAX(connection_type) AS ct "
+                "FROM emr_connections WHERE is_active = 1 AND tenant_id = %s",
+                (int(tenant_id),),
+            )
+            _row = _cur.fetchone()
+            has_active = bool(_row and _row["cnt"] > 0)
+            _conn_type = _row["ct"] if _row else None
     except Exception:
         pass
 
     if has_active:
         try:
-            # For FHIR/REST connections, count from emr_patient_matches
-            with raf_cursor() as _cur2:
-                _cur2.execute(
-                    "SELECT connection_type FROM emr_connections WHERE is_active = 1 LIMIT 1"
-                )
-                _ct_row = _cur2.fetchone()
-                _conn_type = _ct_row["connection_type"] if _ct_row else None
             if _conn_type in ("fhir_r4", "rest_api"):
                 with raf_cursor() as _cur3:
                     _cur3.execute(
-                        "SELECT COUNT(DISTINCT COALESCE(epm.raf_patient_id, epm.id)) AS cnt "
+                        "SELECT COUNT(DISTINCT epm.id) AS cnt "
                         "FROM emr_patient_matches epm "
                         "JOIN emr_connections ec ON ec.id = epm.connection_id "
-                        "WHERE ec.is_active = 1 AND epm.tenant_id = %s",
+                        "WHERE ec.is_active = 1 AND ec.tenant_id = %s",
                         (int(tenant_id),),
                     )
                     total_patients = _cur3.fetchone()["cnt"]
@@ -764,10 +787,21 @@ def population_summary(
         except Exception:
             total_patients = 0
 
-    # Scope RAF scores to tenant-active patients regardless of EMR mode.
-    # Use MAX(final_raf) per patient so the best score (with HCCs) wins
-    # over demographic-only recalculations.
-    _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
+    # Scope RAF scores to the correct patient set based on connection type.
+    # For FHIR/REST: use emr_patient_matches to find patient IDs.
+    # For direct_db or upload: use the patients table via active_patients_subquery.
+    if _conn_type in ("fhir_r4", "rest_api"):
+        _pop_score_filter = (
+            "patient_id IN ("
+            "SELECT epm.id "
+            "FROM emr_patient_matches epm "
+            "JOIN emr_connections ec ON ec.id = epm.connection_id "
+            "WHERE ec.is_active = 1 AND ec.tenant_id = %s"
+            ")"
+        )
+        _pop_score_params: tuple = (int(tenant_id),)
+    else:
+        _pop_score_filter, _pop_score_params = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
             # Use a subquery to get the best (highest) score per patient,
@@ -816,7 +850,7 @@ def population_summary(
         raf_distribution.append({"range": label, "count": count})
 
     try:
-        _hcc_sf, _hcc_sp = active_patients_subquery(int(tenant_id))
+        # Reuse the same patient-scoping filter already built for score queries.
         with raf_cursor() as cur:
             cur.execute(
                 f"""
@@ -824,12 +858,12 @@ def population_summary(
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND tenant_id = %s
-                  AND {_hcc_sf}
+                  AND {_pop_score_filter}
                 GROUP BY hcc_code
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,
-                (calc_year, int(tenant_id), *_hcc_sp),
+                (calc_year, int(tenant_id), *_pop_score_params),
             )
             hcc_rows = cur.fetchall()
     except Exception as exc:
@@ -954,6 +988,13 @@ def get_score_history(
             }
         )
 
+    log_phi_access(
+        action="view_raf_history",
+        resource="raf_scores",
+        patient_id=pid,
+        details=f"years_returned={len(history)}",
+        tenant_id=tenant_id,
+    )
     return {
         "patient_id": pid,
         "patient_name": f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),

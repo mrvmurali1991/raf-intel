@@ -24,7 +24,7 @@ import csv
 import io
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -751,7 +751,7 @@ def generate_forecast(
         "revenue_per_raf_point_annual": _ANNUAL_REVENUE_PER_RAF_POINT,
         "avg_hcc_raf_value_per_gap": 0.30,
         "forecast_multiplier_months": multiplier,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     with raf_cursor() as cur:

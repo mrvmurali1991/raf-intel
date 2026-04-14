@@ -166,7 +166,8 @@ _NE_DEMO_SCORES: dict[tuple[str, str, str], float] = {
 }
 
 # ESRD Dialysis (ESRD_DLY) demographic base scores by age/sex
-# Source: CMS ESRD Table — V28 PY2026 representative values
+# Source: CMS ESRD Table — CMS-HCC V28 PY2026 — verify against official CMS Advance Notice before production use
+# TODO: Replace with official CMS coefficients when PY2026 Final Rule is published
 _ESRD_DLY_DEMO_SCORES: dict[tuple[str, str], float] = {
     ("0-34", "F"): 0.821,
     ("0-34", "M"): 0.876,
@@ -251,10 +252,14 @@ def _sex_code(sex_str: str) -> str:
 
 
 def _get_patient(patient_id: int) -> dict[str, Any] | None:
-    """Get patient from raf_intelligence.patients table.
+    """Get patient from raf_intelligence.patients table, with fallback to emr_patient_matches.
 
     Returns a dict with legacy OpenEMR-compatible keys (pid, fname, lname, DOB,
     sex) so downstream code that references those keys continues to work.
+
+    FHIR patients are stored in emr_patient_matches (not in patients).  When the
+    patients table has no row for *patient_id* we fall back to emr_patient_matches
+    so that RAF calculations succeed for FHIR-sourced patients.
     """
     with raf_cursor() as cur:
         cur.execute(
@@ -262,18 +267,50 @@ def _get_patient(patient_id: int) -> dict[str, Any] | None:
             (patient_id,),
         )
         row = cur.fetchone()
-    if not row:
-        return None
-    # Map to legacy key names used throughout the calculator
-    return {
-        "pid": row["id"],
-        "emr_pid": row["emr_pid"],
-        "fname": row["first_name"],
-        "lname": row["last_name"],
-        "DOB": row["dob"],
-        "dob": row["dob"],
-        "sex": row["sex"],
-    }
+    if row:
+        return {
+            "pid": row["id"],
+            "emr_pid": row["emr_pid"],
+            "fname": row["first_name"],
+            "lname": row["last_name"],
+            "DOB": row["dob"],
+            "dob": row["dob"],
+            "sex": row["sex"],
+        }
+
+    # Fallback: FHIR patient stored in emr_patient_matches
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT epm.id, epm.first_name, epm.last_name, epm.date_of_birth, epm.sex "
+                "FROM emr_patient_matches epm "
+                "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                "WHERE epm.id = %s AND ec.is_active = 1 "
+                "AND ec.connection_type IN ('fhir_r4', 'rest_api') LIMIT 1",
+                (patient_id,),
+            )
+            fhir_row = cur.fetchone()
+        if fhir_row:
+            dob_raw = fhir_row.get("date_of_birth")
+            dob_str = (
+                dob_raw.isoformat()
+                if hasattr(dob_raw, "isoformat")
+                else (str(dob_raw) if dob_raw else None)
+            )
+            return {
+                "pid": fhir_row["id"],
+                "emr_pid": None,  # No OpenEMR pid; ICD codes come from raf_patient_hcc
+                "fname": fhir_row.get("first_name") or "",
+                "lname": fhir_row.get("last_name") or "",
+                "DOB": dob_str,
+                "dob": dob_str,
+                "sex": fhir_row.get("sex") or "M",
+                "data_source": "fhir",
+            }
+    except Exception as exc:
+        logger.debug("_get_patient: FHIR fallback failed for pid=%s: %s", patient_id, exc)
+
+    return None
 
 
 def _get_icd_codes(
@@ -1053,7 +1090,13 @@ def calculate_raf_score(
     # 4a. New Enrollee short-circuit — demographic-only, no HCC disease scoring
     if _is_new_enrollee(model_segment):
         ne_result = _calculate_new_enrollee_score(age, sex, model_segment)
-        ne_payment_raf = round(ne_result["demographic_score"], 4)
+        # Apply the same normalization + MACI adjustment used by all other payment models.
+        # NE segments follow the V28 payment schedule (CMS-HCC V28 norm/MACI tables).
+        _ne_norm = _get_norm_factor(_NORM_FACTORS_V28, measurement_year)
+        _ne_maci = _get_maci_factor(_MACI_FACTORS_V28, measurement_year)
+        ne_payment_raf = round(
+            ne_result["demographic_score"] * (1 - _ne_maci) / _ne_norm, 4
+        )
 
         _upsert_patient_demographics(
             patient_id=patient_id,
@@ -1144,7 +1187,7 @@ def calculate_raf_score(
         # Force blending even for 2026+ if caller explicitly requests it
         if v24_weight == 0.0:
             source = _PACE_BLEND_WEIGHTS if is_pace else _BLEND_WEIGHTS
-            v24_weight, v28_weight = source.get(2025, (0.33, 0.67))
+            v24_weight, v28_weight = source.get(measurement_year, (0.0, 1.0))
     # "auto" uses the dict/PACE lookup result as-is
 
     use_v24 = v24_weight > 0.0
@@ -1529,15 +1572,40 @@ def calculate_raf_for_all_patients(
             "refusing to batch-calculate RAF without tenant scope (HIPAA multi-tenant isolation)"
         )
     with raf_cursor() as cur:
+        # Native patients
         cur.execute(
             "SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s ORDER BY id",
             (tenant_id,),
         )
-        patients = cur.fetchall()
+        native_patients = cur.fetchall()
+
+        # FHIR patients from emr_patient_matches that are not already in the
+        # patients table (i.e. no linked internal row).  We use epm.id as the
+        # patient_id reference, which is consistent with how the rest of the
+        # codebase (patient_service, raf routers) addresses FHIR patients.
+        cur.execute(
+            """
+            SELECT DISTINCT epm.id
+            FROM emr_patient_matches epm
+            JOIN emr_connections ec ON ec.id = epm.connection_id
+            WHERE ec.is_active = 1
+              AND ec.connection_type IN ('fhir_r4', 'rest_api')
+              AND ec.tenant_id = %s
+              AND epm.id NOT IN (
+                  SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+              )
+            ORDER BY epm.id
+            """,
+            (tenant_id, tenant_id),
+        )
+        fhir_patients = cur.fetchall()
+
+    all_patient_ids = [int(p["id"]) for p in native_patients] + [
+        int(p["id"]) for p in fhir_patients
+    ]
 
     results = []
-    for p in patients:
-        pid = int(p["id"])
+    for pid in all_patient_ids:
         try:
             r = calculate_raf_score(pid, year, tenant_id=tenant_id)
             results.append(r)

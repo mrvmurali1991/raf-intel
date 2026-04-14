@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, get_tenant_id, require_role
 from app.rate_limit import limiter
+from app.services.audit_logger import log_phi_access
 
 import app.services.emr_manager as emr_mgr
 import app.services.patient_matcher as patient_matcher
@@ -286,6 +287,37 @@ def _require_connection(
     return conn
 
 
+def _flip_patient_cohort(connection_id: int, tenant_id: str) -> int:
+    """Deactivate all patients for *tenant_id*, then reactivate those belonging
+    to *connection_id*.
+
+    Uses ``emr_connection_id`` — the correct FK column on the ``patients``
+    table — to identify the cohort to restore.
+
+    Returns the number of patients reactivated (``rowcount`` of the second
+    UPDATE).
+    """
+    from app.db import raf_cursor
+
+    with raf_cursor() as cur:
+        cur.execute(
+            "UPDATE patients SET is_active = 0 WHERE is_active = 1 AND tenant_id = %s",
+            (tenant_id,),
+        )
+        cur.execute(
+            "UPDATE patients SET is_active = 1"
+            " WHERE emr_connection_id = %s AND tenant_id = %s",
+            (connection_id, tenant_id),
+        )
+        restored = cur.rowcount or 0
+    logger.info(
+        "emr: flipped patient cohort for connection %s — %d patients reactivated",
+        connection_id,
+        restored,
+    )
+    return restored
+
+
 def _mask_credentials(conn: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of the connection dict with sensitive fields masked
     and normalized field names for the frontend."""
@@ -379,8 +411,8 @@ def demo_connect(
                     "message": "OpenEMR already connected",
                     "connection": _mask_credentials(c),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("auto_connect_openemr failed: %s", exc)
 
     # Try to activate an existing inactive OpenEMR connection
     try:
@@ -398,8 +430,8 @@ def demo_connect(
                     "message": "OpenEMR connected successfully",
                     "connection": _mask_credentials(updated),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("auto_connect_openemr failed: %s", exc)
 
     # Fallback: auto-register from env vars (direct DB)
     openemr_host = os.getenv("OPENEMR_DB_HOST", "")
@@ -649,21 +681,7 @@ def update_connection(
         # original EMR-sourced cohort after a CSV import temporarily replaced
         # it (CSV uploads only deactivate; nothing is destroyed).
         try:
-            from app.db import raf_cursor
-
-            with raf_cursor() as cur:
-                cur.execute(
-                    "UPDATE patients SET is_active = 0 WHERE is_active = 1 AND tenant_id = %s",
-                    (tenant_id,),
-                )
-                cur.execute(
-                    "UPDATE patients SET is_active = 1 WHERE connection_id = %s AND tenant_id = %s",
-                    (connection_id, tenant_id),
-                )
-                logger.info(
-                    "Reactivated patients linked to EMR connection %s",
-                    connection_id,
-                )
+            _flip_patient_cohort(connection_id, tenant_id)
         except Exception as exc:
             logger.error(
                 "Failed to flip patient activation for connection %s: %s",
@@ -750,31 +768,21 @@ def reactivate_connection(
 
     1. Marks the connection ``is_active = 1`` (and deactivates other connections).
     2. Deactivates every patient currently flagged active.
-    3. Re-activates patients whose ``connection_id`` matches this connection.
+    3. Re-activates patients whose ``emr_connection_id`` matches this connection.
     """
     _require_connection(connection_id, tenant_id)
 
+    # deactivate_other_connections atomically sets is_active=0 on all other
+    # connections for this tenant and is_active=1 on this one — no separate
+    # update_connection call is needed.
     try:
         emr_mgr.deactivate_other_connections(connection_id, tenant_id=tenant_id)
-        emr_mgr.update_connection(connection_id, {"is_active": 1}, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("reactivate_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Failed to reactivate connection")
 
-    restored = 0
     try:
-        from app.db import raf_cursor
-
-        with raf_cursor() as cur:
-            cur.execute(
-                "UPDATE patients SET is_active = 0 WHERE is_active = 1 AND tenant_id = %s",
-                (tenant_id,),
-            )
-            cur.execute(
-                "UPDATE patients SET is_active = 1 WHERE connection_id = %s AND tenant_id = %s",
-                (connection_id, tenant_id),
-            )
-            restored = cur.rowcount or 0
+        restored = _flip_patient_cohort(connection_id, tenant_id)
     except Exception as exc:
         logger.error(
             "reactivate_connection: failed to flip patients for %s: %s",
@@ -1134,6 +1142,13 @@ def trigger_sync(
         logger.error("trigger_sync %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    log_phi_access(
+        action="trigger_emr_sync",
+        resource="emr_patients",
+        patient_id=None,
+        details=f"connection_id={connection_id} sync_type={sync_type}",
+        tenant_id=tenant_id,
+    )
     return {
         "message": "Sync started",
         "connection_id": connection_id,
@@ -1341,6 +1356,7 @@ def list_unmatched_patients(
         description="Filter by match status",
     ),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """
     Return patient records from this EMR connection that could not be
@@ -1368,6 +1384,13 @@ def list_unmatched_patients(
         logger.error("list_unmatched_patients %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    log_phi_access(
+        action="view_unmatched_patients",
+        resource="emr_patients",
+        patient_id=None,
+        details=f"connection_id={connection_id} status={patient_status} limit={limit} offset={offset}",
+        tenant_id=tenant_id,
+    )
     return {"connection_id": connection_id, **result}
 
 

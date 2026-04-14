@@ -72,9 +72,8 @@ def cache_delete_pattern(pattern: str) -> None:
     if not r:
         return
     try:
-        keys = r.keys(pattern)
-        if keys:
-            r.delete(*keys)
+        for key in r.scan_iter(match=pattern):
+            r.delete(key)
     except Exception:
         pass
 

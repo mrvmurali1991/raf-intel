@@ -32,7 +32,21 @@ import type {
   AnalysisResult,
   DBSuspect,
   JobStatusResponse,
+  PopulationSummary,
+  DataCompleteness,
+  RevenueOpportunityReport,
+  TrendMetric,
+  DashboardTrends,
 } from "@/types";
+
+// Re-export consolidated types so existing consumers importing from "@/lib/api" continue to work.
+export type {
+  PopulationSummary,
+  DataCompleteness,
+  RevenueOpportunityReport,
+  TrendMetric,
+  DashboardTrends,
+};
 
 // ---------------------------------------------------------------------------
 // Axios instance
@@ -288,31 +302,7 @@ export interface RafBreakdown {
   }>;
 }
 
-export interface PopulationSummary {
-  year: number;
-  total_patients: number;
-  patients_with_scores: number;
-  average_raf_score: number;
-  median_raf_score: number;
-  total_revenue_opportunity: number;
-  patients_with_gaps: number;
-  hcc_capture_rate: number;
-  top_hccs?: Array<Record<string, unknown>>;
-  raf_distribution?: Array<{ range: string; count: number }>;
-  blend_weights?: Record<string, number>;
-  score_type_breakdown?: Record<string, number>;
-}
-
-export interface DataCompleteness {
-  completeness_score?: number;
-  total_patients?: number;
-  patients_with_billing?: number;
-  patients_with_problems?: number;
-  patients_with_clinical_notes?: number;
-  patients_with_vitals?: number;
-  patients_with_immunizations?: number;
-  patients_with_insurance?: number;
-}
+// PopulationSummary and DataCompleteness are now canonical in @/types — re-exported above.
 
 export interface SuspectsResponse {
   status_filter: string;
@@ -497,16 +487,7 @@ export interface Webhook {
   last_triggered_at?: string;
 }
 
-export interface RevenueOpportunityReport {
-  measurement_year: number;
-  total_patients_analyzed: number;
-  total_patients?: number;
-  total_billing_raf: number;
-  total_ai_raf: number;
-  total_gap: number;
-  estimated_annual_revenue: number;
-  average_raf_score: number;
-}
+// RevenueOpportunityReport is now canonical in @/types — re-exported above.
 
 export interface PatientScorecardRow {
   pid: number;
@@ -595,18 +576,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   return data;
 }
 
-export interface TrendMetric {
-  current: number;
-  prior: number;
-  change_pct: number | null;
-}
-
-export interface DashboardTrends {
-  period: string;
-  patients_analyzed?: TrendMetric;
-  average_raf_score?: TrendMetric;
-  error?: boolean;
-}
+// TrendMetric and DashboardTrends are now canonical in @/types — re-exported above.
 
 export async function getDashboardTrends(): Promise<DashboardTrends> {
   const { data } = await api.get("/api/dashboard/trends");

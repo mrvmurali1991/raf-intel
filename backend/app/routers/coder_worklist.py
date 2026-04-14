@@ -287,8 +287,8 @@ def start_item(
     try:
         updated = start_review(item_id, coder_user_id=coder_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("start_item id=%s validation error: %s", item_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("start_item id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -332,8 +332,8 @@ def complete_item(
             notes=body.notes,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("complete_item id=%s validation error: %s", item_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("complete_item id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -368,8 +368,8 @@ def escalate(
     try:
         updated = escalate_item(item_id, coder_user_id=coder_id, reason=body.reason)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("escalate id=%s validation error: %s", item_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("escalate id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -400,8 +400,8 @@ def return_for_info(
     try:
         updated = return_item(item_id, coder_user_id=coder_id, reason=body.reason)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("return_for_info id=%s validation error: %s", item_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("return_for_info id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")

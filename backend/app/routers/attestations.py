@@ -337,8 +337,8 @@ def create_batch(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("create_batch validation error: %s", exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("create_batch failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -381,8 +381,8 @@ def submit_batch(
             user_agent=ua,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("submit_batch validation error batch_id=%s: %s", batch_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("submit_batch batch_id=%s failed: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -455,8 +455,8 @@ def attest_condition(
             user_agent=ua,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("attest id=%s validation error: %s", attestation_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("attest id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -494,8 +494,8 @@ def reject_condition(
             user_agent=ua,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("reject id=%s validation error: %s", attestation_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("reject id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -535,8 +535,8 @@ def defer_condition(
             user_agent=ua,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
+        logger.warning("defer id=%s validation error: %s", attestation_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("defer id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")

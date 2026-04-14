@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.cache import cache_get, cache_set
 from app.services.dashboard_analytics_service import (
     get_coding_accuracy_metrics,
@@ -48,6 +48,7 @@ _CACHE_TTL = 300
 def analytics_overview(
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -60,7 +61,6 @@ def analytics_overview(
     - estimated_annual_revenue — avg_raf × CMS per-member rate × patient count
     """
     measurement_year = year or date.today().year
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     cache_key = f"analytics:overview:{tenant_id}:{measurement_year}"
     cached = cache_get(cache_key)
@@ -84,6 +84,7 @@ def analytics_overview(
 )
 def analytics_coding(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -95,7 +96,6 @@ def analytics_coding(
     - meat_compliance_rate — encounters with MEAT evidence / HCC-coded encounters
     - top_missed_hccs — top-10 most frequently missed HCC categories (open suspects)
     """
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     cache_key = f"analytics:coding:{tenant_id}"
     cached = cache_get(cache_key)
@@ -119,6 +119,7 @@ def analytics_coding(
 )
 def analytics_providers(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> list[dict[str, Any]]:
     """
@@ -130,7 +131,6 @@ def analytics_providers(
     - hcc_capture_rate — proportion of encounters with ≥1 HCC coded
     - gap_closure_rate — closed recapture gaps / total gaps for this provider's panel
     """
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     cache_key = f"analytics:providers:{tenant_id}"
     cached = cache_get(cache_key)
@@ -154,6 +154,7 @@ def analytics_providers(
 )
 def analytics_risk_stratification(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -168,7 +169,6 @@ def analytics_risk_stratification(
     Also returns rising_risk_patients — patients whose RAF increased ≥ 0.3
     year-over-year, sorted by largest increase.
     """
-    tenant_id = str(current_user.get("tenant_id", "1"))
 
     cache_key = f"analytics:risk:{tenant_id}"
     cached = cache_get(cache_key)

@@ -136,8 +136,8 @@ def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | None:
             row = cur.fetchone()
             if row and row.get("emr_pid"):
                 return int(row["emr_pid"])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to fetch data: %s", exc)
     return None
 
 
@@ -162,13 +162,90 @@ def _calculate_age(dob_raw: str | None) -> int | None:
         return None
 
 
+def _patient_in_fhir_matches(pid: int, tenant_id: str | None = None) -> bool:
+    """Return True if *pid* exists in emr_patient_matches.id for an active FHIR connection."""
+    try:
+        with raf_cursor() as cur:
+            if tenant_id is not None:
+                cur.execute(
+                    "SELECT 1 FROM emr_patient_matches epm "
+                    "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                    "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
+                    "AND epm.id = %s AND ec.tenant_id = %s LIMIT 1",
+                    (pid, tenant_id),
+                )
+            else:
+                cur.execute(
+                    "SELECT 1 FROM emr_patient_matches epm "
+                    "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                    "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
+                    "AND epm.id = %s LIMIT 1",
+                    (pid,),
+                )
+            return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None:
+    """Return a unified patient dict from emr_patient_matches for a FHIR patient."""
+    try:
+        with raf_cursor() as cur:
+            if tenant_id is not None:
+                cur.execute(
+                    "SELECT epm.id, epm.external_id, epm.first_name, epm.last_name, "
+                    "epm.date_of_birth, epm.sex, epm.mrn, epm.raf_patient_id, epm.match_status "
+                    "FROM emr_patient_matches epm "
+                    "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                    "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
+                    "AND epm.id = %s AND ec.tenant_id = %s LIMIT 1",
+                    (pid, tenant_id),
+                )
+            else:
+                cur.execute(
+                    "SELECT epm.id, epm.external_id, epm.first_name, epm.last_name, "
+                    "epm.date_of_birth, epm.sex, epm.mrn, epm.raf_patient_id, epm.match_status "
+                    "FROM emr_patient_matches epm "
+                    "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                    "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
+                    "AND epm.id = %s LIMIT 1",
+                    (pid,),
+                )
+            row = cur.fetchone()
+            if not row:
+                return None
+            dob_raw = row.get("date_of_birth")
+            return {
+                "pid": row["id"],
+                "fname": row.get("first_name") or "",
+                "lname": row.get("last_name") or "",
+                "DOB": dob_raw.isoformat() if hasattr(dob_raw, "isoformat") else (str(dob_raw) if dob_raw else ""),
+                "sex": row.get("sex") or "",
+                "mrn": row.get("mrn") or "",
+                "external_id": row.get("external_id"),
+                "raf_patient_id": row.get("raf_patient_id"),
+                "match_status": row.get("match_status") or "",
+                "data_source": "fhir",
+            }
+    except Exception:
+        return None
+
+
+def patient_is_fhir(pid: int, tenant_id: str) -> bool:
+    """Return True when *pid* belongs to an active FHIR/REST connection (emr_patient_matches.id)."""
+    return _patient_in_fhir_matches(pid, tenant_id)
+
+
 def patient_is_accessible(pid: int, tenant_id: str) -> bool:
     """Return True when the router should allow access to *pid*.
 
     Combines the two tenant/connection guards used throughout the router.
+    Includes direct emr_patient_matches.id lookup for FHIR patients.
     """
-    return _patient_belongs_to_tenant(pid, tenant_id) or _patient_in_active_connection(
-        pid, tenant_id=tenant_id
+    return (
+        _patient_belongs_to_tenant(pid, tenant_id)
+        or _patient_in_active_connection(pid, tenant_id=tenant_id)
+        or _patient_in_fhir_matches(pid, tenant_id=tenant_id)
     )
 
 
@@ -216,7 +293,7 @@ def _list_fhir_patients(
     for r in rows:
         patients.append(
             {
-                "pid": r["raf_patient_id"] or r["pid"],
+                "pid": r["pid"],
                 "fname": r["fname"] or "",
                 "lname": r["lname"] or "",
                 "DOB": str(r["DOB"]) if r["DOB"] else "",
@@ -401,7 +478,7 @@ def svc_list_patients(
 # ---------------------------------------------------------------------------
 
 
-def svc_patients_with_encounters(limit: int) -> dict[str, Any]:
+def svc_patients_with_encounters(limit: int, tenant_id: str | None = None) -> dict[str, Any]:
     """Return patients that have at least one encounter."""
     if _has_active_emr_connection():
         patients = emr.get_patients_with_encounters(limit=limit)
@@ -416,9 +493,10 @@ def svc_patients_with_encounters(limit: int) -> dict[str, Any]:
                 FROM patients p
                 JOIN raf_encounter_analysis ea ON ea.pid = p.id
                 WHERE p.is_active = 1 AND p.data_source = 'upload'
+                  AND p.tenant_id = %s AND ea.tenant_id = %s
                 LIMIT %s
                 """,
-                (limit,),
+                (tenant_id, tenant_id, limit),
             )
             patients = [dict(r) for r in cur.fetchall()]
         return {"total": len(patients), "patients": patients}
@@ -449,8 +527,8 @@ def svc_get_patient(pid: int, tenant_id: str) -> dict[str, Any] | None:
                               city, state, zip AS postal_code, phone AS phone_cell,
                               phone AS phone_home, email, mrn, insurance_type,
                               data_source, created_at AS created_date
-                       FROM patients WHERE id = %s AND is_active = 1""",
-                    (pid,),
+                       FROM patients WHERE id = %s AND is_active = 1 AND tenant_id = %s""",
+                    (pid, tenant_id),
                 )
                 row = cur.fetchone()
                 if row:
@@ -462,8 +540,14 @@ def svc_get_patient(pid: int, tenant_id: str) -> dict[str, Any] | None:
                             patient[k] = float(v)
                         else:
                             patient[k] = v if v is not None else ""
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
+    if not patient:
+        # Third fallback: FHIR patient from emr_patient_matches
+        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+        if fhir_row:
+            patient = fhir_row
+
     if not patient:
         return None
 
@@ -497,14 +581,58 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
     """Return all encounters for *pid*, with enrichment from cached analysis."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
 
-    try:
-        encounters = emr.get_encounters(emr_pid)
-    except Exception as exc:
-        logger.error("svc_get_encounters error pid=%s: %s", pid, exc)
-        encounters = []
+    # For FHIR patients, skip the direct OpenEMR DB query and go straight to
+    # the FHIR-specific tables (fhir_encounters + raf_encounter_analysis).
+    is_fhir = _patient_in_fhir_matches(pid, tenant_id=tenant_id)
+
+    encounters: list[dict] = []
+    if is_fhir:
+        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+        external_id = fhir_row.get("external_id") if fhir_row else None
+        if external_id:
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """SELECT fe.id AS encounter_id,
+                                  fe.period_start AS date,
+                                  COALESCE(fe.type_display, fe.encounter_type) AS reason,
+                                  fe.status,
+                                  fe.fhir_encounter_id,
+                                  fe.provider_name
+                           FROM fhir_encounters fe
+                           WHERE fe.fhir_patient_id = %s
+                           ORDER BY fe.period_start DESC""",
+                        (external_id,),
+                    )
+                    for r in cur.fetchall():
+                        encounters.append(
+                            {
+                                "encounter_id": r["encounter_id"],
+                                "pid": pid,
+                                "date": str(r["date"]) if r["date"] else None,
+                                "reason": r.get("reason") or "Office Visit",
+                                "facility": "",
+                                "provider_id": None,
+                                "provider_fname": r.get("provider_name") or "",
+                                "provider_lname": "",
+                                "has_notes": 0,
+                                "notes": "",
+                                "note_text": "",
+                                "status": r.get("status") or "finished",
+                                "source": "fhir",
+                            }
+                        )
+            except Exception as exc:
+                logger.error("svc_get_encounters FHIR error pid=%s: %s", pid, exc)
+    else:
+        try:
+            encounters = emr.get_encounters(emr_pid)
+        except Exception as exc:
+            logger.error("svc_get_encounters error pid=%s: %s", pid, exc)
+            encounters = []
 
     # Fallback: load from raf_intelligence.encounters
-    if not encounters:
+    if not encounters and not is_fhir:
         try:
             with raf_cursor() as cur:
                 cur.execute(
@@ -564,8 +692,8 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
                                 if isinstance(row["analysis_json"], str)
                                 else row["analysis_json"]
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("Failed to fetch data: %s", exc)
                     analysis_map[eid] = {
                         "diagnoses": analysis_data.get("diagnoses", []),
                         "pipeline": analysis_data.get("pipeline", {}),
@@ -609,8 +737,8 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
                     eid = row["encounter"]
                     if eid not in notes_map:
                         notes_map[eid] = row.get("note_text") or ""
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
 
         for enc in encounters:
             eid = enc.get("encounter_id") or enc.get("encounter")
@@ -640,14 +768,46 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
 def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
     """Return all prescriptions for *pid*, with RAF DB fallback."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    is_fhir = _patient_in_fhir_matches(pid, tenant_id=tenant_id)
+    medications: list[dict] = []
 
-    try:
-        medications = emr.get_medications(emr_pid, year=year)
-    except Exception as exc:
-        logger.error("svc_get_medications error pid=%s: %s", pid, exc)
-        medications = []
+    if is_fhir:
+        # FHIR patients: query patient_medications by raf_patient_id
+        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+        raf_patient_id = fhir_row.get("raf_patient_id") if fhir_row else None
+        if raf_patient_id:
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        "SELECT medication_name AS drug, dosage, frequency, "
+                        "purpose AS note, start_date, status "
+                        "FROM patient_medications "
+                        "WHERE patient_id = %s AND status = 'active' ORDER BY medication_name",
+                        (raf_patient_id,),
+                    )
+                    for r in cur.fetchall():
+                        medications.append(
+                            {
+                                "drug": r.get("drug") or "",
+                                "dosage": r.get("dosage") or "",
+                                "form": "",
+                                "frequency": r.get("frequency") or "",
+                                "note": r.get("note") or "",
+                                "start_date": str(r["start_date"]) if r.get("start_date") else None,
+                                "active": 1,
+                                "source": "fhir",
+                            }
+                        )
+            except Exception as exc:
+                logger.error("svc_get_medications FHIR error pid=%s: %s", pid, exc)
+    else:
+        try:
+            medications = emr.get_medications(emr_pid, year=year)
+        except Exception as exc:
+            logger.error("svc_get_medications error pid=%s: %s", pid, exc)
+            medications = []
 
-    if not medications:
+    if not medications and not is_fhir:
         try:
             with raf_cursor() as cur:
                 cur.execute(
@@ -669,8 +829,8 @@ def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[s
                             "active": 1,
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
 
     response: dict[str, Any] = {
         "pid": pid,
@@ -722,14 +882,55 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
     from app.services.icd_validator import get_description, validate_code
 
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
+    is_fhir = _patient_in_fhir_matches(pid, tenant_id=tenant_id)
+    codes: list[dict] = []
 
-    try:
-        codes = emr.get_billing_codes(emr_pid)
-    except Exception as exc:
-        logger.error("svc_get_diagnoses error pid=%s: %s", pid, exc)
-        codes = []
+    if is_fhir:
+        # FHIR patients: pull ICD-10 codes from raf_patient_hcc via raf_patient_id
+        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+        raf_patient_id = fhir_row.get("raf_patient_id") if fhir_row else None
+        if raf_patient_id:
+            try:
+                import json as _json
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """SELECT hcc_code, icd10_codes, measurement_year, updated_at
+                           FROM raf_patient_hcc
+                           WHERE patient_id = %s
+                           ORDER BY measurement_year DESC""",
+                        (raf_patient_id,),
+                    )
+                    for r in cur.fetchall():
+                        icd_list: list[str] = []
+                        raw = r.get("icd10_codes")
+                        if raw:
+                            try:
+                                icd_list = _json.loads(raw) if isinstance(raw, str) else raw
+                            except Exception as exc:
+                                logger.debug("Failed to fetch data: %s", exc)
+                        for code in icd_list:
+                            codes.append(
+                                {
+                                    "code": code,
+                                    "code_text": "",
+                                    "code_type": "ICD10",
+                                    "hcc_code": r.get("hcc_code"),
+                                    "encounter_date": str(r["updated_at"])[:10]
+                                    if r.get("updated_at")
+                                    else None,
+                                    "source": "fhir",
+                                }
+                            )
+            except Exception as exc:
+                logger.error("svc_get_diagnoses FHIR error pid=%s: %s", pid, exc)
+    else:
+        try:
+            codes = emr.get_billing_codes(emr_pid)
+        except Exception as exc:
+            logger.error("svc_get_diagnoses error pid=%s: %s", pid, exc)
+            codes = []
 
-    if not codes:
+    if not codes and not is_fhir:
         try:
             with raf_cursor() as cur:
                 cur.execute(
@@ -752,8 +953,8 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
                             else None,
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
 
     for row in codes:
         code = row.get("code", "")
@@ -829,8 +1030,8 @@ def svc_get_problem_list(pid: int, year: Optional[int], tenant_id: str) -> dict[
                             "severity": r.get("severity"),
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
 
     for p in problems:
         if "icd10_code" not in p:
@@ -983,8 +1184,8 @@ def svc_get_comprehensive_profile(
                             else None,
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
 
     cpt_codes = _safe_call("billing.cpt", emr.get_cpt_codes, emr_pid, default=[])
     hints = emr.CPT_CONDITION_HINTS
@@ -1021,8 +1222,8 @@ def svc_get_comprehensive_profile(
                             "source": "raf_db",
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
     for p in problem_list:
         raw_dx = p.get("diagnosis") or ""
         icd10 = raw_dx.split(":")[-1].strip() if ":" in raw_dx else raw_dx.strip()
@@ -1060,8 +1261,8 @@ def svc_get_comprehensive_profile(
                             "source": "raf_db",
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch data: %s", exc)
 
     medication_diagnosis_gaps = _safe_call(
         "medication_diagnosis_gaps",
@@ -1162,8 +1363,8 @@ def svc_get_comprehensive_profile(
                     months = int(_enr_row["enrollment_months"])
                     enrolled_date = datetime.now() - timedelta(days=months * 30)
                     enrollment["enrolled_since"] = enrolled_date.strftime("%Y-%m-%d")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to fetch data: %s", exc)
 
     # --- HEDIS -----------------------------------------------------------
     hedis: dict[str, Any] = _safe_call(

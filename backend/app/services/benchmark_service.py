@@ -27,7 +27,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -988,7 +988,7 @@ def run_accuracy_benchmark(test_cases: list[dict] | None = None) -> dict[str, An
 
     result: dict[str, Any] = {
         "run_id":         run_id,
-        "run_timestamp":  datetime.utcnow().isoformat() + "Z",
+        "run_timestamp":  datetime.now(timezone.utc).isoformat() + "Z",
         "suite_version":  BENCHMARK_SUITE_VERSION,
         "total_cases":    total_cases,
         "icd10_metrics": {

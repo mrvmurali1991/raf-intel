@@ -786,7 +786,7 @@ def generate_gaps_from_suspects(
 # ---------------------------------------------------------------------------
 
 
-def generate_care_gaps(tenant_id: str) -> dict[str, Any]:
+def generate_care_gaps(tenant_id: str, measurement_year: int | None = None) -> dict[str, Any]:
     """
     Pipeline entry point for care gap auto-generation.
 
@@ -807,6 +807,9 @@ def generate_care_gaps(tenant_id: str) -> dict[str, Any]:
     if not tenant_id:
         raise ValueError("generate_care_gaps: tenant_id is required")
 
+    if measurement_year is None:
+        measurement_year = date.today().year
+
     created_count = 0
     skipped_count = 0
     errors: list[dict[str, Any]] = []
@@ -826,9 +829,10 @@ def generate_care_gaps(tenant_id: str) -> dict[str, Any]:
             FROM raf_suspect_conditions sc
             WHERE sc.status = 'open'
               AND sc.tenant_id = %s
+              AND sc.measurement_year = %s
             ORDER BY sc.confidence_score DESC
             """,
-            (tenant_id,),
+            (tenant_id, measurement_year),
         )
         suspects: list[dict[str, Any]] = cur.fetchall() or []
 

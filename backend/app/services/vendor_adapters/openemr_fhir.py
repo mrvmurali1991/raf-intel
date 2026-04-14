@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 import httpx
@@ -100,7 +100,7 @@ class OpenEMRFhirAdapter:
                         is_expired = True
                 if (
                     isinstance(token_expires, datetime)
-                    and token_expires < datetime.utcnow()
+                    and token_expires < datetime.now(timezone.utc)
                 ):
                     is_expired = True
 
@@ -149,6 +149,7 @@ class OpenEMRFhirAdapter:
                         "username": self.emr_username,
                         "password": self.emr_password,
                         "scope": self.scope,
+                        "user_role": "users",
                     },
                     headers={
                         "Content-Type": "application/x-www-form-urlencoded",
@@ -431,6 +432,7 @@ class OpenEMRFhirAdapter:
         errors: list[str] = []
         patients_synced = 0
         conditions_found = 0
+        conditions_skipped = 0
         encounters_synced = 0
         raf_scores_calculated = 0
 
@@ -479,6 +481,12 @@ class OpenEMRFhirAdapter:
                 if condition.get("icd10_code"):
                     self._upsert_condition_with_hcc(condition)
                     conditions_found += 1
+                else:
+                    logger.warning(
+                        "Skipping condition without ICD-10 mapping: %s",
+                        condition.get("display", "unknown"),
+                    )
+                    conditions_skipped += 1
             except Exception as exc:
                 errors.append(f"Condition {resource.get('id')}: {exc}")
 
@@ -503,6 +511,27 @@ class OpenEMRFhirAdapter:
             errors.append(f"Encounter fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
+        # Phase 3.5 — MedicationRequests                                       #
+        # ------------------------------------------------------------------ #
+        medications_synced = 0
+        try:
+            med_entries = self._fhir_get_all("MedicationRequest")
+            logger.info(
+                "OpenEMR FHIR: fetched %d MedicationRequest entries", len(med_entries)
+            )
+            for entry in med_entries:
+                resource = entry.get("resource", {})
+                if resource.get("resourceType") != "MedicationRequest":
+                    continue
+                try:
+                    self._upsert_medication(resource)
+                    medications_synced += 1
+                except Exception as exc:
+                    errors.append(f"MedicationRequest {resource.get('id')}: {exc}")
+        except Exception as exc:
+            errors.append(f"MedicationRequest fetch failed: {exc}")
+
+        # ------------------------------------------------------------------ #
         # Phase 4 — RAF score calculation                                      #
         # ------------------------------------------------------------------ #
         try:
@@ -511,18 +540,22 @@ class OpenEMRFhirAdapter:
             errors.append(f"RAF score calculation failed: {exc}")
 
         logger.info(
-            "OpenEMR FHIR sync done: %d patients, %d conditions, %d encounters, "
-            "%d RAF scores, %d errors",
+            "OpenEMR FHIR sync done: %d patients, %d conditions, %d conditions_skipped, "
+            "%d encounters, %d medications, %d RAF scores, %d errors",
             patients_synced,
             conditions_found,
+            conditions_skipped,
             encounters_synced,
+            medications_synced,
             raf_scores_calculated,
             len(errors),
         )
         return {
             "patients_synced": patients_synced,
             "conditions_found": conditions_found,
+            "conditions_skipped": conditions_skipped,
             "encounters_synced": encounters_synced,
+            "medications_synced": medications_synced,
             "raf_scores_calculated": raf_scores_calculated,
             "errors": errors,
         }
@@ -708,27 +741,41 @@ class OpenEMRFhirAdapter:
     def _upsert_patient(self, patient: dict) -> None:
         from app.db import raf_cursor
 
+        # Derive a stable numeric emr_pid from the FHIR UUID so each
+        # patient gets a unique (connection_id, emr_pid) pair.
+        # Use 7 hex digits (max 268435455) to stay within INT UNSIGNED range.
+        import hashlib
+        ext_id = patient["external_id"] or ""
+        emr_pid = int(hashlib.md5(ext_id.encode()).hexdigest()[:7], 16)
+
         with raf_cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO emr_patient_matches (
+                    patient_id, emr_connection_id, emr_patient_id,
                     connection_id, external_id, emr_pid, first_name, last_name,
-                    date_of_birth, sex, mrn, match_status, created_at
-                ) VALUES (%s, %s, 0, %s, %s, %s, %s, %s, 'auto', NOW())
+                    date_of_birth, sex, mrn, match_status, tenant_id, created_at
+                ) VALUES (0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto', %s, NOW())
                 ON DUPLICATE KEY UPDATE
                     first_name = VALUES(first_name),
                     last_name = VALUES(last_name),
                     date_of_birth = VALUES(date_of_birth),
-                    sex = VALUES(sex)
+                    sex = VALUES(sex),
+                    external_id = VALUES(external_id),
+                    mrn = VALUES(mrn)
                 """,
                 (
                     self.connection_id,
                     patient["external_id"],
+                    self.connection_id,
+                    patient["external_id"],
+                    emr_pid,
                     patient["first_name"],
                     patient["last_name"],
                     patient["date_of_birth"] or None,
                     patient["sex"],
                     patient["mrn"],
+                    self.connection.get("tenant_id", "1"),
                 ),
             )
 
@@ -851,6 +898,76 @@ class OpenEMRFhirAdapter:
                 )
 
     # ------------------------------------------------------------------
+    # Patient resolution helper
+    # ------------------------------------------------------------------
+
+    def _resolve_or_create_raf_patient_id(self, external_id: str) -> int | None:
+        """Return the raf_patient_demographics.id for a FHIR patient.
+
+        If the emr_patient_matches row exists but raf_patient_id is not yet
+        linked (e.g. first sync had a partial failure), this method
+        reconstructs the patient dict from emr_patient_matches and calls
+        _upsert_demographics to create the missing row, then returns the
+        newly assigned id.
+
+        Returns None only when the patient is not present in
+        emr_patient_matches at all (i.e. the patient phase of the sync has
+        not run yet for this patient).
+        """
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT raf_patient_id, first_name, last_name, date_of_birth, sex
+                FROM emr_patient_matches
+                WHERE connection_id = %s AND external_id = %s
+                LIMIT 1
+                """,
+                (self.connection_id, external_id),
+            )
+            row = cur.fetchone()
+
+        if not row:
+            return None
+
+        if row["raf_patient_id"]:
+            return int(row["raf_patient_id"])
+
+        # raf_patient_id is NULL — demographics row is missing. Reconstruct
+        # the patient dict from emr_patient_matches and upsert demographics.
+        logger.info(
+            "OpenEMR FHIR: demographics missing for external_id=%s — creating now",
+            external_id,
+        )
+        patient_stub = {
+            "external_id": external_id,
+            "first_name": row.get("first_name") or "",
+            "last_name": row.get("last_name") or "",
+            "date_of_birth": (row.get("date_of_birth") or ""),
+            "sex": row.get("sex") or "M",
+        }
+        if hasattr(patient_stub["date_of_birth"], "isoformat"):
+            patient_stub["date_of_birth"] = patient_stub["date_of_birth"].isoformat()
+        self._upsert_demographics(patient_stub)
+
+        # Re-query after upsert to get the newly assigned id
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT raf_patient_id
+                FROM emr_patient_matches
+                WHERE connection_id = %s AND external_id = %s
+                  AND raf_patient_id IS NOT NULL
+                LIMIT 1
+                """,
+                (self.connection_id, external_id),
+            )
+            row2 = cur.fetchone()
+
+        return int(row2["raf_patient_id"]) if row2 else None
+
+    # ------------------------------------------------------------------
     # Condition → HCC upsert (with ICD-10 crosswalk)
     # ------------------------------------------------------------------
 
@@ -868,27 +985,21 @@ class OpenEMRFhirAdapter:
 
         measurement_year = date.today().year
 
-        with raf_cursor() as cur:
-            # 1. Resolve internal patient id
-            cur.execute(
-                """
-                SELECT raf_patient_id
-                FROM emr_patient_matches
-                WHERE connection_id = %s AND external_id = %s
-                  AND raf_patient_id IS NOT NULL
-                LIMIT 1
-                """,
-                (self.connection_id, condition["patient_external_id"]),
+        # Resolve internal patient id — if demographics row is missing, create it
+        # on the fly from the data already stored in emr_patient_matches so that
+        # the FK constraint on raf_patient_hcc is satisfied.
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+            condition["patient_external_id"]
+        )
+        if raf_patient_id is None:
+            logger.debug(
+                "OpenEMR FHIR: skipping condition %s — patient %s not in emr_patient_matches",
+                icd10,
+                condition["patient_external_id"],
             )
-            pm_row = cur.fetchone()
-            if not pm_row:
-                logger.debug(
-                    "OpenEMR FHIR: skipping condition %s — patient %s not yet matched",
-                    icd10,
-                    condition["patient_external_id"],
-                )
-                return
-            raf_patient_id: int = pm_row["raf_patient_id"]
+            return
+
+        with raf_cursor() as cur:
 
             # 2. ICD-10 → HCC crosswalk lookup (prefer current year, fall back
             #    to nearest available year)
@@ -989,23 +1100,14 @@ class OpenEMRFhirAdapter:
         else:
             enc_type_code = ""
 
-        with raf_cursor() as cur:
-            # Resolve patient to our internal raf_patient_id
-            cur.execute(
-                """
-                SELECT raf_patient_id
-                FROM emr_patient_matches
-                WHERE connection_id = %s AND external_id = %s
-                  AND raf_patient_id IS NOT NULL
-                LIMIT 1
-                """,
-                (self.connection_id, patient_external_id),
-            )
-            pm_row = cur.fetchone()
-            if not pm_row:
-                return  # Patient not yet matched; skip encounter
-            raf_patient_id: int = pm_row["raf_patient_id"]
+        # Resolve patient — ensure demographics row exists before writing encounter
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+            patient_external_id
+        )
+        if raf_patient_id is None:
+            return  # Patient not in emr_patient_matches; skip encounter
 
+        with raf_cursor() as cur:
             # We store one row per encounter in raf_encounter_analysis.
             # encounter_id is a surrogate generated from the FHIR id hash so
             # we can upsert deterministically.
@@ -1014,17 +1116,107 @@ class OpenEMRFhirAdapter:
             cur.execute(
                 """
                 INSERT INTO raf_encounter_analysis
-                    (patient_id, encounter_id, billing_raf, ai_raf,
-                     raf_gap, revenue_opportunity, analyzed_at, created_at,
-                     overall_score, hcc_opportunity_count)
-                VALUES (%s, %s, 0, 0, 0, 0, %s, NOW(), 0, 0)
+                    (patient_id, encounter_id, overall_score,
+                     hcc_opportunity_count, analyzed_at, created_at)
+                VALUES (%s, %s, 0, 0, %s, NOW())
                 ON DUPLICATE KEY UPDATE
                     analyzed_at = VALUES(analyzed_at)
                 """,
                 (
                     raf_patient_id,
                     encounter_surrogate,
-                    period_start or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                    period_start or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                ),
+            )
+            # Also write encounter metadata to fhir_encounters for UI display
+            cur.execute(
+                """
+                INSERT INTO fhir_encounters
+                    (fhir_id, raf_patient_id, connection_id, encounter_date,
+                     status, encounter_type, encounter_surrogate, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                ON DUPLICATE KEY UPDATE
+                    encounter_date = VALUES(encounter_date),
+                    status = VALUES(status),
+                    encounter_type = VALUES(encounter_type)
+                """,
+                (
+                    encounter_fhir_id,
+                    raf_patient_id,
+                    self.connection_id,
+                    period_start,
+                    status,
+                    enc_type_code,
+                    encounter_surrogate,
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # Medication upsert
+    # ------------------------------------------------------------------
+
+    def _upsert_medication(self, resource: dict) -> None:
+        """Store a FHIR MedicationRequest in patient_medications for UI display."""
+        from app.db import raf_cursor
+
+        med_fhir_id: str = resource.get("id", "")
+        subject = resource.get("subject", {})
+        patient_external_id: str = (
+            (subject.get("reference") or "").replace("Patient/", "").strip()
+        )
+        if not patient_external_id:
+            return
+
+        # Resolve internal raf_patient_id via emr_patient_matches
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+            patient_external_id
+        )
+        if raf_patient_id is None:
+            return
+
+        # Medication name
+        med_concept = resource.get("medicationCodeableConcept", {})
+        drug_name = med_concept.get("text", "")
+        if not drug_name:
+            codings = med_concept.get("coding", [])
+            if codings:
+                drug_name = codings[0].get("display", "") or codings[0].get("code", "")
+
+        if not drug_name:
+            med_ref = resource.get("medicationReference", {})
+            drug_name = med_ref.get("display", "") or med_fhir_id
+
+        # Dosage
+        dosage_instructions = resource.get("dosageInstruction", [{}])
+        dosage_text = dosage_instructions[0].get("text", "") if dosage_instructions else ""
+
+        # Status
+        status = resource.get("status", "active")
+        is_active = 1 if status in ("active", "on-hold") else 0
+
+        # Authored date
+        authored_on = resource.get("authoredOn", "")
+        start_date = authored_on[:10] if authored_on else None
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO patient_medications
+                    (patient_id, medication_name, dosage, status, start_date, fhir_id, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON DUPLICATE KEY UPDATE
+                    medication_name = VALUES(medication_name),
+                    dosage = VALUES(dosage),
+                    status = VALUES(status),
+                    start_date = VALUES(start_date)
+                """,
+                (
+                    raf_patient_id,
+                    drug_name[:255],
+                    dosage_text[:255],
+                    "active" if is_active else "inactive",
+                    start_date,
+                    med_fhir_id[:100],
                 ),
             )
 
@@ -1046,14 +1238,16 @@ class OpenEMRFhirAdapter:
         scores_written = 0
 
         with raf_cursor() as cur:
-            # Fetch all demographics rows for current year
+            # Fetch all demographics rows for current year scoped to this tenant
+            tenant_id = str(self.connection.get("tenant_id", "1"))
             cur.execute(
                 """
                 SELECT id AS raf_patient_id, age_band, sex, model_segment
                 FROM raf_patient_demographics
                 WHERE measurement_year = %s
+                  AND tenant_id = %s
                 """,
-                (measurement_year,),
+                (measurement_year, tenant_id),
             )
             demo_rows = cur.fetchall()
 

@@ -31,7 +31,7 @@ Table DDL (run once via migration):
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.db import raf_cursor
@@ -190,7 +190,7 @@ def resolve_gap(gap_id: int, status: str, resolved_by: str) -> bool:
     """
 
     with raf_cursor() as cursor:
-        cursor.execute(sql, (status, datetime.utcnow(), resolved_by, gap_id))
+        cursor.execute(sql, (status, datetime.now(timezone.utc), resolved_by, gap_id))
         updated = cursor.rowcount
 
     if not updated:
@@ -410,7 +410,7 @@ def close_gap(gap_id: int, tenant_id: str) -> None:
         cursor.execute(check_sql, (gap_id, tenant_id))
         if not cursor.fetchone():
             raise ValueError(f"Gap {gap_id} not found for tenant {tenant_id}")
-        cursor.execute(update_sql, (datetime.utcnow(), gap_id))
+        cursor.execute(update_sql, (datetime.now(timezone.utc), gap_id))
     logger.info("close_gap: gap_id=%d tenant=%s", gap_id, tenant_id)
 
 

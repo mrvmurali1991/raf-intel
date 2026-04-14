@@ -256,6 +256,78 @@ export interface PatientSummary {
   suspect_count: number;
 }
 
+// ---------------------------------------------------------------------------
+// Dashboard Trends  —  GET /api/dashboard/trends
+// ---------------------------------------------------------------------------
+
+export interface TrendMetric {
+  current: number;
+  previous: number;
+  change_pct: number | null;
+}
+
+export interface DashboardTrends {
+  period: string;
+  patients_analyzed?: TrendMetric;
+  average_raf_score?: TrendMetric;
+  error?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Population Summary  —  GET /api/raf/population-summary
+// ---------------------------------------------------------------------------
+
+export interface HCCSummary {
+  hcc: string;
+  label: string;
+  count: number;
+}
+
+export interface PopulationSummary {
+  year: number;
+  total_patients: number;
+  patients_with_scores: number;
+  average_raf_score: number;
+  median_raf_score: number;
+  patients_with_gaps: number;
+  hcc_capture_rate: number;
+  total_revenue_opportunity: number;
+  raf_distribution: RAFDistributionBucket[];
+  top_hccs: HCCSummary[];
+  blend_weights?: Record<string, number>;
+  score_type_breakdown?: Record<string, number>;
+}
+
+// ---------------------------------------------------------------------------
+// Data Completeness  —  GET /api/reports/data-completeness
+// ---------------------------------------------------------------------------
+
+export interface DataCompleteness {
+  completeness_score: number;
+  total_patients: number;
+  patients_with_billing: number;
+  patients_with_problems: number;
+  patients_with_clinical_notes: number;
+  patients_with_vitals: number;
+  patients_with_immunizations: number;
+  patients_with_insurance: number;
+}
+
+// ---------------------------------------------------------------------------
+// Revenue Opportunity  —  GET /api/reports/revenue-opportunity
+// ---------------------------------------------------------------------------
+
+export interface RevenueOpportunityReport {
+  measurement_year: number;
+  total_patients_analyzed: number;
+  total_patients?: number;
+  total_billing_raf: number;
+  total_ai_raf: number;
+  total_gap: number;
+  estimated_annual_revenue: number;
+  average_raf_score: number;
+}
+
 export interface JobStatusResponse {
   job_id: string;
   status: "queued" | "running" | "completed" | "failed";

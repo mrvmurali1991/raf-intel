@@ -42,7 +42,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
 from app.services import submission_service as svc
 
@@ -103,17 +103,6 @@ class ScheduleUpsertRequest(BaseModel):
         return v
 
 
-# ---------------------------------------------------------------------------
-# Helper: resolve tenant_id from authenticated user
-# ---------------------------------------------------------------------------
-
-def _tenant(current_user: dict) -> str:
-    tid = current_user.get("tenant_id")
-    if tid is None:
-        return "default"
-    return str(tid)
-
-
 def _require_batch(batch_id: str, tenant_id: str) -> dict[str, Any]:
     """Load a batch and enforce tenant ownership; raise 404 if missing."""
     try:
@@ -143,6 +132,7 @@ def generate_submission(
     request: Request,
     body: GenerateRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "write")),
 ) -> dict[str, Any]:
     """
@@ -158,8 +148,6 @@ def generate_submission(
     Run POST /api/submissions/batches/{id}/validate before submitting.
     """
     from fastapi.responses import JSONResponse
-
-    tenant_id = _tenant(current_user)
     try:
         if body.file_type == "RAPS":
             result = svc.generate_raps_file(
@@ -206,6 +194,7 @@ def list_batches(
     limit:  int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0,  ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -213,7 +202,6 @@ def list_batches(
 
     Optional filters: `payment_year`, `file_type` (RAPS/EDPS), `status`.
     """
-    tenant_id = _tenant(current_user)
     try:
         return svc.list_batches(
             tenant_id=tenant_id,
@@ -237,13 +225,13 @@ def list_batches(
 def get_batch(
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
     Return full detail for a single submission batch including record counts,
     validation summary, file hash, and current status.
     """
-    tenant_id = _tenant(current_user)
     return _require_batch(batch_id, tenant_id)
 
 
@@ -260,6 +248,7 @@ def list_records(
     limit:  int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0,   ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -268,7 +257,6 @@ def list_records(
     Use `validation_status` to filter to valid/invalid/warning records.
     Use `cms_status` to filter by CMS response status after MAO-002 parsing.
     """
-    tenant_id = _tenant(current_user)
     _require_batch(batch_id, tenant_id)
     try:
         return svc.list_records(
@@ -294,6 +282,7 @@ def validate_batch(
     request: Request,
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "write")),
 ) -> dict[str, Any]:
     """
@@ -312,7 +301,6 @@ def validate_batch(
     Returns a full validation report including per-rule error counts and
     a record-level result list.
     """
-    tenant_id = _tenant(current_user)
     _require_batch(batch_id, tenant_id)
     try:
         return svc.validate_submission(batch_id)
@@ -330,6 +318,7 @@ def validate_batch(
 def get_validation_report(
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -340,7 +329,6 @@ def get_validation_report(
 
     Run POST /api/submissions/batches/{id}/validate first to populate results.
     """
-    tenant_id = _tenant(current_user)
     batch = _require_batch(batch_id, tenant_id)
 
     try:
@@ -381,6 +369,7 @@ def submit_batch(
     request: Request,
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "write")),
 ) -> Any:
     """
@@ -394,7 +383,6 @@ def submit_batch(
 
     Returns the submission file as an attachment download.
     """
-    tenant_id = _tenant(current_user)
     batch = _require_batch(batch_id, tenant_id)
 
     # Validate state — must be pending or validated
@@ -453,6 +441,7 @@ def submit_batch(
 def download_batch_file(
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> Any:
     """
@@ -461,7 +450,6 @@ def download_batch_file(
     Unlike POST /submit, this endpoint does NOT change the batch status.
     Use it to retrieve a previously generated file for review or re-transmission.
     """
-    tenant_id = _tenant(current_user)
     batch = _require_batch(batch_id, tenant_id)
 
     file_path = batch.get("file_path") or ""
@@ -507,6 +495,7 @@ async def upload_response(
     ),
     file: UploadFile = File(..., description="CMS response file"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "write")),
 ) -> dict[str, Any]:
     """
@@ -523,7 +512,6 @@ async def upload_response(
 
     File is read as UTF-8 text; binary files will raise a 422 error.
     """
-    tenant_id = _tenant(current_user)
     _require_batch(batch_id, tenant_id)
 
     # Read and decode file content
@@ -566,13 +554,13 @@ async def upload_response(
 def list_responses(
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
     Return all parsed CMS response files (MAO-002 and MAO-004) associated
     with the given batch, including accepted/rejected counts and total payment.
     """
-    tenant_id = _tenant(current_user)
     _require_batch(batch_id, tenant_id)
     try:
         responses = svc.list_responses(batch_id)
@@ -591,6 +579,7 @@ def list_responses(
 def get_reconciliation(
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -603,7 +592,6 @@ def get_reconciliation(
     - Per-record line items with payment amounts
     - Accepted / rejected / duplicate counts
     """
-    tenant_id = _tenant(current_user)
     _require_batch(batch_id, tenant_id)
     try:
         return svc.get_reconciliation(batch_id)
@@ -621,6 +609,7 @@ def get_reconciliation(
 def get_schedule(
     payment_year: int | None = Query(default=None, description="Filter by payment year"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -629,7 +618,6 @@ def get_schedule(
     Merges standard CMS deadlines with any tenant-custom overrides.
     Each entry includes `days_until` and `is_overdue` for dashboard display.
     """
-    tenant_id = _tenant(current_user)
     try:
         schedule = svc.get_submission_schedule(tenant_id, payment_year)
     except Exception as exc:
@@ -658,6 +646,7 @@ def upsert_schedule(
     request: Request,
     body: ScheduleUpsertRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "write")),
 ) -> dict[str, Any]:
     """
@@ -667,7 +656,6 @@ def upsert_schedule(
     (payment_year, sweep_type) combination.  Use this to track internal
     deadlines that differ from the CMS-published dates.
     """
-    tenant_id = _tenant(current_user)
     try:
         return svc.upsert_submission_schedule(
             tenant_id=tenant_id,
@@ -689,6 +677,7 @@ def upsert_schedule(
 @router.get("/stats", summary="Overall submission statistics for the tenant")
 def get_stats(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -700,7 +689,6 @@ def get_stats(
     - Per-payment-year / per-file-type breakdown
     - Upcoming CMS deadlines within the next 90 days
     """
-    tenant_id = _tenant(current_user)
     try:
         return svc.get_submission_stats(tenant_id)
     except RuntimeError as exc:
@@ -719,6 +707,7 @@ def get_error_records(
     limit:  int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0,   ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "read")),
 ) -> dict[str, Any]:
     """
@@ -732,7 +721,6 @@ def get_error_records(
     Each record includes `validation_errors` (list of rule/message objects),
     `cms_error_code`, and `cms_error_desc` when available.
     """
-    tenant_id = _tenant(current_user)
     _require_batch(batch_id, tenant_id)
     try:
         return svc.list_error_records(batch_id, limit=limit, offset=offset)

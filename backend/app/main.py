@@ -470,7 +470,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             f"base-uri 'self'; "
             f"form-action 'self'"
         )
-        response.headers["X-CSP-Nonce"] = _csp_nonce
         return response
 
 

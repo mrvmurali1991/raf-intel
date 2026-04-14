@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from app.db import raf_cursor
@@ -183,11 +183,15 @@ def get_provider_worklist(
         with raf_cursor() as cur:
             cur.execute(
                 """
-                SELECT DISTINCT p.id       AS patient_id,
-                       p.first_name,
-                       p.last_name,
+                SELECT DISTINCT
+                       p.id       AS patient_id,
+                       COALESCE(NULLIF(p.first_name, ''), epm.first_name) AS first_name,
+                       COALESCE(NULLIF(p.last_name,  ''), epm.last_name)  AS last_name,
                        p.dob
                 FROM   patients p
+                LEFT JOIN emr_patient_matches epm
+                       ON  epm.patient_id  = p.id
+                       AND epm.tenant_id   = %s
                 WHERE  p.tenant_id  = %s
                   AND  p.is_active  = 1
                   AND  p.id IN (
@@ -196,9 +200,10 @@ def get_provider_worklist(
                        WHERE  ne.tenant_id    = %s
                          AND  ne.provider_npi = %s
                   )
-                ORDER BY p.last_name, p.first_name
+                ORDER BY COALESCE(NULLIF(p.last_name, ''), epm.last_name),
+                         COALESCE(NULLIF(p.first_name, ''), epm.first_name)
                 """,
-                (tenant_id, tenant_id, npi_filter),
+                (tenant_id, tenant_id, tenant_id, npi_filter),
             )
             patients = cur.fetchall()
     except Exception as exc:
@@ -737,7 +742,7 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
         "total_revenue_at_risk": 0.0,
         "top_conditions": [],
         "provider_performance": [],
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
     }
 
     recapture_exists = _table_exists("recapture_gaps")
@@ -756,8 +761,9 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                       AND  rg.status       = 'open'
                       AND  rg.current_year = %s
                       AND  p.is_active     = 1
+                      AND  p.tenant_id     = %s
                     """,
-                    (tenant_id, current_year),
+                    (tenant_id, current_year, tenant_id),
                 )
                 row = cur.fetchone()
                 if row:
@@ -778,6 +784,7 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                     WHERE  ph.tenant_id        = %s
                       AND  ph.measurement_year = %s
                       AND  p.is_active         = 1
+                      AND  p.tenant_id         = %s
                       AND  NOT EXISTS (
                            SELECT 1
                            FROM   raf_patient_hcc cy
@@ -787,7 +794,7 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                              AND  cy.tenant_id        = %s
                       )
                     """,
-                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, prior_year, current_year, tenant_id),
+                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, prior_year, tenant_id, current_year, tenant_id),
                 )
                 row = cur.fetchone()
                 if row:
@@ -807,8 +814,9 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                 WHERE  ph.tenant_id        = %s
                   AND  ph.measurement_year = %s
                   AND  p.is_active         = 1
+                  AND  p.tenant_id         = %s
                 """,
-                (tenant_id, prior_year),
+                (tenant_id, prior_year, tenant_id),
             )
             row = cur.fetchone()
             if row:
@@ -831,11 +839,12 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                       AND  rg.status       = 'open'
                       AND  rg.current_year = %s
                       AND  p.is_active     = 1
+                      AND  p.tenant_id     = %s
                     GROUP BY rg.hcc_code
                     ORDER BY gap_count DESC, avg_revenue_impact DESC
                     LIMIT 10
                     """,
-                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, current_year),
+                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, current_year, tenant_id),
                 )
                 summary["top_conditions"] = [
                     {
@@ -860,6 +869,7 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                     WHERE  ph.tenant_id        = %s
                       AND  ph.measurement_year = %s
                       AND  p.is_active         = 1
+                      AND  p.tenant_id         = %s
                       AND  NOT EXISTS (
                            SELECT 1
                            FROM   raf_patient_hcc cy
@@ -872,7 +882,7 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                     ORDER BY gap_count DESC, avg_revenue_impact DESC
                     LIMIT 10
                     """,
-                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, prior_year, current_year, tenant_id),
+                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, prior_year, tenant_id, current_year, tenant_id),
                 )
                 summary["top_conditions"] = [
                     {
@@ -896,12 +906,13 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                 JOIN   patients p ON p.id = ne.patient_id
                 WHERE  ne.tenant_id          = %s
                   AND  p.is_active           = 1
+                  AND  p.tenant_id           = %s
                   AND  YEAR(ne.encounter_date) = %s
                 GROUP BY ne.provider_npi
                 ORDER BY patients_seen_ytd DESC
                 LIMIT 20
                 """,
-                (tenant_id, current_year),
+                (tenant_id, tenant_id, current_year),
             )
             provider_rows = cur.fetchall()
     except Exception as exc:

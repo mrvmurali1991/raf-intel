@@ -72,6 +72,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from datetime import date, datetime, timezone
 from typing import Any
@@ -361,15 +362,18 @@ def _update_run(
 # If the stash misses (process restart etc.) the RAF handler degrades safely.
 # ---------------------------------------------------------------------------
 
+_run_id_lock = threading.Lock()
 _run_id_stash: dict[str, int] = {}
 
 
 def _stash_run_id(tenant_id: str, run_id: int) -> None:
-    _run_id_stash[tenant_id] = run_id
+    with _run_id_lock:
+        _run_id_stash[tenant_id] = run_id
 
 
 def _pop_run_id(tenant_id: str) -> int | None:
-    return _run_id_stash.pop(tenant_id, None)
+    with _run_id_lock:
+        return _run_id_stash.pop(tenant_id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -561,21 +565,66 @@ def _handle_normalization_completed(payload: dict[str, Any]) -> None:
     settings = _get_pipeline_settings(tenant_id)
 
     if settings.get("pipeline_mode") == "auto_ai" and settings.get("ai_analysis_enabled"):
-        # Phase ③: AI Analysis first, then RAF calc on "analysis_completed"
-        logger.info(
-            "pipeline_chain: normalization_completed → dispatching AI analysis "
-            "[tenant=%s mode=auto_ai affected_patients=%d run_id=%s]",
-            tenant_id,
-            len(patient_ids),
-            run_id or "none",
-        )
+        # Phase ③: AI Analysis — route to Celery task or fast-forward depending
+        # on the PIPELINE_AI_ENABLED env var.
+        #
+        # PIPELINE_AI_ENABLED=true  → dispatch task_analyze_encounters_batch to
+        #   the "heavy" Celery queue.  The task emits "analysis_completed" when
+        #   done, which triggers Phase ④ (RAF calc) automatically.
+        #
+        # PIPELINE_AI_ENABLED=false (default) → skip AI and emit
+        #   "analysis_completed" immediately so the rest of the chain (RAF calc,
+        #   suspects, gaps, webhook) still runs.  This keeps existing deployments
+        #   safe: AI is opt-in.
+        _pipeline_ai_raw = os.environ.get("PIPELINE_AI_ENABLED", "false").strip().lower()
+        _pipeline_ai_on = _pipeline_ai_raw not in ("0", "false", "no", "off")
+
         _update_run(run_id, current_step="ai_analysis")
         _stash_run_id(tenant_id, run_id)
-        _handle_analysis_requested({
-            "tenant_id": tenant_id,
-            "patient_ids": patient_ids,
-            "pipeline_run_id": run_id,
-        })
+
+        if _pipeline_ai_on:
+            logger.info(
+                "pipeline_chain: normalization_completed → dispatching AI analysis "
+                "task (PIPELINE_AI_ENABLED=true) "
+                "[tenant=%s mode=auto_ai affected_patients=%d run_id=%s]",
+                tenant_id,
+                len(patient_ids),
+                run_id or "none",
+            )
+            try:
+                from app.services.celery_tasks import dispatch_analyze_encounters_batch
+                dispatch_analyze_encounters_batch(
+                    tenant_id=tenant_id,
+                    patient_ids=[int(p) for p in patient_ids] if patient_ids else None,
+                    max_encounters=500,
+                )
+            except Exception as dispatch_exc:
+                logger.error(
+                    "pipeline_chain: failed to dispatch task_analyze_encounters_batch "
+                    "[tenant=%s]: %s — falling through to RAF calc",
+                    tenant_id,
+                    dispatch_exc,
+                )
+                # Dispatch failed: fall through directly so the chain does not stall.
+                _handle_analysis_completed({
+                    "tenant_id": tenant_id,
+                    "analyzed_count": 0,
+                    "pipeline_run_id": run_id,
+                })
+        else:
+            # AI disabled via env var — skip Phase ③ and continue directly.
+            logger.info(
+                "pipeline_chain: normalization_completed → PIPELINE_AI_ENABLED=false, "
+                "skipping AI analysis and emitting analysis_completed "
+                "[tenant=%s run_id=%s]",
+                tenant_id,
+                run_id or "none",
+            )
+            _handle_analysis_completed({
+                "tenant_id": tenant_id,
+                "analyzed_count": 0,
+                "pipeline_run_id": run_id,
+            })
         return
 
     # Default: auto_basic — go straight to RAF calc (existing behavior)
@@ -702,7 +751,8 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 if not note_text.strip():
                     continue
 
-                # Get patient demographics
+                # Get patient demographics — try local patients table first,
+                # then fall back to emr_patient_matches for FHIR patients.
                 patient_age = None
                 patient_sex = None
                 try:
@@ -716,6 +766,15 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                         if patient_row.get("date_of_birth"):
                             patient_age = _calculate_age(patient_row["date_of_birth"])
                         patient_sex = patient_row.get("gender")
+                    else:
+                        # FHIR patient — look up in emr_patient_matches
+                        from app.services.patient_service import _get_fhir_patient_row
+                        fhir_row = _get_fhir_patient_row(patient_id)
+                        if fhir_row:
+                            dob_raw = fhir_row.get("DOB") or ""
+                            if dob_raw:
+                                patient_age = _calculate_age(str(dob_raw)[:10])
+                            patient_sex = fhir_row.get("sex") or ""
                 except Exception:
                     pass
 
@@ -775,8 +834,8 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 )
 
                 # Persist encounter analysis
-                from app.routers.analysis import _save_encounter_analysis
-                _save_encounter_analysis(encounter_id, patient_id, result)
+                from app.services.analysis_service import save_encounter_analysis
+                save_encounter_analysis(encounter_id, patient_id, result)
 
                 # Persist suspects
                 suspect_conditions = result.get("suspect_conditions", [])

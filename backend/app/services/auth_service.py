@@ -545,10 +545,14 @@ def list_users(
     offset: int = 0,
     role: str | None = None,
     is_active: bool | None = None,
+    tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     _ensure_tables()
     conditions = []
     params: list[Any] = []
+    if tenant_id is not None:
+        conditions.append("tenant_id = %s")
+        params.append(tenant_id)
     if role is not None:
         conditions.append("role = %s")
         params.append(role)
@@ -1311,11 +1315,14 @@ def verify_mfa_code(user_id: int, code: str) -> bool:
                 matched_index = i
                 break
         else:
-            # TODO: legacy plaintext code — remove this branch once all users
-            # have re-enrolled MFA after the hashing migration.
-            if stored == code_upper:
-                matched_index = i
-                break
+            # Legacy plaintext recovery code detected — reject and force
+            # the user to re-enroll MFA so codes are stored hashed.
+            logger.warning(
+                "Rejecting plaintext MFA recovery code for user %s. "
+                "User must re-enroll MFA to generate hashed codes.",
+                user_id,
+            )
+            continue
 
     if matched_index is not None:
         stored_codes.pop(matched_index)
@@ -1570,10 +1577,17 @@ def query_audit_log(
     end_date: datetime | None = None,
     limit: int = 100,
     offset: int = 0,
+    tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     _ensure_tables()
     conditions = []
     params: list[Any] = []
+    # Restrict to users in the caller's tenant (audit_log has no tenant_id column)
+    if tenant_id is not None:
+        conditions.append(
+            "user_id IN (SELECT id FROM users WHERE tenant_id = %s)"
+        )
+        params.append(tenant_id)
     if user_id is not None:
         conditions.append("user_id = %s")
         params.append(user_id)

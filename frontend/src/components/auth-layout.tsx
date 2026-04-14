@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/Toast";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { WelcomeWizard } from "@/components/WelcomeWizard";

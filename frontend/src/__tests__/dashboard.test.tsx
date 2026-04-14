@@ -44,7 +44,7 @@ const mockApiData = {
 
 vi.mock("@/lib/api", () => mockApiData);
 
-vi.mock("@/components/ErrorBoundary", () => ({
+vi.mock("@/components/error-boundary", () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

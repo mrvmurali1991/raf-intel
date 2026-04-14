@@ -38,7 +38,7 @@ vi.mock("@/lib/api", () => ({
   searchPatients: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("@/components/ErrorBoundary", () => ({
+vi.mock("@/components/error-boundary", () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

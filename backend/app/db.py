@@ -286,7 +286,7 @@ class NoActiveEMRConnection(Exception):
 
 
 @contextmanager
-def openemr_cursor(dictionary: bool = True, tenant_id: str = "1") -> Generator:
+def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Generator:
     """Yield a cursor from the active EMR connection configured via the UI.
 
     Checks the ``emr_connections`` table for an active ``direct_db`` row.
@@ -294,7 +294,23 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str = "1") -> Generator:
     environment variables (OPENEMR_DB_*).  This ensures the dashboard and
     reports work out-of-the-box while the UI still shows a 'No EMR Connected'
     banner encouraging explicit configuration.
+
+    ``tenant_id`` is required.  Passing ``None`` raises ``ValueError`` to
+    prevent silent cross-tenant data leakage from callers that omit the
+    argument.
     """
+    if tenant_id is None:
+        # SECURITY: Callers must always supply an explicit tenant_id.
+        # Raise immediately to prevent silent cross-tenant data exposure.
+        # If you are seeing this error, add `tenant_id: str = Depends(get_tenant_id)`
+        # to the endpoint signature and pass it through to the service call.
+        raise ValueError(
+            "openemr_cursor() requires an explicit tenant_id argument.  "
+            "Do not call openemr_cursor() without a tenant scope — it previously "
+            "defaulted to '1', silently leaking data across tenants.  "
+            "Add tenant_id: str = Depends(get_tenant_id) to the endpoint and "
+            "pass it through to the service function."
+        )
     # Lazy import to avoid circular dependency at module load
     from app.services.emr_manager import get_active_direct_db_credentials
 

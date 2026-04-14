@@ -27,7 +27,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -265,7 +265,7 @@ def _resolve_upload_path(tenant_id: str) -> Path:
     """Return the upload directory for the given tenant and current month."""
     # Sanitize tenant_id to prevent path traversal
     safe_tenant = re.sub(r'[^a-zA-Z0-9_-]', '_', str(tenant_id))
-    month_dir = UPLOADS_BASE / safe_tenant / datetime.utcnow().strftime("%Y-%m")
+    month_dir = UPLOADS_BASE / safe_tenant / datetime.now(timezone.utc).strftime("%Y-%m")
     # Verify resolved path is within UPLOADS_BASE
     resolved = month_dir.resolve()
     if not resolved.is_relative_to(UPLOADS_BASE.resolve()):
@@ -503,7 +503,7 @@ def _call_gemini_vision(file_bytes: bytes, mime_type: str) -> dict[str, Any]:
 
 def _get_existing_patient_hccs(patient_id: str) -> set[str]:
     """Return the set of HCC codes already captured for a patient this year."""
-    year = datetime.utcnow().year
+    year = datetime.now(timezone.utc).year
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -701,7 +701,7 @@ def _save_analysis_and_diagnoses(
 # ---------------------------------------------------------------------------
 
 
-def analyze_document(document_id: str) -> dict[str, Any]:
+def analyze_document(document_id: str, tenant_id: str | None = None) -> dict[str, Any]:
     """
     Run Gemini Vision analysis on a stored document.
 
@@ -711,15 +711,21 @@ def analyze_document(document_id: str) -> dict[str, Any]:
     4. Persist analysis + diagnosis lines
     5. Return structured result summary
 
-    Raises ValueError if the document is not found.
+    Raises ValueError if the document is not found or belongs to a different tenant.
     Raises RuntimeError on Gemini or storage failures.
     """
-    # Fetch document record
+    # Fetch document record — enforce tenant isolation when tenant_id is provided
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM documents WHERE id = %s LIMIT 1",
-            (document_id,),
-        )
+        if tenant_id is not None:
+            cur.execute(
+                "SELECT * FROM documents WHERE id = %s AND tenant_id = %s LIMIT 1",
+                (document_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM documents WHERE id = %s LIMIT 1",
+                (document_id,),
+            )
         doc = cur.fetchone()
 
     if not doc:
@@ -1098,13 +1104,32 @@ def match_patient_from_analysis(document_id: str) -> dict[str, Any]:
             logger.warning("Patient name match query failed: %s", exc)
 
     if patient_id:
-        # Link the document to the matched patient
+        # patient_id here is an OpenEMR pid. Resolve to the internal patients.id
+        # via emr_patient_matches so documents.patient_id is always the canonical
+        # internal ID (consistent with direct-DB and upload patients).
+        resolved_id: str = patient_id
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT patient_id FROM emr_patient_matches"
+                    " WHERE emr_pid = %s LIMIT 1",
+                    (int(patient_id),),
+                )
+                match_row = cur.fetchone()
+                if match_row and match_row.get("patient_id"):
+                    resolved_id = str(match_row["patient_id"])
+        except Exception as exc:
+            logger.warning(
+                "match_patient_from_analysis: emr_patient_matches lookup failed: %s", exc
+            )
+
+        # Link the document to the matched patient using the internal patient id
         with raf_cursor() as cur:
             cur.execute(
                 "UPDATE documents SET patient_id = %s WHERE id = %s",
-                (patient_id, document_id),
+                (resolved_id, document_id),
             )
-        return {"matched": True, "patient_id": patient_id}
+        return {"matched": True, "patient_id": resolved_id}
 
     return {
         "matched": False,

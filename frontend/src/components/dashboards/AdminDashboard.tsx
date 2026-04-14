@@ -1,6 +1,6 @@
 "use client";
 
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";

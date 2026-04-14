@@ -55,7 +55,7 @@ from app.services.hccinfhir_utils import (
     get_hcc_coefficient as _get_hcc_coefficient_raw,
     DEFAULT_MODEL,
 )
-from app.db import get_raf_db
+from app.db import get_raf_db, raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -308,10 +308,8 @@ def refresh_crosswalk_table(tenant_id: str) -> dict:
     from hccinfhir.defaults import dx_to_cc_default  # local import to avoid circular
 
     inserted = errors = 0
-    db = get_raf_db()
-    cursor = db.cursor()
 
-    try:
+    with raf_cursor() as cur:
         # Collect all unique (icd10_code, cc, model_name) triples from hccinfhir.
         rows_to_upsert: list[tuple[str, str, str]] = []
         for (icd10_code, model_name), cc_set in dx_to_cc_default.items():
@@ -324,31 +322,23 @@ def refresh_crosswalk_table(tenant_id: str) -> dict:
             for cc in cc_set:
                 rows_to_upsert.append((icd10_code, cc, short_version))
 
-        for icd10_code, hcc_code, model_version in rows_to_upsert:
-            try:
-                cursor.execute(
-                    """
-                    INSERT INTO hcc_icd10_crosswalk (icd10_code, hcc_code, model_version)
-                    VALUES (%s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        hcc_code      = VALUES(hcc_code),
-                        model_version = VALUES(model_version)
-                    """,
-                    (icd10_code, hcc_code, model_version),
-                )
-                inserted += 1
-            except Exception as exc:
-                logger.error(
-                    "refresh_crosswalk_table: failed to upsert icd10=%s hcc=%s — %s",
-                    icd10_code, hcc_code, exc,
-                )
-                errors += 1
-
-        db.commit()
-
-    finally:
-        cursor.close()
-        db.close()
+        try:
+            cur.executemany(
+                """
+                INSERT INTO hcc_icd10_crosswalk (icd10_code, hcc_code, model_version)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    hcc_code      = VALUES(hcc_code),
+                    model_version = VALUES(model_version)
+                """,
+                rows_to_upsert,
+            )
+            inserted = len(rows_to_upsert)
+        except Exception as exc:
+            logger.error(
+                "refresh_crosswalk_table: batch upsert failed — %s", exc,
+            )
+            errors = len(rows_to_upsert)
 
     logger.info(
         "refresh_crosswalk_table [tenant=%s]: upserted=%d errors=%d",
@@ -388,19 +378,13 @@ def reconcile_crosswalk(tenant_id: str) -> list[dict]:
             One of ``"missing_in_hccinfhir"``, ``"missing_in_db"``,
             or ``"hcc_mismatch"``.
     """
-    db = get_raf_db()
-    cursor = db.cursor(dictionary=True)
-
     divergences: list[dict] = []
 
-    try:
-        cursor.execute(
+    with raf_cursor() as cur:
+        cur.execute(
             "SELECT icd10_code, hcc_code, model_version FROM hcc_icd10_crosswalk"
         )
-        db_rows = cursor.fetchall()
-    finally:
-        cursor.close()
-        db.close()
+        db_rows = cur.fetchall()
 
     if not db_rows:
         logger.info("reconcile_crosswalk [tenant=%s]: crosswalk table is empty", tenant_id)

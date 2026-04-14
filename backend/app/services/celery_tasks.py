@@ -105,6 +105,14 @@ celery_app.conf.beat_schedule = {
         "schedule": 3600.0,  # seconds — task guards against double-fire internally
         "options": {"queue": "default"},
     },
+    # Clean up pipeline_runs rows that are stuck in a non-terminal state (e.g.
+    # worker crashed mid-chain).  Runs every 30 minutes; the underlying service
+    # function decides what qualifies as "stale".
+    "cleanup-stale-pipeline-runs-every-30m": {
+        "task": "raf.cleanup_stale_runs",
+        "schedule": 1800.0,
+        "options": {"queue": "default"},
+    },
 }
 
 
@@ -372,6 +380,17 @@ def task_retention_sweep(self) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Task: clean up stale pipeline runs
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(name="raf.cleanup_stale_runs")
+def task_cleanup_stale_runs():
+    from app.services.pipeline_chain import cleanup_stale_runs
+    cleanup_stale_runs()
+
+
+# ---------------------------------------------------------------------------
 # Task: normalize encounters for a tenant
 # ---------------------------------------------------------------------------
 
@@ -492,7 +511,7 @@ def task_analyze_encounters_batch(
         from app.services.openemr_connector import get_clinical_notes
         from app.services.meat_evidence_service import store_analysis_meat, update_hcc_meat_status
         from app.services.suspect_engine import save_suspects_from_analysis
-        from app.routers.analysis import _save_encounter_analysis
+        from app.services.analysis_service import save_encounter_analysis as _save_encounter_analysis
         from datetime import date
 
         # Get unanalyzed encounters
@@ -544,7 +563,8 @@ def task_analyze_encounters_batch(
                     skipped += 1
                     continue
 
-                # Get patient demographics
+                # Get patient demographics — try local patients table first,
+                # then fall back to emr_patient_matches for FHIR patients.
                 patient_age = None
                 patient_sex = None
                 try:
@@ -555,8 +575,18 @@ def task_analyze_encounters_batch(
                         from app.services.raf_calculator import _calculate_age
                         patient_age = _calculate_age(pat["date_of_birth"])
                         patient_sex = pat.get("gender")
-                except Exception:
-                    pass
+                    else:
+                        # FHIR patient — look up in emr_patient_matches
+                        from app.services.patient_service import _get_fhir_patient_row
+                        from app.services.raf_calculator import _calculate_age
+                        fhir_row = _get_fhir_patient_row(patient_id)
+                        if fhir_row:
+                            dob_raw = fhir_row.get("DOB") or ""
+                            if dob_raw:
+                                patient_age = _calculate_age(str(dob_raw)[:10])
+                            patient_sex = fhir_row.get("sex") or ""
+                except Exception as exc:
+                    logger.warning("FHIR patient demographics lookup failed for encounter %s: %s", encounter_id, exc)
 
                 # Run 4-stage AI pipeline
                 result = run_verified_pipeline(
@@ -626,8 +656,8 @@ def task_analyze_encounters_batch(
                 "analyzed_count": analyzed,
                 "pipeline_run_id": 0,  # Chain recovers via stash
             })
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to emit analysis_completed event: %s", exc)
 
         return result_stats
 

@@ -28,7 +28,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -360,6 +360,90 @@ def _find_existing_batch(idempotency_key: str) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
+# FHIR-awareness helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_active_connection_type() -> str | None:
+    """
+    Return the connection_type of the active EMR connection ('fhir_r4',
+    'rest_api', 'direct_db', etc.) or None when no active connection exists.
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT connection_type FROM emr_connections WHERE is_active = 1 LIMIT 1"
+            )
+            row = cur.fetchone()
+            return row["connection_type"] if row else None
+    except Exception as exc:
+        logger.debug("_get_active_connection_type query failed (non-fatal): %s", exc)
+        return None
+
+
+def _lookup_emr_pid_for_raf_patient(raf_patient_id: int) -> int | None:
+    """
+    For FHIR/REST connections, resolve the external OpenEMR patient PID that
+    corresponds to an internal RAF patient ID by consulting emr_patient_matches.
+
+    Returns the external EMR pid on success, or None when no match is found.
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT epm.emr_pid
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                WHERE ec.is_active = 1
+                  AND (epm.raf_patient_id = %s OR epm.id = %s)
+                LIMIT 1
+                """,
+                (raf_patient_id, raf_patient_id),
+            )
+            row = cur.fetchone()
+            return int(row["emr_pid"]) if row and row.get("emr_pid") else None
+    except Exception as exc:
+        logger.debug(
+            "_lookup_emr_pid_for_raf_patient failed for patient %s (non-fatal): %s",
+            raf_patient_id,
+            exc,
+        )
+        return None
+
+
+def _resolve_mbi(raf_patient_id: int, demographics_hicn_mbi: str | None, conn_type: str | None) -> str:
+    """
+    Return the best available HICN/MBI for a patient.
+
+    Priority:
+    1. Value already present in raf_patient_demographics.hicn_mbi.
+    2. For FHIR/REST connections: resolve the external OpenEMR pid via
+       emr_patient_matches, then call OpenEMR insurance_data lookup.
+    3. For direct_db connections: call OpenEMR insurance_data lookup directly
+       with the raf_patient_id (which equals the OpenEMR pid in that topology).
+    4. Empty string when all lookups fail.
+    """
+    if demographics_hicn_mbi:
+        return demographics_hicn_mbi
+
+    if conn_type in ("fhir_r4", "rest_api"):
+        emr_pid = _lookup_emr_pid_for_raf_patient(raf_patient_id)
+        if emr_pid is not None:
+            return _lookup_mbi_from_openemr(emr_pid)
+        # No matched EMR record — MBI must be populated in raf_patient_demographics
+        logger.debug(
+            "_resolve_mbi: no emr_patient_matches row for raf_patient_id=%s; "
+            "MBI will be empty unless raf_patient_demographics.hicn_mbi is set",
+            raf_patient_id,
+        )
+        return ""
+
+    # direct_db: raf_patient_id == OpenEMR pid
+    return _lookup_mbi_from_openemr(raf_patient_id)
+
+
+# ---------------------------------------------------------------------------
 # Core service functions
 # ---------------------------------------------------------------------------
 
@@ -384,6 +468,9 @@ def generate_raps_file(
     """
 
     batch_id = str(uuid.uuid4())
+
+    # -- Detect active EMR connection type (FHIR vs direct_db) ---------------
+    conn_type = _get_active_connection_type()
 
     # -- Pull HCC / encounter data from RAF DB --------------------------------
     try:
@@ -444,8 +531,8 @@ def generate_raps_file(
     detail_count = 0
 
     for row in hcc_rows:
-        # Resolve HICN/MBI: prefer demographics table, fall back to OpenEMR
-        hicn_mbi = row.get("hicn_mbi") or _lookup_mbi_from_openemr(row["patient_id"])
+        # Resolve HICN/MBI: prefer demographics table; fall back via FHIR-aware lookup
+        hicn_mbi = _resolve_mbi(row["patient_id"], row.get("hicn_mbi"), conn_type)
         provider_npi = (row.get("provider_npi") or "").strip() or "0000000000"
         provider_type = _PROVIDER_TYPE_MAP.get(
             (row.get("provider_type") or "").lower(), _PROVIDER_TYPE_MAP["default"]
@@ -553,6 +640,9 @@ def generate_edps_file(
     batch_id = str(uuid.uuid4())
     control_num = str(int(datetime.now().timestamp()))[-9:]
 
+    # -- Detect active EMR connection type (FHIR vs direct_db) ---------------
+    conn_type = _get_active_connection_type()
+
     # -- Query encounter data -------------------------------------------------
     try:
         with raf_cursor() as cur:
@@ -611,7 +701,8 @@ def generate_edps_file(
     seq = 1
 
     for row in hcc_rows:
-        hicn_mbi = row.get("hicn_mbi") or _lookup_mbi_from_openemr(row["patient_id"])
+        # Resolve HICN/MBI: prefer demographics table; fall back via FHIR-aware lookup
+        hicn_mbi = _resolve_mbi(row["patient_id"], row.get("hicn_mbi"), conn_type)
         rendering_npi = (row.get("provider_npi") or "").strip() or "0000000000"
         facility_npi = (row.get("facility_npi") or "").strip() or "0000000000"
         pos = row.get("place_of_service") or "11"
@@ -1435,7 +1526,7 @@ def mark_submitted(batch_id: str) -> dict[str, Any]:
                     submitted_at = %s
                 WHERE id = %s
                 """,
-                (datetime.utcnow(), batch_id),
+                (datetime.now(timezone.utc), batch_id),
             )
     except Exception as exc:
         raise RuntimeError(f"DB error: {exc}") from exc

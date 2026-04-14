@@ -35,7 +35,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, R
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, field_validator
 
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, get_tenant_id, require_role
 from app.config import settings
 from app.db import raf_cursor
 from app.rate_limit import limiter
@@ -204,6 +204,17 @@ def _get_client_ip(request: Request) -> str | None:
     return None
 
 
+_COOKIE_MAX_AGE = 86400 * 7  # 7 days
+
+_SENSITIVE_USER_FIELDS = frozenset({
+    "password_hash",
+    "mfa_secret",
+    "mfa_recovery_codes",
+    "reset_token",
+    "reset_token_expires_at",
+})
+
+
 def _serialize_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
     """Convert datetime objects to ISO strings for JSON serialisation."""
     if not row:
@@ -215,6 +226,13 @@ def _serialize_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
         else:
             result[k] = v
     return result
+
+
+def _safe_user(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Serialize a user row, stripping sensitive fields."""
+    if not row:
+        return row
+    return _serialize_row({k: v for k, v in row.items() if k not in _SENSITIVE_USER_FIELDS})
 
 
 # ---------------------------------------------------------------------------
@@ -263,9 +281,8 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
         request_path="/api/auth/login",
         response_status=200,
     )
-    # Compatibility: keep refresh_token in response body while also issuing it
-    # as an httpOnly cookie for browser-based clients.
-    refresh_token = result.get("refresh_token")
+    # Strip refresh_token from body — it belongs only in the httpOnly cookie.
+    refresh_token = result.pop("refresh_token", None)
     resp = JSONResponse(content=result)
     if refresh_token:
         secure = settings.app_env != "development"
@@ -275,7 +292,7 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
             httponly=True,
             secure=secure,
             samesite="lax",
-            max_age=86400 * 7,  # 7 days
+            max_age=_COOKIE_MAX_AGE,  # 7 days
             path="/",
         )
     return resp
@@ -369,7 +386,7 @@ def refresh_token_endpoint(
             httponly=True,
             secure=secure,
             samesite="lax",
-            max_age=86400 * 7,
+            max_age=_COOKIE_MAX_AGE,
             path="/",
         )
     return resp
@@ -408,7 +425,7 @@ def verify_mfa(body: MFAVerifyRequest, request: Request) -> JSONResponse:
             httponly=True,
             secure=secure,
             samesite="lax",
-            max_age=86400 * 7,
+            max_age=_COOKIE_MAX_AGE,
             path="/",
         )
     return resp
@@ -619,9 +636,10 @@ def admin_list_users(
     role: str | None = Query(None),
     is_active: bool | None = Query(None),
     current_user: dict = Depends(require_role("admin", "manager")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    users = list_users(limit=limit, offset=offset, role=role, is_active=is_active)
-    serialized = [_serialize_row(u) for u in users]
+    users = list_users(limit=limit, offset=offset, role=role, is_active=is_active, tenant_id=tenant_id)
+    serialized = [_safe_user(u) for u in users]
     return {"count": len(serialized), "users": serialized}
 
 
@@ -636,7 +654,7 @@ def admin_create_user(
             password=body.password,
             full_name=body.full_name,
             role=body.role,
-            tenant_id=body.tenant_id,
+            tenant_id=current_user["tenant_id"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -647,7 +665,7 @@ def admin_create_user(
         resource_id=str(user["id"]),
         details={"email": body.email, "role": body.role},
     )
-    return _serialize_row(user)
+    return _safe_user(user)
 
 
 @router.get("/users/{user_id}", summary="Get user detail")
@@ -658,7 +676,7 @@ def admin_get_user(
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-    return _serialize_row(user)
+    return _safe_user(user)
 
 
 @router.put("/users/{user_id}", summary="Update a user (admin only)")
@@ -675,7 +693,7 @@ def admin_update_user(
         full_name=body.full_name,
         role=body.role,
         avatar_url=body.avatar_url,
-        tenant_id=body.tenant_id,
+        tenant_id=current_user["tenant_id"],
     )
     log_audit(
         action="user_updated",
@@ -684,7 +702,7 @@ def admin_update_user(
         resource_id=str(user_id),
         details=body.model_dump(exclude_none=True),
     )
-    return _serialize_row(updated)
+    return _safe_user(updated)
 
 
 @router.delete("/users/{user_id}", summary="Deactivate a user (admin only)")
@@ -707,7 +725,7 @@ def admin_deactivate_user(
         resource_type="user",
         resource_id=str(user_id),
     )
-    return _serialize_row(deactivated)
+    return _safe_user(deactivated)
 
 
 @router.get(
@@ -764,6 +782,7 @@ def get_audit_log(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(require_role("admin", "auditor")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     try:
         start_dt = datetime.fromisoformat(start_date) if start_date else None
@@ -788,6 +807,7 @@ def get_audit_log(
         end_date=end_dt,
         limit=limit,
         offset=offset,
+        tenant_id=tenant_id,
     )
     return {
         "count": len(rows),
@@ -807,10 +827,12 @@ class SwitchTenantRequest(BaseModel):
 @router.get("/tenants", summary="List all tenants (admin only)")
 def list_tenants(
     current_user: dict = Depends(require_role("admin")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    """Return all distinct tenants with metadata for the tenant switcher."""
+    """Return tenant metadata for the caller's own tenant only."""
     with raf_cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT
                 p.tenant_id,
                 COALESCE(e.display_name, CONCAT('Tenant ', p.tenant_id)) AS name,
@@ -819,9 +841,12 @@ def list_tenants(
             FROM patients p
             LEFT JOIN emr_connections e ON e.tenant_id = p.tenant_id AND e.is_active = 1
             LEFT JOIN users u ON u.tenant_id = p.tenant_id AND u.is_active = 1
+            WHERE p.tenant_id = %s
             GROUP BY p.tenant_id, e.display_name
             ORDER BY p.tenant_id
-        """)
+            """,
+            (tenant_id,),
+        )
         rows = cur.fetchall()
 
     tenants = []
@@ -835,27 +860,26 @@ def list_tenants(
             }
         )
 
-    # Include tenants that have no patients but have users
-    seen = {t["tenant_id"] for t in tenants}
-    with raf_cursor() as cur:
-        cur.execute("""
-            SELECT DISTINCT tenant_id FROM users WHERE is_active = 1
-        """)
-        for row in cur.fetchall():
-            tid = str(row["tenant_id"])
-            if tid not in seen:
-                tenants.append(
-                    {
-                        "tenant_id": tid,
-                        "name": f"Tenant {tid}",
-                        "patient_count": 0,
-                        "user_count": 0,
-                    }
-                )
+    # If no patients exist yet for this tenant, still return the tenant entry via users
+    if not tenants:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS user_count FROM users WHERE tenant_id = %s AND is_active = 1",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            tenants.append(
+                {
+                    "tenant_id": str(tenant_id),
+                    "name": f"Tenant {tenant_id}",
+                    "patient_count": 0,
+                    "user_count": int((row or {}).get("user_count", 0)),
+                }
+            )
 
     return {
         "tenants": tenants,
-        "current_tenant_id": str(current_user.get("tenant_id", "1")),
+        "current_tenant_id": str(tenant_id),
     }
 
 

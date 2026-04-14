@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from datetime import date
 from typing import Any
 
@@ -24,6 +25,84 @@ from app.db import raf_cursor
 from app.services import openemr_connector as emr
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Cached signal tables (5-minute TTL avoids N+1 DB hits per patient scan)
+# ---------------------------------------------------------------------------
+_medication_signals_cache: list[dict] | None = None
+_medication_signals_ts: float = 0
+
+_lab_signals_cache: list[dict] | None = None
+_lab_signals_ts: float = 0
+
+_SIGNAL_CACHE_TTL = 300  # seconds
+
+
+def _get_medication_signals(cur) -> list[dict]:
+    global _medication_signals_cache, _medication_signals_ts
+    if _medication_signals_cache is None or time.time() - _medication_signals_ts > _SIGNAL_CACHE_TTL:
+        cur.execute("SELECT * FROM raf_medication_signals")
+        _medication_signals_cache = cur.fetchall()
+        _medication_signals_ts = time.time()
+        logger.debug("Refreshed medication signals cache: %d rows", len(_medication_signals_cache))
+    return _medication_signals_cache
+
+
+def _get_lab_signals(cur) -> list[dict]:
+    global _lab_signals_cache, _lab_signals_ts
+    if _lab_signals_cache is None or time.time() - _lab_signals_ts > _SIGNAL_CACHE_TTL:
+        cur.execute("SELECT * FROM raf_lab_signals")
+        _lab_signals_cache = cur.fetchall()
+        _lab_signals_ts = time.time()
+        logger.debug("Refreshed lab signals cache: %d rows", len(_lab_signals_cache))
+    return _lab_signals_cache
+
+
+# ---------------------------------------------------------------------------
+# Patient list helper — supports both native and FHIR/REST patients
+# ---------------------------------------------------------------------------
+
+def _get_all_patient_ids(tenant_id: str) -> list[int]:
+    """Return patient IDs to scan, sourced from the active connection type.
+
+    When the tenant has an active FHIR R4 or REST API EMR connection the IDs
+    are taken from ``emr_patient_matches`` (the ``emr_pid`` column contains the
+    external patient identifier that every downstream EMR call expects).
+    Otherwise the native ``patients`` table is used.
+    """
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT connection_type FROM emr_connections "
+            "WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
+            (tenant_id,),
+        )
+        row = cur.fetchone()
+        if row and row["connection_type"] in ("fhir_r4", "rest_api"):
+            cur.execute(
+                """
+                SELECT epm.emr_pid AS patient_id
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                WHERE ec.is_active = 1
+                  AND ec.tenant_id = %s
+                """,
+                (tenant_id,),
+            )
+            logger.info(
+                "_get_all_patient_ids tenant=%s using FHIR/REST source (emr_patient_matches)",
+                tenant_id,
+            )
+        else:
+            cur.execute(
+                "SELECT id AS patient_id FROM patients "
+                "WHERE is_active = 1 AND tenant_id = %s",
+                (tenant_id,),
+            )
+            logger.info(
+                "_get_all_patient_ids tenant=%s using native patients table",
+                tenant_id,
+            )
+        return [r["patient_id"] for r in cur.fetchall()]
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +226,12 @@ def _store_suspect(
         updated_at       DATETIME
     """
     evidence_json = json.dumps(suspect.get("evidence") or {})
-    _tenant = tenant_id or suspect.get("tenant_id") or "1"
+    _tenant = tenant_id or suspect.get("tenant_id")
+    if not _tenant:
+        raise ValueError(
+            "_store_suspect called without a tenant_id — refusing to store suspect "
+            "without tenant scope to prevent cross-tenant data leakage."
+        )
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -223,8 +307,7 @@ def scan_medications(patient_id: int, year: int | None = None) -> list[dict[str,
 
     try:
         with raf_cursor() as cur:
-            cur.execute("SELECT * FROM raf_medication_signals")
-            signals = cur.fetchall()
+            signals = _get_medication_signals(cur)
     except Exception as exc:
         logger.error("scan_medications: cannot load signals: %s", exc)
         return []
@@ -306,8 +389,7 @@ def scan_labs(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
 
     try:
         with raf_cursor() as cur:
-            cur.execute("SELECT * FROM raf_lab_signals")
-            signals = cur.fetchall()
+            signals = _get_lab_signals(cur)
     except Exception as exc:
         logger.error("scan_labs: cannot load signals: %s", exc)
         return []
@@ -628,6 +710,57 @@ def run_full_suspect_scan(
     return stored
 
 
+def run_tenant_suspect_scan(
+    tenant_id: str,
+    year: int | None = None,
+) -> dict[str, Any]:
+    """
+    Run ``run_full_suspect_scan`` for every patient belonging to *tenant_id*.
+
+    Patient IDs are resolved via ``_get_all_patient_ids`` so both native
+    (``patients`` table) and FHIR/REST (``emr_patient_matches``) patients are
+    included automatically based on the active EMR connection type.
+
+    Returns a summary dict::
+
+        {
+            "tenant_id": "...",
+            "year": 2025,
+            "patients_scanned": 42,
+            "total_suspects_stored": 137,
+            "errors": 0,
+        }
+    """
+    patient_ids = _get_all_patient_ids(tenant_id)
+    logger.info(
+        "run_tenant_suspect_scan tenant=%s year=%s → %d patients to scan",
+        tenant_id, year, len(patient_ids),
+    )
+
+    total_stored = 0
+    error_count = 0
+    for pid in patient_ids:
+        try:
+            stored = run_full_suspect_scan(pid, year=year, tenant_id=tenant_id)
+            total_stored += len(stored)
+        except Exception as exc:
+            logger.error(
+                "run_tenant_suspect_scan failed for pid=%s tenant=%s: %s",
+                pid, tenant_id, exc,
+            )
+            error_count += 1
+
+    summary = {
+        "tenant_id": tenant_id,
+        "year": year or date.today().year,
+        "patients_scanned": len(patient_ids),
+        "total_suspects_stored": total_stored,
+        "errors": error_count,
+    }
+    logger.info("run_tenant_suspect_scan complete: %s", summary)
+    return summary
+
+
 # ---------------------------------------------------------------------------
 # Query suspects
 # ---------------------------------------------------------------------------
@@ -745,21 +878,32 @@ def get_all_open_suspects(
         logger.warning("get_all_open_suspects called without tenant_id — returning empty list")
         return []
 
+    # Collect the valid patient ID set for this tenant, respecting the active
+    # connection type (native patients table vs FHIR/REST emr_patient_matches).
+    try:
+        valid_pids = _get_all_patient_ids(tenant_id)
+    except Exception as exc:
+        logger.error("get_all_open_suspects: _get_all_patient_ids failed: %s", exc)
+        return []
+
+    if not valid_pids:
+        return []
+
+    pid_placeholders = ",".join(["%s"] * len(valid_pids))
+
     try:
         with raf_cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT sc.*
                 FROM raf_suspect_conditions sc
                 WHERE sc.status = 'open'
                   AND sc.tenant_id = %s
-                  AND sc.patient_id IN (
-                      SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
-                  )
+                  AND sc.patient_id IN ({pid_placeholders})
                 ORDER BY sc.confidence_score DESC, sc.patient_id ASC, sc.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, tenant_id, int(limit), int(offset)),
+                (tenant_id, *valid_pids, int(limit), int(offset)),
             )
             rows = cur.fetchall()
     except Exception as exc:
@@ -768,11 +912,14 @@ def get_all_open_suspects(
 
     suspects = [_serialize_suspect(r) for r in rows]
 
-    # Enrich with patient names from the patients table (same DB).
+    # Enrich with patient names.  For native patients the name comes from the
+    # patients table; for FHIR patients it comes from emr_patient_matches
+    # (fname/lname columns).  We try both and merge.
     pids = sorted({int(s["patient_id"]) for s in suspects if s.get("patient_id") is not None})
     name_map: dict[int, str] = {}
     if pids:
         placeholders = ",".join(["%s"] * len(pids))
+        # Native patients table
         try:
             with raf_cursor() as cur:
                 cur.execute(
@@ -786,7 +933,34 @@ def get_all_open_suspects(
                     if full:
                         name_map[int(row["id"])] = full
         except Exception as exc:
-            logger.warning("get_all_open_suspects name enrichment failed: %s", exc)
+            logger.warning("get_all_open_suspects native name enrichment failed: %s", exc)
+
+        # FHIR/EMR patients (fills gaps not covered by native table)
+        remaining = [p for p in pids if p not in name_map]
+        if remaining:
+            rem_placeholders = ",".join(["%s"] * len(remaining))
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT epm.emr_pid AS id,
+                               epm.fname   AS first_name,
+                               epm.lname   AS last_name
+                        FROM emr_patient_matches epm
+                        JOIN emr_connections ec ON ec.id = epm.connection_id
+                        WHERE ec.tenant_id = %s
+                          AND epm.emr_pid IN ({rem_placeholders})
+                        """,
+                        (tenant_id, *remaining),
+                    )
+                    for row in cur.fetchall():
+                        first = (row.get("first_name") or "").strip()
+                        last = (row.get("last_name") or "").strip()
+                        full = f"{first} {last}".strip()
+                        if full:
+                            name_map[int(row["id"])] = full
+            except Exception as exc:
+                logger.warning("get_all_open_suspects FHIR name enrichment failed: %s", exc)
 
     for s in suspects:
         pid = s.get("patient_id")
@@ -832,7 +1006,12 @@ def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
                 _hcc = row["suspect_hcc"]
                 _icd = row.get("suspect_icd10") or ""
                 _desc = row.get("description") or ""
-                _tenant = row.get("tenant_id") or "1"
+                _tenant = row.get("tenant_id")
+                if not _tenant:
+                    raise ValueError(
+                        f"accept_suspect: suspect {suspect_id} has no tenant_id in the database — "
+                        "cannot safely promote HCC without tenant scope."
+                    )
 
                 # HCC coefficient lookup
                 _HCC_COEFFICIENTS = {

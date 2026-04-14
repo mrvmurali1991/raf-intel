@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from app.db import raf_cursor, openemr_cursor
@@ -189,23 +189,31 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
 
     excluded_pids = billed_pids | completed_pids
 
-    # All patients from raf_intelligence.patients
+    # All patients from raf_intelligence.patients (including FHIR-synced ones)
+    # Names are resolved from emr_patient_matches when the patients row has blank
+    # first_name / last_name (common for FHIR-sourced patients).
     _sf, _sp = active_patients_subquery(tid, patient_id_column="id")
     with raf_cursor() as cur:
         cur.execute(
             f"""
-            SELECT p.id AS pid, p.first_name AS fname, p.last_name AS lname,
+            SELECT p.id AS pid,
+                   COALESCE(NULLIF(p.first_name, ''), epm.first_name) AS fname,
+                   COALESCE(NULLIF(p.last_name,  ''), epm.last_name)  AS lname,
                    p.dob AS DOB, p.sex,
                    p.phone AS phone_home, p.phone AS phone_cell,
                    p.address AS street, p.city, p.state,
                    p.zip AS postal_code, pp.provider_id AS providerID
             FROM patients p
+            LEFT JOIN emr_patient_matches epm
+                   ON  epm.patient_id = p.id
+                   AND epm.tenant_id  = %s
             LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
             WHERE p.is_active = 1 AND {_sf}
               AND p.tenant_id = %s
-            ORDER BY p.last_name, p.first_name
+            ORDER BY COALESCE(NULLIF(p.last_name, ''), epm.last_name),
+                     COALESCE(NULLIF(p.first_name, ''), epm.first_name)
             """,
-            (*_sp, tid),
+            (tid, *_sp, tid),
         )
         all_patients = cur.fetchall()
 
@@ -563,7 +571,7 @@ def log_outreach(
     caller should subsequently call update_schedule to set status='declined' plus
     decline_reason).
     """
-    ts = contact_date or datetime.utcnow().isoformat(sep=" ", timespec="seconds")
+    ts = contact_date or datetime.now(timezone.utc).isoformat(sep=" ", timespec="seconds")
 
     with raf_cursor() as cur:
         cur.execute(
@@ -734,7 +742,7 @@ def mark_checklist_item(
     completed_by: int | None = None,
 ) -> dict[str, Any] | None:
     """Toggle a checklist item complete/incomplete."""
-    completed_at = datetime.utcnow().isoformat(sep=" ", timespec="seconds") if completed else None
+    completed_at = datetime.now(timezone.utc).isoformat(sep=" ", timespec="seconds") if completed else None
 
     with raf_cursor() as cur:
         cur.execute(
@@ -894,7 +902,7 @@ def create_bulk_outreach(
         return {"created": 0, "awv_ids": [], "method": method}
 
     awv_ids = [int(r["id"]) for r in target_rows]
-    ts = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
+    ts = datetime.now(timezone.utc).isoformat(sep=" ", timespec="seconds")
     today_str = date.today().isoformat()
 
     log_rows = [

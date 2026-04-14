@@ -17,6 +17,7 @@ import ipaddress
 import json
 import logging
 import secrets
+import socket
 import threading
 import time
 from datetime import datetime, timezone
@@ -28,6 +29,38 @@ import httpx
 from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Validate a webhook URL to prevent SSRF attacks.
+
+    Raises ``ValueError`` if the URL targets a private, loopback, link-local,
+    or cloud-metadata address, or uses a non-HTTPS scheme.
+    """
+    parsed = urlparse(url)
+
+    if parsed.scheme != "https":
+        raise ValueError(f"Webhook URL must use https scheme, got {parsed.scheme!r}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Webhook URL has no hostname")
+
+    try:
+        addrinfos = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise ValueError(f"Cannot resolve webhook hostname {hostname!r}: {exc}") from exc
+
+    for family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(
+                f"Webhook URL resolves to blocked address {ip} "
+                f"(private/loopback/link-local/reserved)"
+            )
+        if str(ip) in ("169.254.169.254", "fd00:ec2::254"):
+            raise ValueError(f"Webhook URL resolves to cloud metadata address {ip}")
+
 
 # ---------------------------------------------------------------------------
 # Event catalogue
@@ -353,6 +386,8 @@ def _deliver_to_webhook(
     last_body: str | None = None
     delivered_at: datetime | None = None
 
+    _validate_webhook_url(url)
+
     for attempt in range(1, max_attempts + 1):
         try:
             with httpx.Client(timeout=10.0) as client:
@@ -509,6 +544,7 @@ def test_webhook(webhook_id: int, tenant_id: str) -> dict[str, Any]:
     }
 
     try:
+        _validate_webhook_url(webhook["url"])
         with httpx.Client(timeout=10.0) as client:
             resp = client.post(webhook["url"], content=payload_bytes, headers=headers)
         result["status_code"] = resp.status_code

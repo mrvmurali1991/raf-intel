@@ -34,7 +34,7 @@ import logging
 import re
 import uuid
 from datetime import date as _date
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends, APIRouter, BackgroundTasks, HTTPException, Request
@@ -68,6 +68,7 @@ from app.rate_limit import limiter
 from app.services.circuit_breaker import CircuitBreakerError
 
 from app.services.confidence_router import route_analysis_result
+from app.services.analysis_service import save_encounter_analysis as _svc_save_encounter_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -164,208 +165,6 @@ def _run_pipeline(
             med_diagnoses=med_diagnoses,
         )
 
-
-
-# ---------------------------------------------------------------------------
-# Persist helpers
-# ---------------------------------------------------------------------------
-
-
-def _save_encounter_analysis(
-    encounter_id: int,
-    pid: int,
-    analysis: dict[str, Any],
-) -> None:
-    """Upsert to raf_encounter_analysis and raf_meat_evidence tables."""
-    import json as _json
-
-    # Encounter-level row
-    sql = """
-        INSERT INTO raf_encounter_analysis
-            (encounter_id, patient_id, analysis_json, overall_score,
-             dx_count, suspect_count, hcc_opportunity_count,
-             routing, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-        ON DUPLICATE KEY UPDATE
-            analysis_json         = VALUES(analysis_json),
-            overall_score         = VALUES(overall_score),
-            dx_count              = VALUES(dx_count),
-            suspect_count         = VALUES(suspect_count),
-            hcc_opportunity_count = VALUES(hcc_opportunity_count),
-            routing               = VALUES(routing),
-            created_at            = NOW()
-    """
-
-    def _default_ser(obj):
-        """Handle Decimal, datetime, date, etc. for JSON serialization."""
-        from decimal import Decimal
-        from datetime import datetime as _dt, date as _d
-
-        if isinstance(obj, Decimal):
-            return float(obj)
-        if isinstance(obj, (_dt, _d)):
-            return obj.isoformat()
-        return str(obj)
-
-    try:
-        # Ensure all values are safe scalar types
-        overall = analysis.get("overall_confidence", 0)
-        if isinstance(overall, dict):
-            overall = overall.get("score", overall.get("confidence", 0))
-        routing_raw = analysis.get("routing", {})
-        if isinstance(routing_raw, dict):
-            routing = str(routing_raw.get("routing", "needs_review"))[:50]
-        else:
-            routing = str(routing_raw)[:50]
-
-        with raf_cursor() as cur:
-            cur.execute(
-                sql,
-                (
-                    encounter_id,
-                    pid,
-                    _json.dumps(analysis, default=_default_ser),
-                    float(overall) if overall else 0,
-                    len(analysis.get("diagnoses", [])),
-                    len(analysis.get("suspect_conditions", [])),
-                    sum(1 for d in analysis.get("diagnoses", []) if d.get("hcc")),
-                    routing,
-                ),
-            )
-        logger.debug("Saved encounter analysis for encounter_id=%s", encounter_id)
-    except Exception as exc:
-        logger.warning(
-            "Failed to save encounter analysis for encounter %s: %s (type: %s)",
-            encounter_id,
-            exc,
-            type(exc).__name__,
-        )
-        # Retry with aggressive serialization
-        try:
-            clean_json = _json.loads(_json.dumps(analysis, default=_default_ser))
-            with raf_cursor() as cur:
-                cur.execute(
-                    sql,
-                    (
-                        encounter_id,
-                        pid,
-                        _json.dumps(clean_json),
-                        float(analysis.get("overall_confidence", 0)),
-                        len(analysis.get("diagnoses", [])),
-                        len(analysis.get("suspect_conditions", [])),
-                        sum(1 for d in analysis.get("diagnoses", []) if d.get("hcc")),
-                        str(analysis.get("routing", "needs_review")),
-                    ),
-                )
-            logger.info(
-                "Saved encounter analysis (retry) for encounter_id=%s", encounter_id
-            )
-        except Exception as exc2:
-            logger.error(
-                "Retry save also failed for encounter %s: %s", encounter_id, exc2
-            )
-
-    # --- Persist HCC codes discovered by AI into raf_patient_hcc ---
-    try:
-        measurement_year = _date.today().year
-        hcc_diagnoses = [
-            d for d in analysis.get("diagnoses", [])
-            if d.get("hcc")
-        ]
-        if hcc_diagnoses:
-            with raf_cursor() as cur:
-                for dx in hcc_diagnoses:
-                    hcc_code = str(dx["hcc"]).strip()
-                    icd10 = str(dx.get("icd10", "")).strip()
-
-                    # Check for existing row (same patient + hcc + year)
-                    cur.execute(
-                        "SELECT id, icd10_codes, source_encounter_ids "
-                        "FROM raf_patient_hcc "
-                        "WHERE patient_id = %s AND hcc_code = %s AND measurement_year = %s "
-                        "LIMIT 1",
-                        (pid, hcc_code, measurement_year),
-                    )
-                    existing = cur.fetchone()
-                    if existing:
-                        # Merge ICD-10 codes array
-                        try:
-                            old_codes = json.loads(existing["icd10_codes"] or "[]")
-                        except (ValueError, TypeError):
-                            old_codes = []
-                        merged_codes = list(set(old_codes + ([icd10] if icd10 else [])))
-
-                        # Merge source encounter IDs array
-                        try:
-                            old_enc = json.loads(existing["source_encounter_ids"] or "[]")
-                        except (ValueError, TypeError):
-                            old_enc = []
-                        merged_enc = list(set(old_enc + [encounter_id]))
-
-                        cur.execute(
-                            "UPDATE raf_patient_hcc "
-                            "SET icd10_codes = %s, source_encounter_ids = %s, updated_at = NOW() "
-                            "WHERE id = %s",
-                            (json.dumps(merged_codes), json.dumps(merged_enc), existing["id"]),
-                        )
-                    else:
-                        cur.execute(
-                            """INSERT INTO raf_patient_hcc
-                               (patient_id, measurement_year, hcc_code, icd10_codes,
-                                source_encounter_ids, raf_coefficient, meat_status, is_trumped)
-                               VALUES (%s, %s, %s, %s, %s, 0, 'pending', 0)""",
-                            (
-                                pid,
-                                measurement_year,
-                                hcc_code,
-                                json.dumps([icd10] if icd10 else []),
-                                json.dumps([encounter_id]),
-                            ),
-                        )
-            logger.info(
-                "Persisted %d HCC code(s) to raf_patient_hcc for patient_id=%s encounter_id=%s",
-                len(hcc_diagnoses), pid, encounter_id,
-            )
-    except Exception as hcc_exc:
-        logger.warning(
-            "Failed to persist HCC codes to raf_patient_hcc for encounter %s: %s",
-            encounter_id, hcc_exc,
-        )
-
-    # MEAT evidence — requires raf_patient_hcc rows to already exist;
-    # use the existing store_analysis_meat which accepts (patient_id, year, gemini_result).
-    # We inject encounter metadata via the _meta block.
-    gemini_compat = {
-        "diagnoses": [
-            {
-                "icd10": d.get("icd10", ""),
-                "description": d.get("description", ""),
-                "hcc_code": d.get("hcc", ""),
-                "confidence": d.get("confidence", 0),
-                "negated": False,
-                "meat": {
-                    "monitoring": d.get("meat", {}).get("M", ""),
-                    "evaluation": d.get("meat", {}).get("E", ""),
-                    "assessment": d.get("meat", {}).get("A", ""),
-                    "treatment": d.get("meat", {}).get("T", ""),
-                },
-                "meat_score": d.get("meat_score", 0),
-            }
-            for d in analysis.get("diagnoses", [])
-        ],
-        "_meta": {
-            "encounter_id": encounter_id,
-            "encounter_date": analysis.get("encounter_date", _date.today().isoformat()),
-        },
-    }
-    try:
-        store_analysis_meat(pid, _date.today().year, gemini_compat)
-        # Refresh meat_status in raf_patient_hcc based on newly stored evidence
-        update_hcc_meat_status(pid, _date.today().year)
-    except Exception as exc:
-        logger.warning(
-            "Failed to store MEAT evidence for encounter %s: %s", encounter_id, exc
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -490,8 +289,20 @@ def analyze_encounter(
 
     if body.include_context:
         patient = get_patient(pid)
+        if not patient:
+            # FHIR patients are not in OpenEMR — fall back to emr_patient_matches.
+            try:
+                from app.services.patient_service import _get_fhir_patient_row
+                patient = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+                if patient:
+                    logger.info(
+                        "analyze_encounter: resolved pid=%s as FHIR patient from emr_patient_matches",
+                        pid,
+                    )
+            except Exception as _fhir_exc:
+                logger.debug("FHIR patient lookup failed for pid=%s: %s", pid, _fhir_exc)
         if patient:
-            dob = patient.get("DOB") or ""
+            dob = patient.get("DOB") or patient.get("date_of_birth") or ""
             # CMS rule: age is calculated as of Feb 1 of the encounter service year.
             # Extract year from the encounter date; fall back to today's year if absent.
             enc_date_raw = encounter.get("date") or ""
@@ -519,19 +330,22 @@ def analyze_encounter(
         try:
             problem_list = get_problem_list(pid)
             recapture_gaps = get_recapture_gaps(pid, enc_year)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to fetch %s: %s", "problem_list/recapture_gaps", exc)
             problem_list, recapture_gaps = [], []
 
         # NEW — Latest vitals snapshot
         try:
             latest_vitals = get_latest_vitals(pid)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to fetch %s: %s", "latest_vitals", exc)
             latest_vitals = {}
 
         # NEW — Medications with documented indication notes
         try:
             med_diagnoses = get_medication_diagnoses(pid)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to fetch %s: %s", "medication_diagnoses", exc)
             med_diagnoses = []
 
     # Run pipeline
@@ -588,7 +402,7 @@ def analyze_encounter(
     # Persist
     if body.save_results:
         result["encounter_date"] = encounter.get("date", _date.today().isoformat())
-        _save_encounter_analysis(encounter_id, pid, result)
+        _svc_save_encounter_analysis(encounter_id, pid, result)
 
     log_phi_access(
         action="analyze",
@@ -763,6 +577,18 @@ def analyze_note(
     # Pull context from OpenEMR if the patient exists and is not the
     # anonymous paste-mode sentinel (patient_id=0).
     patient = get_patient(pid) if pid else None
+    if not patient and pid:
+        # FHIR patients are not in OpenEMR — fall back to emr_patient_matches.
+        try:
+            from app.services.patient_service import _get_fhir_patient_row
+            patient = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+            if patient:
+                logger.info(
+                    "analyze_note: resolved pid=%s as FHIR patient from emr_patient_matches",
+                    pid,
+                )
+        except Exception as _fhir_exc:
+            logger.debug("FHIR patient lookup failed for pid=%s: %s", pid, _fhir_exc)
     if patient:
         dob = patient.get("DOB") or ""
         try:
@@ -771,8 +597,8 @@ def analyze_note(
             # For historical encounter scoring use the /encounter/{id} endpoint,
             # which passes the encounter service year to _calculate_age.
             patient_age = _calculate_age(str(dob)[:10])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fetch %s: %s", "_calculate_age", exc)
         patient_sex = patient.get("sex", "")
         billing = get_billing_codes(pid)
         existing_hccs = [b["code"] for b in billing if b.get("code")][:50]
@@ -910,7 +736,7 @@ def analyze_note(
 
 def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | None = None) -> None:
     """Background task: analyze all encounters for a patient (DB-backed)."""
-    _upsert_job(job_id, status="RUNNING", started_at=datetime.utcnow())
+    _upsert_job(job_id, status="RUNNING", started_at=datetime.now(timezone.utc))
     try:
         patient = get_patient(pid)
         if not patient:
@@ -918,7 +744,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
                 job_id,
                 status="FAILED",
                 error_message=f"Patient {pid} not found",
-                finished_at=datetime.utcnow(),
+                finished_at=datetime.now(timezone.utc),
             )
             return
 
@@ -988,7 +814,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
                     result["encounter_date"] = note.get(
                         "date", _date.today().isoformat()
                     )
-                    _save_encounter_analysis(enc_id, pid, result)
+                    _svc_save_encounter_analysis(enc_id, pid, result)
 
             except Exception as exc:
                 logger.warning("Batch job %s: note error pid=%s: %s", job_id, pid, exc)
@@ -1003,7 +829,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
             status="SUCCESS",
             progress=len(results),
             result_json=_json.dumps({"results": results}),
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
         )
 
     except Exception as exc:
@@ -1011,7 +837,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
             job_id,
             status="FAILED",
             error_message=str(exc),
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
         )
         logger.error("Batch job %s failed: %s", job_id, exc, exc_info=True)
 

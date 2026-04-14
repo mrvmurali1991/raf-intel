@@ -41,6 +41,10 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id
 from app.db import raf_cursor
+from app.services.meat_evidence_service import (
+    calculate_meat_completeness,
+    update_hcc_meat_status,
+)
 from app.services.meat_validator import validate_meat, validate_meat_batch
 
 logger = logging.getLogger(__name__)
@@ -117,6 +121,7 @@ def validate_single(
 @router.post("/run-for-patient/{patient_id}", response_model=RunForPatientResponse)
 def run_for_patient(
     patient_id: int,
+    current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ) -> RunForPatientResponse:
     """
@@ -129,6 +134,46 @@ def run_for_patient(
     """
 
     try:
+        # ------------------------------------------------------------------
+        # Detect FHIR patients — they are stored in emr_patient_matches, not
+        # the local `documents` table.  For them we refresh meat_status from
+        # already-stored evidence and return the summary without re-running
+        # the NLP validator (clinical notes come from the FHIR source and are
+        # not cached locally).
+        # ------------------------------------------------------------------
+        is_fhir = False
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM emr_patient_matches epm
+                    JOIN emr_connections ec ON ec.id = epm.connection_id
+                    WHERE ec.is_active = 1
+                      AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                      AND (epm.id = %s OR epm.raf_patient_id = %s)
+                    LIMIT 1
+                    """,
+                    (patient_id, patient_id),
+                )
+                is_fhir = cur.fetchone() is not None
+        except Exception as fhir_check_err:
+            logger.warning(
+                "meat.run_for_patient: FHIR check failed for pid=%s: %s",
+                patient_id, fhir_check_err,
+            )
+
+        if is_fhir:
+            # Refresh meat_status from existing evidence rows and return summary.
+            update_hcc_meat_status(patient_id)
+            report = calculate_meat_completeness(patient_id)
+            return RunForPatientResponse(
+                patient_id=patient_id,
+                hccs_validated=report["total_hccs"],
+                complete=report["complete_hccs"],
+                partial=report["partial_hccs"],
+                missing=report["missing_hccs"],
+            )
+
         # 1. Fetch most-recent note for the patient (tenant-scoped).
         with raf_cursor() as cur:
             cur.execute(

@@ -5,6 +5,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
+  /** Optional title shown in the default error UI. Defaults to "Something went wrong". */
+  fallbackTitle?: string;
   onReset?: () => void;
 }
 
@@ -50,7 +52,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 text-center"
         >
           <h1 className="text-2xl font-semibold text-foreground">
-            Something went wrong
+            {this.props.fallbackTitle ?? 'Something went wrong'}
           </h1>
           <p className="text-sm text-muted-foreground max-w-md">
             An unexpected error occurred while rendering this page. You can try

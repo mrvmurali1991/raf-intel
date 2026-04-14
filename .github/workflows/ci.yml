@@ -217,6 +217,24 @@ jobs:
         working-directory: frontend
 
   # ---------------------------------------------------------------------------
+  # Job: frontend-test
+  # Vitest unit test suite for the frontend.
+  # ---------------------------------------------------------------------------
+  frontend-test:
+    name: "Frontend — Vitest"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm test -- --run
+
+  # ---------------------------------------------------------------------------
   # Job: frontend-build
   # Full Next.js production build — validates that the app compiles end-to-end.
   # NEXT_PUBLIC_API_URL is set to a placeholder so the build doesn't abort on
@@ -228,6 +246,7 @@ jobs:
     needs:
       - frontend-typecheck
       - frontend-lint
+      - frontend-test
 
     env:
       NEXT_PUBLIC_API_URL: http://localhost:8500

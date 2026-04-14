@@ -46,6 +46,10 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
+import ipaddress
+import socket
+from urllib.parse import urlparse
+
 import requests
 
 from app.db import raf_cursor
@@ -778,6 +782,39 @@ def _increment_error_count(connection_id: int) -> None:
 # ===========================================================================
 
 
+def _validate_webhook_url(url: str) -> None:
+    """Validate a webhook URL to prevent SSRF attacks.
+
+    Raises ``ValueError`` if the URL targets a private, loopback, link-local,
+    or cloud-metadata address, or uses a non-HTTPS scheme.
+    """
+    parsed = urlparse(url)
+
+    if parsed.scheme != "https":
+        raise ValueError(f"Webhook URL must use https scheme, got {parsed.scheme!r}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Webhook URL has no hostname")
+
+    # Resolve hostname to IP(s) and check each one.
+    try:
+        addrinfos = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise ValueError(f"Cannot resolve webhook hostname {hostname!r}: {exc}") from exc
+
+    for family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(
+                f"Webhook URL resolves to blocked address {ip} "
+                f"(private/loopback/link-local/reserved)"
+            )
+        # Explicit cloud metadata check (covers mapped IPv4-in-IPv6 too).
+        if str(ip) in ("169.254.169.254", "fd00:ec2::254"):
+            raise ValueError(f"Webhook URL resolves to cloud metadata address {ip}")
+
+
 def _build_webhook_payload(
     event_name: str,
     msg_id: int,
@@ -841,6 +878,7 @@ def _deliver_to_subscribers(event_name: str, payload: dict[str, Any]) -> None:
     for sub in subs:
         url = sub["webhook_url"]
         try:
+            _validate_webhook_url(url)
             resp = requests.post(url, data=body, headers=headers, timeout=10)
             logger.info(
                 "adt: webhook delivery to %s returned %d (sub_id=%d)",

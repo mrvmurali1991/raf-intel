@@ -38,13 +38,26 @@ _MAX_CSV_BYTES = 10 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------
-# Internal guard — reused by many endpoints
+# Internal guards — reused by many endpoints
 # ---------------------------------------------------------------------------
 
 def _require_patient_access(pid: int, tenant_id: str) -> None:
     """Raise 404 when *pid* is not accessible for *tenant_id*."""
     if not svc.patient_is_accessible(pid, tenant_id):
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+
+
+def _require_emr_patient(pid: int, tenant_id: str) -> bool:
+    """Return True when patient exists in the local OpenEMR DB.
+
+    For FHIR patients (stored in emr_patient_matches), this returns False so
+    callers can return empty clinical sub-resources instead of raising 404.
+    Never raises — the caller decides how to handle a False result.
+    """
+    if svc.patient_is_fhir(pid, tenant_id):
+        return False
+    patient = emr.get_patient(pid)
+    return bool(patient)
 
 
 # ---------------------------------------------------------------------------
@@ -100,10 +113,11 @@ def patients_with_encounters(
     limit: int = Query(200, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """Return only patients that have at least one encounter."""
     try:
-        return svc.svc_patients_with_encounters(limit=limit)
+        return svc.svc_patients_with_encounters(limit=limit, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("patients_with_encounters error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -485,10 +499,6 @@ def get_encounters(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
-
     result = svc.svc_get_encounters(pid=pid, year=year, tenant_id=_tid)
 
     log_phi_access(
@@ -531,10 +541,6 @@ def get_medications(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
-
     return svc.svc_get_medications(pid=pid, year=year, tenant_id=_tid)
 
 
@@ -572,10 +578,6 @@ def get_medication_gaps(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
-
     try:
         return svc.svc_get_medication_gaps(pid=pid, year=year, tenant_id=_tid)
     except Exception as exc:
@@ -600,10 +602,6 @@ def get_diagnoses(
     """
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
-
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
     result = svc.svc_get_diagnoses(pid=pid, tenant_id=_tid)
 
@@ -639,9 +637,8 @@ def get_procedures(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "count": 0, "procedures": [], "note": "Procedure data not yet synced for FHIR patients"}
 
     try:
         return svc.svc_get_procedures(pid=pid, tenant_id=_tid)
@@ -678,9 +675,8 @@ def get_problem_list(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "count": 0, "problems": [], "note": "Problem list not yet synced for FHIR patients"}
 
     return svc.svc_get_problem_list(pid=pid, year=year, tenant_id=_tid)
 
@@ -715,9 +711,8 @@ def get_recapture_gaps(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "gaps": [], "year": year, "gap_count": 0, "note": "Recapture gap data not yet synced for FHIR patients"}
 
     try:
         return svc.svc_get_recapture_gaps(pid=pid, year=year, tenant_id=_tid)
@@ -764,7 +759,9 @@ def get_vitals_suspects(
 
     patient = emr.get_patient(pid)
     if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        if not svc.patient_is_fhir(pid, _tid):
+            raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        return {"pid": pid, "suspects": [], "count": 0, "note": "Vitals data not yet synced for FHIR patients"}
 
     try:
         return svc.svc_get_vitals_suspects(pid=pid, year=year, tenant_id=_tid, patient=patient)
@@ -801,7 +798,9 @@ def get_lab_suspects(
 
     patient = emr.get_patient(pid)
     if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        if not svc.patient_is_fhir(pid, _tid):
+            raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        return {"pid": pid, "suspects": [], "count": 0, "note": "Lab data not yet synced for FHIR patients"}
 
     try:
         return svc.svc_get_lab_suspects(pid=pid, year=year, tenant_id=_tid, patient=patient)
@@ -838,7 +837,11 @@ def get_comprehensive_profile(
 
     patient = emr.get_patient(pid)
     if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        if not svc.patient_is_fhir(pid, _tid):
+            raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        # For FHIR patients, build a minimal patient dict from emr_patient_matches
+        fhir_row = svc._get_fhir_patient_row(pid, tenant_id=_tid)
+        patient = fhir_row or {"pid": pid}
 
     result = svc.svc_get_comprehensive_profile(pid=pid, tenant_id=tenant_id, patient=patient)
 
@@ -872,9 +875,8 @@ def get_family_history(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "family_history": {}, "note": "Family history not yet synced for FHIR patients"}
 
     return svc.svc_get_family_history(pid=pid, tenant_id=_tid)
 
@@ -901,9 +903,8 @@ def get_sdoh(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "sdoh_form": {}, "billed_z_codes": [], "billable_highlights": {}, "note": "SDOH data not yet synced for FHIR patients"}
 
     return svc.svc_get_sdoh(pid=pid, tenant_id=_tid)
 
@@ -928,9 +929,8 @@ def get_allergies(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "count": 0, "allergies": [], "note": "Allergy data not yet synced for FHIR patients"}
 
     return svc.svc_get_allergies(pid=pid, tenant_id=_tid)
 
@@ -956,9 +956,8 @@ def get_referrals(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "count": 0, "referrals": [], "note": "Referral data not yet synced for FHIR patients"}
 
     return svc.svc_get_referrals(pid=pid, tenant_id=_tid)
 
@@ -984,9 +983,8 @@ def get_immunizations(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "count": 0, "immunizations": [], "note": "Immunization data not yet synced for FHIR patients"}
 
     try:
         return svc.svc_get_immunizations(pid=pid, tenant_id=_tid)
@@ -1023,9 +1021,8 @@ def get_hedis_compliance(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "measures": {}, "note": "HEDIS data not yet synced for FHIR patients"}
 
     try:
         return svc.svc_get_hedis_compliance(pid=pid, year=year, tenant_id=_tid)
@@ -1057,8 +1054,7 @@ def get_patient_enrollment(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    patient = emr.get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    if not _require_emr_patient(pid, _tid):
+        return {"pid": pid, "enrollment": {}, "note": "Enrollment data not yet synced for FHIR patients"}
 
     return svc.svc_get_patient_enrollment(pid=pid, tenant_id=_tid)

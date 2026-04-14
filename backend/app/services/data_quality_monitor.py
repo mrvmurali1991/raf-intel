@@ -40,6 +40,26 @@ SAMPLE_LIMIT = 10
 # Using Any here avoids a hard import of mysql.connector types at module level.
 Cursor = Any
 
+_FHIR_CONNECTION_TYPES = ("fhir_r4", "rest_api")
+
+
+def _is_fhir_active(cursor: Cursor) -> bool:
+    """Return True when there is an active FHIR/REST EMR connection.
+
+    Uses the same emr_connections table as patient_service so the definition
+    of "active FHIR connection" is consistent across the codebase.
+    """
+    try:
+        cursor.execute(
+            "SELECT 1 FROM emr_connections "
+            "WHERE is_active = 1 "
+            "  AND connection_type IN ('fhir_r4', 'rest_api') "
+            "LIMIT 1"
+        )
+        return cursor.fetchone() is not None
+    except Exception:
+        return False
+
 
 def _empty_result(check: str, severity: str, details: str) -> dict[str, Any]:
     return {
@@ -63,32 +83,58 @@ def _error_result(check: str, exc: Exception) -> dict[str, Any]:
 
 
 def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """Patients with no HCCs and no diagnoses recorded in the last 365 days."""
+    """Patients with no HCCs and no diagnoses recorded in the last 365 days.
+
+    When a FHIR/REST connection is active, patient data lives in
+    emr_patient_matches rather than the patients table.
+    """
     check = "patients_without_icd"
     try:
-        cursor.execute(
-            """
-            SELECT p.id
-            FROM patients p
-            WHERE p.tenant_id = %(tenant_id)s
-              AND NOT EXISTS (
-                    SELECT 1 FROM raf_patient_hcc h
-                    JOIN patients ph ON ph.id = h.patient_id
-                    WHERE h.patient_id = p.id
-                      AND ph.tenant_id = %(tenant_id)s
-              )
-              AND NOT EXISTS (
-                    SELECT 1 FROM diagnoses d
-                    JOIN patients pd ON pd.id = d.patient_id
-                    WHERE d.patient_id = p.id
-                      AND pd.tenant_id = %(tenant_id)s
-                      AND d.diagnosis_date >= (CURRENT_DATE - INTERVAL 365 DAY)
-              )
-            ORDER BY p.id
-            LIMIT 1000
-            """,
-            {"tenant_id": tenant_id},
-        )
+        if _is_fhir_active(cursor):
+            cursor.execute(
+                """
+                SELECT epm.id
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                WHERE ec.is_active = 1
+                  AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                  AND NOT EXISTS (
+                        SELECT 1 FROM raf_patient_hcc h
+                        WHERE h.patient_id = epm.id
+                  )
+                  AND NOT EXISTS (
+                        SELECT 1 FROM diagnoses d
+                        WHERE d.patient_id = epm.id
+                          AND d.diagnosis_date >= (CURRENT_DATE - INTERVAL 365 DAY)
+                  )
+                ORDER BY epm.id
+                LIMIT 1000
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT p.id
+                FROM patients p
+                WHERE p.tenant_id = %(tenant_id)s
+                  AND NOT EXISTS (
+                        SELECT 1 FROM raf_patient_hcc h
+                        JOIN patients ph ON ph.id = h.patient_id
+                        WHERE h.patient_id = p.id
+                          AND ph.tenant_id = %(tenant_id)s
+                  )
+                  AND NOT EXISTS (
+                        SELECT 1 FROM diagnoses d
+                        JOIN patients pd ON pd.id = d.patient_id
+                        WHERE d.patient_id = p.id
+                          AND pd.tenant_id = %(tenant_id)s
+                          AND d.diagnosis_date >= (CURRENT_DATE - INTERVAL 365 DAY)
+                  )
+                ORDER BY p.id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
         rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
@@ -105,21 +151,41 @@ def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]
 
 
 def check_hccs_missing_meat(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """HCC rows with MEAT status missing or NULL — unsupported documentation."""
+    """HCC rows with MEAT status missing or NULL — unsupported documentation.
+
+    When a FHIR/REST connection is active, the HCC patient_id references
+    emr_patient_matches.id rather than patients.id, so we join against the
+    appropriate patient source for tenant scoping.
+    """
     check = "hccs_missing_meat"
     try:
-        cursor.execute(
-            """
-            SELECT h.id
-            FROM raf_patient_hcc h
-            JOIN patients p ON p.id = h.patient_id
-            WHERE p.tenant_id = %(tenant_id)s
-              AND (h.meat_status IS NULL OR h.meat_status = 'MISSING')
-            ORDER BY h.id
-            LIMIT 1000
-            """,
-            {"tenant_id": tenant_id},
-        )
+        if _is_fhir_active(cursor):
+            cursor.execute(
+                """
+                SELECT h.id
+                FROM raf_patient_hcc h
+                JOIN emr_patient_matches epm ON epm.id = h.patient_id
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                WHERE ec.is_active = 1
+                  AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                  AND (h.meat_status IS NULL OR h.meat_status = 'MISSING')
+                ORDER BY h.id
+                LIMIT 1000
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT h.id
+                FROM raf_patient_hcc h
+                JOIN patients p ON p.id = h.patient_id
+                WHERE p.tenant_id = %(tenant_id)s
+                  AND (h.meat_status IS NULL OR h.meat_status = 'MISSING')
+                ORDER BY h.id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
         rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
@@ -136,21 +202,40 @@ def check_hccs_missing_meat(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
 
 
 def check_raf_score_outliers(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """RAF scores outside plausible clinical range (>5.0 or <0.1)."""
+    """RAF scores outside plausible clinical range (>5.0 or <0.1).
+
+    When a FHIR/REST connection is active, raf_score is stored on
+    emr_patient_matches rather than patients.
+    """
     check = "raf_score_outliers"
     try:
-        cursor.execute(
-            """
-            SELECT p.id
-            FROM patients p
-            WHERE p.tenant_id = %(tenant_id)s
-              AND p.raf_score IS NOT NULL
-              AND (p.raf_score > 5.0 OR p.raf_score < 0.1)
-            ORDER BY p.id
-            LIMIT 1000
-            """,
-            {"tenant_id": tenant_id},
-        )
+        if _is_fhir_active(cursor):
+            cursor.execute(
+                """
+                SELECT epm.id
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                WHERE ec.is_active = 1
+                  AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                  AND epm.raf_score IS NOT NULL
+                  AND (epm.raf_score > 5.0 OR epm.raf_score < 0.1)
+                ORDER BY epm.id
+                LIMIT 1000
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT p.id
+                FROM patients p
+                WHERE p.tenant_id = %(tenant_id)s
+                  AND p.raf_score IS NOT NULL
+                  AND (p.raf_score > 5.0 OR p.raf_score < 0.1)
+                ORDER BY p.id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
         rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
@@ -167,21 +252,40 @@ def check_raf_score_outliers(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
 
 
 def check_future_dob(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """Patients with date-of-birth after today — impossible data."""
+    """Patients with date-of-birth after today — impossible data.
+
+    When a FHIR/REST connection is active, DOB is stored in emr_patient_matches
+    (birth_date column as populated by the FHIR importer).
+    """
     check = "future_dob"
     try:
-        cursor.execute(
-            """
-            SELECT id
-            FROM patients
-            WHERE tenant_id = %(tenant_id)s
-              AND dob IS NOT NULL
-              AND dob > CURRENT_DATE
-            ORDER BY id
-            LIMIT 1000
-            """,
-            {"tenant_id": tenant_id},
-        )
+        if _is_fhir_active(cursor):
+            cursor.execute(
+                """
+                SELECT epm.id
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                WHERE ec.is_active = 1
+                  AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                  AND epm.birth_date IS NOT NULL
+                  AND epm.birth_date > CURRENT_DATE
+                ORDER BY epm.id
+                LIMIT 1000
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id
+                FROM patients
+                WHERE tenant_id = %(tenant_id)s
+                  AND dob IS NOT NULL
+                  AND dob > CURRENT_DATE
+                ORDER BY id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
         rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
@@ -195,32 +299,64 @@ def check_future_dob(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
 
 
 def check_duplicate_patients(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """Patients sharing the same (last_name, first_name, dob)."""
+    """Patients sharing the same (last_name, first_name, dob).
+
+    When a FHIR/REST connection is active, duplicate detection runs against
+    emr_patient_matches using family_name, given_name, and birth_date columns.
+    """
     check = "duplicate_patients"
     try:
-        cursor.execute(
-            """
-            SELECT p.id
-            FROM patients p
-            JOIN (
-                SELECT last_name, first_name, dob
-                FROM patients
-                WHERE tenant_id = %(tenant_id)s
-                  AND last_name IS NOT NULL
-                  AND first_name IS NOT NULL
-                  AND dob IS NOT NULL
-                GROUP BY last_name, first_name, dob
-                HAVING COUNT(*) > 1
-            ) dup
-              ON dup.last_name = p.last_name
-             AND dup.first_name = p.first_name
-             AND dup.dob = p.dob
-            WHERE p.tenant_id = %(tenant_id)s
-            ORDER BY p.last_name, p.first_name, p.dob, p.id
-            LIMIT 1000
-            """,
-            {"tenant_id": tenant_id},
-        )
+        if _is_fhir_active(cursor):
+            cursor.execute(
+                """
+                SELECT epm.id
+                FROM emr_patient_matches epm
+                JOIN emr_connections ec ON ec.id = epm.connection_id
+                JOIN (
+                    SELECT family_name, given_name, birth_date
+                    FROM emr_patient_matches epm2
+                    JOIN emr_connections ec2 ON ec2.id = epm2.connection_id
+                    WHERE ec2.is_active = 1
+                      AND ec2.connection_type IN ('fhir_r4', 'rest_api')
+                      AND epm2.family_name IS NOT NULL
+                      AND epm2.given_name IS NOT NULL
+                      AND epm2.birth_date IS NOT NULL
+                    GROUP BY family_name, given_name, birth_date
+                    HAVING COUNT(*) > 1
+                ) dup
+                  ON dup.family_name = epm.family_name
+                 AND dup.given_name  = epm.given_name
+                 AND dup.birth_date  = epm.birth_date
+                WHERE ec.is_active = 1
+                  AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                ORDER BY epm.family_name, epm.given_name, epm.birth_date, epm.id
+                LIMIT 1000
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT p.id
+                FROM patients p
+                JOIN (
+                    SELECT last_name, first_name, dob
+                    FROM patients
+                    WHERE tenant_id = %(tenant_id)s
+                      AND last_name IS NOT NULL
+                      AND first_name IS NOT NULL
+                      AND dob IS NOT NULL
+                    GROUP BY last_name, first_name, dob
+                    HAVING COUNT(*) > 1
+                ) dup
+                  ON dup.last_name = p.last_name
+                 AND dup.first_name = p.first_name
+                 AND dup.dob = p.dob
+                WHERE p.tenant_id = %(tenant_id)s
+                ORDER BY p.last_name, p.first_name, p.dob, p.id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
         rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
@@ -274,21 +410,42 @@ def check_stale_crosswalk(cursor: Cursor) -> dict[str, Any]:
 
 
 def check_orphaned_hccs(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """raf_patient_hcc rows whose patient_id has no matching patients row."""
+    """raf_patient_hcc rows whose patient_id has no matching patient record.
+
+    For FHIR/REST connections the authoritative patient source is
+    emr_patient_matches, so we check against that table instead of patients.
+    """
     check = "orphaned_hccs"
     try:
-        cursor.execute(
-            """
-            SELECT h.id
-            FROM raf_patient_hcc h
-            LEFT JOIN patients p ON p.id = h.patient_id
-            WHERE p.id IS NULL
-              AND h.tenant_id = %(tenant_id)s
-            ORDER BY h.id
-            LIMIT 1000
-            """,
-            {"tenant_id": tenant_id},
-        )
+        if _is_fhir_active(cursor):
+            cursor.execute(
+                """
+                SELECT h.id
+                FROM raf_patient_hcc h
+                LEFT JOIN emr_patient_matches epm ON epm.id = h.patient_id
+                LEFT JOIN emr_connections ec ON ec.id = epm.connection_id
+                    AND ec.is_active = 1
+                    AND ec.connection_type IN ('fhir_r4', 'rest_api')
+                WHERE epm.id IS NULL
+                  AND h.tenant_id = %(tenant_id)s
+                ORDER BY h.id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT h.id
+                FROM raf_patient_hcc h
+                LEFT JOIN patients p ON p.id = h.patient_id
+                WHERE p.id IS NULL
+                  AND h.tenant_id = %(tenant_id)s
+                ORDER BY h.id
+                LIMIT 1000
+                """,
+                {"tenant_id": tenant_id},
+            )
         rows = [r["id"] for r in cursor.fetchall()]
         return {
             "check": check,
@@ -352,6 +509,9 @@ CHECK_NAMES: list[str] = [fn.__name__ for fn in _TENANT_CHECKS] + [
 
 
 if __name__ == "__main__":
-    print("Data Quality Monitor — available checks:")
+    import logging as _logging
+    _logging.basicConfig(level=_logging.INFO)
+    _dqm_logger = _logging.getLogger(__name__)
+    _dqm_logger.info("Data Quality Monitor — available checks:")
     for name in CHECK_NAMES:
-        print(f"  - {name}")
+        _dqm_logger.info("  - %s", name)

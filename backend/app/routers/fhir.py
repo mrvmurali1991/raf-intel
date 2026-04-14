@@ -25,7 +25,8 @@ import threading
 from typing import Any, Literal
 
 from fastapi import Depends, APIRouter, HTTPException, Query, BackgroundTasks
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
+from app.services.audit_logger import log_phi_access
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 import app.services.fhir_service as fhir_svc
@@ -434,6 +435,7 @@ def list_patients(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("fhir", "read"))) -> dict[str, Any]:
     """
     Return patients pulled from the FHIR server during the most recent sync.
@@ -451,6 +453,13 @@ def list_patients(
 
     mapped = sum(1 for p in patients if p.get("openemr_pid"))
 
+    log_phi_access(
+        action="view_fhir_patients",
+        resource="fhir_patients",
+        patient_id=None,
+        details=f"connection_id={connection_id} count={len(patients)} limit={limit} offset={offset}",
+        tenant_id=tenant_id,
+    )
     return {
         "connection_id": connection_id,
         "total_returned": len(patients),
@@ -568,6 +577,7 @@ def process_conditions(
     connection_id: int,
     body: ProcessConditionsRequest = ProcessConditionsRequest(),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("fhir", "write"))) -> dict[str, Any]:
     """
     Process unmapped FHIR conditions through the full HCC/RAF pipeline:
@@ -594,6 +604,13 @@ def process_conditions(
         logger.error("process_conditions fhir %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    log_phi_access(
+        action="process_fhir_conditions",
+        resource="fhir_conditions",
+        patient_id=body.openemr_pid,
+        details=f"connection_id={connection_id} limit={body.limit}",
+        tenant_id=tenant_id,
+    )
     return {
         "connection_id": connection_id,
         **result,
