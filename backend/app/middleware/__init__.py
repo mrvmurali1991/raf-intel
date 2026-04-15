@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.audit_middleware import AuditRequestContextMiddleware
 from app.phi_access_logger import PHIAccessLoggingMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
-from app.middleware.logging import (
+from app.middleware.request_logging import (
     RequestIDMiddleware,
     AuditLoggingMiddleware,
     StructuredLoggingMiddleware,
