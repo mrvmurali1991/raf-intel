@@ -1666,11 +1666,11 @@ def svc_get_comprehensive_profile(
 
     # --- Vitals ----------------------------------------------------------
     latest_vitals = _safe_call("vitals.latest", emr.get_latest_vitals, emr_pid, default=None)  # type: ignore[attr-defined]
-    if latest_vitals is None:
+    if not latest_vitals:
         all_vitals = _safe_call("vitals.all", emr.get_vitals, emr_pid, default=[])
         latest_vitals = all_vitals[0] if all_vitals else None
     # FHIR fallback: pull vitals from fhir_observations
-    if latest_vitals is None and is_fhir and fhir_external_id:
+    if not latest_vitals and is_fhir and fhir_external_id:
         try:
             with raf_cursor() as _fv_cur:
                 _fv_cur.execute(
