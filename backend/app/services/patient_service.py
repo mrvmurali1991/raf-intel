@@ -1687,7 +1687,11 @@ def svc_get_comprehensive_profile(
                         name = (vr.get("code_display") or "").lower().replace(" ", "_")
                         val = vr.get("value_numeric") or vr.get("value_string") or ""
                         if name and name not in vitals_dict:
-                            vitals_dict[name] = f"{val} {vr.get('unit') or ''}".strip()
+                            # Return numeric values so frontend can do math (BMI, unit conversion)
+                            try:
+                                vitals_dict[name] = float(val) if val else None
+                            except (ValueError, TypeError):
+                                vitals_dict[name] = val
                     if vitals_dict:
                         vitals_dict["date"] = str(vitals_rows[0]["effective_date"]) if vitals_rows[0].get("effective_date") else None
                         vitals_dict["source"] = "fhir"
