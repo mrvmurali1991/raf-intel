@@ -107,8 +107,24 @@ async def _fetch_token_async(connection: dict[str, Any]) -> str:
 
     # OpenEMR uses password grant with client_secret_post auth method
     if vendor == "openemr":
-        oauth_username: str = connection.get("oauth_username", "") or os.environ.get("OPENEMR_USERNAME", "admin")
-        oauth_password: str = connection.get("oauth_password", "") or os.environ.get("OPENEMR_PASSWORD", "")
+        # Check extra_config JSON for oauth creds (set via UI or DB)
+        _extra = connection.get("extra_config") or {}
+        if isinstance(_extra, str):
+            import json as _json
+            try:
+                _extra = _json.loads(_extra)
+            except Exception:
+                _extra = {}
+        oauth_username: str = (
+            connection.get("oauth_username", "")
+            or _extra.get("oauth_username", "")
+            or os.environ.get("OPENEMR_USERNAME", "admin")
+        )
+        oauth_password: str = (
+            connection.get("oauth_password", "")
+            or _extra.get("oauth_password", "")
+            or os.environ.get("OPENEMR_PASSWORD", "")
+        )
         post_data = {
             "grant_type": "password",
             "client_id": client_id,
@@ -153,7 +169,11 @@ async def _get_token_async(connection: dict[str, Any]) -> str:
     conn_id: int = connection["id"]
     auth_type: str = (connection.get("auth_type") or "none").lower()
 
-    if auth_type != "oauth2":
+    if auth_type not in ("oauth2", "smart_on_fhir"):
+        # Check if there's a stored access_token as fallback
+        stored = connection.get("access_token")
+        if stored:
+            return stored
         return ""  # no auth or API-key handled via headers elsewhere
 
     cached = _token_cache.get(conn_id)
@@ -1371,6 +1391,159 @@ def _upsert_fhir_observation(connection_id: int, parsed: dict[str, Any]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# AllergyIntolerance — parser, upsert, sync
+# ---------------------------------------------------------------------------
+
+
+def parse_allergy_intolerance(resource: dict[str, Any]) -> dict[str, Any]:
+    """Extract structured data from a FHIR R4 AllergyIntolerance resource."""
+    fhir_id = resource.get("id", "")
+    subject_ref = resource.get("patient", {}).get("reference", "")
+    fhir_patient_id = subject_ref.split("/")[-1] if "/" in subject_ref else subject_ref
+
+    # Code
+    code_cc = resource.get("code", {})
+    codings = code_cc.get("coding", [])
+    allergy_code = codings[0].get("code", "") if codings else ""
+    allergy_display = codings[0].get("display", "") if codings else ""
+    if not allergy_display:
+        allergy_display = code_cc.get("text", "")
+
+    clinical_status = ""
+    cs = resource.get("clinicalStatus", {})
+    cs_codings = cs.get("coding", [])
+    if cs_codings:
+        clinical_status = cs_codings[0].get("code", "")
+
+    verification_status = ""
+    vs = resource.get("verificationStatus", {})
+    vs_codings = vs.get("coding", [])
+    if vs_codings:
+        verification_status = vs_codings[0].get("code", "")
+
+    category = ""
+    cats = resource.get("category", [])
+    if cats:
+        category = cats[0]
+
+    criticality = resource.get("criticality", "")
+    allergy_type = resource.get("type", "")
+    onset = resource.get("onsetDateTime", "") or resource.get("onsetString", "")
+    recorded_date = resource.get("recordedDate", "")
+
+    return {
+        "fhir_resource_id": fhir_id,
+        "fhir_patient_id": fhir_patient_id,
+        "allergy_code": allergy_code[:50],
+        "allergy_display": allergy_display[:500],
+        "clinical_status": clinical_status[:50],
+        "verification_status": verification_status[:50],
+        "category": category[:50],
+        "criticality": criticality[:50],
+        "allergy_type": allergy_type[:50],
+        "onset_date": onset[:10] if onset else None,
+        "recorded_date": recorded_date[:10] if recorded_date else None,
+        "raw_json": json.dumps(resource, default=str),
+    }
+
+
+def _upsert_fhir_allergy(connection_id: int, parsed: dict[str, Any]) -> int:
+    now = _now_utc()
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fhir_allergies (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                connection_id INT NOT NULL,
+                fhir_resource_id VARCHAR(200) NOT NULL,
+                fhir_patient_id VARCHAR(200),
+                allergy_code VARCHAR(50),
+                allergy_display VARCHAR(500),
+                clinical_status VARCHAR(50),
+                verification_status VARCHAR(50),
+                category VARCHAR(50),
+                criticality VARCHAR(50),
+                allergy_type VARCHAR(50),
+                onset_date DATE,
+                recorded_date DATE,
+                raw_json LONGTEXT,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                UNIQUE KEY uq_conn_fhir_allergy (connection_id, fhir_resource_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
+        cur.execute(
+            "SELECT id FROM fhir_allergies WHERE connection_id = %s AND fhir_resource_id = %s LIMIT 1",
+            (connection_id, parsed["fhir_resource_id"]),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                """
+                UPDATE fhir_allergies
+                SET allergy_code = %s, allergy_display = %s, clinical_status = %s,
+                    verification_status = %s, category = %s, criticality = %s,
+                    allergy_type = %s, onset_date = %s, recorded_date = %s,
+                    raw_json = %s, updated_at = %s
+                WHERE id = %s
+                """,
+                (
+                    parsed["allergy_code"], parsed["allergy_display"],
+                    parsed["clinical_status"], parsed["verification_status"],
+                    parsed["category"], parsed["criticality"],
+                    parsed["allergy_type"], parsed["onset_date"],
+                    parsed["recorded_date"], parsed["raw_json"],
+                    now, existing["id"],
+                ),
+            )
+            return existing["id"]
+        else:
+            cur.execute(
+                """
+                INSERT INTO fhir_allergies
+                    (connection_id, fhir_resource_id, fhir_patient_id,
+                     allergy_code, allergy_display, clinical_status, verification_status,
+                     category, criticality, allergy_type,
+                     onset_date, recorded_date, raw_json, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    connection_id,
+                    parsed["fhir_resource_id"], parsed["fhir_patient_id"],
+                    parsed["allergy_code"], parsed["allergy_display"],
+                    parsed["clinical_status"], parsed["verification_status"],
+                    parsed["category"], parsed["criticality"],
+                    parsed["allergy_type"], parsed["onset_date"],
+                    parsed["recorded_date"], parsed["raw_json"],
+                    now, now,
+                ),
+            )
+            return cur.lastrowid
+
+
+async def _sync_allergies_async(
+    connection: dict[str, Any],
+    last_updated: str | None = None,
+) -> int:
+    """Fetch and upsert all AllergyIntolerance resources. Returns count synced."""
+    params: dict[str, Any] = {"_count": 100}
+    if last_updated:
+        params["_lastUpdated"] = f"gt{last_updated}"
+
+    resources = await _fhir_get_all_pages(connection, "AllergyIntolerance", params=params)
+    count = 0
+    for resource in resources:
+        parsed = parse_allergy_intolerance(resource)
+        _upsert_fhir_allergy(connection["id"], parsed)
+        count += 1
+
+    logger.info("Synced %d AllergyIntolerance resources for connection %s", count, connection["id"])
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Patient matching — FHIR Patient → OpenEMR pid
 # ---------------------------------------------------------------------------
 
@@ -1779,7 +1952,7 @@ async def run_sync_async(
     if not conn.get("is_active"):
         raise ValueError(f"FHIR connection {connection_id} is disabled")
 
-    default_resources = ["Patient", "Condition", "Encounter", "DiagnosticReport", "MedicationRequest", "Observation"]
+    default_resources = ["Patient", "Condition", "Encounter", "DiagnosticReport", "MedicationRequest", "Observation", "AllergyIntolerance"]
     resources_to_sync = resource_types or default_resources
 
     # Determine last_updated cutoff for incremental
@@ -1817,6 +1990,7 @@ async def run_sync_async(
                 ("DiagnosticReport", lambda: _sync_diagnostic_reports_async(conn, last_updated)),
                 ("MedicationRequest", lambda: _sync_medications_async(conn, last_updated)),
                 ("Observation", lambda: _sync_observations_async(conn, last_updated)),
+                ("AllergyIntolerance", lambda: _sync_allergies_async(conn, last_updated)),
             ]
             for res_type, sync_fn in resource_syncs:
                 if res_type in resources_to_sync:

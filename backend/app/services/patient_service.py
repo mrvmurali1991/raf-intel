@@ -1589,6 +1589,28 @@ def svc_get_comprehensive_profile(
 
     # --- Allergies -------------------------------------------------------
     allergies = _safe_call("allergies", emr.get_allergies, emr_pid, default=[])  # type: ignore[attr-defined]
+    # FHIR fallback: pull from fhir_allergies if still empty
+    if not allergies and is_fhir and fhir_external_id:
+        try:
+            with raf_cursor() as _fa_cur:
+                _fa_cur.execute(
+                    """SELECT allergy_display AS title, category, criticality AS severity,
+                              clinical_status AS status, onset_date, recorded_date
+                       FROM fhir_allergies
+                       WHERE fhir_patient_id = %s
+                       ORDER BY recorded_date DESC""",
+                    (fhir_external_id,),
+                )
+                for row in _fa_cur.fetchall():
+                    allergies.append({
+                        "title": row.get("title") or "Unknown allergy",
+                        "category": row.get("category") or "",
+                        "severity": row.get("severity") or "",
+                        "status": row.get("status") or "active",
+                        "begdate": str(row["onset_date"]) if row.get("onset_date") else "",
+                    })
+        except Exception as exc:
+            logger.debug("FHIR allergy fallback failed: %s", exc)
 
     # --- Referrals -------------------------------------------------------
     referrals = _safe_call("referrals", emr.get_referrals, emr_pid, default=[])  # type: ignore[attr-defined]
@@ -1732,6 +1754,31 @@ def svc_get_allergies(pid: int, tenant_id: str) -> dict[str, Any]:
     """Return active allergies for *pid*."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
     allergies = emr.get_allergies(emr_pid)
+    # FHIR fallback
+    if not allergies:
+        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+        fhir_external_id = fhir_row.get("external_id") if fhir_row else None
+        if fhir_external_id:
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """SELECT allergy_display AS title, category,
+                                  criticality AS severity, clinical_status AS status,
+                                  onset_date
+                           FROM fhir_allergies
+                           WHERE fhir_patient_id = %s""",
+                        (fhir_external_id,),
+                    )
+                    for row in cur.fetchall():
+                        allergies.append({
+                            "title": row.get("title") or "Unknown",
+                            "category": row.get("category") or "",
+                            "severity": row.get("severity") or "",
+                            "status": row.get("status") or "active",
+                            "begdate": str(row["onset_date"]) if row.get("onset_date") else "",
+                        })
+            except Exception:
+                pass
     return {"pid": pid, "count": len(allergies), "allergies": allergies}
 
 
