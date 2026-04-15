@@ -786,33 +786,66 @@ def task_analyze_encounters_batch(
                     encounter_year=date.today().year,
                 )
 
-                # Filter out hallucinated SDOH Z-codes (Z55-Z65) that have no
-                # evidence in the clinical note or structured EHR data.
-                # Gemini tends to infer social determinants even when not documented.
-                _stage1_codes = set()
+                # ── Evidence-based diagnosis filter ──────────────────────
+                # Every AI-found code must have evidence in the current
+                # encounter's note.  Three checks:
+                #  1. Hallucinated SDOH Z-codes (Z55-Z65) with no Stage 1 basis
+                #  2. Cross-encounter bleed: code category not in Stage 1 or note
+                #  3. Upcoding: AI combo-code when doctor wrote simpler code
+                #
+                # Collect Stage 1 codes (extracted from THIS encounter's note)
+                _stage1_codes: set[str] = set()
+                _stage1_categories: set[str] = set()  # first 3 chars (e.g. "E11", "I50")
                 try:
                     ext = result.get("extraction", {})
                     for src in ("explicit", "problem_list", "assessment", "labs", "meds"):
                         for item in (ext.get(src) or []):
-                            c = item.get("code") or item.get("icd10") or ""
+                            c = (item.get("code") or item.get("icd10") or "").upper().strip()
                             if c:
-                                _stage1_codes.add(c.upper())
+                                _stage1_codes.add(c)
+                                _stage1_categories.add(c[:3])
                 except Exception:
                     pass
 
-                def _is_unsupported_z(dx: dict) -> bool:
-                    code = (dx.get("icd10") or "").upper()
-                    if code.startswith(("Z55", "Z56", "Z57", "Z58", "Z59",
-                                        "Z60", "Z61", "Z62", "Z63", "Z64", "Z65")):
-                        return code not in _stage1_codes
+                def _has_note_evidence(dx: dict) -> bool:
+                    """Check if a Gemini diagnosis has evidence in this encounter."""
+                    code = (dx.get("icd10") or "").upper().strip()
+                    if not code:
+                        return False
+
+                    category = code[:3]  # e.g. E11, I50, N18, J81
+
+                    # 1. SDOH Z-codes (Z55-Z65): must be in Stage 1
+                    if category in ("Z55", "Z56", "Z57", "Z58", "Z59",
+                                    "Z60", "Z61", "Z62", "Z63", "Z64", "Z65"):
+                        return code in _stage1_codes
+
+                    # 2. Exact match or same category in Stage 1 → keep
+                    if code in _stage1_codes or category in _stage1_categories:
+                        return True
+
+                    # 3. Check if Gemini upgraded a code in the same disease
+                    #    group. E.g. I10 (HTN) in note → I11.0 (HTN+HF) or
+                    #    I13.0 (HTN+HF+CKD) from AI. Allow only if the
+                    #    *base* condition category is in Stage 1.
+                    #    Hypertensive combos: I11, I12, I13 ← I10 in note
+                    if category in ("I11", "I12", "I13") and "I10" in _stage1_categories:
+                        return True
+                    #    Diabetes combos: E11.2x, E11.4x ← E11.6x in note
+                    if category == "E11" and "E11" in _stage1_categories:
+                        return True
+
+                    # 4. Not in Stage 1 at all → cross-encounter bleed, remove
                     return False
 
                 orig_dx = result.get("diagnoses", [])
-                filtered_dx = [d for d in orig_dx if not _is_unsupported_z(d)]
-                if len(filtered_dx) < len(orig_dx):
+                filtered_dx = [d for d in orig_dx if _has_note_evidence(d)]
+                removed = len(orig_dx) - len(filtered_dx)
+                if removed:
+                    removed_codes = [d.get("icd10", "?") for d in orig_dx if not _has_note_evidence(d)]
                     task_logger.info(
-                        "analyze_encounters_batch: enc=%d removed %d hallucinated Z-codes",
-                        encounter_id, len(orig_dx) - len(filtered_dx),
+                        "analyze_encounters_batch: enc=%d removed %d unsupported codes: %s",
+                        encounter_id, removed, ", ".join(removed_codes),
                     )
                     result["diagnoses"] = filtered_dx
 
