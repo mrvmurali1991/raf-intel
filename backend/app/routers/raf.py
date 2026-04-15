@@ -1916,7 +1916,7 @@ def get_raf_dashboard(
                 """
                 SELECT hcc_code, hcc_description,
                        COUNT(DISTINCT patient_id) AS patient_count,
-                       AVG(coefficient) AS avg_coefficient
+                       AVG(raf_coefficient) AS avg_coefficient
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND tenant_id = %s
