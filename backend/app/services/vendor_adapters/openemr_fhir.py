@@ -95,14 +95,16 @@ class OpenEMRFhirAdapter:
             if token_expires:
                 if isinstance(token_expires, str):
                     try:
-                        token_expires = datetime.fromisoformat(token_expires)
+                        token_expires = datetime.fromisoformat(
+                            token_expires.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         is_expired = True
-                if (
-                    isinstance(token_expires, datetime)
-                    and token_expires < datetime.now(timezone.utc)
-                ):
-                    is_expired = True
+                if isinstance(token_expires, datetime):
+                    if token_expires.tzinfo is None:
+                        token_expires = token_expires.replace(tzinfo=timezone.utc)
+                    if token_expires < datetime.now(timezone.utc):
+                        is_expired = True
 
             if not is_expired:
                 self._access_token = stored_token
