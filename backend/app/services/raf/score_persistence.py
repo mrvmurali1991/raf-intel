@@ -85,10 +85,15 @@ def _store_patient_hccs(
         cc_to_dx: dict = result.cc_to_dx or {}
 
         with raf_cursor() as cur:
-            cur.execute(
-                "DELETE FROM raf_patient_hcc WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s",
-                (patient_id, year, tenant_id),
-            )
+            # Only delete existing HCC rows if we have new ones to insert.
+            # FHIR patients get HCC rows from the condition sync — the RAF
+            # calculator may find icd_codes=[] (no encounters table data) and
+            # we must NOT wipe those FHIR-sourced HCCs.
+            if hcc_list:
+                cur.execute(
+                    "DELETE FROM raf_patient_hcc WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s",
+                    (patient_id, year, tenant_id),
+                )
             for hcc in hcc_list:
                 hcc_str = str(hcc)
                 hcc_int = int(hcc_str) if hcc_str.isdigit() else 0
