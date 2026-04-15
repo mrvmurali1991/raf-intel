@@ -72,6 +72,21 @@ const C = {
 // API helpers
 // ---------------------------------------------------------------------------
 
+interface PipelineSettings {
+  pipeline_mode: "auto_ai" | "auto_basic" | "manual";
+  ai_analysis_enabled: boolean;
+}
+
+async function getPipelineSettings(): Promise<PipelineSettings> {
+  const { data } = await api.get("/api/pipeline/settings");
+  return data;
+}
+
+async function updatePipelineSettings(body: Partial<PipelineSettings>): Promise<PipelineSettings> {
+  const { data } = await api.put("/api/pipeline/settings", body);
+  return data;
+}
+
 async function getVendorPresets(): Promise<VendorPreset[]> {
   const { data } = await api.get("/api/emr/vendors");
   const list = Array.isArray(data) ? data : (data?.vendors ?? []);
@@ -1290,6 +1305,14 @@ export default function EmrConfigPage() {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [aiToggling, setAiToggling] = useState(false);
+
+  const { data: pipelineSettings, refetch: refetchPipeline } = useQuery({
+    queryKey: ["pipeline-settings"],
+    queryFn: getPipelineSettings,
+    staleTime: 10_000,
+    retry: 1,
+  });
 
   const { data: connections = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["emr-connections"],
@@ -1297,6 +1320,26 @@ export default function EmrConfigPage() {
     staleTime: 30_000,
     retry: 1,
   });
+
+  async function handleToggleAI() {
+    setAiToggling(true);
+    try {
+      const newMode = pipelineSettings?.pipeline_mode === "auto_ai" ? "auto_basic" : "auto_ai";
+      const newAi = newMode === "auto_ai";
+      await updatePipelineSettings({ pipeline_mode: newMode, ai_analysis_enabled: newAi });
+      refetchPipeline();
+      showToast(
+        newAi
+          ? "AI Analysis enabled. Every EMR sync will trigger Gemini AI analysis."
+          : "AI Analysis disabled. Pipeline runs without AI (basic mode).",
+        "success",
+      );
+    } catch {
+      showToast("Failed to update pipeline settings.", "error");
+    } finally {
+      setAiToggling(false);
+    }
+  }
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -1477,6 +1520,130 @@ export default function EmrConfigPage() {
               subtitle={errorCount > 0 ? "Connections need attention" : "All connections healthy"}
             />
           </div>
+        </div>
+
+        {/* AI Pipeline Control */}
+        <div className="premium-card animate-slide-up stagger-4" style={{
+          borderRadius: 14,
+          overflow: "hidden",
+          marginBottom: 24,
+        }}>
+          <div style={{
+            padding: "20px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: pipelineSettings?.pipeline_mode === "auto_ai"
+              ? "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)"
+              : `linear-gradient(135deg, ${C.slate50} 0%, ${C.white} 100%)`,
+            borderBottom: `1px solid ${C.slate100}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: pipelineSettings?.pipeline_mode === "auto_ai"
+                  ? "linear-gradient(135deg, #2563EB, #7C3AED)"
+                  : C.slate200,
+                color: pipelineSettings?.pipeline_mode === "auto_ai" ? "#fff" : C.slate500,
+              }}>
+                <Zap size={20} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: C.slate900 }}>
+                  AI Analysis Pipeline
+                </div>
+                <div style={{ fontSize: 12, color: C.slate500, marginTop: 2 }}>
+                  {pipelineSettings?.pipeline_mode === "auto_ai"
+                    ? "Gemini AI runs automatically on every EMR sync (8-phase pipeline)"
+                    : pipelineSettings?.pipeline_mode === "manual"
+                    ? "Manual mode — all pipeline steps triggered manually"
+                    : "Basic mode — EMR Sync, Normalize, RAF Calc only (no AI)"}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {/* Mode badge */}
+              <span style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.02em",
+                background: pipelineSettings?.pipeline_mode === "auto_ai" ? "#DBEAFE" : C.slate100,
+                color: pipelineSettings?.pipeline_mode === "auto_ai" ? "#1D4ED8" : C.slate600,
+              }}>
+                {pipelineSettings?.pipeline_mode === "auto_ai" ? "AUTO AI" : pipelineSettings?.pipeline_mode === "manual" ? "MANUAL" : "BASIC"}
+              </span>
+
+              {/* Toggle switch */}
+              <button
+                onClick={handleToggleAI}
+                disabled={aiToggling}
+                style={{
+                  position: "relative",
+                  width: 52,
+                  height: 28,
+                  borderRadius: 14,
+                  border: "none",
+                  cursor: aiToggling ? "wait" : "pointer",
+                  background: pipelineSettings?.pipeline_mode === "auto_ai"
+                    ? "linear-gradient(135deg, #2563EB, #7C3AED)"
+                    : C.slate300,
+                  transition: "background 0.3s ease",
+                  flexShrink: 0,
+                }}
+                title={pipelineSettings?.pipeline_mode === "auto_ai" ? "Disable AI Analysis" : "Enable AI Analysis"}
+              >
+                <div style={{
+                  position: "absolute",
+                  top: 3,
+                  left: pipelineSettings?.pipeline_mode === "auto_ai" ? 27 : 3,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  background: "#fff",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  transition: "left 0.3s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  {aiToggling && <Loader2 size={12} style={{ animation: "spin 1s linear infinite", color: C.slate400 }} />}
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Pipeline phases indicator */}
+          {pipelineSettings?.pipeline_mode === "auto_ai" && (
+            <div style={{
+              padding: "12px 24px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              color: C.slate500,
+              overflowX: "auto",
+            }}>
+              {["EMR Sync", "Normalize", "AI Analysis", "RAF Calc", "HCC Hierarchy", "Suspects", "Gap Generation", "Webhooks"].map((phase, i) => (
+                <span key={phase} style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+                  <span style={{
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    background: i === 2 ? "#DBEAFE" : C.slate100,
+                    color: i === 2 ? "#1D4ED8" : C.slate600,
+                    fontWeight: i === 2 ? 700 : 500,
+                    fontSize: 10,
+                  }}>
+                    {phase}
+                  </span>
+                  {i < 7 && <ArrowRight size={10} style={{ color: C.slate300 }} />}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Connection list */}
