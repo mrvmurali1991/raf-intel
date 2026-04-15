@@ -734,6 +734,23 @@ class OpenEMRFhirAdapter:
                 return v
         return ("", "")
 
+    @staticmethod
+    def _safe_onset_date(val: str) -> str | None:
+        """Sanitize a FHIR date to YYYY-MM-DD or None.
+        Handles invalid dates like '-0001-11-30' from OpenEMR."""
+        if not val:
+            return None
+        s = str(val)[:10]
+        if s.startswith("-") or s < "0001":
+            return None
+        # Validate it's a real date
+        try:
+            from datetime import datetime as _dt
+            _dt.strptime(s, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+        return s
+
     def _normalize_condition(self, resource: dict) -> dict:
         # Extract ICD-10 code from coding
         icd_code = ""
@@ -792,7 +809,7 @@ class OpenEMRFhirAdapter:
             "icd10_code": icd_code,
             "description": description,
             "status": status,
-            "onset_date": onset[:10] if onset else "",
+            "onset_date": self._safe_onset_date(onset),
             "patient_external_id": patient_ref,
         }
 
@@ -1262,7 +1279,7 @@ class OpenEMRFhirAdapter:
                 """
             )
             tenant_id = self.connection.get("tenant_id", "1")
-            onset_date = condition.get("onset_date") or None
+            onset_date = self._safe_onset_date(condition.get("onset_date"))
             status = condition.get("status") or "active"
             cur.execute(
                 """
@@ -1304,7 +1321,7 @@ class OpenEMRFhirAdapter:
 
         # Period
         period = resource.get("period", {})
-        period_start: str | None = period.get("start", "")[:10] or None
+        period_start: str | None = self._safe_onset_date(period.get("start", ""))
         status: str = resource.get("status", "unknown")
 
         # Service type / class

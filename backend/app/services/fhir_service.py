@@ -1435,8 +1435,8 @@ def parse_allergy_intolerance(resource: dict[str, Any]) -> dict[str, Any]:
         "category": category[:50],
         "criticality": criticality[:50],
         "allergy_type": allergy_type[:50],
-        "onset_date": onset[:10] if onset else None,
-        "recorded_date": recorded_date[:10] if recorded_date else None,
+        "onset_date": _safe_date(onset),
+        "recorded_date": _safe_date(recorded_date),
         "raw_json": json.dumps(resource, default=str),
     }
 
