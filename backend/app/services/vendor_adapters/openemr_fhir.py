@@ -810,17 +810,19 @@ class OpenEMRFhirAdapter:
             # --- patients table (so _flip_patient_cohort and dashboard work) ---
             cur.execute(
                 """INSERT INTO patients
-                       (tenant_id, first_name, last_name, dob, gender,
+                       (tenant_id, first_name, last_name, fname, lname, dob, gender,
                         emr_pid, emr_connection_id, data_source, is_active,
                         phone, preferred_language, race, ethnicity,
                         address, city, state, zip,
                         created_at, updated_at)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
                            %s, %s, %s, %s, %s, %s, %s, %s,
                            NOW(), NOW())
                    ON DUPLICATE KEY UPDATE
                        first_name = VALUES(first_name),
                        last_name  = VALUES(last_name),
+                       fname      = VALUES(fname),
+                       lname      = VALUES(lname),
                        dob        = VALUES(dob),
                        gender     = VALUES(gender),
                        phone      = VALUES(phone),
@@ -834,6 +836,8 @@ class OpenEMRFhirAdapter:
                        updated_at = NOW()""",
                 (
                     tenant_id,
+                    patient["first_name"],
+                    patient["last_name"],
                     patient["first_name"],
                     patient["last_name"],
                     patient["date_of_birth"] or None,
