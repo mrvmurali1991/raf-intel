@@ -1311,9 +1311,11 @@ def svc_get_vitals_suspects(
 
     # FHIR fallback for vitals
     if not latest_vitals:
+        logger.warning("svc_get_vitals_suspects: latest_vitals empty for pid=%s, trying FHIR fallback", pid)
         try:
             fhir_row = _get_fhir_patient_row(pid, tenant_id)
             fhir_ext_id = _get_fhir_resource_id(fhir_row) if fhir_row else None
+            logger.warning("svc_get_vitals_suspects: fhir_row=%s, fhir_ext_id=%s", bool(fhir_row), fhir_ext_id)
             if fhir_ext_id:
                 with raf_cursor() as _vc:
                     _vc.execute(
@@ -1337,7 +1339,7 @@ def svc_get_vitals_suspects(
                             latest_vitals["date"] = str(vrows[0]["effective_date"]) if vrows[0].get("effective_date") else None
                             latest_vitals["source"] = "fhir"
         except Exception as exc:
-            logger.debug("svc_get_vitals_suspects FHIR fallback failed: %s", exc)
+            logger.warning("svc_get_vitals_suspects FHIR fallback failed: %s", exc)
 
     patient_name = (
         f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
