@@ -1376,7 +1376,7 @@ def svc_get_lab_suspects(
         or f"Patient {pid}"
     )
 
-    return {
+    resp: dict[str, Any] = {
         "pid": pid,
         "patient_name": patient_name,
         "year_filter": year,
@@ -1389,6 +1389,35 @@ def svc_get_lab_suspects(
         "total_suspects": len(result["all_suspects"]),
         "suspects": result["all_suspects"],
     }
+
+    # FHIR fallback: include lab results from fhir_observations
+    if result.get("lab_results_scanned", 0) == 0:
+        try:
+            fhir_id = _get_fhir_resource_id(pid, tenant_id)
+            if fhir_id:
+                with raf_cursor() as _lc:
+                    _lc.execute(
+                        """SELECT code_display, value_numeric, value_string, unit, effective_date
+                           FROM fhir_observations
+                           WHERE fhir_patient_id = %s AND category = 'laboratory'
+                           ORDER BY effective_date DESC""",
+                        (fhir_id,),
+                    )
+                    rows = _lc.fetchall()
+                    if rows:
+                        lab_results = [
+                            {
+                                "result_text": f"{r.get('code_display', '')}: {r.get('value_numeric') or r.get('value_string', '')} {r.get('unit', '')}".strip(),
+                                "date": str(r["effective_date"]) if r.get("effective_date") else None,
+                            }
+                            for r in rows
+                        ]
+                        resp["labs"] = {"results": lab_results, "source": "fhir"}
+                        resp["lab_results_scanned"] = len(lab_results)
+        except Exception as exc:
+            logger.debug("svc_get_lab_suspects FHIR lab fallback failed: %s", exc)
+
+    return resp
 
 
 # ---------------------------------------------------------------------------

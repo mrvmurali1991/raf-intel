@@ -913,12 +913,10 @@ def get_family_history(
                 )
                 rows = cur.fetchall()
                 if rows:
-                    fh = {}
+                    fh: dict = {}
                     for r in rows:
                         rel = r.get("relation", "unknown").lower().replace(" ", "_")
-                        fh[rel] = r.get("condition_name", "")
-                        if r.get("onset_age"):
-                            fh[f"{rel}_onset"] = r["onset_age"]
+                        fh[f"history_{rel}"] = r.get("condition_name", "")
                     return {"pid": pid, "family_history": fh, "source": "raf_db"}
         except Exception:
             pass
@@ -1040,10 +1038,9 @@ def get_immunizations(
                 if rows:
                     imms = [
                         {
-                            "vaccine_name": r.get("vaccine_name", ""),
+                            "title": r.get("vaccine_name", ""),
+                            "vaccine": r.get("vaccine_name", ""),
                             "administered_date": str(r["administered_date"]) if r.get("administered_date") else None,
-                            "lot_number": r.get("lot_number"),
-                            "site": r.get("site"),
                             "status": r.get("status", "completed"),
                         }
                         for r in rows
