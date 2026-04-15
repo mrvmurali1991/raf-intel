@@ -62,6 +62,7 @@ x-backend-env: &backend-env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-raf-intelligence-backend}
   LOG_FORMAT: ${LOG_FORMAT:-json}
+  STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
 
 services:
   # -------------------------------------------------------------------------
