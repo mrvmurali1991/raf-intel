@@ -1186,7 +1186,24 @@ class OpenEMRFhirAdapter:
         if not icd10:
             return
 
-        measurement_year = date.today().year
+        current_year = date.today().year
+        measurement_year = current_year
+
+        # Also determine the onset year so we can map HCCs to both years
+        onset_year: int | None = None
+        onset_dt = condition.get("onset_date")
+        if onset_dt:
+            try:
+                if isinstance(onset_dt, date):
+                    onset_year = onset_dt.year
+                elif isinstance(onset_dt, str) and len(onset_dt) >= 4:
+                    onset_year = int(onset_dt[:4])
+            except (ValueError, TypeError):
+                pass
+        # Build list of years to create HCCs for
+        hcc_years = [current_year]
+        if onset_year and onset_year != current_year and onset_year >= current_year - 2:
+            hcc_years.append(onset_year)
 
         # Resolve internal patient id — if demographics row is missing, create it
         # on the fly from the data already stored in emr_patient_matches so that
@@ -1245,34 +1262,52 @@ class OpenEMRFhirAdapter:
             # 4. Determine MEAT status based on clinical documentation presence
             meat_status = "complete" if condition.get("onset_date") else "partial"
 
-            # 5. Upsert into raf_patient_hcc
-            cur.execute(
-                """
-                INSERT INTO raf_patient_hcc
-                    (patient_id, measurement_year, hcc_code, icd10_codes,
-                     source_encounter_ids, raf_coefficient, meat_status,
-                     is_trumped, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 0, NOW())
-                ON DUPLICATE KEY UPDATE
-                    icd10_codes = JSON_ARRAY_APPEND(
-                        COALESCE(icd10_codes, JSON_ARRAY()), '$', %s
+            # 5. Upsert into raf_patient_hcc for each applicable year
+            for _yr in hcc_years:
+                # Ensure demographics row exists for this year
+                cur.execute(
+                    "SELECT id FROM raf_patient_demographics WHERE patient_id = %s AND measurement_year = %s",
+                    (raf_patient_id, _yr),
+                )
+                if not cur.fetchone():
+                    # Copy from current year or create minimal row
+                    cur.execute(
+                        "SELECT age_band, sex, orec, model_segment, tenant_id FROM raf_patient_demographics WHERE patient_id = %s ORDER BY ABS(CAST(measurement_year AS SIGNED) - %s) LIMIT 1",
+                        (raf_patient_id, _yr),
+                    )
+                    demo_src = cur.fetchone()
+                    if demo_src:
+                        cur.execute(
+                            "INSERT IGNORE INTO raf_patient_demographics (patient_id, measurement_year, age_band, sex, orec, model_segment, tenant_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                            (raf_patient_id, _yr, demo_src["age_band"], demo_src["sex"], demo_src["orec"], demo_src["model_segment"], demo_src.get("tenant_id")),
+                        )
+
+                cur.execute(
+                    """
+                    INSERT INTO raf_patient_hcc
+                        (patient_id, measurement_year, hcc_code, icd10_codes,
+                         source_encounter_ids, raf_coefficient, meat_status,
+                         is_trumped, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        icd10_codes = JSON_ARRAY_APPEND(
+                            COALESCE(icd10_codes, JSON_ARRAY()), '$', %s
+                        ),
+                        raf_coefficient = VALUES(raf_coefficient),
+                        meat_status = VALUES(meat_status),
+                        updated_at = NOW()
+                    """,
+                    (
+                        raf_patient_id,
+                        _yr,
+                        hcc_code,
+                        _json.dumps([icd10]),
+                        _json.dumps([]),
+                        raf_coefficient,
+                        meat_status,
+                        icd10,
                     ),
-                    raf_coefficient = VALUES(raf_coefficient),
-                    meat_status = VALUES(meat_status),
-                    updated_at = NOW()
-                """,
-                (
-                    raf_patient_id,
-                    measurement_year,
-                    hcc_code,
-                    _json.dumps([icd10]),
-                    _json.dumps([]),
-                    raf_coefficient,
-                    meat_status,
-                    # ON DUPLICATE KEY extra param for JSON_ARRAY_APPEND
-                    icd10,
-                ),
-            )
+                )
 
             # Also upsert into patient_conditions so the "Active Problems"
             # section on the patient detail page reflects FHIR conditions.
