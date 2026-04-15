@@ -1313,9 +1313,8 @@ def svc_get_vitals_suspects(
     if not latest_vitals:
         logger.warning("svc_get_vitals_suspects: latest_vitals empty for pid=%s, trying FHIR fallback", pid)
         try:
-            fhir_row = _get_fhir_patient_row(pid, tenant_id)
-            fhir_ext_id = _get_fhir_resource_id(fhir_row) if fhir_row else None
-            logger.warning("svc_get_vitals_suspects: fhir_row=%s, fhir_ext_id=%s", bool(fhir_row), fhir_ext_id)
+            fhir_ext_id = _get_fhir_resource_id(pid, tenant_id)
+            logger.warning("svc_get_vitals_suspects: fhir_ext_id=%s for pid=%s", fhir_ext_id, pid)
             if fhir_ext_id:
                 with raf_cursor() as _vc:
                     _vc.execute(
