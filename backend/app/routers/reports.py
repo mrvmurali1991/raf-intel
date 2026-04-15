@@ -347,6 +347,7 @@ def patient_scorecard(year: int = Query(default=None),
             # Estimate gap from open suspect conditions
             est_gap = float(suspect_by_pid[pid]["estimated_gap"] or 0)
             gap = round(est_gap, 4)
+            ai_raf = round(billing_raf + gap, 4)
             revenue_opportunity = round(gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
             hcc_count_ai = int(suspect_by_pid[pid]["suspect_count"])
         else:
