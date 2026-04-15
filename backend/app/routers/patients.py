@@ -797,6 +797,35 @@ def get_lab_suspects(
     if not patient:
         if not svc.patient_is_fhir(pid, _tid):
             raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+        # FHIR fallback: return lab results from fhir_observations
+        try:
+            from app.db import raf_cursor
+            from app.services.patient_service import _get_fhir_resource_id
+            fhir_id = _get_fhir_resource_id(pid, _tid)
+            if fhir_id:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """SELECT code_display, value_numeric, value_string, unit, effective_date
+                           FROM fhir_observations
+                           WHERE fhir_patient_id = %s AND category = 'laboratory'
+                           ORDER BY effective_date DESC""",
+                        (fhir_id,),
+                    )
+                    rows = cur.fetchall()
+                    if rows:
+                        lab_results = [
+                            {
+                                "result_text": f"{r.get('code_display', '')}: {r.get('value_numeric') or r.get('value_string', '')} {r.get('unit', '')}".strip(),
+                                "date": str(r["effective_date"]) if r.get("effective_date") else None,
+                            }
+                            for r in rows
+                        ]
+                        return {
+                            "pid": pid, "suspects": [], "count": 0,
+                            "labs": {"results": lab_results, "source": "fhir"},
+                        }
+        except Exception:
+            pass
         return {"pid": pid, "suspects": [], "count": 0, "note": "Lab data not yet synced for FHIR patients"}
 
     try:
@@ -873,6 +902,26 @@ def get_family_history(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
+        # FHIR fallback: query patient_family_history table
+        try:
+            from app.db import raf_cursor
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT relation, condition_name, onset_age, notes, status "
+                    "FROM patient_family_history WHERE patient_id = %s ORDER BY id",
+                    (pid,),
+                )
+                rows = cur.fetchall()
+                if rows:
+                    fh = {}
+                    for r in rows:
+                        rel = r.get("relation", "unknown").lower().replace(" ", "_")
+                        fh[rel] = r.get("condition_name", "")
+                        if r.get("onset_age"):
+                            fh[f"{rel}_onset"] = r["onset_age"]
+                    return {"pid": pid, "family_history": fh, "source": "raf_db"}
+        except Exception:
+            pass
         return {"pid": pid, "family_history": {}, "note": "Family history not yet synced for FHIR patients"}
 
     return svc.svc_get_family_history(pid=pid, tenant_id=_tid)
@@ -978,6 +1027,30 @@ def get_immunizations(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
+        # FHIR fallback: query patient_immunizations table
+        try:
+            from app.db import raf_cursor
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT vaccine_name, administered_date, lot_number, site, status "
+                    "FROM patient_immunizations WHERE patient_id = %s ORDER BY administered_date DESC",
+                    (pid,),
+                )
+                rows = cur.fetchall()
+                if rows:
+                    imms = [
+                        {
+                            "vaccine_name": r.get("vaccine_name", ""),
+                            "administered_date": str(r["administered_date"]) if r.get("administered_date") else None,
+                            "lot_number": r.get("lot_number"),
+                            "site": r.get("site"),
+                            "status": r.get("status", "completed"),
+                        }
+                        for r in rows
+                    ]
+                    return {"pid": pid, "count": len(imms), "immunizations": imms, "source": "raf_db"}
+        except Exception:
+            pass
         return {"pid": pid, "count": 0, "immunizations": [], "note": "Immunization data not yet synced for FHIR patients"}
 
     try:
