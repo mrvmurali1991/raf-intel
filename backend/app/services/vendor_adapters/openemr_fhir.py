@@ -573,6 +573,55 @@ class OpenEMRFhirAdapter:
         sex = (resource.get("gender") or "unknown")[0].upper()
         if sex not in ("M", "F"):
             sex = "U"
+
+        # Phone: telecom array entry where system == "phone"
+        phone = ""
+        for telecom in resource.get("telecom", []):
+            if telecom.get("system") == "phone":
+                phone = telecom.get("value", "")
+                break
+
+        # Language: communication[0].language.coding[0].display or .text
+        language = ""
+        communications = resource.get("communication", [])
+        if communications:
+            lang_obj = communications[0].get("language", {})
+            codings = lang_obj.get("coding", [])
+            if codings:
+                language = codings[0].get("display", "")
+            if not language:
+                language = lang_obj.get("text", "")
+
+        # Race and Ethnicity from US Core extensions
+        race = ""
+        ethnicity = ""
+        for ext in resource.get("extension", []):
+            url = ext.get("url", "")
+            if url.endswith("us-core-race"):
+                for sub in ext.get("extension", []):
+                    if sub.get("url") == "text":
+                        race = sub.get("valueString", "")
+                        break
+            elif url.endswith("us-core-ethnicity"):
+                for sub in ext.get("extension", []):
+                    if sub.get("url") == "text":
+                        ethnicity = sub.get("valueString", "")
+                        break
+
+        # Address: first address entry
+        address_street = ""
+        address_city = ""
+        address_state = ""
+        address_zip = ""
+        addresses = resource.get("address", [])
+        if addresses:
+            addr = addresses[0]
+            lines = addr.get("line", [])
+            address_street = lines[0] if lines else ""
+            address_city = addr.get("city", "")
+            address_state = addr.get("state", "")
+            address_zip = addr.get("postalCode", "")
+
         return {
             "external_id": resource.get("id", ""),
             "first_name": first,
@@ -580,6 +629,14 @@ class OpenEMRFhirAdapter:
             "date_of_birth": dob,
             "sex": sex,
             "mrn": resource.get("id", ""),
+            "phone": phone,
+            "language": language,
+            "race": race,
+            "ethnicity": ethnicity,
+            "address": address_street,
+            "city": address_city,
+            "state": address_state,
+            "zip": address_zip,
         }
 
     # Common clinical text → ICD-10-CM mapping for conditions without coded entries
@@ -755,14 +812,25 @@ class OpenEMRFhirAdapter:
                 """INSERT INTO patients
                        (tenant_id, first_name, last_name, dob, gender,
                         emr_pid, emr_connection_id, data_source, is_active,
+                        phone, preferred_language, race, ethnicity,
+                        address, city, state, zip,
                         created_at, updated_at)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
+                           %s, %s, %s, %s, %s, %s, %s, %s,
                            NOW(), NOW())
                    ON DUPLICATE KEY UPDATE
                        first_name = VALUES(first_name),
                        last_name  = VALUES(last_name),
                        dob        = VALUES(dob),
                        gender     = VALUES(gender),
+                       phone      = VALUES(phone),
+                       preferred_language = VALUES(preferred_language),
+                       race       = VALUES(race),
+                       ethnicity  = VALUES(ethnicity),
+                       address    = VALUES(address),
+                       city       = VALUES(city),
+                       state      = VALUES(state),
+                       zip        = VALUES(zip),
                        updated_at = NOW()""",
                 (
                     tenant_id,
@@ -772,6 +840,14 @@ class OpenEMRFhirAdapter:
                     (patient["sex"] or "M")[0].upper(),
                     emr_pid,
                     self.connection_id,
+                    patient.get("phone") or None,
+                    patient.get("language") or None,
+                    patient.get("race") or None,
+                    patient.get("ethnicity") or None,
+                    patient.get("address") or None,
+                    patient.get("city") or None,
+                    patient.get("state") or None,
+                    patient.get("zip") or None,
                 ),
             )
             # Get the internal patient_id
@@ -1116,6 +1192,48 @@ class OpenEMRFhirAdapter:
                     meat_status,
                     # ON DUPLICATE KEY extra param for JSON_ARRAY_APPEND
                     icd10,
+                ),
+            )
+
+            # Also upsert into patient_conditions so the "Active Problems"
+            # section on the patient detail page reflects FHIR conditions.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS patient_conditions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    patient_id INT NOT NULL,
+                    icd10_code VARCHAR(20),
+                    description VARCHAR(500),
+                    hcc_code VARCHAR(20),
+                    onset_date DATE,
+                    status VARCHAR(50) DEFAULT 'active',
+                    severity VARCHAR(50),
+                    tenant_id VARCHAR(50),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_pid_icd (patient_id, icd10_code)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+            tenant_id = self.connection.get("tenant_id", "1")
+            onset_date = condition.get("onset_date") or None
+            status = condition.get("status") or "active"
+            cur.execute(
+                """
+                INSERT INTO patient_conditions
+                    (patient_id, icd10_code, description, onset_date, status, tenant_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    description = VALUES(description),
+                    onset_date  = VALUES(onset_date),
+                    status      = VALUES(status)
+                """,
+                (
+                    raf_patient_id,
+                    icd10,
+                    condition.get("description") or "",
+                    onset_date,
+                    status,
+                    tenant_id,
                 ),
             )
 

@@ -692,11 +692,11 @@ export default function PatientDetailPage({
               MEAT Compliance
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: C.slate900, lineHeight: 1 }}>
-                {meatFilled}/{meatTotal || 0}
+              <span style={{ fontSize: 16, fontWeight: 700, color: meatTotal === 0 ? C.slate400 : meatFilled === 0 ? C.amber600 : C.slate900, lineHeight: 1 }}>
+                {meatTotal === 0 ? "—" : meatFilled === 0 ? "Pending" : `${meatFilled}/${meatTotal}`}
               </span>
               <div style={{ width: 80 }}>
-                <ProgressBar value={meatTotal > 0 ? (meatFilled / meatTotal) * 100 : 0} showPercent={false} height={4} color={C.emerald500} />
+                <ProgressBar value={meatTotal > 0 ? (meatFilled / meatTotal) * 100 : 0} showPercent={false} height={4} color={meatFilled > 0 ? C.emerald500 : C.amber600} />
               </div>
             </div>
           </div>

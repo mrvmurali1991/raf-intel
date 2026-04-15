@@ -1168,10 +1168,27 @@ def svc_get_comprehensive_profile(
 
     # Determine if this patient is a FHIR patient once, reuse throughout
     is_fhir = _patient_in_fhir_matches(pid, tenant_id=tenant_id)
+    # Also check data_source from the patient dict (more reliable for patients table)
+    if not is_fhir and patient.get("data_source") == "fhir":
+        is_fhir = True
     fhir_external_id: str | None = None
     if is_fhir:
         fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
         fhir_external_id = fhir_row.get("external_id") if fhir_row else None
+        # Fallback: try emr_patient_matches by patient_id
+        if not fhir_external_id:
+            try:
+                with raf_cursor() as _fhir_cur:
+                    _fhir_cur.execute(
+                        "SELECT external_id FROM emr_patient_matches "
+                        "WHERE patient_id = %s LIMIT 1",
+                        (pid,),
+                    )
+                    _fr = _fhir_cur.fetchone()
+                    if _fr:
+                        fhir_external_id = _fr.get("external_id")
+            except Exception:
+                pass
 
     # --- Billing ----------------------------------------------------------
     icd10_codes = _safe_call("billing.icd10", emr.get_billing_codes, emr_pid, default=[])
@@ -1251,6 +1268,48 @@ def svc_get_comprehensive_profile(
                     )
         except Exception as exc:
             logger.debug("Failed to fetch data: %s", exc)
+    # FHIR fallback: pull from fhir_conditions if still empty
+    if not problem_list and is_fhir and fhir_external_id:
+        try:
+            with raf_cursor() as _fc_cur:
+                _fc_cur.execute(
+                    """SELECT fc.display AS title, fc.icd10_codes,
+                              fc.clinical_status AS status, fc.onset_date,
+                              fc.hcc_codes
+                       FROM fhir_conditions fc
+                       WHERE fc.fhir_patient_id = %s
+                       ORDER BY fc.onset_date DESC""",
+                    (fhir_external_id,),
+                )
+                for r in _fc_cur.fetchall():
+                    import json as _json
+                    codes = []
+                    try:
+                        codes = _json.loads(r.get("icd10_codes") or "[]")
+                    except Exception:
+                        pass
+                    icd = codes[0] if codes else ""
+                    hcc_codes = []
+                    try:
+                        hcc_codes = _json.loads(r.get("hcc_codes") or "[]")
+                    except Exception:
+                        pass
+                    problem_list.append(
+                        {
+                            "title": r.get("title") or "",
+                            "diagnosis": icd,
+                            "icd10_code": icd,
+                            "diagnosis_code": icd,
+                            "has_icd_code": bool(icd),
+                            "hcc_code": hcc_codes[0] if hcc_codes else None,
+                            "severity": "",
+                            "begdate": str(r["onset_date"]) if r.get("onset_date") else None,
+                            "activity": "1",
+                            "source": "fhir",
+                        }
+                    )
+        except Exception as exc:
+            logger.debug("FHIR problem_list fallback failed: %s", exc)
     for p in problem_list:
         raw_dx = p.get("diagnosis") or ""
         icd10 = raw_dx.split(":")[-1].strip() if ":" in raw_dx else raw_dx.strip()
@@ -1290,6 +1349,32 @@ def svc_get_comprehensive_profile(
                     )
         except Exception as exc:
             logger.debug("Failed to fetch data: %s", exc)
+    # FHIR fallback: pull from fhir_medications if still empty
+    if not medications and is_fhir and fhir_external_id:
+        try:
+            with raf_cursor() as _fm_cur:
+                _fm_cur.execute(
+                    """SELECT medication_display AS drug, dosage_text AS dosage,
+                              status, authored_on AS start_date
+                       FROM fhir_medications
+                       WHERE fhir_patient_id = %s
+                       ORDER BY authored_on DESC""",
+                    (fhir_external_id,),
+                )
+                for r in _fm_cur.fetchall():
+                    medications.append(
+                        {
+                            "drug": r.get("drug") or "",
+                            "dosage": r.get("dosage") or "",
+                            "frequency": "",
+                            "purpose": "",
+                            "start_date": str(r["start_date"]) if r.get("start_date") else None,
+                            "provider": "",
+                            "source": "fhir",
+                        }
+                    )
+        except Exception as exc:
+            logger.debug("FHIR medications fallback failed: %s", exc)
 
     medication_diagnosis_gaps = _safe_call(
         "medication_diagnosis_gaps",
@@ -1390,6 +1475,31 @@ def svc_get_comprehensive_profile(
     if latest_vitals is None:
         all_vitals = _safe_call("vitals.all", emr.get_vitals, emr_pid, default=[])
         latest_vitals = all_vitals[0] if all_vitals else None
+    # FHIR fallback: pull vitals from fhir_observations
+    if latest_vitals is None and is_fhir and fhir_external_id:
+        try:
+            with raf_cursor() as _fv_cur:
+                _fv_cur.execute(
+                    """SELECT code_display, value_numeric, value_string, unit, effective_date
+                       FROM fhir_observations
+                       WHERE fhir_patient_id = %s AND category = 'vital-signs'
+                       ORDER BY effective_date DESC LIMIT 20""",
+                    (fhir_external_id,),
+                )
+                vitals_rows = _fv_cur.fetchall()
+                if vitals_rows:
+                    vitals_dict: dict[str, Any] = {}
+                    for vr in vitals_rows:
+                        name = (vr.get("code_display") or "").lower().replace(" ", "_")
+                        val = vr.get("value_numeric") or vr.get("value_string") or ""
+                        if name and name not in vitals_dict:
+                            vitals_dict[name] = f"{val} {vr.get('unit') or ''}".strip()
+                    if vitals_dict:
+                        vitals_dict["date"] = str(vitals_rows[0]["effective_date"]) if vitals_rows[0].get("effective_date") else None
+                        vitals_dict["source"] = "fhir"
+                        latest_vitals = vitals_dict
+        except Exception as exc:
+            logger.debug("FHIR vitals fallback failed: %s", exc)
 
     vitals_suspects: list[dict[str, Any]] = []
     lab_suspects_list: list[dict[str, Any]] = []
@@ -1470,6 +1580,31 @@ def svc_get_comprehensive_profile(
 
     # --- Actual labs -----------------------------------------------------
     actual_labs = _safe_call("labs", emr.get_labs, emr_pid, default=[])
+    # FHIR fallback: pull labs from fhir_observations
+    if not actual_labs and is_fhir and fhir_external_id:
+        try:
+            with raf_cursor() as _fl_cur:
+                _fl_cur.execute(
+                    """SELECT code, code_display, value_numeric, value_string,
+                              unit, effective_date, status
+                       FROM fhir_observations
+                       WHERE fhir_patient_id = %s AND category = 'laboratory'
+                       ORDER BY effective_date DESC LIMIT 50""",
+                    (fhir_external_id,),
+                )
+                for r in _fl_cur.fetchall():
+                    actual_labs.append(
+                        {
+                            "test_name": r.get("code_display") or r.get("code") or "",
+                            "result": str(r.get("value_numeric") or r.get("value_string") or ""),
+                            "units": r.get("unit") or "",
+                            "date": str(r["effective_date"]) if r.get("effective_date") else None,
+                            "status": r.get("status") or "",
+                            "source": "fhir",
+                        }
+                    )
+        except Exception as exc:
+            logger.debug("FHIR labs fallback failed: %s", exc)
 
     # --- Data completeness -----------------------------------------------
     has_clinical_notes = any(bool(enc.get("has_notes")) for enc in encounters)

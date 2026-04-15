@@ -51,8 +51,8 @@ function DataCompletenessChecklist({ profile, encounters, problems, meds, labSus
   const hasNotes = encList.some((e: any) => e.notes || e.has_notes);
   const hasProblems = probList.length > 0;
   const hasMeds = medList.length > 0;
-  const hasVitals = Array.isArray(vitalsSuspects) ? vitalsSuspects.length > 0 : !!(vitalsSuspects?.suspects?.length);
-  const hasLabs = Array.isArray(labSuspects) ? labSuspects.length > 0 : !!(labSuspects?.suspects?.length);
+  const hasVitals = !!(profile?.vitals?.latest) || (Array.isArray(vitalsSuspects) ? vitalsSuspects.length > 0 : !!(vitalsSuspects?.suspects?.length));
+  const hasLabs = !!((profile?.labs as any)?.results?.length) || (Array.isArray(labSuspects) ? labSuspects.length > 0 : !!(labSuspects?.suspects?.length));
   // These are not year-specific — use profile
   const hasInsurance = !!(profile?.enrollment) && (profile?.enrollment as any)?.source !== "default";
   const hasImmunizations = Array.isArray(profile?.immunizations) && profile.immunizations.length > 0;
@@ -791,7 +791,11 @@ export function OverviewTab({
             ) : !recaptureItems.length ? (
               <EmptyState
                 title="No recapture gaps"
-                description={`All conditions appear to be documented for ${selectedYear}`}
+                description={
+                  (profile?.data_completeness?.completeness_pct ?? 100) < 60
+                    ? "Analyze encounters to identify potential gaps — data quality is low"
+                    : `All conditions appear to be documented for ${selectedYear}`
+                }
               />
             ) : (
               <div>
@@ -982,7 +986,7 @@ export function OverviewTab({
               />
               <DataRow
                 label="Enrolled Since"
-                value={formatDate((profile?.enrollment as Record<string, string> | undefined)?.start_date)}
+                value={formatDate((profile?.enrollment as Record<string, string> | undefined)?.enrolled_since || (profile?.enrollment as Record<string, string> | undefined)?.start_date)}
               />
             </div>
           )}

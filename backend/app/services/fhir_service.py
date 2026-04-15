@@ -419,6 +419,135 @@ def parse_encounter(resource: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_medication_request(resource: dict[str, Any]) -> dict[str, Any]:
+    """
+    Extract structured data from a FHIR R4 MedicationRequest resource.
+
+    Returns a flat dict suitable for insertion into fhir_medications.
+    """
+    fhir_id: str = resource.get("id", "")
+
+    # Subject (patient reference)
+    subject_ref: str = resource.get("subject", {}).get("reference", "")
+    fhir_patient_id = subject_ref.split("/")[-1] if "/" in subject_ref else subject_ref
+
+    # Medication code — prefer medicationCodeableConcept, fall back to medicationReference
+    medication_code = ""
+    medication_display = ""
+    med_cc = resource.get("medicationCodeableConcept", {})
+    if med_cc:
+        codings = med_cc.get("coding", [])
+        if codings:
+            medication_code = codings[0].get("code", "")
+            medication_display = codings[0].get("display", "")
+        if not medication_display:
+            medication_display = med_cc.get("text", "")
+    else:
+        med_ref = resource.get("medicationReference", {})
+        medication_display = med_ref.get("display", "")
+        medication_code = med_ref.get("reference", "").split("/")[-1]
+
+    # Status and intent
+    status = resource.get("status", "")
+    intent = resource.get("intent", "")
+
+    # Authored date
+    authored_on = resource.get("authoredOn", "")
+
+    # Dosage instruction text (first entry only)
+    dosage_text = ""
+    dosage_instructions = resource.get("dosageInstruction", [])
+    if dosage_instructions:
+        dosage_text = dosage_instructions[0].get("text", "")
+
+    return {
+        "fhir_resource_id": fhir_id,
+        "fhir_patient_id": fhir_patient_id,
+        "medication_code": _safe_str(medication_code, 50),
+        "medication_display": _safe_str(medication_display, 500),
+        "status": _safe_str(status, 50),
+        "intent": _safe_str(intent, 50),
+        "authored_on": _safe_date(authored_on),
+        "dosage_text": _safe_str(dosage_text, 1000),
+        "raw_json": json.dumps(resource),
+    }
+
+
+def parse_observation(resource: dict[str, Any]) -> dict[str, Any]:
+    """
+    Extract structured data from a FHIR R4 Observation resource.
+
+    Returns a flat dict suitable for insertion into fhir_observations.
+    """
+    fhir_id: str = resource.get("id", "")
+
+    # Subject (patient reference)
+    subject_ref: str = resource.get("subject", {}).get("reference", "")
+    fhir_patient_id = subject_ref.split("/")[-1] if "/" in subject_ref else subject_ref
+
+    # Category (e.g. "vital-signs", "laboratory")
+    category = ""
+    categories = resource.get("category", [])
+    if categories:
+        cat_codings = categories[0].get("coding", [])
+        if cat_codings:
+            category = cat_codings[0].get("code", "")
+
+    # LOINC code and display
+    code = ""
+    code_display = ""
+    code_obj = resource.get("code", {})
+    code_codings = code_obj.get("coding", [])
+    if code_codings:
+        code = code_codings[0].get("code", "")
+        code_display = code_codings[0].get("display", "")
+    if not code_display:
+        code_display = code_obj.get("text", "")
+
+    # Value — numeric, string, or codeable concept text
+    value_numeric: float | None = None
+    value_string: str = ""
+    unit: str = ""
+    vq = resource.get("valueQuantity", {})
+    if vq:
+        raw_val = vq.get("value")
+        try:
+            value_numeric = float(raw_val) if raw_val is not None else None
+        except (TypeError, ValueError):
+            value_numeric = None
+        unit = vq.get("unit", "")
+    elif resource.get("valueString"):
+        value_string = resource["valueString"]
+    elif resource.get("valueCodeableConcept"):
+        vcc = resource["valueCodeableConcept"]
+        vcc_codings = vcc.get("coding", [])
+        value_string = vcc_codings[0].get("display", "") if vcc_codings else vcc.get("text", "")
+
+    # Effective date
+    effective_date = (
+        resource.get("effectiveDateTime")
+        or resource.get("effectivePeriod", {}).get("start")
+        or ""
+    )
+
+    # Status
+    status = resource.get("status", "")
+
+    return {
+        "fhir_resource_id": fhir_id,
+        "fhir_patient_id": fhir_patient_id,
+        "category": _safe_str(category, 50),
+        "code": _safe_str(code, 50),
+        "code_display": _safe_str(code_display, 500),
+        "value_numeric": value_numeric,
+        "value_string": _safe_str(value_string, 500),
+        "unit": _safe_str(unit, 50),
+        "effective_date": _safe_date(effective_date),
+        "status": _safe_str(status, 50),
+        "raw_json": json.dumps(resource),
+    }
+
+
 def parse_diagnostic_report(resource: dict[str, Any]) -> dict[str, Any]:
     """
     Extract structured data from a FHIR R4 DiagnosticReport resource.
@@ -1076,6 +1205,172 @@ def _upsert_fhir_diagnostic_report(connection_id: int, parsed: dict[str, Any]) -
 
 
 # ---------------------------------------------------------------------------
+# Database helpers — medications
+# ---------------------------------------------------------------------------
+
+def _upsert_fhir_medication(connection_id: int, parsed: dict[str, Any]) -> int:
+    now = _now_utc()
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fhir_medications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                connection_id INT NOT NULL,
+                fhir_resource_id VARCHAR(200) NOT NULL,
+                fhir_patient_id VARCHAR(200),
+                medication_code VARCHAR(50),
+                medication_display VARCHAR(500),
+                status VARCHAR(50),
+                intent VARCHAR(50),
+                authored_on DATE,
+                dosage_text TEXT,
+                raw_json LONGTEXT,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                UNIQUE KEY uq_conn_fhir_med (connection_id, fhir_resource_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
+        cur.execute(
+            """
+            SELECT id FROM fhir_medications
+            WHERE connection_id = %s AND fhir_resource_id = %s
+            LIMIT 1
+            """,
+            (connection_id, parsed["fhir_resource_id"]),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                """
+                UPDATE fhir_medications
+                SET medication_code = %s, medication_display = %s, status = %s,
+                    intent = %s, authored_on = %s, dosage_text = %s,
+                    raw_json = %s, updated_at = %s
+                WHERE id = %s
+                """,
+                (
+                    parsed["medication_code"], parsed["medication_display"],
+                    parsed["status"], parsed["intent"], parsed["authored_on"],
+                    parsed["dosage_text"], parsed["raw_json"],
+                    now, existing["id"],
+                ),
+            )
+            return existing["id"]
+        else:
+            cur.execute(
+                """
+                INSERT INTO fhir_medications
+                    (connection_id, fhir_resource_id, fhir_patient_id,
+                     medication_code, medication_display, status, intent,
+                     authored_on, dosage_text, raw_json, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    connection_id,
+                    parsed["fhir_resource_id"],
+                    parsed["fhir_patient_id"],
+                    parsed["medication_code"],
+                    parsed["medication_display"],
+                    parsed["status"],
+                    parsed["intent"],
+                    parsed["authored_on"],
+                    parsed["dosage_text"],
+                    parsed["raw_json"],
+                    now, now,
+                ),
+            )
+            return cur.lastrowid
+
+
+# ---------------------------------------------------------------------------
+# Database helpers — observations
+# ---------------------------------------------------------------------------
+
+def _upsert_fhir_observation(connection_id: int, parsed: dict[str, Any]) -> int:
+    now = _now_utc()
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fhir_observations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                connection_id INT NOT NULL,
+                fhir_resource_id VARCHAR(200) NOT NULL,
+                fhir_patient_id VARCHAR(200),
+                category VARCHAR(50),
+                code VARCHAR(50),
+                code_display VARCHAR(500),
+                value_numeric DECIMAL(10,4),
+                value_string VARCHAR(500),
+                unit VARCHAR(50),
+                effective_date DATE,
+                status VARCHAR(50),
+                raw_json LONGTEXT,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                UNIQUE KEY uq_conn_fhir_obs (connection_id, fhir_resource_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
+        cur.execute(
+            """
+            SELECT id FROM fhir_observations
+            WHERE connection_id = %s AND fhir_resource_id = %s
+            LIMIT 1
+            """,
+            (connection_id, parsed["fhir_resource_id"]),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                """
+                UPDATE fhir_observations
+                SET category = %s, code = %s, code_display = %s,
+                    value_numeric = %s, value_string = %s, unit = %s,
+                    effective_date = %s, status = %s,
+                    raw_json = %s, updated_at = %s
+                WHERE id = %s
+                """,
+                (
+                    parsed["category"], parsed["code"], parsed["code_display"],
+                    parsed["value_numeric"], parsed["value_string"], parsed["unit"],
+                    parsed["effective_date"], parsed["status"],
+                    parsed["raw_json"], now, existing["id"],
+                ),
+            )
+            return existing["id"]
+        else:
+            cur.execute(
+                """
+                INSERT INTO fhir_observations
+                    (connection_id, fhir_resource_id, fhir_patient_id,
+                     category, code, code_display,
+                     value_numeric, value_string, unit,
+                     effective_date, status, raw_json, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    connection_id,
+                    parsed["fhir_resource_id"],
+                    parsed["fhir_patient_id"],
+                    parsed["category"],
+                    parsed["code"],
+                    parsed["code_display"],
+                    parsed["value_numeric"],
+                    parsed["value_string"],
+                    parsed["unit"],
+                    parsed["effective_date"],
+                    parsed["status"],
+                    parsed["raw_json"],
+                    now, now,
+                ),
+            )
+            return cur.lastrowid
+
+
+# ---------------------------------------------------------------------------
 # Patient matching — FHIR Patient → OpenEMR pid
 # ---------------------------------------------------------------------------
 
@@ -1274,6 +1569,46 @@ async def _sync_diagnostic_reports_async(
     return count
 
 
+async def _sync_medications_async(
+    connection: dict[str, Any],
+    last_updated: str | None = None,
+) -> int:
+    """Fetch and upsert all MedicationRequest resources. Returns count synced."""
+    params: dict[str, Any] = {"_count": 100}
+    if last_updated:
+        params["_lastUpdated"] = f"gt{last_updated}"
+
+    resources = await _fhir_get_all_pages(connection, "MedicationRequest", params=params)
+    count = 0
+    for resource in resources:
+        parsed = parse_medication_request(resource)
+        _upsert_fhir_medication(connection["id"], parsed)
+        count += 1
+
+    logger.info("Synced %d MedicationRequest resources for connection %s", count, connection["id"])
+    return count
+
+
+async def _sync_observations_async(
+    connection: dict[str, Any],
+    last_updated: str | None = None,
+) -> int:
+    """Fetch and upsert all Observation resources. Returns count synced."""
+    params: dict[str, Any] = {"_count": 100}
+    if last_updated:
+        params["_lastUpdated"] = f"gt{last_updated}"
+
+    resources = await _fhir_get_all_pages(connection, "Observation", params=params)
+    count = 0
+    for resource in resources:
+        parsed = parse_observation(resource)
+        _upsert_fhir_observation(connection["id"], parsed)
+        count += 1
+
+    logger.info("Synced %d Observation resources for connection %s", count, connection["id"])
+    return count
+
+
 # ---------------------------------------------------------------------------
 # Bulk FHIR $export
 # ---------------------------------------------------------------------------
@@ -1352,6 +1687,8 @@ async def _process_bulk_ndjson(
         "Condition": 0,
         "Encounter": 0,
         "DiagnosticReport": 0,
+        "MedicationRequest": 0,
+        "Observation": 0,
     }
 
     auth_type: str = (connection.get("auth_type") or "none").lower()
@@ -1398,6 +1735,16 @@ async def _process_bulk_ndjson(
                     connection["id"], parse_diagnostic_report(resource)
                 )
                 counts["DiagnosticReport"] += 1
+            elif rtype == "MedicationRequest":
+                _upsert_fhir_medication(
+                    connection["id"], parse_medication_request(resource)
+                )
+                counts["MedicationRequest"] += 1
+            elif rtype == "Observation":
+                _upsert_fhir_observation(
+                    connection["id"], parse_observation(resource)
+                )
+                counts["Observation"] += 1
 
     return counts
 
@@ -1428,7 +1775,7 @@ async def run_sync_async(
     if not conn.get("is_active"):
         raise ValueError(f"FHIR connection {connection_id} is disabled")
 
-    default_resources = ["Patient", "Condition", "Encounter", "DiagnosticReport"]
+    default_resources = ["Patient", "Condition", "Encounter", "DiagnosticReport", "MedicationRequest", "Observation"]
     resources_to_sync = resource_types or default_resources
 
     # Determine last_updated cutoff for incremental
@@ -1446,6 +1793,8 @@ async def run_sync_async(
         "Condition": 0,
         "Encounter": 0,
         "DiagnosticReport": 0,
+        "MedicationRequest": 0,
+        "Observation": 0,
     }
 
     try:
@@ -1466,10 +1815,15 @@ async def run_sync_async(
                 counts["DiagnosticReport"] = await _sync_diagnostic_reports_async(
                     conn, last_updated
                 )
+            if "MedicationRequest" in resources_to_sync:
+                counts["MedicationRequest"] = await _sync_medications_async(conn, last_updated)
+            if "Observation" in resources_to_sync:
+                counts["Observation"] = await _sync_observations_async(conn, last_updated)
 
         summary = (
             f"Synced: {counts['Patient']} patients, {counts['Condition']} conditions, "
-            f"{counts['Encounter']} encounters, {counts['DiagnosticReport']} reports"
+            f"{counts['Encounter']} encounters, {counts['DiagnosticReport']} reports, "
+            f"{counts['MedicationRequest']} medications, {counts['Observation']} observations"
         )
         _update_sync_log(
             log_id,
