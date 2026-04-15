@@ -1869,6 +1869,61 @@ def _add_constraints_and_indexes() -> None:
     except Exception as exc:
         logger.warning("unique index uq_patients_tenant_emrpid_conn skipped: %s", exc)
 
+    # 3e. patient_conditions(patient_id, icd10_code) — prevents condition
+    #     duplication on every sync run.
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM information_schema.statistics "
+                "WHERE table_schema = DATABASE() AND table_name = 'patient_conditions' "
+                "AND index_name = 'uq_pid_icd' LIMIT 1"
+            )
+            if not cur.fetchone():
+                # Deduplicate first
+                cur.execute(
+                    """
+                    DELETE pc1 FROM patient_conditions pc1
+                    INNER JOIN patient_conditions pc2
+                    ON pc1.patient_id = pc2.patient_id
+                    AND pc1.icd10_code = pc2.icd10_code
+                    AND pc1.id < pc2.id
+                    """
+                )
+                logger.info("patient_conditions dedup: removed %d duplicates", cur.rowcount)
+                cur.execute(
+                    "CREATE UNIQUE INDEX uq_pid_icd ON patient_conditions (patient_id, icd10_code)"
+                )
+    except Exception as exc:
+        logger.warning("unique index uq_pid_icd on patient_conditions skipped: %s", exc)
+
+    # 3f. raf_encounter_analysis(patient_id, encounter_id) — prevents
+    #     encounter duplication on every sync run.
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM information_schema.statistics "
+                "WHERE table_schema = DATABASE() AND table_name = 'raf_encounter_analysis' "
+                "AND index_name = 'uq_rea_patient_encounter' LIMIT 1"
+            )
+            if not cur.fetchone():
+                # Deduplicate first
+                cur.execute(
+                    """
+                    DELETE e1 FROM raf_encounter_analysis e1
+                    INNER JOIN raf_encounter_analysis e2
+                    ON e1.patient_id = e2.patient_id
+                    AND e1.encounter_id = e2.encounter_id
+                    AND e1.id < e2.id
+                    """
+                )
+                logger.info("raf_encounter_analysis dedup: removed %d duplicates", cur.rowcount)
+                cur.execute(
+                    "CREATE UNIQUE INDEX uq_rea_patient_encounter "
+                    "ON raf_encounter_analysis (patient_id, encounter_id)"
+                )
+    except Exception as exc:
+        logger.warning("unique index uq_rea_patient_encounter skipped: %s", exc)
+
     # ------------------------------------------------------------------
     # 4. CHECK constraint on care_gap_tasks.priority (MySQL 8.0.16+)
     #    MySQL does not support IF NOT EXISTS on constraints, so we

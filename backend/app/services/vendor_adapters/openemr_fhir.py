@@ -8,6 +8,7 @@ and normalises them into the standard shapes.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from datetime import date, datetime, timezone
@@ -1120,12 +1121,23 @@ class OpenEMRFhirAdapter:
         tenant_id = self.connection.get("tenant_id", "1")
 
         with raf_cursor() as cur:
-            # Look up the real patients.id
+            # Look up the real patients.id — first by emr_pid, then fall
+            # back to emr_patient_matches (handles multiple FHIR UUIDs
+            # for the same person).
             cur.execute(
                 "SELECT id FROM patients WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s LIMIT 1",
                 (emr_pid, self.connection_id, tenant_id),
             )
             p_row = cur.fetchone()
+            if not p_row:
+                # Check emr_patient_matches for an alternate UUID mapping
+                cur.execute(
+                    "SELECT patient_id FROM emr_patient_matches WHERE emr_pid = %s AND connection_id = %s LIMIT 1",
+                    (emr_pid, self.connection_id),
+                )
+                m_row = cur.fetchone()
+                if m_row and m_row["patient_id"]:
+                    p_row = {"id": m_row["patient_id"]}
             if not p_row:
                 return None
             real_pid = p_row["id"]
@@ -1342,7 +1354,7 @@ class OpenEMRFhirAdapter:
             # We store one row per encounter in raf_encounter_analysis.
             # encounter_id is a surrogate generated from the FHIR id hash so
             # we can upsert deterministically.
-            encounter_surrogate: int = abs(hash(encounter_fhir_id)) % (2**31)
+            encounter_surrogate: int = int(hashlib.md5(encounter_fhir_id.encode()).hexdigest()[:8], 16) % (2**31)
 
             cur.execute(
                 """
