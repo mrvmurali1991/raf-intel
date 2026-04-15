@@ -236,8 +236,8 @@ def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None
                     "FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
-                    "AND (epm.id = %s OR epm.raf_patient_id = %s) AND ec.tenant_id = %s LIMIT 1",
-                    (pid, pid, tenant_id),
+                    "AND (epm.id = %s OR epm.raf_patient_id = %s OR epm.patient_id = %s) AND ec.tenant_id = %s LIMIT 1",
+                    (pid, pid, pid, tenant_id),
                 )
             else:
                 cur.execute(
@@ -246,8 +246,8 @@ def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None
                     "FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
-                    "AND (epm.id = %s OR epm.raf_patient_id = %s) LIMIT 1",
-                    (pid, pid),
+                    "AND (epm.id = %s OR epm.raf_patient_id = %s OR epm.patient_id = %s) LIMIT 1",
+                    (pid, pid, pid),
                 )
             row = cur.fetchone()
             if not row:
