@@ -713,26 +713,29 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
                                   COALESCE(fe.type_display, fe.encounter_type) AS reason,
                                   fe.status,
                                   fe.fhir_encounter_id,
-                                  fe.provider_name
+                                  fe.provider_name,
+                                  fe.reason_codes,
+                                  fe.service_provider
                            FROM fhir_encounters fe
                            WHERE fe.fhir_patient_id = %s
                            ORDER BY fe.period_start DESC""",
                         (external_id,),
                     )
                     for r in cur.fetchall():
+                        _rc = r.get("reason_codes") or ""
                         encounters.append(
                             {
                                 "encounter_id": r["encounter_id"],
                                 "pid": pid,
                                 "date": str(r["date"]) if r["date"] else None,
                                 "reason": r.get("reason") or "Office Visit",
-                                "facility": "",
+                                "facility": r.get("service_provider") or "",
                                 "provider_id": None,
                                 "provider_fname": r.get("provider_name") or "",
                                 "provider_lname": "",
-                                "has_notes": 0,
-                                "notes": "",
-                                "note_text": "",
+                                "has_notes": 1 if _rc else 0,
+                                "notes": _rc,
+                                "note_text": _rc,
                                 "status": r.get("status") or "finished",
                                 "source": "fhir",
                             }
@@ -1584,13 +1587,16 @@ def svc_get_comprehensive_profile(
                               COALESCE(fe.type_display, fe.encounter_type) AS reason,
                               fe.status,
                               fe.fhir_encounter_id,
-                              fe.provider_name
+                              fe.provider_name,
+                              fe.reason_codes,
+                              fe.service_provider
                        FROM fhir_encounters fe
                        WHERE fe.fhir_patient_id = %s
                        ORDER BY fe.period_start DESC""",
                     (fhir_external_id,),
                 )
                 for r in _enc_cur.fetchall():
+                    _reason_codes = r.get("reason_codes") or ""
                     encounters.append(
                         {
                             "encounter_id": r["encounter_id"],
@@ -1601,10 +1607,10 @@ def svc_get_comprehensive_profile(
                             "provider_id": None,
                             "provider_fname": r.get("provider_name") or "",
                             "provider_lname": "",
-                            "facility": "",
-                            "has_notes": 0,
-                            "notes": "",
-                            "note_text": "",
+                            "facility": r.get("service_provider") or "",
+                            "has_notes": 1 if _reason_codes else 0,
+                            "notes": _reason_codes,
+                            "note_text": _reason_codes,
                             "status": r.get("status") or "finished",
                             "source": "fhir",
                         }
@@ -1702,6 +1708,28 @@ def svc_get_comprehensive_profile(
 
     # --- Immunizations ---------------------------------------------------
     immunizations = _safe_call("immunizations", emr.get_immunizations, emr_pid, default=[])  # type: ignore[attr-defined]
+    # FHIR fallback: pull immunizations from patient_immunizations table
+    if not immunizations:
+        try:
+            with raf_cursor() as _imm_cur:
+                _imm_cur.execute(
+                    """SELECT vaccine_name AS title, administered_date,
+                              cvx_code, lot_number, site, status
+                       FROM patient_immunizations
+                       WHERE patient_id = %s
+                       ORDER BY administered_date DESC""",
+                    (pid,),
+                )
+                for r in _imm_cur.fetchall():
+                    immunizations.append({
+                        "title": r.get("title") or "",
+                        "administered_date": str(r["administered_date"]) if r.get("administered_date") else None,
+                        "cvx_code": r.get("cvx_code") or "",
+                        "id": r.get("id"),
+                        "source": "raf_db",
+                    })
+        except Exception as exc:
+            logger.debug("patient_immunizations fallback failed: %s", exc)
 
     # --- Enrollment info -------------------------------------------------
     enrollment = _safe_call(
@@ -1747,6 +1775,31 @@ def svc_get_comprehensive_profile(
 
     # --- Family history --------------------------------------------------
     family_history = _safe_call("family_history", emr.get_family_history, emr_pid, default=[])  # type: ignore[attr-defined]
+    # FHIR fallback: pull from patient_family_history table
+    if not family_history:
+        try:
+            with raf_cursor() as _fh_cur:
+                _fh_cur.execute(
+                    """SELECT relation, condition_name, onset_age, notes, status
+                       FROM patient_family_history
+                       WHERE patient_id = %s
+                       ORDER BY relation""",
+                    (pid,),
+                )
+                fh_rows = _fh_cur.fetchall()
+                if fh_rows:
+                    family_history = [
+                        {
+                            "relation": r.get("relation") or "",
+                            "condition": r.get("condition_name") or "",
+                            "onset_age": r.get("onset_age") or "",
+                            "notes": r.get("notes") or "",
+                            "source": "raf_db",
+                        }
+                        for r in fh_rows
+                    ]
+        except Exception as exc:
+            logger.debug("patient_family_history fallback failed: %s", exc)
 
     # --- Allergies -------------------------------------------------------
     allergies = _safe_call("allergies", emr.get_allergies, emr_pid, default=[])  # type: ignore[attr-defined]
@@ -1775,6 +1828,31 @@ def svc_get_comprehensive_profile(
 
     # --- Referrals -------------------------------------------------------
     referrals = _safe_call("referrals", emr.get_referrals, emr_pid, default=[])  # type: ignore[attr-defined]
+    # FHIR fallback: pull from patient_referrals table
+    if not referrals:
+        try:
+            with raf_cursor() as _ref_cur:
+                _ref_cur.execute(
+                    """SELECT referral_date, referred_to, referred_by, reason,
+                              specialty, status, notes
+                       FROM patient_referrals
+                       WHERE patient_id = %s
+                       ORDER BY referral_date DESC""",
+                    (pid,),
+                )
+                for r in _ref_cur.fetchall():
+                    referrals.append({
+                        "date": str(r["referral_date"]) if r.get("referral_date") else None,
+                        "referred_to": r.get("referred_to") or "",
+                        "referred_by": r.get("referred_by") or "",
+                        "reason": r.get("reason") or "",
+                        "specialty": r.get("specialty") or "",
+                        "status": r.get("status") or "",
+                        "notes": r.get("notes") or "",
+                        "source": "raf_db",
+                    })
+        except Exception as exc:
+            logger.debug("patient_referrals fallback failed: %s", exc)
 
     # --- RAF score + breakdown ------------------------------------------
     raf_current_score: float | None = None
