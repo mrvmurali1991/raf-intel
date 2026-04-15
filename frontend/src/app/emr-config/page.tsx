@@ -1397,24 +1397,13 @@ export default function EmrConfigPage() {
           : "Connection deactivated.",
         "success",
       );
-      qc.invalidateQueries({ queryKey: ["emr-connections"] });
-      qc.invalidateQueries({ queryKey: ["patients"] });
-      qc.invalidateQueries({ queryKey: ["raf"] });
-      qc.invalidateQueries({ queryKey: ["insights"] });
-      qc.invalidateQueries({ queryKey: ["emr-status"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      // Auto-refresh dashboard after pipeline has time to complete
+      // Clear ALL cached queries — switching connections changes everything
+      qc.clear();
+      qc.invalidateQueries();
+      // Auto-refresh after pipeline has time to complete
       if (activate) {
-        setTimeout(() => {
-          qc.invalidateQueries({ queryKey: ["raf"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
-          qc.invalidateQueries({ queryKey: ["patients"] });
-        }, 15000);
-        setTimeout(() => {
-          qc.invalidateQueries({ queryKey: ["raf"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
-          qc.invalidateQueries({ queryKey: ["patients"] });
-        }, 45000);
+        setTimeout(() => qc.invalidateQueries(), 15000);
+        setTimeout(() => qc.invalidateQueries(), 45000);
       }
     } catch {
       showToast("Failed to update connection status.", "error");

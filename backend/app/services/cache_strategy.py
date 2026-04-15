@@ -24,6 +24,33 @@ from app.metrics import CACHE_HITS, CACHE_MISSES
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Active-connection scoping — ensures cache keys change on EMR switch
+# ---------------------------------------------------------------------------
+
+def get_active_connection_id(tenant_id: str | None = None) -> int:
+    """Return the active EMR connection id for cache-key scoping.
+
+    When a user switches from OpenEMR-A to OpenEMR-B, the connection id
+    changes and every cache key that includes it becomes a miss — exactly
+    what we want so stale data from the old connection is never served.
+    """
+    try:
+        from app.db import raf_cursor
+        with raf_cursor() as cur:
+            if tenant_id:
+                cur.execute(
+                    "SELECT id FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
+                    (tenant_id,),
+                )
+            else:
+                cur.execute("SELECT id FROM emr_connections WHERE is_active = 1 LIMIT 1")
+            row = cur.fetchone()
+            return row["id"] if row else 0
+    except Exception:
+        return 0
+
 # ---------------------------------------------------------------------------
 # Stampede protection (thundering-herd lock)
 # ---------------------------------------------------------------------------
@@ -73,15 +100,17 @@ TTL_DASHBOARD = 300       # 5 min — invalidated on pipeline completion
 
 
 def _make_key(tenant_id: str, entity: str, *parts: Any) -> str:
-    """Build a tenant-scoped cache key.
+    """Build a tenant-scoped cache key that includes the active connection id.
 
-    For long or variable-length argument lists the tail is hashed to keep
-    keys short and Redis-friendly.
+    Including the connection id means switching EMR connections automatically
+    produces different cache keys, preventing stale data from a previous
+    connection from being served.
     """
+    conn_id = get_active_connection_id(tenant_id)
     tail = ":".join(str(p) for p in parts)
     if len(tail) > 128:
         tail = hashlib.md5(tail.encode(), usedforsecurity=False).hexdigest()
-    return f"{tenant_id}:{entity}:{tail}"
+    return f"{tenant_id}:c{conn_id}:{entity}:{tail}"
 
 
 # ---------------------------------------------------------------------------
@@ -165,9 +194,11 @@ def tenant_cached(
 def invalidate_raf_scores(tenant_id: str, patient_id: int | None = None) -> None:
     """Invalidate cached RAF scores for a tenant (optionally a single patient)."""
     if patient_id is not None:
+        cache_delete_pattern(f"{tenant_id}:*:raf_breakdown:*{patient_id}*")
         cache_delete_pattern(f"{tenant_id}:raf_breakdown:*{patient_id}*")
         cache_delete_pattern(f"raf:breakdown:{patient_id}:*:{tenant_id}")
     else:
+        cache_delete_pattern(f"{tenant_id}:*:raf_breakdown:*")
         cache_delete_pattern(f"{tenant_id}:raf_breakdown:*")
         cache_delete_pattern(f"raf:breakdown:*:*:{tenant_id}")
     logger.debug(
@@ -177,19 +208,23 @@ def invalidate_raf_scores(tenant_id: str, patient_id: int | None = None) -> None
 
 def invalidate_patient_list(tenant_id: str) -> None:
     """Invalidate cached patient lists for a tenant."""
+    cache_delete_pattern(f"{tenant_id}:*:patient_list:*")
     cache_delete_pattern(f"{tenant_id}:patient_list:*")
     logger.debug("invalidated patient_list cache tenant=%s", tenant_id)
 
 
 def invalidate_worklist(tenant_id: str) -> None:
     """Invalidate cached worklist data for a tenant."""
+    cache_delete_pattern(f"{tenant_id}:*:worklist:*")
     cache_delete_pattern(f"{tenant_id}:worklist:*")
+    cache_delete_pattern(f"{tenant_id}:*:coder_worklist:*")
     cache_delete_pattern(f"{tenant_id}:coder_worklist:*")
     logger.debug("invalidated worklist cache tenant=%s", tenant_id)
 
 
 def invalidate_dashboard(tenant_id: str) -> None:
     """Invalidate cached dashboard stats for a tenant."""
+    cache_delete_pattern(f"{tenant_id}:*:dashboard:*")
     cache_delete_pattern(f"{tenant_id}:dashboard:*")
     logger.debug("invalidated dashboard cache tenant=%s", tenant_id)
 

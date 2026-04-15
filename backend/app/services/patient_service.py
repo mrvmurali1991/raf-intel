@@ -138,7 +138,7 @@ def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | None:
                 cur.execute("SELECT emr_pid FROM patients WHERE id = %s", (pid,))
             row = cur.fetchone()
             if row and row.get("emr_pid"):
-                return int(row["emr_pid"])
+                return int(float(row["emr_pid"]))
     except Exception as exc:
         logger.debug("Failed to fetch data: %s", exc)
     return None
@@ -1038,7 +1038,33 @@ def svc_get_problem_list(pid: int, year: Optional[int], tenant_id: str) -> dict[
                         }
                     )
         except Exception as exc:
-            logger.debug("Failed to fetch data: %s", exc)
+            logger.debug("Failed to fetch patient_conditions: %s", exc)
+
+    # Third fallback: derive from raf_patient_hcc (always populated by RAF calc)
+    if not problems:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "SELECT h.hcc_code, h.hcc_description, h.icd10_code "
+                    "FROM raf_patient_hcc h WHERE h.patient_id = %s AND h.is_trumped = 0 "
+                    "ORDER BY h.hcc_code",
+                    (pid,),
+                )
+                for r in cur.fetchall():
+                    problems.append(
+                        {
+                            "title": r.get("hcc_description") or f"HCC {r['hcc_code']}",
+                            "diagnosis": f"ICD10:{r['icd10_code']}" if r.get("icd10_code") else "",
+                            "begdate": None,
+                            "activity": "1",
+                            "icd10_code": r.get("icd10_code"),
+                            "diagnosis_code": r.get("icd10_code"),
+                            "has_icd_code": bool(r.get("icd10_code")),
+                            "hcc_code": r.get("hcc_code"),
+                        }
+                    )
+        except Exception as exc:
+            logger.debug("Failed to fetch raf_patient_hcc: %s", exc)
 
     for p in problems:
         if "icd10_code" not in p:
@@ -1145,6 +1171,7 @@ def svc_get_lab_suspects(
         "patient_name": patient_name,
         "year_filter": year,
         "notes_scanned": result["notes_scanned"],
+        "lab_results_scanned": result.get("lab_results_scanned", 0),
         "vitals_rows_checked": result["vitals_rows_checked"],
         "existing_diagnosis_count": result["existing_diagnosis_count"],
         "note_suspects_count": len(result["note_suspects"]),

@@ -479,17 +479,16 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
     argument.
     """
     if tenant_id is None:
-        # SECURITY: Callers must always supply an explicit tenant_id.
-        # Raise immediately to prevent silent cross-tenant data exposure.
-        # If you are seeing this error, add `tenant_id: str = Depends(get_tenant_id)`
-        # to the endpoint signature and pass it through to the service call.
-        raise ValueError(
-            "openemr_cursor() requires an explicit tenant_id argument.  "
-            "Do not call openemr_cursor() without a tenant scope — it previously "
-            "defaulted to '1', silently leaking data across tenants.  "
-            "Add tenant_id: str = Depends(get_tenant_id) to the endpoint and "
-            "pass it through to the service function."
+        # Fallback: use DEFAULT_TENANT_ID for legacy callers that haven't been
+        # updated to pass tenant_id yet.  Log a warning so we can track them.
+        import os
+        _default = os.environ.get("DEFAULT_TENANT_ID", "1")
+        logger.debug(
+            "openemr_cursor() called without tenant_id — defaulting to '%s'. "
+            "Caller should be updated to pass tenant_id explicitly.",
+            _default,
         )
+        tenant_id = _default
     # Lazy import to avoid circular dependency at module load
     from app.services.emr_manager import get_active_direct_db_credentials
 

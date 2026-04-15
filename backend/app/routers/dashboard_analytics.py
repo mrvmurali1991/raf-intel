@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.cache import cache_get, cache_set
+from app.services.cache_strategy import get_active_connection_id
 from app.services.dashboard_analytics_service import (
     get_coding_accuracy_metrics,
     get_patient_risk_stratification,
@@ -62,7 +63,8 @@ def analytics_overview(
     """
     measurement_year = year or date.today().year
 
-    cache_key = f"analytics:overview:{tenant_id}:{measurement_year}"
+    _acid = get_active_connection_id(tenant_id)
+    cache_key = f"analytics:overview:{tenant_id}:{measurement_year}:{_acid}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -97,7 +99,8 @@ def analytics_coding(
     - top_missed_hccs — top-10 most frequently missed HCC categories (open suspects)
     """
 
-    cache_key = f"analytics:coding:{tenant_id}"
+    _acid = get_active_connection_id(tenant_id)
+    cache_key = f"analytics:coding:{tenant_id}:{_acid}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -132,7 +135,8 @@ def analytics_providers(
     - gap_closure_rate — closed recapture gaps / total gaps for this provider's panel
     """
 
-    cache_key = f"analytics:providers:{tenant_id}"
+    _acid = get_active_connection_id(tenant_id)
+    cache_key = f"analytics:providers:{tenant_id}:{_acid}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -170,7 +174,8 @@ def analytics_risk_stratification(
     year-over-year, sorted by largest increase.
     """
 
-    cache_key = f"analytics:risk:{tenant_id}"
+    _acid = get_active_connection_id(tenant_id)
+    cache_key = f"analytics:risk:{tenant_id}:{_acid}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached

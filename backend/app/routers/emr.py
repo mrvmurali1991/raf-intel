@@ -685,11 +685,13 @@ def update_connection(
                 connection_id,
                 exc,
             )
-        # Invalidate dashboard/report caches so stale data isn't served
+        # Invalidate ALL caches so stale data from previous connection isn't served
+        from app.services.cache_strategy import invalidate_all_for_tenant
         from app.cache import cache_delete_pattern
         try:
+            invalidate_all_for_tenant(tenant_id)
             cache_delete_pattern("report:*")
-            cache_delete_pattern("dashboard:*")
+            cache_delete_pattern("analytics:*")
         except Exception:
             pass
         # Auto-trigger sync + RAF calc pipeline
@@ -801,11 +803,13 @@ def reactivate_connection(
         )
         raise HTTPException(status_code=500, detail="Failed to restore patient cohort")
 
-    # Invalidate dashboard/report caches so stale data isn't served
+    # Invalidate ALL caches so stale data from previous connection isn't served
+    from app.services.cache_strategy import invalidate_all_for_tenant
     from app.cache import cache_delete_pattern
     try:
+        invalidate_all_for_tenant(tenant_id)
         cache_delete_pattern("report:*")
-        cache_delete_pattern("dashboard:*")
+        cache_delete_pattern("analytics:*")
     except Exception:
         pass
 

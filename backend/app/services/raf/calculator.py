@@ -30,6 +30,7 @@ from hccinfhir import HCCInFHIR, Demographics  # noqa: F401 (Demographics re-exp
 
 from app.db import raf_cursor, openemr_cursor
 from app.cache import cache_get, cache_set, cache_delete_pattern
+from app.services.cache_strategy import get_active_connection_id
 
 from app.services.raf.icd_formatter import _format_icd10
 from app.services.raf.blend_weights import (
@@ -1676,7 +1677,8 @@ def get_raf_breakdown(
     import json as _json
 
     # --- cache check ---
-    _cache_key = f"raf:breakdown:{patient_id}:{year}:{tenant_id}"
+    _acid = get_active_connection_id(tenant_id)
+    _cache_key = f"raf:breakdown:{patient_id}:{year}:{tenant_id}:{_acid}"
     _cached = cache_get(_cache_key)
     if _cached is not None:
         return _cached

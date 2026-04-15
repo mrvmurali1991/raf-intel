@@ -15,7 +15,7 @@ Public API
 extract_lab_values(note_text)             -> list[LabValue]
 detect_lab_suspects(note_text, existing)  -> list[SuspectResult]
 detect_vitals_suspects(vitals, existing)  -> list[SuspectResult]
-run_lab_suspect_scan(pid)                 -> dict  (full scan + stats)
+run_lab_suspect_scan(emr_pid)             -> dict  (full scan + stats)
 """
 from __future__ import annotations
 
@@ -492,28 +492,31 @@ def _note_matches_year(note: dict[str, Any], year: int | None) -> bool:
         return False
 
 
-def run_lab_suspect_scan(pid: int, year: int | None = None) -> dict[str, Any]:
+def run_lab_suspect_scan(emr_pid: int, year: int | None = None) -> dict[str, Any]:
     """
-    Execute a complete lab/vitals suspect scan for *pid* and return a
+    Execute a complete lab/vitals suspect scan for *emr_pid* and return a
     summary dict ready to be served by the API endpoint.
 
     Parameters
     ----------
-    pid:
-        OpenEMR patient identifier.
+    emr_pid:
+        OpenEMR patient identifier (the mapped emr_pid, NOT the RAF internal id).
+        Callers must resolve the emr_pid via ``_get_emr_pid`` before calling
+        this function.
     year:
         Optional calendar year (e.g. 2025).  When provided, only clinical
-        notes and vitals rows whose ``date`` field falls within that year are
-        included in the scan.  When omitted, all available records are used
-        (existing behaviour).
+        notes, lab results, and vitals rows whose ``date`` field falls within
+        that year are included in the scan.  When omitted, all available
+        records are used (existing behaviour).
 
     Steps
     -----
     1. Fetch existing billing diagnoses (ICD-10 codes) from OpenEMR.
     2. Fetch all SOAP + clinical note text for the patient.
     3. Run detect_lab_suspects() over the combined note text.
-    4. Fetch latest vitals row and run detect_vitals_suspects().
-    5. Merge results, deduplicate by (condition, icd10), sort by confidence.
+    4. Fetch structured lab results from procedure_result and scan result_text.
+    5. Fetch latest vitals row and run detect_vitals_suspects().
+    6. Merge results, deduplicate by (condition, icd10), sort by confidence.
 
     Returns
     -------
@@ -522,6 +525,8 @@ def run_lab_suspect_scan(pid: int, year: int | None = None) -> dict[str, Any]:
         notes_scanned, vitals_rows_checked, existing_diagnosis_count
     """
     from app.services import openemr_connector as emr
+
+    pid = emr_pid  # local alias used throughout; always the OpenEMR pid
 
     # -- 1. Existing diagnoses -----------------------------------------------
     try:
@@ -562,15 +567,31 @@ def run_lab_suspect_scan(pid: int, year: int | None = None) -> dict[str, Any]:
     except Exception as exc:
         logger.debug("run_lab_suspect_scan pid=%s: clinical notes unavailable: %s", pid, exc)
 
-    combined_note_text = "\n\n".join(notes_text_parts)
-    notes_scanned = len(notes_text_parts)
+    # -- 3. Structured lab results from procedure_result ---------------------
+    # Append result_text from procedure_result rows so that structured lab
+    # values (HbA1c, eGFR, LDL, Hgb, etc.) stored in OpenEMR's lab module
+    # are picked up by the regex engine even when they are not transcribed
+    # into free-text SOAP notes.
+    lab_results_scanned = 0
+    try:
+        lab_rows = emr.get_labs(pid, year=year)
+        for lab_row in lab_rows:
+            result_text = lab_row.get("result_text") or ""
+            if result_text.strip():
+                notes_text_parts.append(result_text)
+                lab_results_scanned += 1
+    except Exception as exc:
+        logger.debug("run_lab_suspect_scan pid=%s: procedure_result unavailable: %s", pid, exc)
 
-    # -- 3. Note-based suspects ----------------------------------------------
+    combined_note_text = "\n\n".join(notes_text_parts)
+    notes_scanned = len(notes_text_parts) - lab_results_scanned  # notes only for stat
+
+    # -- 4. Note-based suspects (includes structured lab result_text) --------
     note_suspects: list[dict[str, Any]] = []
     if combined_note_text.strip():
         note_suspects = detect_lab_suspects(combined_note_text, existing_icd10)
 
-    # -- 4. Vitals-based suspects --------------------------------------------
+    # -- 5. Vitals-based suspects --------------------------------------------
     vitals_suspects: list[dict[str, Any]] = []
     vitals_rows_checked = 0
     try:
@@ -583,7 +604,7 @@ def run_lab_suspect_scan(pid: int, year: int | None = None) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("run_lab_suspect_scan pid=%s: could not load vitals: %s", pid, exc)
 
-    # -- 5. Merge & deduplicate ----------------------------------------------
+    # -- 6. Merge & deduplicate ----------------------------------------------
     merged: dict[tuple[str, str], dict[str, Any]] = {}
 
     for suspect in note_suspects:
@@ -603,15 +624,16 @@ def run_lab_suspect_scan(pid: int, year: int | None = None) -> dict[str, Any]:
     )
 
     logger.info(
-        "run_lab_suspect_scan pid=%s year=%s: notes=%d vitals_rows=%d "
+        "run_lab_suspect_scan emr_pid=%s year=%s: notes=%d lab_results=%d vitals_rows=%d "
         "note_suspects=%d vitals_suspects=%d merged=%d",
-        pid, year, notes_scanned, vitals_rows_checked,
+        pid, year, notes_scanned, lab_results_scanned, vitals_rows_checked,
         len(note_suspects), len(vitals_suspects), len(all_suspects),
     )
 
     return {
         "pid": pid,
         "notes_scanned": notes_scanned,
+        "lab_results_scanned": lab_results_scanned,
         "vitals_rows_checked": vitals_rows_checked,
         "existing_diagnosis_count": len(existing_icd10),
         "note_suspects": note_suspects,

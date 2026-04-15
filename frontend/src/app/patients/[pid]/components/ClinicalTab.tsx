@@ -83,7 +83,7 @@ export function ClinicalTab({
   const [activeSection, setActiveSection] = useState("demographics");
 
   const medItems: MedicationItem[] = Array.isArray(meds) ? meds : (meds as MedicationsResponse | undefined)?.medications ?? [];
-  const vitalsItems: ClinicalFindingItem[] = Array.isArray(vitalsSuspects) ? vitalsSuspects : (vitalsSuspects as ClinicalFindingsResponse | undefined)?.suspects ?? [];
+  const vitalsItems: ClinicalFindingItem[] = Array.isArray(vitalsSuspects) ? vitalsSuspects : (vitalsSuspects as ClinicalFindingsResponse | undefined)?.vitals_suspects ?? (vitalsSuspects as ClinicalFindingsResponse | undefined)?.suspects ?? [];
   const labItems: ClinicalFindingItem[] = Array.isArray(labSuspects) ? labSuspects : (labSuspects as ClinicalFindingsResponse | undefined)?.suspects ?? [];
   const allergyItems: AllergyItem[] = Array.isArray(allergies) ? allergies : (allergies as AllergiesResponse | undefined)?.allergies ?? [];
   const immunizationItems: ImmunizationItem[] = Array.isArray(immunizations) ? immunizations : (immunizations as ImmunizationsResponse | undefined)?.immunizations ?? [];

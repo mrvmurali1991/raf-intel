@@ -610,8 +610,8 @@ def get_vitals(pid: int, tenant_id: str = "") -> list[dict[str, Any]]:
             fv.id,
             fv.pid,
             fv.date,
-            fv.weight_metric AS weight,
-            fv.height_metric AS height,
+            fv.weight AS weight,
+            fv.height AS height,
             fv.bps,
             fv.bpd
         FROM form_vitals fv
@@ -1077,43 +1077,36 @@ def get_all_clinical_notes_for_patient(pid: int) -> list[dict[str, Any]]:
 
 @_empty_on_no_emr()
 def get_labs(pid: int, year: int | None = None) -> list[dict[str, Any]]:
-    """Return lab results for a patient."""
-    if year is not None:
-        sql = """
-            SELECT
-                pr.id,
-                pr.pid,
-                pr.encounter,
-                pr.result_text,
-                pr.date
-            FROM procedure_result pr
-            WHERE pr.pid = %s
-              AND YEAR(pr.date) = %s
-            ORDER BY pr.date DESC
-            LIMIT 500
-        """
-        params = (pid, year)
-    else:
-        sql = """
-            SELECT
-                pr.id,
-                pr.pid,
-                pr.encounter,
-                pr.result_text,
-                pr.date
-            FROM procedure_result pr
-            WHERE pr.pid = %s
-            ORDER BY pr.date DESC
-            LIMIT 500
-        """
-        params = (pid,)
+    """Return lab results for a patient via procedure_order → report → result."""
+    year_clause = "AND YEAR(pr.date) = %s" if year is not None else ""
+    sql = f"""
+        SELECT
+            pr.procedure_result_id AS id,
+            po.patient_id AS pid,
+            po.encounter_id AS encounter,
+            pr.result_code,
+            pr.result_text,
+            pr.result,
+            pr.units,
+            pr.`range`,
+            pr.abnormal,
+            pr.date
+        FROM procedure_result pr
+        JOIN procedure_report rpt ON rpt.procedure_report_id = pr.procedure_report_id
+        JOIN procedure_order po ON po.procedure_order_id = rpt.procedure_order_id
+        WHERE po.patient_id = %s
+          {year_clause}
+        ORDER BY pr.date DESC
+        LIMIT 500
+    """
+    params: tuple = (pid, year) if year is not None else (pid,)
     try:
         with openemr_cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
-    except mysql.connector.ProgrammingError:
-        logger.debug("procedure_result table not available")
+    except Exception:
+        logger.debug("get_labs: procedure tables not available for pid=%s", pid)
         return []
 
 
@@ -1208,10 +1201,17 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
     try:
         patient = get_patient(pid)
         if not patient:
-            logger.warning(
-                "get_patient_enrollment_info: pid=%s not found, defaulting to CNA", pid
-            )
-            return _default
+            # Try OpenEMR patient_data directly (pid may be emr_pid)
+            try:
+                with openemr_cursor() as cur:
+                    cur.execute("SELECT DOB FROM patient_data WHERE pid = %s", (pid,))
+                    row = cur.fetchone()
+                    if row:
+                        patient = {"DOB": str(row["DOB"]) if row.get("DOB") else None}
+            except Exception:
+                pass
+        if not patient:
+            patient = {}
 
         dob_raw = patient.get("DOB") or patient.get("dob")
         age: int | None = None
@@ -1889,7 +1889,7 @@ def get_immunizations(pid: int) -> list[dict[str, Any]]:
             id,
             administered_date,
             cvx_code,
-            title
+            note AS title
         FROM immunizations
         WHERE patient_id = %s
           AND added_erroneously = 0
@@ -2535,14 +2535,11 @@ def get_referrals(pid: int) -> list[dict[str, Any]]:
         SELECT
             id,
             date,
-            body,
-            refer_to,
-            refer_from,
-            reason,
-            reply_date
+            title,
+            title AS body
         FROM transactions
         WHERE pid = %s
-          AND title = 'Referral'
+          AND title LIKE 'Refer%%'
         ORDER BY date DESC
     """
     try:

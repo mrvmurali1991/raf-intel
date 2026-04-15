@@ -26,22 +26,9 @@ from app.db import raf_cursor, openemr_cursor, NoActiveEMRConnection
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.emr_manager import active_patients_subquery
 from app.cache import cache_get, cache_set
+from app.services.cache_strategy import get_active_connection_id as _active_connection_id
 
 logger = logging.getLogger(__name__)
-
-
-def _active_connection_id(tenant_id: str) -> int:
-    """Return the active EMR connection id for cache-key scoping."""
-    try:
-        with raf_cursor() as cur:
-            cur.execute(
-                "SELECT id FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
-                (tenant_id,),
-            )
-            row = cur.fetchone()
-            return row["id"] if row else 0
-    except Exception:
-        return 0
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 

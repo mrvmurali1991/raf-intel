@@ -1802,6 +1802,7 @@ async def run_sync_async(
     }
 
     try:
+        sync_errors = []
         if use_bulk:
             bulk_result = await _bulk_export_async(conn, resources_to_sync, since=last_updated)
             if bulk_result["error"]:
@@ -1809,36 +1810,40 @@ async def run_sync_async(
             bulk_counts = await _process_bulk_ndjson(conn, bulk_result["files"])
             counts.update(bulk_counts)
         else:
-            if "Patient" in resources_to_sync:
-                counts["Patient"] = await _sync_patients_async(conn, last_updated)
-            if "Condition" in resources_to_sync:
-                counts["Condition"] = await _sync_conditions_async(conn, last_updated)
-            if "Encounter" in resources_to_sync:
-                counts["Encounter"] = await _sync_encounters_async(conn, last_updated)
-            if "DiagnosticReport" in resources_to_sync:
-                counts["DiagnosticReport"] = await _sync_diagnostic_reports_async(
-                    conn, last_updated
-                )
-            if "MedicationRequest" in resources_to_sync:
-                counts["MedicationRequest"] = await _sync_medications_async(conn, last_updated)
-            if "Observation" in resources_to_sync:
-                counts["Observation"] = await _sync_observations_async(conn, last_updated)
+            resource_syncs = [
+                ("Patient", lambda: _sync_patients_async(conn, last_updated)),
+                ("Condition", lambda: _sync_conditions_async(conn, last_updated)),
+                ("Encounter", lambda: _sync_encounters_async(conn, last_updated)),
+                ("DiagnosticReport", lambda: _sync_diagnostic_reports_async(conn, last_updated)),
+                ("MedicationRequest", lambda: _sync_medications_async(conn, last_updated)),
+                ("Observation", lambda: _sync_observations_async(conn, last_updated)),
+            ]
+            for res_type, sync_fn in resource_syncs:
+                if res_type in resources_to_sync:
+                    try:
+                        counts[res_type] = await sync_fn()
+                    except Exception as e:
+                        logger.warning("Sync failed for %s (connection %s): %s", res_type, connection_id, e)
+                        sync_errors.append(f"{res_type}: {e}")
 
         summary = (
             f"Synced: {counts['Patient']} patients, {counts['Condition']} conditions, "
             f"{counts['Encounter']} encounters, {counts['DiagnosticReport']} reports, "
             f"{counts['MedicationRequest']} medications, {counts['Observation']} observations"
         )
+        if sync_errors:
+            summary += f" | Errors: {'; '.join(sync_errors)}"
+        sync_status = "completed" if not sync_errors else "completed_with_errors"
         _update_sync_log(
             log_id,
-            status="completed",
+            status=sync_status,
             message=summary,
             patients_synced=counts["Patient"],
             conditions_synced=counts["Condition"],
             encounters_synced=counts["Encounter"],
             reports_synced=counts["DiagnosticReport"],
         )
-        _update_connection_sync_status(connection_id, "completed", summary)
+        _update_connection_sync_status(connection_id, sync_status, summary)
         logger.info("Sync complete for connection %s: %s", connection_id, summary)
 
         return {

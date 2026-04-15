@@ -675,9 +675,6 @@ def get_problem_list(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "count": 0, "problems": [], "note": "Problem list not yet synced for FHIR patients"}
-
     return svc.svc_get_problem_list(pid=pid, year=year, tenant_id=_tid)
 
 
@@ -928,9 +925,6 @@ def get_allergies(
     """
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
-
-    if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "count": 0, "allergies": [], "note": "Allergy data not yet synced for FHIR patients"}
 
     return svc.svc_get_allergies(pid=pid, tenant_id=_tid)
 
