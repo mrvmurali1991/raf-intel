@@ -685,6 +685,13 @@ def update_connection(
                 connection_id,
                 exc,
             )
+        # Invalidate dashboard/report caches so stale data isn't served
+        from app.cache import cache_delete_pattern
+        try:
+            cache_delete_pattern("report:*")
+            cache_delete_pattern("dashboard:*")
+        except Exception:
+            pass
         # Auto-trigger sync + RAF calc pipeline
         try:
             from app.services.celery_tasks import task_emr_activate_pipeline
@@ -793,6 +800,14 @@ def reactivate_connection(
             exc,
         )
         raise HTTPException(status_code=500, detail="Failed to restore patient cohort")
+
+    # Invalidate dashboard/report caches so stale data isn't served
+    from app.cache import cache_delete_pattern
+    try:
+        cache_delete_pattern("report:*")
+        cache_delete_pattern("dashboard:*")
+    except Exception:
+        pass
 
     # P1: Auto-trigger sync + RAF calc in background after activation
     sync_triggered = False

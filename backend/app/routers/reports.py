@@ -29,6 +29,20 @@ from app.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
+
+def _active_connection_id(tenant_id: str) -> int:
+    """Return the active EMR connection id for cache-key scoping."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            return row["id"] if row else 0
+    except Exception:
+        return 0
+
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 # CMS per-member per-year revenue multiplier (MA benchmark rate)
@@ -74,7 +88,8 @@ def revenue_opportunity(year: int = Query(default=None),
     calc_year = year or date.today().year
 
     # --- cache check ---
-    _cache_key = f"report:revenue:{calc_year}:{tenant_id}"
+    _acid = _active_connection_id(tenant_id)
+    _cache_key = f"report:revenue:{calc_year}:{tenant_id}:{_acid}"
     _cached = cache_get(_cache_key)
     if _cached is not None:
         return _cached
@@ -388,7 +403,8 @@ def hcc_distribution(year: int = Query(default=None),
     calc_year = year or date.today().year
 
     # --- cache check ---
-    _cache_key = f"report:hcc_distribution:{calc_year}:{tenant_id}"
+    _acid = _active_connection_id(tenant_id)
+    _cache_key = f"report:hcc_distribution:{calc_year}:{tenant_id}:{_acid}"
     _cached = cache_get(_cache_key)
     if _cached is not None:
         return _cached
@@ -697,7 +713,8 @@ def data_completeness(
     """
 
     # --- cache check ---
-    _cache_key = f"report:data_completeness:{tenant_id}"
+    _acid = _active_connection_id(tenant_id)
+    _cache_key = f"report:data_completeness:{tenant_id}:{_acid}"
     _cached = cache_get(_cache_key)
     if _cached is not None:
         return _cached
