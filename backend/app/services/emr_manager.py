@@ -207,12 +207,13 @@ def _decrypt_credentials(row: dict[str, Any]) -> dict[str, Any]:
                 result[field] = decrypt(result[field])
             except (ValueError, Exception) as exc:
                 logger.warning(
-                    "Failed to decrypt field '%s' for connection id=%s: %s",
+                    "Failed to decrypt field '%s' for connection id=%s: %s — using raw value",
                     field,
                     result.get("id"),
                     exc,
                 )
-                result[field] = ""
+                # Password may be plaintext (manual UPDATE) — keep raw value
+                pass
     return result
 
 

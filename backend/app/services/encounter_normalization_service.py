@@ -65,10 +65,13 @@ def _get_emr_connection_creds(connection_id: int) -> dict:
     encrypted_pw = row.get("db_password") or ""
     try:
         plain_pw = decrypt(encrypted_pw) if encrypted_pw else ""
-    except Exception as exc:
-        raise ValueError(
-            f"_get_emr_connection_creds: failed to decrypt password for connection_id={connection_id}: {exc}"
-        ) from exc
+    except Exception:
+        # Password may be stored as plaintext (e.g. manual UPDATE) — use as-is
+        logger.warning(
+            "_get_emr_connection_creds: decrypt failed for connection_id=%s, using raw value",
+            connection_id,
+        )
+        plain_pw = encrypted_pw
 
     return {
         "host": row["db_host"],
