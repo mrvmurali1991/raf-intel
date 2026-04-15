@@ -97,9 +97,9 @@ class SyncRequest(BaseModel):
         "incremental",
         description="'full' ignores the last-sync timestamp; 'incremental' uses it",
     )
-    resource_types: list[Literal["Patient", "Condition", "Encounter", "DiagnosticReport"]] | None = Field(
+    resource_types: list[Literal["Patient", "Condition", "Encounter", "DiagnosticReport", "MedicationRequest", "Observation"]] | None = Field(
         None,
-        description="Subset of resource types to sync.  Omit to sync all four.",
+        description="Subset of resource types to sync.  Omit to sync all.",
     )
     use_bulk: bool = Field(
         False,
