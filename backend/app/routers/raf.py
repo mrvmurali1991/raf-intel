@@ -299,7 +299,7 @@ def calculate_all(
     _conn_type = None
     try:
         with raf_cursor() as _ct_cur:
-            _ct_cur.execute("SELECT connection_type FROM emr_connections WHERE is_active = 1 LIMIT 1")
+            _ct_cur.execute("SELECT connection_type FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1", (tenant_id,))
             _ct_r = _ct_cur.fetchone()
             _conn_type = _ct_r["connection_type"] if _ct_r else None
     except Exception:
@@ -312,7 +312,8 @@ def calculate_all(
                     "SELECT epm.id AS pid "
                     "FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
-                    "WHERE ec.is_active = 1 ORDER BY pid"
+                    "WHERE ec.is_active = 1 AND ec.tenant_id = %s ORDER BY pid",
+                    (tenant_id,),
                 )
                 rows = cur.fetchall() or []
             patient_ids = [int(r["pid"]) for r in rows]
@@ -322,12 +323,6 @@ def calculate_all(
             raise HTTPException(status_code=500, detail="Failed to fetch patient list")
     else:
         try:
-            patient_count = get_patient_count()
-        except Exception as exc:
-            logger.error("calculate_all: failed to count patients: %s", exc, exc_info=True)
-            raise HTTPException(status_code=500, detail="Failed to query patient count")
-
-        try:
             with raf_cursor() as cur:
                 cur.execute(
                     "SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s ORDER BY id",
@@ -335,6 +330,7 @@ def calculate_all(
                 )
                 rows = cur.fetchall() or []
             patient_ids = [int(r["id"]) for r in rows]
+            patient_count = len(patient_ids)
         except Exception as exc:
             logger.error("calculate_all: failed to fetch patient IDs: %s", exc, exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to fetch patient list")
