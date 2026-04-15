@@ -1838,6 +1838,37 @@ def _add_constraints_and_indexes() -> None:
     except Exception as exc:
         logger.warning("unique index uq_provider_npi skipped: %s", exc)
 
+    # 3d. patients(tenant_id, emr_pid, emr_connection_id) — prevents
+    #      duplicate patients created by repeated FHIR sync runs.
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM information_schema.statistics "
+                "WHERE table_schema = DATABASE() AND table_name = 'patients' "
+                "AND index_name = 'uq_patients_tenant_emrpid_conn' LIMIT 1"
+            )
+            if not cur.fetchone():
+                # Remove duplicates first (keep highest id per group)
+                cur.execute(
+                    """
+                    DELETE p1 FROM patients p1
+                    INNER JOIN patients p2
+                    ON  p1.tenant_id         = p2.tenant_id
+                    AND p1.emr_pid           = p2.emr_pid
+                    AND p1.emr_connection_id = p2.emr_connection_id
+                    AND p1.id < p2.id
+                    WHERE p1.emr_pid IS NOT NULL
+                      AND p1.emr_pid != ''
+                      AND p1.emr_connection_id IS NOT NULL
+                    """
+                )
+                cur.execute(
+                    "CREATE UNIQUE INDEX uq_patients_tenant_emrpid_conn "
+                    "ON patients (tenant_id, emr_pid, emr_connection_id)"
+                )
+    except Exception as exc:
+        logger.warning("unique index uq_patients_tenant_emrpid_conn skipped: %s", exc)
+
     # ------------------------------------------------------------------
     # 4. CHECK constraint on care_gap_tasks.priority (MySQL 8.0.16+)
     #    MySQL does not support IF NOT EXISTS on constraints, so we
