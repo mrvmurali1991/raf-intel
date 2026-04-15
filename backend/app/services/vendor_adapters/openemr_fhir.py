@@ -747,16 +747,51 @@ class OpenEMRFhirAdapter:
         import hashlib
         ext_id = patient["external_id"] or ""
         emr_pid = int(hashlib.md5(ext_id.encode()).hexdigest()[:7], 16)
+        tenant_id = self.connection.get("tenant_id", "1")
 
         with raf_cursor() as cur:
+            # --- patients table (so _flip_patient_cohort and dashboard work) ---
+            cur.execute(
+                """INSERT INTO patients
+                       (tenant_id, first_name, last_name, dob, gender,
+                        emr_pid, emr_connection_id, data_source, is_active,
+                        created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
+                           NOW(), NOW())
+                   ON DUPLICATE KEY UPDATE
+                       first_name = VALUES(first_name),
+                       last_name  = VALUES(last_name),
+                       dob        = VALUES(dob),
+                       gender     = VALUES(gender),
+                       updated_at = NOW()""",
+                (
+                    tenant_id,
+                    patient["first_name"],
+                    patient["last_name"],
+                    patient["date_of_birth"] or None,
+                    (patient["sex"] or "M")[0].upper(),
+                    emr_pid,
+                    self.connection_id,
+                ),
+            )
+            # Get the internal patient_id
+            cur.execute(
+                "SELECT id FROM patients WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s LIMIT 1",
+                (emr_pid, self.connection_id, tenant_id),
+            )
+            p_row = cur.fetchone()
+            internal_pid = p_row["id"] if p_row else 0
+
+            # --- emr_patient_matches ---
             cur.execute(
                 """
                 INSERT INTO emr_patient_matches (
                     patient_id, emr_connection_id, emr_patient_id,
                     connection_id, external_id, emr_pid, first_name, last_name,
                     date_of_birth, sex, mrn, match_status, tenant_id, created_at
-                ) VALUES (0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto', %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto', %s, NOW())
                 ON DUPLICATE KEY UPDATE
+                    patient_id = VALUES(patient_id),
                     first_name = VALUES(first_name),
                     last_name = VALUES(last_name),
                     date_of_birth = VALUES(date_of_birth),
@@ -765,6 +800,7 @@ class OpenEMRFhirAdapter:
                     mrn = VALUES(mrn)
                 """,
                 (
+                    internal_pid,
                     self.connection_id,
                     patient["external_id"],
                     self.connection_id,
@@ -775,7 +811,7 @@ class OpenEMRFhirAdapter:
                     patient["date_of_birth"] or None,
                     patient["sex"],
                     patient["mrn"],
-                    self.connection.get("tenant_id", "1"),
+                    tenant_id,
                 ),
             )
 
@@ -855,25 +891,38 @@ class OpenEMRFhirAdapter:
             match_id: int = row["id"]
             existing_raf_id: int | None = row["raf_patient_id"]
 
+            # Resolve real patients.id for this FHIR patient
+            import hashlib as _hl
+            _ext = patient["external_id"] or ""
+            _emr_pid = int(_hl.md5(_ext.encode()).hexdigest()[:7], 16)
+            _tenant = self.connection.get("tenant_id", "1")
+            cur.execute(
+                "SELECT id FROM patients WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s LIMIT 1",
+                (_emr_pid, self.connection_id, _tenant),
+            )
+            _p_row = cur.fetchone()
+            real_patient_id = _p_row["id"] if _p_row else match_id
+
             if existing_raf_id:
                 # Update the existing demographics row
                 cur.execute(
                     """
                     UPDATE raf_patient_demographics
-                    SET age_band = %s,
+                    SET patient_id = %s,
+                        age_band = %s,
                         sex = %s,
                         measurement_year = %s,
                         updated_at = NOW()
                     WHERE id = %s
                     """,
-                    (age_band, sex, measurement_year, existing_raf_id),
+                    (real_patient_id, age_band, sex, measurement_year, existing_raf_id),
                 )
                 logger.debug(
                     "OpenEMR FHIR: updated demographics for raf_patient_id=%s",
                     existing_raf_id,
                 )
             else:
-                # Insert a new demographics row
+                # Insert a new demographics row using real patients.id
                 cur.execute(
                     """
                     INSERT INTO raf_patient_demographics
@@ -881,9 +930,7 @@ class OpenEMRFhirAdapter:
                          dual_status, disabled, model_segment)
                     VALUES (%s, %s, %s, %s, 0, 0, 'CNA')
                     """,
-                    # patient_id here is the emr_patient_matches.id used as a
-                    # surrogate until a native RAF patient record exists.
-                    (match_id, measurement_year, age_band, sex),
+                    (real_patient_id, measurement_year, age_band, sex),
                 )
                 new_raf_id: int = cur.lastrowid
                 # Link the match row back to the new demographics id
