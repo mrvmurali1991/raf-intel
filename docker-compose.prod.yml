@@ -63,6 +63,7 @@ x-backend-env: &backend-env
   OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-raf-intelligence-backend}
   LOG_FORMAT: ${LOG_FORMAT:-json}
   STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
+  PIPELINE_AI_ENABLED: ${PIPELINE_AI_ENABLED:-true}
 
 services:
   # -------------------------------------------------------------------------

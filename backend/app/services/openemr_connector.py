@@ -548,7 +548,7 @@ def get_all_billing(pid: int) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 @_empty_on_no_emr()
-def get_medications(pid: int, year: int | None = None) -> list[dict[str, Any]]:
+def get_medications(pid: int, year: int | None = None, tenant_id: str = "") -> list[dict[str, Any]]:
     """Return all prescriptions for a patient, including the diagnosis field.
 
     The ``diagnosis`` column stores the ICD-10 code the medication was
@@ -589,7 +589,7 @@ def get_medications(pid: int, year: int | None = None) -> list[dict[str, Any]]:
 {year_clause}
         ORDER BY start_date DESC
     """
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
     result = [_serialize(r) for r in rows]
@@ -603,7 +603,7 @@ def get_medications(pid: int, year: int | None = None) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 @_empty_on_no_emr()
-def get_vitals(pid: int) -> list[dict[str, Any]]:
+def get_vitals(pid: int, tenant_id: str = "") -> list[dict[str, Any]]:
     """Return vitals history for a patient."""
     sql = """
         SELECT
@@ -618,7 +618,7 @@ def get_vitals(pid: int) -> list[dict[str, Any]]:
         WHERE fv.pid = %s
         ORDER BY fv.date DESC
     """
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         cur.execute(sql, (pid,))
         rows = cur.fetchall()
     return [_serialize(r) for r in rows]
@@ -990,7 +990,7 @@ def get_soap_notes(pid: int) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 @_empty_on_no_emr()
-def get_clinical_notes(encounter_id: int) -> list[dict[str, Any]]:
+def get_clinical_notes(encounter_id: int, tenant_id: str = "") -> list[dict[str, Any]]:
     """
     Return all clinical note forms associated with an encounter.
     Combines form_soap, form_clinical_notes, and notes fields from
@@ -1030,7 +1030,7 @@ def get_clinical_notes(encounter_id: int) -> list[dict[str, Any]]:
         WHERE fcn.encounter = %s
     """
 
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         cur.execute(sql_soap, (encounter_id,))
         notes.extend([_serialize(r) for r in cur.fetchall()])
 
@@ -1456,7 +1456,7 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @_empty_on_no_emr()
-def get_problem_list(pid: int, year: int | None = None) -> list[dict[str, Any]]:
+def get_problem_list(pid: int, year: int | None = None, tenant_id: str = "") -> list[dict[str, Any]]:
     """
     Return all active medical problems for a patient from the lists table.
 
@@ -1497,7 +1497,7 @@ def get_problem_list(pid: int, year: int | None = None) -> list[dict[str, Any]]:
         ORDER BY begdate DESC
     """
     try:
-        with openemr_cursor() as cur:
+        with openemr_cursor(tenant_id=tenant_id) as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
@@ -1507,7 +1507,7 @@ def get_problem_list(pid: int, year: int | None = None) -> list[dict[str, Any]]:
 
 
 @_empty_on_no_emr()
-def get_recapture_gaps(pid: int, year: int) -> list[dict[str, Any]]:
+def get_recapture_gaps(pid: int, year: int, tenant_id: str = "") -> list[dict[str, Any]]:
     """
     Return active medical problems that have NOT been billed as an ICD-10
     code in the given calendar year.
@@ -1545,7 +1545,7 @@ def get_recapture_gaps(pid: int, year: int) -> list[dict[str, Any]]:
         ORDER BY l.begdate DESC
     """
     try:
-        with openemr_cursor() as cur:
+        with openemr_cursor(tenant_id=tenant_id) as cur:
             cur.execute(sql, (pid, year))
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
@@ -1584,7 +1584,7 @@ def push_medical_problem(pid: int, title: str, diagnosis_code: str) -> bool:
 
 
 @_empty_on_no_emr(default=None)
-def get_latest_vitals(pid: int) -> dict[str, Any]:
+def get_latest_vitals(pid: int, tenant_id: str = "") -> dict[str, Any]:
     """
     Return the single most-recent active vitals row for a patient.
 
@@ -1592,12 +1592,12 @@ def get_latest_vitals(pid: int) -> dict[str, Any]:
     first element, or an empty dict when no vitals are recorded.  All values
     are serialised by _serialize(), so Decimal / datetime types are safe.
     """
-    rows = get_vitals(pid)
+    rows = get_vitals(pid, tenant_id=tenant_id)
     return rows[0] if rows else {}
 
 
 @_empty_on_no_emr()
-def get_medication_diagnoses(pid: int) -> list[dict[str, Any]]:
+def get_medication_diagnoses(pid: int, tenant_id: str = "") -> list[dict[str, Any]]:
     """Return unique ICD-10 codes extracted from prescription diagnosis fields.
 
     Reads the ``diagnosis`` column on the ``prescriptions`` table, which
@@ -1620,7 +1620,7 @@ def get_medication_diagnoses(pid: int) -> list[dict[str, Any]]:
           AND p.note != ''
         ORDER BY p.active DESC, p.drug
     """
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         cur.execute(sql, (pid,))
         rows = cur.fetchall()
 

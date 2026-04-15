@@ -719,7 +719,7 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
         with raf_cursor() as cur:
             cur.execute(
                 """
-                SELECT ne.encounter_id, ne.patient_id, ne.encounter_date
+                SELECT ne.encounter_id, ne.openemr_encounter_id, ne.patient_id, ne.encounter_date
                 FROM normalized_encounters ne
                 LEFT JOIN raf_encounter_analysis rea ON rea.encounter_id = ne.encounter_id
                 WHERE ne.tenant_id = %s AND rea.id IS NULL
@@ -739,10 +739,11 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
         for enc in encounters:
             try:
                 encounter_id = enc["encounter_id"]
+                emr_encounter_id = enc.get("openemr_encounter_id") or encounter_id
                 patient_id = enc["patient_id"]
 
-                # Get clinical notes
-                notes = get_clinical_notes(encounter_id)
+                # Get clinical notes using OpenEMR's encounter ID
+                notes = get_clinical_notes(emr_encounter_id, tenant_id=tenant_id)
                 if not notes:
                     continue
                 note_text = "\n\n".join(
@@ -778,6 +779,20 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 except Exception:
                     pass
 
+                # Resolve emr_pid for OpenEMR lookups
+                emr_pid = patient_id
+                try:
+                    with raf_cursor() as cur:
+                        cur.execute(
+                            "SELECT emr_pid FROM patients WHERE id = %s AND tenant_id = %s",
+                            (patient_id, tenant_id),
+                        )
+                        _emr_row = cur.fetchone()
+                        if _emr_row and _emr_row.get("emr_pid"):
+                            emr_pid = int(float(_emr_row["emr_pid"]))
+                except Exception:
+                    pass
+
                 # Gather additional context — all best-effort
                 medications = None
                 problem_list = None
@@ -786,24 +801,24 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 med_diagnoses = None
                 try:
                     medications = [
-                        m.get("drug", "") for m in (get_medications(patient_id) or [])
+                        m.get("drug", "") for m in (get_medications(emr_pid, tenant_id=tenant_id) or [])
                     ]
                 except Exception:
                     pass
                 try:
-                    problem_list = get_problem_list(patient_id)
+                    problem_list = get_problem_list(emr_pid, tenant_id=tenant_id)
                 except Exception:
                     pass
                 try:
-                    recapture_gaps = get_recapture_gaps(patient_id, date.today().year)
+                    recapture_gaps = get_recapture_gaps(emr_pid, date.today().year, tenant_id=tenant_id)
                 except Exception:
                     pass
                 try:
-                    latest_vitals = get_latest_vitals(patient_id)
+                    latest_vitals = get_latest_vitals(emr_pid, tenant_id=tenant_id)
                 except Exception:
                     pass
                 try:
-                    med_diagnoses = get_medication_diagnoses(patient_id)
+                    med_diagnoses = get_medication_diagnoses(emr_pid, tenant_id=tenant_id)
                 except Exception:
                     pass
 
