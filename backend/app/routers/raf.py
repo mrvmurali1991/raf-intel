@@ -1914,13 +1914,13 @@ def get_raf_dashboard(
         with raf_cursor() as cur:
             cur.execute(
                 """
-                SELECT hcc_code, hcc_label,
+                SELECT hcc_code, hcc_description,
                        COUNT(DISTINCT patient_id) AS patient_count,
                        AVG(coefficient) AS avg_coefficient
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND tenant_id = %s
-                GROUP BY hcc_code, hcc_label
+                GROUP BY hcc_code, hcc_description
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,
@@ -1930,7 +1930,7 @@ def get_raf_dashboard(
         dashboard["top_hccs"] = [
             {
                 "hcc_code": r["hcc_code"],
-                "hcc_label": r.get("hcc_label") or "",
+                "hcc_label": r.get("hcc_description") or "",
                 "patient_count": int(r["patient_count"]),
                 "avg_coefficient": round(float(r.get("avg_coefficient") or 0), 4),
             }
