@@ -786,6 +786,36 @@ def task_analyze_encounters_batch(
                     encounter_year=date.today().year,
                 )
 
+                # Filter out hallucinated SDOH Z-codes (Z55-Z65) that have no
+                # evidence in the clinical note or structured EHR data.
+                # Gemini tends to infer social determinants even when not documented.
+                _stage1_codes = set()
+                try:
+                    ext = result.get("extraction", {})
+                    for src in ("explicit", "problem_list", "assessment", "labs", "meds"):
+                        for item in (ext.get(src) or []):
+                            c = item.get("code") or item.get("icd10") or ""
+                            if c:
+                                _stage1_codes.add(c.upper())
+                except Exception:
+                    pass
+
+                def _is_unsupported_z(dx: dict) -> bool:
+                    code = (dx.get("icd10") or "").upper()
+                    if code.startswith(("Z55", "Z56", "Z57", "Z58", "Z59",
+                                        "Z60", "Z61", "Z62", "Z63", "Z64", "Z65")):
+                        return code not in _stage1_codes
+                    return False
+
+                orig_dx = result.get("diagnoses", [])
+                filtered_dx = [d for d in orig_dx if not _is_unsupported_z(d)]
+                if len(filtered_dx) < len(orig_dx):
+                    task_logger.info(
+                        "analyze_encounters_batch: enc=%d removed %d hallucinated Z-codes",
+                        encounter_id, len(orig_dx) - len(filtered_dx),
+                    )
+                    result["diagnoses"] = filtered_dx
+
                 # Persist results
                 _save_encounter_analysis(encounter_id, patient_id, result)
 
