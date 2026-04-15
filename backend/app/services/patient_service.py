@@ -290,13 +290,13 @@ def _get_fhir_resource_id(pid: int, tenant_id: str | None = None) -> str | None:
             # Get the patient row to find emr_pid and emr_connection_id
             if tenant_id is not None:
                 cur.execute(
-                    "SELECT emr_pid, emr_connection_id, first_name, last_name, dob "
+                    "SELECT emr_pid, emr_connection_id, first_name, last_name, fname, lname, dob "
                     "FROM patients WHERE id = %s AND tenant_id = %s LIMIT 1",
                     (pid, tenant_id),
                 )
             else:
                 cur.execute(
-                    "SELECT emr_pid, emr_connection_id, first_name, last_name, dob "
+                    "SELECT emr_pid, emr_connection_id, first_name, last_name, fname, lname, dob "
                     "FROM patients WHERE id = %s LIMIT 1",
                     (pid,),
                 )
@@ -308,28 +308,30 @@ def _get_fhir_resource_id(pid: int, tenant_id: str | None = None) -> str | None:
 
             # emr_pid now stores the FHIR resource UUID directly for
             # FHIR-synced patients; check if it matches a fhir_patients row.
-            if conn_id:
-                emr_pid_val = str(p_row.get("emr_pid") or "").strip()
-                if emr_pid_val:
-                    cur.execute(
-                        "SELECT fhir_resource_id FROM fhir_patients "
-                        "WHERE connection_id = %s AND fhir_resource_id = %s LIMIT 1",
-                        (conn_id, emr_pid_val),
-                    )
-                    fp_row = cur.fetchone()
-                    if fp_row:
-                        return fp_row["fhir_resource_id"]
-
-            # Path 3: fuzzy match by name + DOB within the connection
-            fname = (p_row.get("first_name") or "").strip().lower()
-            lname = (p_row.get("last_name") or "").strip().lower()
-            dob = p_row.get("dob")
-            if conn_id and fname and lname and dob:
+            # Note: patients.emr_connection_id is from emr_connections table,
+            # but fhir_patients.connection_id is from fhir_connections table
+            # (different IDs for the same connection), so match by UUID only.
+            emr_pid_val = str(p_row.get("emr_pid") or "").strip()
+            if emr_pid_val:
                 cur.execute(
                     "SELECT fhir_resource_id FROM fhir_patients "
-                    "WHERE connection_id = %s AND LOWER(given_name) LIKE %s "
+                    "WHERE fhir_resource_id = %s LIMIT 1",
+                    (emr_pid_val,),
+                )
+                fp_row = cur.fetchone()
+                if fp_row:
+                    return fp_row["fhir_resource_id"]
+
+            # Path 3: fuzzy match by name + DOB
+            fname = (p_row.get("first_name") or p_row.get("fname") or "").strip().lower()
+            lname = (p_row.get("last_name") or p_row.get("lname") or "").strip().lower()
+            dob = p_row.get("dob")
+            if fname and lname and dob:
+                cur.execute(
+                    "SELECT fhir_resource_id FROM fhir_patients "
+                    "WHERE LOWER(given_name) LIKE %s "
                     "AND LOWER(family_name) = %s AND birth_date = %s LIMIT 1",
-                    (conn_id, f"{fname}%", lname, str(dob)),
+                    (f"{fname}%", lname, str(dob)),
                 )
                 fp_match = cur.fetchone()
                 if fp_match:
