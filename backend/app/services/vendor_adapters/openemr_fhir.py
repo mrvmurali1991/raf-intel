@@ -808,57 +808,99 @@ class OpenEMRFhirAdapter:
         # on the UUID) work correctly.
         emr_pid = patient["external_id"] or ""
         tenant_id = self.connection.get("tenant_id", "1")
+        dob = patient["date_of_birth"] or None
+        fname = patient["first_name"]
+        lname = patient["last_name"]
 
         with raf_cursor() as cur:
-            # --- patients table (so _flip_patient_cohort and dashboard work) ---
+            # --- Check if a patient with the same name+DOB already exists
+            #     (handles OpenEMR creating multiple FHIR resources for
+            #     the same person with different UUIDs) ---
+            existing_id = None
             cur.execute(
-                """INSERT INTO patients
-                       (tenant_id, first_name, last_name, fname, lname, dob, gender,
-                        emr_pid, emr_connection_id, data_source, is_active,
-                        phone, email, preferred_language, race, ethnicity,
-                        address, city, state, zip,
-                        created_at, updated_at)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           NOW(), NOW())
-                   ON DUPLICATE KEY UPDATE
-                       first_name = VALUES(first_name),
-                       last_name  = VALUES(last_name),
-                       fname      = VALUES(fname),
-                       lname      = VALUES(lname),
-                       dob        = VALUES(dob),
-                       gender     = VALUES(gender),
-                       phone      = VALUES(phone),
-                       email      = VALUES(email),
-                       preferred_language = VALUES(preferred_language),
-                       race       = VALUES(race),
-                       ethnicity  = VALUES(ethnicity),
-                       address    = VALUES(address),
-                       city       = VALUES(city),
-                       state      = VALUES(state),
-                       zip        = VALUES(zip),
-                       updated_at = NOW()""",
-                (
-                    tenant_id,
-                    patient["first_name"],
-                    patient["last_name"],
-                    patient["first_name"],
-                    patient["last_name"],
-                    patient["date_of_birth"] or None,
-                    (patient["sex"] or "M")[0].upper(),
-                    emr_pid,
-                    self.connection_id,
-                    patient.get("phone") or None,
-                    patient.get("email") or None,
-                    patient.get("language") or None,
-                    patient.get("race") or None,
-                    patient.get("ethnicity") or None,
-                    patient.get("address") or None,
-                    patient.get("city") or None,
-                    patient.get("state") or None,
-                    patient.get("zip") or None,
-                ),
+                """SELECT id FROM patients
+                   WHERE tenant_id = %s
+                     AND first_name = %s AND last_name = %s AND dob = %s
+                     AND emr_connection_id = %s
+                   LIMIT 1""",
+                (tenant_id, fname, lname, dob, self.connection_id),
             )
+            row = cur.fetchone()
+            if row:
+                existing_id = row["id"]
+
+            if existing_id:
+                # Update existing patient (matched by name+DOB)
+                cur.execute(
+                    """UPDATE patients SET
+                           fname = %s, lname = %s,
+                           gender = %s, emr_pid = %s,
+                           phone = %s, email = %s,
+                           preferred_language = %s, race = %s, ethnicity = %s,
+                           address = %s, city = %s, state = %s, zip = %s,
+                           updated_at = NOW()
+                       WHERE id = %s""",
+                    (
+                        fname, lname,
+                        (patient["sex"] or "M")[0].upper(), emr_pid,
+                        patient.get("phone") or None,
+                        patient.get("email") or None,
+                        patient.get("language") or None,
+                        patient.get("race") or None,
+                        patient.get("ethnicity") or None,
+                        patient.get("address") or None,
+                        patient.get("city") or None,
+                        patient.get("state") or None,
+                        patient.get("zip") or None,
+                        existing_id,
+                    ),
+                )
+            else:
+                # Insert new patient
+                cur.execute(
+                    """INSERT INTO patients
+                           (tenant_id, first_name, last_name, fname, lname, dob, gender,
+                            emr_pid, emr_connection_id, data_source, is_active,
+                            phone, email, preferred_language, race, ethnicity,
+                            address, city, state, zip,
+                            created_at, updated_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
+                               %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                               NOW(), NOW())
+                       ON DUPLICATE KEY UPDATE
+                           first_name = VALUES(first_name),
+                           last_name  = VALUES(last_name),
+                           fname      = VALUES(fname),
+                           lname      = VALUES(lname),
+                           dob        = VALUES(dob),
+                           gender     = VALUES(gender),
+                           phone      = VALUES(phone),
+                           email      = VALUES(email),
+                           preferred_language = VALUES(preferred_language),
+                           race       = VALUES(race),
+                           ethnicity  = VALUES(ethnicity),
+                           address    = VALUES(address),
+                           city       = VALUES(city),
+                           state      = VALUES(state),
+                           zip        = VALUES(zip),
+                           updated_at = NOW()""",
+                    (
+                        tenant_id, fname, lname, fname, lname,
+                        dob,
+                        (patient["sex"] or "M")[0].upper(),
+                        emr_pid,
+                        self.connection_id,
+                        patient.get("phone") or None,
+                        patient.get("email") or None,
+                        patient.get("language") or None,
+                        patient.get("race") or None,
+                        patient.get("ethnicity") or None,
+                        patient.get("address") or None,
+                        patient.get("city") or None,
+                        patient.get("state") or None,
+                        patient.get("zip") or None,
+                    ),
+                )
             # Get the internal patient_id
             cur.execute(
                 "SELECT id FROM patients WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s LIMIT 1",
