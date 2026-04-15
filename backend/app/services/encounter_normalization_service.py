@@ -407,25 +407,9 @@ def sync_diagnoses(tenant_id: str, connection_id: int) -> dict:
         tenant_id, connection_id, synced, skipped, errors,
     )
 
-    # Emit an internal pipeline event so the auto-chain can trigger RAF
-    # recalculation.  The import is deferred to avoid circular imports at
-    # module load time.  The call is non-blocking (fires in a background thread).
-    try:
-        from app.services.event_emitter import emit_internal
-        emit_internal(
-            "normalization_completed",
-            {
-                "tenant_id": tenant_id,
-                "patient_ids": list(pid_map.values()),
-                "diagnoses_synced": synced,
-                "diagnoses_skipped": skipped,
-                "diagnoses_errors": errors,
-            },
-        )
-    except Exception as _emit_exc:
-        logger.error(
-            "sync_diagnoses: failed to emit normalization_completed: %s", _emit_exc
-        )
+    # NOTE: normalization_completed is handled by pipeline_chain._do_normalization
+    # calling _handle_normalization_completed directly. No event emit needed here
+    # — emitting caused duplicate Gemini dispatches (3x API cost).
 
     return {"synced": synced, "skipped": skipped, "errors": errors}
 

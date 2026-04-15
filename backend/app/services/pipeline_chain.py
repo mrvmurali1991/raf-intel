@@ -1404,8 +1404,9 @@ def setup_pipeline_chain() -> None:
 
     # Phase ① → ②: EMR sync → normalization
     register_handler("emr_sync_completed", _handle_emr_sync_completed)
-    # Phase ② → ③/④: normalization → AI analysis (auto_ai) or RAF calc (auto_basic)
-    register_handler("normalization_completed", _handle_normalization_completed)
+    # Phase ② → ③/④: handled by direct call in _do_normalization (line ~532),
+    # NOT via event handler — avoids duplicate Gemini dispatches.
+    # register_handler("normalization_completed", _handle_normalization_completed)
     # Phase ③: AI analysis (dispatched when auto_ai mode is active)
     register_handler("analysis_requested", _handle_analysis_requested)
     # Phase ③ → ④: AI done → RAF calc + HCC hierarchy
