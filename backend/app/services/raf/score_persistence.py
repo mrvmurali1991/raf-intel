@@ -235,6 +235,39 @@ def _upsert_raf_score(
                     v28_hcc_count,
                 ),
             )
+
+            # Sync the authoritative RAF columns back to the patients table so
+            # that list/search queries always reflect the latest calculated score
+            # without requiring a JOIN to raf_scores.
+            patient_id: int = result["patient_id"]
+            final_raf: float = result["payment_raf"]
+            demographic_score: float = result["demographic_score"]
+            cur.execute(
+                """
+                UPDATE patients SET
+                    raf_score        = %s,
+                    hcc_count        = (
+                        SELECT COUNT(*)
+                        FROM raf_patient_hcc
+                        WHERE patient_id = %s
+                          AND measurement_year = %s
+                          AND tenant_id = %s
+                          AND is_trumped = 0
+                    ),
+                    demographic_score = %s,
+                    updated_at        = NOW()
+                WHERE id = %s AND tenant_id = %s
+                """,
+                (
+                    final_raf,
+                    patient_id,
+                    result["measurement_year"],
+                    tenant_id,
+                    demographic_score,
+                    patient_id,
+                    tenant_id,
+                ),
+            )
     except Exception as exc:
         logger.error(
             "Failed to persist raf_scores for pid=%s tenant=%s: %s",

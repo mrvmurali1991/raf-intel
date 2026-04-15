@@ -1906,24 +1906,25 @@ def get_raf_dashboard(
         logger.error("get_raf_dashboard population error: %s", exc, exc_info=True)
         dashboard["population"] = {"error": "Failed to load population stats"}
 
-    # Top 10 HCCs by frequency
+    # Top 10 HCCs by frequency — query raf_patient_hcc directly without
+    # requiring a matching raf_scores row (the inner join was silently
+    # excluding patients whose HCC records exist but whose score rows have
+    # a different patient_id due to FHIR/upload ID migration).
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"""
-                SELECT rph.hcc_code, rph.hcc_label, COUNT(*) AS patient_count,
-                       AVG(rph.coefficient) AS avg_coefficient
-                FROM raf_patient_hcc rph
-                JOIN raf_scores rs ON rs.patient_id = rph.patient_id
-                    AND rs.measurement_year = rph.measurement_year
-                WHERE rph.measurement_year = %s
-                  AND {_sf}
-                  AND rph.tenant_id = %s
-                GROUP BY rph.hcc_code, rph.hcc_label
+                """
+                SELECT hcc_code, hcc_label,
+                       COUNT(DISTINCT patient_id) AS patient_count,
+                       AVG(coefficient) AS avg_coefficient
+                FROM raf_patient_hcc
+                WHERE measurement_year = %s
+                  AND tenant_id = %s
+                GROUP BY hcc_code, hcc_label
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,
-                (calc_year, *_sp, _tid),
+                (calc_year, _tid),
             )
             hcc_rows = cur.fetchall() or []
         dashboard["top_hccs"] = [

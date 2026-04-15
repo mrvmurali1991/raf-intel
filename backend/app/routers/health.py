@@ -367,12 +367,21 @@ def dashboard_stats(
                     """
                     SELECT sc.patient_id AS pid,
                            p.first_name AS fname, p.last_name AS lname,
-                           rs.final_raf AS raf_score,
+                           latest_rs.raf_score,
                            COUNT(*) AS suspect_count
                     FROM raf_suspect_conditions sc
                     LEFT JOIN patients p ON p.id = sc.patient_id
-                    LEFT JOIN raf_scores rs ON rs.patient_id = sc.patient_id
-                      AND rs.measurement_year = %s
+                    LEFT JOIN (
+                        SELECT patient_id, final_raf AS raf_score
+                        FROM raf_scores
+                        WHERE measurement_year = %s
+                          AND (patient_id, calculated_at) IN (
+                              SELECT patient_id, MAX(calculated_at)
+                              FROM raf_scores
+                              WHERE measurement_year = %s
+                              GROUP BY patient_id
+                          )
+                    ) latest_rs ON latest_rs.patient_id = sc.patient_id
                     WHERE sc.status = 'open'
                       AND sc.tenant_id = %s
                       AND sc.patient_id IN (
@@ -381,29 +390,38 @@ def dashboard_stats(
                           JOIN emr_connections ec ON ec.id = epm.connection_id
                           WHERE ec.is_active = 1 AND ec.tenant_id = %s
                       )
-                    GROUP BY sc.patient_id, p.first_name, p.last_name, rs.final_raf
+                    GROUP BY sc.patient_id, p.first_name, p.last_name, latest_rs.raf_score
                     ORDER BY suspect_count DESC
                     LIMIT 10
                     """,
-                    (measurement_year, tenant_id, int(tenant_id)),
+                    (measurement_year, measurement_year, tenant_id, int(tenant_id)),
                 )
             else:
                 cur.execute(
                     """
                     SELECT sc.patient_id AS pid,
                            p.first_name AS fname, p.last_name AS lname,
-                           rs.final_raf AS raf_score,
+                           latest_rs.raf_score,
                            COUNT(*) AS suspect_count
                     FROM raf_suspect_conditions sc
                     LEFT JOIN patients p ON p.id = sc.patient_id
-                    LEFT JOIN raf_scores rs ON rs.patient_id = sc.patient_id
-                      AND rs.measurement_year = %s
+                    LEFT JOIN (
+                        SELECT patient_id, final_raf AS raf_score
+                        FROM raf_scores
+                        WHERE measurement_year = %s
+                          AND (patient_id, calculated_at) IN (
+                              SELECT patient_id, MAX(calculated_at)
+                              FROM raf_scores
+                              WHERE measurement_year = %s
+                              GROUP BY patient_id
+                          )
+                    ) latest_rs ON latest_rs.patient_id = sc.patient_id
                     WHERE sc.status = 'open' AND sc.tenant_id = %s
-                    GROUP BY sc.patient_id, p.first_name, p.last_name, rs.final_raf
+                    GROUP BY sc.patient_id, p.first_name, p.last_name, latest_rs.raf_score
                     ORDER BY suspect_count DESC
                     LIMIT 10
                     """,
-                    (measurement_year, tenant_id),
+                    (measurement_year, measurement_year, tenant_id),
                 )
             for r in cur.fetchall():
                 top_undercoded.append({

@@ -1163,19 +1163,39 @@ def svc_get_comprehensive_profile(
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
     current_year = _date.today().year
 
+    # Determine if this patient is a FHIR patient once, reuse throughout
+    is_fhir = _patient_in_fhir_matches(pid, tenant_id=tenant_id)
+    fhir_external_id: str | None = None
+    if is_fhir:
+        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+        fhir_external_id = fhir_row.get("external_id") if fhir_row else None
+
     # --- Billing ----------------------------------------------------------
     icd10_codes = _safe_call("billing.icd10", emr.get_billing_codes, emr_pid, default=[])
     if not icd10_codes:
         try:
             with raf_cursor() as _bl_cur:
-                _bl_cur.execute(
-                    "SELECT DISTINCT ed.icd10_code AS code, ed.description AS code_text, "
-                    "ed.hcc_code, e.encounter_date "
-                    "FROM encounter_diagnoses ed "
-                    "JOIN encounters e ON e.id = ed.encounter_id "
-                    "WHERE ed.patient_id = %s ORDER BY e.encounter_date DESC",
-                    (pid,),
-                )
+                if is_fhir and fhir_external_id:
+                    # For FHIR patients: pull diagnoses from fhir_conditions
+                    # Columns: icd10_codes (CSV string), display (description), onset_date
+                    _bl_cur.execute(
+                        "SELECT DISTINCT fc.icd10_codes AS code, fc.display AS code_text, "
+                        "fc.onset_date AS encounter_date "
+                        "FROM fhir_conditions fc "
+                        "WHERE fc.fhir_patient_id = %s "
+                        "AND fc.clinical_status IN ('active', 'recurrence', 'relapse', '') "
+                        "ORDER BY fc.onset_date DESC",
+                        (fhir_external_id,),
+                    )
+                else:
+                    _bl_cur.execute(
+                        "SELECT DISTINCT ed.icd10_code AS code, ed.description AS code_text, "
+                        "ed.hcc_code, e.encounter_date "
+                        "FROM encounter_diagnoses ed "
+                        "JOIN encounters e ON e.id = ed.encounter_id "
+                        "WHERE ed.patient_id = %s ORDER BY e.encounter_date DESC",
+                        (pid,),
+                    )
                 for r in _bl_cur.fetchall():
                     icd10_codes.append(
                         {
@@ -1278,44 +1298,89 @@ def svc_get_comprehensive_profile(
 
     # --- Encounters ------------------------------------------------------
     encounters: list[dict] = []
-    try:
-        with raf_cursor() as _enc_cur:
-            _enc_cur.execute(
-                """SELECT e.id AS encounter_id, e.patient_id AS pid,
-                          e.encounter_date AS date, e.encounter_type AS reason,
-                          e.facility, e.provider_id, e.notes, e.status,
-                          pr.first_name AS provider_fname, pr.last_name AS provider_lname
-                   FROM encounters e
-                   LEFT JOIN providers pr ON pr.id = e.provider_id
-                   WHERE e.patient_id = %s
-                   ORDER BY e.encounter_date DESC""",
-                (pid,),
-            )
-            for r in _enc_cur.fetchall():
-                pname = ""
-                if r.get("provider_fname") or r.get("provider_lname"):
-                    pname = f"{r.get('provider_fname', '')} {r.get('provider_lname', '')}".strip()
-                encounters.append(
-                    {
-                        "encounter_id": r["encounter_id"],
-                        "pid": r["pid"],
-                        "date": str(r["date"]) if r.get("date") else None,
-                        "reason": r.get("reason") or "Office Visit",
-                        "provider": pname,
-                        "provider_id": r.get("provider_id"),
-                        "provider_fname": r.get("provider_fname", ""),
-                        "provider_lname": r.get("provider_lname", ""),
-                        "facility": r.get("facility") or "",
-                        "has_notes": 1 if r.get("notes") else 0,
-                        "notes": r.get("notes") or "",
-                        "note_text": r.get("notes") or "",
-                        "source": "raf_db",
-                    }
+    if is_fhir and fhir_external_id:
+        # FHIR patients: query fhir_encounters by the external FHIR patient ID
+        try:
+            with raf_cursor() as _enc_cur:
+                _enc_cur.execute(
+                    """SELECT fe.id AS encounter_id,
+                              fe.period_start AS date,
+                              COALESCE(fe.type_display, fe.encounter_type) AS reason,
+                              fe.status,
+                              fe.fhir_encounter_id,
+                              fe.provider_name
+                       FROM fhir_encounters fe
+                       WHERE fe.fhir_patient_id = %s
+                       ORDER BY fe.period_start DESC""",
+                    (fhir_external_id,),
                 )
-    except Exception as _enc_exc2:
-        logger.error("svc_get_comprehensive_profile RAF DB encounters error pid=%s: %s", pid, _enc_exc2, exc_info=True)
-    if not encounters:
-        encounters = _safe_call("encounters", emr.get_encounters, emr_pid, default=[])
+                for r in _enc_cur.fetchall():
+                    encounters.append(
+                        {
+                            "encounter_id": r["encounter_id"],
+                            "pid": pid,
+                            "date": str(r["date"]) if r.get("date") else None,
+                            "reason": r.get("reason") or "Office Visit",
+                            "provider": r.get("provider_name") or "",
+                            "provider_id": None,
+                            "provider_fname": r.get("provider_name") or "",
+                            "provider_lname": "",
+                            "facility": "",
+                            "has_notes": 0,
+                            "notes": "",
+                            "note_text": "",
+                            "status": r.get("status") or "finished",
+                            "source": "fhir",
+                        }
+                    )
+        except Exception as _enc_exc_fhir:
+            logger.error(
+                "svc_get_comprehensive_profile FHIR encounters error pid=%s: %s",
+                pid, _enc_exc_fhir, exc_info=True,
+            )
+    else:
+        # Non-FHIR patients: query raf_intelligence.encounters table
+        try:
+            with raf_cursor() as _enc_cur:
+                _enc_cur.execute(
+                    """SELECT e.id AS encounter_id, e.patient_id AS pid,
+                              e.encounter_date AS date, e.encounter_type AS reason,
+                              e.facility, e.provider_id, e.notes, e.status,
+                              pr.first_name AS provider_fname, pr.last_name AS provider_lname
+                       FROM encounters e
+                       LEFT JOIN providers pr ON pr.id = e.provider_id
+                       WHERE e.patient_id = %s
+                       ORDER BY e.encounter_date DESC""",
+                    (pid,),
+                )
+                for r in _enc_cur.fetchall():
+                    pname = ""
+                    if r.get("provider_fname") or r.get("provider_lname"):
+                        pname = f"{r.get('provider_fname', '')} {r.get('provider_lname', '')}".strip()
+                    encounters.append(
+                        {
+                            "encounter_id": r["encounter_id"],
+                            "pid": r["pid"],
+                            "date": str(r["date"]) if r.get("date") else None,
+                            "reason": r.get("reason") or "Office Visit",
+                            "provider": pname,
+                            "provider_id": r.get("provider_id"),
+                            "provider_fname": r.get("provider_fname", ""),
+                            "provider_lname": r.get("provider_lname", ""),
+                            "facility": r.get("facility") or "",
+                            "has_notes": 1 if r.get("notes") else 0,
+                            "notes": r.get("notes") or "",
+                            "note_text": r.get("notes") or "",
+                            "source": "raf_db",
+                        }
+                    )
+        except Exception as _enc_exc2:
+            logger.error(
+                "svc_get_comprehensive_profile RAF DB encounters error pid=%s: %s",
+                pid, _enc_exc2, exc_info=True,
+            )
+        if not encounters:
+            encounters = _safe_call("encounters", emr.get_encounters, emr_pid, default=[])
 
     # --- Vitals ----------------------------------------------------------
     latest_vitals = _safe_call("vitals.latest", emr.get_latest_vitals, emr_pid, default=None)  # type: ignore[attr-defined]

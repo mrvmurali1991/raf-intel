@@ -159,8 +159,11 @@ def scan_all_patients(
     full suspect scan for each one.  Returns a summary of totals and any
     per-patient errors encountered.
     """
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
     try:
-        patients: list[dict[str, Any]] = get_all_patients()
+        patients: list[dict[str, Any]] = get_all_patients(tenant_id=tenant_id)
     except Exception as exc:
         logger.error("scan_all_patients – get_all_patients failed: %s", exc)
         raise HTTPException(

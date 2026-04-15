@@ -1752,7 +1752,7 @@ def get_all_patient_diagnoses(pid: int) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 @_empty_on_no_emr()
-def get_all_patients(limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
+def get_all_patients(limit: int = 500, offset: int = 0, tenant_id: str | None = None) -> list[dict[str, Any]]:
     """
     Alias for get_patients().
 
@@ -1781,7 +1781,7 @@ def get_all_patients(limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
         ORDER BY lname, fname
         LIMIT %s OFFSET %s
     """
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         cur.execute(sql, (limit, offset))
         rows = cur.fetchall()
     return [_serialize(r) for r in rows]
