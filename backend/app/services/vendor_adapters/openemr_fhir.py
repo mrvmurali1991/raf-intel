@@ -1225,7 +1225,8 @@ class OpenEMRFhirAdapter:
                 hcc_code = 0
                 raf_coefficient = 0.0
             else:
-                hcc_code: int = int(xwalk["hcc_code"])
+                _raw_hcc = str(xwalk["hcc_code"]).replace("HCC", "").strip()
+                hcc_code: int = int(_raw_hcc)
 
                 # 3. HCC coefficient lookup
                 cur.execute(
@@ -1580,9 +1581,12 @@ class OpenEMRFhirAdapter:
                         """,
                         (raf_patient_id, measurement_year),
                     )
-                    patient_hccs: set[int] = {
-                        int(r["hcc_code"]) for r in cur.fetchall()
-                    }
+                    patient_hccs: set[int] = set()
+                    for r in cur.fetchall():
+                        try:
+                            patient_hccs.add(int(str(r["hcc_code"]).replace("HCC", "").strip()))
+                        except (ValueError, TypeError):
+                            pass
 
                     interaction_score = 0.0
                     for iterm in interaction_rows:
