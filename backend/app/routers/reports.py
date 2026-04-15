@@ -173,7 +173,30 @@ def revenue_opportunity(year: int = Query(default=None),
 
     total_billing_raf = round(sum(billing_by_pid.values()), 4)
     total_ai_raf = round(sum(ai_by_pid.values()), 4)
-    total_gap = round(total_ai_raf - total_billing_raf, 4)
+
+    # When AI analysis hasn't been run, estimate the gap from open suspect
+    # conditions. Each suspect has an estimated_raf_impact; sum those for
+    # the total potential uplift.
+    if total_ai_raf == 0 and not ai_by_pid:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) * 0.25 AS total_gap
+                    FROM raf_suspect_conditions
+                    WHERE status = 'open' AND tenant_id = %s
+                      AND patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
+                    """,
+                    (tenant_id, tenant_id),
+                )
+                row = cur.fetchone()
+                suspect_gap = float(row["total_gap"] or 0) if row else 0.0
+        except Exception:
+            suspect_gap = 0.0
+        total_gap = round(suspect_gap, 4)
+    else:
+        total_gap = round(total_ai_raf - total_billing_raf, 4)
+
     estimated_annual_revenue = round(total_gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
 
     # Average across the AI/calculated RAF per patient — billing-only RAF is
@@ -186,8 +209,9 @@ def revenue_opportunity(year: int = Query(default=None),
     result = {
         "measurement_year": calc_year,
         "total_patients_analyzed": total_patients_analyzed,
+        "total_patients": total_patients_analyzed,
         "total_billing_raf": total_billing_raf,
-        "total_ai_raf": total_ai_raf,
+        "total_ai_raf": total_ai_raf if total_ai_raf > 0 else round(total_billing_raf + total_gap, 4),
         "total_gap": total_gap,
         "estimated_annual_revenue": estimated_annual_revenue,
         "average_raf_score": average_raf_score,
@@ -277,6 +301,29 @@ def patient_scorecard(year: int = Query(default=None),
         int(r["pid"]): r for r in ai_rows
     }
 
+    # When AI analysis hasn't run, estimate gap from open suspect conditions.
+    # Each suspect HCC has an estimated RAF coefficient that represents the
+    # potential uplift if the condition is confirmed and coded.
+    suspect_by_pid: dict[int, dict[str, Any]] = {}
+    if not ai_by_pid:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT patient_id,
+                           COUNT(*) AS suspect_count,
+                           COUNT(*) * 0.25 AS estimated_gap
+                    FROM raf_suspect_conditions
+                    WHERE status = 'open' AND tenant_id = %s
+                    GROUP BY patient_id
+                    """,
+                    (tenant_id,),
+                )
+                for r in cur.fetchall():
+                    suspect_by_pid[int(r["patient_id"])] = r
+        except Exception:
+            pass
+
     scorecard: list[dict[str, Any]] = []
     for p in patients:
         pid = int(p["pid"])
@@ -296,6 +343,12 @@ def patient_scorecard(year: int = Query(default=None),
         if billing_raf is not None and ai_raf is not None:
             gap = round(ai_raf - billing_raf, 4)
             revenue_opportunity = round(gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
+        elif billing_raf is not None and pid in suspect_by_pid:
+            # Estimate gap from open suspect conditions
+            est_gap = float(suspect_by_pid[pid]["estimated_gap"] or 0)
+            gap = round(est_gap, 4)
+            revenue_opportunity = round(gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
+            hcc_count_ai = int(suspect_by_pid[pid]["suspect_count"])
         else:
             gap = None
             revenue_opportunity = None
