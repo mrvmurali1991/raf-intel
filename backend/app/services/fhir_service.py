@@ -1171,7 +1171,7 @@ def _upsert_fhir_diagnostic_report(connection_id: int, parsed: dict[str, Any]) -
     now = _now_utc()
     with raf_cursor() as cur:
         cur.execute(
-            "SELECT id FROM fhir_diagnostic_reports WHERE connection_id = %s AND fhir_resource_id = %s LIMIT 1",
+            "SELECT id FROM fhir_diagnostic_reports WHERE connection_id = %s AND fhir_report_id = %s LIMIT 1",
             (connection_id, parsed["fhir_resource_id"]),
         )
         existing = cur.fetchone()
@@ -1180,18 +1180,16 @@ def _upsert_fhir_diagnostic_report(connection_id: int, parsed: dict[str, Any]) -
             cur.execute(
                 """
                 UPDATE fhir_diagnostic_reports
-                SET status = %s, category_display = %s, code_display = %s,
-                    effective_date = %s, conclusion = %s, conclusion_codes = %s,
-                    observation_refs = %s, fhir_encounter_id = %s,
-                    raw_json = %s, updated_at = %s
+                SET status = %s, category = %s, report_type = %s,
+                    effective_date = %s, conclusion = %s,
+                    fhir_resource = %s, updated_at = %s
                 WHERE id = %s
                 """,
                 (
-                    parsed["status"], parsed["category_display"], parsed["code_display"],
+                    parsed["status"], parsed.get("category_display", ""),
+                    parsed.get("code_display", ""),
                     parsed["effective_date"], parsed["conclusion"],
-                    parsed["conclusion_codes"], parsed["observation_refs"],
-                    parsed["fhir_encounter_id"], parsed["raw_json"],
-                    now, existing["id"],
+                    parsed["raw_json"], now, existing["id"],
                 ),
             )
             return existing["id"]
@@ -1199,24 +1197,20 @@ def _upsert_fhir_diagnostic_report(connection_id: int, parsed: dict[str, Any]) -
             cur.execute(
                 """
                 INSERT INTO fhir_diagnostic_reports
-                    (connection_id, fhir_resource_id, fhir_patient_id, fhir_encounter_id,
-                     status, category_display, code_display, effective_date,
-                     conclusion, conclusion_codes, observation_refs,
-                     raw_json, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (connection_id, fhir_report_id, fhir_patient_id,
+                     status, category, report_type, effective_date,
+                     conclusion, fhir_resource, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     connection_id,
                     parsed["fhir_resource_id"],
                     parsed["fhir_patient_id"],
-                    parsed["fhir_encounter_id"],
                     parsed["status"],
-                    parsed["category_display"],
-                    parsed["code_display"],
+                    parsed.get("category_display", ""),
+                    parsed.get("code_display", ""),
                     parsed["effective_date"],
                     parsed["conclusion"],
-                    parsed["conclusion_codes"],
-                    parsed["observation_refs"],
                     parsed["raw_json"],
                     now, now,
                 ),
