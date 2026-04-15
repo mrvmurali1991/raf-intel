@@ -1861,6 +1861,19 @@ def get_raf_dashboard(
 
     dashboard: dict[str, Any] = {"measurement_year": calc_year}
 
+    # Active EMR source name for display
+    try:
+        from app.services.emr_manager import list_connections
+        _conns = list_connections(tenant_id=tenant_id)
+        _active = next((c for c in _conns if c.get("is_active")), None)
+        dashboard["active_emr"] = {
+            "name": _active.get("display_name") or _active.get("name") or "Unknown" if _active else None,
+            "connection_id": _active.get("id") if _active else None,
+            "connection_type": _active.get("connection_type") if _active else None,
+        }
+    except Exception:
+        dashboard["active_emr"] = None
+
     # Blend weights
     dashboard["blend_weights"] = _BLEND_WEIGHTS.get(
         calc_year, _BLEND_WEIGHTS.get(max(_BLEND_WEIGHTS.keys()), {"v24": 0.0, "v28": 1.0})

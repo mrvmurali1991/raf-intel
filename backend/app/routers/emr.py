@@ -674,12 +674,9 @@ def update_connection(
 
     # Enforce one-active-at-a-time: deactivate all other connections for this
     # tenant whenever this connection is being set to active.
-    if updates.get("is_active") is True or updates.get("is_active") == 1:
+    _activating = updates.get("is_active") is True or updates.get("is_active") == 1
+    if _activating:
         emr_mgr.deactivate_other_connections(connection_id, tenant_id=tenant_id)
-        # Flip patient registry: deactivate everything else, then reactivate
-        # the patients that belong to this EMR connection. This restores the
-        # original EMR-sourced cohort after a CSV import temporarily replaced
-        # it (CSV uploads only deactivate; nothing is destroyed).
         try:
             _flip_patient_cohort(connection_id, tenant_id)
         except Exception as exc:
@@ -688,6 +685,12 @@ def update_connection(
                 connection_id,
                 exc,
             )
+        # Auto-trigger sync + RAF calc pipeline
+        try:
+            from app.services.celery_tasks import task_emr_activate_pipeline
+            task_emr_activate_pipeline.delay(connection_id, tenant_id)
+        except Exception as exc:
+            logger.warning("update_connection: failed to trigger auto-pipeline: %s", exc)
 
     # Map router field names to emr_manager expected names
     if "name" in updates and "display_name" not in updates:
@@ -791,10 +794,20 @@ def reactivate_connection(
         )
         raise HTTPException(status_code=500, detail="Failed to restore patient cohort")
 
+    # P1: Auto-trigger sync + RAF calc in background after activation
+    sync_triggered = False
+    try:
+        from app.services.celery_tasks import task_emr_activate_pipeline
+        task_emr_activate_pipeline.delay(connection_id, tenant_id)
+        sync_triggered = True
+    except Exception as exc:
+        logger.warning("reactivate_connection: failed to trigger auto-pipeline: %s", exc)
+
     return {
         "message": "Connection reactivated",
         "connection_id": connection_id,
         "patients_restored": restored,
+        "pipeline_triggered": sync_triggered,
     }
 
 

@@ -1141,3 +1141,81 @@ def dispatch_transmit_submission(
         args_json=json.dumps({"tenant_id": tenant_id, "submission_id": submission_id}),
     )
     return task.id
+
+
+# ---------------------------------------------------------------------------
+# EMR Activate Pipeline — auto-sync + RAF calc on EMR switch
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    name="raf.emr_activate_pipeline",
+    queue="default",
+    max_retries=1,
+    default_retry_delay=30,
+)
+def task_emr_activate_pipeline(
+    self,
+    connection_id: int,
+    tenant_id: str,
+) -> dict[str, Any]:
+    """Auto-run sync + RAF calculation when an EMR connection is activated.
+
+    Steps:
+    1. Trigger sync for the newly activated connection
+    2. Calculate RAF scores for all active patients
+    3. Apply HCC hierarchy
+    """
+    logger.info(
+        "emr_activate_pipeline: starting for connection_id=%s tenant=%s",
+        connection_id, tenant_id,
+    )
+    result: dict[str, Any] = {"connection_id": connection_id, "tenant_id": tenant_id}
+
+    # Step 1: Sync
+    try:
+        from app.services.emr_manager import trigger_sync
+        sync_result = trigger_sync(connection_id, sync_type="incremental", tenant_id=tenant_id)
+        result["sync"] = {
+            "status": sync_result.get("status"),
+            "patients_synced": sync_result.get("patients_synced", 0),
+            "conditions_found": sync_result.get("conditions_found", 0),
+        }
+        logger.info("emr_activate_pipeline: sync done — %s", result["sync"])
+    except Exception as exc:
+        logger.error("emr_activate_pipeline: sync failed: %s", exc)
+        result["sync"] = {"status": "failed", "error": str(exc)}
+
+    # Step 2: RAF calculation for all active patients
+    try:
+        from app.services.raf.calculator import calculate_raf_for_all_patients
+        raf_result = calculate_raf_for_all_patients(tenant_id=tenant_id)
+        result["raf_calc"] = {"status": "completed", "details": str(raf_result)[:200]}
+        logger.info("emr_activate_pipeline: RAF calc done")
+    except Exception as exc:
+        logger.error("emr_activate_pipeline: RAF calc failed: %s", exc)
+        result["raf_calc"] = {"status": "failed", "error": str(exc)}
+
+    # Step 3: HCC hierarchy
+    try:
+        from app.services.hcc_hierarchy import apply_hierarchy_to_patient
+        from app.db import raf_cursor
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s",
+                (tenant_id,),
+            )
+            patient_ids = [r["id"] for r in cur.fetchall()]
+        for pid in patient_ids:
+            try:
+                apply_hierarchy_to_patient(pid, tenant_id=tenant_id)
+            except Exception:
+                pass
+        result["hierarchy"] = {"status": "completed", "patients": len(patient_ids)}
+        logger.info("emr_activate_pipeline: hierarchy done for %d patients", len(patient_ids))
+    except Exception as exc:
+        logger.error("emr_activate_pipeline: hierarchy failed: %s", exc)
+        result["hierarchy"] = {"status": "failed", "error": str(exc)}
+
+    logger.info("emr_activate_pipeline: complete — %s", result)
+    return result

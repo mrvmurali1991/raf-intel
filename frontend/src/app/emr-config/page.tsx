@@ -1393,16 +1393,29 @@ export default function EmrConfigPage() {
       await toggleEmrConnectionActive(id, activate);
       showToast(
         activate
-          ? "Connection activated. EMR patient cohort restored."
+          ? "Connection activated. Syncing data & calculating RAF scores..."
           : "Connection deactivated.",
         "success",
       );
       qc.invalidateQueries({ queryKey: ["emr-connections"] });
-      // Patient activation flips on the backend when an EMR connection is
-      // (re)activated, so refresh any cached patient/RAF/insights data.
       qc.invalidateQueries({ queryKey: ["patients"] });
       qc.invalidateQueries({ queryKey: ["raf"] });
       qc.invalidateQueries({ queryKey: ["insights"] });
+      qc.invalidateQueries({ queryKey: ["emr-status"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      // Auto-refresh dashboard after pipeline has time to complete
+      if (activate) {
+        setTimeout(() => {
+          qc.invalidateQueries({ queryKey: ["raf"] });
+          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["patients"] });
+        }, 15000);
+        setTimeout(() => {
+          qc.invalidateQueries({ queryKey: ["raf"] });
+          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["patients"] });
+        }, 45000);
+      }
     } catch {
       showToast("Failed to update connection status.", "error");
     }
