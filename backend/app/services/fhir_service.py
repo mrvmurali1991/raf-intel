@@ -1374,11 +1374,11 @@ def _upsert_fhir_observation(connection_id: int, parsed: dict[str, Any]) -> int:
 # Patient matching — FHIR Patient → OpenEMR pid
 # ---------------------------------------------------------------------------
 
-def _find_openemr_pid_by_mrn(mrn: str) -> int | None:
+def _find_openemr_pid_by_mrn(mrn: str, tenant_id: str = "1") -> int | None:
     """Search OpenEMR patient_data for a matching MRN."""
     if not mrn:
         return None
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         # pubpid and pid are the main identifier columns in OpenEMR
         cur.execute(
             """
@@ -1393,12 +1393,12 @@ def _find_openemr_pid_by_mrn(mrn: str) -> int | None:
 
 
 def _find_openemr_pid_by_name_dob(
-    family: str, given: str, dob: str
+    family: str, given: str, dob: str, tenant_id: str = "1"
 ) -> int | None:
     """Search OpenEMR patient_data by last name, first name, and date of birth."""
     if not family or not dob:
         return None
-    with openemr_cursor() as cur:
+    with openemr_cursor(tenant_id=tenant_id) as cur:
         cur.execute(
             """
             SELECT pid FROM patient_data
@@ -1430,10 +1430,14 @@ def attempt_auto_map_patient(connection_id: int, fhir_row_id: int) -> int | None
     if not row:
         return None
 
-    pid = _find_openemr_pid_by_mrn(row["mrn"])
+    # Resolve tenant_id from the connection for openemr_cursor calls
+    conn = get_connection(connection_id)
+    _tid = (conn or {}).get("tenant_id", "1") or "1"
+
+    pid = _find_openemr_pid_by_mrn(row["mrn"], tenant_id=_tid)
     if not pid:
         pid = _find_openemr_pid_by_name_dob(
-            row["family_name"], row["given_name"], row["birth_date"]
+            row["family_name"], row["given_name"], row["birth_date"], tenant_id=_tid
         )
 
     if pid:
