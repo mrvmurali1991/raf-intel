@@ -1178,26 +1178,30 @@ class OpenEMRFhirAdapter:
                 ),
             )
             # Also write encounter metadata to fhir_encounters for UI display
-            cur.execute(
-                """
-                INSERT INTO fhir_encounters
-                    (fhir_encounter_id, fhir_patient_id, connection_id, period_start,
-                     status, encounter_class, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
-                ON DUPLICATE KEY UPDATE
-                    period_start = VALUES(period_start),
-                    status = VALUES(status),
-                    encounter_class = VALUES(encounter_class)
-                """,
-                (
-                    encounter_fhir_id,
-                    patient_external_id,
-                    self.connection_id,
-                    period_start,
-                    status or "unknown",
-                    enc_type_code,
-                ),
-            )
+            # (best-effort — FK may fail if fhir_connections row doesn't exist)
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO fhir_encounters
+                        (fhir_encounter_id, fhir_patient_id, connection_id, period_start,
+                         status, encounter_class, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        period_start = VALUES(period_start),
+                        status = VALUES(status),
+                        encounter_class = VALUES(encounter_class)
+                    """,
+                    (
+                        encounter_fhir_id,
+                        patient_external_id,
+                        self.connection_id,
+                        period_start,
+                        status or "unknown",
+                        enc_type_code,
+                    ),
+                )
+            except Exception:
+                pass  # fhir_encounters is optional UI metadata
 
     # ------------------------------------------------------------------
     # Medication upsert
