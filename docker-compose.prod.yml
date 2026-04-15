@@ -64,6 +64,7 @@ x-backend-env: &backend-env
   LOG_FORMAT: ${LOG_FORMAT:-json}
   STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
   PIPELINE_AI_ENABLED: ${PIPELINE_AI_ENABLED:-true}
+  ENCRYPTION_SALT: ${ENCRYPTION_SALT:-raf-intelligence-encryption-salt}
 
 services:
   # -------------------------------------------------------------------------
