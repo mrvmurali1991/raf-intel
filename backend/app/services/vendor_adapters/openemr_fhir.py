@@ -922,18 +922,28 @@ class OpenEMRFhirAdapter:
                     existing_raf_id,
                 )
             else:
-                # Insert a new demographics row using real patients.id
+                # Upsert demographics row using real patients.id
                 cur.execute(
                     """
                     INSERT INTO raf_patient_demographics
                         (patient_id, measurement_year, age_band, sex,
                          dual_status, disabled, model_segment)
                     VALUES (%s, %s, %s, %s, 0, 0, 'CNA')
+                    ON DUPLICATE KEY UPDATE
+                        age_band = VALUES(age_band),
+                        sex = VALUES(sex),
+                        updated_at = NOW()
                     """,
                     (real_patient_id, measurement_year, age_band, sex),
                 )
-                new_raf_id: int = cur.lastrowid
-                # Link the match row back to the new demographics id
+                # Get the id (whether inserted or existing)
+                cur.execute(
+                    "SELECT id FROM raf_patient_demographics WHERE patient_id = %s AND measurement_year = %s",
+                    (real_patient_id, measurement_year),
+                )
+                demo_row = cur.fetchone()
+                new_raf_id: int = demo_row["id"] if demo_row else cur.lastrowid
+                # Link the match row back to the demographics id
                 cur.execute(
                     "UPDATE emr_patient_matches SET raf_patient_id = %s WHERE id = %s",
                     (new_raf_id, match_id),
