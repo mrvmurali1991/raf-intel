@@ -576,12 +576,14 @@ class OpenEMRFhirAdapter:
         if sex not in ("M", "F"):
             sex = "U"
 
-        # Phone: telecom array entry where system == "phone"
+        # Phone and Email: telecom array
         phone = ""
+        email = ""
         for telecom in resource.get("telecom", []):
-            if telecom.get("system") == "phone":
+            if telecom.get("system") == "phone" and not phone:
                 phone = telecom.get("value", "")
-                break
+            elif telecom.get("system") == "email" and not email:
+                email = telecom.get("value", "")
 
         # Language: communication[0].language.coding[0].display or .text
         language = ""
@@ -632,6 +634,7 @@ class OpenEMRFhirAdapter:
             "sex": sex,
             "mrn": resource.get("id", ""),
             "phone": phone,
+            "email": email,
             "language": language,
             "race": race,
             "ethnicity": ethnicity,
@@ -812,11 +815,11 @@ class OpenEMRFhirAdapter:
                 """INSERT INTO patients
                        (tenant_id, first_name, last_name, fname, lname, dob, gender,
                         emr_pid, emr_connection_id, data_source, is_active,
-                        phone, preferred_language, race, ethnicity,
+                        phone, email, preferred_language, race, ethnicity,
                         address, city, state, zip,
                         created_at, updated_at)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
-                           %s, %s, %s, %s, %s, %s, %s, %s,
+                           %s, %s, %s, %s, %s, %s, %s, %s, %s,
                            NOW(), NOW())
                    ON DUPLICATE KEY UPDATE
                        first_name = VALUES(first_name),
@@ -826,6 +829,7 @@ class OpenEMRFhirAdapter:
                        dob        = VALUES(dob),
                        gender     = VALUES(gender),
                        phone      = VALUES(phone),
+                       email      = VALUES(email),
                        preferred_language = VALUES(preferred_language),
                        race       = VALUES(race),
                        ethnicity  = VALUES(ethnicity),
@@ -845,6 +849,7 @@ class OpenEMRFhirAdapter:
                     emr_pid,
                     self.connection_id,
                     patient.get("phone") or None,
+                    patient.get("email") or None,
                     patient.get("language") or None,
                     patient.get("race") or None,
                     patient.get("ethnicity") or None,
