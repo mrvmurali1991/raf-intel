@@ -674,7 +674,9 @@ export function OverviewTab({
                         padding: "12px 20px",
                         borderTop: `1px solid ${C.slate100}`,
                         transition: "background 0.1s",
+                        cursor: "pointer",
                       }}
+                      onClick={() => setActiveTab("encounters")}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.background = C.slate100)
                       }
@@ -725,9 +727,10 @@ export function OverviewTab({
                           </span>
                         )}
                         <button
-                          onClick={() =>
-                            analyzeMutation.mutate(enc.encounter_id)
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            analyzeMutation.mutate(enc.encounter_id);
+                          }}
                           disabled={analyzeMutation.isPending || !hasNotes}
                           style={{
                             display: "inline-flex",
