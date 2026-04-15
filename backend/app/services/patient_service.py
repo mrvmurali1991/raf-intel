@@ -1309,6 +1309,36 @@ def svc_get_vitals_suspects(
         logger.warning("svc_get_vitals_suspects: could not fetch trends pid=%s: %s", pid, exc)
         latest_vitals = {}
 
+    # FHIR fallback for vitals
+    if not latest_vitals:
+        try:
+            fhir_row = _get_fhir_patient_row(pid, tenant_id)
+            fhir_ext_id = _get_fhir_resource_id(fhir_row) if fhir_row else None
+            if fhir_ext_id:
+                with raf_cursor() as _vc:
+                    _vc.execute(
+                        """SELECT code_display, value_numeric, value_string, unit, effective_date
+                           FROM fhir_observations
+                           WHERE fhir_patient_id = %s AND category = 'vital-signs'
+                           ORDER BY effective_date DESC LIMIT 20""",
+                        (fhir_ext_id,),
+                    )
+                    vrows = _vc.fetchall()
+                    if vrows:
+                        for vr in vrows:
+                            name = (vr.get("code_display") or "").lower().replace(" ", "_")
+                            val = vr.get("value_numeric") or vr.get("value_string") or ""
+                            if name and name not in latest_vitals:
+                                try:
+                                    latest_vitals[name] = float(val) if val else None
+                                except (ValueError, TypeError):
+                                    latest_vitals[name] = val
+                        if latest_vitals:
+                            latest_vitals["date"] = str(vrows[0]["effective_date"]) if vrows[0].get("effective_date") else None
+                            latest_vitals["source"] = "fhir"
+        except Exception as exc:
+            logger.debug("svc_get_vitals_suspects FHIR fallback failed: %s", exc)
+
     patient_name = (
         f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
         or f"Patient {pid}"
