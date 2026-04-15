@@ -902,7 +902,7 @@ def population_summary(
         "median_raf_score": median_raf,
         "patients_with_gaps": patients_with_gaps,
         "hcc_capture_rate": hcc_capture_rate,
-        "total_revenue_opportunity": 0,
+        "total_revenue_opportunity": round(sum(scores) * 12614, 2) if scores else 0,
         "raf_distribution": raf_distribution,
         "top_hccs": top_hccs,
         "blend_weights": {"v24": round(v24_w, 4), "v28": round(v28_w, 4)},

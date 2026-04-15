@@ -361,7 +361,7 @@ def _get_icd_codes(
     # 1. Billing codes from OpenEMR (filtered by encounter DOS window)
     if emr_pid is not None:
         try:
-            with openemr_cursor() as cur:
+            with openemr_cursor(tenant_id=tenant_id) as cur:
                 if dos_start is not None or dos_end is not None:
                     conditions = [
                         "b.pid = %s",
@@ -395,6 +395,33 @@ def _get_icd_codes(
                 patient_id,
                 exc,
             )
+
+    # 1b. Normalized encounter_diagnoses in RAF DB (covers direct_db + FHIR sources)
+    try:
+        with raf_cursor() as cur:
+            ed_conditions = ["ed.patient_id = %s"]
+            ed_params: list[Any] = [patient_id]
+            if tenant_id:
+                ed_conditions.append("ed.tenant_id = %s")
+                ed_params.append(tenant_id)
+            if dos_start is not None:
+                ed_conditions.append("e.encounter_date >= %s")
+                ed_params.append(str(dos_start))
+            if dos_end is not None:
+                ed_conditions.append("e.encounter_date <= %s")
+                ed_params.append(str(dos_end) + " 23:59:59")
+            sql = (
+                "SELECT DISTINCT ed.icd10_code FROM encounter_diagnoses ed "
+                "JOIN encounters e ON e.id = ed.encounter_id "
+                "WHERE " + " AND ".join(ed_conditions)
+            )
+            cur.execute(sql, tuple(ed_params))
+            for r in cur.fetchall():
+                code = r.get("icd10_code")
+                if code:
+                    codes.add(code.strip())
+    except Exception as exc:
+        logger.debug("_get_icd_codes: encounter_diagnoses lookup failed for pid=%s: %s", patient_id, exc)
 
     # 2. AI-analyzed codes from raf_encounter_analysis (filtered by encounter DOS window)
     if not include_suspected:

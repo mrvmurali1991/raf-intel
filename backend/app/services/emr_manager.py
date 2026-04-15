@@ -151,12 +151,9 @@ def active_patients_subquery(
         f"    FROM emr_patient_matches epm"
         f"    JOIN emr_connections ec ON ec.id = epm.connection_id"
         f"    WHERE ec.is_active = 1 AND ec.tenant_id = %s"
-        f"  UNION"
-        f"  SELECT DISTINCT patient_id FROM raf_patient_demographics"
-        f"    WHERE tenant_id = %s AND patient_id IS NOT NULL"
         f"))"
     )
-    return frag, (tid, tid, tid)
+    return frag, (tid, tid)
 
 _CREDENTIAL_FIELDS = ("db_password", "client_secret", "api_key", "access_token", "refresh_token_emr")
 
