@@ -585,7 +585,10 @@ def task_analyze_encounters_batch(
     try:
         from app.db import raf_cursor
         from app.services.pipeline_orchestrator import run_verified_pipeline
-        from app.services.openemr_connector import get_clinical_notes
+        from app.services.openemr_connector import (
+            get_clinical_notes, get_medications, get_problem_list,
+            get_recapture_gaps, get_latest_vitals, get_medication_diagnoses,
+        )
         from app.services.meat_evidence_service import store_analysis_meat, update_hcc_meat_status
         from app.services.suspect_engine import save_suspects_from_analysis
         from app.services.analysis_service import save_encounter_analysis as _save_encounter_analysis
@@ -668,11 +671,119 @@ def task_analyze_encounters_batch(
                 except Exception as exc:
                     logger.warning("FHIR patient demographics lookup failed for encounter %s: %s", encounter_id, exc)
 
-                # Run 4-stage AI pipeline
+                # Resolve emr_pid for OpenEMR lookups
+                emr_pid: int | None = None
+                try:
+                    with raf_cursor() as cur:
+                        cur.execute(
+                            "SELECT emr_pid FROM patients WHERE id = %s AND tenant_id = %s",
+                            (patient_id, tenant_id),
+                        )
+                        _emr_row = cur.fetchone()
+                        if _emr_row and _emr_row.get("emr_pid"):
+                            emr_pid = int(float(_emr_row["emr_pid"]))
+                except Exception:
+                    pass
+
+                # Gather enrichment data (all best-effort, free local DB queries)
+                medications = None
+                problem_list = None
+                recapture_gaps = None
+                latest_vitals = None
+                med_diagnoses = None
+                existing_hccs: list[str] = []
+                if emr_pid:
+                    try:
+                        medications = [
+                            m.get("drug", "") for m in (get_medications(emr_pid, tenant_id=tenant_id) or [])
+                        ]
+                    except Exception:
+                        pass
+                    try:
+                        problem_list = get_problem_list(emr_pid, tenant_id=tenant_id)
+                    except Exception:
+                        pass
+                    try:
+                        recapture_gaps = get_recapture_gaps(emr_pid, date.today().year, tenant_id=tenant_id)
+                    except Exception:
+                        pass
+                    try:
+                        latest_vitals = get_latest_vitals(emr_pid, tenant_id=tenant_id)
+                    except Exception:
+                        pass
+                    try:
+                        med_diagnoses = get_medication_diagnoses(emr_pid, tenant_id=tenant_id)
+                    except Exception:
+                        pass
+                try:
+                    with raf_cursor() as cur:
+                        cur.execute(
+                            "SELECT DISTINCT hcc_code FROM raf_patient_hcc "
+                            "WHERE patient_id = %s AND measurement_year = %s",
+                            (patient_id, date.today().year),
+                        )
+                        existing_hccs = [str(r["hcc_code"]) for r in cur.fetchall()]
+                except Exception:
+                    pass
+
+                # Append structured EHR context to note text for Gemini
+                extra_sections: list[str] = []
+                if emr_pid:
+                    try:
+                        from app.services.openemr_connector import get_immunizations
+                        imm = get_immunizations(emr_pid)
+                        if imm:
+                            imm_text = "; ".join(f"{v.get('vaccine_name','')} ({v.get('administered_date','')})" for v in imm[:20])
+                            extra_sections.append(f"IMMUNIZATIONS: {imm_text}")
+                    except Exception:
+                        pass
+                    try:
+                        from app.services.openemr_connector import get_allergies
+                        allergies = get_allergies(emr_pid)
+                        if allergies:
+                            allergy_text = "; ".join(a.get("title", "") for a in allergies[:20])
+                            extra_sections.append(f"ALLERGIES: {allergy_text}")
+                    except Exception:
+                        pass
+                    try:
+                        from app.services.openemr_connector import get_family_history
+                        fhx = get_family_history(emr_pid)
+                        if fhx and any(v for v in fhx.values() if v):
+                            fhx_items = [f"{k}: {v}" for k, v in fhx.items() if v and k != "pid"]
+                            extra_sections.append(f"FAMILY HISTORY: {'; '.join(fhx_items[:15])}")
+                    except Exception:
+                        pass
+                    try:
+                        from app.services.openemr_connector import get_sdoh_data
+                        sdoh = get_sdoh_data(emr_pid)
+                        if sdoh and any(v for v in sdoh.values() if v):
+                            sdoh_items = [f"{k}: {v}" for k, v in sdoh.items() if v and k != "pid"]
+                            extra_sections.append(f"SOCIAL HISTORY: {'; '.join(sdoh_items[:15])}")
+                    except Exception:
+                        pass
+                    try:
+                        from app.services.openemr_connector import get_referrals
+                        refs = get_referrals(emr_pid)
+                        if refs:
+                            ref_text = "; ".join(f"{r.get('refer_to','')} - {r.get('reason','')}" for r in refs[:10])
+                            extra_sections.append(f"REFERRALS: {ref_text}")
+                    except Exception:
+                        pass
+                if extra_sections:
+                    note_text += "\n\n--- EHR STRUCTURED DATA ---\n" + "\n".join(extra_sections)
+
+                # Run 4-stage AI pipeline with full context
                 result = run_verified_pipeline(
                     clinical_note=note_text,
                     patient_age=patient_age,
                     patient_sex=patient_sex,
+                    medications=medications,
+                    problem_list=problem_list,
+                    recapture_gaps=recapture_gaps,
+                    latest_vitals=latest_vitals,
+                    med_diagnoses=med_diagnoses,
+                    existing_hccs=existing_hccs,
+                    encounter_year=date.today().year,
                 )
 
                 # Persist results
