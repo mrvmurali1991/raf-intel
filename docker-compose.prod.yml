@@ -227,7 +227,7 @@ services:
       celery -A app.services.celery_tasks worker
         --loglevel=info
         --concurrency=${CELERY_CONCURRENCY:-4}
-        -Q default,pipeline,notifications
+        -Q default,pipeline,notifications,heavy
         --hostname default@%h
     deploy:
       update_config:
