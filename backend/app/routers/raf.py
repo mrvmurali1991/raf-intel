@@ -1909,18 +1909,19 @@ def get_raf_dashboard(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT hcc_code, hcc_description,
                        COUNT(DISTINCT patient_id) AS patient_count,
                        AVG(raf_coefficient) AS avg_coefficient
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
+                  AND {_sf}
                   AND tenant_id = %s
                 GROUP BY hcc_code, hcc_description
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,
-                (calc_year, _tid),
+                (calc_year, *_sp, _tid),
             )
             hcc_rows = cur.fetchall() or []
         dashboard["top_hccs"] = [
