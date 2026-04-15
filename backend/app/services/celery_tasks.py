@@ -596,7 +596,8 @@ def task_analyze_encounters_batch(
             if patient_ids:
                 placeholders = ",".join(["%s"] * len(patient_ids))
                 cur.execute(f"""
-                    SELECT ne.encounter_id, ne.patient_id, ne.encounter_date
+                    SELECT ne.encounter_id, ne.patient_id, ne.encounter_date,
+                           ne.openemr_encounter_id
                     FROM normalized_encounters ne
                     LEFT JOIN raf_encounter_analysis rea ON rea.encounter_id = ne.encounter_id
                     WHERE ne.tenant_id = %s AND ne.patient_id IN ({placeholders}) AND rea.id IS NULL
@@ -605,7 +606,8 @@ def task_analyze_encounters_batch(
                 """, (tenant_id, *patient_ids, max_encounters))
             else:
                 cur.execute("""
-                    SELECT ne.encounter_id, ne.patient_id, ne.encounter_date
+                    SELECT ne.encounter_id, ne.patient_id, ne.encounter_date,
+                           ne.openemr_encounter_id
                     FROM normalized_encounters ne
                     LEFT JOIN raf_encounter_analysis rea ON rea.encounter_id = ne.encounter_id
                     WHERE ne.tenant_id = %s AND rea.id IS NULL
@@ -625,10 +627,11 @@ def task_analyze_encounters_batch(
         for i, enc in enumerate(encounters):
             encounter_id = enc["encounter_id"]
             patient_id = enc["patient_id"]
+            emr_encounter_id = enc.get("openemr_encounter_id") or encounter_id
 
             try:
-                # Get clinical notes
-                notes = get_clinical_notes(encounter_id)
+                # Get clinical notes (use OpenEMR encounter ID for SOAP lookup)
+                notes = get_clinical_notes(emr_encounter_id, tenant_id=tenant_id)
                 if not notes:
                     skipped += 1
                     continue
