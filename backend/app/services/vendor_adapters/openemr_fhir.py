@@ -1283,12 +1283,14 @@ class OpenEMRFhirAdapter:
                 raise ValueError("EMR connection has no tenant_id — cannot write RAF scores without tenant scope.")
             cur.execute(
                 """
-                SELECT id AS raf_patient_id, age_band, sex, model_segment
+                SELECT patient_id AS raf_patient_id, age_band, sex, model_segment
                 FROM raf_patient_demographics
                 WHERE measurement_year = %s
-                  AND tenant_id = %s
+                  AND patient_id IN (
+                      SELECT id FROM patients WHERE emr_connection_id = %s AND tenant_id = %s
+                  )
                 """,
-                (measurement_year, tenant_id),
+                (measurement_year, self.connection_id, tenant_id),
             )
             demo_rows = cur.fetchall()
 
