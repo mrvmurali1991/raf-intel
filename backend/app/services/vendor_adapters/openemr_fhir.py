@@ -949,70 +949,62 @@ class OpenEMRFhirAdapter:
     # ------------------------------------------------------------------
 
     def _resolve_or_create_raf_patient_id(self, external_id: str) -> int | None:
-        """Return the raf_patient_demographics.id for a FHIR patient.
+        """Return the real patients.id for a FHIR patient.
+
+        The FK on raf_patient_hcc references raf_patient_demographics(patient_id,
+        measurement_year), and patient_id there is patients.id.  So this method
+        must return patients.id, NOT raf_patient_demographics.id.
 
         If the emr_patient_matches row exists but raf_patient_id is not yet
-        linked (e.g. first sync had a partial failure), this method
-        reconstructs the patient dict from emr_patient_matches and calls
-        _upsert_demographics to create the missing row, then returns the
-        newly assigned id.
+        linked, this method calls _upsert_demographics to create the missing row.
 
         Returns None only when the patient is not present in
-        emr_patient_matches at all (i.e. the patient phase of the sync has
-        not run yet for this patient).
+        emr_patient_matches at all.
         """
         from app.db import raf_cursor
+        import hashlib as _hl
+
+        # Derive the same emr_pid hash used in _upsert_patient
+        _ext = external_id or ""
+        emr_pid = int(_hl.md5(_ext.encode()).hexdigest()[:7], 16)
+        tenant_id = self.connection.get("tenant_id", "1")
 
         with raf_cursor() as cur:
+            # Look up the real patients.id
             cur.execute(
-                """
-                SELECT raf_patient_id, first_name, last_name, date_of_birth, sex
-                FROM emr_patient_matches
-                WHERE connection_id = %s AND external_id = %s
-                LIMIT 1
-                """,
-                (self.connection_id, external_id),
+                "SELECT id FROM patients WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s LIMIT 1",
+                (emr_pid, self.connection_id, tenant_id),
             )
-            row = cur.fetchone()
+            p_row = cur.fetchone()
+            if not p_row:
+                return None
+            real_pid = p_row["id"]
 
-        if not row:
-            return None
-
-        if row["raf_patient_id"]:
-            return int(row["raf_patient_id"])
-
-        # raf_patient_id is NULL — demographics row is missing. Reconstruct
-        # the patient dict from emr_patient_matches and upsert demographics.
-        logger.info(
-            "OpenEMR FHIR: demographics missing for external_id=%s — creating now",
-            external_id,
-        )
-        patient_stub = {
-            "external_id": external_id,
-            "first_name": row.get("first_name") or "",
-            "last_name": row.get("last_name") or "",
-            "date_of_birth": (row.get("date_of_birth") or ""),
-            "sex": row.get("sex") or "M",
-        }
-        if hasattr(patient_stub["date_of_birth"], "isoformat"):
-            patient_stub["date_of_birth"] = patient_stub["date_of_birth"].isoformat()
-        self._upsert_demographics(patient_stub)
-
-        # Re-query after upsert to get the newly assigned id
-        with raf_cursor() as cur:
+            # Ensure demographics exist for this patient
             cur.execute(
-                """
-                SELECT raf_patient_id
-                FROM emr_patient_matches
-                WHERE connection_id = %s AND external_id = %s
-                  AND raf_patient_id IS NOT NULL
-                LIMIT 1
-                """,
-                (self.connection_id, external_id),
+                "SELECT id FROM raf_patient_demographics WHERE patient_id = %s AND measurement_year = %s",
+                (real_pid, date.today().year),
             )
-            row2 = cur.fetchone()
+            if not cur.fetchone():
+                # Need to create demographics — get patient data from emr_patient_matches
+                cur.execute(
+                    "SELECT first_name, last_name, date_of_birth, sex FROM emr_patient_matches WHERE connection_id = %s AND external_id = %s LIMIT 1",
+                    (self.connection_id, external_id),
+                )
+                row = cur.fetchone()
+                if row:
+                    patient_stub = {
+                        "external_id": external_id,
+                        "first_name": row.get("first_name") or "",
+                        "last_name": row.get("last_name") or "",
+                        "date_of_birth": (row.get("date_of_birth") or ""),
+                        "sex": row.get("sex") or "M",
+                    }
+                    if hasattr(patient_stub["date_of_birth"], "isoformat"):
+                        patient_stub["date_of_birth"] = patient_stub["date_of_birth"].isoformat()
+                    self._upsert_demographics(patient_stub)
 
-        return int(row2["raf_patient_id"]) if row2 else None
+        return real_pid
 
     # ------------------------------------------------------------------
     # Condition → HCC upsert (with ICD-10 crosswalk)
