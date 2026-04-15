@@ -46,13 +46,12 @@ type RiskFilter = "all" | "high" | "medium" | "low" | "unscored";
 
 // Worklist grid template — single source of truth so header, body rows,
 // skeleton, column-filter row and group super-header all stay perfectly aligned.
-// 9 cells: Patient | Age/Sex | RAF Score | Demo | Disease | Interact | HCCs | Status | ›
+// 7 cells: Patient | Risk Level | RAF Score | Risk Factors | HCCs | Status | >
 const WORKLIST_GRID =
-  "minmax(280px, 2.6fr) 80px 132px 88px 88px 88px 96px 116px 28px";
-const WORKLIST_GAP = 12;
+  "minmax(240px, 2.2fr) 120px 100px minmax(200px, 2fr) 100px 140px 32px";
+const WORKLIST_GAP = 0;
 const WORKLIST_PAD_X = 24;
-const ROW_HEIGHT = 76;
-const SUBSCORE_BAND_BG = C.bgBand;
+const ROW_HEIGHT = 80;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -103,32 +102,25 @@ function SortLabel({
         margin: 0,
         cursor: "pointer",
         fontFamily: FONT_SYS,
-        fontSize: 11,
-        fontWeight: 600,
+        fontSize: 11.5,
+        fontWeight: 700,
         textTransform: "uppercase",
-        letterSpacing: "0.06em",
-        color: active ? C.brand : C.label,
+        letterSpacing: "0.08em",
+        color: active ? "#0F172A" : "#64748B",
         whiteSpace: "nowrap",
         transition: "color 0.15s ease",
         justifySelf: align === "right" ? "end" : "start",
       }}
     >
       {label}
-      <span style={{
-        display: "inline-flex",
-        flexDirection: "column",
-        opacity: active ? 1 : 0.55,
-        marginLeft: 2,
-      }}>
-        <ChevronUp size={9} style={{
-          marginBottom: -3,
-          color: active && sort.dir === "asc" ? C.brand : "#CBD5E1",
-        }} />
-        <ChevronDown size={9} style={{
-          marginTop: -3,
-          color: active && sort.dir === "desc" ? C.brand : "#CBD5E1",
-        }} />
-      </span>
+      {active && (
+        <span style={{ display: "inline-flex", marginLeft: 2 }}>
+          {sort.dir === "asc"
+            ? <ChevronUp size={11} color="#0F172A" />
+            : <ChevronDown size={11} color="#0F172A" />
+          }
+        </span>
+      )}
     </button>
   );
 }
@@ -940,9 +932,6 @@ export default function PatientsPage() {
   }
 
   // ---- EMR deactivated empty state ----
-  // The global EmrDeactivatedBanner already tells the user what to do, so
-  // here we just render a calm empty state instead of a red "Failed to load"
-  // error toast. The banner handles navigation to /emr-config.
   if (isError && isEmrDeactivatedError(error)) {
     return (
       <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, fontFamily: FONT_SYS }}>
@@ -1007,35 +996,12 @@ export default function PatientsPage() {
     );
   }
 
-  // ---- Reusable bits ----
-
-  // Per-cell styles for the sub-score band so header / rows / skeleton stay aligned.
-  const bandCellStyle = (
-    pos: "left" | "mid" | "right",
-    bg: string = SUBSCORE_BAND_BG,
-    height: number = ROW_HEIGHT,
-  ): React.CSSProperties => ({
-    height,
-    marginLeft: pos === "left" ? -WORKLIST_GAP / 2 - 2 : -WORKLIST_GAP / 2,
-    marginRight: pos === "right" ? -WORKLIST_GAP / 2 - 2 : -WORKLIST_GAP / 2,
-    paddingLeft: pos === "left" ? 12 : 8,
-    paddingRight: pos === "right" ? 12 : 8,
-    backgroundColor: bg,
-    borderRadius:
-      pos === "left" ? "10px 0 0 10px" :
-      pos === "right" ? "0 10px 10px 0" :
-      undefined,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    transition: "background-color 0.2s ease",
-  });
-
   return (
     <ErrorBoundary fallbackTitle="Patients page failed to load">
     <div style={{
       display: "flex", flexDirection: "column", gap: 0,
-      background: C.bgPage, minHeight: "100vh",
+      background: "#FAFAF8",
+      minHeight: "100vh",
       padding: "32px 40px 48px",
       fontFamily: FONT_SYS,
       color: C.text,
@@ -1119,8 +1085,8 @@ export default function PatientsPage() {
               fontVariantNumeric: "tabular-nums",
             }}>
               {isLoading
-                ? "Loading registry…"
-                : `${totalPatients.toLocaleString()} patients in registry · CMS-HCC V28 · MY ${measurementYear}`}
+                ? "Loading registry\u2026"
+                : `${totalPatients.toLocaleString()} patients in registry \u00B7 CMS-HCC V28 \u00B7 MY ${measurementYear}`}
             </p>
           </div>
         </div>
@@ -1134,7 +1100,7 @@ export default function PatientsPage() {
             <input
               type="text"
               title="Search patients by name or PID"
-              placeholder="Search patients…"
+              placeholder="Search patients\u2026"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search patients"
@@ -1206,165 +1172,245 @@ export default function PatientsPage() {
       </div>
 
       {/* ============================================================ */}
+      {/* Alert Banner — High Risk                                     */}
+      {/* ============================================================ */}
+      {stats.high > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 20px",
+          borderRadius: 16,
+          backgroundColor: "#FFFBEB",
+          border: "1px solid #FDE68A",
+          marginBottom: 16,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertTriangle size={18} color="#D97706" />
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#92400E" }}>
+              {stats.high} High Risk Patient{stats.high !== 1 ? "s" : ""} Need{stats.high === 1 ? "s" : ""} Review
+            </span>
+          </div>
+          <button
+            onClick={() => { setRiskFilter("high"); setPage(0); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "7px 16px", borderRadius: 8,
+              border: "none",
+              backgroundColor: C.brand,
+              color: "#FFFFFF",
+              fontSize: 13, fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(15,118,110,0.25)",
+            }}
+          >
+            Review Now <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/* Summary stat strip                                           */}
       {/* ============================================================ */}
       <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        display: "flex",
         gap: 12,
         marginBottom: 16,
       }}>
-        {[
-          {
-            label: "Total Patients",
-            value: totalPatients.toLocaleString(),
-            sub: `${stats.analyzedPct}% analyzed`,
-            icon: Users,
-            tone: C.brand,
-          },
-          {
-            label: "Average RAF",
-            value: stats.avgRaf > 0 ? stats.avgRaf.toFixed(3) : "\u2014",
-            sub: `${measurementYear} · ${(stats.all - stats.unscored).toLocaleString()} scored`,
-            icon: Activity,
-            tone: "#0EA5E9",
-          },
-          {
-            label: "High Risk",
-            value: stats.high.toLocaleString(),
-            sub: `RAF \u2265 2.00`,
-            icon: TrendingUp,
-            tone: C.high,
-          },
-          {
-            label: "Total HCCs",
-            value: stats.hccTotal.toLocaleString(),
-            sub: `In current view`,
-            icon: ShieldCheck,
-            tone: C.low,
-          },
-        ].map(({ label, value, sub, icon: Icon, tone }) => (
-          <div
-            key={label}
-            style={{
-              backgroundColor: C.bgCard,
-              border: `1px solid ${C.borderSoft}`,
-              borderRadius: 12,
-              padding: "14px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              boxShadow: "0 1px 2px rgba(15, 23, 42, 0.03)",
-            }}
-          >
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              backgroundColor: `${tone}14`,
-              color: tone,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <Icon size={17} strokeWidth={2.25} />
-            </div>
-            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        {/* High Risk */}
+        <div style={{
+          flex: 1,
+          backgroundColor: C.bgCard,
+          border: `1px solid ${C.borderSoft}`,
+          borderRadius: 16,
+          padding: "16px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            backgroundColor: C.highSoft,
+            color: C.high,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}>
+            {stats.high}
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>High Risk</div>
+            <div style={{ fontSize: 12, color: C.textSubtle }}>RAF &ge; 2.00</div>
+          </div>
+        </div>
+
+        {/* Medium Risk */}
+        <div style={{
+          flex: 1,
+          backgroundColor: C.bgCard,
+          border: `1px solid ${C.borderSoft}`,
+          borderRadius: 16,
+          padding: "16px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            backgroundColor: C.mediumSoft,
+            color: C.medium,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}>
+            {stats.medium}
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Medium Risk</div>
+            <div style={{ fontSize: 12, color: C.textSubtle }}>RAF 1.00 &ndash; 1.99</div>
+          </div>
+        </div>
+
+        {/* Average RAF */}
+        <div style={{
+          flex: 1,
+          backgroundColor: C.bgCard,
+          border: `1px solid ${C.borderSoft}`,
+          borderRadius: 16,
+          padding: "16px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+        }}>
+          <div style={{
+            fontSize: 26, fontWeight: 800,
+            color: C.text,
+            fontVariantNumeric: "tabular-nums",
+            letterSpacing: "-0.02em",
+            lineHeight: 1,
+            flexShrink: 0,
+            minWidth: 60,
+          }}>
+            {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "\u2014"}
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Average RAF</div>
+            <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", alignItems: "center", gap: 6 }}>
+              {stats.avgRaf > 0 ? stats.avgRaf.toFixed(3) : "\u2014"}
               <span style={{
-                fontSize: 11, fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: C.label,
+                display: "inline-flex", alignItems: "center",
+                padding: "1px 6px", borderRadius: 4,
+                backgroundColor: "#ECFDF5",
+                color: "#059669",
+                fontSize: 10, fontWeight: 700,
               }}>
-                {label}
-              </span>
-              <span style={{
-                fontSize: 22, fontWeight: 700,
-                color: C.text,
-                lineHeight: 1.1,
-                letterSpacing: "-0.02em",
-                fontVariantNumeric: "tabular-nums",
-              }}>
-                {value}
-              </span>
-              <span style={{
-                fontSize: 11, color: C.textSubtle,
-                fontVariantNumeric: "tabular-nums",
-              }}>
-                {sub}
+                {stats.analyzedPct}% scored
               </span>
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Total HCCs */}
+        <div style={{
+          flex: 1,
+          backgroundColor: C.bgCard,
+          border: `1px solid ${C.borderSoft}`,
+          borderRadius: 16,
+          padding: "16px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            backgroundColor: C.blueSoft,
+            color: C.blue,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}>
+            {stats.hccTotal}
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Total HCCs</div>
+            <div style={{ fontSize: 12, color: C.textSubtle }}>In current view</div>
+          </div>
+        </div>
       </div>
 
       {/* ============================================================ */}
-      {/* Filter strip                                                 */}
+      {/* Filter tabs (pill buttons)                                   */}
       {/* ============================================================ */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap", gap: 12, marginBottom: 14,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {/* Risk filter as segmented chips */}
-          <div style={{
-            display: "inline-flex",
-            alignItems: "center",
-            backgroundColor: "#FFFFFF",
-            border: `1px solid ${C.border}`,
-            borderRadius: 10,
-            padding: 3,
-            gap: 2,
-            height: 36,
-          }}>
-            {([
-              { key: "all" as const, label: "All", count: stats.all, dot: null },
-              { key: "high" as const, label: "High", count: stats.high, dot: C.high },
-              { key: "medium" as const, label: "Medium", count: stats.medium, dot: C.medium },
-              { key: "low" as const, label: "Low", count: stats.low, dot: C.low },
-              { key: "unscored" as const, label: "Unscored", count: stats.unscored, dot: "#CBD5E1" },
-            ]).map(({ key, label, count, dot }) => {
-              const active = riskFilter === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => { setRiskFilter(key); setPage(0); }}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    height: 28, padding: "0 12px",
-                    borderRadius: 7,
-                    border: "none",
-                    backgroundColor: active ? C.text : "transparent",
-                    color: active ? "#FFFFFF" : C.textMuted,
-                    fontSize: 12, fontWeight: 600,
-                    fontFamily: FONT_SYS,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {dot && (
-                    <span style={{
-                      width: 6, height: 6, borderRadius: 3,
-                      backgroundColor: dot,
-                      boxShadow: active ? "0 0 0 1.5px rgba(255,255,255,0.25)" : "none",
-                    }} />
-                  )}
-                  {label}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {([
+            { key: "all" as const, label: "All Patients", count: stats.all, icon: null },
+            { key: "high" as const, label: "High Risk", count: stats.high, icon: "\u26A0" },
+            { key: "medium" as const, label: "Medium", count: stats.medium, icon: null },
+            { key: "low" as const, label: "Low", count: stats.low, icon: null },
+            { key: "unscored" as const, label: "Unscored", count: stats.unscored, icon: null },
+          ]).map(({ key, label, count, icon }) => {
+            const active = riskFilter === key;
+            const dotColor =
+              key === "high" ? C.high :
+              key === "medium" ? C.medium :
+              key === "low" ? C.low :
+              key === "unscored" ? "#CBD5E1" : null;
+            return (
+              <button
+                key={key}
+                onClick={() => { setRiskFilter(key); setPage(0); }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  height: 34, padding: "0 14px",
+                  borderRadius: 999,
+                  border: active ? "none" : `1px solid ${C.border}`,
+                  backgroundColor: active ? "#1E293B" : "#FFFFFF",
+                  color: active ? "#FFFFFF" : C.textMuted,
+                  fontSize: 12.5, fontWeight: 600,
+                  fontFamily: FONT_SYS,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  boxShadow: active ? "0 2px 8px rgba(15,23,42,0.18)" : "none",
+                }}
+              >
+                {icon && <span style={{ fontSize: 12 }}>{icon}</span>}
+                {dotColor && !icon && (
                   <span style={{
-                    fontSize: 11, fontWeight: 600,
-                    color: active ? "rgba(255,255,255,0.7)" : C.label,
-                    fontVariantNumeric: "tabular-nums",
-                  }}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                    width: 7, height: 7, borderRadius: "50%",
+                    backgroundColor: dotColor,
+                    boxShadow: active ? `0 0 0 2px rgba(255,255,255,0.3)` : "none",
+                  }} />
+                )}
+                {label}
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: active ? "rgba(255,255,255,0.65)" : C.label,
+                  fontVariantNumeric: "tabular-nums",
+                  marginLeft: -2,
+                }}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          <div style={{ width: 1, height: 20, backgroundColor: C.border, margin: "0 4px" }} />
 
           <button
             title={showColumnFilters ? "Hide column filters" : "Show column filters"}
             onClick={() => setShowColumnFilters((v) => !v)}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
-              height: 36, padding: "0 14px", borderRadius: 10,
+              height: 34, padding: "0 14px", borderRadius: 999,
               border: `1px solid ${showColumnFilters || hasActiveColFilters ? C.brand : C.border}`,
               backgroundColor: showColumnFilters || hasActiveColFilters ? C.brandSoft : "#FFFFFF",
               color: showColumnFilters || hasActiveColFilters ? C.brand : C.textMuted,
@@ -1375,7 +1421,7 @@ export default function PatientsPage() {
             }}
           >
             <Filter size={13} />
-            Column Filters
+            Filters
             {hasActiveColFilters && (
               <span style={{
                 minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9,
@@ -1393,7 +1439,7 @@ export default function PatientsPage() {
               onClick={() => { clearColFilters(); setPage(0); }}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
-                height: 36, padding: "0 12px", borderRadius: 10,
+                height: 34, padding: "0 12px", borderRadius: 999,
                 background: "none",
                 border: `1px dashed ${C.border}`,
                 fontSize: 12, fontWeight: 500,
@@ -1411,8 +1457,11 @@ export default function PatientsPage() {
             fontSize: 12, color: C.textSubtle, whiteSpace: "nowrap",
             fontVariantNumeric: "tabular-nums",
           }}>
-            Showing <strong style={{ color: C.text, fontWeight: 600 }}>{total.toLocaleString()}</strong> of{" "}
-            <strong style={{ color: C.text, fontWeight: 600 }}>{totalPatients.toLocaleString()}</strong>
+            Showing{" "}
+            <strong style={{ color: C.text, fontWeight: 600 }}>
+              {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
+            </strong>{" "}
+            of <strong style={{ color: C.text, fontWeight: 600 }}>{totalPatients.toLocaleString()}</strong>
           </span>
         )}
       </div>
@@ -1428,81 +1477,36 @@ export default function PatientsPage() {
         aria-live="polite"
         style={{
           backgroundColor: C.bgCard,
-          borderRadius: 14,
+          borderRadius: 16,
           overflow: "hidden",
           border: `1px solid ${C.borderSoft}`,
-          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04)",
+          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04)",
         }}
       >
-        {/* ── Group super-header: "Sub-scores" bracket over Demo/Disease/Interact ── */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: WORKLIST_GRID,
-          alignItems: "end",
-          padding: `12px ${WORKLIST_PAD_X}px 0`,
-          backgroundColor: "#FCFDFE",
-          gap: WORKLIST_GAP,
-        }}>
-          <span /><span /><span />
-          <div style={{
-            gridColumn: "4 / span 3",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            paddingBottom: 6,
-          }}>
-            <span style={{ flex: 1, height: 1, backgroundColor: C.border }} />
-            <span style={{
-              fontSize: 9.5, fontWeight: 700,
-              textTransform: "uppercase", letterSpacing: "0.14em",
-              color: C.label,
-              whiteSpace: "nowrap",
-            }}>
-              Sub-scores
-            </span>
-            <span style={{ flex: 1, height: 1, backgroundColor: C.border }} />
-          </div>
-          <span /><span /><span />
-        </div>
-
         {/* Column header */}
         <div role="row" style={{
           display: "grid",
           gridTemplateColumns: WORKLIST_GRID,
           alignItems: "center",
-          padding: `8px ${WORKLIST_PAD_X}px 10px`,
-          backgroundColor: "#FCFDFE",
+          padding: `12px ${WORKLIST_PAD_X}px 12px`,
+          backgroundColor: "#FAFBFC",
           borderBottom: `1px solid ${C.border}`,
           gap: WORKLIST_GAP,
         }}>
           <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
-          <SortLabel col="age" label="Age / Sex" sort={sort} onSort={handleSort} />
+          <span role="columnheader" style={{
+            fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
+            letterSpacing: "0.08em", color: "#64748B",
+          }}>Risk Level</span>
           <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
-
-          <div role="columnheader" title="Demographic RAF — based on age, sex, enrollment status" style={bandCellStyle("left", SUBSCORE_BAND_BG, 30)}>
-            <span style={{
-              fontSize: 11, fontWeight: 600, textTransform: "uppercase",
-              letterSpacing: "0.06em", color: C.label,
-            }}>Demo</span>
-          </div>
-          <div role="columnheader" title="Disease RAF — based on HCC diagnoses and severity" style={bandCellStyle("mid", SUBSCORE_BAND_BG, 30)}>
-            <span style={{
-              fontSize: 11, fontWeight: 600, textTransform: "uppercase",
-              letterSpacing: "0.06em", color: C.label,
-            }}>Disease</span>
-          </div>
-          <div role="columnheader" title="Interaction RAF — HCC disease interaction combinations" style={bandCellStyle("right", SUBSCORE_BAND_BG, 30)}>
-            <span style={{
-              fontSize: 11, fontWeight: 600, textTransform: "uppercase",
-              letterSpacing: "0.06em", color: C.label,
-            }}>Interact</span>
-          </div>
-
+          <span role="columnheader" style={{
+            fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
+            letterSpacing: "0.08em", color: "#64748B",
+          }}>Risk Factors</span>
           <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
           <span role="columnheader" style={{
-            fontSize: 11, fontWeight: 600, textTransform: "uppercase",
-            letterSpacing: "0.06em", color: C.label,
+            fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
+            letterSpacing: "0.08em", color: "#64748B",
           }}>Status</span>
           <span role="columnheader" aria-label="Open patient detail" />
         </div>
@@ -1518,53 +1522,54 @@ export default function PatientsPage() {
             borderBottom: `1px solid ${C.border}`,
             gap: WORKLIST_GAP,
           }}>
-            <span style={{ fontSize: 11, color: C.label, fontStyle: "italic" }}>Use search above</span>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            {/* Patient col: sex + age range */}
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <select
                 title="Filter by sex"
                 value={colFilters.sex}
                 onChange={(e) => { setColFilters((f) => ({ ...f, sex: e.target.value as typeof f.sex })); setPage(0); }}
                 style={{
-                  width: "100%", height: 24, fontSize: 11, borderRadius: 5,
+                  width: 52, height: 26, fontSize: 11, borderRadius: 6,
                   border: colFilters.sex !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
                   backgroundColor: colFilters.sex !== "all" ? C.brandSoft : "#fff",
                   color: C.textMuted, padding: "0 4px", outline: "none", cursor: "pointer",
                   fontFamily: FONT_SYS,
                 }}
               >
-                <option value="all">All</option>
+                <option value="all">Sex</option>
                 <option value="Male">M</option>
                 <option value="Female">F</option>
               </select>
-              <div style={{ display: "flex", gap: 2 }}>
-                <input
-                  title="Minimum age" placeholder="Min"
-                  value={colFilters.ageMin}
-                  onChange={(e) => { setColFilters((f) => ({ ...f, ageMin: e.target.value })); setPage(0); }}
-                  style={{
-                    width: "50%", height: 22, fontSize: 11, borderRadius: 4,
-                    border: colFilters.ageMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                    padding: "0 4px", outline: "none", textAlign: "center",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                  type="number"
-                />
-                <input
-                  title="Maximum age" placeholder="Max"
-                  value={colFilters.ageMax}
-                  onChange={(e) => { setColFilters((f) => ({ ...f, ageMax: e.target.value })); setPage(0); }}
-                  style={{
-                    width: "50%", height: 22, fontSize: 11, borderRadius: 4,
-                    border: colFilters.ageMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                    padding: "0 4px", outline: "none", textAlign: "center",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                  type="number"
-                />
-              </div>
+              <input
+                title="Minimum age" placeholder="Age\u2265"
+                value={colFilters.ageMin}
+                onChange={(e) => { setColFilters((f) => ({ ...f, ageMin: e.target.value })); setPage(0); }}
+                style={{
+                  width: 44, height: 26, fontSize: 11, borderRadius: 6,
+                  border: colFilters.ageMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
+                  padding: "0 4px", outline: "none", textAlign: "center",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+                type="number"
+              />
+              <input
+                title="Maximum age" placeholder="Age\u2264"
+                value={colFilters.ageMax}
+                onChange={(e) => { setColFilters((f) => ({ ...f, ageMax: e.target.value })); setPage(0); }}
+                style={{
+                  width: 44, height: 26, fontSize: 11, borderRadius: 6,
+                  border: colFilters.ageMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
+                  padding: "0 4px", outline: "none", textAlign: "center",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+                type="number"
+              />
             </div>
 
+            {/* Risk Level col — no filter (derived from RAF) */}
+            <span style={{ fontSize: 10, color: C.label, fontStyle: "italic" }}>auto</span>
+
+            {/* RAF Score col */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <input
                 title="Minimum RAF score" placeholder="Min"
@@ -1592,27 +1597,23 @@ export default function PatientsPage() {
               />
             </div>
 
-            <div style={bandCellStyle("left", SUBSCORE_BAND_BG, 50)}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
-                <input title="Min demographic score" placeholder="Min" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 4px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max demographic score" placeholder="Max" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 4px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+            {/* Risk Factors col — demo/disease/interact filters */}
+            <div style={{ display: "flex", gap: 4 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+                <input title="Min demographic score" placeholder="Demo\u2265" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max demographic score" placeholder="Demo\u2264" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+                <input title="Min disease score" placeholder="Dis\u2265" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max disease score" placeholder="Dis\u2264" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+                <input title="Min interaction score" placeholder="Int\u2265" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max interaction score" placeholder="Int\u2264" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
             </div>
 
-            <div style={bandCellStyle("mid", SUBSCORE_BAND_BG, 50)}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
-                <input title="Min disease score" placeholder="Min" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 4px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max disease score" placeholder="Max" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 4px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-              </div>
-            </div>
-
-            <div style={bandCellStyle("right", SUBSCORE_BAND_BG, 50)}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
-                <input title="Min interaction score" placeholder="Min" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 4px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max interaction score" placeholder="Max" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 4px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-              </div>
-            </div>
-
+            {/* HCCs col */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <input
                 title="Minimum HCC count" placeholder="Min"
@@ -1640,12 +1641,13 @@ export default function PatientsPage() {
               />
             </div>
 
+            {/* Status col */}
             <select
               title="Filter by analysis status"
               value={colFilters.status}
               onChange={(e) => { setColFilters((f) => ({ ...f, status: e.target.value as typeof f.status })); setPage(0); }}
               style={{
-                width: "100%", height: 24, fontSize: 11, borderRadius: 5,
+                width: "100%", height: 26, fontSize: 11, borderRadius: 6,
                 border: colFilters.status !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
                 backgroundColor: colFilters.status !== "all" ? C.brandSoft : "#fff",
                 color: C.textMuted, padding: "0 4px", outline: "none", cursor: "pointer",
@@ -1681,25 +1683,17 @@ export default function PatientsPage() {
               <div style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div style={{ width: 140, height: 12, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
-                <div style={{ width: 60, height: 10, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+                <div style={{ width: 80, height: 10, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
               </div>
             </div>
-            <div style={{ width: 36, height: 12, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ width: 56, height: 18, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
-              <div style={{ width: 44, height: 10, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 64, height: 22, borderRadius: 999, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 56, height: 18, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
             </div>
-            <div style={bandCellStyle("left")}>
-              <div style={{ width: 38, height: 11, borderRadius: 4, backgroundColor: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
-            </div>
-            <div style={bandCellStyle("mid")}>
-              <div style={{ width: 38, height: 11, borderRadius: 4, backgroundColor: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
-            </div>
-            <div style={bandCellStyle("right")}>
-              <div style={{ width: 38, height: 11, borderRadius: 4, backgroundColor: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
-            </div>
-            <div style={{ width: 32, height: 18, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite", justifySelf: "end" }} />
-            <div style={{ width: 86, height: 22, borderRadius: 999, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 40, height: 18, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite", justifySelf: "end" }} />
+            <div style={{ width: 86, height: 24, borderRadius: 999, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
             <div />
           </div>
         ))}
@@ -1766,8 +1760,7 @@ export default function PatientsPage() {
           const isHovered = hoveredRow === pid;
           const accent = riskAccentColor(scored ? score : null);
           const tone = riskTone(scored ? score : null);
-
-          const rowBandBg = isHovered ? C.bgBandHover : SUBSCORE_BAND_BG;
+          const location = formatLocation(p);
 
           return (
             <div
@@ -1802,17 +1795,16 @@ export default function PatientsPage() {
               onFocus={(e) => { e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.brandSoft}`; }}
               onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }}
             >
-              {/* Patient: avatar + name + caption */}
-              <div title={`${fullName} · PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              {/* Patient: avatar + name + subtitle */}
+              <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                 <div style={{
-                  width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+                  width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
                   background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
                   color: avatarColor,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 13, fontWeight: 700,
                   letterSpacing: "0.02em",
                   border: `1px solid ${avatarColor}26`,
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7)",
                 }}>
                   {initials}
                 </div>
@@ -1833,16 +1825,18 @@ export default function PatientsPage() {
                     whiteSpace: "nowrap",
                     letterSpacing: "0.02em",
                   }}>
-                    PID {pid}
-                    {age !== null && (
+                    {age !== null ? `${age}${sexLabel !== "\u2014" ? sexLabel : ""}` : ""}
+                    {age !== null && <span style={{ margin: "0 4px", color: "#CBD5E1" }}>&middot;</span>}
+                    {pid}
+                    {location !== "\u2014" && (
                       <>
-                        <span style={{ margin: "0 6px", color: "#CBD5E1" }}>·</span>
-                        {age}{sexLabel !== "\u2014" ? ` ${sexLabel}` : ""}
+                        <span style={{ margin: "0 4px", color: "#CBD5E1" }}>&middot;</span>
+                        {location}
                       </>
                     )}
                     {p.data_source === "upload" && (
                       <>
-                        <span style={{ margin: "0 6px", color: "#CBD5E1" }}>·</span>
+                        <span style={{ margin: "0 4px", color: "#CBD5E1" }}>&middot;</span>
                         <span style={{
                           fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
                           padding: "1px 5px", borderRadius: 4,
@@ -1855,116 +1849,118 @@ export default function PatientsPage() {
                 </div>
               </div>
 
-              {/* Age / Sex */}
-              <span
-                title={`Age: ${age ?? "Unknown"} · Sex: ${p.sex ?? "Unknown"} · DOB: ${p.DOB ?? "N/A"}`}
-                style={{
-                  fontSize: 13, color: C.textMuted,
-                  fontVariantNumeric: "tabular-nums",
-                  fontWeight: 500,
-                }}
-              >
-                {age !== null ? `${age} ${sexLabel}` : sexLabel}
-              </span>
-
-              {/* RAF Score — hero */}
-              <div
-                title={`Total CMS-HCC RAF Score: ${scored ? Number(score).toFixed(4) : "Not yet calculated"}`}
-                style={{ minWidth: 0 }}
-              >
+              {/* Risk Level — colored badge pill */}
+              <div>
                 {scored ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
-                    <span style={{
-                      fontSize: 22,
-                      fontWeight: 700,
-                      color: C.text,
-                      fontFamily: FONT_SYS,
-                      fontVariantNumeric: "tabular-nums",
-                      lineHeight: 1,
-                      letterSpacing: "-0.025em",
-                    }}>
-                      {Number(score).toFixed(2)}
-                    </span>
-                    <span
-                      aria-label={`${tone.label} risk`}
-                      style={{
-                        display: "inline-flex", alignItems: "center",
-                        height: 16, padding: "0 6px",
-                        borderRadius: 4,
-                        backgroundColor: tone.bg,
-                        color: tone.fg,
-                        fontSize: 9.5, fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        lineHeight: 1,
-                      }}
-                    >
-                      {tone.label}
-                    </span>
-                  </div>
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    height: 24, padding: "0 10px",
+                    borderRadius: 999,
+                    backgroundColor: tone.bg,
+                    color: tone.fg,
+                    fontSize: 11.5, fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}>
+                    {tone.label === "High" ? "\u25B2" : tone.label === "Medium" ? "\u25CF" : "\u25BC"} {tone.label}
+                  </span>
                 ) : (
                   <span style={{
-                    fontSize: 20, color: "#CBD5E1", fontWeight: 400,
+                    display: "inline-flex", alignItems: "center",
+                    height: 24, padding: "0 10px",
+                    borderRadius: 999,
+                    backgroundColor: "#F1F5F9",
+                    color: C.label,
+                    fontSize: 11.5, fontWeight: 600,
+                  }}>
+                    Unscored
+                  </span>
+                )}
+              </div>
+
+              {/* RAF Score — large bold */}
+              <div title={`Total CMS-HCC RAF Score: ${scored ? Number(score).toFixed(4) : "Not yet calculated"}`}>
+                {scored ? (
+                  <span style={{
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: C.text,
                     fontFamily: FONT_SYS,
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                    letterSpacing: "-0.025em",
+                  }}>
+                    {Number(score).toFixed(2)}
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: 18, color: "#CBD5E1", fontWeight: 400,
                     fontVariantNumeric: "tabular-nums",
                   }}>{"\u2014"}</span>
                 )}
               </div>
 
-              {/* Demographic — sub-score band left */}
-              <div
-                title={`Demographic Score: ${p.demographic_score != null ? Number(p.demographic_score).toFixed(4) : "N/A"}`}
-                style={bandCellStyle("left", rowBandBg)}
-              >
-                {p.demographic_score != null ? (
-                  <span style={{
-                    fontSize: 13, fontWeight: 500, color: C.textMuted,
-                    fontFamily: FONT_SYS,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "-0.005em",
-                  }}>
-                    {Number(p.demographic_score).toFixed(3)}
+              {/* Risk Factors — sub-score tag chips */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                {p.demographic_score != null && p.demographic_score > 0 && (
+                  <span
+                    title={`Demographic Score: ${Number(p.demographic_score).toFixed(4)}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      height: 22, padding: "0 8px",
+                      borderRadius: 6,
+                      backgroundColor: "#F0F9FF",
+                      border: "1px solid #BAE6FD",
+                      color: "#0369A1",
+                      fontSize: 10.5, fontWeight: 600,
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Demo {Number(p.demographic_score).toFixed(3)}
                   </span>
-                ) : (
-                  <span style={{ fontSize: 13, color: "#CBD5E1", fontWeight: 400 }}>{"\u2014"}</span>
                 )}
-              </div>
-
-              {/* Disease — sub-score band mid */}
-              <div
-                title={`Disease Score: ${p.disease_score != null ? Number(p.disease_score).toFixed(4) : "N/A"}`}
-                style={bandCellStyle("mid", rowBandBg)}
-              >
-                {p.disease_score != null ? (
-                  <span style={{
-                    fontSize: 13, fontWeight: 500, color: C.textMuted,
-                    fontFamily: FONT_SYS,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "-0.005em",
-                  }}>
-                    {Number(p.disease_score).toFixed(3)}
+                {p.disease_score != null && p.disease_score > 0 && (
+                  <span
+                    title={`Disease Score: ${Number(p.disease_score).toFixed(4)}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      height: 22, padding: "0 8px",
+                      borderRadius: 6,
+                      backgroundColor: "#FFF7ED",
+                      border: "1px solid #FED7AA",
+                      color: "#C2410C",
+                      fontSize: 10.5, fontWeight: 600,
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Disease {Number(p.disease_score).toFixed(3)}
                   </span>
-                ) : (
-                  <span style={{ fontSize: 13, color: "#CBD5E1", fontWeight: 400 }}>{"\u2014"}</span>
                 )}
-              </div>
-
-              {/* Interaction — sub-score band right */}
-              <div
-                title={`Interaction Score: ${p.interaction_score != null ? Number(p.interaction_score).toFixed(4) : "N/A"}`}
-                style={bandCellStyle("right", rowBandBg)}
-              >
-                {p.interaction_score != null ? (
-                  <span style={{
-                    fontSize: 13, fontWeight: 500, color: C.textMuted,
-                    fontFamily: FONT_SYS,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "-0.005em",
-                  }}>
-                    {Number(p.interaction_score).toFixed(3)}
+                {p.interaction_score != null && p.interaction_score > 0 && (
+                  <span
+                    title={`Interaction Score: ${Number(p.interaction_score).toFixed(4)}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      height: 22, padding: "0 8px",
+                      borderRadius: 6,
+                      backgroundColor: "#F5F3FF",
+                      border: "1px solid #DDD6FE",
+                      color: "#6D28D9",
+                      fontSize: 10.5, fontWeight: 600,
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Interact {Number(p.interaction_score).toFixed(3)}
                   </span>
-                ) : (
-                  <span style={{ fontSize: 13, color: "#CBD5E1", fontWeight: 400 }}>{"\u2014"}</span>
+                )}
+                {(!scored || (
+                  (p.demographic_score == null || p.demographic_score === 0) &&
+                  (p.disease_score == null || p.disease_score === 0) &&
+                  (p.interaction_score == null || p.interaction_score === 0)
+                )) && (
+                  <span style={{ fontSize: 12, color: "#CBD5E1" }}>{"\u2014"}</span>
                 )}
               </div>
 
@@ -1976,8 +1972,7 @@ export default function PatientsPage() {
                 {hccCount > 0 ? (
                   <>
                     <span style={{
-                      fontSize: 18, fontWeight: 700, color: C.text,
-                      fontFamily: FONT_SYS,
+                      fontSize: 17, fontWeight: 700, color: C.text,
                       fontVariantNumeric: "tabular-nums",
                       lineHeight: 1,
                       letterSpacing: "-0.015em",
@@ -1999,24 +1994,40 @@ export default function PatientsPage() {
               </div>
 
               {/* Status pill */}
-              <div title={scored ? "RAF score has been calculated" : "RAF score pending — patient needs analysis"}>
+              <div title={scored ? (tone.label === "High" ? "High risk — needs review" : "RAF score has been calculated") : "RAF score pending — patient needs analysis"}>
                 <span style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  height: 22, padding: "0 10px 0 8px",
+                  height: 24, padding: "0 12px 0 10px",
                   borderRadius: 999,
-                  backgroundColor: scored ? C.lowSoft : "#F8FAFC",
-                  border: `1px solid ${scored ? "#BBF7D0" : C.border}`,
-                  fontSize: 11, fontWeight: 600,
-                  color: scored ? "#047857" : C.label,
+                  backgroundColor:
+                    !scored ? "#F8FAFC" :
+                    tone.label === "High" ? C.highSoft :
+                    C.lowSoft,
+                  border: `1px solid ${
+                    !scored ? C.border :
+                    tone.label === "High" ? "#FECACA" :
+                    "#BBF7D0"
+                  }`,
+                  fontSize: 11.5, fontWeight: 600,
+                  color:
+                    !scored ? C.label :
+                    tone.label === "High" ? "#DC2626" :
+                    "#047857",
                   whiteSpace: "nowrap",
                   letterSpacing: "-0.005em",
                 }}>
                   <span style={{
                     width: 6, height: 6, borderRadius: 3,
-                    backgroundColor: scored ? "#10B981" : "#CBD5E1",
-                    boxShadow: scored ? "0 0 0 2px rgba(16,185,129,0.18)" : "none",
+                    backgroundColor:
+                      !scored ? "#CBD5E1" :
+                      tone.label === "High" ? "#EF4444" :
+                      "#10B981",
+                    boxShadow:
+                      !scored ? "none" :
+                      tone.label === "High" ? "0 0 0 2px rgba(239,68,68,0.18)" :
+                      "0 0 0 2px rgba(16,185,129,0.18)",
                   }} />
-                  {scored ? "Analyzed" : "Pending"}
+                  {!scored ? "Pending" : tone.label === "High" ? "Needs Review" : "Analyzed"}
                 </span>
               </div>
 
@@ -2045,8 +2056,11 @@ export default function PatientsPage() {
               fontSize: 12, color: C.textSubtle,
               fontVariantNumeric: "tabular-nums",
             }}>
-              Page <strong style={{ color: C.text, fontWeight: 600 }}>{page + 1}</strong> of{" "}
-              <strong style={{ color: C.text, fontWeight: 600 }}>{totalPages}</strong>
+              Showing{" "}
+              <strong style={{ color: C.text, fontWeight: 600 }}>
+                {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
+              </strong>{" "}
+              of <strong style={{ color: C.text, fontWeight: 600 }}>{total.toLocaleString()}</strong>
             </span>
 
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
