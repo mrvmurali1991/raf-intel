@@ -25,9 +25,8 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${inter.variable} ${mono.variable} h-full antialiased`}
-      suppressHydrationWarning
     >
-      <body className="min-h-full bg-background text-foreground tracking-tight" suppressHydrationWarning>
+      <body className="min-h-full bg-background text-foreground tracking-tight">
         <a href="#main-content" className="skip-to-content">
           Skip to main content
         </a>

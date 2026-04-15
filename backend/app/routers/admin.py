@@ -455,3 +455,91 @@ async def admin_report_error(request: Request) -> dict[str, str]:
     exc = ClientError(message)
     _capture(exc, context={"source": source})
     return {"status": "recorded"}
+
+
+# ---------------------------------------------------------------------------
+# Break-glass log (admin review)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/break-glass-log")
+def api_break_glass_log(
+    current_user: dict = Depends(require_role("admin")),
+):
+    """List all break-glass emergency access events."""
+    from app.services.break_glass import list_break_glass_events
+
+    tenant_id = str(current_user.get("tenant_id", ""))
+    events = list_break_glass_events(tenant_id=tenant_id)
+    return {"events": events}
+
+
+# ---------------------------------------------------------------------------
+# De-identified data export for analytics
+# ---------------------------------------------------------------------------
+
+
+class DeidentifiedExportRequest(BaseModel):
+    patient_ids: list[int] = Field(default=[], description="Patient IDs to export (empty = all)")
+    limit: int = Field(default=1000, le=10000)
+
+
+@router.post("/export-deidentified")
+def api_export_deidentified(
+    body: DeidentifiedExportRequest,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Export de-identified patient data for analytics (HIPAA Safe Harbor)."""
+    from app.db import raf_cursor
+    from app.services.phi_deidentifier import deidentify_dataset
+
+    tenant_id = str(current_user.get("tenant_id", ""))
+
+    with raf_cursor() as cur:
+        if body.patient_ids:
+            placeholders = ",".join(["%s"] * len(body.patient_ids))
+            cur.execute(
+                f"SELECT * FROM patients WHERE tenant_id = %s AND id IN ({placeholders}) LIMIT %s",
+                (tenant_id, *body.patient_ids, body.limit),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM patients WHERE tenant_id = %s LIMIT %s",
+                (tenant_id, body.limit),
+            )
+        rows = cur.fetchall()
+
+    records = [dict(r) for r in rows]
+    safe_records = deidentify_dataset(records)
+
+    from app.services.immutable_audit import append_audit_entry
+    append_audit_entry(
+        event_type="deidentified_export",
+        user_id=current_user.get("id"),
+        tenant_id=tenant_id,
+        resource_type="patient_dataset",
+        action="export_deidentified",
+        details={"record_count": len(safe_records)},
+    )
+
+    return {"count": len(safe_records), "records": safe_records}
+
+
+# ---------------------------------------------------------------------------
+# Immutable audit log verification
+# ---------------------------------------------------------------------------
+
+
+@router.get("/audit-chain-verify")
+def api_verify_audit_chain(
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Verify the immutable audit log hash chain integrity."""
+    from app.services.immutable_audit import verify_audit_chain
+
+    ok, errors = verify_audit_chain()
+    return {
+        "integrity": "intact" if ok else "TAMPERED",
+        "valid": ok,
+        "errors": errors,
+    }

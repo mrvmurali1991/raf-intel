@@ -232,17 +232,42 @@ def dashboard_stats(
     analyzed = 0
     avg_raf = 0.0
 
-    from app.services.emr_manager import ACTIVE_PATIENTS_SUBQUERY, active_patients_subquery
+    from app.services.emr_manager import active_patients_subquery
 
     _ds_filter = (
         " AND data_source = 'upload'" if (not has_active and has_uploaded_data) else ""
     )
+
+    # Detect if the active connection is FHIR/REST — if so, count from
+    # emr_patient_matches instead of the patients table.
+    _active_conn_type = None
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s{_ds_filter}",
+                "SELECT connection_type FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
                 (tenant_id,),
             )
+            row = cur.fetchone()
+            if row:
+                _active_conn_type = row["connection_type"]
+    except Exception:
+        pass
+
+    try:
+        with raf_cursor() as cur:
+            if _active_conn_type in ("fhir_r4", "rest_api"):
+                cur.execute(
+                    "SELECT COUNT(DISTINCT epm.id) AS cnt "
+                    "FROM emr_patient_matches epm "
+                    "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                    "WHERE ec.is_active = 1 AND ec.tenant_id = %s",
+                    (tenant_id,),
+                )
+            else:
+                cur.execute(
+                    f"SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s{_ds_filter}",
+                    (tenant_id,),
+                )
             total_patients = cur.fetchone()["cnt"]
     except Exception:
         pass
@@ -250,6 +275,18 @@ def dashboard_stats(
     if not has_active and has_uploaded_data:
         _score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' AND tenant_id = %s)"
         _score_params: tuple = (int(tenant_id),)
+    elif _active_conn_type in ("fhir_r4", "rest_api"):
+        # FHIR patients live in emr_patient_matches; their RAF scores are
+        # stored against COALESCE(raf_patient_id, id) from that table.
+        _score_filter = (
+            "patient_id IN ("
+            "SELECT epm.id "
+            "FROM emr_patient_matches epm "
+            "JOIN emr_connections ec ON ec.id = epm.connection_id "
+            "WHERE ec.is_active = 1 AND ec.tenant_id = %s"
+            ")"
+        )
+        _score_params = (int(tenant_id),)
     else:
         _sf, _sp = active_patients_subquery(int(tenant_id))
         _score_filter = _sf
@@ -319,31 +356,60 @@ def dashboard_stats(
         pass
 
     # Top undercoded patients (patients with most suspect conditions)
+    # Use LEFT JOIN on patients so FHIR patients (whose IDs may not be in the
+    # patients table directly) are still included. For FHIR, also restrict to
+    # patient IDs that belong to the active connection.
     top_undercoded = []
     try:
         with raf_cursor() as cur:
-            cur.execute(
-                """
-                SELECT sc.patient_id AS pid,
-                       p.first_name AS fname, p.last_name AS lname,
-                       rs.final_raf AS raf_score,
-                       COUNT(*) AS suspect_count
-                FROM raf_suspect_conditions sc
-                JOIN patients p ON p.id = sc.patient_id
-                LEFT JOIN raf_scores rs ON rs.patient_id = sc.patient_id
-                  AND rs.measurement_year = %s
-                WHERE sc.status = 'open' AND sc.tenant_id = %s
-                GROUP BY sc.patient_id, p.first_name, p.last_name, rs.final_raf
-                ORDER BY suspect_count DESC
-                LIMIT 10
-                """,
-                (measurement_year, tenant_id),
-            )
+            if _active_conn_type in ("fhir_r4", "rest_api"):
+                cur.execute(
+                    """
+                    SELECT sc.patient_id AS pid,
+                           p.first_name AS fname, p.last_name AS lname,
+                           rs.final_raf AS raf_score,
+                           COUNT(*) AS suspect_count
+                    FROM raf_suspect_conditions sc
+                    LEFT JOIN patients p ON p.id = sc.patient_id
+                    LEFT JOIN raf_scores rs ON rs.patient_id = sc.patient_id
+                      AND rs.measurement_year = %s
+                    WHERE sc.status = 'open'
+                      AND sc.tenant_id = %s
+                      AND sc.patient_id IN (
+                          SELECT epm.id
+                          FROM emr_patient_matches epm
+                          JOIN emr_connections ec ON ec.id = epm.connection_id
+                          WHERE ec.is_active = 1 AND ec.tenant_id = %s
+                      )
+                    GROUP BY sc.patient_id, p.first_name, p.last_name, rs.final_raf
+                    ORDER BY suspect_count DESC
+                    LIMIT 10
+                    """,
+                    (measurement_year, tenant_id, int(tenant_id)),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT sc.patient_id AS pid,
+                           p.first_name AS fname, p.last_name AS lname,
+                           rs.final_raf AS raf_score,
+                           COUNT(*) AS suspect_count
+                    FROM raf_suspect_conditions sc
+                    LEFT JOIN patients p ON p.id = sc.patient_id
+                    LEFT JOIN raf_scores rs ON rs.patient_id = sc.patient_id
+                      AND rs.measurement_year = %s
+                    WHERE sc.status = 'open' AND sc.tenant_id = %s
+                    GROUP BY sc.patient_id, p.first_name, p.last_name, rs.final_raf
+                    ORDER BY suspect_count DESC
+                    LIMIT 10
+                    """,
+                    (measurement_year, tenant_id),
+                )
             for r in cur.fetchall():
                 top_undercoded.append({
                     "id": str(r["pid"]),
                     "pid": str(r["pid"]),
-                    "name": f"{r['fname'] or ''} {r['lname'] or ''}".strip(),
+                    "name": f"{r['fname'] or ''} {r['lname'] or ''}".strip() or "Unknown",
                     "raf_score": float(r["raf_score"]) if r.get("raf_score") else 0,
                     "suspect_count": int(r["suspect_count"]),
                 })
@@ -589,18 +655,34 @@ def detailed_health(
     }
 
 
-@router.get("/metrics", include_in_schema=False)
+@router.get("/api/health/metrics", include_in_schema=False)
 async def metrics(
     request: Request, current_user: dict = Depends(get_current_user)
 ) -> dict[str, Any]:
     """
-    Lightweight application metrics for operational monitoring.
+    Lightweight application metrics for operational monitoring (authenticated).
+
+    Note: The Prometheus scrape endpoint is at /metrics (no auth, registered by
+    app.metrics.init_metrics). This endpoint returns a JSON summary intended for
+    the admin dashboard.
     """
     start_time: datetime = getattr(
         request.app.state, "start_time", datetime.now(timezone.utc)
     )
     uptime_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
-    request_count: int = getattr(request.app.state, "request_count", 0)
+    # Use Prometheus atomic counter if available, else fall back to app.state
+    try:
+        from app.metrics import HTTP_REQUESTS_TOTAL, REGISTRY, _PROMETHEUS_AVAILABLE
+        if _PROMETHEUS_AVAILABLE:
+            request_count = int(sum(
+                s.value for m in REGISTRY.collect()
+                if m.name == "http_requests_total"
+                for s in m.samples if s.name == "http_requests_total_total"
+            ) or 0)
+        else:
+            request_count = getattr(request.app.state, "request_count", 0)
+    except Exception:
+        request_count = getattr(request.app.state, "request_count", 0)
 
     payload: dict[str, Any] = {
         "uptime_seconds": round(uptime_seconds, 1),
@@ -619,3 +701,51 @@ async def metrics(
         pass
 
     return payload
+
+
+# ---------------------------------------------------------------------------
+# /api/health/db — database-specific deep health check (authenticated)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/health/db",
+    summary="Database deep health (authenticated)",
+    tags=["health"],
+)
+async def db_health(
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return connection pool utilisation, slow query count, and replication lag.
+
+    Requires authentication.  The check runs synchronously inside a thread
+    via run_in_db_executor so the event loop is not blocked.
+
+    Response shape::
+
+        {
+            "status": "ok" | "warn" | "degraded",
+            "pool": {
+                "pool_size": 20,
+                "status": "ok",
+                "latency_ms": 2
+            },
+            "slow_queries": {
+                "threshold_sec": 5,
+                "count": 0,
+                "status": "ok"
+            },
+            "replication": null | {
+                "replica_host": "10.1.2.x",
+                "lag_seconds": 1,
+                "status": "ok"
+            },
+            "checked_at": "2026-04-14T10:00:00+00:00"
+        }
+    """
+    from app.db import run_in_db_executor
+    from app.services.db_health import get_db_health
+
+    result = await run_in_db_executor(get_db_health)
+    status_code = 200 if result.get("status") in ("ok", "warn") else 503
+    return JSONResponse(content=result, status_code=status_code)

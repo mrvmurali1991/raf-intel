@@ -693,21 +693,30 @@ def store_parsed_claims(batch_id: int, claims: list[dict[str, Any]]) -> int:
     return inserted
 
 
-def get_batch(batch_id: int) -> dict[str, Any] | None:
+def get_batch(batch_id: int, tenant_id: str = "") -> dict[str, Any] | None:
     """Return a single batch record by ID."""
     with raf_cursor() as cur:
-        cur.execute("SELECT * FROM claims_batches WHERE id=%s", (batch_id,))
+        if tenant_id:
+            cur.execute("SELECT * FROM claims_batches WHERE id=%s AND tenant_id=%s", (batch_id, tenant_id))
+        else:
+            cur.execute("SELECT * FROM claims_batches WHERE id=%s", (batch_id,))
         row = cur.fetchone()
     return _serialize_row(row) if row else None
 
 
-def list_batches(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+def list_batches(limit: int = 50, offset: int = 0, tenant_id: str = "") -> list[dict[str, Any]]:
     """Return all claims batches ordered by most recent."""
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM claims_batches ORDER BY created_at DESC LIMIT %s OFFSET %s",
-            (limit, offset),
-        )
+        if tenant_id:
+            cur.execute(
+                "SELECT * FROM claims_batches WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (tenant_id, limit, offset),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM claims_batches ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
         rows = cur.fetchall()
     return [_serialize_row(r) for r in rows]
 

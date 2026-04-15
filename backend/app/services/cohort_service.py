@@ -50,6 +50,30 @@ from app.services.emr_manager import active_patients_subquery  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
+# FHIR connection detection helper
+# ---------------------------------------------------------------------------
+
+def _active_conn_type(tenant_id: int) -> str:
+    """Return the connection_type of the active EMR connection for the tenant.
+
+    Returns ``'direct_db'`` when no active connection row is found so that
+    all existing direct-DB code paths remain the default.
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT connection_type FROM emr_connections "
+                "WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            return row["connection_type"] if row else "direct_db"
+    except Exception as exc:
+        logger.warning("cohort_service._active_conn_type: could not determine conn type: %s", exc)
+        return "direct_db"
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -222,14 +246,48 @@ def _resolve_criteria_patient_ids(
         demo_params.extend(states)
 
     if demo_conditions:
-        where = " AND ".join(demo_conditions)
-        with raf_cursor() as cur:
-            cur.execute(
-                f"SELECT id FROM patients WHERE is_active = 1 AND {where}",
-                demo_params,
-            )
-            rows = cur.fetchall() or []
-        patient_sets.append({r["id"] for r in rows})
+        conn_type = _active_conn_type(tid)
+        if conn_type == "fhir_r4":
+            # FHIR patients are in emr_patient_matches; only age and gender
+            # are available (zip/state are not synced from FHIR).
+            fhir_conditions: list[str] = []
+            fhir_params: list[Any] = []
+            if age_min is not None:
+                fhir_conditions.append("TIMESTAMPDIFF(YEAR, epm.date_of_birth, CURDATE()) >= %s")
+                fhir_params.append(int(age_min))
+            if age_max is not None:
+                fhir_conditions.append("TIMESTAMPDIFF(YEAR, epm.date_of_birth, CURDATE()) <= %s")
+                fhir_params.append(int(age_max))
+            if gender:
+                fhir_conditions.append("epm.sex = %s")
+                fhir_params.append(gender.upper())
+            # zip_codes / states not available for FHIR patients — skip silently
+            if zip_codes or states:
+                logger.info(
+                    "cohort_service: zip_codes/states criteria ignored for FHIR connection "
+                    "(demographic data not available in emr_patient_matches)"
+                )
+            if fhir_conditions:
+                fhir_where = " AND ".join(fhir_conditions)
+                with raf_cursor() as cur:
+                    cur.execute(
+                        f"SELECT epm.id "
+                        f"FROM emr_patient_matches epm "
+                        f"JOIN emr_connections ec ON ec.id = epm.connection_id "
+                        f"WHERE ec.is_active = 1 AND ec.tenant_id = %s AND {fhir_where}",
+                        [tid, *fhir_params],
+                    )
+                    rows = cur.fetchall() or []
+                patient_sets.append({r["id"] for r in rows})
+        else:
+            where = " AND ".join(demo_conditions)
+            with raf_cursor() as cur:
+                cur.execute(
+                    f"SELECT id FROM patients WHERE is_active = 1 AND {where}",
+                    demo_params,
+                )
+                rows = cur.fetchall() or []
+            patient_sets.append({r["id"] for r in rows})
 
     # --- Payer + ICD (OpenEMR clinical data, requires emr_pid lookup) ---
     openemr_conditions: list[str] = []
@@ -698,35 +756,54 @@ def take_snapshot(cohort_id: int, tenant_id: str) -> dict[str, Any]:
                 r["risk_tier"]: r["cnt"] for r in risk_rows if r["risk_tier"]
             }
 
-        # Demographics from raf_intelligence.patients
+        # Demographics — prefer raf_intelligence.patients (direct-DB);
+        # fall back to emr_patient_matches for FHIR tenants.
         avg_age: float | None = None
         gender_distribution: dict[str, int] = {}
+        conn_type = _active_conn_type(tid)
         try:
-            with raf_cursor() as cur:
-                cur.execute(
-                    f"""
-                    SELECT
-                        AVG(TIMESTAMPDIFF(YEAR, dob, CURDATE())) AS avg_age,
-                        sex,
-                        COUNT(*) AS cnt
-                    FROM patients
-                    WHERE id IN ({ids_fmt})
-                    GROUP BY sex
-                    """,
-                    patient_ids,
-                )
-                demo_rows = cur.fetchall() or []
-                if demo_rows:
-                    # avg_age is repeated on every row from the GROUP BY — take first
-                    avg_age_raw = demo_rows[0].get("avg_age")
-                    avg_age = (
-                        round(float(avg_age_raw), 2)
-                        if avg_age_raw is not None
-                        else None
+            if conn_type == "fhir_r4":
+                with raf_cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT
+                            AVG(TIMESTAMPDIFF(YEAR, epm.date_of_birth, CURDATE())) AS avg_age,
+                            epm.sex,
+                            COUNT(*) AS cnt
+                        FROM emr_patient_matches epm
+                        JOIN emr_connections ec ON ec.id = epm.connection_id
+                        WHERE ec.is_active = 1 AND epm.id IN ({ids_fmt})
+                        GROUP BY epm.sex
+                        """,
+                        patient_ids,
                     )
-                    gender_distribution = {
-                        r["sex"]: r["cnt"] for r in demo_rows if r.get("sex")
-                    }
+                    demo_rows = cur.fetchall() or []
+            else:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT
+                            AVG(TIMESTAMPDIFF(YEAR, dob, CURDATE())) AS avg_age,
+                            sex,
+                            COUNT(*) AS cnt
+                        FROM patients
+                        WHERE id IN ({ids_fmt})
+                        GROUP BY sex
+                        """,
+                        patient_ids,
+                    )
+                    demo_rows = cur.fetchall() or []
+            if demo_rows:
+                # avg_age is repeated on every row from the GROUP BY — take first
+                avg_age_raw = demo_rows[0].get("avg_age")
+                avg_age = (
+                    round(float(avg_age_raw), 2)
+                    if avg_age_raw is not None
+                    else None
+                )
+                gender_distribution = {
+                    r["sex"]: r["cnt"] for r in demo_rows if r.get("sex")
+                }
         except Exception as exc:
             logger.warning("cohort snapshot: demographics query failed: %s", exc)
 

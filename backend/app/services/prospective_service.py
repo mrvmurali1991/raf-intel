@@ -73,39 +73,42 @@ _HIGH_PRIORITY_PERCENTILE = 0.80
 # ---------------------------------------------------------------------------
 
 
-def _active_patient_ids() -> set[int]:
+def _active_patient_ids(tenant_id: str = "") -> set[int]:
     """Return the set of patient IDs linked to active EMR connections.
 
     When no EMR connection is active, falls back to uploaded patients
     (data_source='upload') so that CSV/Excel-imported data is still visible.
+
+    ``tenant_id`` is required for tenant isolation.
     """
+    if not tenant_id:
+        logger.error("_active_patient_ids called without tenant_id — returning empty set.")
+        return set()
     try:
         with raf_cursor() as cur:
             # Check if active connection is direct_db
-            cur.execute("SELECT connection_type FROM emr_connections WHERE is_active = 1 LIMIT 1")
+            cur.execute("SELECT connection_type FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1", (tenant_id,))
             ct_row = cur.fetchone()
             if ct_row and ct_row["connection_type"] == "direct_db":
                 from app.db import openemr_cursor
-                # Use raf_intelligence.patients instead of OpenEMR patient_data
-                cur.execute("SELECT id FROM patients WHERE is_active = 1 LIMIT 10000")
+                cur.execute("SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s LIMIT 10000", (tenant_id,))
                 return {int(r["id"]) for r in cur.fetchall()}
             if ct_row:
-                # FHIR/REST: use emr_patient_matches
                 cur.execute(
                     "SELECT DISTINCT pm.raf_patient_id FROM emr_patient_matches pm "
                     "JOIN emr_connections ec ON ec.id = pm.connection_id "
-                    "WHERE ec.is_active = 1 AND pm.raf_patient_id IS NOT NULL"
+                    "WHERE ec.is_active = 1 AND ec.tenant_id = %s AND pm.raf_patient_id IS NOT NULL",
+                    (tenant_id,),
                 )
                 return {int(r["raf_patient_id"]) for r in cur.fetchall()}
-            # No active EMR — fall back to uploaded patients
             cur.execute(
-                "SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' LIMIT 10000"
+                "SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s AND data_source = 'upload' LIMIT 10000",
+                (tenant_id,),
             )
             result = {int(r["id"]) for r in cur.fetchall()}
             if result:
                 return result
-            # Final fallback: all active patients
-            cur.execute("SELECT id FROM patients WHERE is_active = 1 LIMIT 10000")
+            cur.execute("SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s LIMIT 10000", (tenant_id,))
             return {int(r["id"]) for r in cur.fetchall()}
     except Exception as exc:
         logger.error("_active_patient_ids failed: %s", exc)

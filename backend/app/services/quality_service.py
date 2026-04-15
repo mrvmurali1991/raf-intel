@@ -25,6 +25,30 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# FHIR connection detection helper
+# ---------------------------------------------------------------------------
+
+def _active_conn_type(tenant_id: int) -> str:
+    """Return the connection_type of the active EMR connection for the tenant.
+
+    Returns ``'direct_db'`` when no active connection row is found so that
+    all existing direct-DB code paths remain the default.
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT connection_type FROM emr_connections "
+                "WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            return row["connection_type"] if row else "direct_db"
+    except Exception as exc:
+        logger.warning("_active_conn_type: could not determine conn type: %s", exc)
+        return "direct_db"
+
+
+# ---------------------------------------------------------------------------
 # Measure catalog
 # ---------------------------------------------------------------------------
 
@@ -185,14 +209,33 @@ def _keyword_match(text: str, keywords: list[str]) -> bool:
 # OpenEMR data fetchers (per-patient)
 # ---------------------------------------------------------------------------
 
-def _get_patient_demographics(pid: int) -> dict[str, Any] | None:
-    sql = "SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE id = %s"
+def _get_patient_demographics(pid: int, tenant_id: str = "") -> dict[str, Any] | None:
+    # Primary source: raf_intelligence.patients (direct-DB / OpenEMR patients)
+    sql = "SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE id = %s AND tenant_id = %s"
     with raf_cursor() as cur:
-        cur.execute(sql, (pid,))
+        cur.execute(sql, (pid, tenant_id))
         row = cur.fetchone()
-    if not row:
-        return None
-    return dict(row)
+    if row:
+        return dict(row)
+
+    # Fallback: FHIR patients tracked in emr_patient_matches
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT epm.id AS pid, epm.first_name AS fname, epm.last_name AS lname, "
+                "epm.date_of_birth AS DOB, epm.sex "
+                "FROM emr_patient_matches epm "
+                "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                "WHERE ec.is_active = 1 AND epm.id = %s LIMIT 1",
+                (pid,),
+            )
+            fhir_row = cur.fetchone()
+        if fhir_row:
+            return dict(fhir_row)
+    except Exception as exc:
+        logger.debug("_get_patient_demographics: FHIR fallback failed for pid %s: %s", pid, exc)
+
+    return None
 
 
 def _get_active_diagnoses(pid: int, year: int) -> list[str]:
@@ -668,20 +711,37 @@ def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
         measures: {code: {eligible_count, met_count, compliance_rate, gap_count}}
         overall_compliance_rate: mean compliance across all measures with eligible patients
     """
-    # Load all patients from raf_intelligence.patients
+    # Load all patients — direct-DB patients from raf_intelligence.patients,
+    # FHIR patients from emr_patient_matches joined to their active connection.
     if tenant_id is None:
         raise ValueError(
             "quality_service.get_quality_summary: tenant_id is required — "
             "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
     tid = tenant_id
-    _sf, _sp = active_patients_subquery(int(tid), patient_id_column="id")
-    with raf_cursor() as cur:
-        cur.execute(
-            f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id",
-            (*_sp, tid),
-        )
-        patients = cur.fetchall()
+    conn_type = _active_conn_type(int(tid))
+
+    if conn_type == "fhir_r4":
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT epm.id AS pid, epm.first_name AS fname, epm.last_name AS lname, "
+                "epm.date_of_birth AS DOB, epm.sex "
+                "FROM emr_patient_matches epm "
+                "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                "WHERE ec.is_active = 1 AND ec.tenant_id = %s "
+                "ORDER BY epm.id",
+                (tid,),
+            )
+            patients = cur.fetchall()
+    else:
+        _sf, _sp = active_patients_subquery(int(tid), patient_id_column="id")
+        with raf_cursor() as cur:
+            cur.execute(
+                f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex "
+                f"FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id",
+                (*_sp, tid),
+            )
+            patients = cur.fetchall()
 
     measure_stats: dict[str, dict[str, int]] = {
         code: {"eligible_count": 0, "met_count": 0, "gap_count": 0}
@@ -785,13 +845,29 @@ def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, 
             "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
     tid = tenant_id
-    _sf, _sp = active_patients_subquery(int(tid), patient_id_column="id")
-    with raf_cursor() as cur:
-        cur.execute(
-            f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id LIMIT %s",
-            (*_sp, tid, limit),
-        )
-        patients = cur.fetchall()
+    conn_type = _active_conn_type(int(tid))
+
+    if conn_type == "fhir_r4":
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT epm.id AS pid, epm.first_name AS fname, epm.last_name AS lname, "
+                "epm.date_of_birth AS DOB, epm.sex "
+                "FROM emr_patient_matches epm "
+                "JOIN emr_connections ec ON ec.id = epm.connection_id "
+                "WHERE ec.is_active = 1 AND ec.tenant_id = %s "
+                "ORDER BY epm.id LIMIT %s",
+                (tid, limit),
+            )
+            patients = cur.fetchall()
+    else:
+        _sf, _sp = active_patients_subquery(int(tid), patient_id_column="id")
+        with raf_cursor() as cur:
+            cur.execute(
+                f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex "
+                f"FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id LIMIT %s",
+                (*_sp, tid, limit),
+            )
+            patients = cur.fetchall()
 
     gaps: list[dict[str, Any]] = []
 
@@ -855,7 +931,7 @@ def _rate_to_stars(rate: float | None, thresholds: list[float]) -> float:
     return 1.0
 
 
-def estimate_stars_rating(year: int) -> dict[str, Any]:
+def estimate_stars_rating(year: int, tenant_id: int | None = None) -> dict[str, Any]:
     """
     Estimate CMS STARS rating based on HEDIS measure performance.
 
@@ -869,7 +945,7 @@ def estimate_stars_rating(year: int) -> dict[str, Any]:
         star_breakdown         – per-measure star scores and compliance rates
         interpretation         – qualitative label for the estimated STARS
     """
-    summary = get_quality_summary(year)
+    summary = get_quality_summary(year, tenant_id=tenant_id)
     per_measure = summary.get("measures", {})
 
     star_breakdown: dict[str, Any] = {}

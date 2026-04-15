@@ -297,8 +297,8 @@ def get_panel_patients(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE id IN ({placeholders})",
-                tuple(patient_ids),
+                f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE id IN ({placeholders}) AND tenant_id = %s",
+                tuple(patient_ids) + (tenant_id,),
             )
             patients = {int(p["pid"]): p for p in cur.fetchall()}
     except Exception as exc:

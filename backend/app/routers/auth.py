@@ -33,7 +33,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.auth import get_current_user, get_tenant_id, require_role
 from app.config import settings
@@ -936,3 +936,43 @@ def switch_tenant(
         "tenant_id": target_tid,
         "message": f"Switched to tenant {target_tid}",
     }
+
+
+# ---------------------------------------------------------------------------
+# Break-glass emergency access
+# ---------------------------------------------------------------------------
+
+
+class BreakGlassRequest(BaseModel):
+    reason: str = Field(..., min_length=10, description="Clinical justification for emergency access")
+
+
+@router.post("/break-glass")
+def api_break_glass(
+    body: BreakGlassRequest,
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "physician", "provider", "medical_director")),
+):
+    """Activate break-glass emergency access (physicians/admins only).
+
+    Creates a time-limited (30 min) emergency session with full audit trail.
+    """
+    from app.services.break_glass import create_break_glass_session
+
+    forwarded = request.headers.get("X-Forwarded-For")
+    ip = (
+        forwarded.split(",")[0].strip()
+        if forwarded
+        else (request.client.host if request.client else None)
+    )
+    try:
+        session = create_break_glass_session(
+            user_id=current_user["id"],
+            tenant_id=current_user.get("tenant_id", "unknown"),
+            reason=body.reason,
+            role=current_user.get("role", ""),
+            ip_address=ip,
+        )
+        return {"status": "ok", "break_glass_session": session}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

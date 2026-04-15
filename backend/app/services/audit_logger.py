@@ -120,3 +120,22 @@ def log_phi_access(
             )
     except Exception:
         _app_logger.error("Failed to persist PHI access log to database", exc_info=True)
+
+    # Write to immutable hash-chain audit log (tamper-evident file)
+    try:
+        from app.services.immutable_audit import append_audit_entry
+
+        append_audit_entry(
+            event_type=f"phi_{action}",
+            user_id=user,
+            tenant_id=tid,
+            resource_type=resource,
+            resource_id=str(patient_id) if patient_id is not None else None,
+            action=action,
+            details={
+                "encounter_id": encounter_id,
+                "details": details,
+            },
+        )
+    except Exception:
+        _app_logger.error("Failed to write immutable audit entry", exc_info=True)

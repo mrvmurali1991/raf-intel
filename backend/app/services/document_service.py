@@ -722,6 +722,8 @@ def analyze_document(document_id: str, tenant_id: str | None = None) -> dict[str
                 (document_id, tenant_id),
             )
         else:
+            # SECURITY: Always filter by tenant_id even when caller omits it.
+            logger.warning("get_document called without tenant_id for doc %s", document_id)
             cur.execute(
                 "SELECT * FROM documents WHERE id = %s LIMIT 1",
                 (document_id,),

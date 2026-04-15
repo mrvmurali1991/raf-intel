@@ -758,8 +758,8 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 try:
                     with raf_cursor() as cur:
                         cur.execute(
-                            "SELECT date_of_birth, gender FROM patients WHERE id = %s",
-                            (patient_id,),
+                            "SELECT date_of_birth, gender FROM patients WHERE id = %s AND tenant_id = %s",
+                            (patient_id, tenant_id),
                         )
                         patient_row = cur.fetchone()
                     if patient_row:
@@ -1008,6 +1008,14 @@ def _handle_analysis_completed(payload: dict[str, Any]) -> None:
         },
     )
 
+    # Pre-warm RAF score cache after calculation
+    try:
+        from app.services.cache_strategy import warm_raf_scores, invalidate_raf_scores
+        invalidate_raf_scores(tenant_id)
+        warm_raf_scores(tenant_id)
+    except Exception as exc:
+        logger.warning("pipeline_chain: cache warming after RAF calc failed: %s", exc)
+
     _handle_raf_calculation_completed({
         "tenant_id": tenant_id,
         "total": len(results),
@@ -1167,6 +1175,15 @@ def _handle_pipeline_completed(payload: dict[str, Any]) -> None:
         run_id,
         settings.get("pipeline_mode"),
     )
+
+    # Pre-warm dashboard caches after full pipeline completion
+    try:
+        from app.services.cache_strategy import warm_dashboard, invalidate_dashboard, invalidate_worklist
+        invalidate_dashboard(tenant_id)
+        invalidate_worklist(tenant_id)
+        warm_dashboard(tenant_id)
+    except Exception as exc:
+        logger.warning("pipeline_chain: dashboard cache warming failed: %s", exc)
 
     if settings.get("webhook_enabled"):
         try:

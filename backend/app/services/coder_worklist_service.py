@@ -22,6 +22,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from app.db import raf_cursor
+from app.services.cache_strategy import tenant_cached, TTL_WORKLIST
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ def _fetch_item(worklist_id: int) -> dict[str, Any] | None:
 # Queue retrieval
 # ---------------------------------------------------------------------------
 
+@tenant_cached("coder_worklist", ttl=TTL_WORKLIST)
 def get_worklist(
     coder_user_id: int,
     tenant_id: str,
@@ -171,10 +173,7 @@ def claim_next(
             "coder_worklist_service.claim_next: tenant_id is required — "
             "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-    tid = tenant_id
-    _active_patients_frag = (
-        "(patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s))"
-    )
+    _active_patients_frag, _ap = active_patients_subquery(int(tenant_id))
     with raf_cursor() as cur:
         sql = f"""
             SELECT id
@@ -184,7 +183,7 @@ def claim_next(
               AND  status        = 'queued'
               AND  {_active_patients_frag}
         """
-        params: list[Any] = [coder_user_id, tenant_id, tid]
+        params: list[Any] = [coder_user_id, tenant_id, *_ap]
 
         if review_type:
             sql += " AND review_type = %s"
@@ -684,9 +683,8 @@ def _round_robin_coder(tenant_id: str) -> int | None:
             "coder_worklist_service._round_robin_coder: tenant_id is required — "
             "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-    tid = tenant_id
-    _active_patients_frag = (
-        "(w.patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s))"
+    _active_patients_frag, _ap = active_patients_subquery(
+        int(tenant_id), patient_id_column="w.patient_id"
     )
     with raf_cursor() as cur:
         cur.execute(
@@ -705,7 +703,7 @@ def _round_robin_coder(tenant_id: str) -> int | None:
             ORDER BY open_count ASC
             LIMIT  1
             """,
-            (tenant_id, tid),
+            (tenant_id, *_ap),
         )
         row = cur.fetchone()
     return row["id"] if row else None
@@ -765,10 +763,7 @@ def get_productivity_stats(
                 "coder_worklist_service.get_productivity_stats: tenant_id is required — "
                 "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
             )
-        tid = tenant_id
-        _active_patients_frag = (
-            "(patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s))"
-        )
+        _active_patients_frag, _ap = active_patients_subquery(int(tenant_id))
         cur.execute(
             f"""
             SELECT COUNT(*) AS open_count
@@ -778,7 +773,7 @@ def get_productivity_stats(
               AND  status        IN ('queued', 'in_progress')
               AND  {_active_patients_frag}
             """,
-            (coder_user_id, tenant_id, tid),
+            (coder_user_id, tenant_id, *_ap),
         )
         queue_depth = cur.fetchone()["open_count"]
 

@@ -109,10 +109,14 @@ async def _resolve_user(request: Request) -> dict[str, Any] | None:
     # JWT 'tenant_id' is ignored in the base _resolve_user to prevent
     # client-side elevation.
     if user.get("tenant_id") is None:
-        # Default to tenant '1' for legacy accounts (backward compat).
-        # In the future, this should be a 403 Forbidden to enforce strict isolation.
-        logger.warning("User %s has no tenant assignment; defaulting to '1' for legacy compatibility.", user_id)
-        user["tenant_id"] = "1"
+        # SECURITY: Reject users without a tenant assignment.
+        # No fallback — a missing tenant_id means the account is misconfigured.
+        logger.error(
+            "TENANT ISOLATION VIOLATION: User %s has no tenant assignment. "
+            "Access denied. An admin must assign a tenant_id to this user.",
+            user_id,
+        )
+        return None
     return user
 
 
@@ -159,9 +163,12 @@ def get_tenant_id(current_user: dict = Depends(get_current_user)) -> str:
     """
     tid = current_user.get("tenant_id")
     if tid is None:
-        # Default to tenant '1' for legacy accounts (backward compat).
-        # Ensures regression tests like test_get_tenant_id_defaults_to_1_when_none pass.
-        return "1"
+        # SECURITY: Never fall back to a default tenant.
+        # A missing tenant_id means the user record is misconfigured.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. No tenant assignment found for this user. Contact your administrator.",
+        )
     return str(tid)
 
 

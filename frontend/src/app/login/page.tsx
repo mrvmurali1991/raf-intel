@@ -11,6 +11,7 @@ import {
   Activity, FileCheck, Lock, ChevronRight,
   KeyRound, RotateCcw, HeartPulse, Stethoscope, FileText, Zap
 } from "lucide-react";
+import { loginSchema } from "@/lib/validators";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
@@ -464,9 +465,16 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const parsed = loginSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].message);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const result = await login(email, password);
+      const result = await login(parsed.data.email, parsed.data.password);
       if (result.mfa_required && result.mfa_token) {
         setPendingMfaToken(result.mfa_token);
         setStep("mfa");
@@ -696,7 +704,7 @@ export default function LoginPage() {
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                 {error && (
                   <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 p-3.5 text-sm text-red-700 dark:text-red-300">
                     <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />

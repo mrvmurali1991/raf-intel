@@ -270,6 +270,7 @@ def quality_summary(
 def stars_estimate(
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
@@ -287,7 +288,7 @@ def stars_estimate(
     calc_year = year or date.today().year
 
     try:
-        result = estimate_stars_rating(calc_year)
+        result = estimate_stars_rating(calc_year, tenant_id=int(tenant_id))
     except Exception as exc:
         logger.error("stars_estimate error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -33,6 +33,8 @@ class JSONFormatter(logging.Formatter):
         "patient_id",
         "tenant_id",
         "duration_ms",
+        "trace_id",
+        "span_id",
     )
 
     # Regex patterns for sensitive values that must be redacted from any
@@ -65,6 +67,18 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info and record.exc_info[0]:
             log_entry["exception"] = self.formatException(record.exc_info)
 
+        # Inject OpenTelemetry trace context when available.
+        try:
+            from opentelemetry import trace as _otel_trace
+
+            span = _otel_trace.get_current_span()
+            ctx = span.get_span_context()
+            if ctx and ctx.trace_id:
+                log_entry["trace_id"] = format(ctx.trace_id, "032x")
+                log_entry["span_id"] = format(ctx.span_id, "016x")
+        except Exception:
+            pass
+
         # Promote well-known extra fields to top-level keys.
         for key in self._EXTRA_FIELDS:
             if hasattr(record, key):
@@ -84,11 +98,12 @@ def configure_logging() -> None:
     call so the formatter reflects the current APP_ENV.
     """
     app_env = os.getenv("APP_ENV", "development")
+    log_format = os.getenv("LOG_FORMAT", "")  # "json" forces JSON in any env
     root = logging.getLogger()
     root.setLevel(logging.INFO)
 
     handler = logging.StreamHandler(sys.stdout)
-    if app_env == "production":
+    if app_env == "production" or log_format.lower() == "json":
         handler.setFormatter(JSONFormatter())
     else:
         handler.setFormatter(

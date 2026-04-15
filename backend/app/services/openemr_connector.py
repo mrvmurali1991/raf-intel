@@ -263,10 +263,10 @@ def get_patient(pid: int) -> dict[str, Any] | None:
 
 
 @_empty_on_no_emr(default=0)
-def get_patient_count() -> int:
+def get_patient_count(tenant_id: str = "") -> int:
     from app.db import raf_cursor
     with raf_cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1")
+        cur.execute("SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s", (tenant_id,))
         row = cur.fetchone()
     return row["cnt"] if row else 0
 

@@ -34,6 +34,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from app.db import raf_cursor
+from app.services.cache_strategy import tenant_cached, TTL_WORKLIST
 
 logger = logging.getLogger(__name__)
 
@@ -706,6 +707,7 @@ def get_patient_action_items(
 # ---------------------------------------------------------------------------
 
 
+@tenant_cached("worklist", ttl=TTL_WORKLIST)
 def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
     """
     Return aggregate worklist statistics for a tenant.

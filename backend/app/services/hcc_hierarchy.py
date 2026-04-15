@@ -252,7 +252,7 @@ def apply_hierarchy(
 def apply_hierarchy_to_patient(
     patient_id: int,
     measurement_year: int,
-    tenant_id: str = "1",
+    tenant_id: str,
     model_version: Optional[str] = None,
 ) -> dict:
     """Read raf_patient_hcc, apply hierarchy, write is_trumped / trumped_by_hcc.
@@ -369,7 +369,7 @@ def apply_hierarchy_to_patient(
 
 def apply_hierarchy_to_all_patients(
     measurement_year: int,
-    tenant_id: str = "1",
+    tenant_id: str,
     model_version: Optional[str] = None,
 ) -> dict:
     """Apply hierarchy stamping to every patient for a measurement year.

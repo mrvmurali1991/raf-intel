@@ -30,8 +30,48 @@ from mysql.connector.pooling import MySQLConnectionPool
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+_slow_query_logger = logging.getLogger("app.db.slow_queries")
 
 _POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
+_SLOW_QUERY_MS = int(os.getenv("SLOW_QUERY_THRESHOLD_MS", "500"))
+
+# ---------------------------------------------------------------------------
+# Per-request query counter (thread-local) for N+1 detection
+# ---------------------------------------------------------------------------
+
+_query_counter = threading.local()
+
+
+def reset_query_counter() -> None:
+    """Reset the per-request query counter (call at request start)."""
+    _query_counter.count = 0
+    _query_counter.queries = []
+
+
+def get_query_count() -> int:
+    """Return the number of queries executed in the current request."""
+    return getattr(_query_counter, "count", 0)
+
+
+def get_query_log() -> list[str]:
+    """Return truncated SQL for queries in the current request."""
+    return getattr(_query_counter, "queries", [])
+
+
+# ---------------------------------------------------------------------------
+# Read-replica and proxy configuration
+# ---------------------------------------------------------------------------
+
+# Set DB_READ_HOST to enable a read replica for SELECT-heavy queries.
+# If unset, raf_read_cursor() falls back to the primary pool.
+_DB_READ_HOST: str | None = os.getenv("DB_READ_HOST")
+_DB_READ_PORT: int = int(os.getenv("DB_READ_PORT", "3306"))
+
+# Set DB_PROXY_HOST to route all primary writes through a connection proxy
+# (ProxySQL / MySQL Router).  When set, the primary RAF pool will connect
+# via the proxy instead of directly to the DB server.
+_DB_PROXY_HOST: str | None = os.getenv("DB_PROXY_HOST")
+_DB_PROXY_PORT: int = int(os.getenv("DB_PROXY_PORT", "6033"))
 
 # ---------------------------------------------------------------------------
 # Pool singletons – created once, protected by a lock for thread safety
@@ -39,6 +79,7 @@ _POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
 
 _openemr_pool: MySQLConnectionPool | None = None
 _raf_pool: MySQLConnectionPool | None = None
+_raf_read_pool: MySQLConnectionPool | None = None
 _pool_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
@@ -87,7 +128,18 @@ _MAX_DYNAMIC_POOLS = 20
 #     scores = await fetch_scores(tenant_id)
 # ---------------------------------------------------------------------------
 
-_DB_EXECUTOR_WORKERS = int(os.getenv("DB_EXECUTOR_WORKERS", str(_POOL_SIZE)))
+# ---------------------------------------------------------------------------
+# ThreadPoolExecutor — dedicated to synchronous MySQL I/O
+#
+# DB_MAX_WORKERS overrides the worker count ceiling.  Defaults to
+# DB_EXECUTOR_WORKERS (which itself defaults to DB_POOL_SIZE).
+# DB_QUEUE_SIZE limits the pending-task queue so a surge of requests
+# does not exhaust memory; tasks beyond the limit receive an immediate
+# rejection rather than silently queuing forever.
+# ---------------------------------------------------------------------------
+
+_DB_EXECUTOR_WORKERS = int(os.getenv("DB_MAX_WORKERS", os.getenv("DB_EXECUTOR_WORKERS", str(_POOL_SIZE))))
+_DB_QUEUE_SIZE = int(os.getenv("DB_QUEUE_SIZE", str(_DB_EXECUTOR_WORKERS * 4)))
 _db_executor = ThreadPoolExecutor(
     max_workers=_DB_EXECUTOR_WORKERS,
     thread_name_prefix="db",
@@ -208,13 +260,26 @@ def _build_openemr_pool() -> MySQLConnectionPool:
 
 
 def _build_raf_pool() -> MySQLConnectionPool:
+    """Build the primary RAF write pool.
+
+    When DB_PROXY_HOST is configured, connections are routed through the
+    proxy (ProxySQL / MySQL Router) instead of connecting directly to the
+    primary DB server.
+    """
     ssl_ctx = _build_ssl_context()
+    # Route through proxy when configured; retain original host as fallback.
+    host = _DB_PROXY_HOST if _DB_PROXY_HOST else settings.raf_db_host
+    port = _DB_PROXY_PORT if _DB_PROXY_HOST else settings.raf_db_port
+    if _DB_PROXY_HOST:
+        logger.info(
+            "RAF primary pool: routing through proxy %s:%s", host, port
+        )
     kwargs: dict = dict(
         pool_name="raf_pool",
         pool_size=_POOL_SIZE,
         pool_reset_session=True,
-        host=settings.raf_db_host,
-        port=settings.raf_db_port,
+        host=host,
+        port=port,
         user=settings.raf_db_user,
         password=settings.raf_db_password,
         database=settings.raf_db_name,
@@ -224,6 +289,39 @@ def _build_raf_pool() -> MySQLConnectionPool:
     )
     if ssl_ctx:
         kwargs["ssl_context"] = ssl_ctx
+    return MySQLConnectionPool(**kwargs)
+
+
+def _build_raf_read_pool() -> MySQLConnectionPool:
+    """Build a read-only pool pointing at the read replica.
+
+    Called only when DB_READ_HOST is configured.  Uses a slightly smaller
+    pool than the primary because reads can be spread across multiple
+    replicas in future.
+    """
+    ssl_ctx = _build_ssl_context()
+    read_pool_size = max(5, _POOL_SIZE // 2)
+    kwargs: dict = dict(
+        pool_name="raf_read_pool",
+        pool_size=read_pool_size,
+        pool_reset_session=True,
+        host=_DB_READ_HOST,
+        port=_DB_READ_PORT,
+        user=settings.raf_db_user,
+        password=settings.raf_db_password,
+        database=settings.raf_db_name,
+        charset="utf8mb4",
+        collation="utf8mb4_unicode_ci",
+        connect_timeout=10,
+    )
+    if ssl_ctx:
+        kwargs["ssl_context"] = ssl_ctx
+    logger.info(
+        "RAF read-replica pool initialised: %s:%s (pool_size=%d)",
+        _DB_READ_HOST,
+        _DB_READ_PORT,
+        read_pool_size,
+    )
     return MySQLConnectionPool(**kwargs)
 
 
@@ -245,6 +343,26 @@ def get_raf_pool() -> MySQLConnectionPool:
     return _raf_pool
 
 
+def get_raf_read_pool() -> MySQLConnectionPool:
+    """Return the read-replica pool, or the primary pool if no replica is configured."""
+    global _raf_read_pool
+    if _DB_READ_HOST is None:
+        # No replica configured — fall back to primary transparently.
+        return get_raf_pool()
+    if _raf_read_pool is None:
+        with _pool_lock:
+            if _raf_read_pool is None:
+                try:
+                    _raf_read_pool = _build_raf_read_pool()
+                except Exception as exc:
+                    logger.warning(
+                        "Read replica pool creation failed (%s) — falling back to primary.",
+                        exc,
+                    )
+                    return get_raf_pool()
+    return _raf_read_pool
+
+
 def get_openemr_db():
     """Return a raw connection from the OpenEMR pool."""
     return get_openemr_pool().get_connection()
@@ -260,16 +378,64 @@ def get_raf_db():
 # ---------------------------------------------------------------------------
 
 
+class _InstrumentedCursor:
+    """Thin wrapper around a MySQL cursor that logs slow queries and counts executions."""
+
+    __slots__ = ("_cursor",)
+
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, query, params=None):
+        # Track query count for N+1 detection
+        count = getattr(_query_counter, "count", 0)
+        _query_counter.count = count + 1
+        queries = getattr(_query_counter, "queries", [])
+        if len(queries) < 50:  # cap log size
+            queries.append((query[:120] if isinstance(query, str) else str(query)[:120]))
+            _query_counter.queries = queries
+
+        start = time.monotonic()
+        try:
+            return self._cursor.execute(query, params)
+        finally:
+            elapsed_ms = (time.monotonic() - start) * 1000
+            if elapsed_ms >= _SLOW_QUERY_MS:
+                _slow_query_logger.warning(
+                    "SLOW QUERY (%.0fms): %s | params=%s",
+                    elapsed_ms,
+                    query[:500] if isinstance(query, str) else str(query)[:500],
+                    str(params)[:200] if params else "None",
+                )
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self._cursor.close()
+
+
 @contextmanager
 def _db_cursor(pool_fn, dictionary: bool = True) -> Generator:
     """Shared implementation — acquire a connection from *pool_fn*, yield a
     cursor, commit on success, rollback on exception, and always close both
-    the cursor and the connection."""
+    the cursor and the connection.
+
+    The cursor is wrapped with _InstrumentedCursor to log slow queries
+    (>SLOW_QUERY_THRESHOLD_MS) and count queries per request for N+1 detection.
+    """
     pool = pool_fn()
     conn = pool.get_connection()
     cursor = None
     try:
-        cursor = conn.cursor(dictionary=dictionary)
+        raw_cursor = conn.cursor(dictionary=dictionary)
+        cursor = _InstrumentedCursor(raw_cursor)
         yield cursor
         conn.commit()
     except Exception:
@@ -277,8 +443,21 @@ def _db_cursor(pool_fn, dictionary: bool = True) -> Generator:
         raise
     finally:
         if cursor is not None:
-            cursor.close()
+            cursor._cursor.close()
         conn.close()
+
+
+def explain_query(query: str, params: tuple | None = None) -> list[dict]:
+    """Run EXPLAIN on a query and return the plan rows.
+
+    Only available when APP_ENV is 'development'. Returns an empty list in
+    production to prevent accidental exposure of query internals.
+    """
+    if settings.app_env != "development":
+        return []
+    with _db_cursor(get_raf_pool) as cur:
+        cur.execute(f"EXPLAIN {query}", params)
+        return cur.fetchall()
 
 
 class NoActiveEMRConnection(Exception):
@@ -345,15 +524,53 @@ def raf_cursor(dictionary: bool = True) -> Generator:
         yield cursor
 
 
+@contextmanager
+def raf_read_cursor(dictionary: bool = True) -> Generator:
+    """Yield a read-only cursor routed to the read replica (or primary fallback).
+
+    Use this context manager for SELECT-only workloads — patient lists,
+    dashboard aggregates, reports — to offload read traffic from the primary
+    write instance.
+
+    When DB_READ_HOST is not configured this is identical to ``raf_cursor``.
+    When the replica pool fails at pool-acquisition time the cursor silently
+    falls back to the primary pool so the request still succeeds.
+
+    IMPORTANT: Never issue INSERT/UPDATE/DELETE through this cursor.  On a true
+    read replica those statements will fail with a read-only error from MySQL.
+    """
+    if not _DB_READ_HOST:
+        with _db_cursor(get_raf_pool, dictionary=dictionary) as cursor:
+            yield cursor
+        return
+
+    # Try to acquire a connection from the read replica pool.  If the pool
+    # itself is unreachable we fall back to the primary *before* yielding,
+    # avoiding the illegal double-yield that a post-yield fallback would cause.
+    try:
+        pool = get_raf_read_pool()
+    except Exception:
+        logger.warning(
+            "raf_read_cursor: read replica pool unavailable, falling back to primary."
+        )
+        pool = get_raf_pool()
+
+    with _db_cursor(lambda: pool, dictionary=dictionary) as cursor:
+        yield cursor
+
+
 # ---------------------------------------------------------------------------
 # Health-check helper
 # ---------------------------------------------------------------------------
 
 
 def check_connections() -> dict[str, bool]:
-    """Try to ping both databases and return status dict."""
+    """Try to ping both databases (and read replica if configured) and return status dict."""
     status: dict[str, bool] = {}
-    for label, pool_fn in [("openemr", get_openemr_pool), ("raf", get_raf_pool)]:
+    targets = [("openemr", get_openemr_pool), ("raf", get_raf_pool)]
+    if _DB_READ_HOST:
+        targets.append(("raf_read", get_raf_read_pool))
+    for label, pool_fn in targets:
         conn = None
         try:
             pool = pool_fn()
@@ -669,6 +886,61 @@ def test_db_connection(
             cursor.close()
         if conn is not None:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Tenant-scoped query helpers — safety net for multi-tenancy
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+TENANT_SCOPED_TABLES = {
+    "patients", "raf_scores", "raf_patient_demographics", "raf_patient_hcc",
+    "raf_patient_interactions", "suspects", "attestations", "documents",
+    "chart_chase", "claims", "care_gaps", "cohorts", "cohort_snapshots",
+    "submissions", "providers", "emr_connections", "audit_log",
+    "quality_measures", "awv_visits", "notifications", "coder_worklist",
+    "encounters", "encounter_diagnoses", "raf_score_components",
+}
+
+_TENANT_FILTER_RE = _re.compile(r"\btenant_id\s*=", _re.IGNORECASE)
+
+
+def tenant_query(cursor, sql: str, params: tuple | list, tenant_id: str):
+    """Execute SQL with automatic tenant_id injection if missing.
+
+    Safety net: if the SQL already contains ``tenant_id =``, it runs as-is.
+    Otherwise the filter is appended automatically and logged as a warning.
+    """
+    if not tenant_id:
+        raise ValueError("tenant_query() requires a non-empty tenant_id.")
+    params = tuple(params) if not isinstance(params, tuple) else params
+    if not _TENANT_FILTER_RE.search(sql):
+        sql_upper = sql.strip().upper()
+        if "WHERE" in sql_upper:
+            sql = sql + " AND tenant_id = %s"
+        else:
+            sql = sql + " WHERE tenant_id = %s"
+        params = params + (tenant_id,)
+        logger.warning(
+            "TENANT SAFETY NET: Injected tenant_id filter. SQL: %.80s", sql[:80],
+        )
+    cursor.execute(sql, params)
+    return cursor
+
+
+def tenant_insert(cursor, table: str, data: dict, tenant_id: str):
+    """Insert a row, auto-adding tenant_id if not already in *data*."""
+    if not tenant_id:
+        raise ValueError("tenant_insert() requires a non-empty tenant_id.")
+    if "tenant_id" not in data:
+        data = {**data, "tenant_id": tenant_id}
+        logger.warning("TENANT SAFETY NET: Auto-added tenant_id to INSERT into %s.", table)
+    columns = ", ".join(data.keys())
+    placeholders = ", ".join(["%s"] * len(data))
+    sql = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+    cursor.execute(sql, tuple(data.values()))
+    return cursor
 
 
 def close_dynamic_pool(host: str, port: int, database: str, user: str) -> None:

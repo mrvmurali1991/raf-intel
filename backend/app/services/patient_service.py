@@ -32,6 +32,7 @@ from app.db import raf_cursor
 from app.services import openemr_connector as emr
 from app.services.raf_calculator import get_raf_breakdown
 from app.services.emr_manager import active_patients_subquery
+from app.services.cache_strategy import tenant_cached, TTL_PATIENT_LIST, invalidate_patient_list
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ def _patient_in_active_connection(pid: int, tenant_id: str | None = None) -> boo
                         (pid, tenant_id),
                     )
                 else:
+                    logger.warning("patient_exists called without tenant_id for pid=%s", pid)
                     cur.execute("SELECT 1 FROM patients WHERE id = %s", (pid,))
                 return cur.fetchone() is not None
         return False
@@ -132,6 +134,7 @@ def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | None:
                     (pid, tenant_id),
                 )
             else:
+                logger.warning("_get_emr_pid called without tenant_id for pid=%s", pid)
                 cur.execute("SELECT emr_pid FROM patients WHERE id = %s", (pid,))
             row = cur.fetchone()
             if row and row.get("emr_pid"):
@@ -392,6 +395,7 @@ def _list_raf_patients(
 # ---------------------------------------------------------------------------
 
 
+@tenant_cached("patient_list", ttl=TTL_PATIENT_LIST)
 def svc_list_patients(
     limit: int,
     offset: int,
@@ -1348,8 +1352,8 @@ def svc_get_comprehensive_profile(
     try:
         with raf_cursor() as _enr_cur:
             _enr_cur.execute(
-                "SELECT insurance_plan, insurance_type, enrollment_months, dob FROM patients WHERE id = %s",
-                (pid,),
+                "SELECT insurance_plan, insurance_type, enrollment_months, dob FROM patients WHERE id = %s AND tenant_id = %s",
+                (pid, tenant_id),
             )
             _enr_row = _enr_cur.fetchone()
             if _enr_row:

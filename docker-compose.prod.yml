@@ -46,6 +46,22 @@ x-backend-env: &backend-env
   DB_SSL_ENABLED: ${DB_SSL_ENABLED:-true}
   FRONTEND_URL: ${FRONTEND_URL:-}
   OPENEMR_URL: ${OPENEMR_URL:-http://openemr:80}
+  # Read-replica (optional): set DB_READ_HOST to offload SELECT traffic
+  DB_READ_HOST: ${DB_READ_HOST:-}
+  DB_READ_PORT: ${DB_READ_PORT:-3306}
+  # Connection proxy (optional): set DB_PROXY_HOST for ProxySQL / MySQL Router
+  DB_PROXY_HOST: ${DB_PROXY_HOST:-}
+  DB_PROXY_PORT: ${DB_PROXY_PORT:-6033}
+  # ThreadPoolExecutor tuning
+  DB_MAX_WORKERS: ${DB_MAX_WORKERS:-20}
+  DB_QUEUE_SIZE: ${DB_QUEUE_SIZE:-80}
+  # Redis Sentinel (optional): set REDIS_SENTINEL_HOSTS for HA Redis
+  REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+  REDIS_SENTINEL_MASTER: ${REDIS_SENTINEL_MASTER:-mymaster}
+  # Observability (optional — set OTEL_EXPORTER_OTLP_ENDPOINT to enable tracing)
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-raf-intelligence-backend}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
 
 services:
   # -------------------------------------------------------------------------
@@ -62,8 +78,11 @@ services:
       - /tmp:noexec,nosuid,size=64M
     command: >
       redis-server
-        --maxmemory 512mb
+        --maxmemory 1gb
         --maxmemory-policy allkeys-lru
+        --maxmemory-samples 10
+        --appendonly yes
+        --appendfsync everysec
         --save 60 1000
         --loglevel warning
         --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -81,10 +100,10 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 640M
+          memory: 1280M
         reservations:
           cpus: "0.1"
-          memory: 128M
+          memory: 256M
     logging:
       driver: json-file
       options:
@@ -127,10 +146,10 @@ services:
         - "python"
         - "-c"
         - "import urllib.request; urllib.request.urlopen('http://localhost:8500/health')"
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 3
-      start_period: 15s
+      retries: 5
+      start_period: 30s
     # Gunicorn is the production-grade process manager; each worker is a
     # Uvicorn ASGI worker.  2 workers is conservative — adjust to (2 * CPU + 1).
     command: >
@@ -144,8 +163,16 @@ services:
         --access-logfile -
         --error-logfile -
         --log-level info
-    stop_grace_period: 40s
+    stop_grace_period: 30s
     deploy:
+      update_config:
+        order: start-first          # Bring new container up before stopping old
+        failure_action: rollback
+        delay: 5s
+        parallelism: 1
+      rollback_config:
+        parallelism: 1
+        failure_action: pause
       resources:
         limits:
           cpus: "2.0"
@@ -160,7 +187,9 @@ services:
         max-file: "5"
 
   # -------------------------------------------------------------------------
-  # Worker — Celery task processor
+  # Worker (default) — lightweight operational tasks: EMR syncs, sweeps, SFTP
+  # Queues: default, pipeline, notifications
+  # Scale: docker compose -f docker-compose.prod.yml up --scale worker=N
   # -------------------------------------------------------------------------
   worker:
     build:
@@ -187,25 +216,144 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.services.job_service inspect ping --destination celery@$$HOSTNAME --timeout 10"]
+      test: ["CMD-SHELL", "celery -A app.services.celery_tasks inspect ping --destination celery@$$HOSTNAME --timeout 10"]
       interval: 30s
       timeout: 15s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+    command: >
+      celery -A app.services.celery_tasks worker
+        --loglevel=info
+        --concurrency=${CELERY_CONCURRENCY:-4}
+        -Q default,pipeline,notifications
+        --hostname default@%h
     deploy:
-      # Scale horizontally: docker compose up --scale worker=3
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 10s
+        parallelism: 1
+      rollback_config:
+        parallelism: 1
+        failure_action: pause
+      # Scale horizontally: docker compose up --scale worker=N
       resources:
         limits:
-          cpus: "4.0"
-          memory: 4G
+          cpus: "2.0"
+          memory: 2G
         reservations:
-          cpus: "1.0"
-          memory: 1G
+          cpus: "0.5"
+          memory: 512M
     logging:
       driver: json-file
       options:
         max-size: "20m"
         max-file: "5"
+
+  # -------------------------------------------------------------------------
+  # Worker (heavy) — long-running AI analysis tasks; autoscale=MAX,MIN
+  # Start: docker compose -f docker-compose.prod.yml --profile heavy up -d worker-heavy
+  # -------------------------------------------------------------------------
+  worker-heavy:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: raf-worker:${IMAGE_TAG:-latest}
+    container_name: raf-worker-heavy
+    restart: unless-stopped
+    profiles:
+      - heavy
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      <<: *backend-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+      - submissions:/app/data/submissions
+      - logs:/app/logs
+    networks:
+      - raf-internal
+      - raf-external
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.services.celery_tasks inspect ping --destination heavy@$$HOSTNAME --timeout 10"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 60s
+    # --autoscale=MAX,MIN: Celery dynamically scales prefork workers between
+    # MIN and MAX based on queue depth. MIN=3 keeps warm workers ready.
+    command: >
+      celery -A app.services.celery_tasks worker
+        --loglevel=info
+        --autoscale=${CELERY_HEAVY_MAX:-10},${CELERY_HEAVY_MIN:-3}
+        -Q heavy
+        --hostname heavy@%h
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # -------------------------------------------------------------------------
+  # Flower — Celery monitoring dashboard (HTTP Basic Auth via FLOWER_BASIC_AUTH)
+  # Start: docker compose -f docker-compose.prod.yml --profile monitoring up -d flower
+  # Access: http://host:5555
+  # -------------------------------------------------------------------------
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: raf-worker:${IMAGE_TAG:-latest}
+    container_name: raf-flower
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      <<: *backend-env
+      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:-admin:changeme}
+    networks:
+      - raf-internal
+      - raf-external
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    command: >
+      celery -A app.services.celery_tasks flower
+        --port=5555
+        --basic-auth=${FLOWER_BASIC_AUTH:-admin:changeme}
+        --url-prefix=${FLOWER_URL_PREFIX:-}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # -------------------------------------------------------------------------
   # Frontend — Next.js standalone server
@@ -241,11 +389,20 @@ services:
         - "node"
         - "-e"
         - "require('http').get('http://localhost:3000/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
     deploy:
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 5s
+        parallelism: 1
+      rollback_config:
+        parallelism: 1
+        failure_action: pause
       resources:
         limits:
           cpus: "1.0"
@@ -300,6 +457,36 @@ services:
         reservations:
           cpus: "0.1"
           memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------------
+  # Jaeger — Distributed tracing (start with --profile observability)
+  # -------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: raf-jaeger
+    restart: unless-stopped
+    profiles:
+      - observability
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC receiver
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - raf-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     logging:
       driver: json-file
       options:

@@ -729,7 +729,9 @@ def get_insights(current_user: dict = Depends(get_current_user)) -> dict[str, An
     """
     import inspect as _inspect
     now = datetime.now(timezone.utc).isoformat()
-    tenant_id = str(current_user.get("tenant_id", "1")) if current_user else "1"
+    tenant_id = str(current_user.get("tenant_id", "")) if current_user else ""
+    if not tenant_id:
+        return JSONResponse(status_code=403, content={"detail": "No tenant assignment."})
     insights: list[dict] = []
 
     for generator in _GENERATORS:

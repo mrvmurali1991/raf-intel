@@ -24,6 +24,7 @@ from datetime import date, datetime
 from typing import Any
 
 from app.db import raf_cursor
+from app.services.cache_strategy import tenant_cached, TTL_DASHBOARD
 
 logger = logging.getLogger(__name__)
 
@@ -459,6 +460,7 @@ def get_history(task_id: int) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+@tenant_cached("dashboard", ttl=TTL_DASHBOARD)
 def get_dashboard_stats(
     *,
     provider_id: int | None = None,

@@ -28,7 +28,7 @@ import io
 import json
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -377,7 +377,7 @@ def _import_multi_sheet(
         update_set = ", ".join(f"`{c}` = %s" for c in update_cols)
         patient_update_sql = f"UPDATE patients SET {update_set} WHERE id = %s"
 
-        current_year = datetime.utcnow().year
+        current_year = datetime.now(timezone.utc).year
 
         for idx, raw in enumerate(patients_rows, start=2):
             try:
@@ -752,7 +752,7 @@ def _import_multi_sheet(
                 imported_rows,
                 failed_rows,
                 err_summary,
-                datetime.utcnow(),
+                datetime.now(timezone.utc),
                 upload_id,
             ),
         )
@@ -820,7 +820,7 @@ def _finalize_upload_session(
                 imported,
                 failed,
                 (error_summary or "")[:4000] or None,
-                datetime.utcnow(),
+                datetime.now(timezone.utc),
                 upload_id,
             ),
         )

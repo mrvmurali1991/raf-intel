@@ -149,7 +149,7 @@ jobs:
             --cov=app \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-fail-under=40 \
+            --cov-fail-under=80 \
             -m "not slow and not integration" \
             --timeout=60
         working-directory: backend
@@ -399,3 +399,144 @@ jobs:
             NEXT_PUBLIC_API_URL=http://localhost:8500
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job: e2e-test
+  # Playwright end-to-end tests against a running frontend + backend.
+  # Runs after both backend and frontend are verified to build cleanly.
+  # Uses docker-compose to spin up the full stack before tests run.
+  # ---------------------------------------------------------------------------
+  e2e-test:
+    name: "E2E — Playwright"
+    runs-on: ubuntu-latest
+    # E2E tests only run on push to main/develop (not PRs) to save CI minutes.
+    # Remove this condition to run on every PR.
+    if: github.event_name == 'push'
+    needs:
+      - backend-test
+      - frontend-build
+
+    env:
+      PLAYWRIGHT_BASE_URL: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://localhost:8500
+      # Backend env — minimal set for docker-compose
+      APP_ENV: development
+      JWT_SECRET: ci-e2e-jwt-secret-not-for-production-use-64chars-padding
+      JWT_REFRESH_SECRET: ci-e2e-refresh-secret-not-for-production-64chars-pad
+      RAF_DB_HOST: 127.0.0.1
+      RAF_DB_PORT: 3306
+      RAF_DB_USER: raf_app
+      RAF_DB_PASSWORD: testpassword
+      RAF_DB_NAME: raf_intelligence_test
+      OPENEMR_DB_HOST: 127.0.0.1
+      OPENEMR_DB_PORT: 3306
+      OPENEMR_DB_USER: raf_app
+      OPENEMR_DB_PASSWORD: testpassword
+      OPENEMR_DB_NAME: openemr_test
+      PHI_FERNET_KEY: jA8a-p7k_j9yv-gXy_AhTzX_h8oZ_wYqFp_rWs3vDcE=
+      PHI_AES256_KEY: a2l2eW1veXFja25ia3hzeG5wbGp0d3JsdmJmY3p0YWE=
+      GOOGLE_API_KEY: ""
+      SENTRY_DSN: ""
+      REDIS_URL: redis://localhost:6379/0
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: raf_intelligence_test
+          MYSQL_USER: raf_app
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Wait for MySQL
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -u root -prootpassword --silent; do
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+
+      - name: Seed demo data
+        run: python seed_demo_data.py || true
+        working-directory: backend
+        env:
+          APP_ENV: development
+
+      - name: Start backend server
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8500 &
+          echo "Backend PID: $!"
+          sleep 5
+          curl -f http://localhost:8500/health || (echo "Backend failed to start"; exit 1)
+        working-directory: backend
+
+      - name: Start frontend server
+        run: |
+          npm run build
+          npm run start -- -p 3001 &
+          echo "Frontend PID: $!"
+          sleep 10
+          curl -f http://localhost:3001 || (echo "Frontend failed to start"; exit 1)
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8500
+
+      - name: Run Playwright E2E tests
+        run: npx playwright test --config=../e2e/playwright.config.ts --project=chromium
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3001
+          TEST_USERNAME: admin@raf.health
+          TEST_PASSWORD: Admin@123
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Upload Playwright test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results
+          path: frontend/test-results/
+          retention-days: 7

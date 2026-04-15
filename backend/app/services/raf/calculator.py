@@ -251,7 +251,7 @@ def _sex_code(sex_str: str) -> str:
     return "M"
 
 
-def _get_patient(patient_id: int) -> dict[str, Any] | None:
+def _get_patient(patient_id: int, tenant_id: str = "") -> dict[str, Any] | None:
     """Get patient from raf_intelligence.patients table, with fallback to emr_patient_matches.
 
     Returns a dict with legacy OpenEMR-compatible keys (pid, fname, lname, DOB,
@@ -263,8 +263,8 @@ def _get_patient(patient_id: int) -> dict[str, Any] | None:
     """
     with raf_cursor() as cur:
         cur.execute(
-            "SELECT id, emr_pid, first_name, last_name, dob, sex FROM patients WHERE id = %s",
-            (patient_id,),
+            "SELECT id, emr_pid, first_name, last_name, dob, sex FROM patients WHERE id = %s AND tenant_id = %s",
+            (patient_id, tenant_id),
         )
         row = cur.fetchone()
     if row:
@@ -346,7 +346,7 @@ def _get_icd_codes(
     # Resolve emr_pid for OpenEMR billing lookup
     emr_pid: int | None = None
     with raf_cursor() as cur:
-        cur.execute("SELECT emr_pid FROM patients WHERE id = %s", (patient_id,))
+        cur.execute("SELECT emr_pid FROM patients WHERE id = %s AND tenant_id = %s", (patient_id, tenant_id))
         row = cur.fetchone()
         if row:
             emr_pid = row["emr_pid"]

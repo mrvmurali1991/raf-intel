@@ -22,7 +22,7 @@
  *   import { getPatients, calculateRaf } from "@/lib/api"; // typed helpers
  */
 
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import logger from "@/lib/logger";
 import type {
   Patient,
@@ -57,11 +57,46 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:850
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
-  timeout: 180_000, // 3 minutes — complex clinical notes can take 60-90 s
+  timeout: 30_000, // 30 seconds default; long-running endpoints override per-request
   withCredentials: true,
 });
 
 export default api;
+
+// ---------------------------------------------------------------------------
+// Per-endpoint timeout overrides for long-running operations
+// ---------------------------------------------------------------------------
+
+/** 2-minute timeout for operations that process many patients/encounters */
+export const LONG_TIMEOUT = 120_000;
+/** 3-minute timeout for full pipeline syncs and AI analysis */
+export const PIPELINE_TIMEOUT = 180_000;
+
+/**
+ * URL patterns that need longer timeouts.  The request interceptor below
+ * applies these automatically so callers don't need to remember.
+ */
+const LONG_TIMEOUT_PATTERNS: Array<[RegExp, number]> = [
+  [/\/api\/v1\/emr\/sync/i,        PIPELINE_TIMEOUT],
+  [/\/api\/v1\/analysis/i,         PIPELINE_TIMEOUT],
+  [/\/api\/v1\/pipeline/i,         PIPELINE_TIMEOUT],
+  [/\/api\/v1\/raf\/calculate/i,   LONG_TIMEOUT],
+  [/\/api\/v1\/uploads/i,          LONG_TIMEOUT],
+  [/\/api\/v1\/fhir\/sync/i,       PIPELINE_TIMEOUT],
+];
+
+api.interceptors.request.use((config) => {
+  if (!config.timeout || config.timeout === 30_000) {
+    const url = config.url || "";
+    for (const [pattern, timeout] of LONG_TIMEOUT_PATTERNS) {
+      if (pattern.test(url)) {
+        config.timeout = timeout;
+        break;
+      }
+    }
+  }
+  return config;
+});
 
 // ---------------------------------------------------------------------------
 // Logging interceptors (always active)
@@ -136,6 +171,69 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// ---------------------------------------------------------------------------
+// Typed error envelope matching backend responses
+// ---------------------------------------------------------------------------
+
+export interface ApiErrorResponse {
+  detail?: string;
+  message?: string;
+  error?: string;
+  code?: string;
+  status?: number;
+}
+
+/** Extract a user-friendly message from an API error */
+export function getApiErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as ApiErrorResponse | undefined;
+    const msg = data?.detail ?? data?.message ?? data?.error;
+    if (msg) return String(msg);
+    if (err.response?.status === 401) return "Authentication required. Please log in.";
+    if (err.response?.status === 403) return "You do not have permission for this action.";
+    if (err.response?.status === 429) return "Too many requests. Please wait and try again.";
+    if (err.code === "ECONNABORTED") return "Request timed out. Please try again.";
+    if (!err.response) return "Network error. Check your connection.";
+  }
+  if (err instanceof Error) return err.message;
+  return "An unexpected error occurred.";
+}
+
+// ---------------------------------------------------------------------------
+// Retry logic for 5xx errors (max 2 retries with exponential backoff)
+// ---------------------------------------------------------------------------
+
+interface RetryConfig {
+  _retryCount?: number;
+}
+
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+
+api.interceptors.response.use(undefined, async (error: AxiosError) => {
+  const config = error.config as (InternalAxiosRequestConfig & RetryConfig) | undefined;
+  if (!config) return Promise.reject(error);
+
+  const status = error.response?.status ?? 0;
+  const retryCount = config._retryCount ?? 0;
+
+  // Only retry on 5xx server errors (not 401/403/423 etc.), and only idempotent-safe methods
+  const isRetryable = status >= 500 && status < 600;
+  const isSafeMethod = ["get", "head", "options", "put", "delete"].includes(
+    (config.method ?? "").toLowerCase()
+  );
+
+  if (isRetryable && isSafeMethod && retryCount < MAX_RETRIES) {
+    config._retryCount = retryCount + 1;
+    const delay = RETRY_DELAY_MS * Math.pow(2, retryCount);
+    logger.warn("API", `Retrying ${config.method?.toUpperCase()} ${config.url} (attempt ${config._retryCount}/${MAX_RETRIES}) after ${delay}ms`);
+    await new Promise((r) => setTimeout(r, delay));
+    return api(config);
+  }
+
+  return Promise.reject(error);
+});
 
 /**
  * Helper: returns true if an error was emitted because the tenant has no

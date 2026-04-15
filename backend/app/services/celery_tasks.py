@@ -6,8 +6,21 @@ periodic/operational tasks that replace the daemon-thread sync scheduler.
 
 Worker startup
 --------------
-    # Process all queues (default + heavy)
-    celery -A app.services.celery_tasks worker --loglevel=info --concurrency=4 -Q default,heavy
+    # All-queues worker (development):
+    celery -A app.services.celery_tasks worker --loglevel=info --concurrency=4 \
+        -Q default,heavy,pipeline,notifications
+
+    # Dedicated heavy-AI worker (production):
+    celery -A app.services.celery_tasks worker --loglevel=info \
+        --autoscale=10,3 -Q heavy --hostname heavy@%%h
+
+    # Dedicated pipeline/event worker:
+    celery -A app.services.celery_tasks worker --loglevel=info \
+        --concurrency=4 -Q pipeline --hostname pipeline@%%h
+
+    # Dedicated notification/webhook worker:
+    celery -A app.services.celery_tasks worker --loglevel=info \
+        --concurrency=8 -Q notifications --hostname notify@%%h
 
 Beat scheduler (periodic tasks)
 --------------------------------
@@ -16,16 +29,25 @@ Beat scheduler (periodic tasks)
 Both commands must be run from the ``backend/`` directory so that the
 ``app`` package is importable.
 
+Queue definitions
+-----------------
+    default       — lightweight operational tasks (EMR syncs, health checks, sweeps)
+    heavy         — long-running AI analysis (30-35 min tasks); autoscale=10,3
+    pipeline      — pipeline chain event handlers (ordered, low-latency)
+    notifications — outbound webhooks and alert delivery; high concurrency, short TTL
+
 Task inventory
 --------------
-    raf.sync_emr_connection       — per-connection EMR sync (replaces daemon thread)
-    raf.check_due_syncs           — Beat entry: queries DB and fans out sync tasks
-    raf.retention_sweep           — Beat entry: HIPAA data-retention sweep
-    raf.normalize_encounters      — encounter normalisation for a tenant
-    raf.analyze_encounters_batch  — batch AI analysis of clinical encounters
-    raf.calculate_raf_batch       — (re-exported from job_service)
-    raf.generate_submission       — (re-exported from job_service)
-    raf.transmit_submission       — SFTP transmission for a submission batch
+    raf.sync_emr_connection       — per-connection EMR sync  [default]
+    raf.check_due_syncs           — Beat: scan and fan out sync tasks  [default]
+    raf.retention_sweep           — Beat: HIPAA data-retention sweep  [default]
+    raf.normalize_encounters      — encounter normalisation  [heavy]
+    raf.analyze_encounters_batch  — batch AI analysis  [heavy]
+    raf.calculate_raf_batch       — (re-exported from job_service)  [heavy]
+    raf.generate_submission       — (re-exported from job_service)  [default]
+    raf.transmit_submission       — SFTP transmission  [default]
+    raf.pipeline_step             — pipeline chain step  [pipeline]
+    raf.send_notification         — webhook/alert delivery  [notifications]
 
 All tasks import and call the canonical service functions — no business logic
 is duplicated here.
@@ -63,6 +85,61 @@ from app.services.job_service import (  # noqa: F401  (re-export for Beat)
 
 logger = logging.getLogger(__name__)
 task_logger = get_task_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Queue configuration and task routing
+#
+# Four named queues separate workloads by resource profile:
+#
+#   default       — fast operational tasks (< 2 min); 4–8 concurrent workers
+#   heavy         — AI analysis tasks (up to 35 min); autoscale workers 3–10
+#   pipeline      — ordered pipeline chain steps; dedicated workers for low
+#                   scheduling latency
+#   notifications — outbound webhook / alert delivery; high concurrency,
+#                   short time limits
+#
+# Priority levels (0 = highest, 9 = lowest) give Beat-driven periodic tasks
+# a lower priority so manual user-triggered jobs are not starved.
+# ---------------------------------------------------------------------------
+
+from kombu import Queue
+
+celery_app.conf.task_queues = [
+    Queue("default",       routing_key="default",       queue_arguments={"x-max-priority": 10}),
+    Queue("heavy",         routing_key="heavy",         queue_arguments={"x-max-priority": 10}),
+    Queue("pipeline",      routing_key="pipeline",      queue_arguments={"x-max-priority": 10}),
+    Queue("notifications", routing_key="notifications", queue_arguments={"x-max-priority": 10}),
+]
+
+celery_app.conf.task_default_queue = "default"
+celery_app.conf.task_default_routing_key = "default"
+
+# Explicit per-task routing so callers do not need to specify queue= on every
+# apply_async() call.
+celery_app.conf.task_routes = {
+    # Heavy AI analysis tasks
+    "raf.analyze_encounters_batch":      {"queue": "heavy",    "priority": 5},
+    "raf.normalize_encounters":          {"queue": "heavy",    "priority": 5},
+    "raf.calculate_raf_batch":           {"queue": "heavy",    "priority": 5},
+    "raf.analyze_document":              {"queue": "heavy",    "priority": 5},
+    "raf.scan_suspects_all":             {"queue": "heavy",    "priority": 4},
+    "raf.calculate_provider_scorecards": {"queue": "heavy",    "priority": 4},
+    # Pipeline chain event steps
+    "raf.cleanup_stale_runs":            {"queue": "pipeline", "priority": 6},
+    # Default operational tasks
+    "raf.sync_emr_connection":           {"queue": "default",  "priority": 5},
+    "raf.check_due_syncs":               {"queue": "default",  "priority": 3},
+    "raf.retention_sweep":               {"queue": "default",  "priority": 2},
+    "raf.generate_submission":           {"queue": "default",  "priority": 5},
+    "raf.transmit_submission":           {"queue": "default",  "priority": 6},
+    "raf.process_claims_batch":          {"queue": "default",  "priority": 5},
+    "raf.sync_fhir":                     {"queue": "default",  "priority": 5},
+}
+
+# Enforce JSON serialization (safer than default which allows pickle).
+celery_app.conf.task_serializer = "json"
+celery_app.conf.result_serializer = "json"
+celery_app.conf.accept_content = ["json"]
 
 
 # ---------------------------------------------------------------------------
@@ -569,7 +646,7 @@ def task_analyze_encounters_batch(
                 patient_sex = None
                 try:
                     with raf_cursor() as cur:
-                        cur.execute("SELECT date_of_birth, gender FROM patients WHERE id = %s", (patient_id,))
+                        cur.execute("SELECT date_of_birth, gender FROM patients WHERE id = %s AND tenant_id = %s", (patient_id, tenant_id))
                         pat = cur.fetchone()
                     if pat and pat.get("date_of_birth"):
                         from app.services.raf_calculator import _calculate_age

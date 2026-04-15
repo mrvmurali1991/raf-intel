@@ -1239,7 +1239,9 @@ class OpenEMRFhirAdapter:
 
         with raf_cursor() as cur:
             # Fetch all demographics rows for current year scoped to this tenant
-            tenant_id = str(self.connection.get("tenant_id", "1"))
+            tenant_id = str(self.connection.get("tenant_id") or "")
+            if not tenant_id:
+                raise ValueError("EMR connection has no tenant_id — cannot write RAF scores without tenant scope.")
             cur.execute(
                 """
                 SELECT id AS raf_patient_id, age_band, sex, model_segment
