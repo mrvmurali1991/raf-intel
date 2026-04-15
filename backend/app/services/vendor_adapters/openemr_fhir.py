@@ -1181,22 +1181,21 @@ class OpenEMRFhirAdapter:
             cur.execute(
                 """
                 INSERT INTO fhir_encounters
-                    (fhir_id, raf_patient_id, connection_id, encounter_date,
-                     status, encounter_type, encounter_surrogate, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    (fhir_encounter_id, fhir_patient_id, connection_id, period_start,
+                     status, encounter_class, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
                 ON DUPLICATE KEY UPDATE
-                    encounter_date = VALUES(encounter_date),
+                    period_start = VALUES(period_start),
                     status = VALUES(status),
-                    encounter_type = VALUES(encounter_type)
+                    encounter_class = VALUES(encounter_class)
                 """,
                 (
                     encounter_fhir_id,
-                    raf_patient_id,
+                    patient_external_id,
                     self.connection_id,
                     period_start,
-                    status,
+                    status or "unknown",
                     enc_type_code,
-                    encounter_surrogate,
                 ),
             )
 
