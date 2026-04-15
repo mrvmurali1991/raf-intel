@@ -124,8 +124,12 @@ def _patient_in_active_connection(pid: int, tenant_id: str | None = None) -> boo
         return False
 
 
-def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | None:
-    """Look up the emr_pid for a patient in raf_intelligence.patients."""
+def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | str | None:
+    """Look up the emr_pid for a patient in raf_intelligence.patients.
+
+    Returns an int for direct-DB (OpenEMR) patients or a string UUID for
+    FHIR-synced patients.
+    """
     try:
         with raf_cursor() as cur:
             if tenant_id is not None:
@@ -138,7 +142,12 @@ def _get_emr_pid(pid: int, tenant_id: str | None = None) -> int | None:
                 cur.execute("SELECT emr_pid FROM patients WHERE id = %s", (pid,))
             row = cur.fetchone()
             if row and row.get("emr_pid"):
-                return int(float(row["emr_pid"]))
+                raw = row["emr_pid"]
+                try:
+                    return int(float(raw))
+                except (ValueError, TypeError):
+                    # FHIR UUID string — return as-is
+                    return str(raw)
     except Exception as exc:
         logger.debug("Failed to fetch data: %s", exc)
     return None
@@ -166,24 +175,46 @@ def _calculate_age(dob_raw: str | None) -> int | None:
 
 
 def _patient_in_fhir_matches(pid: int, tenant_id: str | None = None) -> bool:
-    """Return True if *pid* exists in emr_patient_matches.id for an active FHIR connection."""
+    """Return True if *pid* is a FHIR patient.
+
+    Checks three paths:
+      1. emr_patient_matches.id = pid  (legacy: pid IS the match row id)
+      2. emr_patient_matches.raf_patient_id = pid  (new: pid is patients.id)
+      3. patients.data_source = 'fhir'  (most reliable for patients-table rows)
+    """
     try:
         with raf_cursor() as cur:
+            # Path 3: patients table data_source check (fastest, most reliable)
+            if tenant_id is not None:
+                cur.execute(
+                    "SELECT 1 FROM patients WHERE id = %s AND tenant_id = %s "
+                    "AND data_source = 'fhir' LIMIT 1",
+                    (pid, tenant_id),
+                )
+            else:
+                cur.execute(
+                    "SELECT 1 FROM patients WHERE id = %s AND data_source = 'fhir' LIMIT 1",
+                    (pid,),
+                )
+            if cur.fetchone() is not None:
+                return True
+
+            # Path 1 & 2: emr_patient_matches
             if tenant_id is not None:
                 cur.execute(
                     "SELECT 1 FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
-                    "AND epm.id = %s AND ec.tenant_id = %s LIMIT 1",
-                    (pid, tenant_id),
+                    "AND (epm.id = %s OR epm.raf_patient_id = %s) AND ec.tenant_id = %s LIMIT 1",
+                    (pid, pid, tenant_id),
                 )
             else:
                 cur.execute(
                     "SELECT 1 FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
-                    "AND epm.id = %s LIMIT 1",
-                    (pid,),
+                    "AND (epm.id = %s OR epm.raf_patient_id = %s) LIMIT 1",
+                    (pid, pid),
                 )
             return cur.fetchone() is not None
     except Exception:
@@ -191,7 +222,11 @@ def _patient_in_fhir_matches(pid: int, tenant_id: str | None = None) -> bool:
 
 
 def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None:
-    """Return a unified patient dict from emr_patient_matches for a FHIR patient."""
+    """Return a unified patient dict from emr_patient_matches for a FHIR patient.
+
+    Checks both epm.id = pid (legacy) and epm.raf_patient_id = pid (new path
+    for patients that live in the patients table with data_source='fhir').
+    """
     try:
         with raf_cursor() as cur:
             if tenant_id is not None:
@@ -201,8 +236,8 @@ def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None
                     "FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
-                    "AND epm.id = %s AND ec.tenant_id = %s LIMIT 1",
-                    (pid, tenant_id),
+                    "AND (epm.id = %s OR epm.raf_patient_id = %s) AND ec.tenant_id = %s LIMIT 1",
+                    (pid, pid, tenant_id),
                 )
             else:
                 cur.execute(
@@ -211,8 +246,8 @@ def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None
                     "FROM emr_patient_matches epm "
                     "JOIN emr_connections ec ON ec.id = epm.connection_id "
                     "WHERE ec.is_active = 1 AND ec.connection_type IN ('fhir_r4', 'rest_api') "
-                    "AND epm.id = %s LIMIT 1",
-                    (pid,),
+                    "AND (epm.id = %s OR epm.raf_patient_id = %s) LIMIT 1",
+                    (pid, pid),
                 )
             row = cur.fetchone()
             if not row:
@@ -232,6 +267,77 @@ def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None
             }
     except Exception:
         return None
+
+
+def _get_fhir_resource_id(pid: int, tenant_id: str | None = None) -> str | None:
+    """Resolve the FHIR resource UUID for a patient, used to query fhir_* tables.
+
+    Tries three paths in order:
+      1. emr_patient_matches.external_id  (via _get_fhir_patient_row)
+      2. fhir_patients.fhir_resource_id   (via patients.emr_pid / emr_connection_id)
+      3. fhir_patients.fhir_resource_id   (name+DOB fuzzy match as last resort)
+
+    Returns the UUID string or None.
+    """
+    # Path 1: emr_patient_matches external_id (the standard FHIR patient UUID)
+    fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
+    if fhir_row and fhir_row.get("external_id"):
+        return fhir_row["external_id"]
+
+    # Path 2: fhir_patients table via patients.emr_pid + emr_connection_id
+    try:
+        with raf_cursor() as cur:
+            # Get the patient row to find emr_pid and emr_connection_id
+            if tenant_id is not None:
+                cur.execute(
+                    "SELECT emr_pid, emr_connection_id, first_name, last_name, dob "
+                    "FROM patients WHERE id = %s AND tenant_id = %s LIMIT 1",
+                    (pid, tenant_id),
+                )
+            else:
+                cur.execute(
+                    "SELECT emr_pid, emr_connection_id, first_name, last_name, dob "
+                    "FROM patients WHERE id = %s LIMIT 1",
+                    (pid,),
+                )
+            p_row = cur.fetchone()
+            if not p_row:
+                return None
+
+            conn_id = p_row.get("emr_connection_id")
+
+            # emr_pid now stores the FHIR resource UUID directly for
+            # FHIR-synced patients; check if it matches a fhir_patients row.
+            if conn_id:
+                emr_pid_val = str(p_row.get("emr_pid") or "").strip()
+                if emr_pid_val:
+                    cur.execute(
+                        "SELECT fhir_resource_id FROM fhir_patients "
+                        "WHERE connection_id = %s AND fhir_resource_id = %s LIMIT 1",
+                        (conn_id, emr_pid_val),
+                    )
+                    fp_row = cur.fetchone()
+                    if fp_row:
+                        return fp_row["fhir_resource_id"]
+
+            # Path 3: fuzzy match by name + DOB within the connection
+            fname = (p_row.get("first_name") or "").strip().lower()
+            lname = (p_row.get("last_name") or "").strip().lower()
+            dob = p_row.get("dob")
+            if conn_id and fname and lname and dob:
+                cur.execute(
+                    "SELECT fhir_resource_id FROM fhir_patients "
+                    "WHERE connection_id = %s AND LOWER(given_name) LIKE %s "
+                    "AND LOWER(family_name) = %s AND birth_date = %s LIMIT 1",
+                    (conn_id, f"{fname}%", lname, str(dob)),
+                )
+                fp_match = cur.fetchone()
+                if fp_match:
+                    return fp_match["fhir_resource_id"]
+    except Exception as exc:
+        logger.debug("_get_fhir_resource_id fallback failed for pid=%s: %s", pid, exc)
+
+    return None
 
 
 def patient_is_fhir(pid: int, tenant_id: str) -> bool:
@@ -594,8 +700,7 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
 
     encounters: list[dict] = []
     if is_fhir:
-        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
-        external_id = fhir_row.get("external_id") if fhir_row else None
+        external_id = _get_fhir_resource_id(pid, tenant_id=tenant_id)
         if external_id:
             try:
                 with raf_cursor() as cur:
@@ -779,10 +884,15 @@ def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[s
     medications: list[dict] = []
 
     if is_fhir:
-        # FHIR patients: query patient_medications by raf_patient_id
+        # FHIR patients: try patient_medications by pid first, then raf_patient_id
         fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
         raf_patient_id = fhir_row.get("raf_patient_id") if fhir_row else None
-        if raf_patient_id:
+        lookup_ids = [pid]
+        if raf_patient_id and raf_patient_id != pid:
+            lookup_ids.append(raf_patient_id)
+        for _med_pid in lookup_ids:
+            if medications:
+                break
             try:
                 with raf_cursor() as cur:
                     cur.execute(
@@ -790,7 +900,7 @@ def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[s
                         "purpose AS note, start_date, status "
                         "FROM patient_medications "
                         "WHERE patient_id = %s AND status = 'active' ORDER BY medication_name",
-                        (raf_patient_id,),
+                        (_med_pid,),
                     )
                     for r in cur.fetchall():
                         medications.append(
@@ -807,6 +917,34 @@ def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[s
                         )
             except Exception as exc:
                 logger.error("svc_get_medications FHIR error pid=%s: %s", pid, exc)
+        # FHIR fallback: pull from fhir_medications table
+        if not medications:
+            fhir_rid = _get_fhir_resource_id(pid, tenant_id=tenant_id)
+            if fhir_rid:
+                try:
+                    with raf_cursor() as cur:
+                        cur.execute(
+                            "SELECT medication_display AS drug, dosage_text AS dosage, "
+                            "status, authored_on AS start_date "
+                            "FROM fhir_medications WHERE fhir_patient_id = %s "
+                            "ORDER BY authored_on DESC",
+                            (fhir_rid,),
+                        )
+                        for r in cur.fetchall():
+                            medications.append(
+                                {
+                                    "drug": r.get("drug") or "",
+                                    "dosage": r.get("dosage") or "",
+                                    "form": "",
+                                    "frequency": "",
+                                    "note": "",
+                                    "start_date": str(r["start_date"]) if r.get("start_date") else None,
+                                    "active": 1,
+                                    "source": "fhir",
+                                }
+                            )
+                except Exception as exc:
+                    logger.debug("svc_get_medications fhir_medications fallback failed: %s", exc)
     else:
         try:
             medications = emr.get_medications(emr_pid, year=year)
@@ -893,10 +1031,15 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
     codes: list[dict] = []
 
     if is_fhir:
-        # FHIR patients: pull ICD-10 codes from raf_patient_hcc via raf_patient_id
+        # FHIR patients: pull ICD-10 codes from raf_patient_hcc via pid (or raf_patient_id)
         fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
         raf_patient_id = fhir_row.get("raf_patient_id") if fhir_row else None
-        if raf_patient_id:
+        lookup_ids = [pid]
+        if raf_patient_id and raf_patient_id != pid:
+            lookup_ids.append(raf_patient_id)
+        for _dx_pid in lookup_ids:
+            if codes:
+                break
             try:
                 import json as _json
                 with raf_cursor() as cur:
@@ -905,7 +1048,7 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
                            FROM raf_patient_hcc
                            WHERE patient_id = %s
                            ORDER BY measurement_year DESC""",
-                        (raf_patient_id,),
+                        (_dx_pid,),
                     )
                     for r in cur.fetchall():
                         icd_list: list[str] = []
@@ -930,6 +1073,36 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
                             )
             except Exception as exc:
                 logger.error("svc_get_diagnoses FHIR error pid=%s: %s", pid, exc)
+        # Fallback: pull from fhir_conditions if raf_patient_hcc had nothing
+        if not codes:
+            fhir_rid = _get_fhir_resource_id(pid, tenant_id=tenant_id)
+            if fhir_rid:
+                try:
+                    with raf_cursor() as cur:
+                        cur.execute(
+                            "SELECT DISTINCT fc.icd10_codes AS code, fc.display AS code_text, "
+                            "fc.onset_date AS encounter_date "
+                            "FROM fhir_conditions fc "
+                            "WHERE fc.fhir_patient_id = %s "
+                            "AND fc.clinical_status IN ('active', 'recurrence', 'relapse', '') "
+                            "ORDER BY fc.onset_date DESC",
+                            (fhir_rid,),
+                        )
+                        for r in cur.fetchall():
+                            codes.append(
+                                {
+                                    "code": r["code"],
+                                    "code_text": r["code_text"],
+                                    "code_type": "ICD10",
+                                    "hcc_code": None,
+                                    "encounter_date": str(r["encounter_date"])
+                                    if r.get("encounter_date")
+                                    else None,
+                                    "source": "fhir",
+                                }
+                            )
+                except Exception as exc:
+                    logger.debug("svc_get_diagnoses fhir_conditions fallback failed: %s", exc)
     else:
         try:
             codes = emr.get_billing_codes(emr_pid)
@@ -1200,22 +1373,7 @@ def svc_get_comprehensive_profile(
         is_fhir = True
     fhir_external_id: str | None = None
     if is_fhir:
-        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
-        fhir_external_id = fhir_row.get("external_id") if fhir_row else None
-        # Fallback: try emr_patient_matches by patient_id
-        if not fhir_external_id:
-            try:
-                with raf_cursor() as _fhir_cur:
-                    _fhir_cur.execute(
-                        "SELECT external_id FROM emr_patient_matches "
-                        "WHERE patient_id = %s LIMIT 1",
-                        (pid,),
-                    )
-                    _fr = _fhir_cur.fetchone()
-                    if _fr:
-                        fhir_external_id = _fr.get("external_id")
-            except Exception:
-                pass
+        fhir_external_id = _get_fhir_resource_id(pid, tenant_id=tenant_id)
 
     # --- Billing ----------------------------------------------------------
     icd10_codes = _safe_call("billing.icd10", emr.get_billing_codes, emr_pid, default=[])
@@ -1756,8 +1914,7 @@ def svc_get_allergies(pid: int, tenant_id: str) -> dict[str, Any]:
     allergies = emr.get_allergies(emr_pid)
     # FHIR fallback
     if not allergies:
-        fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
-        fhir_external_id = fhir_row.get("external_id") if fhir_row else None
+        fhir_external_id = _get_fhir_resource_id(pid, tenant_id=tenant_id)
         if fhir_external_id:
             try:
                 with raf_cursor() as cur:

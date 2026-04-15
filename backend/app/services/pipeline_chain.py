@@ -789,7 +789,11 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                         )
                         _emr_row = cur.fetchone()
                         if _emr_row and _emr_row.get("emr_pid"):
-                            emr_pid = int(float(_emr_row["emr_pid"]))
+                            _raw = _emr_row["emr_pid"]
+                            try:
+                                emr_pid = int(float(_raw))
+                            except (ValueError, TypeError):
+                                emr_pid = str(_raw)  # FHIR UUID
                 except Exception:
                     pass
 

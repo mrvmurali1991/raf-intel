@@ -14,7 +14,6 @@ import {
   FileImage,
   FileText,
   Workflow,
-  Plug,
   BarChart3,
   UserCheck,
   Star,
@@ -89,7 +88,6 @@ const navGroups: NavGroup[] = [
       { href: "/claims", label: "Claims", icon: FileText },
       { href: "/demo", label: "Pipeline Demo", icon: Workflow },
       { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
-      { href: "/integrations", label: "Integrations", icon: Plug },
     ],
   },
   {

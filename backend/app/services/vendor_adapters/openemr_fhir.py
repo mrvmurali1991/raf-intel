@@ -798,12 +798,10 @@ class OpenEMRFhirAdapter:
     def _upsert_patient(self, patient: dict) -> None:
         from app.db import raf_cursor
 
-        # Derive a stable numeric emr_pid from the FHIR UUID so each
-        # patient gets a unique (connection_id, emr_pid) pair.
-        # Use 7 hex digits (max 268435455) to stay within INT UNSIGNED range.
-        import hashlib
-        ext_id = patient["external_id"] or ""
-        emr_pid = int(hashlib.md5(ext_id.encode()).hexdigest()[:7], 16)
+        # Use the FHIR resource UUID as emr_pid so lookups against
+        # fhir_conditions / fhir_encounters / fhir_medications (which key
+        # on the UUID) work correctly.
+        emr_pid = patient["external_id"] or ""
         tenant_id = self.connection.get("tenant_id", "1")
 
         with raf_cursor() as cur:
@@ -968,9 +966,7 @@ class OpenEMRFhirAdapter:
             existing_raf_id: int | None = row["raf_patient_id"]
 
             # Resolve real patients.id for this FHIR patient
-            import hashlib as _hl
-            _ext = patient["external_id"] or ""
-            _emr_pid = int(_hl.md5(_ext.encode()).hexdigest()[:7], 16)
+            _emr_pid = patient["external_id"] or ""
             _tenant = self.connection.get("tenant_id", "1")
             cur.execute(
                 "SELECT id FROM patients WHERE emr_pid = %s AND emr_connection_id = %s AND tenant_id = %s LIMIT 1",
@@ -1048,11 +1044,9 @@ class OpenEMRFhirAdapter:
         emr_patient_matches at all.
         """
         from app.db import raf_cursor
-        import hashlib as _hl
 
-        # Derive the same emr_pid hash used in _upsert_patient
-        _ext = external_id or ""
-        emr_pid = int(_hl.md5(_ext.encode()).hexdigest()[:7], 16)
+        # Use the FHIR UUID directly as emr_pid (matches _upsert_patient)
+        emr_pid = external_id or ""
         tenant_id = self.connection.get("tenant_id", "1")
 
         with raf_cursor() as cur:

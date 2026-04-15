@@ -672,7 +672,7 @@ def task_analyze_encounters_batch(
                     logger.warning("FHIR patient demographics lookup failed for encounter %s: %s", encounter_id, exc)
 
                 # Resolve emr_pid for OpenEMR lookups
-                emr_pid: int | None = None
+                emr_pid: int | str | None = None
                 try:
                     with raf_cursor() as cur:
                         cur.execute(
@@ -681,7 +681,11 @@ def task_analyze_encounters_batch(
                         )
                         _emr_row = cur.fetchone()
                         if _emr_row and _emr_row.get("emr_pid"):
-                            emr_pid = int(float(_emr_row["emr_pid"]))
+                            _raw = _emr_row["emr_pid"]
+                            try:
+                                emr_pid = int(float(_raw))
+                            except (ValueError, TypeError):
+                                emr_pid = str(_raw)  # FHIR UUID
                 except Exception:
                     pass
 
