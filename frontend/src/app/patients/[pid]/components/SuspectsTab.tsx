@@ -58,36 +58,38 @@ export function SuspectsTab({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>
-                    {s.condition || s.suspect_condition || "\u2014"}
+                    {s.suspected_condition || s.description || s.evidence_type || "\u2014"}
                   </span>
-                  {s.icd10_code && (
+                  {(s.suspect_icd10 || (s as any).icd10_code) && (
                     <span style={{
                       display: "inline-block", padding: "2px 8px", borderRadius: 4,
                       fontSize: 11, fontWeight: 600, fontFamily: "monospace",
                       background: C.slate100, color: C.slate700, border: `1px solid ${C.slate200}`,
                     }}>
-                      {s.icd10_code}
+                      {s.suspect_icd10 || (s as any).icd10_code}
                     </span>
                   )}
-                  {s.hcc_code && (
+                  {(s.suspect_hcc != null) && (
                     <span style={{
                       display: "inline-block", padding: "2px 8px", borderRadius: 4,
                       fontSize: 11, fontWeight: 600, fontFamily: "monospace",
                       background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`,
                     }}>
-                      {s.hcc_code}
+                      HCC {s.suspect_hcc}
                     </span>
                   )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                   <ConfidencePill value={confidence} />
                 </div>
-                {(s.evidence || s.rationale) && (
+                {(s.evidence_detail || (s as any).evidence || (s as any).rationale) && (
                   <div style={{
                     fontSize: 13, color: C.slate500, marginTop: 8, lineHeight: 1.5,
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                   }}>
-                    {s.evidence || s.rationale}
+                    {typeof s.evidence_detail === "object" && s.evidence_detail
+                      ? `Prior ${(s.evidence_detail as any).prior_icd || ""} (${(s.evidence_detail as any).prior_year || ""})`
+                      : s.evidence_detail || (s as any).evidence || (s as any).rationale}
                   </div>
                 )}
                 {s.meat_evidence && (
