@@ -260,33 +260,36 @@ def patient_is_accessible(pid: int, tenant_id: str) -> bool:
 def _list_fhir_patients(
     limit: int, offset: int, search: str = "", tenant_id: str | None = None
 ) -> tuple[list[dict], int]:
-    """List patients from emr_patient_matches for FHIR/REST connections."""
+    """List patients for FHIR/REST connections from the patients table.
+
+    FHIR patients now have proper rows in the patients table (data_source='fhir',
+    emr_connection_id set).  Using the patients table avoids duplicate counting
+    that occurs with emr_patient_matches.
+    """
     with raf_cursor() as cur:
-        where = "WHERE ec.is_active = 1"
+        where = "WHERE p.is_active = 1 AND p.data_source = 'fhir'"
         params: list = []
         if tenant_id is not None:
-            where += " AND ec.tenant_id = %s"
+            where += " AND p.tenant_id = %s"
             params.append(tenant_id)
         if search:
-            where += " AND (epm.first_name LIKE %s OR epm.last_name LIKE %s OR CAST(epm.id AS CHAR) LIKE %s)"
+            where += " AND (p.first_name LIKE %s OR p.last_name LIKE %s OR CAST(p.id AS CHAR) LIKE %s)"
             like = f"%{search}%"
             params.extend([like, like, like])
 
         cur.execute(
-            f"SELECT COUNT(DISTINCT epm.id) AS cnt FROM emr_patient_matches epm "
-            f"JOIN emr_connections ec ON ec.id = epm.connection_id {where}",
+            f"SELECT COUNT(*) AS cnt FROM patients p {where}",
             params,
         )
         total = (cur.fetchone() or {}).get("cnt", 0)
 
         cur.execute(
-            f"""SELECT epm.id AS pid, epm.external_id, epm.first_name AS fname,
-                       epm.last_name AS lname, epm.date_of_birth AS DOB,
-                       epm.sex, epm.mrn, epm.raf_patient_id
-                FROM emr_patient_matches epm
-                JOIN emr_connections ec ON ec.id = epm.connection_id
+            f"""SELECT p.id AS pid, p.first_name AS fname,
+                       p.last_name AS lname, p.dob AS DOB,
+                       p.sex, p.mrn
+                FROM patients p
                 {where}
-                ORDER BY epm.last_name, epm.first_name
+                ORDER BY p.last_name, p.first_name
                 LIMIT %s OFFSET %s""",
             (*params, limit, offset),
         )
@@ -302,7 +305,7 @@ def _list_fhir_patients(
                 "DOB": str(r["DOB"]) if r["DOB"] else "",
                 "sex": r["sex"] or "",
                 "mrn": r.get("mrn") or "",
-                "external_id": r["external_id"],
+                "external_id": "",
             }
         )
     return patients, total

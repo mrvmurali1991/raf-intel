@@ -115,9 +115,9 @@ def active_patients_subquery(
     Returns a ``(sql_fragment, params)`` tuple. The fragment restricts the
     given ``patient_id_column`` (default ``patient_id`` — override to
     ``pid``/``id`` for OpenEMR tables) to rows whose patient is active AND
-    belongs to the supplied tenant. Two bound parameters are emitted; the
-    caller must include them in the query's params tuple in positional
-    order matching the fragment.
+    belongs to the supplied tenant. One bound parameter is emitted; the
+    caller must include it in the query's params tuple in positional order
+    matching the fragment.
 
     Raises ValueError if tenant_id is None — never falls back to a default,
     as that would silently serve cross-tenant data (HIPAA violation).
@@ -128,32 +128,17 @@ def active_patients_subquery(
             "refusing to query across all tenants (HIPAA multi-tenant isolation)"
         )
     tid = int(tenant_id)
-    # Accept patients from any active source:
-    #
-    #  1. Direct-DB / OpenEMR patients — present in the `patients` table
-    #     (is_active=1 guards against soft-deleted records).
-    #
-    #  2. FHIR/REST patients — the suspect engine stores emr_pid (the external
-    #     EMR patient identifier from emr_patient_matches) as patient_id in
-    #     raf_suspect_conditions, raf_patient_hcc, etc.  We include both
-    #     emr_pid AND the surrogate raf_patient_demographics.patient_id so
-    #     that gap, chase, and worklist queries match regardless of which
-    #     column was used as the reference.
-    #
-    # Note: raf_patient_demographics has no is_active column — filter by
-    # tenant_id only.  emr_patient_matches is joined to emr_connections to
-    # scope by tenant.
+    # All patient sources (Direct-DB, OpenEMR, FHIR/REST) now have proper
+    # rows in the `patients` table with is_active=1, data_source set, and
+    # emr_connection_id linked.  The previous UNION with emr_patient_matches
+    # is no longer needed and could cause double-counting when emr_pid
+    # values differ from patients.id values.
     frag = (
         f"({patient_id_column} IN ("
         f"  SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s"
-        f"  UNION"
-        f"  SELECT DISTINCT epm.emr_pid"
-        f"    FROM emr_patient_matches epm"
-        f"    JOIN emr_connections ec ON ec.id = epm.connection_id"
-        f"    WHERE ec.is_active = 1 AND ec.tenant_id = %s"
         f"))"
     )
-    return frag, (tid, tid)
+    return frag, (tid,)
 
 _CREDENTIAL_FIELDS = ("db_password", "client_secret", "api_key", "access_token", "refresh_token_emr")
 

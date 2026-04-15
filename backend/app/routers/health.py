@@ -238,36 +238,14 @@ def dashboard_stats(
         " AND data_source = 'upload'" if (not has_active and has_uploaded_data) else ""
     )
 
-    # Detect if the active connection is FHIR/REST — if so, count from
-    # emr_patient_matches instead of the patients table.
-    _active_conn_type = None
+    # All connection types (direct_db, fhir_r4, rest_api) now have proper
+    # rows in the patients table with is_active flag — use it uniformly.
     try:
         with raf_cursor() as cur:
             cur.execute(
-                "SELECT connection_type FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1",
+                f"SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s{_ds_filter}",
                 (tenant_id,),
             )
-            row = cur.fetchone()
-            if row:
-                _active_conn_type = row["connection_type"]
-    except Exception:
-        pass
-
-    try:
-        with raf_cursor() as cur:
-            if _active_conn_type in ("fhir_r4", "rest_api"):
-                cur.execute(
-                    "SELECT COUNT(DISTINCT epm.id) AS cnt "
-                    "FROM emr_patient_matches epm "
-                    "JOIN emr_connections ec ON ec.id = epm.connection_id "
-                    "WHERE ec.is_active = 1 AND ec.tenant_id = %s",
-                    (tenant_id,),
-                )
-            else:
-                cur.execute(
-                    f"SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s{_ds_filter}",
-                    (tenant_id,),
-                )
             total_patients = cur.fetchone()["cnt"]
     except Exception:
         pass
@@ -275,18 +253,6 @@ def dashboard_stats(
     if not has_active and has_uploaded_data:
         _score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' AND tenant_id = %s)"
         _score_params: tuple = (int(tenant_id),)
-    elif _active_conn_type in ("fhir_r4", "rest_api"):
-        # FHIR patients live in emr_patient_matches; their RAF scores are
-        # stored against COALESCE(raf_patient_id, id) from that table.
-        _score_filter = (
-            "patient_id IN ("
-            "SELECT epm.id "
-            "FROM emr_patient_matches epm "
-            "JOIN emr_connections ec ON ec.id = epm.connection_id "
-            "WHERE ec.is_active = 1 AND ec.tenant_id = %s"
-            ")"
-        )
-        _score_params = (int(tenant_id),)
     else:
         _sf, _sp = active_patients_subquery(int(tenant_id))
         _score_filter = _sf
@@ -362,67 +328,35 @@ def dashboard_stats(
     top_undercoded = []
     try:
         with raf_cursor() as cur:
-            if _active_conn_type in ("fhir_r4", "rest_api"):
-                cur.execute(
-                    """
-                    SELECT sc.patient_id AS pid,
-                           p.first_name AS fname, p.last_name AS lname,
-                           latest_rs.raf_score,
-                           COUNT(*) AS suspect_count
-                    FROM raf_suspect_conditions sc
-                    LEFT JOIN patients p ON p.id = sc.patient_id
-                    LEFT JOIN (
-                        SELECT patient_id, final_raf AS raf_score
-                        FROM raf_scores
-                        WHERE measurement_year = %s
-                          AND (patient_id, calculated_at) IN (
-                              SELECT patient_id, MAX(calculated_at)
-                              FROM raf_scores
-                              WHERE measurement_year = %s
-                              GROUP BY patient_id
-                          )
-                    ) latest_rs ON latest_rs.patient_id = sc.patient_id
-                    WHERE sc.status = 'open'
-                      AND sc.tenant_id = %s
-                      AND sc.patient_id IN (
-                          SELECT epm.id
-                          FROM emr_patient_matches epm
-                          JOIN emr_connections ec ON ec.id = epm.connection_id
-                          WHERE ec.is_active = 1 AND ec.tenant_id = %s
+            cur.execute(
+                """
+                SELECT sc.patient_id AS pid,
+                       p.first_name AS fname, p.last_name AS lname,
+                       latest_rs.raf_score,
+                       COUNT(*) AS suspect_count
+                FROM raf_suspect_conditions sc
+                LEFT JOIN patients p ON p.id = sc.patient_id
+                LEFT JOIN (
+                    SELECT patient_id, final_raf AS raf_score
+                    FROM raf_scores
+                    WHERE measurement_year = %s
+                      AND (patient_id, calculated_at) IN (
+                          SELECT patient_id, MAX(calculated_at)
+                          FROM raf_scores
+                          WHERE measurement_year = %s
+                          GROUP BY patient_id
                       )
-                    GROUP BY sc.patient_id, p.first_name, p.last_name, latest_rs.raf_score
-                    ORDER BY suspect_count DESC
-                    LIMIT 10
-                    """,
-                    (measurement_year, measurement_year, tenant_id, int(tenant_id)),
-                )
-            else:
-                cur.execute(
-                    """
-                    SELECT sc.patient_id AS pid,
-                           p.first_name AS fname, p.last_name AS lname,
-                           latest_rs.raf_score,
-                           COUNT(*) AS suspect_count
-                    FROM raf_suspect_conditions sc
-                    LEFT JOIN patients p ON p.id = sc.patient_id
-                    LEFT JOIN (
-                        SELECT patient_id, final_raf AS raf_score
-                        FROM raf_scores
-                        WHERE measurement_year = %s
-                          AND (patient_id, calculated_at) IN (
-                              SELECT patient_id, MAX(calculated_at)
-                              FROM raf_scores
-                              WHERE measurement_year = %s
-                              GROUP BY patient_id
-                          )
-                    ) latest_rs ON latest_rs.patient_id = sc.patient_id
-                    WHERE sc.status = 'open' AND sc.tenant_id = %s
-                    GROUP BY sc.patient_id, p.first_name, p.last_name, latest_rs.raf_score
-                    ORDER BY suspect_count DESC
-                    LIMIT 10
-                    """,
-                    (measurement_year, measurement_year, tenant_id),
-                )
+                ) latest_rs ON latest_rs.patient_id = sc.patient_id
+                WHERE sc.status = 'open' AND sc.tenant_id = %s
+                  AND sc.patient_id IN (
+                      SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                  )
+                GROUP BY sc.patient_id, p.first_name, p.last_name, latest_rs.raf_score
+                ORDER BY suspect_count DESC
+                LIMIT 10
+                """,
+                (measurement_year, measurement_year, tenant_id, tenant_id),
+            )
             for r in cur.fetchall():
                 top_undercoded.append({
                     "id": str(r["pid"]),
