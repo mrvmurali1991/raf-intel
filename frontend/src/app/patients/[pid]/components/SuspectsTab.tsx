@@ -58,7 +58,7 @@ export function SuspectsTab({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>
-                    {s.suspected_condition || s.description || s.evidence_type || "\u2014"}
+                    {s.suspected_condition || (s as any).description || s.evidence_type || "\u2014"}
                   </span>
                   {(s.suspect_icd10 || (s as any).icd10_code) && (
                     <span style={{
