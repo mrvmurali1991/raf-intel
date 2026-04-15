@@ -798,12 +798,12 @@ def task_analyze_encounters_batch(
                 _stage1_categories: set[str] = set()  # first 3 chars (e.g. "E11", "I50")
                 try:
                     ext = result.get("extraction", {})
-                    for src in ("explicit", "problem_list", "assessment", "labs", "meds"):
-                        for item in (ext.get(src) or []):
-                            c = (item.get("code") or item.get("icd10") or "").upper().strip()
-                            if c:
-                                _stage1_codes.add(c)
-                                _stage1_categories.add(c[:3])
+                    # all_unique_codes is a flat list of ICD-10 strings
+                    for c in (ext.get("all_unique_codes") or []):
+                        c = str(c).upper().strip()
+                        if c:
+                            _stage1_codes.add(c)
+                            _stage1_categories.add(c[:3])
                 except Exception:
                     pass
 
