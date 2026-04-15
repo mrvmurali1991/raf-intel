@@ -1363,6 +1363,30 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
             pid, exc,
         )
 
+    # Fallback: if no insurance from OpenEMR, check patients table fields
+    if primary_insurance is None:
+        try:
+            from app.db import raf_cursor as _raf_cur
+            with _raf_cur() as cur:
+                cur.execute(
+                    "SELECT insurance_type, insurance_plan, enrolled_date "
+                    "FROM patients WHERE id = %s LIMIT 1",
+                    (pid,),
+                )
+                p_row = cur.fetchone()
+                if p_row:
+                    ins_name = p_row.get("insurance_plan") or p_row.get("insurance_type")
+                    if ins_name:
+                        primary_insurance = ins_name
+                        insurance_source = "raf_patients"
+                        insurance_confidence = "medium"
+                        if plan_type is None:
+                            plan_type = "Medicare Advantage" if "medicare" in ins_name.lower() else ins_name
+                        if enrolled_since is None and p_row.get("enrolled_date"):
+                            enrolled_since = str(p_row["enrolled_date"])[:10]
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Step 3 -- OREC from age
     # ------------------------------------------------------------------
