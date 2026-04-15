@@ -649,11 +649,11 @@ def task_analyze_encounters_batch(
                 patient_sex = None
                 try:
                     with raf_cursor() as cur:
-                        cur.execute("SELECT date_of_birth, gender FROM patients WHERE id = %s AND tenant_id = %s", (patient_id, tenant_id))
+                        cur.execute("SELECT dob, gender FROM patients WHERE id = %s AND tenant_id = %s", (patient_id, tenant_id))
                         pat = cur.fetchone()
-                    if pat and pat.get("date_of_birth"):
+                    if pat and pat.get("dob"):
                         from app.services.raf_calculator import _calculate_age
-                        patient_age = _calculate_age(pat["date_of_birth"])
+                        patient_age = _calculate_age(pat["dob"])
                         patient_sex = pat.get("gender")
                     else:
                         # FHIR patient — look up in emr_patient_matches
