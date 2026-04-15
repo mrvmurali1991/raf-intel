@@ -43,7 +43,7 @@ function KPISkeleton() {
 
 export function ProviderDashboard() {
   const { data: stats, isLoading } = useQuery<ProviderDashboardStats>({
-    queryKey: ["dashboard", "stats"],
+    queryKey: ["dashboard-stats"],
     queryFn: () => getDashboardStats() as unknown as ProviderDashboardStats,
   });
 

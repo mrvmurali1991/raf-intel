@@ -216,11 +216,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.services.celery_tasks inspect ping --destination celery@$$HOSTNAME --timeout 10"]
+      test: ["CMD-SHELL", "celery -A app.services.celery_tasks inspect ping --destination default@$$HOSTNAME --timeout 10"]
       interval: 30s
       timeout: 15s
       retries: 5
-      start_period: 30s
+      start_period: 45s
     stop_grace_period: 30s
     command: >
       celery -A app.services.celery_tasks worker

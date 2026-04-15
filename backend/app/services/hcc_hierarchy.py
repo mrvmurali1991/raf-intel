@@ -307,43 +307,59 @@ def apply_hierarchy_to_patient(
 
         result["total"] = len(rows)
 
-        # Apply pure-logic hierarchy
+        # Capture original DB values BEFORE apply_hierarchy mutates the dicts.
+        originals: dict[int, tuple[bool, str | None]] = {
+            row["id"]: (bool(row.get("is_trumped")), row.get("trumped_by_hcc"))
+            for row in rows
+        }
+
+        # Apply pure-logic hierarchy (mutates dicts in place).
         apply_hierarchy(rows, model_version=model_version)
 
-        # Persist changes — only update rows whose values actually changed
+        # Persist changes — only update rows whose values actually changed.
         errors = 0
         updated = 0
-        for row in rows:
-            new_trumped = bool(row["is_trumped"])
-            new_trumped_by = row.get("trumped_by_hcc")
+        try:
+            with raf_cursor() as cur:
+                for row in rows:
+                    row_id = row["id"]
+                    new_trumped = bool(row["is_trumped"])
+                    new_trumped_by = row.get("trumped_by_hcc")
 
-            # Normalise existing DB values for comparison
-            old_trumped = bool(row.get("_orig_is_trumped", row.get("is_trumped")))
-            old_trumped_by = row.get("_orig_trumped_by", row.get("trumped_by_hcc"))
+                    old_trumped, old_trumped_by = originals.get(row_id, (False, None))
 
-            try:
-                with raf_cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE raf_patient_hcc
-                           SET is_trumped     = %s,
-                               trumped_by_hcc = %s,
-                               updated_at     = NOW()
-                         WHERE id = %s
-                        """,
-                        (
-                            1 if new_trumped else 0,
-                            new_trumped_by,
-                            row["id"],
-                        ),
-                    )
-                updated += 1
-            except Exception as exc:
-                logger.error(
-                    "apply_hierarchy_to_patient: failed to update row id=%s: %s",
-                    row.get("id"), exc,
-                )
-                errors += 1
+                    # Skip rows that did not change to avoid unnecessary writes.
+                    if new_trumped == old_trumped and new_trumped_by == old_trumped_by:
+                        continue
+
+                    try:
+                        cur.execute(
+                            """
+                            UPDATE raf_patient_hcc
+                               SET is_trumped     = %s,
+                                   trumped_by_hcc = %s,
+                                   updated_at     = NOW()
+                             WHERE id = %s
+                            """,
+                            (
+                                1 if new_trumped else 0,
+                                new_trumped_by,
+                                row_id,
+                            ),
+                        )
+                        updated += 1
+                    except Exception as exc:
+                        logger.error(
+                            "apply_hierarchy_to_patient: failed to update row id=%s: %s",
+                            row_id, exc,
+                        )
+                        errors += 1
+        except Exception as exc:
+            logger.error(
+                "apply_hierarchy_to_patient: failed to open cursor for updates pid=%s: %s",
+                patient_id, exc,
+            )
+            errors += result["total"]
 
         result["trumped"] = sum(1 for r in rows if r["is_trumped"])
         result["not_trumped"] = result["total"] - result["trumped"]

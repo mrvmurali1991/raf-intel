@@ -247,9 +247,6 @@ def list_attestations(
     if status and status != "all":
         conditions.append("status = %s")
         params.append(status)
-    if tenant_id:
-        conditions.append("tenant_id = %s")
-        params.append(tenant_id)
 
     where = "WHERE " + " AND ".join(conditions)
     params += [limit, offset]
@@ -677,9 +674,6 @@ def generate_reminders(
             f"attestation_service.generate_reminders: tenant_id must be numeric, got {tenant_id!r}"
         )
 
-    tenant_clause = "AND pa.tenant_id = %s" if tenant_id else ""
-    tenant_param: list[Any] = [tenant_id] if tenant_id else []
-
     _sf, _sp = active_patients_subquery(_tid, patient_id_column="pa.patient_id")
     with raf_cursor() as cur:
         cur.execute(
@@ -694,7 +688,6 @@ def generate_reminders(
               AND  pa.created_at <= %s
               AND  {_sf}
               AND  pa.tenant_id = %s
-              {tenant_clause}
               AND  pa.id NOT IN (
                   SELECT ar.attestation_id
                   FROM   attestation_reminders ar
@@ -702,7 +695,7 @@ def generate_reminders(
                     AND  ar.sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
               )
             """,
-            [cutoff, *_sp, _tid] + tenant_param + [reminder_type],
+            [cutoff, *_sp, _tid, reminder_type],
         )
         candidates = cur.fetchall()
 
@@ -789,9 +782,6 @@ def get_dashboard_stats(
     if provider_user_id is not None:
         conditions.append("provider_user_id = %s")
         params.append(provider_user_id)
-    if tenant_id:
-        conditions.append("tenant_id = %s")
-        params.append(tenant_id)
 
     where = "WHERE " + " AND ".join(conditions)
 

@@ -45,8 +45,6 @@ from app.services.multi_model_calculator import (
     AVAILABLE_MODELS,
 )
 from app.services.openemr_connector import (
-    get_patient,
-    get_all_patients,
     get_patient_count,
 )
 from app.db import raf_cursor, run_in_db_executor
@@ -226,7 +224,7 @@ async def calculate_raf(
     Dispatching via ``run_in_db_executor`` keeps the event loop responsive under
     concurrent calculation requests.
     """
-    patient = await run_in_db_executor(get_patient, pid)
+    patient = await run_in_db_executor(_get_patient, pid, tenant_id)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
@@ -409,7 +407,7 @@ async def get_scores(
     ``raf_scores`` SELECT are both dispatched to the dedicated DB thread pool
     so neither blocks the event loop.
     """
-    patient = await run_in_db_executor(get_patient, pid)
+    patient = await run_in_db_executor(_get_patient, pid, tenant_id)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
@@ -501,7 +499,7 @@ async def get_breakdown(
     both touch MySQL; dispatching them to the DB executor prevents event-loop
     stalls on the highest-traffic HCC detail endpoint.
     """
-    patient = await run_in_db_executor(get_patient, pid)
+    patient = await run_in_db_executor(_get_patient, pid, tenant_id)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
@@ -649,7 +647,7 @@ def get_model_comparison(
     Note: this endpoint does NOT persist scores; use POST /api/raf/calculate/{pid}
     for that purpose.
     """
-    patient = get_patient(pid)
+    patient = _get_patient(pid, tenant_id=tenant_id)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
@@ -673,8 +671,8 @@ def get_model_comparison(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=404, detail="Resource not found")
+        logger.warning("model_comparison not found pid=%s: %s", pid, exc)
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("model_comparison error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -887,7 +885,7 @@ def population_summary(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                "SELECT COUNT(DISTINCT patient_id) AS cnt FROM care_gap_tasks WHERE tenant_id = %s AND status != 'resolved'",
+                "SELECT COUNT(DISTINCT patient_id) AS cnt FROM care_gap_tasks WHERE tenant_id = %s AND status NOT IN ('completed', 'rejected')",
                 (tenant_id,),
             )
             patients_with_gaps = cur.fetchone()["cnt"]
@@ -930,7 +928,7 @@ def get_score_history(
     Return all RAF scores ever calculated for *pid*, one entry per year,
     ordered newest-first. Includes `score_type` and `blend_weights` per year.
     """
-    patient = get_patient(pid)
+    patient = _get_patient(pid, tenant_id=tenant_id)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
@@ -1133,24 +1131,11 @@ def calculate_multi(
     Note: CMS-HCC calculation uses the hccinfhir engine when `include_cms_hcc=true`.
     RxHCC and HHS-HCC use internal coefficient tables (representative, not CMS-validated).
     """
-    patient = get_patient(pid)
-    if not patient:
+    emr_patient = _get_patient(pid, tenant_id=tenant_id)
+    if not emr_patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
     calc_year = body.year or date.today().year
-
-    # Gather patient demographics from OpenEMR
-    try:
-        emr_patient = _get_patient(pid)
-    except Exception as exc:
-        logger.error("multi_model get_patient error pid=%s: %s", pid, exc)
-        emr_patient = None
-
-    if not emr_patient:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Patient {pid} not found in OpenEMR clinical data.",
-        )
 
     dob = emr_patient.get("DOB") or emr_patient.get("dob")
     sex_raw = emr_patient.get("sex") or emr_patient.get("gender") or "M"
@@ -1272,10 +1257,6 @@ def get_multi_model_scores(
     Returns the same structure as POST /api/raf/calculate-multi/{pid} but uses
     the stored CMS-HCC score rather than recalculating it.
     """
-    patient = get_patient(pid)
-    if not patient:
-        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
-
     calc_year = year or date.today().year
 
     # Get stored CMS-HCC score from DB
@@ -1338,17 +1319,9 @@ def get_multi_model_scores(
         }
 
     # Get patient data and ICD codes for live RxHCC / HHS-HCC calculations
-    try:
-        emr_patient = _get_patient(pid)
-    except Exception as exc:
-        logger.error("multi_model get_patient error pid=%s: %s", pid, exc)
-        emr_patient = None
-
+    emr_patient = _get_patient(pid, tenant_id=tenant_id)
     if not emr_patient:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Patient {pid} not found in OpenEMR clinical data.",
-        )
+        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
     dob = emr_patient.get("DOB") or emr_patient.get("dob")
     sex_raw = emr_patient.get("sex") or emr_patient.get("gender") or "M"
@@ -1863,3 +1836,142 @@ def icd10_to_hcc_crosswalk(
             "delta_v28_v24": round(total_v28 - total_v24, 4),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /dashboard  — population-level RAF dashboard summary
+# ---------------------------------------------------------------------------
+
+
+@router.get("/dashboard", summary="RAF dashboard — population-level summary for the current year")
+def get_raf_dashboard(
+    year: int | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("raf_scores", "read")),
+) -> dict[str, Any]:
+    """
+    Return a combined RAF dashboard payload:
+
+    - ``population``: total patients, scored patients, average/median RAF for the year
+    - ``top_hccs``: the 10 most frequently occurring HCCs across all patients
+    - ``recent_calculations``: the 10 most recently calculated RAF scores
+    - ``blend_weights``: CMS V24/V28 blend weights for the requested year
+    - ``measurement_year``: the year used for all calculations
+    """
+    calc_year = year or date.today().year
+    _tid = int(tenant_id)
+    _sf, _sp = active_patients_subquery(_tid)
+
+    dashboard: dict[str, Any] = {"measurement_year": calc_year}
+
+    # Blend weights
+    dashboard["blend_weights"] = _BLEND_WEIGHTS.get(
+        calc_year, _BLEND_WEIGHTS.get(max(_BLEND_WEIGHTS.keys()), {"v24": 0.0, "v28": 1.0})
+    )
+
+    # Population totals
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM patients WHERE is_active = 1 AND tenant_id = %s",
+                (_tid,),
+            )
+            total_patients = (cur.fetchone() or {}).get("cnt", 0)
+
+            cur.execute(
+                f"""
+                SELECT
+                    COUNT(DISTINCT rs.patient_id) AS scored,
+                    AVG(rs.final_raf) AS avg_raf,
+                    SUM(rs.final_raf) AS sum_raf
+                FROM raf_scores rs
+                WHERE rs.measurement_year = %s
+                  AND {_sf}
+                  AND rs.tenant_id = %s
+                """,
+                (calc_year, *_sp, _tid),
+            )
+            pop_row = cur.fetchone() or {}
+            scored_patients = int(pop_row.get("scored") or 0)
+            avg_raf = round(float(pop_row.get("avg_raf") or 0), 4)
+
+        dashboard["population"] = {
+            "total_patients": total_patients,
+            "scored_patients": scored_patients,
+            "unscored_patients": max(0, total_patients - scored_patients),
+            "average_raf": avg_raf,
+        }
+    except Exception as exc:
+        logger.error("get_raf_dashboard population error: %s", exc, exc_info=True)
+        dashboard["population"] = {"error": "Failed to load population stats"}
+
+    # Top 10 HCCs by frequency
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT rph.hcc_code, rph.hcc_label, COUNT(*) AS patient_count,
+                       AVG(rph.coefficient) AS avg_coefficient
+                FROM raf_patient_hcc rph
+                JOIN raf_scores rs ON rs.patient_id = rph.patient_id
+                    AND rs.measurement_year = rph.measurement_year
+                WHERE rph.measurement_year = %s
+                  AND {_sf}
+                  AND rph.tenant_id = %s
+                GROUP BY rph.hcc_code, rph.hcc_label
+                ORDER BY patient_count DESC
+                LIMIT 10
+                """,
+                (calc_year, *_sp, _tid),
+            )
+            hcc_rows = cur.fetchall() or []
+        dashboard["top_hccs"] = [
+            {
+                "hcc_code": r["hcc_code"],
+                "hcc_label": r.get("hcc_label") or "",
+                "patient_count": int(r["patient_count"]),
+                "avg_coefficient": round(float(r.get("avg_coefficient") or 0), 4),
+            }
+            for r in hcc_rows
+        ]
+    except Exception as exc:
+        logger.error("get_raf_dashboard top_hccs error: %s", exc, exc_info=True)
+        dashboard["top_hccs"] = []
+
+    # 10 most recently calculated scores
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT rs.patient_id, rs.measurement_year, rs.final_raf,
+                       rs.score_type, rs.model_segment, rs.calculated_at,
+                       p.first_name, p.last_name
+                FROM raf_scores rs
+                LEFT JOIN patients p ON p.id = rs.patient_id AND p.tenant_id = rs.tenant_id
+                WHERE rs.measurement_year = %s
+                  AND {_sf}
+                  AND rs.tenant_id = %s
+                ORDER BY rs.calculated_at DESC
+                LIMIT 10
+                """,
+                (calc_year, *_sp, _tid),
+            )
+            recent_rows = cur.fetchall() or []
+        dashboard["recent_calculations"] = [
+            {
+                "patient_id": r["patient_id"],
+                "patient_name": f"{r.get('first_name') or ''} {r.get('last_name') or ''}".strip(),
+                "measurement_year": r["measurement_year"],
+                "final_raf": round(float(r["final_raf"]), 4),
+                "score_type": r.get("score_type", "v28"),
+                "model_segment": r.get("model_segment", ""),
+                "calculated_at": str(r.get("calculated_at", "")),
+            }
+            for r in recent_rows
+        ]
+    except Exception as exc:
+        logger.error("get_raf_dashboard recent error: %s", exc, exc_info=True)
+        dashboard["recent_calculations"] = []
+
+    return dashboard

@@ -943,9 +943,9 @@ def get_all_open_suspects(
                 with raf_cursor() as cur:
                     cur.execute(
                         f"""
-                        SELECT epm.emr_pid AS id,
-                               epm.fname   AS first_name,
-                               epm.lname   AS last_name
+                        SELECT epm.emr_pid  AS id,
+                               epm.first_name,
+                               epm.last_name
                         FROM emr_patient_matches epm
                         JOIN emr_connections ec ON ec.id = epm.connection_id
                         WHERE ec.tenant_id = %s
@@ -1019,7 +1019,12 @@ def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
                     37: 0.166, 55: 0.395, 85: 0.360, 96: 0.299, 108: 0.288,
                     111: 0.335, 137: 0.289, 138: 0.069, 226: 0.360, 238: 0.299, 280: 0.319,
                 }
-                _coeff = _HCC_COEFFICIENTS.get(_hcc, 0.100)
+                # _hcc may be stored as "85" or "HCC85"; strip prefix and convert to int for lookup
+                try:
+                    _hcc_int = int(str(_hcc).upper().lstrip("HC").lstrip("C"))
+                except (ValueError, TypeError):
+                    _hcc_int = -1
+                _coeff = _HCC_COEFFICIENTS.get(_hcc_int, 0.100)
 
                 # Check if already exists
                 cur.execute(

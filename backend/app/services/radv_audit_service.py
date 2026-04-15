@@ -134,10 +134,10 @@ def get_hcc_audit_trail(
             """
             SELECT
                 p.id,
-                p.fname,
-                p.lname,
-                p.DOB,
-                p.sex,
+                p.first_name,
+                p.last_name,
+                p.dob,
+                p.gender,
                 pd.medicare_beneficiary_id,
                 pd.insurance_id
             FROM patients p
@@ -155,9 +155,9 @@ def get_hcc_audit_trail(
     if demo_row:
         patient_info: dict[str, Any] = {
             "patient_id": patient_id,
-            "name": f"{demo_row.get('fname', '')} {demo_row.get('lname', '')}".strip(),
-            "date_of_birth": str(demo_row["DOB"]) if demo_row.get("DOB") else None,
-            "gender": demo_row.get("sex"),
+            "name": f"{demo_row.get('first_name', '')} {demo_row.get('last_name', '')}".strip(),
+            "date_of_birth": str(demo_row["dob"]) if demo_row.get("dob") else None,
+            "gender": demo_row.get("gender"),
             "mbi": demo_row.get("medicare_beneficiary_id"),
             "insurance_id": demo_row.get("insurance_id"),
         }
@@ -414,8 +414,8 @@ def generate_radv_report(
             """
             SELECT
                 ph.patient_id,
-                p.fname,
-                p.lname,
+                p.first_name,
+                p.last_name,
                 ph.hcc_code,
                 ph.meat_status,
                 ph.raf_coefficient
@@ -459,7 +459,7 @@ def generate_radv_report(
             if pid not in patient_incomplete:
                 patient_incomplete[pid] = {
                     "patient_id": pid,
-                    "name": f"{row.get('fname', '')} {row.get('lname', '')}".strip(),
+                    "name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
                     "incomplete_hcc_count": 0,
                     "hccs": [],
                 }

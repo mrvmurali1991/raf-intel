@@ -319,6 +319,7 @@ def _get_icd_codes(
     dos_start: date | None = None,
     dos_end: date | None = None,
     include_suspected: bool = False,
+    tenant_id: str = "",
 ) -> list[str]:
     """Get unique ICD-10 codes from OpenEMR billing + AI analysis results.
 
@@ -346,7 +347,13 @@ def _get_icd_codes(
     # Resolve emr_pid for OpenEMR billing lookup
     emr_pid: int | None = None
     with raf_cursor() as cur:
-        cur.execute("SELECT emr_pid FROM patients WHERE id = %s AND tenant_id = %s", (patient_id, tenant_id))
+        if tenant_id:
+            cur.execute(
+                "SELECT emr_pid FROM patients WHERE id = %s AND tenant_id = %s",
+                (patient_id, tenant_id),
+            )
+        else:
+            cur.execute("SELECT emr_pid FROM patients WHERE id = %s", (patient_id,))
         row = cur.fetchone()
         if row:
             emr_pid = row["emr_pid"]
@@ -836,11 +843,11 @@ def _get_hcc_coefficient_v28(hcc_code: str, segment: str = "CNA") -> float:
 
 
 def _enrich_hcc_details(
-    hcc_codes: list[str], patient_id: int, year: int, segment: str
+    hcc_codes: list[str], patient_id: int, year: int, segment: str, tenant_id: str = ""
 ) -> list[dict]:
     """Get labels and coefficients for HCC codes by running hccinfhir calculation."""
     try:
-        patient = _get_patient(patient_id)
+        patient = _get_patient(patient_id, tenant_id=tenant_id)
         if not patient:
             return []
         age = _calculate_age(patient.get("DOB"), year)
@@ -968,9 +975,9 @@ def calculate_raf_score(
         }
 
     # 1. Get patient
-    patient = _get_patient(patient_id)
+    patient = _get_patient(patient_id, tenant_id=tenant_id)
     if not patient:
-        raise ValueError(f"Patient {patient_id} not found in OpenEMR")
+        raise ValueError(f"Patient {patient_id} not found")
 
     dob = patient.get("DOB") or patient.get("dob")
     if not dob:
@@ -998,7 +1005,7 @@ def calculate_raf_score(
         }
     else:
         icd_codes = _get_icd_codes(
-            patient_id, year=measurement_year, include_suspected=False
+            patient_id, year=measurement_year, include_suspected=False, tenant_id=tenant_id
         )
 
     # 2b. Merge ICD codes from raf_patient_hcc (document analysis, manual entries)
@@ -1038,6 +1045,7 @@ def calculate_raf_score(
                 dos_start=dos_start if dos_start else None,
                 dos_end=dos_end if dos_end else None,
                 include_suspected=True,
+                tenant_id=tenant_id,
             )
             for code in ai_suspects:
                 if code not in icd_codes:
@@ -1456,9 +1464,9 @@ def calculate_raf_score_multi_model(
     if patient_id == 0:
         return {"error": "Multi-model comparison not available in paste mode"}
 
-    patient = _get_patient(patient_id)
+    patient = _get_patient(patient_id, tenant_id=tenant_id)
     if not patient:
-        raise ValueError(f"Patient {patient_id} not found in OpenEMR")
+        raise ValueError(f"Patient {patient_id} not found")
 
     dob = patient.get("DOB") or patient.get("dob")
     if not dob:
@@ -1470,7 +1478,7 @@ def calculate_raf_score_multi_model(
     age_year = encounter_year if encounter_year is not None else measurement_year
     age = _calculate_age(dob, age_year)
 
-    icd_codes = _get_icd_codes(patient_id, year=measurement_year)
+    icd_codes = _get_icd_codes(patient_id, year=measurement_year, tenant_id=tenant_id)
 
     _dual_type, _orec, _institutional, enrollment_source = _resolve_enrollment(
         patient_id=patient_id,
@@ -1736,12 +1744,12 @@ def get_raf_breakdown(
         # Collect ICD codes from the patient for the engine_input display
         _stored_icd_codes: list[str] = []
         try:
-            _stored_icd_codes = _get_icd_codes(patient_id, year=year)
+            _stored_icd_codes = _get_icd_codes(patient_id, year=year, tenant_id=tenant_id)
         except Exception:
             pass
 
         # Get patient demographics for engine_input display
-        _pat = _get_patient(patient_id)
+        _pat = _get_patient(patient_id, tenant_id=tenant_id)
         _pat_dob = (_pat or {}).get("DOB") or (_pat or {}).get("dob") or "1950-01-01"
         _pat_sex = _sex_code((_pat or {}).get("sex", "M"))
         _pat_age = _calculate_age(_pat_dob, year)

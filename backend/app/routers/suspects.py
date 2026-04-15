@@ -112,7 +112,9 @@ def list_suspects(
     so each record includes ``patient_name``.  Records are sorted by
     ``confidence_score`` descending (highest confidence first).
     """
-    tenant_id: str = current_user.get("tenant_id") or ""
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
     try:
         suspects: list[dict[str, Any]] = get_all_open_suspects(
             limit=limit, offset=offset, tenant_id=tenant_id
@@ -185,8 +187,8 @@ def scan_all_patients(
             continue
         try:
             found = run_full_suspect_scan(
-            pid, year=year, tenant_id=current_user.get("tenant_id") or None
-        )
+                pid, year=year, tenant_id=current_user.get("tenant_id") or None
+            )
             new_count = len(found)
             total_new += new_count
             per_patient.append({"pid": pid, "new_suspects": new_count})

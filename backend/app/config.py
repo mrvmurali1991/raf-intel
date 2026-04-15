@@ -99,22 +99,22 @@ class Settings:
         return self.google_api_key
 
     # OpenEMR database
-    openemr_db_host: str = os.getenv("OPENEMR_DB_HOST", "127.0.0.1")
-    openemr_db_port: int = int(os.getenv("OPENEMR_DB_PORT", "3309"))
+    openemr_db_host: str = os.getenv("OPENEMR_DB_HOST") or "mysql"
+    openemr_db_port: int = int(os.getenv("OPENEMR_DB_PORT") or "3306")
     openemr_db_user: str = _get_required_credential("OPENEMR_DB_USER")
     openemr_db_password: str = _get_required_credential("OPENEMR_DB_PASSWORD")
     openemr_db_name: str = os.getenv("OPENEMR_DB_NAME", "openemr")
 
     # RAF database
-    raf_db_host: str = os.getenv("RAF_DB_HOST", "127.0.0.1")
-    raf_db_port: int = int(os.getenv("RAF_DB_PORT", "3309"))
+    raf_db_host: str = os.getenv("RAF_DB_HOST") or "127.0.0.1"
+    raf_db_port: int = int(os.getenv("RAF_DB_PORT") or "3306")
     raf_db_user: str = _get_required_credential("RAF_DB_USER")
     raf_db_password: str = _get_required_credential("RAF_DB_PASSWORD")
     raf_db_name: str = os.getenv("RAF_DB_NAME", "raf_intelligence")
 
     # Application
     app_port: int = int(os.getenv("APP_PORT", "8500"))
-    openemr_url: str = os.getenv("OPENEMR_URL", "http://localhost:8080")
+    openemr_url: str = os.getenv("OPENEMR_URL") or "http://localhost:8080"
 
     # Redis (for Celery)
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")

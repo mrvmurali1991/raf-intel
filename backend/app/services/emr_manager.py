@@ -94,43 +94,15 @@ _DEFAULT_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 # Connection-aware patient filtering
 # ---------------------------------------------------------------------------
 
-# SQL fragment (no leading AND) that restricts any patient_id column to only
-# rows whose patient is currently active in raf_intelligence.patients.  This
-# is the single source of truth — connecting/disconnecting an EMR flips the
-# is_active flag on the linked patients via the activate/deactivate pattern.
+# Use ``active_patients_subquery(tenant_id)`` for all tenant-scoped active-patient
+# filtering.  It returns a ``(sql_fragment, params)`` tuple whose fragment restricts
+# the given patient_id column to rows whose patient is active AND belongs to the
+# supplied tenant.  Raises ValueError if tenant_id is None.
 #
-# ⚠️  SECURITY / TENANT ISOLATION WARNING ⚠️
-# ------------------------------------------------------------------
-# The raw ACTIVE_PATIENTS_SUBQUERY constant below does NOT filter by
-# tenant_id and therefore LEAKS cross-tenant rows when composed into
-# a query without an explicit `AND <alias>.tenant_id = %s` clause.
-#
-# New code MUST use ``active_patients_subquery(tenant_id)`` below, which
-# returns a tuple ``(sql_fragment, params)`` whose fragment already
-# restricts to ``tenant_id = %s`` for both the outer table and the
-# inner ``patients`` lookup. The caller must append the returned params
-# to their query's params tuple in the correct positional order.
-#
-# Every legacy call site that still interpolates the bare constant
-# MUST either:
-#   (a) be migrated to ``active_patients_subquery(tenant_id)``, or
-#   (b) compose the result with an explicit ``AND p.tenant_id = %s``
-#       (or appropriate alias) in the same WHERE clause.
-#
-# Legacy usage (NOT tenant-safe on its own):
-#   f"SELECT ... FROM raf_scores WHERE {ACTIVE_PATIENTS_SUBQUERY} AND ..."
-#
-# New usage (tenant-safe):
+# Usage:
 #   frag, params = active_patients_subquery(tenant_id)
 #   sql = f"SELECT ... FROM raf_scores WHERE {frag} AND ..."
 #   cursor.execute(sql, (*params, ...other params...))
-# DEPRECATED: use active_patients_subquery(tenant_id) for all new code.
-# Kept for backwards compatibility only — do NOT add new usages of this constant.
-ACTIVE_PATIENTS_SUBQUERY = """(
-    patient_id IN (
-        SELECT id FROM patients WHERE is_active = 1
-    )
-)"""
 
 
 def active_patients_subquery(
@@ -138,7 +110,7 @@ def active_patients_subquery(
     *,
     patient_id_column: str = "patient_id",
 ) -> tuple[str, tuple[int, ...]]:
-    """Return a tenant-scoped variant of ACTIVE_PATIENTS_SUBQUERY.
+    """Return a tenant-scoped SQL fragment for active-patient filtering.
 
     Returns a ``(sql_fragment, params)`` tuple. The fragment restricts the
     given ``patient_id_column`` (default ``patient_id`` — override to
@@ -279,7 +251,10 @@ _VENDOR_PRESETS: list[dict[str, Any]] = [
                 "first_name": "fname",
                 "last_name": "lname",
                 "dob": "DOB",
+                "gender": "sex",
+                "ssn": "ss",
                 "icd_codes": "diagnosis.diagnosis_code",
+                "encounter_id": "encounter",
             }
         ),
     },
@@ -294,6 +269,10 @@ _VENDOR_PRESETS: list[dict[str, Any]] = [
         "default_mappings": json.dumps(
             {
                 "patient_id": "id",
+                "first_name": "name[0].given[0]",
+                "last_name": "name[0].family",
+                "dob": "birthDate",
+                "gender": "gender",
                 "icd_codes": "code.coding[system=http://hl7.org/fhir/sid/icd-10-cm].code",
             }
         ),
@@ -309,6 +288,10 @@ _VENDOR_PRESETS: list[dict[str, Any]] = [
         "default_mappings": json.dumps(
             {
                 "patient_id": "id",
+                "first_name": "name[0].given[0]",
+                "last_name": "name[0].family",
+                "dob": "birthDate",
+                "gender": "gender",
                 "icd_codes": "code.coding[system=http://hl7.org/fhir/sid/icd-10-cm].code",
             }
         ),
@@ -324,6 +307,9 @@ _VENDOR_PRESETS: list[dict[str, Any]] = [
         "default_mappings": json.dumps(
             {
                 "patient_id": "id",
+                "first_name": "name[0].given[0]",
+                "last_name": "name[0].family",
+                "dob": "birthDate",
                 "icd_codes": "code.coding[system=http://hl7.org/fhir/sid/icd-10-cm].code",
             }
         ),
@@ -1285,7 +1271,7 @@ def trigger_sync(
             }
 
     if connection_type == "direct_db":
-        # Run direct DB sync using the openemr_connector.
+        # Run encounter + diagnosis normalization using the connection's stored db_host/port.
         try:
             result = _sync_direct_db(connection_id, sync_id, sync_type)
             _emit_sync_completed(result, tenant_id, connection_id, sync_type)
@@ -1314,46 +1300,40 @@ def trigger_sync(
 
 
 def _sync_direct_db(connection_id: int, sync_id: str, sync_type: str) -> dict:
-    """Pull patients + diagnoses from OpenEMR via direct DB and upsert into RAF tables."""
-    from datetime import date as _date
-    from app.services import openemr_connector as oe
+    """Pull patients + encounters + diagnoses from OpenEMR via direct DB.
 
-    # Resolve tenant_id for this connection once before the loop
+    Uses the host/port/credentials stored in emr_connections (via
+    encounter_normalization_service) so the connection always goes to the
+    correct host — never falls back to the static env-var pool which may
+    point to localhost/127.0.0.1 instead of the Docker service hostname.
+    """
+    from app.services.encounter_normalization_service import sync_all as _enc_sync_all
+
+    # Resolve tenant_id for this connection.
     with raf_cursor() as _cur:
         _cur.execute("SELECT tenant_id FROM emr_connections WHERE id = %s", (connection_id,))
         _conn_row = _cur.fetchone()
-    tenant_id: int | None = _conn_row["tenant_id"] if _conn_row else None
+    if not _conn_row:
+        raise KeyError(f"_sync_direct_db: emr_connections row not found for id={connection_id}")
+    tenant_id: str = str(_conn_row["tenant_id"])
 
-    patients = oe.get_patients(limit=10000, offset=0)
-    patients_synced = 0
-    conditions_found = 0
-    errors: list[str] = []
-    measurement_year = _date.today().year
+    # sync_all() fetches credentials from emr_connections[connection_id] and
+    # uses dynamic_db_cursor(host=db_host, ...) — never touches the static pool.
+    result = _enc_sync_all(tenant_id=tenant_id, connection_id=connection_id)
 
-    for pt in patients:
-        pid = pt.get("pid")
-        if not pid:
-            continue
-        try:
-            _upsert_patient_demographics(pid, pt, measurement_year, connection_id, tenant_id)
-            patients_synced += 1
-
-            billing = oe.get_billing_codes(pid)
-            icd_codes = [c.get("code", "") for c in billing if c.get("code_type") == "ICD10" and c.get("code")]
-            if icd_codes:
-                _upsert_patient_hcc(pid, icd_codes, measurement_year)
-                conditions_found += len(icd_codes)
-        except Exception as exc:
-            errors.append(f"pid={pid}: {exc}")
-
-    sync_status = "completed" if not errors else "failed"
-    error_msg = "; ".join(errors[:10]) if errors else None
+    enc = result.get("encounters", {})
+    diag = result.get("diagnoses", {})
+    patients_synced: int = enc.get("synced", 0)
+    conditions_found: int = diag.get("synced", 0)
+    total_errors: int = enc.get("errors", 0) + diag.get("errors", 0)
+    sync_status = "completed" if total_errors == 0 else "failed"
+    error_msg = f"encounter_errors={enc.get('errors', 0)} diagnosis_errors={diag.get('errors', 0)}" if total_errors else None
 
     log_sync_result(
         sync_id, status=sync_status,
         records_fetched=patients_synced,
         records_processed=conditions_found,
-        records_failed=len(errors),
+        records_failed=total_errors,
         error_message=error_msg,
     )
 
@@ -1364,15 +1344,17 @@ def _sync_direct_db(connection_id: int, sync_id: str, sync_type: str) -> dict:
         )
 
     logger.info(
-        "direct_db sync complete: %d patients, %d conditions, %d errors",
-        patients_synced, conditions_found, len(errors),
+        "direct_db sync complete: encounters_synced=%d diagnoses_synced=%d errors=%d",
+        patients_synced, conditions_found, total_errors,
     )
     return {
         "sync_id": sync_id, "connection_id": connection_id,
         "sync_type": sync_type, "status": sync_status,
         "patients_synced": patients_synced,
         "conditions_found": conditions_found,
-        "errors": errors[:10],
+        "errors": [],
+        "encounters": enc,
+        "diagnoses": diag,
     }
 
 
@@ -1414,7 +1396,7 @@ def _upsert_patient_demographics(
     pt: dict,
     measurement_year: int,
     connection_id: int | None = None,
-    tenant_id: int | None = None,
+    tenant_id: str | int | None = None,
 ) -> None:
     """Insert or update a patient in raf_patient_demographics from OpenEMR data.
 
@@ -1850,17 +1832,42 @@ def auto_register_openemr() -> dict | None:
         )
         existing = cur.fetchone()
 
-    if existing:
-        logger.debug(
-            "emr_manager: OpenEMR connection already exists (id=%s) – skipping auto-register",
-            existing["id"] if isinstance(existing, dict) else existing[0],
-        )
-        return None
-
     db_port = int(os.getenv("OPENEMR_DB_PORT", "3306"))
     db_name = os.getenv("OPENEMR_DB_NAME", "openemr")
     db_user = os.getenv("OPENEMR_DB_USER", "")
     db_password = os.getenv("OPENEMR_DB_PASSWORD", "")
+
+    if existing:
+        existing_id = existing["id"] if isinstance(existing, dict) else existing[0]
+        # If the stored db_host differs from what the current env says (e.g. the
+        # row was registered with "localhost" before the Docker env var was set
+        # to "mysql"), update it in place so pipeline sync_encounters can reach
+        # the correct host.
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT db_host FROM emr_connections WHERE id = %s",
+                (existing_id,),
+            )
+            stored = cur.fetchone()
+        stored_host = (stored or {}).get("db_host", "") if isinstance(stored, dict) else ""
+        if stored_host != db_host:
+            with raf_cursor() as cur:
+                cur.execute(
+                    "UPDATE emr_connections SET db_host = %s WHERE id = %s",
+                    (db_host, existing_id),
+                )
+            logger.info(
+                "emr_manager: corrected db_host for OpenEMR connection id=%s: %r → %r",
+                existing_id,
+                stored_host,
+                db_host,
+            )
+        else:
+            logger.debug(
+                "emr_manager: OpenEMR connection already exists (id=%s) – skipping auto-register",
+                existing_id,
+            )
+        return None
 
     openemr_url = os.getenv("OPENEMR_URL", "http://localhost:8080")
 

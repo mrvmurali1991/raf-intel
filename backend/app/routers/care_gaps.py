@@ -460,8 +460,8 @@ def update_status(
             task_id, new_status=body.status, user_id=user_id, note=body.note
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=422, detail="Invalid input")
+        logger.warning("update_status validation error id=%s: %s", task_id, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error("update_status error id=%s: %s", task_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -486,8 +486,8 @@ def post_comment(
     try:
         return add_comment(task_id, user_id=user_id, comment=body.comment)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=404, detail="Resource not found")
+        logger.warning("post_comment not found task=%s: %s", task_id, exc)
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("post_comment error task=%s: %s", task_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

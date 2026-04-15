@@ -209,7 +209,7 @@ def _keyword_match(text: str, keywords: list[str]) -> bool:
 # OpenEMR data fetchers (per-patient)
 # ---------------------------------------------------------------------------
 
-def _get_patient_demographics(pid: int, tenant_id: str = "") -> dict[str, Any] | None:
+def _get_patient_demographics(pid: int, tenant_id: int | str = "") -> dict[str, Any] | None:
     # Primary source: raf_intelligence.patients (direct-DB / OpenEMR patients)
     sql = "SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE id = %s AND tenant_id = %s"
     with raf_cursor() as cur:
@@ -218,7 +218,8 @@ def _get_patient_demographics(pid: int, tenant_id: str = "") -> dict[str, Any] |
     if row:
         return dict(row)
 
-    # Fallback: FHIR patients tracked in emr_patient_matches
+    # Fallback: FHIR patients tracked in emr_patient_matches — must scope to
+    # the same tenant to prevent cross-tenant data leakage.
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -226,8 +227,8 @@ def _get_patient_demographics(pid: int, tenant_id: str = "") -> dict[str, Any] |
                 "epm.date_of_birth AS DOB, epm.sex "
                 "FROM emr_patient_matches epm "
                 "JOIN emr_connections ec ON ec.id = epm.connection_id "
-                "WHERE ec.is_active = 1 AND epm.id = %s LIMIT 1",
-                (pid,),
+                "WHERE ec.is_active = 1 AND ec.tenant_id = %s AND epm.id = %s LIMIT 1",
+                (tenant_id, pid),
             )
             fhir_row = cur.fetchone()
         if fhir_row:
@@ -497,7 +498,7 @@ def _eval_nephropathy_screen(labs: list[dict]) -> tuple[bool, dict]:
 # Per-measure evaluator (public API)
 # ---------------------------------------------------------------------------
 
-def evaluate_measure(patient_id: int, measure_code: str, year: int) -> dict[str, Any]:
+def evaluate_measure(patient_id: int, measure_code: str, year: int, *, tenant_id: int | str = "") -> dict[str, Any]:
     """
     Evaluate a single HEDIS measure for one patient.
 
@@ -516,7 +517,7 @@ def evaluate_measure(patient_id: int, measure_code: str, year: int) -> dict[str,
     year_start, year_end = _year_range(year)
 
     # Load patient demographics
-    demo = _get_patient_demographics(patient_id)
+    demo = _get_patient_demographics(patient_id, tenant_id)
     if not demo:
         return {"error": f"Patient {patient_id} not found"}
 
@@ -657,7 +658,7 @@ def _gap_description(measure_code: str, component: str) -> str:
 # Patient-level: all measures
 # ---------------------------------------------------------------------------
 
-def get_patient_measures(patient_id: int, year: int) -> dict[str, Any]:
+def get_patient_measures(patient_id: int, year: int, *, tenant_id: int | str = "") -> dict[str, Any]:
     """
     Evaluate all HEDIS measures for a single patient.
 
@@ -669,7 +670,7 @@ def get_patient_measures(patient_id: int, year: int) -> dict[str, Any]:
     met_count = 0
 
     for code in HEDIS_MEASURES:
-        result = evaluate_measure(patient_id, code, year)
+        result = evaluate_measure(patient_id, code, year, tenant_id=tenant_id)
         results[code] = result
         if result.get("denominator"):
             eligible_count += 1
@@ -678,7 +679,7 @@ def get_patient_measures(patient_id: int, year: int) -> dict[str, Any]:
 
     compliance_rate = round(met_count / eligible_count * 100, 1) if eligible_count > 0 else None
 
-    demo = _get_patient_demographics(patient_id)
+    demo = _get_patient_demographics(patient_id, tenant_id)
     name = ""
     if demo:
         name = f"{demo.get('fname', '')} {demo.get('lname', '')}".strip()
@@ -764,7 +765,7 @@ def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
             if not in_denom:
                 continue
 
-            result = evaluate_measure(pid, code, year)
+            result = evaluate_measure(pid, code, year, tenant_id=tid)
             measure_stats[code]["eligible_count"] += 1
             if result.get("met"):
                 measure_stats[code]["met_count"] += 1
@@ -806,8 +807,11 @@ def _is_in_denominator_fast(
     Denominator check that reuses pre-fetched diagnosis codes to avoid redundant
     DB calls during population-level iteration.
     """
-    if measure_code in ("CDC", "SPD"):
+    if measure_code == "CDC":
         return 18 <= age <= 75 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
+    elif measure_code == "SPD":
+        # SPD denominator age is 40–75, not 18–75
+        return 40 <= age <= 75 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
     elif measure_code == "CBP":
         return 18 <= age <= 85 and any(_has_icd_prefix(c, ["I10", "I11", "I12", "I13"]) for c in codes)
     elif measure_code == "COA":
@@ -817,7 +821,6 @@ def _is_in_denominator_fast(
         return sex in ("female", "f") and 67 <= age <= 85 and any(_has_icd_prefix(c, fracture_prefixes) for c in codes)
     elif measure_code == "KED":
         return 18 <= age <= 85 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
-    # SPD age range is 40-75, already handled above
     return False
 
 
@@ -883,7 +886,7 @@ def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, 
             in_denom = _is_in_denominator_fast(pid, mc, age, sex, year, codes)
             if not in_denom:
                 continue
-            result = evaluate_measure(pid, mc, year)
+            result = evaluate_measure(pid, mc, year, tenant_id=tid)
             if not result.get("met") and result.get("denominator"):
                 gaps.append({
                     "patient_id": pid,

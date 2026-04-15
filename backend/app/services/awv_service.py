@@ -175,14 +175,14 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
         billed_rows = cur.fetchall()
     billed_pids: set[int] = {int(r["pid"]) for r in billed_rows}
 
-    # Patients who already have a completed AWV schedule record
+    # Patients who already have a completed AWV schedule record (scoped to this tenant)
     with raf_cursor() as cur:
         cur.execute(
             """
             SELECT patient_id FROM awv_schedules
-            WHERE schedule_year = %s AND status = 'completed'
+            WHERE tenant_id = %s AND schedule_year = %s AND status = 'completed'
             """,
-            (year,),
+            (tenant_id, year),
         )
         scheduled_rows = cur.fetchall()
     completed_pids: set[int] = {int(r["patient_id"]) for r in scheduled_rows}
@@ -199,7 +199,7 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
             SELECT p.id AS pid,
                    COALESCE(NULLIF(p.first_name, ''), epm.first_name) AS fname,
                    COALESCE(NULLIF(p.last_name,  ''), epm.last_name)  AS lname,
-                   p.dob AS DOB, p.sex,
+                   p.dob AS dob, p.sex,
                    p.phone AS phone_home, p.phone AS phone_cell,
                    p.address AS street, p.city, p.state,
                    p.zip AS postal_code, pp.provider_id AS providerID
@@ -286,7 +286,7 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
             "first_name": p.get("fname") or "",
             "last_name": p.get("lname") or "",
             "name": f"{p.get('fname', '')} {p.get('lname', '')}".strip(),
-            "dob": _format_date(p.get("DOB")),
+            "dob": _format_date(p.get("dob")),
             "sex": p.get("sex") or "Unknown",
             "phone": p.get("phone_cell") or p.get("phone_home") or "",
             "provider_id": provider_id_val,

@@ -795,7 +795,7 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                 except Exception:
                     pass
                 try:
-                    recapture_gaps = get_recapture_gaps(patient_id)
+                    recapture_gaps = get_recapture_gaps(patient_id, date.today().year)
                 except Exception:
                     pass
                 try:
@@ -1040,7 +1040,7 @@ def _handle_raf_calculation_completed(payload: dict[str, Any]) -> None:
             "refusing to process event without tenant scope (HIPAA multi-tenant isolation)"
         )
 
-    run_id: int = payload.get("pipeline_run_id") or 0
+    run_id: int = payload.get("pipeline_run_id") or _pop_run_id(tenant_id) or 0
     settings = _get_pipeline_settings(tenant_id)
 
     if settings.get("pipeline_mode") == "manual":
@@ -1114,7 +1114,7 @@ def _handle_suspect_scan_completed(payload: dict[str, Any]) -> None:
             "refusing to process event without tenant scope (HIPAA multi-tenant isolation)"
         )
 
-    run_id: int = payload.get("pipeline_run_id") or 0
+    run_id: int = payload.get("pipeline_run_id") or _pop_run_id(tenant_id) or 0
     settings = _get_pipeline_settings(tenant_id)
 
     if not settings.get("gap_generation_enabled", True):

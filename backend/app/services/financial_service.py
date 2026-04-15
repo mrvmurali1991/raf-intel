@@ -70,6 +70,27 @@ def parse_payment_csv(content: bytes | str) -> list[dict[str, Any]]:
     reader = csv.DictReader(io.StringIO(text))
     records: list[dict[str, Any]] = []
 
+    # Helper closures defined outside the loop — they reference `row` which is
+    # rebound each iteration, so they must capture it via argument default.
+    def _float(row: dict[str, str], key: str, default: float = 0.0) -> float:
+        for k in (key, key.replace("_", "")):
+            val = row.get(k, "").replace(",", "").strip()
+            if val:
+                try:
+                    return float(val)
+                except ValueError:
+                    pass
+        return default
+
+    def _int(row: dict[str, str], key: str, default: int | None = None) -> int | None:
+        val = row.get(key, "").strip()
+        if val:
+            try:
+                return int(val)
+            except ValueError:
+                pass
+        return default
+
     for row_num, raw_row in enumerate(reader, start=2):
         # Normalise keys
         row: dict[str, str] = {k.strip().lower().replace(" ", "_"): (v or "").strip()
@@ -79,25 +100,6 @@ def parse_payment_csv(content: bytes | str) -> list[dict[str, Any]]:
         if not member_id:
             logger.debug("Row %d: missing member_id / mbi — skipped", row_num)
             continue
-
-        def _float(key: str, default: float = 0.0) -> float | None:
-            for k in (key, key.replace("_", "")):
-                val = row.get(k, "").replace(",", "").strip()
-                if val:
-                    try:
-                        return float(val)
-                    except ValueError:
-                        pass
-            return default
-
-        def _int(key: str, default: int | None = None) -> int | None:
-            val = row.get(key, "").strip()
-            if val:
-                try:
-                    return int(val)
-                except ValueError:
-                    pass
-            return default
 
         raw_type = (row.get("payment_type") or "monthly_capitation").lower().replace(" ", "_")
         valid_types = {"monthly_capitation", "mid_year_sweep", "final_sweep", "retroactive"}
@@ -117,10 +119,10 @@ def parse_payment_csv(content: bytes | str) -> list[dict[str, Any]]:
         records.append({
             "member_id": member_id,
             "plan_id": row.get("plan_id") or None,
-            "payment_year": _int("payment_year") or date.today().year,
-            "payment_month": _int("payment_month"),
-            "cms_raf_score": _float("cms_raf_score") or _float("raf_score"),
-            "cms_payment_amount": _float("payment_amount") or _float("cms_payment_amount") or 0.0,
+            "payment_year": _int(row, "payment_year") or date.today().year,
+            "payment_month": _int(row, "payment_month"),
+            "cms_raf_score": _float(row, "cms_raf_score") or _float(row, "raf_score"),
+            "cms_payment_amount": _float(row, "payment_amount") or _float(row, "cms_payment_amount") or 0.0,
             "payment_type": payment_type,
             "adjustment_reason": row.get("adjustment_reason") or None,
             "received_date": received_date,
@@ -137,12 +139,12 @@ def create_import_batch(
     imported_by: int | None,
     tenant_id: str,
 ) -> int:
+    """Insert a payment_import_batches row and return its id."""
     if not tenant_id:
         raise ValueError(
             "create_import_batch: tenant_id is required — "
             "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-    """Insert a payment_import_batches row and return its id."""
     with raf_cursor() as cur:
         cur.execute(
             """
@@ -160,15 +162,15 @@ def store_payment_records(
     records: list[dict[str, Any]],
     tenant_id: str,
 ) -> int:
+    """
+    Persist parsed payment records, match to internal patients, and update the
+    batch summary counters.  Returns the count of rows inserted.
+    """
     if not tenant_id:
         raise ValueError(
             "store_payment_records: tenant_id is required — "
             "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-    """
-    Persist parsed payment records, match to internal patients, and update the
-    batch summary counters.  Returns the count of rows inserted.
-    """
     if not records:
         return 0
 
@@ -331,11 +333,6 @@ def run_reconciliation(
     payment_year: int | None = None,
     payment_month: int | None = None,
 ) -> dict[str, Any]:
-    if not tenant_id:
-        raise ValueError(
-            "run_reconciliation: tenant_id is required — "
-            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
-        )
     """
     Compare projected RAF scores (from raf_scores table) with CMS-reported RAF
     scores for a given period.  Upserts one financial_reconciliation row per
@@ -345,6 +342,11 @@ def run_reconciliation(
 
     Returns a summary dict with counts and aggregate variance.
     """
+    if not tenant_id:
+        raise ValueError(
+            "run_reconciliation: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     year = payment_year or _period_to_year(reconciliation_period)
     month = payment_month or _period_to_month(reconciliation_period)
 
@@ -521,12 +523,12 @@ def get_patient_reconciliation(
     tenant_id: str,
     limit: int = 24,
 ) -> dict[str, Any]:
+    """Return all reconciliation periods for a single patient, newest first."""
     if not tenant_id:
         raise ValueError(
             "get_patient_reconciliation: tenant_id is required — "
             "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-    """Return all reconciliation periods for a single patient, newest first."""
     with raf_cursor() as cur:
         cur.execute(
             """
@@ -544,9 +546,8 @@ def get_patient_reconciliation(
     payment_totals: dict[str, float] = {}
     if periods:
         with raf_cursor() as cur:
-            fmt = ",".join(["%s"] * len(periods))
             cur.execute(
-                f"""
+                """
                 SELECT payment_year, payment_month,
                        SUM(cms_payment_amount) AS total
                   FROM cms_payment_records
@@ -575,17 +576,17 @@ def get_variance_analysis(
     period: str | None = None,
     top_n: int = 20,
 ) -> dict[str, Any]:
-    if not tenant_id:
-        raise ValueError(
-            "get_variance_analysis: tenant_id is required — "
-            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
-        )
     """
     Return the top patients and variance reasons driving financial discrepancy.
 
     Also returns an HCC-level breakdown where data is available by joining
     against raf_hcc_details.
     """
+    if not tenant_id:
+        raise ValueError(
+            "get_variance_analysis: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     filters = ["fr.tenant_id = %s", "fr.status != 'matched'"]
     params: list[Any] = [tenant_id]
 
@@ -669,11 +670,6 @@ def generate_forecast(
     confidence_level: str = "medium",
     created_by: int | None = None,
 ) -> dict[str, Any]:
-    if not tenant_id:
-        raise ValueError(
-            "generate_forecast: tenant_id is required — "
-            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
-        )
     """
     Build a revenue forecast for forecast_period.
 
@@ -681,6 +677,11 @@ def generate_forecast(
     Gap closure revenue applies gap_closure_rate against open HCC suspects.
     Sweep adjustment models expected mid-year/final sweep as a % of base.
     """
+    if not tenant_id:
+        raise ValueError(
+            "generate_forecast: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     year = _period_to_year(forecast_period)
 
     # Pull current RAF scores scoped to this tenant
@@ -858,11 +859,6 @@ def get_financial_summary(
     tenant_id: str,
     year: int | None = None,
 ) -> dict[str, Any]:
-    if not tenant_id:
-        raise ValueError(
-            "get_financial_summary: tenant_id is required — "
-            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
-        )
     """
     Dashboard-level financial overview:
     - Total CMS payments received YTD
@@ -871,6 +867,11 @@ def get_financial_summary(
     - Reconciliation status distribution
     - Latest forecast
     """
+    if not tenant_id:
+        raise ValueError(
+            "get_financial_summary: tenant_id is required — "
+            "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
+        )
     target_year = year or date.today().year
 
     with raf_cursor() as cur:
@@ -951,15 +952,15 @@ def get_revenue_trends(
     tenant_id: str,
     periods: int = 12,
 ) -> dict[str, Any]:
+    """
+    Return month-by-month CMS payment totals and reconciliation variance
+    for the most recent N months.
+    """
     if not tenant_id:
         raise ValueError(
             "get_revenue_trends: tenant_id is required — "
             "refusing to operate without tenant scope (HIPAA multi-tenant isolation)"
         )
-    """
-    Return month-by-month CMS payment totals and reconciliation variance
-    for the most recent N months.
-    """
     with raf_cursor() as cur:
         cur.execute(
             """

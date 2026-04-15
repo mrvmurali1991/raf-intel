@@ -54,13 +54,24 @@ def _row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-def _fetch_chase(chase_id: int) -> dict[str, Any]:
-    """Return a single chase request row or raise ValueError if not found."""
+def _fetch_chase(chase_id: int, tenant_id: str | None = None) -> dict[str, Any]:
+    """Return a single chase request row or raise ValueError if not found.
+
+    When ``tenant_id`` is provided the query is scoped to that tenant so a
+    chase belonging to a different tenant is treated as not found (prevents
+    cross-tenant data leakage).
+    """
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM chart_chase_requests WHERE id = %s",
-            (chase_id,),
-        )
+        if tenant_id:
+            cur.execute(
+                "SELECT * FROM chart_chase_requests WHERE id = %s AND tenant_id = %s",
+                (chase_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM chart_chase_requests WHERE id = %s",
+                (chase_id,),
+            )
         row = cur.fetchone()
     if not row:
         raise ValueError(f"Chart chase {chase_id} not found")
@@ -130,9 +141,9 @@ def list_chases(
     return [_row_to_dict(r) for r in rows]
 
 
-def get_chase(chase_id: int) -> dict[str, Any]:
+def get_chase(chase_id: int, *, tenant_id: str | None = None) -> dict[str, Any]:
     """Return a single chase request with its attempt history."""
-    chase = _fetch_chase(chase_id)
+    chase = _fetch_chase(chase_id, tenant_id=tenant_id)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -211,13 +222,14 @@ def create_chase(data: dict[str, Any]) -> dict[str, Any]:
     return _fetch_chase(new_id)
 
 
-def update_chase(chase_id: int, data: dict[str, Any]) -> dict[str, Any]:
+def update_chase(chase_id: int, data: dict[str, Any], *, tenant_id: str | None = None) -> dict[str, Any]:
     """Update mutable fields on an existing chase request.
 
     Only the keys present in ``data`` are updated; absent keys are left
-    unchanged.  Raises ValueError when the chase does not exist.
+    unchanged.  Raises ValueError when the chase does not exist or belongs to
+    a different tenant.
     """
-    _fetch_chase(chase_id)  # Existence check
+    _fetch_chase(chase_id, tenant_id=tenant_id)  # Existence + tenant check
 
     allowed = {
         "chase_type", "reason", "hcc_codes", "dos_from", "dos_to",
@@ -234,34 +246,42 @@ def update_chase(chase_id: int, data: dict[str, Any]) -> dict[str, Any]:
             updates["hcc_codes"] = json.dumps(updates["hcc_codes"])
 
     set_clause = ", ".join(f"{col} = %s" for col in updates)
-    params = list(updates.values()) + [chase_id]
+    if tenant_id:
+        params = list(updates.values()) + [chase_id, tenant_id]
+        where = "WHERE id = %s AND tenant_id = %s"
+    else:
+        params = list(updates.values()) + [chase_id]
+        where = "WHERE id = %s"
 
     with raf_cursor() as cur:
         cur.execute(
-            f"UPDATE chart_chase_requests SET {set_clause} WHERE id = %s",
+            f"UPDATE chart_chase_requests SET {set_clause} {where}",
             params,
         )
 
     logger.info("Updated chart chase id=%s fields=%s", chase_id, list(updates.keys()))
-    return _fetch_chase(chase_id)
+    return _fetch_chase(chase_id, tenant_id=tenant_id)
 
 
-def cancel_chase(chase_id: int, *, notes: str | None = None) -> dict[str, Any]:
+def cancel_chase(chase_id: int, *, tenant_id: str | None = None, notes: str | None = None) -> dict[str, Any]:
     """Set status to 'cancelled'.  Raises ValueError if chase not found."""
-    _fetch_chase(chase_id)
+    _fetch_chase(chase_id, tenant_id=tenant_id)
+    tenant_clause = "AND tenant_id = %s" if tenant_id else ""
     with raf_cursor() as cur:
         if notes:
+            params = (notes, chase_id, tenant_id) if tenant_id else (notes, chase_id)
             cur.execute(
-                "UPDATE chart_chase_requests SET status = 'cancelled', notes = %s WHERE id = %s",
-                (notes, chase_id),
+                f"UPDATE chart_chase_requests SET status = 'cancelled', notes = %s WHERE id = %s {tenant_clause}",
+                params,
             )
         else:
+            params = (chase_id, tenant_id) if tenant_id else (chase_id,)
             cur.execute(
-                "UPDATE chart_chase_requests SET status = 'cancelled' WHERE id = %s",
-                (chase_id,),
+                f"UPDATE chart_chase_requests SET status = 'cancelled' WHERE id = %s {tenant_clause}",
+                params,
             )
     logger.info("Cancelled chart chase id=%s", chase_id)
-    return _fetch_chase(chase_id)
+    return _fetch_chase(chase_id, tenant_id=tenant_id)
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +291,7 @@ def cancel_chase(chase_id: int, *, notes: str | None = None) -> dict[str, Any]:
 def log_attempt(
     chase_id: int,
     *,
+    tenant_id: str | None = None,
     method: str,
     sent_by: str,
     response: str | None = None,
@@ -286,7 +307,7 @@ def log_attempt(
 
     Returns the updated chase row (with attempts_history).
     """
-    chase = _fetch_chase(chase_id)
+    chase = _fetch_chase(chase_id, tenant_id=tenant_id)
 
     if chase["status"] in ("completed", "cancelled"):
         raise ValueError(
@@ -347,7 +368,7 @@ def log_attempt(
             (new_attempts, new_chase_type, new_status, chase_id),
         )
 
-    return get_chase(chase_id)
+    return get_chase(chase_id, tenant_id=tenant_id)
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +378,7 @@ def log_attempt(
 def receive_chase(
     chase_id: int,
     *,
+    tenant_id: str | None = None,
     document_id: int | None = None,
     partial: bool = False,
     received_date: date | None = None,
@@ -371,7 +393,7 @@ def receive_chase(
     Raises ValueError if the chase does not exist or is already completed /
     cancelled.
     """
-    chase = _fetch_chase(chase_id)
+    chase = _fetch_chase(chase_id, tenant_id=tenant_id)
 
     if chase["status"] in ("completed", "cancelled"):
         raise ValueError(
@@ -397,7 +419,7 @@ def receive_chase(
     logger.info(
         "Chase id=%s marked %s; document_id=%s", chase_id, new_status, document_id
     )
-    return get_chase(chase_id)
+    return get_chase(chase_id, tenant_id=tenant_id)
 
 
 # ---------------------------------------------------------------------------

@@ -495,7 +495,7 @@ def svc_patients_with_encounters(limit: int, tenant_id: str | None = None) -> di
                 SELECT DISTINCT p.id AS pid, p.first_name AS fname, p.last_name AS lname,
                        p.dob AS DOB, p.sex
                 FROM patients p
-                JOIN raf_encounter_analysis ea ON ea.pid = p.id
+                JOIN raf_encounter_analysis ea ON ea.patient_id = p.id
                 WHERE p.is_active = 1 AND p.data_source = 'upload'
                   AND p.tenant_id = %s AND ea.tenant_id = %s
                 LIMIT %s

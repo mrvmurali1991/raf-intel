@@ -90,7 +90,8 @@ async def upload_claims_file(
         )
 
     try:
-        batch_id = svc.create_batch(filename, file_format, len(content), uploaded_by)
+        tenant_id = str(current_user.get("tenant_id") or "")
+        batch_id = svc.create_batch(filename, file_format, len(content), uploaded_by, tenant_id=tenant_id)
         stored_count = svc.store_parsed_claims(batch_id, claims)
         svc.update_batch_status(batch_id, svc.STATUS_PARSED)
     except Exception as exc:
@@ -131,8 +132,9 @@ def list_batches(
     _perm: None = Depends(require_permission("claims", "read")),
 ) -> dict[str, Any]:
     """Return all claims batches ordered by most recent upload."""
+    tenant_id = str(current_user.get("tenant_id") or "")
     try:
-        batches = svc.list_batches(limit=limit, offset=offset)
+        batches = svc.list_batches(limit=limit, offset=offset, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("list_batches error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -155,7 +157,8 @@ def get_batch(
     Return full batch metadata including status, claim counts, match counts,
     and computed statistics if the batch has been processed.
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
@@ -187,12 +190,13 @@ def delete_batch(
     Permanently delete a batch and all associated claim records, diagnosis
     mappings, and processing results. This action cannot be undone.
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
     try:
-        deleted_claims = svc.delete_batch(batch_id)
+        deleted_claims = svc.delete_batch(batch_id, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("delete_batch error for batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -239,7 +243,8 @@ def process_batch(
 
     Set ?run_async=true to process in the background (returns 202 immediately).
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
@@ -298,7 +303,8 @@ def list_batch_claims(
     Each record includes parsed demographics, ICD-10 codes, CPT codes,
     charges, and the matched OpenEMR pid (if any).
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
@@ -343,7 +349,8 @@ def get_batch_diagnoses(
     Return all unique ICD-10 codes found in this batch, each annotated with
     its HCC category (if mapped) and occurrence counts.
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
@@ -376,7 +383,8 @@ def get_hcc_summary(
     Return a ranked summary of HCC categories found across all claims in the batch,
     with patient and claim occurrence counts per HCC.
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
@@ -414,7 +422,8 @@ def get_unmapped_patients(
     Return distinct patients in this batch that could not be matched to an
     OpenEMR patient record. Useful for manual reconciliation workflows.
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 
@@ -470,7 +479,8 @@ def calculate_raf_for_batch(
     implementation of CMS-HCC V28). Not CMS-validated. Verify against official
     CMS SAS software before use in payment determinations.
     """
-    batch = svc.get_batch(batch_id)
+    tenant_id = str(current_user.get("tenant_id") or "")
+    batch = svc.get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
 

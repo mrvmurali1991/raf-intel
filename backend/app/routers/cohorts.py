@@ -191,8 +191,8 @@ def compare(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=404, detail="Resource not found")
+        logger.warning("compare_cohorts not found: %s", exc)
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("compare_cohorts error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -435,8 +435,8 @@ def refresh_membership(
     try:
         return refresh_cohort_membership(cohort_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=404, detail="Resource not found")
+        logger.warning("refresh_membership error id=%s: %s", cohort_id, exc)
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("refresh_membership error id=%s: %s", cohort_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -469,8 +469,8 @@ def snapshot(
     try:
         return take_snapshot(cohort_id, tenant_id=tenant_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=404, detail="Resource not found")
+        logger.warning("snapshot error id=%s: %s", cohort_id, exc)
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("snapshot error id=%s: %s", cohort_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -527,8 +527,8 @@ def export_csv(
     try:
         csv_content = export_cohort_csv(cohort_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=404, detail="Resource not found")
+        logger.warning("export_csv not found id=%s: %s", cohort_id, exc)
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("export_csv error id=%s: %s", cohort_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

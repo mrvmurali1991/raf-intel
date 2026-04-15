@@ -99,6 +99,7 @@ def get_pre_visit_summary(
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """
     Generate a comprehensive pre-visit RAF summary for the given patient.
@@ -117,7 +118,7 @@ def get_pre_visit_summary(
     """
     calc_year = year or date.today().year
     try:
-        result = svc.generate_pre_visit_summary(patient_id=pid, year=calc_year)
+        result = svc.generate_pre_visit_summary(patient_id=pid, year=calc_year, tenant_id=tenant_id)
     except Exception as exc:
         logger.error("get_pre_visit_summary error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

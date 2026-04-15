@@ -83,10 +83,14 @@ def _error_result(check: str, exc: Exception) -> dict[str, Any]:
 
 
 def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
-    """Patients with no HCCs and no diagnoses recorded in the last 365 days.
+    """Patients with no HCCs recorded (no entries in raf_patient_hcc).
 
     When a FHIR/REST connection is active, patient data lives in
     emr_patient_matches rather than the patients table.
+
+    Note: the diagnoses table does not exist in the RAF Intelligence schema;
+    this check relies solely on the raf_patient_hcc table which is the
+    canonical source for coded HCC conditions.
     """
     check = "patients_without_icd"
     try:
@@ -102,11 +106,6 @@ def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]
                         SELECT 1 FROM raf_patient_hcc h
                         WHERE h.patient_id = epm.id
                   )
-                  AND NOT EXISTS (
-                        SELECT 1 FROM diagnoses d
-                        WHERE d.patient_id = epm.id
-                          AND d.diagnosis_date >= (CURRENT_DATE - INTERVAL 365 DAY)
-                  )
                 ORDER BY epm.id
                 LIMIT 1000
                 """
@@ -119,16 +118,8 @@ def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]
                 WHERE p.tenant_id = %(tenant_id)s
                   AND NOT EXISTS (
                         SELECT 1 FROM raf_patient_hcc h
-                        JOIN patients ph ON ph.id = h.patient_id
                         WHERE h.patient_id = p.id
-                          AND ph.tenant_id = %(tenant_id)s
-                  )
-                  AND NOT EXISTS (
-                        SELECT 1 FROM diagnoses d
-                        JOIN patients pd ON pd.id = d.patient_id
-                        WHERE d.patient_id = p.id
-                          AND pd.tenant_id = %(tenant_id)s
-                          AND d.diagnosis_date >= (CURRENT_DATE - INTERVAL 365 DAY)
+                          AND h.tenant_id = %(tenant_id)s
                   )
                 ORDER BY p.id
                 LIMIT 1000
@@ -142,8 +133,8 @@ def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]
             "count": len(rows),
             "sample_ids": rows[:SAMPLE_LIMIT],
             "details": (
-                "Patients with zero rows in raf_patient_hcc and no diagnoses "
-                "in the last 365 days — likely missing coding or data ingestion gap."
+                "Patients with zero rows in raf_patient_hcc — likely missing coding "
+                "or data ingestion gap."
             ),
         }
     except Exception as exc:  # noqa: BLE001
@@ -204,34 +195,38 @@ def check_hccs_missing_meat(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
 def check_raf_score_outliers(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
     """RAF scores outside plausible clinical range (>5.0 or <0.1).
 
-    When a FHIR/REST connection is active, raf_score is stored on
-    emr_patient_matches rather than patients.
+    RAF scores live in the raf_scores table (final_raf column), not on the
+    patients or emr_patient_matches rows.  Both FHIR and non-FHIR paths
+    query raf_scores joined to the appropriate patient source for tenant
+    scoping.
     """
     check = "raf_score_outliers"
     try:
         if _is_fhir_active(cursor):
             cursor.execute(
                 """
-                SELECT epm.id
-                FROM emr_patient_matches epm
+                SELECT rs.patient_id AS id
+                FROM raf_scores rs
+                JOIN emr_patient_matches epm ON epm.id = rs.patient_id
                 JOIN emr_connections ec ON ec.id = epm.connection_id
                 WHERE ec.is_active = 1
                   AND ec.connection_type IN ('fhir_r4', 'rest_api')
-                  AND epm.raf_score IS NOT NULL
-                  AND (epm.raf_score > 5.0 OR epm.raf_score < 0.1)
-                ORDER BY epm.id
+                  AND rs.final_raf IS NOT NULL
+                  AND (rs.final_raf > 5.0 OR rs.final_raf < 0.1)
+                ORDER BY rs.patient_id
                 LIMIT 1000
                 """
             )
         else:
             cursor.execute(
                 """
-                SELECT p.id
-                FROM patients p
+                SELECT rs.patient_id AS id
+                FROM raf_scores rs
+                JOIN patients p ON p.id = rs.patient_id
                 WHERE p.tenant_id = %(tenant_id)s
-                  AND p.raf_score IS NOT NULL
-                  AND (p.raf_score > 5.0 OR p.raf_score < 0.1)
-                ORDER BY p.id
+                  AND rs.final_raf IS NOT NULL
+                  AND (rs.final_raf > 5.0 OR rs.final_raf < 0.1)
+                ORDER BY rs.patient_id
                 LIMIT 1000
                 """,
                 {"tenant_id": tenant_id},
@@ -255,7 +250,7 @@ def check_future_dob(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
     """Patients with date-of-birth after today — impossible data.
 
     When a FHIR/REST connection is active, DOB is stored in emr_patient_matches
-    (birth_date column as populated by the FHIR importer).
+    as the date_of_birth column.
     """
     check = "future_dob"
     try:
@@ -267,8 +262,8 @@ def check_future_dob(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
                 JOIN emr_connections ec ON ec.id = epm.connection_id
                 WHERE ec.is_active = 1
                   AND ec.connection_type IN ('fhir_r4', 'rest_api')
-                  AND epm.birth_date IS NOT NULL
-                  AND epm.birth_date > CURRENT_DATE
+                  AND epm.date_of_birth IS NOT NULL
+                  AND epm.date_of_birth > CURRENT_DATE
                 ORDER BY epm.id
                 LIMIT 1000
                 """
@@ -302,7 +297,7 @@ def check_duplicate_patients(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
     """Patients sharing the same (last_name, first_name, dob).
 
     When a FHIR/REST connection is active, duplicate detection runs against
-    emr_patient_matches using family_name, given_name, and birth_date columns.
+    emr_patient_matches using the last_name, first_name, and date_of_birth columns.
     """
     check = "duplicate_patients"
     try:
@@ -313,23 +308,23 @@ def check_duplicate_patients(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
                 FROM emr_patient_matches epm
                 JOIN emr_connections ec ON ec.id = epm.connection_id
                 JOIN (
-                    SELECT family_name, given_name, birth_date
+                    SELECT last_name, first_name, date_of_birth
                     FROM emr_patient_matches epm2
                     JOIN emr_connections ec2 ON ec2.id = epm2.connection_id
                     WHERE ec2.is_active = 1
                       AND ec2.connection_type IN ('fhir_r4', 'rest_api')
-                      AND epm2.family_name IS NOT NULL
-                      AND epm2.given_name IS NOT NULL
-                      AND epm2.birth_date IS NOT NULL
-                    GROUP BY family_name, given_name, birth_date
+                      AND epm2.last_name IS NOT NULL
+                      AND epm2.first_name IS NOT NULL
+                      AND epm2.date_of_birth IS NOT NULL
+                    GROUP BY last_name, first_name, date_of_birth
                     HAVING COUNT(*) > 1
                 ) dup
-                  ON dup.family_name = epm.family_name
-                 AND dup.given_name  = epm.given_name
-                 AND dup.birth_date  = epm.birth_date
+                  ON dup.last_name    = epm.last_name
+                 AND dup.first_name   = epm.first_name
+                 AND dup.date_of_birth = epm.date_of_birth
                 WHERE ec.is_active = 1
                   AND ec.connection_type IN ('fhir_r4', 'rest_api')
-                ORDER BY epm.family_name, epm.given_name, epm.birth_date, epm.id
+                ORDER BY epm.last_name, epm.first_name, epm.date_of_birth, epm.id
                 LIMIT 1000
                 """
             )

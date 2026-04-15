@@ -201,27 +201,32 @@ def list_packages(
     pid: int | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("audit", "read"))) -> dict[str, Any]:
-    """Return metadata for previously generated audit packages."""
+    """Return metadata for previously generated audit packages, scoped to the calling tenant."""
+    # raf_audit_packages has no tenant_id column; scope via join to patients.
     if pid is not None:
         sql = """
-            SELECT id, patient_id, measurement_year, file_path,
-                   status, file_size_bytes, generated_at, created_at
-            FROM raf_audit_packages
-            WHERE patient_id = %s
-            ORDER BY created_at DESC
+            SELECT ap.id, ap.patient_id, ap.measurement_year, ap.file_path,
+                   ap.status, ap.file_size_bytes, ap.generated_at, ap.created_at
+            FROM raf_audit_packages ap
+            JOIN patients p ON p.id = ap.patient_id
+            WHERE ap.patient_id = %s AND p.tenant_id = %s AND p.is_active = 1
+            ORDER BY ap.created_at DESC
             LIMIT %s
         """
-        params: tuple[Any, ...] = (pid, limit)
+        params: tuple[Any, ...] = (pid, tenant_id, limit)
     else:
         sql = """
-            SELECT id, patient_id, measurement_year, file_path,
-                   status, file_size_bytes, generated_at, created_at
-            FROM raf_audit_packages
-            ORDER BY created_at DESC
+            SELECT ap.id, ap.patient_id, ap.measurement_year, ap.file_path,
+                   ap.status, ap.file_size_bytes, ap.generated_at, ap.created_at
+            FROM raf_audit_packages ap
+            JOIN patients p ON p.id = ap.patient_id
+            WHERE p.tenant_id = %s AND p.is_active = 1
+            ORDER BY ap.created_at DESC
             LIMIT %s
         """
-        params = (limit,)
+        params = (tenant_id, limit)
 
     try:
         with raf_cursor() as cur:
@@ -282,9 +287,11 @@ def download_package_by_id(
     try:
         with raf_cursor() as cur:
             cur.execute(
-                "SELECT id, patient_id, measurement_year, file_path, status "
-                "FROM raf_audit_packages WHERE id = %s",
-                (package_id,),
+                "SELECT ap.id, ap.patient_id, ap.measurement_year, ap.file_path, ap.status "
+                "FROM raf_audit_packages ap "
+                "JOIN patients p ON p.id = ap.patient_id "
+                "WHERE ap.id = %s AND p.tenant_id = %s AND p.is_active = 1",
+                (package_id, tenant_id),
             )
             row = cur.fetchone()
     except Exception as exc:

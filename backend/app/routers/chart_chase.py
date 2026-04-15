@@ -360,13 +360,14 @@ def create_chase(
 def get_chase(
     chase_id: int,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "read")),
 ) -> dict[str, Any]:
     """Return a single chase request including its full attempt history."""
     try:
-        chase = svc.get_chase(chase_id)
+        chase = svc.get_chase(chase_id, tenant_id=tenant_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.warning("get_chase id=%s not found: %s", chase_id, exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
         logger.error("get_chase id=%s: %s", chase_id, exc)
@@ -384,6 +385,7 @@ def update_chase(
     chase_id: int,
     body: ChaseUpdateRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -400,9 +402,9 @@ def update_chase(
     """
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     try:
-        chase = svc.update_chase(chase_id, updates)
+        chase = svc.update_chase(chase_id, updates, tenant_id=tenant_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.warning("update_chase id=%s not found: %s", chase_id, exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
         logger.error("update_chase id=%s: %s", chase_id, exc)
@@ -420,6 +422,7 @@ def log_attempt(
     chase_id: int,
     body: AttemptRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -445,6 +448,7 @@ def log_attempt(
     try:
         chase = svc.log_attempt(
             chase_id,
+            tenant_id=tenant_id,
             method=body.method,
             sent_by=sent_by,
             response=body.response,
@@ -470,6 +474,7 @@ def receive_chase(
     chase_id: int,
     body: ReceiveRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -488,6 +493,7 @@ def receive_chase(
     try:
         chase = svc.receive_chase(
             chase_id,
+            tenant_id=tenant_id,
             document_id=body.document_id,
             partial=body.partial,
             received_date=body.received_date,
@@ -512,6 +518,7 @@ def cancel_chase(
     chase_id: int,
     body: CancelRequest,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
 ) -> dict[str, Any]:
     """
@@ -523,9 +530,9 @@ def cancel_chase(
         { "notes": "Patient disenrolled" }
     """
     try:
-        chase = svc.cancel_chase(chase_id, notes=body.notes)
+        chase = svc.cancel_chase(chase_id, tenant_id=tenant_id, notes=body.notes)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.warning("cancel_chase id=%s not found: %s", chase_id, exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
         logger.error("cancel_chase id=%s: %s", chase_id, exc)

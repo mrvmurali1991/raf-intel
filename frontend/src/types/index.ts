@@ -1,15 +1,17 @@
 export interface Patient {
-  id: string;
-  pid: string;
-  first_name: string;
-  last_name: string;
+  /** Numeric primary key — the backend aliases `id` as `pid`. May be number or string. */
+  id?: string | number;
+  pid: string | number;
+  /** Backend returns fname/lname; first_name/last_name provided for legacy compat */
+  first_name?: string;
+  last_name?: string;
   fname?: string;
   lname?: string;
-  dob: string;
-  /** Capitalized variant returned by some API responses */
+  /** Backend returns DOB (capitalised); dob is the lowercased variant */
+  dob?: string;
   DOB?: string;
-  age: number;
-  sex: string;
+  age?: number;
+  sex?: string;
   city?: string;
   state?: string;
   postal_code?: string;
@@ -23,15 +25,17 @@ export interface Patient {
   insurance_type?: string;
   hcc_count?: number;
   provider_name?: string;
-  raf_score: number;
+  /** May be null when patient has not yet been scored */
+  raf_score?: number | null;
   demographic_score?: number | null;
   disease_score?: number | null;
   interaction_score?: number | null;
+  data_source?: string;
   raf_score_history?: RAFScoreEntry[];
-  hcc_codes: HCCCode[];
-  suspects: SuspectCondition[];
+  hcc_codes?: HCCCode[];
+  suspects?: SuspectCondition[];
   encounters?: Encounter[];
-  meat_status: MEATStatus;
+  meat_status?: MEATStatus;
 }
 
 export interface RAFScoreEntry {

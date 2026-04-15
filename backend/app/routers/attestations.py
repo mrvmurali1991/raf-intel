@@ -356,6 +356,7 @@ def submit_batch(
     body: SubmitBatchRequest,
     request: Request,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "write")),
 ) -> dict[str, Any]:
     """
@@ -398,6 +399,7 @@ def submit_batch(
 def get_attestation(
     attestation_id: int,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "read")),
 ) -> dict[str, Any]:
     """Return the full detail for a single attestation."""

@@ -587,19 +587,20 @@ def create_batch(
     file_format: str,
     file_size: int,
     uploaded_by: str = "api",
+    tenant_id: str = "",
 ) -> int:
     """Insert a new claims batch record and return its ID."""
     with raf_cursor() as cur:
         cur.execute(
             """
             INSERT INTO claims_batches
-                (batch_uuid, filename, file_format, file_size, status, uploaded_by, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                (batch_uuid, filename, file_format, file_size, status, uploaded_by, tenant_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
             """,
-            (str(uuid.uuid4()), filename, file_format, file_size, STATUS_UPLOADED, uploaded_by),
+            (str(uuid.uuid4()), filename, file_format, file_size, STATUS_UPLOADED, uploaded_by, tenant_id or None),
         )
         batch_id = cur.lastrowid
-    logger.info("Created claims batch id=%d filename='%s' format=%s", batch_id, filename, file_format)
+    logger.info("Created claims batch id=%d filename='%s' format=%s tenant_id=%s", batch_id, filename, file_format, tenant_id)
     return batch_id
 
 
@@ -721,12 +722,22 @@ def list_batches(limit: int = 50, offset: int = 0, tenant_id: str = "") -> list[
     return [_serialize_row(r) for r in rows]
 
 
-def delete_batch(batch_id: int) -> int:
-    """Delete a batch and all associated claims. Returns rows deleted."""
+def delete_batch(batch_id: int, tenant_id: str = "") -> int:
+    """Delete a batch and all associated claims. Returns rows deleted.
+
+    When *tenant_id* is supplied the DELETE is scoped to that tenant so a
+    caller cannot delete a batch belonging to a different tenant.
+    """
     with raf_cursor() as cur:
         cur.execute("DELETE FROM claims_records WHERE batch_id=%s", (batch_id,))
         deleted_claims = cur.rowcount
-        cur.execute("DELETE FROM claims_batches WHERE id=%s", (batch_id,))
+        if tenant_id:
+            cur.execute(
+                "DELETE FROM claims_batches WHERE id=%s AND tenant_id=%s",
+                (batch_id, tenant_id),
+            )
+        else:
+            cur.execute("DELETE FROM claims_batches WHERE id=%s", (batch_id,))
     logger.info("Deleted batch_id=%d (%d claims removed)", batch_id, deleted_claims)
     return deleted_claims
 

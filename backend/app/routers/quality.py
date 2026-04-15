@@ -133,6 +133,7 @@ def patient_measures(
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
+    tenant_id: int = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """
     Return met/unmet status for every tracked HEDIS measure for the specified
@@ -145,7 +146,7 @@ def patient_measures(
     calc_year = year or date.today().year
 
     try:
-        result = get_patient_measures(pid, calc_year)
+        result = get_patient_measures(pid, calc_year, tenant_id=int(tenant_id))
     except Exception as exc:
         logger.error("patient_measures error [pid=%s]: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

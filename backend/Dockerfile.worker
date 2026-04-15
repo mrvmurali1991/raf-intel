@@ -37,7 +37,8 @@ COPY app/ ./app/
 
 RUN groupadd --gid 1001 celery && \
     useradd  --uid 1001 --gid celery --no-create-home celery && \
-    mkdir -p /app/data && chown celery:celery /app/data
+    mkdir -p /app/data /app/uploads /app/logs /app/data/submissions && \
+    chown -R celery:celery /app/data /app/uploads /app/logs
 
 USER celery
 

@@ -198,11 +198,11 @@ def get_prospective_worklist(
                            p.zip AS postal_code, pp.provider_id AS providerID
                     FROM patients p
                     LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
-                    WHERE p.is_active = 1 AND pp.provider_id = %s
+                    WHERE p.is_active = 1 AND p.tenant_id = %s AND pp.provider_id = %s
                     ORDER BY p.last_name, p.first_name
                     LIMIT 10000
                     """,
-                    (provider_id,),
+                    (tenant_id, provider_id),
                 )
             else:
                 cur.execute(
@@ -214,15 +214,16 @@ def get_prospective_worklist(
                            p.zip AS postal_code, pp.provider_id AS providerID
                     FROM patients p
                     LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
-                    WHERE p.is_active = 1
+                    WHERE p.is_active = 1 AND p.tenant_id = %s
                     ORDER BY p.last_name, p.first_name
                     LIMIT 10000
-                    """
+                    """,
+                    (tenant_id,),
                 )
             patients = cur.fetchall()
 
         # Filter to only patients linked to active EMR connections
-        active_pids = _active_patient_ids()
+        active_pids = _active_patient_ids(tenant_id)
         patients = [p for p in patients if int(p["pid"]) in active_pids]
 
         if not patients:
@@ -435,7 +436,7 @@ def _build_address(p: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_pre_visit_summary(patient_id: int, year: int) -> dict[str, Any]:
+def generate_pre_visit_summary(patient_id: int, year: int, tenant_id: str = "") -> dict[str, Any]:
     """
     Aggregate a complete pre-visit RAF summary for a patient.
 
@@ -463,8 +464,9 @@ def generate_pre_visit_summary(patient_id: int, year: int) -> dict[str, Any]:
                 FROM patients p
                 LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
                 WHERE p.id = %s
+                  AND (p.tenant_id = %s OR %s = '')
                 """,
-                (patient_id,),
+                (patient_id, tenant_id, tenant_id),
             )
             patient = cur.fetchone()
 
@@ -722,15 +724,16 @@ def get_awv_eligible(tenant_id: str, year: int) -> dict[str, Any]:
                        pp.provider_id AS providerID
                 FROM patients p
                 LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
-                WHERE p.is_active = 1
+                WHERE p.is_active = 1 AND p.tenant_id = %s
                 ORDER BY p.last_name, p.first_name
                 LIMIT 10000
-                """
+                """,
+                (tenant_id,),
             )
             all_patients = cur.fetchall()
 
         # Filter to only patients linked to active EMR connections
-        active_pids = _active_patient_ids()
+        active_pids = _active_patient_ids(tenant_id)
         all_patients = [p for p in all_patients if int(p["pid"]) in active_pids]
 
         # Last encounter date per patient
@@ -932,7 +935,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
 
     try:
         # Fetch active patient IDs once for this function
-        active_pids = _active_patient_ids()
+        active_pids = _active_patient_ids(tenant_id)
 
         # Total active patients (only those linked to active EMR connections)
         total_patients = len(active_pids)
@@ -1003,7 +1006,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
                        COUNT(*)                   AS gaps
                 FROM raf_patient_hcc h
                 WHERE h.measurement_year = %s
-                  AND h.patient_id IN (SELECT id FROM patients WHERE is_active = 1)
+                  AND h.patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)
                   AND h.tenant_id = %s
                   AND NOT EXISTS (
                       SELECT 1 FROM raf_patient_hcc h2
@@ -1012,7 +1015,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
                         AND h2.measurement_year = %s
                   )
                 """,
-                (calc_year - 1, tid, calc_year),
+                (calc_year - 1, tid, tid, calc_year),
             )
             recapture_row = cur.fetchone()
         recapture_patients = _coerce_int(recapture_row["pts"]) if recapture_row else 0

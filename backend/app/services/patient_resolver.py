@@ -5,7 +5,7 @@ record, regardless of whether the active EMR connection is a FHIR/REST API
 or a direct database connection.
 
 Column name reference (verified against patient_service.py):
-  - raf_intelligence.patients:        id, fname, lname, DOB, sex, pubpid, emr_pid, tenant_id, is_active
+  - raf_intelligence.patients:        id, tenant_id, first_name, middle_name, last_name, dob, gender, sex, race, ethnicity, zip, mrn, emr_pid, data_source, is_active
   - raf_intelligence.emr_patient_matches: id, external_id, first_name, last_name,
                                           date_of_birth, sex, mrn, raf_patient_id, connection_id
 """
@@ -62,7 +62,7 @@ def resolve_patient(pid: int, tenant_id: str) -> dict | None:
         last_name       — patient last name
         date_of_birth   — ISO date string (YYYY-MM-DD) or raw value
         sex             — patient sex
-        mrn             — medical record number (pubpid for direct_db patients)
+        mrn             — medical record number
         external_id     — external FHIR/REST patient ID, or None for direct_db
         source          — 'fhir' or 'direct_db'
         patient_id_for_raf — the ID to use when querying RAF scores and conditions
@@ -112,15 +112,15 @@ def resolve_patient(pid: int, tenant_id: str) -> dict | None:
                         "patient_id_for_raf": row["raf_patient_id"],
                     }
             else:
-                # direct_db — patients table uses fname/lname/DOB/pubpid
+                # direct_db — patients table uses first_name/last_name/dob/mrn
                 cur.execute(
                     """
                     SELECT id,
-                           fname  AS first_name,
-                           lname  AS last_name,
-                           DOB    AS date_of_birth,
+                           first_name,
+                           last_name,
+                           dob    AS date_of_birth,
                            sex,
-                           pubpid AS mrn,
+                           mrn,
                            emr_pid
                     FROM patients
                     WHERE id = %s
@@ -247,16 +247,16 @@ def get_patient_display_list(tenant_id: str) -> list[dict]:
                 cur.execute(
                     """
                     SELECT id,
-                           fname  AS first_name,
-                           lname  AS last_name,
-                           DOB    AS date_of_birth,
+                           first_name,
+                           last_name,
+                           dob    AS date_of_birth,
                            sex,
-                           pubpid AS mrn,
+                           mrn,
                            emr_pid
                     FROM patients
                     WHERE is_active = 1
                       AND tenant_id = %s
-                    ORDER BY lname, fname
+                    ORDER BY last_name, first_name
                     """,
                     (tenant_id,),
                 )

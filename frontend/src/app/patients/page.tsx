@@ -1840,7 +1840,7 @@ export default function PatientsPage() {
                         {age}{sexLabel !== "\u2014" ? ` ${sexLabel}` : ""}
                       </>
                     )}
-                    {(p as unknown as Record<string, unknown>).data_source === "upload" && (
+                    {p.data_source === "upload" && (
                       <>
                         <span style={{ margin: "0 6px", color: "#CBD5E1" }}>·</span>
                         <span style={{

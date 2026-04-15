@@ -45,7 +45,7 @@ import {
   getPatientScorecard,
   getEmrStatus,
   connectDemoEmr,
-  getProviders,
+  getProviderLeaderboard,
   getSuspectsSummary,
   getWorkflowSummary,
   isEmrDeactivatedError,
@@ -391,7 +391,7 @@ export function AdminDashboard() {
   // ---- Batch 3: Lists (tertiary) ----
   const [providersQ, suspectsQ, workflowQ] = useQueries({
     queries: [
-      { queryKey: ["providers-list"], queryFn: () => getProviders({ limit: 6 }), retry: 1, staleTime: 60_000 },
+      { queryKey: ["providers-leaderboard"], queryFn: () => getProviderLeaderboard(), retry: 1, staleTime: 60_000 },
       { queryKey: ["suspects-summary-open"], queryFn: () => getSuspectsSummary("open"), retry: 1, staleTime: 60_000 },
       { queryKey: ["workflow-summary"], queryFn: getWorkflowSummary, retry: 1, staleTime: 60_000 },
     ],
@@ -482,15 +482,16 @@ export function AdminDashboard() {
     return { value: trends.average_raf_score.change_pct, label: "vs prior 30d" };
   }, [trends]);
 
-  // Provider data
+  // Provider data — leaderboard returns a plain array with patient_count and average_raf_score
   const providers = useMemo(() => {
-    if (providersData?.providers?.length) {
-      return providersData.providers.slice(0, 4).map((p: { last_name: string; specialty?: string; patient_count?: number; average_raf_score?: number | null; coding_rate?: number | null }) => ({
-        name: `Dr. ${p.last_name}`,
+    const list = Array.isArray(providersData) ? providersData : (providersData as { providers?: unknown[] } | undefined)?.providers;
+    if (list?.length) {
+      return (list as Array<{ last_name?: string; provider_name?: string; specialty?: string; patient_count?: number; average_raf_score?: number | null; hcc_capture_rate?: number | null; coding_rate?: number | null }>).slice(0, 4).map((p) => ({
+        name: p.provider_name ? `Dr. ${p.last_name || p.provider_name}` : `Dr. ${p.last_name || ""}`,
         specialty: (p.specialty || "Internal Medicine") as string,
         patients: (p.patient_count ?? 0) as number,
         avgRaf: p.average_raf_score != null ? Number(p.average_raf_score).toFixed(2) : "\u2014",
-        codingRate: p.coding_rate != null ? Math.round(p.coding_rate) : "\u2014",
+        codingRate: p.coding_rate != null ? Math.round(p.coding_rate) : p.hcc_capture_rate != null ? Math.round(p.hcc_capture_rate) : "\u2014",
       }));
     }
     return [];
