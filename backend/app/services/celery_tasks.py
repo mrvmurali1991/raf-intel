@@ -727,6 +727,8 @@ def task_analyze_encounters_batch(
                     pass
 
                 # Append structured EHR context to note text for Gemini
+                # Save original note before enrichment (used for Z-code validation)
+                _original_note_text = note_text
                 extra_sections: list[str] = []
                 if emr_pid:
                     try:
@@ -815,10 +817,15 @@ def task_analyze_encounters_batch(
 
                     category = code[:3]  # e.g. E11, I50, N18, J81
 
-                    # 1. SDOH Z-codes (Z55-Z65): must be in Stage 1
+                    # 1. SDOH Z-codes (Z55-Z65): only keep if the doctor
+                    #    explicitly wrote the code in the assessment section.
+                    #    These require patient attestation and must never be
+                    #    inferred by AI — even if Stage 1 regex picks them up
+                    #    from enrichment text or partial matches.
                     if category in ("Z55", "Z56", "Z57", "Z58", "Z59",
                                     "Z60", "Z61", "Z62", "Z63", "Z64", "Z65"):
-                        return code in _stage1_codes
+                        # Only keep if doctor wrote this exact code in SOAP note
+                        return code in _original_note_text
 
                     # 2. Exact match or same category in Stage 1 → keep
                     if code in _stage1_codes or category in _stage1_categories:
