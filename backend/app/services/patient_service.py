@@ -637,11 +637,12 @@ def svc_get_patient(pid: int, tenant_id: str) -> dict[str, Any] | None:
             with raf_cursor() as cur:
                 cur.execute(
                     """SELECT id AS pid, first_name AS fname, last_name AS lname,
-                              middle_name AS mname, dob AS DOB, sex, race, ethnicity,
+                              middle_name AS mname, dob AS DOB,
+                              COALESCE(sex, gender) AS sex, race, ethnicity,
                               preferred_language AS language, address AS street,
                               city, state, zip AS postal_code, phone AS phone_cell,
                               phone AS phone_home, email, mrn, insurance_type,
-                              data_source, created_at AS created_date
+                              gender, data_source, created_at AS created_date
                        FROM patients WHERE id = %s AND is_active = 1 AND tenant_id = %s""",
                     (pid, tenant_id),
                 )
