@@ -1,0 +1,20 @@
+icd10,hcc_v24,hcc_v28,hcc_label,age_min,age_max,sex,esrd_only
+# V28 is the superset; see hcc_v24.csv for shared rows. This file overrides with V28-specific entries.
+# Columns identical. Keep sorted by ICD.
+F0151,,125,"Vascular dementia w/ behavioral",0,,,false
+G3184,,126,"Mild cognitive impairment",0,,,false
+I5022,,226,"Chronic systolic HF",0,,,false
+I5032,,226,"Chronic diastolic HF",0,,,false
+N184,,329,"CKD stage 4",0,,,false
+N185,,328,"CKD stage 5",0,,,false
+Z992,,326,"Dialysis dependence",0,,true,true
+Z9114,,,"Noncompliance w/ dietary regimen",0,,,false
+F29,,152,"Unspecified psychosis",0,,,false
+Z6845,,48,"BMI 70.0 or greater",0,,,false
+C61,,22,"Prostate cancer",40,,M,false
+C50911,,20,"Breast malignancy female",0,,F,false
+D57411,,42,"Sickle-cell thalassemia w/ crisis",0,,,false
+K7210,,65,"Chronic hepatic failure",0,,,false
+R6521,,2,"Severe sepsis w/ shock",0,,,false
+J841A,,280,"Idiopathic pulmonary fibrosis",0,,,false
+E1310,,36,"Other specified DM w/ ketoacidosis",0,,,false

@@ -1,0 +1,81 @@
+icd10,hcc_v24,hcc_v28,hcc_label,age_min,age_max,sex,esrd_only
+E1122,18,37,"Diabetes with CKD",0,,,false
+E1121,18,37,"Diabetes with nephropathy",0,,,false
+E1140,19,38,"Diabetes with neuropathy",0,,,false
+E119,19,38,"Type 2 diabetes, uncomplicated",0,,,false
+E1165,18,36,"Type 2 diabetes with hyperglycemia",0,,,false
+E1142,19,38,"Diabetes with polyneuropathy",0,,,false
+E1129,18,37,"Diabetes with other kidney complication",0,,,false
+E1151,18,36,"Diabetes with PVD",0,,,false
+E10649,17,35,"T1DM w/ hypoglycemia",0,,,false
+I5022,85,226,"Chronic systolic heart failure",0,,,false
+I5032,85,226,"Chronic diastolic heart failure",0,,,false
+I5042,85,226,"Chronic combined HF",0,,,false
+I509,85,226,"Heart failure, unspecified",0,,,false
+I5030,85,226,"Unspecified diastolic HF",0,,,false
+I2510,88,,"ASCVD native artery",0,,,false
+I2582,,225,"Chronic total occlusion coronary",0,,,false
+I214,86,222,"NSTEMI",0,,,false
+I213,86,222,"STEMI unspecified",0,,,false
+I214,86,222,"Non-ST elevation MI",0,,,false
+I10,,,"Essential hypertension",0,,,false
+N183,,,"CKD stage 3",0,,,false
+N184,137,329,"CKD stage 4",0,,,false
+N185,136,328,"CKD stage 5",0,,,false
+N186,136,328,"ESRD",0,,,true
+N189,,,"CKD unspecified",0,,,false
+J441,111,280,"COPD w/ exacerbation",0,,,false
+J449,111,280,"COPD unspecified",0,,,false
+J450,,,"Asthma",0,,,false
+J9611,84,,"Chronic respiratory failure",0,,,false
+J9621,84,,"Acute on chronic resp failure",0,,,false
+I639,100,253,"Cerebral infarction unspecified",0,,,false
+I69351,103,253,"Hemiplegia following CVA",0,,,false
+I69354,103,253,"Hemiplegia dominant side",0,,,false
+G20,78,190,"Parkinson's disease",0,,,false
+G3109,52,127,"Frontotemporal dementia",0,,,false
+F0390,51,125,"Dementia unspecified",0,,,false
+G309,52,125,"Alzheimer's disease",0,,,false
+F319,59,155,"Bipolar disorder",0,,,false
+F200,57,152,"Paranoid schizophrenia",0,,,false
+F209,57,152,"Schizophrenia unspecified",0,,,false
+F329,,,"Major depression single",0,,,false
+F332,59,155,"MDD recurrent severe",0,,,false
+C50911,12,20,"Breast cancer female NOS",0,,F,false
+C50912,12,20,"Breast cancer male NOS",0,,M,false
+C61,12,22,"Prostate cancer",40,,M,false
+C189,11,19,"Colon cancer",0,,,false
+C259,11,19,"Pancreatic cancer",0,,,false
+C3490,9,17,"Lung cancer",0,,,false
+C787,8,17,"Secondary liver cancer",0,,,false
+C7951,8,17,"Secondary bone cancer",0,,,false
+C9100,8,17,"ALL in remission",0,,,false
+C9200,8,17,"AML",0,,,false
+B20,1,1,"HIV disease",0,,,false
+A4151,2,2,"Sepsis gram-neg",0,,,false
+A419,2,2,"Sepsis unspecified",0,,,false
+K7030,28,62,"Alcoholic cirrhosis w/o ascites",0,,,false
+K7460,28,62,"Cirrhosis of liver unspecified",0,,,false
+K5090,35,80,"Crohn's disease",0,,,false
+K5190,35,80,"Ulcerative colitis",0,,,false
+M0690,40,102,"Rheumatoid arthritis",0,,,false
+L409,,,"Psoriasis",0,,,false
+Z940,186,463,"Kidney transplant",0,,,false
+Z9411,186,463,"Heart transplant",0,,,false
+Z992,134,326,"Dialysis dependence",0,,,true
+I120,137,329,"HTN CKD stage 1-4",0,,,false
+I129,,,"HTN CKD stage 5/ESRD",0,,,false
+E6601,22,48,"Morbid obesity",0,,,false
+E785,,,"Hyperlipidemia",0,,,false
+F419,,,"Anxiety disorder",0,,,false
+G4733,,,"OSA",0,,,false
+I480,96,238,"Paroxysmal atrial fibrillation",0,,,false
+I4891,96,238,"Unspecified atrial fibrillation",0,,,false
+E038,,,"Hypothyroidism specified",0,,,false
+E039,,,"Hypothyroidism unspecified",0,,,false
+N390,,,"UTI",0,,,false
+R410,,,"Disorientation",0,,,false
+R4182,,,"Altered mental status",0,,,false
+G309,52,125,"Alzheimer early onset",0,,,false
+E1136,,,"Diabetes w/ cataract",0,,,false
+E1131,18,37,"DM w/ nonprolif retinopathy",0,,,false
