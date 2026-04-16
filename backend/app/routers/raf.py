@@ -52,6 +52,7 @@ from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
 from app.services.emr_manager import active_patients_subquery
 from app.services.audit_logger import log_phi_access
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -1382,7 +1383,6 @@ def get_multi_model_scores(
 
 # CMS MACI (MA Coding Intensity Adjustment) — statutory minimum 5.9%
 _CMS_MACI = 0.059
-_CMS_BASE_RATE_PER_RAF = 11015.00
 
 # Risk factor label → hccinfhir prefix_override
 _RISK_FACTOR_PREFIX = {
@@ -1634,7 +1634,7 @@ def calculate_raf_full(
         "gender": gender,
         "norm_factor": norm_factor,
         "maci": maci,
-        "base_rate": _CMS_BASE_RATE_PER_RAF,
+        "base_rate": settings.cms_revenue_per_raf_point,
         "coefficient_source": coef_file,
         "demographic": {
             "category": demo_category,

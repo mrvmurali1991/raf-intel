@@ -91,6 +91,7 @@ def list_candidates(
     items: list[ReviewItem] = []
     with raf_cursor() as cur:
         # --- suspects --------------------------------------------------------
+        # form_suspects has no tenant_id column; scope via patients subquery
         if kind in (None, "suspect"):
             cur.execute(
                 """
@@ -104,10 +105,13 @@ def list_candidates(
                   FROM form_suspects s
                   LEFT JOIN patient_data p ON p.pid = s.patient_id
                  WHERE (%s IS NULL OR s.status = %s)
+                   AND s.patient_id IN (
+                       SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                   )
                  ORDER BY s.confidence_score IS NULL, s.confidence_score DESC, s.id DESC
                  LIMIT %s
                 """,
-                (status or None, status, limit),
+                (status or None, status, tenant_id, limit),
             )
             for r in cur.fetchall() or []:
                 items.append(ReviewItem(
@@ -125,6 +129,7 @@ def list_candidates(
                 ))
 
         # --- HCC candidates (from NLP extractions) --------------------------
+        # ai_hcc_candidates has no tenant_id column; scope via patients subquery
         if kind in (None, "hcc_candidate"):
             try:
                 cur.execute(
@@ -141,10 +146,13 @@ def list_candidates(
                       FROM ai_hcc_candidates c
                       LEFT JOIN patient_data p ON p.pid = c.patient_id
                      WHERE (%s IS NULL OR c.status = %s)
+                       AND c.patient_id IN (
+                           SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                       )
                      ORDER BY c.confidence IS NULL, c.confidence DESC, c.id DESC
                      LIMIT %s
                     """,
-                    (status or None, status, limit),
+                    (status or None, status, tenant_id, limit),
                 )
                 for r in cur.fetchall() or []:
                     span = None
@@ -188,10 +196,11 @@ def list_candidates(
                       FROM provider_queries q
                       LEFT JOIN patient_data p ON p.pid = q.patient_id
                      WHERE (%s IS NULL OR q.status = %s)
+                       AND q.tenant_id = %s
                      ORDER BY q.created_at DESC
                      LIMIT %s
                     """,
-                    (status or None, status, limit),
+                    (status or None, status, tenant_id, limit),
                 )
                 for r in cur.fetchall() or []:
                     items.append(ReviewItem(
@@ -258,12 +267,27 @@ def post_decision(
     before: dict[str, Any] = {}
     after: dict[str, Any] = {"status": new_status}
 
+    # provider_queries has tenant_id; form_suspects and ai_hcc_candidates do not —
+    # for those, scope via patient subquery to enforce tenant isolation.
+    if kind == "provider_query":
+        _tenant_select_clause = " AND tenant_id = %s"
+        _tenant_select_params: tuple = (numeric_id, tenant_id)
+        _tenant_update_clause = " AND tenant_id = %s"
+    else:
+        _tenant_select_clause = (
+            " AND patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)"
+        )
+        _tenant_select_params = (numeric_id, tenant_id)
+        _tenant_update_clause = (
+            " AND patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s)"
+        )
+
     with raf_cursor() as cur:
         # fetch before-state for audit
         try:
             cur.execute(
-                f"SELECT status, {icd_col} AS icd10 FROM {table} WHERE id=%s",
-                (numeric_id,),
+                f"SELECT status, {icd_col} AS icd10 FROM {table} WHERE id=%s{_tenant_select_clause}",
+                _tenant_select_params,
             )
             row = cur.fetchone()
             if not row:
@@ -275,23 +299,22 @@ def post_decision(
             logger.exception("review decision lookup failed")
             raise HTTPException(500, "review item lookup failed") from e
 
+        reviewer = str(current_user.get("username") or
+                       current_user.get("email") or
+                       current_user.get("sub"))
         # update
         if body.decision == "edit":
             cur.execute(
                 f"UPDATE {table} SET status=%s, {icd_col}=%s, "
-                f"reviewed_at=NOW(), reviewed_by=%s WHERE id=%s",
-                (new_status, body.edited_icd10, str(current_user.get("username") or
-                                                   current_user.get("email") or
-                                                   current_user.get("sub")), numeric_id),
+                f"reviewed_at=NOW(), reviewed_by=%s WHERE id=%s{_tenant_update_clause}",
+                (new_status, body.edited_icd10, reviewer, numeric_id, tenant_id),
             )
             after["icd10"] = body.edited_icd10
         else:
             cur.execute(
                 f"UPDATE {table} SET status=%s, reviewed_at=NOW(), "
-                f"reviewed_by=%s WHERE id=%s",
-                (new_status, str(current_user.get("username") or
-                                 current_user.get("email") or
-                                 current_user.get("sub")), numeric_id),
+                f"reviewed_by=%s WHERE id=%s{_tenant_update_clause}",
+                (new_status, reviewer, numeric_id, tenant_id),
             )
 
     action = {

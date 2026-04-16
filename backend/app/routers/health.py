@@ -1,11 +1,14 @@
 from datetime import datetime, timezone
 from typing import Any
+import logging
 import time
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.auth import get_current_user, get_tenant_id
+
+logger = logging.getLogger(__name__)
 from app.config import settings
 from app.db import check_connections, get_raf_pool, get_openemr_pool
 from app.monitoring import get_error_stats
@@ -129,8 +132,8 @@ def _build_pipeline_block(tenant_id: str) -> dict[str, Any]:
                 settings_defaults.update(
                     {k: v for k, v in row.items() if v is not None}
                 )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("_build_pipeline_block pipeline_settings fetch failed: %s", e)
 
     mode: str = settings_defaults["pipeline_mode"]
     ai_enabled: bool = bool(settings_defaults["ai_analysis_enabled"])
@@ -144,8 +147,8 @@ def _build_pipeline_block(tenant_id: str) -> dict[str, Any]:
             steps = last_run.get("steps_completed") or []
             if isinstance(steps, list):
                 completed_steps = set(steps)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("_build_pipeline_block latest_run fetch failed: %s", e)
 
     # --- phase statuses ------------------------------------------------------
     phases: list[dict[str, str]] = []
@@ -211,7 +214,8 @@ def dashboard_stats(
                 (tenant_id,),
             )
             has_active = cur.fetchone()["cnt"] > 0
-    except Exception:
+    except Exception as e:
+        logger.warning("dashboard_stats emr_connections check failed: %s", e)
         return ZERO_RESPONSE
 
     has_uploaded_data = False
@@ -223,8 +227,8 @@ def dashboard_stats(
                     (tenant_id,),
                 )
                 has_uploaded_data = cur.fetchone() is not None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("dashboard_stats upload patients check failed: %s", e)
         if not has_uploaded_data:
             return ZERO_RESPONSE
 
@@ -247,8 +251,8 @@ def dashboard_stats(
                 (tenant_id,),
             )
             total_patients = cur.fetchone()["cnt"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dashboard_stats total_patients count failed: %s", e)
 
     if not has_active and has_uploaded_data:
         _score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' AND tenant_id = %s)"
@@ -272,8 +276,8 @@ def dashboard_stats(
             row = cur.fetchone()
             analyzed = row["cnt"]
             avg_raf = round(float(row["avg_raf"] or 0), 4)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dashboard_stats raf_scores avg failed: %s", e)
 
     # Suspects count
     total_suspects_open = 0
@@ -284,8 +288,8 @@ def dashboard_stats(
                 (tenant_id,),
             )
             total_suspects_open = cur.fetchone()["cnt"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dashboard_stats suspects count failed: %s", e)
 
     # RAF distribution buckets
     raf_distribution = []
@@ -318,8 +322,8 @@ def dashboard_stats(
                 (*_score_params, int(tenant_id), measurement_year),
             )
             raf_distribution = [dict(r) for r in cur.fetchall()]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dashboard_stats raf_distribution failed: %s", e)
 
     # Top undercoded patients (patients with most suspect conditions)
     # Use LEFT JOIN on patients so FHIR patients (whose IDs may not be in the
@@ -365,8 +369,8 @@ def dashboard_stats(
                     "raf_score": float(r["raf_score"]) if r.get("raf_score") else 0,
                     "suspect_count": int(r["suspect_count"]),
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dashboard_stats top_undercoded failed: %s", e)
 
     # MEAT compliance — percentage of HCCs with meat_status = 'complete'
     meat_compliance_pct = 0.0
@@ -389,8 +393,8 @@ def dashboard_stats(
                 meat_compliance_pct = round(
                     100.0 * int(row["complete_count"] or 0) / int(row["total_hccs"]), 1
                 )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dashboard_stats meat_compliance failed: %s", e)
 
     return {
         "total_patients": total_patients,
@@ -410,6 +414,7 @@ def dashboard_stats(
 @router.get("/api/dashboard/trends", summary="Dashboard trend data")
 def dashboard_trends(
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     year: int = Query(
         default=None,
         description="Measurement year to filter by (defaults to current year)",
@@ -436,9 +441,10 @@ def dashboard_trends(
                              AND calculated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) THEN final_raf END) AS prior_avg_raf
                 FROM raf_scores
                 WHERE calculated_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+                  AND tenant_id = %s
                   AND measurement_year = %s
                 """,
-                (measurement_year,),
+                (tenant_id, measurement_year),
             )
             row = cur.fetchone()
 
@@ -466,7 +472,8 @@ def dashboard_trends(
             },
         }
 
-    except Exception:
+    except Exception as e:
+        logger.warning("dashboard_trends query failed: %s", e)
         return {"period": "30d", "error": True}
 
 
@@ -582,8 +589,8 @@ def detailed_health(
         process_info["threads"] = proc.num_threads()
     except ImportError:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("detailed_health psutil metrics failed: %s", e)
 
     overall_status = (
         "healthy"
@@ -633,7 +640,8 @@ async def metrics(
             ) or 0)
         else:
             request_count = getattr(request.app.state, "request_count", 0)
-    except Exception:
+    except Exception as e:
+        logger.warning("metrics prometheus counter read failed: %s", e)
         request_count = getattr(request.app.state, "request_count", 0)
 
     payload: dict[str, Any] = {
@@ -649,8 +657,8 @@ async def metrics(
         payload["cpu_percent"] = proc.cpu_percent(interval=None)
     except ImportError:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("metrics psutil read failed: %s", e)
 
     return payload
 

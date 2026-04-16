@@ -1081,32 +1081,14 @@ def oauth2_callback(
         logger.error(
             "OAuth2 token exchange failed (%s): %s", resp.status_code, resp.text[:300]
         )
-        raise HTTPException(
-            502, f"Token exchange failed ({resp.status_code}): {resp.text[:300]}"
-        )
+        raise HTTPException(502, "Token exchange failed")
 
     tokens = resp.json()
     logger.info(
-        "OAuth2 token response keys: %s, scope: %s, token_type: %s",
+        "OAuth2 token response keys: %s, token_type: %s",
         list(tokens.keys()),
-        tokens.get("scope", "N/A"),
         tokens.get("token_type", "N/A"),
     )
-    # Decode JWT to see actual claims
-    _at = tokens.get("access_token", "")
-    if _at and _at.count(".") == 2:
-        try:
-            import base64 as _b64
-
-            _parts = _at.split(".")
-            _padded = _parts[1] + "=" * (4 - len(_parts[1]) % 4)
-            _payload = json.loads(_b64.urlsafe_b64decode(_padded))
-            logger.info(
-                "OAuth2 JWT claims: %s",
-                {k: v for k, v in _payload.items() if k not in ("jti",)},
-            )
-        except Exception:
-            pass
     access_token = tokens.get("access_token", "")
     refresh_token = tokens.get("refresh_token", "")
     expires_in = tokens.get("expires_in", 3600)

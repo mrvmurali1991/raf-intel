@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_role
+from app.rate_limit import limiter
 from app.services.backup_service import (
     _backup_dir,
     get_backup_schedule,
@@ -433,19 +434,27 @@ def admin_error_stats(
 
 
 @router.post("/errors/report", summary="Report a client-side error")
+@limiter.limit("10/minute")
 async def admin_report_error(request: Request) -> dict[str, str]:
     """
     Accept client-side error reports from the frontend error-tracking module.
-    Rate-limited to prevent abuse. No authentication required so errors can be
-    captured before login completes, but payloads are sanitized.
+    Rate-limited to 10/min/IP to prevent abuse. Authentication is not required
+    so pre-login errors can still be captured; payloads are truncated and
+    scrubbed of common PHI/secret shapes.
     """
     try:
         payload = await request.json()
     except Exception:
         payload = {}
 
-    message = str(payload.get("message", "unknown client error"))[:500]
+    raw_message = str(payload.get("message", "unknown client error"))
     source = str(payload.get("source", "frontend"))[:50]
+
+    # Scrub obvious sensitive patterns before persisting. The frontend is
+    # expected to scrub too; this is defence in depth.
+    import re as _re
+    message = _re.sub(r"(?i)(authorization|bearer|token|password|ssn|mrn)[=:\s]+\S+", r"\1=[redacted]", raw_message)
+    message = message[:500]
 
     from app.monitoring import capture_error as _capture
 

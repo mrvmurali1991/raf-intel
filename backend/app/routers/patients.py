@@ -98,6 +98,7 @@ def list_patients(
     log_phi_access(
         action="list",
         resource="patient",
+        user=str(current_user.get("id") or current_user.get("sub") or "system"),
         details=f"limit={limit} offset={offset} search={search!r} returned={len(result['patients'])}",
     )
     return result
@@ -283,6 +284,7 @@ async def import_patients_csv(
     log_phi_access(
         action="bulk_import",
         resource="patient",
+        user=str(current_user.get("id") or current_user.get("sub") or "system"),
         details=(
             f"filename={file.filename!r} on_duplicate={on_duplicate} total_rows={summary['total_rows']} "
             f"imported={summary['imported']} duplicates={summary['duplicates_skipped']} "
@@ -401,6 +403,7 @@ async def import_patients_fhir(
     log_phi_access(
         action="bulk_import_fhir",
         resource="patient",
+        user=str(current_user.get("id") or current_user.get("sub") or "system"),
         details=(
             f"filename={file.filename!r} on_duplicate={on_duplicate} total_rows={summary['total_rows']} "
             f"imported={summary['imported']} duplicates={summary['duplicates_skipped']} "
@@ -432,7 +435,8 @@ def get_patient(
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
-    log_phi_access(action="view", resource="patient", patient_id=pid)
+    log_phi_access(action="view", resource="patient", patient_id=pid,
+                   user=str(current_user.get("id") or current_user.get("sub") or "system"))
     return patient
 
 

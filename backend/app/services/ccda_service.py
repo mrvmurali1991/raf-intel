@@ -41,7 +41,7 @@ import uuid
 from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Any
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 
 from app.db import raf_cursor
 

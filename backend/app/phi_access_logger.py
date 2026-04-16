@@ -207,7 +207,12 @@ class PHIAccessLoggingMiddleware:
 
             user_id: str = "anonymous"
             user_email: str | None = None
-            tenant_id: str = "unknown"
+            # Use tenant_id already resolved by TenantGuardMiddleware via request.state.
+            # The ASGI scope carries state as a dict; TenantGuardMiddleware stores it there.
+            _scope_state = scope.get("state") or {}
+            tenant_id: str = str(getattr(_scope_state, "tenant_id", None) or
+                                  (_scope_state.get("tenant_id") if isinstance(_scope_state, dict) else None) or
+                                  "unknown")
 
             if auth_header.startswith("Bearer "):
                 try:
@@ -215,7 +220,7 @@ class PHIAccessLoggingMiddleware:
                     payload = decode_token(auth_header[len("Bearer "):])
                     user_id = str(payload.get("sub", "anonymous"))
                     user_email = payload.get("email")
-                    tenant_id = str(payload.get("tenant_id", "unknown"))
+                    # Do NOT read tenant_id from JWT payload; rely on TenantGuardMiddleware state.
                 except Exception:
                     pass
 
@@ -332,7 +337,8 @@ async def _get_current_user_safe(request: Request) -> dict[str, Any] | None:
     if user is not None:
         return user
 
-    # Fallback: lightweight JWT decode (no DB round-trip)
+    # Fallback: lightweight JWT decode (no DB round-trip) for user identity only.
+    # Do NOT read tenant_id from JWT; use request.state.tenant_id set by TenantGuardMiddleware.
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None
@@ -342,7 +348,7 @@ async def _get_current_user_safe(request: Request) -> dict[str, Any] | None:
         return {
             "id": payload.get("sub"),
             "email": payload.get("email"),
-            "tenant_id": payload.get("tenant_id"),
+            "tenant_id": getattr(request.state, "tenant_id", None),
         }
     except Exception:
         return None

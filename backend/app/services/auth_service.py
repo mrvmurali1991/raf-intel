@@ -417,8 +417,13 @@ def _seed_dev_admin_user() -> None:
         return
 
     email = os.getenv("DEV_ADMIN_EMAIL", "admin@raf.health")
-    password = os.getenv("DEV_ADMIN_PASSWORD", "RafAdmin@2025!")
+    password = os.getenv("DEV_ADMIN_PASSWORD")
     full_name = os.getenv("DEV_ADMIN_FULL_NAME", "Development Admin")
+    if not password:
+        logger.warning(
+            "DEV_ADMIN_PASSWORD not set; skipping dev admin seed for %s", email
+        )
+        return
     password_hash = hash_password(password)
 
     with raf_cursor() as cur:
@@ -545,14 +550,13 @@ def list_users(
     offset: int = 0,
     role: str | None = None,
     is_active: bool | None = None,
-    tenant_id: str | None = None,
+    tenant_id: str = "",
 ) -> list[dict[str, Any]]:
+    if not tenant_id:
+        raise ValueError("list_users: tenant_id is required")
     _ensure_tables()
-    conditions = []
-    params: list[Any] = []
-    if tenant_id is not None:
-        conditions.append("tenant_id = %s")
-        params.append(tenant_id)
+    conditions = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
     if role is not None:
         conditions.append("role = %s")
         params.append(role)

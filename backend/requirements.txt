@@ -19,6 +19,7 @@ pyotp==2.9.0
 qrcode[pil]==7.4
 slowapi==0.1.9
 cryptography==44.0.0
+defusedxml>=0.7.1
 sentry-sdk[fastapi]==2.14.0
 python-multipart==0.0.9
 paramiko>=3.4.0
