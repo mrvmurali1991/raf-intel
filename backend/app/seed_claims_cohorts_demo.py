@@ -379,7 +379,10 @@ def seed():
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     row[0], row[1], row[2], row[3], row[4],
-                    row[5], json.dumps(row[6]), row[7], row[8], row[9],
+                    row[5], json.dumps(row[6]), row[7],
+                    # user_id is NOT NULL — default to the admin user (id=1)
+                    row[8] if row[8] is not None else 1,
+                    row[9],
                 ),
             )
     print(f"  [+] dashboard_alerts: ensured {len(DASHBOARD_ALERTS)} rows")
