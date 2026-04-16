@@ -32,6 +32,7 @@ import {
   getPatientDocuments,
 } from "@/lib/api";
 import { ModelComparison } from "@/components/model-comparison";
+import { AIHealthBanner } from "@/components/AIHealthBanner";
 import {
   RiskGauge,
   ProgressBar,
@@ -476,6 +477,10 @@ export default function PatientDetailPage({
   // =========================================================================
   return (
     <div className="dot-grid mesh-pattern" style={{ minHeight: "100vh", background: C.bg }}>
+      {/* AI availability warning — surfaces when Gemini is unreachable */}
+      <div style={{ padding: "12px 16px 0" }}>
+        <AIHealthBanner />
+      </div>
       {/* PATIENT HEADER (sticky) */}
       <header
         className="premium-card animate-fade-in"

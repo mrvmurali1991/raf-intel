@@ -660,6 +660,65 @@ async def metrics(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# /api/health/ai — lightweight Gemini probe with 60s cache
+# ---------------------------------------------------------------------------
+
+_AI_HEALTH_CACHE: dict[str, Any] = {"ts": 0.0, "result": None}
+_AI_HEALTH_TTL = 60.0
+
+
+def _probe_gemini() -> dict[str, Any]:
+    """Make a tiny live call against Gemini; return {ok, reason|model}."""
+    import os
+    import requests as _requests
+
+    api_key = settings.gemini_api_key or os.environ.get("GOOGLE_API_KEY", "")
+    model = settings.gemini_model or "gemini-2.5-pro"
+    if not api_key:
+        return {"ok": False, "reason": "GOOGLE_API_KEY not configured", "model": model}
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": "ping"}]}],
+        "generationConfig": {"maxOutputTokens": 1, "temperature": 0},
+    }
+    try:
+        resp = _requests.post(url, json=payload, timeout=5)
+        if resp.status_code >= 400:
+            # Surface a compact reason (truncated).
+            reason = f"HTTP {resp.status_code}: {resp.text[:180]}"
+            return {"ok": False, "reason": reason[:200], "model": model}
+        return {"ok": True, "model": model}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "reason": str(exc)[:200], "model": model}
+
+
+@router.get("/api/health/ai", summary="Gemini AI liveness probe")
+def ai_health() -> dict[str, Any]:
+    """
+    Lightweight Gemini health probe used by the frontend banner.
+
+    Performs a minimal `generate_content('ping')` call with a 5s timeout and
+    caches the result for 60s to avoid hammering the API.  Returns:
+
+        { "ok": true,  "model": "gemini-2.5-pro" }
+        { "ok": false, "reason": "<short error>", "model": "..." }
+    """
+    now = time.monotonic()
+    cached = _AI_HEALTH_CACHE.get("result")
+    if cached is not None and (now - _AI_HEALTH_CACHE["ts"]) < _AI_HEALTH_TTL:
+        return cached
+
+    result = _probe_gemini()
+    _AI_HEALTH_CACHE["ts"] = now
+    _AI_HEALTH_CACHE["result"] = result
+    return result
+
+
 @router.get(
     "/health/db",
     summary="Database deep health (authenticated)",

@@ -1,13 +1,15 @@
 "use client";
 
+import type React from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
 import { CoderDashboard } from "@/components/dashboards/CoderDashboard";
 import { ProviderDashboard } from "@/components/dashboards/ProviderDashboard";
+import { AIHealthBanner } from "@/components/AIHealthBanner";
 
 export default function DashboardOrchestrator() {
   const { user, isLoading } = useAuth();
-  
+
   if (isLoading || !user) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -20,19 +22,22 @@ export default function DashboardOrchestrator() {
     );
   }
 
-  // Segment by Role to enforce Minimum Necessary Information (MNI)
+  // Pick the dashboard segment by role (enforces Minimum Necessary Information).
+  let Dashboard: React.ComponentType;
   if (user.role === "admin" || user.role === "manager" || user.role === "auditor") {
-    return <AdminDashboard />;
-  }
-  
-  if (user.role === "coder") {
-    return <CoderDashboard />;
-  }
-  
-  if (user.role === "provider" || user.role === "clinician") {
-    return <ProviderDashboard />;
+    Dashboard = AdminDashboard;
+  } else if (user.role === "coder") {
+    Dashboard = CoderDashboard;
+  } else if (user.role === "provider" || user.role === "clinician") {
+    Dashboard = ProviderDashboard;
+  } else {
+    Dashboard = ProviderDashboard; // fallback
   }
 
-  // Fallback map
-  return <ProviderDashboard />;
+  return (
+    <>
+      <AIHealthBanner />
+      <Dashboard />
+    </>
+  );
 }
