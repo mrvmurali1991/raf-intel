@@ -511,7 +511,11 @@ def _call_gemini_vision(file_bytes: bytes, mime_type: str) -> dict[str, Any]:
         raise ValueError("GOOGLE_API_KEY is not configured")
 
     model = settings.gemini_model or "gemini-2.5-pro"
-    url = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent"
+    # API-key auth only works against the Generative Language endpoint.
+    # aiplatform.googleapis.com (Vertex AI) requires OAuth Bearer tokens from
+    # service account credentials — the x-goog-api-key header is silently
+    # ignored there and the call fails with 401/403.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     b64_data = base64.b64encode(file_bytes).decode("utf-8")
 
