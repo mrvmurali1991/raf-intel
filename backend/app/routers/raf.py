@@ -844,20 +844,25 @@ def population_summary(
         raf_distribution.append({"range": label, "count": count})
 
     try:
-        # Reuse the same patient-scoping filter already built for score queries.
+        # Scope by tenant_id only — raf_patient_hcc already carries tenant_id on
+        # every row, and its patient_id column does not align with the
+        # emr_patient_matches.id keys used by _pop_score_filter, so adding that
+        # filter here zeroes out every row. Exclude trumped HCCs and placeholder
+        # code '0' so the waterfall shows clinically meaningful drivers.
         with raf_cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT hcc_code, COUNT(DISTINCT patient_id) AS patient_count
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND tenant_id = %s
-                  AND {_pop_score_filter}
+                  AND COALESCE(is_trumped, 0) = 0
+                  AND hcc_code <> '0'
                 GROUP BY hcc_code
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,
-                (calc_year, int(tenant_id), *_pop_score_params),
+                (calc_year, int(tenant_id)),
             )
             hcc_rows = cur.fetchall()
     except Exception as exc:
