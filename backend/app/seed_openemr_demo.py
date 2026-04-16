@@ -729,7 +729,10 @@ def seed_openemr_demo() -> None:
                 )
 
             # Clinical notes (check before insert to avoid duplicates)
-            # OpenEMR pattern: insert child row, capture lastrowid, then link via forms registry
+            # OpenEMR pattern: forms.form_id references the child row's id, but
+            # form_clinical_notes.form_id is NOT NULL with no default — so we must
+            # 1) INSERT forms with form_id=0 placeholder, 2) INSERT child using
+            # forms.id as its form_id, 3) UPDATE forms.form_id to the child row id.
             for pid, enc, dt, ntype, note in _CLINICAL_NOTES:
                 try:
                     cur.execute(
@@ -738,37 +741,50 @@ def seed_openemr_demo() -> None:
                     )
                     if not cur.fetchone():
                         cur.execute(
-                            "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description, activity) "
-                            "VALUES (%s, %s, %s, %s, %s, 1)",
-                            (pid, enc, dt, ntype, note),
+                            "INSERT INTO forms (date, encounter, form_name, form_id, pid, formdir) "
+                            "VALUES (%s, %s, 'Clinical Notes', 0, %s, 'clinical_notes')",
+                            (dt, enc, pid),
+                        )
+                        forms_id = cur.lastrowid
+                        cur.execute(
+                            "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description, activity, form_id) "
+                            "VALUES (%s, %s, %s, %s, %s, 1, %s)",
+                            (pid, enc, dt, ntype, note, forms_id),
                         )
                         cn_id = cur.lastrowid
                         cur.execute(
-                            "INSERT INTO forms (date, encounter, form_name, form_id, pid, formdir) "
-                            "VALUES (%s, %s, 'Clinical Notes', %s, %s, 'clinical_notes')",
-                            (dt, enc, cn_id, pid),
+                            "UPDATE forms SET form_id=%s WHERE id=%s",
+                            (cn_id, forms_id),
                         )
                 except Exception as exc:
                     logger.warning("Seed clinical_notes skipped for pid=%s enc=%s: %s", pid, enc, exc)
 
-            # Vitals
+            # Vitals — form_vitals has no `encounter` column; link via forms registry only.
+            # Same ordering trick as clinical_notes above.
             for pid, enc, dt, wt, ht, bps, bpd in _VITALS:
                 try:
                     cur.execute(
-                        "SELECT id FROM form_vitals WHERE pid=%s AND encounter=%s LIMIT 1",
+                        "SELECT fv.id FROM form_vitals fv "
+                        "JOIN forms f ON f.form_id=fv.id AND f.formdir='vitals' "
+                        "WHERE fv.pid=%s AND f.encounter=%s LIMIT 1",
                         (pid, enc),
                     )
                     if not cur.fetchone():
                         cur.execute(
-                            "INSERT INTO form_vitals (pid, encounter, date, weight_metric, height_metric, bps, bpd, activity) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
-                            (pid, enc, dt, wt, ht, bps, bpd),
+                            "INSERT INTO forms (date, encounter, form_name, form_id, pid, formdir) "
+                            "VALUES (%s, %s, 'Vitals', 0, %s, 'vitals')",
+                            (dt, enc, pid),
+                        )
+                        forms_id = cur.lastrowid
+                        cur.execute(
+                            "INSERT INTO form_vitals (pid, date, weight_metric, height_metric, bps, bpd, activity) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, 1)",
+                            (pid, dt, wt, ht, bps, bpd),
                         )
                         v_id = cur.lastrowid
                         cur.execute(
-                            "INSERT INTO forms (date, encounter, form_name, form_id, pid, formdir) "
-                            "VALUES (%s, %s, 'Vitals', %s, %s, 'vitals')",
-                            (dt, enc, v_id, pid),
+                            "UPDATE forms SET form_id=%s WHERE id=%s",
+                            (v_id, forms_id),
                         )
                 except Exception as exc:
                     logger.warning("Seed vitals skipped for pid=%s enc=%s: %s", pid, enc, exc)
@@ -861,9 +877,10 @@ def seed_openemr_demo() -> None:
                     "FROM form_clinical_notes fcn "
                     "WHERE NOT EXISTS (SELECT 1 FROM forms f WHERE f.form_id=fcn.id AND f.formdir='clinical_notes')"
                 )
+                # form_vitals has no `encounter` column — backfill with encounter=0
                 cur.execute(
                     "INSERT IGNORE INTO forms (date, encounter, form_name, form_id, pid, formdir) "
-                    "SELECT fv.date, fv.encounter, 'Vitals', fv.id, fv.pid, 'vitals' "
+                    "SELECT fv.date, 0, 'Vitals', fv.id, fv.pid, 'vitals' "
                     "FROM form_vitals fv "
                     "WHERE NOT EXISTS (SELECT 1 FROM forms f WHERE f.form_id=fv.id AND f.formdir='vitals')"
                 )

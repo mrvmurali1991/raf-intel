@@ -37,7 +37,7 @@ CLAIMS_BATCH = {
     "total_claims": 35,
     "processed_claims": 35,
     "failed_claims": 0,
-    "status": "processed",
+    "status": "completed",
     "error_message": None,
     "uploaded_by": "admin@rafiq.health",
     "claim_count": 35,
