@@ -546,8 +546,9 @@ def _import_multi_sheet(
                         """
                         INSERT INTO raf_patient_hcc
                             (patient_id, measurement_year, hcc_code, icd10_codes,
-                             source_encounter_ids, raf_coefficient, meat_status, tenant_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                             source_encounter_ids, raf_coefficient, meat_status, tenant_id,
+                             model_version)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'V28')
                         """,
                         (
                             pid,

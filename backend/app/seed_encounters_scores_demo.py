@@ -544,8 +544,8 @@ def _ensure_patient_hcc_rows(cur) -> None:
                 "INSERT INTO raf_patient_hcc "
                 "  (patient_id, measurement_year, hcc_code, icd10_codes, "
                 "   source_encounter_ids, raf_coefficient, meat_status, "
-                "   is_trumped, trumped_by_hcc) "
-                "VALUES (%s, 2026, %s, %s, '[]', %s, 'complete', 0, NULL)",
+                "   is_trumped, trumped_by_hcc, model_version) "
+                "VALUES (%s, 2026, %s, %s, '[]', %s, 'complete', 0, NULL, 'V28')",
                 (pid, hcc, _json.dumps([icd]), coeff),
             )
             inserted += 1

@@ -71,7 +71,13 @@ def detect_and_persist_gaps(
     # patient (from provider_patient_panel + providers).  The LEFT JOIN on the
     # current-year HCC table lets us filter for missing recaptures in Python
     # to avoid a NOT-EXISTS subquery that is harder to read.
-    detect_sql = """
+    # Filter by CMS-HCC model version when operating on V28-era years (2025+).
+    # Pre-2025 rows used the V24 HCC code set, which cannot be meaningfully
+    # compared against V28 rows (same HCC number means different clinical code).
+    prior_model_clause = " AND ph.model_version = 'V28'" if prior_year >= 2025 else ""
+    current_model_clause = " AND c.model_version = 'V28'" if current_year >= 2025 else ""
+
+    detect_sql = f"""
         SELECT
             p.prior_patient_id          AS patient_id,
             p.prior_hcc_code            AS hcc_code,
@@ -86,12 +92,14 @@ def detect_and_persist_gaps(
             FROM raf_patient_hcc ph
             WHERE ph.tenant_id  = %s
               AND ph.model_year = %s
+              {prior_model_clause}
         ) p
         LEFT JOIN raf_patient_hcc c
                ON c.patient_id  = p.prior_patient_id
               AND c.hcc_code    = p.prior_hcc_code
               AND c.tenant_id   = %s
               AND c.model_year  = %s
+              {current_model_clause}
         LEFT JOIN provider_patient_panel ppp
                ON ppp.patient_id = p.prior_patient_id
         LEFT JOIN providers pr

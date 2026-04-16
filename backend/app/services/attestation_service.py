@@ -892,10 +892,11 @@ def _propagate_to_patient_hcc(attestation: dict[str, Any]) -> None:
                 """
                 INSERT INTO raf_patient_hcc
                     (patient_id, measurement_year, hcc_code, icd10_code,
-                     icd10_description, source, confirmed_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, 'attestation', %s, %s)
+                     icd10_description, source, model_version, confirmed_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, 'attestation', 'V28', %s, %s)
                 ON DUPLICATE KEY UPDATE
                     source          = 'attestation',
+                    model_version   = VALUES(model_version),
                     confirmed_at    = %s,
                     updated_at      = %s
                 """,

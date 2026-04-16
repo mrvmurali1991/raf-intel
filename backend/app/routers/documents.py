@@ -158,8 +158,8 @@ def _do_approve_and_score(
             if cur.fetchone():
                 continue
             cur.execute(
-                "INSERT INTO raf_patient_hcc (patient_id, hcc_code, icd10_codes, hcc_description, measurement_year, source, tenant_id, created_at) "
-                "VALUES (%s,%s,%s,%s,%s,'document_analysis',%s,NOW())",
+                "INSERT INTO raf_patient_hcc (patient_id, hcc_code, icd10_codes, hcc_description, measurement_year, source, tenant_id, model_version, created_at) "
+                "VALUES (%s,%s,%s,%s,%s,'document_analysis',%s,'V28',NOW())",
                 (
                     patient_id,
                     hcc,

@@ -1055,8 +1055,9 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
                         INSERT INTO raf_patient_hcc
                             (patient_id, measurement_year, tenant_id, hcc_code, hcc_description,
                              icd10_codes, icd10_code, icd_code, raf_coefficient, raf_weight,
-                             meat_status, is_trumped, source, source_encounter_ids, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'missing', 0, 'suspect_accepted', '[]', NOW(), NOW())
+                             meat_status, is_trumped, source, source_encounter_ids, model_version,
+                             created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'missing', 0, 'suspect_accepted', '[]', 'V28', NOW(), NOW())
                     """, (_pid, _year, _tenant, _hcc, _desc,
                           json.dumps([_icd]), _icd, _icd, _coeff, _coeff))
                     logger.info("Inserted HCC %s into raf_patient_hcc for patient %s", _hcc, _pid)

@@ -1431,14 +1431,15 @@ class OpenEMRFhirAdapter:
                     INSERT INTO raf_patient_hcc
                         (patient_id, measurement_year, hcc_code, icd10_codes,
                          source_encounter_ids, raf_coefficient, meat_status,
-                         is_trumped, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0, NOW())
+                         is_trumped, model_version, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0, 'V28', NOW())
                     ON DUPLICATE KEY UPDATE
                         icd10_codes = JSON_ARRAY_APPEND(
                             COALESCE(icd10_codes, JSON_ARRAY()), '$', %s
                         ),
                         raf_coefficient = VALUES(raf_coefficient),
                         meat_status = VALUES(meat_status),
+                        model_version = VALUES(model_version),
                         updated_at = NOW()
                     """,
                     (

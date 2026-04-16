@@ -252,8 +252,8 @@ def save_encounter_analysis(
                             """INSERT INTO raf_patient_hcc
                                (patient_id, measurement_year, hcc_code, icd10_codes,
                                 source_encounter_ids, raf_coefficient, meat_status, is_trumped,
-                                is_chronic)
-                               VALUES (%s, %s, %s, %s, %s, 0, 'pending', 0, %s)""",
+                                is_chronic, model_version)
+                               VALUES (%s, %s, %s, %s, %s, 0, 'pending', 0, %s, 'V28')""",
                             (
                                 pid,
                                 measurement_year,

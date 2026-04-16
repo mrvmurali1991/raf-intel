@@ -241,8 +241,8 @@ def seed_raf_demo() -> None:
                     )
                     if not cur.fetchone():
                         cur.execute(
-                            "INSERT INTO raf_patient_hcc (patient_id, measurement_year, hcc_code, icd10_codes, source_encounter_ids, raf_coefficient, meat_status, is_trumped, trumped_by_hcc) "
-                            "VALUES (%s, 2026, %s, %s, '[]', %s, 'complete', 0, NULL)",
+                            "INSERT INTO raf_patient_hcc (patient_id, measurement_year, hcc_code, icd10_codes, source_encounter_ids, raf_coefficient, meat_status, is_trumped, trumped_by_hcc, model_version) "
+                            "VALUES (%s, 2026, %s, %s, '[]', %s, 'complete', 0, NULL, 'V28')",
                             (rid, hcc, json.dumps([icd]), coeff),
                         )
                     disease_total += coeff

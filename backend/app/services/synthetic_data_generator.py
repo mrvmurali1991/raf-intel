@@ -484,11 +484,12 @@ def _store_raf_data(
                     """
                     INSERT INTO raf_patient_hcc
                         (patient_id, measurement_year, hcc_code, icd10_codes,
-                         source_encounter_ids, raf_coefficient, meat_status)
-                    VALUES (%s, %s, %s, %s, '[]', %s, 'demo')
+                         source_encounter_ids, raf_coefficient, meat_status, model_version)
+                    VALUES (%s, %s, %s, %s, '[]', %s, 'demo', 'V28')
                     ON DUPLICATE KEY UPDATE
                         icd10_codes = VALUES(icd10_codes),
-                        raf_coefficient = VALUES(raf_coefficient)
+                        raf_coefficient = VALUES(raf_coefficient),
+                        model_version = VALUES(model_version)
                     """,
                     (pid, measurement_year, hcc, json.dumps(related), coeff),
                 )

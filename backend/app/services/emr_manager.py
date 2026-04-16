@@ -1556,8 +1556,9 @@ def _upsert_patient_hcc(pid: int, icd_codes: list[str], measurement_year: int) -
                 cur.execute(
                     """INSERT INTO raf_patient_hcc
                        (patient_id, measurement_year, hcc_code, icd10_codes,
-                        source_encounter_ids, raf_coefficient, meat_status, is_trumped)
-                       VALUES (%s, %s, %s, %s, '[]', %s, 'pending', 0)""",
+                        source_encounter_ids, raf_coefficient, meat_status, is_trumped,
+                        model_version)
+                       VALUES (%s, %s, %s, %s, '[]', %s, 'pending', 0, 'V28')""",
                     (pid, measurement_year, hcc_code, json.dumps(codes_for_hcc), raf_coefficient),
                 )
 

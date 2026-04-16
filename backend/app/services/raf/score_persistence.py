@@ -130,13 +130,14 @@ def _store_patient_hccs(
                     INSERT INTO raf_patient_hcc
                         (patient_id, measurement_year, hcc_code, icd10_codes,
                          source_encounter_ids, raf_coefficient, meat_status, tenant_id,
-                         is_chronic)
-                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s)
+                         is_chronic, model_version)
+                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s, 'V28')
                     ON DUPLICATE KEY UPDATE
                         icd10_codes     = VALUES(icd10_codes),
                         raf_coefficient = VALUES(raf_coefficient),
                         tenant_id       = VALUES(tenant_id),
-                        is_chronic      = VALUES(is_chronic)
+                        is_chronic      = VALUES(is_chronic),
+                        model_version   = VALUES(model_version)
                     """,
                     (
                         patient_id,
