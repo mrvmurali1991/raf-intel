@@ -14,6 +14,8 @@ from datetime import date as _date
 from typing import Any
 
 from app.db import raf_cursor
+from app.services.audit_logger import log_phi_access
+from app.services.icd_validator import validate_code
 from app.services.meat_evidence_service import store_analysis_meat, update_hcc_meat_status
 
 logger = logging.getLogger(__name__)
@@ -101,6 +103,12 @@ def save_encounter_analysis(
                 ),
             )
         logger.debug("Saved encounter analysis for encounter_id=%s", encounter_id)
+        log_phi_access(
+            action="write",
+            resource="encounter_analysis",
+            patient_id=pid,
+            details=f"encounter_id={encounter_id}",
+        )
     except Exception as exc:
         logger.warning(
             "Failed to save encounter analysis for encounter %s: %s (type: %s)",
@@ -140,19 +148,46 @@ def save_encounter_analysis(
         # Derive measurement_year from encounter date when available,
         # falling back to current year only if no date is present.
         _enc_date_str = analysis.get("encounter_date") or analysis.get("date")
+        year_defaulted = False
         if _enc_date_str:
             try:
                 measurement_year = int(str(_enc_date_str)[:4])
             except (ValueError, TypeError):
                 measurement_year = _date.today().year
+                year_defaulted = True
+                logger.warning(
+                    "measurement_year defaulted to %d for encounter_id=%s pid=%s"
+                    " — encounter_date missing or unparseable (value=%r)",
+                    measurement_year,
+                    encounter_id,
+                    pid,
+                    _enc_date_str,
+                )
         else:
             measurement_year = _date.today().year
+            year_defaulted = True
+            logger.warning(
+                "measurement_year defaulted to %d for encounter_id=%s pid=%s"
+                " — encounter_date missing or unparseable (value=None)",
+                measurement_year,
+                encounter_id,
+                pid,
+            )
         hcc_diagnoses = [d for d in analysis.get("diagnoses", []) if d.get("hcc")]
         if hcc_diagnoses:
             with raf_cursor() as cur:
                 for dx in hcc_diagnoses:
-                    hcc_code = str(dx["hcc"]).strip()
+                    # Normalize HCC code to plain number string (e.g., "19")
+                    hcc_code = str(dx["hcc"]).strip().upper().replace("HCC", "").replace(" ", "").lstrip("0") or "0"
                     icd10 = str(dx.get("icd10", "")).strip()
+
+                    if icd10 and not validate_code(icd10):
+                        logger.warning(
+                            "Skipping invalid ICD-10 code %s for encounter %s",
+                            icd10,
+                            encounter_id,
+                        )
+                        continue
 
                     cur.execute(
                         "SELECT id, icd10_codes, source_encounter_ids "
@@ -205,6 +240,41 @@ def save_encounter_analysis(
                 pid,
                 encounter_id,
             )
+            log_phi_access(
+                action="write",
+                resource="hcc_codes",
+                patient_id=pid,
+                details=f"encounter_id={encounter_id}, count={len(hcc_diagnoses)}",
+            )
+
+            # Apply HCC trumping hierarchy so that, e.g., HCC 17 suppresses HCC 18
+            # when both are present for the same patient+year.
+            try:
+                from app.services.hcc_hierarchy import apply_hierarchy_to_patient
+
+                hierarchy_result = apply_hierarchy_to_patient(
+                    patient_id=pid,
+                    measurement_year=measurement_year,
+                    tenant_id="1",
+                )
+                logger.info(
+                    "HCC hierarchy applied for patient_id=%s year=%s: "
+                    "total=%d trumped=%d updated=%d errors=%d",
+                    pid,
+                    measurement_year,
+                    hierarchy_result.get("total", 0),
+                    hierarchy_result.get("trumped", 0),
+                    hierarchy_result.get("updated", 0),
+                    hierarchy_result.get("errors", 0),
+                )
+            except Exception as hierarchy_exc:
+                logger.warning(
+                    "HCC hierarchy step failed for patient_id=%s encounter_id=%s: %s",
+                    pid,
+                    encounter_id,
+                    hierarchy_exc,
+                )
+
     except Exception as hcc_exc:
         logger.warning(
             "Failed to persist HCC codes to raf_patient_hcc for encounter %s: %s",
@@ -215,6 +285,34 @@ def save_encounter_analysis(
     # ------------------------------------------------------------------
     # 3. MEAT evidence
     # ------------------------------------------------------------------
+    def _extract_meat(d: dict) -> dict:
+        """Normalise MEAT keys from AI output.
+
+        The model may return single-letter keys (M/E/A/T) or full-word keys
+        (monitoring/evaluation/assessment/treatment) in either case.  Accept
+        all variants so the downstream store step always receives the expected
+        long-form keys.
+        """
+        _meat_raw = d.get("meat", {})
+        monitoring = _meat_raw.get("M") or _meat_raw.get("monitoring") or _meat_raw.get("Monitoring") or ""
+        evaluation = _meat_raw.get("E") or _meat_raw.get("evaluation") or _meat_raw.get("Evaluation") or ""
+        assessment = _meat_raw.get("A") or _meat_raw.get("assessment") or _meat_raw.get("Assessment") or ""
+        treatment = _meat_raw.get("T") or _meat_raw.get("treatment") or _meat_raw.get("Treatment") or ""
+        if d.get("hcc") and not any([monitoring, evaluation, assessment, treatment]):
+            logger.warning(
+                "All MEAT fields empty for HCC diagnosis icd10=%s hcc=%s — "
+                "AI may have returned unexpected keys: %s",
+                d.get("icd10", ""),
+                d.get("hcc", ""),
+                list(_meat_raw.keys()),
+            )
+        return {
+            "monitoring": monitoring,
+            "evaluation": evaluation,
+            "assessment": assessment,
+            "treatment": treatment,
+        }
+
     gemini_compat = {
         "diagnoses": [
             {
@@ -223,12 +321,7 @@ def save_encounter_analysis(
                 "hcc_code": d.get("hcc", ""),
                 "confidence": d.get("confidence", 0),
                 "negated": False,
-                "meat": {
-                    "monitoring": d.get("meat", {}).get("M", ""),
-                    "evaluation": d.get("meat", {}).get("E", ""),
-                    "assessment": d.get("meat", {}).get("A", ""),
-                    "treatment": d.get("meat", {}).get("T", ""),
-                },
+                "meat": _extract_meat(d),
                 "meat_score": d.get("meat_score", 0),
             }
             for d in analysis.get("diagnoses", [])

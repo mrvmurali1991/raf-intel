@@ -740,52 +740,61 @@ def get_recapture_gaps(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        # FHIR fallback: use patient_conditions to find active conditions not captured as HCCs this year
+        # FHIR fallback: CMS recapture logic — HCCs captured in PRIOR year not yet billed THIS year
         from datetime import date as _date
         _year = year or _date.today().year
+        _prior_year = _year - 1
         try:
+            import json as _json
             from app.db import raf_cursor
             with raf_cursor() as _gc:
-                # Get all active conditions with ICD codes
-                _gc.execute(
-                    """SELECT icd10_code, description, onset_date
-                       FROM patient_conditions
-                       WHERE patient_id = %s AND status = 'active' AND icd10_code IS NOT NULL AND icd10_code != ''
-                       ORDER BY onset_date DESC""",
-                    (pid,),
-                )
-                conditions = _gc.fetchall()
-                if conditions:
-                    # Get HCC codes already captured this year
-                    _gc.execute(
-                        """SELECT DISTINCT icd10_codes FROM raf_patient_hcc
-                           WHERE patient_id = %s AND measurement_year = %s""",
-                        (pid, _year),
-                    )
-                    captured_rows = _gc.fetchall()
-                    import json
-                    captured_icds = set()
-                    for cr in captured_rows:
-                        try:
-                            codes = json.loads(cr.get("icd10_codes") or "[]")
-                            captured_icds.update(codes)
-                        except (ValueError, TypeError):
-                            pass
+                # L5: Deceased patient check — skip recapture gap generation for deceased patients.
+                # NOTE: The patients table currently has no deceased/deceased_date column.
+                # This check should be enabled once FHIR sync populates a deceased_date field
+                # (e.g. from Patient.deceasedDateTime or Patient.deceasedBoolean in the FHIR resource).
+                # Example query once column exists:
+                #   _gc.execute("SELECT deceased_date FROM patients WHERE id = %s LIMIT 1", (pid,))
+                #   _deceased_row = _gc.fetchone()
+                #   if _deceased_row and _deceased_row.get("deceased_date"):
+                #       return {"pid": pid, "year": _year, "gaps": [], "source": "fhir", "note": "Patient is deceased — no recapture gaps generated"}
 
-                    gaps = []
-                    for c in conditions:
-                        icd = (c.get("icd10_code") or "").strip()
-                        if icd and icd not in captured_icds:
-                            gaps.append({
-                                "icd10": icd,
-                                "description": c.get("description") or "",
-                                "onset_date": str(c["onset_date"]) if c.get("onset_date") else None,
-                                "source": "fhir",
-                            })
-                    return {"pid": pid, "year": _year, "gap_count": len(gaps), "recapture_gaps": gaps, "source": "fhir"}
+                # Step 1: get HCCs captured in the prior measurement year
+                _gc.execute(
+                    """SELECT hcc_code, icd10_codes, description
+                       FROM raf_patient_hcc
+                       WHERE patient_id = %s AND measurement_year = %s""",
+                    (pid, _prior_year),
+                )
+                prior_rows = _gc.fetchall()
+
+                # Step 2: get HCC codes already captured in the current year
+                _gc.execute(
+                    """SELECT hcc_code
+                       FROM raf_patient_hcc
+                       WHERE patient_id = %s AND measurement_year = %s""",
+                    (pid, _year),
+                )
+                current_hcc_codes = {r["hcc_code"] for r in _gc.fetchall()}
+
+                # Step 3: gap = prior-year HCCs not present in current year
+                gaps = []
+                for row in prior_rows:
+                    hcc = row.get("hcc_code")
+                    if hcc and hcc not in current_hcc_codes:
+                        try:
+                            icd10_codes = _json.loads(row.get("icd10_codes") or "[]")
+                        except (ValueError, TypeError):
+                            icd10_codes = []
+                        gaps.append({
+                            "hcc_code": hcc,
+                            "icd10_codes": icd10_codes,
+                            "description": row.get("description") or "",
+                            "source": "fhir",
+                        })
+                return {"pid": pid, "year": _year, "prior_year": _prior_year, "gap_count": len(gaps), "recapture_gaps": gaps, "source": "fhir"}
         except Exception as exc:
             logger.debug("recapture-gaps FHIR fallback failed pid=%s: %s", pid, exc)
-        return {"pid": pid, "gaps": [], "year": _year, "gap_count": 0}
+        return {"pid": pid, "recapture_gaps": [], "year": _year, "gap_count": 0}
 
     try:
         return svc.svc_get_recapture_gaps(pid=pid, year=year, tenant_id=_tid)
@@ -1182,7 +1191,8 @@ def get_hedis_compliance(
                     try:
                         from datetime import date as _d2
                         dob = p["dob"] if isinstance(p["dob"], _d2) else _d2.fromisoformat(str(p["dob"])[:10])
-                        age = (_d2.today() - dob).days // 365
+                        today = _d2.today()
+                        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
                     except Exception:
                         pass
 
@@ -1190,7 +1200,13 @@ def get_hedis_compliance(
 
                 measures = {}
                 # Flu vaccine — all ages
-                flu_given = any("influenza" in v or "flu" in v for v, _ in vaccines_lower)
+                flu_given = any(
+                    ("influenza" in v or "flu" in v) and d and (
+                        (hasattr(d, 'year') and d.year >= _hyear - 1) or
+                        (isinstance(d, str) and len(d) >= 4 and int(d[:4]) >= _hyear - 1)
+                    )
+                    for v, d in vaccines_lower
+                )
                 measures["flu_vaccine"] = {"due": True, "compliant": flu_given, "description": "Annual influenza vaccination"}
                 # Pneumococcal — age >= 65
                 if age and age >= 65:
@@ -1244,12 +1260,29 @@ def get_patient_enrollment(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        # Return CNA defaults for FHIR patients (non-dual, aged, community)
+        # Estimate OREC from DOB for FHIR-only patients (no CMS enrollment data available)
+        from datetime import date as _date
+        from app.db import raf_cursor
+        orec = "aged"  # safe fallback if DOB lookup fails
+        try:
+            with raf_cursor() as cur:
+                cur.execute("SELECT dob FROM patients WHERE id = %s LIMIT 1", (pid,))
+                row = cur.fetchone()
+            if row and row[0]:
+                dob = row[0]
+                if isinstance(dob, str):
+                    dob = _date.fromisoformat(dob)
+                today = _date.today()
+                age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                orec = "aged" if age >= 65 else "disabled"
+        except Exception as _exc:
+            logger.debug("enrollment: DOB lookup failed for pid=%s: %s", pid, _exc)
         return {"pid": pid, "enrollment": {
             "dual_status": "non_dual",
-            "orec": "aged",
+            "orec": orec,
             "institutional": False,
-            "source": "default",
+            "source": "estimated",
+            "enrollment_unverified": True,
         }}
 
     return svc.svc_get_patient_enrollment(pid=pid, tenant_id=_tid)

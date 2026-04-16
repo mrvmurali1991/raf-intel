@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json as _json
 import logging
+import time as _time
 from datetime import date as _date
 from datetime import datetime as _datetime
 from typing import Any, Optional
@@ -35,6 +36,10 @@ from app.services.emr_manager import active_patients_subquery
 from app.services.cache_strategy import tenant_cached, TTL_PATIENT_LIST, invalidate_patient_list
 
 logger = logging.getLogger(__name__)
+
+# Simple TTL cache for _get_fhir_resource_id to avoid redundant DB lookups
+_fhir_id_cache: dict[int, tuple[str | None, float]] = {}
+_FHIR_ID_CACHE_TTL = 60  # seconds
 
 
 # ---------------------------------------------------------------------------
@@ -279,9 +284,18 @@ def _get_fhir_resource_id(pid: int, tenant_id: str | None = None) -> str | None:
 
     Returns the UUID string or None.
     """
+    # TODO: Check fhir_sync_logs.status for this patient — if sync is in-progress,
+    # fallback queries may return partial data. Consider adding sync_status to fhir_patients table.
+
+    # Check module-level TTL cache first to avoid redundant DB lookups
+    _cached = _fhir_id_cache.get(pid)
+    if _cached and (_time.time() - _cached[1]) < _FHIR_ID_CACHE_TTL:
+        return _cached[0]
+
     # Path 1: emr_patient_matches external_id (the standard FHIR patient UUID)
     fhir_row = _get_fhir_patient_row(pid, tenant_id=tenant_id)
     if fhir_row and fhir_row.get("external_id"):
+        _fhir_id_cache[pid] = (fhir_row["external_id"], _time.time())
         return fhir_row["external_id"]
 
     # Path 2: fhir_patients table via patients.emr_pid + emr_connection_id
@@ -320,27 +334,87 @@ def _get_fhir_resource_id(pid: int, tenant_id: str | None = None) -> str | None:
                 )
                 fp_row = cur.fetchone()
                 if fp_row:
+                    _fhir_id_cache[pid] = (fp_row["fhir_resource_id"], _time.time())
                     return fp_row["fhir_resource_id"]
 
-            # Path 3: fuzzy match by name + DOB
+            # Path 3: exact match by name + DOB (prefix/fuzzy match is unsafe in healthcare)
             fname = (p_row.get("first_name") or p_row.get("fname") or "").strip().lower()
             lname = (p_row.get("last_name") or p_row.get("lname") or "").strip().lower()
             dob = p_row.get("dob")
             if fname and lname and dob:
                 cur.execute(
                     "SELECT fhir_resource_id FROM fhir_patients "
-                    "WHERE LOWER(given_name) LIKE %s "
-                    "AND LOWER(family_name) = %s AND birth_date = %s LIMIT 1",
-                    (f"{fname}%", lname, str(dob)),
+                    "WHERE LOWER(given_name) = %s "
+                    "AND LOWER(family_name) = %s AND birth_date = %s",
+                    (fname, lname, str(dob)),
                 )
-                fp_match = cur.fetchone()
-                if fp_match:
-                    return fp_match["fhir_resource_id"]
+                fp_matches = cur.fetchall()
+                if len(fp_matches) > 1:
+                    logger.warning(
+                        "Ambiguous FHIR patient match for pid=%s: %d candidates found, skipping",
+                        pid,
+                        len(fp_matches),
+                    )
+                    return None
+                if fp_matches:
+                    _fhir_id_cache[pid] = (fp_matches[0]["fhir_resource_id"], _time.time())
+                    return fp_matches[0]["fhir_resource_id"]
     except Exception as exc:
-        logger.debug("_get_fhir_resource_id fallback failed for pid=%s: %s", pid, exc)
+        logger.warning("_get_fhir_resource_id fallback failed for pid=%s: %s", pid, exc)
 
     return None
 
+
+def _get_fhir_encounters_for_patient(fhir_patient_id: str, pid: int) -> list[dict]:
+    """Query fhir_encounters table and return formatted encounter dicts.
+
+    Parameters
+    ----------
+    fhir_patient_id:
+        The FHIR resource UUID stored in fhir_encounters.fhir_patient_id.
+    pid:
+        Internal patient ID, included in each returned dict as "pid".
+    """
+    results: list[dict] = []
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """SELECT fe.id AS encounter_id,
+                          fe.period_start AS date,
+                          COALESCE(fe.type_display, fe.encounter_type) AS reason,
+                          fe.status,
+                          fe.fhir_encounter_id,
+                          fe.provider_name,
+                          fe.reason_codes,
+                          fe.service_provider
+                   FROM fhir_encounters fe
+                   WHERE fe.fhir_patient_id = %s
+                   ORDER BY fe.period_start DESC""",
+                (fhir_patient_id,),
+            )
+            for r in cur.fetchall():
+                _rc = r.get("reason_codes") or ""
+                results.append(
+                    {
+                        "encounter_id": r["encounter_id"],
+                        "pid": pid,
+                        "date": str(r["date"]) if r.get("date") else None,
+                        "reason": r.get("reason") or "Office Visit",
+                        "provider": r.get("provider_name") or "",
+                        "provider_id": None,
+                        "provider_fname": r.get("provider_name") or "",
+                        "provider_lname": "",
+                        "facility": r.get("service_provider") or "",
+                        "has_notes": 1 if _rc else 0,
+                        "notes": _rc,
+                        "note_text": _rc,
+                        "status": r.get("status") or "finished",
+                        "source": "fhir",
+                    }
+                )
+    except Exception as exc:
+        logger.error("_get_fhir_encounters_for_patient error fhir_patient_id=%s: %s", fhir_patient_id, exc)
+    return results
 
 def patient_is_fhir(pid: int, tenant_id: str) -> bool:
     """Return True when *pid* belongs to an active FHIR/REST connection (emr_patient_matches.id)."""
@@ -705,43 +779,7 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
     if is_fhir:
         external_id = _get_fhir_resource_id(pid, tenant_id=tenant_id)
         if external_id:
-            try:
-                with raf_cursor() as cur:
-                    cur.execute(
-                        """SELECT fe.id AS encounter_id,
-                                  fe.period_start AS date,
-                                  COALESCE(fe.type_display, fe.encounter_type) AS reason,
-                                  fe.status,
-                                  fe.fhir_encounter_id,
-                                  fe.provider_name,
-                                  fe.reason_codes,
-                                  fe.service_provider
-                           FROM fhir_encounters fe
-                           WHERE fe.fhir_patient_id = %s
-                           ORDER BY fe.period_start DESC""",
-                        (external_id,),
-                    )
-                    for r in cur.fetchall():
-                        _rc = r.get("reason_codes") or ""
-                        encounters.append(
-                            {
-                                "encounter_id": r["encounter_id"],
-                                "pid": pid,
-                                "date": str(r["date"]) if r["date"] else None,
-                                "reason": r.get("reason") or "Office Visit",
-                                "facility": r.get("service_provider") or "",
-                                "provider_id": None,
-                                "provider_fname": r.get("provider_name") or "",
-                                "provider_lname": "",
-                                "has_notes": 1 if _rc else 0,
-                                "notes": _rc,
-                                "note_text": _rc,
-                                "status": r.get("status") or "finished",
-                                "source": "fhir",
-                            }
-                        )
-            except Exception as exc:
-                logger.error("svc_get_encounters FHIR error pid=%s: %s", pid, exc)
+            encounters = _get_fhir_encounters_for_patient(external_id, pid)
     else:
         try:
             encounters = emr.get_encounters(emr_pid)
@@ -950,7 +988,7 @@ def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[s
                                 }
                             )
                 except Exception as exc:
-                    logger.debug("svc_get_medications fhir_medications fallback failed: %s", exc)
+                    logger.warning("svc_get_medications fhir_medications fallback failed: %s", exc)
     else:
         try:
             medications = emr.get_medications(emr_pid, year=year)
@@ -1019,10 +1057,14 @@ def svc_get_medication_gaps(pid: int, year: int, tenant_id: str) -> dict[str, An
                 )
                 meds = _mc.fetchall()
                 if meds:
-                    # Get billed ICD codes for this year
+                    # Get billed ICD codes relevant to the target year.
+                    # Include conditions with no onset date (unknown onset) and
+                    # those whose onset is on or before the end of the target year.
                     _mc.execute(
-                        "SELECT DISTINCT icd10_code FROM patient_conditions WHERE patient_id = %s",
-                        (pid,),
+                        "SELECT DISTINCT icd10_code FROM patient_conditions"
+                        " WHERE patient_id = %s"
+                        " AND (onset_date IS NULL OR YEAR(onset_date) <= %s) LIMIT 500",
+                        (pid, year),
                     )
                     billed = {r["icd10_code"] for r in _mc.fetchall() if r.get("icd10_code")}
 
@@ -1035,7 +1077,7 @@ def svc_get_medication_gaps(pid: int, year: int, tenant_id: str) -> dict[str, An
                                 "active": 1,
                             })
         except Exception as exc:
-            logger.debug("svc_get_medication_gaps FHIR fallback failed pid=%s: %s", pid, exc)
+            logger.warning("svc_get_medication_gaps FHIR fallback failed pid=%s: %s", pid, exc)
 
     for gap in gaps:
         code = gap.get("icd_code", "")
@@ -1119,7 +1161,7 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
                             "FROM fhir_conditions fc "
                             "WHERE fc.fhir_patient_id = %s "
                             "AND fc.clinical_status IN ('active', 'recurrence', 'relapse', '') "
-                            "ORDER BY fc.onset_date DESC",
+                            "ORDER BY fc.onset_date DESC LIMIT 500",
                             (fhir_rid,),
                         )
                         for r in cur.fetchall():
@@ -1136,7 +1178,7 @@ def svc_get_diagnoses(pid: int, tenant_id: str) -> dict[str, Any]:
                                 }
                             )
                 except Exception as exc:
-                    logger.debug("svc_get_diagnoses fhir_conditions fallback failed: %s", exc)
+                    logger.warning("svc_get_diagnoses fhir_conditions fallback failed: %s", exc)
     else:
         try:
             codes = emr.get_billing_codes(emr_pid)
@@ -1227,7 +1269,7 @@ def svc_get_problem_list(pid: int, year: Optional[int], tenant_id: str) -> dict[
                 cur.execute(
                     "SELECT icd10_code AS diagnosis, description AS title, "
                     "hcc_code, onset_date AS begdate, status, severity "
-                    "FROM patient_conditions WHERE patient_id = %s ORDER BY onset_date DESC",
+                    "FROM patient_conditions WHERE patient_id = %s ORDER BY onset_date DESC LIMIT 500",
                     (pid,),
                 )
                 for r in cur.fetchall():
@@ -1364,7 +1406,7 @@ def svc_get_vitals_suspects(
                             latest_vitals["date"] = str(vrows[0]["effective_date"]) if vrows[0].get("effective_date") else None
                             latest_vitals["source"] = "fhir"
         except Exception as exc:
-            logger.debug("svc_get_vitals_suspects FHIR fallback failed: %s", exc)
+            logger.warning("svc_get_vitals_suspects FHIR fallback failed: %s", exc)
 
     patient_name = (
         f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
@@ -1426,7 +1468,7 @@ def svc_get_lab_suspects(
                         """SELECT code_display, value_numeric, value_string, unit, effective_date
                            FROM fhir_observations
                            WHERE fhir_patient_id = %s AND category = 'laboratory'
-                           ORDER BY effective_date DESC""",
+                           ORDER BY effective_date DESC LIMIT 200""",
                         (fhir_id,),
                     )
                     rows = _lc.fetchall()
@@ -1441,7 +1483,7 @@ def svc_get_lab_suspects(
                         resp["labs"] = {"results": lab_results, "source": "fhir"}
                         resp["lab_results_scanned"] = len(lab_results)
         except Exception as exc:
-            logger.debug("svc_get_lab_suspects FHIR lab fallback failed: %s", exc)
+            logger.warning("svc_get_lab_suspects FHIR lab fallback failed: %s", exc)
 
     return resp
 
@@ -1481,7 +1523,7 @@ def svc_get_comprehensive_profile(
                         "FROM fhir_conditions fc "
                         "WHERE fc.fhir_patient_id = %s "
                         "AND fc.clinical_status IN ('active', 'recurrence', 'relapse', '') "
-                        "ORDER BY fc.onset_date DESC",
+                        "ORDER BY fc.onset_date DESC LIMIT 500",
                         (fhir_external_id,),
                     )
                 else:
@@ -1524,7 +1566,7 @@ def svc_get_comprehensive_profile(
                               hcc_code, severity, onset_date, status
                        FROM patient_conditions
                        WHERE patient_id = %s AND status = 'active'
-                       ORDER BY description""",
+                       ORDER BY description LIMIT 500""",
                     (pid,),
                 )
                 for r in _pl_cur.fetchall():
@@ -1555,7 +1597,7 @@ def svc_get_comprehensive_profile(
                               fc.hcc_codes
                        FROM fhir_conditions fc
                        WHERE fc.fhir_patient_id = %s
-                       ORDER BY fc.onset_date DESC""",
+                       ORDER BY fc.onset_date DESC LIMIT 500""",
                     (fhir_external_id,),
                 )
                 for r in _fc_cur.fetchall():
@@ -1586,7 +1628,7 @@ def svc_get_comprehensive_profile(
                         }
                     )
         except Exception as exc:
-            logger.debug("FHIR problem_list fallback failed: %s", exc)
+            logger.warning("FHIR problem_list fallback failed: %s", exc)
     for p in problem_list:
         raw_dx = p.get("diagnosis") or ""
         icd10 = raw_dx.split(":")[-1].strip() if ":" in raw_dx else raw_dx.strip()
@@ -1651,7 +1693,7 @@ def svc_get_comprehensive_profile(
                         }
                     )
         except Exception as exc:
-            logger.debug("FHIR medications fallback failed: %s", exc)
+            logger.warning("FHIR medications fallback failed: %s", exc)
 
     medication_diagnosis_gaps = _safe_call(
         "medication_diagnosis_gaps",
@@ -1665,47 +1707,7 @@ def svc_get_comprehensive_profile(
     encounters: list[dict] = []
     if is_fhir and fhir_external_id:
         # FHIR patients: query fhir_encounters by the external FHIR patient ID
-        try:
-            with raf_cursor() as _enc_cur:
-                _enc_cur.execute(
-                    """SELECT fe.id AS encounter_id,
-                              fe.period_start AS date,
-                              COALESCE(fe.type_display, fe.encounter_type) AS reason,
-                              fe.status,
-                              fe.fhir_encounter_id,
-                              fe.provider_name,
-                              fe.reason_codes,
-                              fe.service_provider
-                       FROM fhir_encounters fe
-                       WHERE fe.fhir_patient_id = %s
-                       ORDER BY fe.period_start DESC""",
-                    (fhir_external_id,),
-                )
-                for r in _enc_cur.fetchall():
-                    _reason_codes = r.get("reason_codes") or ""
-                    encounters.append(
-                        {
-                            "encounter_id": r["encounter_id"],
-                            "pid": pid,
-                            "date": str(r["date"]) if r.get("date") else None,
-                            "reason": r.get("reason") or "Office Visit",
-                            "provider": r.get("provider_name") or "",
-                            "provider_id": None,
-                            "provider_fname": r.get("provider_name") or "",
-                            "provider_lname": "",
-                            "facility": r.get("service_provider") or "",
-                            "has_notes": 1 if _reason_codes else 0,
-                            "notes": _reason_codes,
-                            "note_text": _reason_codes,
-                            "status": r.get("status") or "finished",
-                            "source": "fhir",
-                        }
-                    )
-        except Exception as _enc_exc_fhir:
-            logger.error(
-                "svc_get_comprehensive_profile FHIR encounters error pid=%s: %s",
-                pid, _enc_exc_fhir, exc_info=True,
-            )
+        encounters = _get_fhir_encounters_for_patient(fhir_external_id, pid)
     else:
         # Non-FHIR patients: query raf_intelligence.encounters table
         try:
@@ -1783,7 +1785,7 @@ def svc_get_comprehensive_profile(
                         vitals_dict["source"] = "fhir"
                         latest_vitals = vitals_dict
         except Exception as exc:
-            logger.debug("FHIR vitals fallback failed: %s", exc)
+            logger.warning("FHIR vitals fallback failed: %s", exc)
 
     vitals_suspects: list[dict[str, Any]] = []
     lab_suspects_list: list[dict[str, Any]] = []
@@ -1914,7 +1916,7 @@ def svc_get_comprehensive_profile(
                         "begdate": str(row["onset_date"]) if row.get("onset_date") else "",
                     })
         except Exception as exc:
-            logger.debug("FHIR allergy fallback failed: %s", exc)
+            logger.warning("FHIR allergy fallback failed: %s", exc)
 
     # --- Referrals -------------------------------------------------------
     referrals = _safe_call("referrals", emr.get_referrals, emr_pid, default=[])  # type: ignore[attr-defined]
@@ -1982,7 +1984,7 @@ def svc_get_comprehensive_profile(
                         }
                     )
         except Exception as exc:
-            logger.debug("FHIR labs fallback failed: %s", exc)
+            logger.warning("FHIR labs fallback failed: %s", exc)
 
     # --- Data completeness -----------------------------------------------
     has_clinical_notes = any(bool(enc.get("has_notes")) for enc in encounters)
