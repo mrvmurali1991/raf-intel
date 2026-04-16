@@ -835,15 +835,16 @@ def seed_openemr_demo() -> None:
                         (pid, itype, provider, plan, mbi),
                     )
 
-            # Immunizations
+            # Immunizations (note: OpenEMR `immunizations` has no `title`
+            # column — the vaccine name is stored in `note`).
             for pid, dt, cvx, title in _IMMUNIZATIONS:
                 cur.execute(
-                    "SELECT id FROM immunizations WHERE patient_id=%s AND cvx_code=%s AND title=%s LIMIT 1",
+                    "SELECT id FROM immunizations WHERE patient_id=%s AND cvx_code=%s AND note=%s LIMIT 1",
                     (pid, cvx, title),
                 )
                 if not cur.fetchone():
                     cur.execute(
-                        "INSERT INTO immunizations (patient_id, administered_date, cvx_code, title) "
+                        "INSERT INTO immunizations (patient_id, administered_date, cvx_code, note) "
                         "VALUES (%s, %s, %s, %s)",
                         (pid, dt, cvx, title),
                     )

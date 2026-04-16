@@ -216,7 +216,7 @@ def seed_providers_demo() -> None:
                  "2026-03-08 14:15:00", "default"),
                 (16, None, "HCC112", "",
                  "J44.1", "COPD with acute exacerbation",
-                 "encounter", "1234567894",
+                 "manual", "1234567894",
                  "rejected", "reject_inaccurate",
                  None,
                  None, "default"),
