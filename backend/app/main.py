@@ -126,6 +126,23 @@ async def lifespan(app: FastAPI):
     setup_pipeline_chain()
     start_scheduler()
 
+    # Recover zombie jobs left in RUNNING/QUEUED state by a previous crash
+    # or restart. FastAPI BackgroundTasks are in-process and lost on restart,
+    # so without this sweep callers polling /api/analysis/jobs/{id} would wait
+    # forever. Guarded so a failure here never prevents boot.
+    try:
+        from app.services.job_service import recover_stale_jobs
+
+        recovered = recover_stale_jobs(stale_after_hours=1)
+        if recovered:
+            logger.warning(
+                "Startup recovery: marked %d stale raf_jobs rows as FAILED", recovered
+            )
+        else:
+            logger.info("Startup recovery: no stale raf_jobs rows found.")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Startup recovery of stale jobs failed (non-fatal): %s", exc)
+
     yield  # application runs
 
     stop_scheduler()

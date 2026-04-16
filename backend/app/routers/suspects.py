@@ -355,13 +355,18 @@ def scan_patient(
     are persisted to ``raf_suspect_conditions``.  Already-known suspects are
     deduplicated by the engine and not double-inserted.
     """
+    tenant_id: str = current_user.get("tenant_id") or ""
+    from app.services.patient_service import patient_is_accessible
+    if not patient_is_accessible(pid, tenant_id):
+        raise HTTPException(
+            status_code=404, detail=f"Patient {pid} not found in OpenEMR"
+        )
     patient = get_patient(pid)
     if not patient:
         raise HTTPException(
             status_code=404, detail=f"Patient {pid} not found in OpenEMR"
         )
 
-    tenant_id: str = current_user.get("tenant_id") or ""
     try:
         new_suspects: list[dict[str, Any]] = run_full_suspect_scan(
             pid, year=year, tenant_id=tenant_id or None

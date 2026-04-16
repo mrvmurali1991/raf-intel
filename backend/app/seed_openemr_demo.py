@@ -731,12 +731,12 @@ def seed_openemr_demo() -> None:
             # Clinical notes (check before insert to avoid duplicates)
             for pid, enc, dt, ntype, note in _CLINICAL_NOTES:
                 cur.execute(
-                    "SELECT id FROM form_clinical_notes WHERE pid=%s AND encounter=%s AND note_type=%s LIMIT 1",
+                    "SELECT id FROM form_clinical_notes WHERE pid=%s AND encounter=%s AND clinical_notes_type=%s LIMIT 1",
                     (pid, enc, ntype),
                 )
                 if not cur.fetchone():
                     cur.execute(
-                        "INSERT INTO form_clinical_notes (pid, encounter, date, note_type, note) "
+                        "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description) "
                         "VALUES (%s, %s, %s, %s, %s)",
                         (pid, enc, dt, ntype, note),
                     )

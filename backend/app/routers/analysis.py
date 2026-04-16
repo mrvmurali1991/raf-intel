@@ -858,6 +858,9 @@ def batch_analysis(
     Queue a background job to analyze all clinical notes for *pid*.
     Poll ``GET /api/analysis/jobs/{job_id}`` for status.
     """
+    from app.services.patient_service import patient_is_accessible
+    if not patient_is_accessible(pid, tenant_id):
+        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
     patient = get_patient(pid)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")

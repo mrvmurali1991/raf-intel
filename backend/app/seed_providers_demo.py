@@ -63,14 +63,27 @@ def seed_providers_demo() -> None:
                 )
 
             # ----------------------------------------------------------
+            # Resolve provider NPI -> actual DB id (AUTO_INCREMENT may not
+            # yield 1..6 on re-seed / multi-tenant / prior rows).
+            # ----------------------------------------------------------
+            cur.execute(
+                "SELECT id, npi FROM providers WHERE tenant_id = 'default' "
+                "AND npi IN ('1234567890','1234567891','1234567892',"
+                "'1234567893','1234567894','1234567895')"
+            )
+            npi_to_id = {row["npi"]: row["id"] for row in cur.fetchall()}
+            # Ordered list of NPIs matching the providers list above (indexes 1..6)
+            ordered_npis = [
+                "1234567890", "1234567891", "1234567892",
+                "1234567893", "1234567894", "1234567895",
+            ]
+
+            # ----------------------------------------------------------
             # Provider scorecard snapshots
+            # Use logical index (1..6) into ordered_npis; resolve to real id.
             # ----------------------------------------------------------
             scorecards = [
-                # (provider_id, year, date, total_patients, patients_with_raf,
-                #  avg_raf, hccs_captured, hccs_possible, capture_rate, recapture_rate,
-                #  suspects_open, suspects_accepted, suspects_dismissed,
-                #  revenue_opp, revenue_captured, meat_avg, doc_quality, percentile,
-                #  patients_with_scores, suspects_open2, suspects_accepted2, suspects_dismissed2, meat_avg2)
+                # (logical_idx, year, date, total_patients, patients_with_raf, ...)
                 (1, 2026, "2026-04-01", 12, 10, 1.1240, 28, 35, 0.8000, 0.7200,
                  4, 22, 3, 4200.00, 3150.00, 0.8200, 0.8500, 72.00,
                  10, 4, 22, 3, 0.8200),
@@ -91,26 +104,41 @@ def seed_providers_demo() -> None:
                  9, 3, 21, 2, 0.8400),
             ]
             for s in scorecards:
-                cur.execute(
-                    """INSERT INTO provider_scorecard_snapshots
-                       (provider_id, measurement_year, snapshot_date,
-                        total_patients, patients_with_raf, average_raf,
-                        total_hccs_captured, total_hccs_possible, hcc_capture_rate,
-                        recapture_rate, suspect_conditions_open,
-                        suspect_conditions_accepted, suspect_conditions_dismissed,
-                        revenue_opportunity, revenue_captured,
-                        avg_meat_completeness, documentation_quality_score,
-                        percentile_rank, patients_with_scores,
-                        suspects_open, suspects_accepted, suspects_dismissed,
-                        meat_completeness_avg)
-                       SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
-                       FROM DUAL
-                       WHERE NOT EXISTS (
-                           SELECT 1 FROM provider_scorecard_snapshots
-                           WHERE provider_id = %s AND measurement_year = %s AND snapshot_date = %s
-                       )""",
-                    (*s, s[0], s[1], s[2]),
-                )
+                logical_idx = s[0]
+                npi = ordered_npis[logical_idx - 1]
+                real_pid = npi_to_id.get(npi)
+                if real_pid is None:
+                    logger.warning(
+                        "Skipping scorecard for NPI %s — provider row missing.", npi
+                    )
+                    continue
+                s_real = (real_pid,) + s[1:]
+                try:
+                    cur.execute(
+                        """INSERT INTO provider_scorecard_snapshots
+                           (provider_id, measurement_year, snapshot_date,
+                            total_patients, patients_with_raf, average_raf,
+                            total_hccs_captured, total_hccs_possible, hcc_capture_rate,
+                            recapture_rate, suspect_conditions_open,
+                            suspect_conditions_accepted, suspect_conditions_dismissed,
+                            revenue_opportunity, revenue_captured,
+                            avg_meat_completeness, documentation_quality_score,
+                            percentile_rank, patients_with_scores,
+                            suspects_open, suspects_accepted, suspects_dismissed,
+                            meat_completeness_avg)
+                           SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                           FROM DUAL
+                           WHERE NOT EXISTS (
+                               SELECT 1 FROM provider_scorecard_snapshots
+                               WHERE provider_id = %s AND measurement_year = %s AND snapshot_date = %s
+                           )""",
+                        (*s_real, s_real[0], s_real[1], s_real[2]),
+                    )
+                except Exception as sc_exc:
+                    logger.warning(
+                        "Skipping scorecard (pid=%s, year=%s): %s",
+                        real_pid, s_real[1], sc_exc,
+                    )
 
             # ----------------------------------------------------------
             # Provider attestations
@@ -293,18 +321,33 @@ def seed_providers_demo() -> None:
                 (5, 16, "seen", "2026-02-01", "2026-03-22", "manual"),
             ]
             for pp in panels:
-                cur.execute(
-                    """INSERT INTO provider_patient_panel
-                       (provider_id, patient_id, panel_type, attribution_date,
-                        last_visit_date, attribution)
-                       SELECT %s,%s,%s,%s,%s,%s
-                       FROM DUAL
-                       WHERE NOT EXISTS (
-                           SELECT 1 FROM provider_patient_panel
-                           WHERE provider_id = %s AND patient_id = %s AND panel_type = %s
-                       )""",
-                    (*pp, pp[0], pp[1], pp[2]),
-                )
+                logical_idx = pp[0]
+                npi = ordered_npis[logical_idx - 1]
+                real_pid = npi_to_id.get(npi)
+                if real_pid is None:
+                    logger.warning(
+                        "Skipping panel for NPI %s — provider row missing.", npi
+                    )
+                    continue
+                pp_real = (real_pid,) + pp[1:]
+                try:
+                    cur.execute(
+                        """INSERT INTO provider_patient_panel
+                           (provider_id, patient_id, panel_type, attribution_date,
+                            last_visit_date, attribution)
+                           SELECT %s,%s,%s,%s,%s,%s
+                           FROM DUAL
+                           WHERE NOT EXISTS (
+                               SELECT 1 FROM provider_patient_panel
+                               WHERE provider_id = %s AND patient_id = %s AND panel_type = %s
+                           )""",
+                        (*pp_real, pp_real[0], pp_real[1], pp_real[2]),
+                    )
+                except Exception as pp_exc:
+                    logger.warning(
+                        "Skipping panel (pid=%s, patient=%s): %s",
+                        real_pid, pp_real[1], pp_exc,
+                    )
 
         logger.info("Provider demo data seeded successfully.")
     except Exception as exc:

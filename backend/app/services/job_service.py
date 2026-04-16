@@ -179,6 +179,38 @@ def _get_job(job_id: str) -> dict[str, Any] | None:
     return result
 
 
+def recover_stale_jobs(stale_after_hours: int = 1) -> int:
+    """Mark jobs left in QUEUED/RUNNING state as FAILED after a server restart.
+
+    FastAPI BackgroundTasks are in-process and lost on restart, which strands
+    rows in the ``raf_jobs`` table as zombies. This helper is called once from
+    the FastAPI lifespan startup hook. A time threshold avoids racing with
+    in-flight jobs from another worker/container.
+
+    Args:
+        stale_after_hours: Only mark rows whose ``submitted_at`` is older than
+            this many hours.
+
+    Returns:
+        The number of rows updated.
+    """
+    from app.db import raf_cursor
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            UPDATE raf_jobs
+               SET status = 'FAILED',
+                   error_message = 'Interrupted by server restart',
+                   finished_at = NOW()
+             WHERE status IN ('QUEUED', 'RUNNING', 'PENDING', 'STARTED', 'PROGRESS')
+               AND submitted_at < NOW() - INTERVAL %s HOUR
+            """,
+            (stale_after_hours,),
+        )
+        return cur.rowcount or 0
+
+
 def _mark_started(task_self: Any, task_name: str, args_dict: dict) -> None:
     """Persist STARTED status and record the wall-clock start time."""
     _upsert_job(
