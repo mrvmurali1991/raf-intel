@@ -58,6 +58,7 @@ from app.routers import insights as insights_router
 from app.routers import realtime as realtime_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import meat as meat_router
+from app.routers import review as review_router
 from app.routers import radv_audit as radv_audit_router
 from app.routers import data_quality as data_quality_router
 from app.routers import health as health_router
@@ -66,6 +67,7 @@ from app.routers import bundles, cms_transmission
 from app.routers import pipeline as pipeline_router
 from app.routers import consent as consent_router
 from app.routers import pipeline_settings as pipeline_settings_router
+from app.routers import config as config_router
 from app.routers import recapture_gaps as recapture_gaps_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 
@@ -119,6 +121,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(jobs.router)
     app.include_router(pipeline_router.router)
     app.include_router(pipeline_settings_router.router)
+    app.include_router(config_router.router)
     app.include_router(reports.router)
     app.include_router(dashboard_analytics_router.router)
     app.include_router(audit.router)
@@ -131,6 +134,7 @@ def register_routers(app: FastAPI) -> None:
 
     # Coder worklist / review queue
     app.include_router(coder_worklist.router)
+    app.include_router(review_router.router)
 
     # Provider worklist — prioritized patient lists and action items
     app.include_router(provider_worklist_router.router)
