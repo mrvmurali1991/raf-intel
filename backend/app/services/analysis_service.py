@@ -137,7 +137,16 @@ def save_encounter_analysis(
     # 2. Persist HCC codes discovered by AI into raf_patient_hcc
     # ------------------------------------------------------------------
     try:
-        measurement_year = _date.today().year
+        # Derive measurement_year from encounter date when available,
+        # falling back to current year only if no date is present.
+        _enc_date_str = analysis.get("encounter_date") or analysis.get("date")
+        if _enc_date_str:
+            try:
+                measurement_year = int(str(_enc_date_str)[:4])
+            except (ValueError, TypeError):
+                measurement_year = _date.today().year
+        else:
+            measurement_year = _date.today().year
         hcc_diagnoses = [d for d in analysis.get("diagnoses", []) if d.get("hcc")]
         if hcc_diagnoses:
             with raf_cursor() as cur:
@@ -226,12 +235,12 @@ def save_encounter_analysis(
         ],
         "_meta": {
             "encounter_id": encounter_id,
-            "encounter_date": analysis.get("encounter_date", _date.today().isoformat()),
+            "encounter_date": analysis.get("encounter_date") or analysis.get("date") or _date.today().isoformat(),
         },
     }
     try:
-        store_analysis_meat(pid, _date.today().year, gemini_compat)
-        update_hcc_meat_status(pid, _date.today().year)
+        store_analysis_meat(pid, measurement_year, gemini_compat)
+        update_hcc_meat_status(pid, measurement_year)
     except Exception as exc:
         logger.warning(
             "Failed to store MEAT evidence for encounter %s: %s", encounter_id, exc

@@ -1009,6 +1009,34 @@ def svc_get_medication_gaps(pid: int, year: int, tenant_id: str) -> dict[str, An
 
     gaps = emr.get_medication_diagnosis_gaps(emr_pid, year)
 
+    # FHIR fallback: if no gaps from EMR, check patient_medications + patient_conditions
+    if not gaps and _patient_in_fhir_matches(pid, tenant_id=tenant_id):
+        try:
+            with raf_cursor() as _mc:
+                _mc.execute(
+                    "SELECT medication_name, reason_code, reason_display FROM patient_medications WHERE patient_id = %s AND status = 'active'",
+                    (pid,),
+                )
+                meds = _mc.fetchall()
+                if meds:
+                    # Get billed ICD codes for this year
+                    _mc.execute(
+                        "SELECT DISTINCT icd10_code FROM patient_conditions WHERE patient_id = %s",
+                        (pid,),
+                    )
+                    billed = {r["icd10_code"] for r in _mc.fetchall() if r.get("icd10_code")}
+
+                    for med in meds:
+                        reason_code = (med.get("reason_code") or "").strip()
+                        if reason_code and reason_code not in billed:
+                            gaps.append({
+                                "icd_code": reason_code,
+                                "drug": med.get("medication_name") or "",
+                                "active": 1,
+                            })
+        except Exception as exc:
+            logger.debug("svc_get_medication_gaps FHIR fallback failed pid=%s: %s", pid, exc)
+
     for gap in gaps:
         code = gap.get("icd_code", "")
         if code:

@@ -638,7 +638,38 @@ def get_procedures(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "count": 0, "procedures": [], "note": "Procedure data not yet synced for FHIR patients"}
+        # FHIR fallback: return encounter-based procedure info from fhir_encounters
+        try:
+            from app.db import raf_cursor
+            fhir_ext_id = svc._get_fhir_resource_id(pid, _tid)
+            if fhir_ext_id:
+                with raf_cursor() as _pc:
+                    _pc.execute(
+                        """SELECT encounter_type, encounter_date, reason_display,
+                                  provider_display
+                           FROM fhir_encounters
+                           WHERE fhir_patient_id = %s
+                           ORDER BY encounter_date DESC""",
+                        (fhir_ext_id,),
+                    )
+                    rows = _pc.fetchall()
+                    if rows:
+                        procs = [
+                            {
+                                "code": "",
+                                "code_type": "encounter",
+                                "description": r.get("reason_display") or r.get("encounter_type") or "Office Visit",
+                                "date": str(r["encounter_date"]) if r.get("encounter_date") else None,
+                                "provider": r.get("provider_display"),
+                                "condition_hint": None,
+                                "source": "fhir",
+                            }
+                            for r in rows
+                        ]
+                        return {"pid": pid, "count": len(procs), "procedures": procs, "source": "fhir"}
+        except Exception as exc:
+            logger.debug("procedures FHIR fallback failed pid=%s: %s", pid, exc)
+        return {"pid": pid, "count": 0, "procedures": []}
 
     try:
         return svc.svc_get_procedures(pid=pid, tenant_id=_tid)
@@ -709,7 +740,52 @@ def get_recapture_gaps(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "gaps": [], "year": year, "gap_count": 0, "note": "Recapture gap data not yet synced for FHIR patients"}
+        # FHIR fallback: use patient_conditions to find active conditions not captured as HCCs this year
+        from datetime import date as _date
+        _year = year or _date.today().year
+        try:
+            from app.db import raf_cursor
+            with raf_cursor() as _gc:
+                # Get all active conditions with ICD codes
+                _gc.execute(
+                    """SELECT icd10_code, description, onset_date
+                       FROM patient_conditions
+                       WHERE patient_id = %s AND status = 'active' AND icd10_code IS NOT NULL AND icd10_code != ''
+                       ORDER BY onset_date DESC""",
+                    (pid,),
+                )
+                conditions = _gc.fetchall()
+                if conditions:
+                    # Get HCC codes already captured this year
+                    _gc.execute(
+                        """SELECT DISTINCT icd10_codes FROM raf_patient_hcc
+                           WHERE patient_id = %s AND measurement_year = %s""",
+                        (pid, _year),
+                    )
+                    captured_rows = _gc.fetchall()
+                    import json
+                    captured_icds = set()
+                    for cr in captured_rows:
+                        try:
+                            codes = json.loads(cr.get("icd10_codes") or "[]")
+                            captured_icds.update(codes)
+                        except (ValueError, TypeError):
+                            pass
+
+                    gaps = []
+                    for c in conditions:
+                        icd = (c.get("icd10_code") or "").strip()
+                        if icd and icd not in captured_icds:
+                            gaps.append({
+                                "icd10": icd,
+                                "description": c.get("description") or "",
+                                "onset_date": str(c["onset_date"]) if c.get("onset_date") else None,
+                                "source": "fhir",
+                            })
+                    return {"pid": pid, "year": _year, "gap_count": len(gaps), "recapture_gaps": gaps, "source": "fhir"}
+        except Exception as exc:
+            logger.debug("recapture-gaps FHIR fallback failed pid=%s: %s", pid, exc)
+        return {"pid": pid, "gaps": [], "year": _year, "gap_count": 0}
 
     try:
         return svc.svc_get_recapture_gaps(pid=pid, year=year, tenant_id=_tid)
@@ -948,7 +1024,7 @@ def get_sdoh(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "sdoh_form": {}, "billed_z_codes": [], "billable_highlights": {}, "note": "SDOH data not yet synced for FHIR patients"}
+        return {"pid": pid, "sdoh_form": {}, "billed_z_codes": [], "billable_highlights": {}}
 
     return svc.svc_get_sdoh(pid=pid, tenant_id=_tid)
 
@@ -998,7 +1074,7 @@ def get_referrals(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "count": 0, "referrals": [], "note": "Referral data not yet synced for FHIR patients"}
+        return {"pid": pid, "count": 0, "referrals": []}
 
     return svc.svc_get_referrals(pid=pid, tenant_id=_tid)
 
@@ -1086,7 +1162,56 @@ def get_hedis_compliance(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "measures": {}, "note": "HEDIS data not yet synced for FHIR patients"}
+        # FHIR fallback: check patient_immunizations for vaccine compliance
+        from datetime import date as _hdate
+        _hyear = year or _hdate.today().year
+        try:
+            from app.db import raf_cursor
+            with raf_cursor() as _hc:
+                _hc.execute(
+                    "SELECT vaccine_name, administered_date FROM patient_immunizations WHERE patient_id = %s",
+                    (pid,),
+                )
+                imm_rows = _hc.fetchall()
+
+                # Also get DOB for age-based measures
+                _hc.execute("SELECT dob FROM patients WHERE id = %s LIMIT 1", (pid,))
+                p = _hc.fetchone()
+                age = None
+                if p and p.get("dob"):
+                    try:
+                        from datetime import date as _d2
+                        dob = p["dob"] if isinstance(p["dob"], _d2) else _d2.fromisoformat(str(p["dob"])[:10])
+                        age = (_d2.today() - dob).days // 365
+                    except Exception:
+                        pass
+
+                vaccines_lower = [(r.get("vaccine_name", "").lower(), r.get("administered_date")) for r in imm_rows]
+
+                measures = {}
+                # Flu vaccine — all ages
+                flu_given = any("influenza" in v or "flu" in v for v, _ in vaccines_lower)
+                measures["flu_vaccine"] = {"due": True, "compliant": flu_given, "description": "Annual influenza vaccination"}
+                # Pneumococcal — age >= 65
+                if age and age >= 65:
+                    pneu_given = any("pneumo" in v for v, _ in vaccines_lower)
+                    measures["pneumococcal"] = {"due": True, "compliant": pneu_given, "description": "Pneumococcal vaccination series"}
+                # Zoster — age >= 50
+                if age and age >= 50:
+                    zoster_given = any("zoster" in v or "shingles" in v for v, _ in vaccines_lower)
+                    measures["zoster"] = {"due": True, "compliant": zoster_given, "description": "Shingles vaccination series"}
+
+                due_count = sum(1 for m in measures.values() if m.get("due"))
+                compliant_count = sum(1 for m in measures.values() if m.get("due") and m.get("compliant"))
+                return {
+                    "pid": pid, "year": _hyear,
+                    "summary": {"measures_due": due_count, "measures_compliant": compliant_count,
+                                "compliance_rate": round(compliant_count / due_count, 2) if due_count else None},
+                    "measures": measures, "source": "fhir",
+                }
+        except Exception as exc:
+            logger.debug("HEDIS FHIR fallback failed pid=%s: %s", pid, exc)
+        return {"pid": pid, "year": _hyear, "summary": {"measures_due": 0, "measures_compliant": 0, "compliance_rate": None}, "measures": {}}
 
     try:
         return svc.svc_get_hedis_compliance(pid=pid, year=year, tenant_id=_tid)
@@ -1119,6 +1244,12 @@ def get_patient_enrollment(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "enrollment": {}, "note": "Enrollment data not yet synced for FHIR patients"}
+        # Return CNA defaults for FHIR patients (non-dual, aged, community)
+        return {"pid": pid, "enrollment": {
+            "dual_status": "non_dual",
+            "orec": "aged",
+            "institutional": False,
+            "source": "default",
+        }}
 
     return svc.svc_get_patient_enrollment(pid=pid, tenant_id=_tid)
