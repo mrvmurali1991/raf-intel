@@ -309,9 +309,9 @@ def seed():
         if cur.fetchone()[0] == 0:
             cur.execute(
                 """INSERT INTO claims_diagnoses
-                   (batch_id, claim_record_id, icd10_code, hcc_code, hcc_mapped)
-                   VALUES (%s,%s,%s,%s,%s)""",
-                row,
+                   (batch_id, claim_record_id, icd10_code, hcc_code)
+                   VALUES (%s,%s,%s,%s)""",
+                row[:4],
             )
     print(f"  [+] claims_diagnoses: ensured {len(CLAIMS_DIAGNOSES)} rows")
 

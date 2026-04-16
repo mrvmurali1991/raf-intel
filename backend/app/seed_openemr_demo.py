@@ -830,8 +830,8 @@ def seed_openemr_demo() -> None:
                 if not cur.fetchone():
                     cur.execute(
                         "INSERT INTO insurance_data "
-                        "(pid, type, provider, plan_name, subscriber_ss, activity) "
-                        "VALUES (%s, %s, %s, %s, %s, 1)",
+                        "(pid, type, provider, plan_name, subscriber_ss) "
+                        "VALUES (%s, %s, %s, %s, %s)",
                         (pid, itype, provider, plan, mbi),
                     )
 
