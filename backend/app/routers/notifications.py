@@ -12,18 +12,27 @@ Authentication: all endpoints require a valid Bearer JWT.
 """
 # Do NOT use 'from __future__ import annotations' — breaks FastAPI schema generation.
 
+import asyncio
+import json
 import logging
-from typing import Any
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
+from app.config import settings
+from app.services.auth_service import get_user, validate_session
 from app.services.email_service import (
     get_email_config,
     send_email,
     _render_html,
 )
+from app.services.realtime_service import connection_manager
 
 logger = logging.getLogger(__name__)
 
@@ -248,3 +257,115 @@ def update_preferences(
     _set_prefs(user_id, updated)
     logger.info("notifications: preferences updated for user %s", user_id)
     return updated
+
+
+# ---------------------------------------------------------------------------
+# SSE ticket + stream
+# ---------------------------------------------------------------------------
+# The browser's native EventSource cannot send Authorization headers, so to
+# avoid putting a long-lived access token in the URL query string we issue a
+# short-lived signed ticket from an authenticated HTTP endpoint, then accept
+# that ticket on the SSE stream. Ticket lifetime is 30 s — enough to open the
+# EventSource immediately after the fetch resolves.
+
+_SSE_TICKET_TTL_SECONDS = 30
+_SSE_CREDENTIALS_EXCEPTION = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Invalid or expired SSE ticket.",
+)
+
+
+def _issue_sse_ticket(user_id: int, session_id: str, tenant_id: Any) -> str:
+    now = datetime.now(timezone.utc)
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "session_id": session_id,
+        "tenant_id": tenant_id,
+        "iat": now,
+        "exp": now + timedelta(seconds=_SSE_TICKET_TTL_SECONDS),
+        "type": "sse_ticket",
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+async def _resolve_sse_ticket(ticket: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(ticket, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except jwt.PyJWTError:
+        raise _SSE_CREDENTIALS_EXCEPTION
+    if payload.get("type") != "sse_ticket":
+        raise _SSE_CREDENTIALS_EXCEPTION
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise _SSE_CREDENTIALS_EXCEPTION
+    session_id = payload.get("session_id")
+    if not session_id or not validate_session(session_id):
+        raise _SSE_CREDENTIALS_EXCEPTION
+    user = get_user(user_id)
+    if not user or not user.get("is_active"):
+        raise _SSE_CREDENTIALS_EXCEPTION
+    user["session_id"] = session_id
+    if user.get("tenant_id") is None:
+        user["tenant_id"] = payload.get("tenant_id")
+    return user
+
+
+async def _sse_stream_generator(queue: asyncio.Queue, connection_id: str) -> AsyncGenerator[str, None]:
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=25.0)
+                yield f"data: {json.dumps(event)}\n\n"
+            except asyncio.TimeoutError:
+                yield ": ping\n\n"
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await connection_manager.disconnect(connection_id)
+
+
+@router.get(
+    "/sse-ticket",
+    summary="Issue a short-lived SSE ticket for /api/notifications/stream",
+)
+def issue_sse_ticket(
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    session_id = current_user.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="No active session.")
+    ticket = _issue_sse_ticket(
+        user_id=int(current_user["id"]),
+        session_id=str(session_id),
+        tenant_id=current_user.get("tenant_id"),
+    )
+    return {"ticket": ticket, "ttl_seconds": _SSE_TICKET_TTL_SECONDS}
+
+
+@router.get(
+    "/stream",
+    summary="SSE stream — live notifications for the current user",
+    response_class=StreamingResponse,
+)
+async def notifications_stream(
+    ticket: str = Query(..., description="Short-lived ticket from /sse-ticket"),
+) -> StreamingResponse:
+    user = await _resolve_sse_ticket(ticket)
+    user_id: int = int(user["id"])
+    tenant_id = user.get("tenant_id")
+    tenant_id_str = str(tenant_id) if tenant_id is not None else "default"
+
+    connection_id = f"sse-notif-{user_id}-{uuid.uuid4().hex[:8]}"
+    queue = await connection_manager.connect(connection_id, user_id, tenant_id_str)
+    logger.info("notifications: SSE stream opened [%s] user=%s", connection_id, user_id)
+
+    return StreamingResponse(
+        _sse_stream_generator(queue, connection_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
