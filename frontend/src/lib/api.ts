@@ -77,12 +77,12 @@ export const PIPELINE_TIMEOUT = 180_000;
  * applies these automatically so callers don't need to remember.
  */
 const LONG_TIMEOUT_PATTERNS: Array<[RegExp, number]> = [
-  [/\/api\/v1\/emr\/sync/i,        PIPELINE_TIMEOUT],
-  [/\/api\/v1\/analysis/i,         PIPELINE_TIMEOUT],
-  [/\/api\/v1\/pipeline/i,         PIPELINE_TIMEOUT],
-  [/\/api\/v1\/raf\/calculate/i,   LONG_TIMEOUT],
-  [/\/api\/v1\/uploads/i,          LONG_TIMEOUT],
-  [/\/api\/v1\/fhir\/sync/i,       PIPELINE_TIMEOUT],
+  [/\/api\/emr\/sync/i,        PIPELINE_TIMEOUT],
+  [/\/api\/analysis/i,         PIPELINE_TIMEOUT],
+  [/\/api\/pipeline/i,         PIPELINE_TIMEOUT],
+  [/\/api\/raf\/calculate/i,   LONG_TIMEOUT],
+  [/\/api\/uploads/i,          LONG_TIMEOUT],
+  [/\/api\/fhir\/sync/i,       PIPELINE_TIMEOUT],
 ];
 
 api.interceptors.request.use((config) => {

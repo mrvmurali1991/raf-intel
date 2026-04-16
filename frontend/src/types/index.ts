@@ -77,7 +77,7 @@ export interface SuspectCondition {
   hcc_code: string;
   confidence: number;
   evidence: string;
-  status: "open" | "accepted" | "dismissed";
+  status: "open" | "accepted" | "dismissed" | "coded";
   source?: string;
   created_at?: string;
 }
@@ -91,6 +91,47 @@ export interface Encounter {
   diagnoses: string[];
   notes?: string;
   analyzed: boolean;
+}
+
+/** One fired interaction term returned by the RAF calculation service. */
+export interface InteractionDetail {
+  /** Interaction term identifier, e.g. "HCC18_HCC85". */
+  term: string;
+  /** Rounded coefficient contribution. */
+  coefficient: number;
+  /** Human-readable label for display. */
+  description: string;
+}
+
+/** Shape returned by the review_queue service (review_queue.py → route_for_review). */
+export interface ReviewQueueResult {
+  auto_accept: ReviewQueueEntry[];
+  needs_review: ReviewQueueEntry[];
+  reject: ReviewQueueEntry[];
+  review_summary: {
+    total: number;
+    auto_accept_count: number;
+    needs_review_count: number;
+    reject_count: number;
+    estimated_review_time_minutes: number;
+    encounter_quality_score: number | null;
+  };
+}
+
+export interface ReviewQueueEntry {
+  icd10: string;
+  description: string;
+  hcc: string | null;
+  hcc_weight?: number;
+  confidence: number;
+  confidence_label: string;
+  stage1_found: boolean;
+  stage2_found: boolean;
+  stage3_restored: boolean;
+  meat_score: number;
+  routing: "auto_accept" | "needs_review" | "reject";
+  review_flags: string[];
+  review_notes: string[];
 }
 
 export interface AnalysisResult {
@@ -114,7 +155,11 @@ export interface AnalysisResult {
     note_chars_original?: number;
   };
   overall_confidence?: number;
-  confidence_routing?: any;
+  confidence_routing?: unknown;
+  /** Populated by review_queue service on the backend; present in fresh pipeline responses. */
+  review_queue?: ReviewQueueResult | null;
+  /** Structured per-interaction breakdown; returned by skill_pipeline RAF calculation. */
+  interaction_details?: InteractionDetail[];
   _meta?: {
     model?: string;
     pipeline_version?: string;
@@ -126,6 +171,9 @@ export interface AnalysisResult {
     timings?: Record<string, number>;
     stages?: string[];
   };
+  /** Whether this result was served from the server-side cache. */
+  _cached?: boolean;
+  verification?: unknown;
 }
 
 export interface AIDiagnosis {

@@ -1636,12 +1636,16 @@ const REPORT_TYPES = ["Revenue Opportunity", "Patient Scorecard", "HCC Distribut
 const FREQUENCIES  = ["Weekly", "Monthly", "Quarterly"];
 const FORMATS      = ["PDF", "CSV", "Excel"];
 
-const LS_KEY = "raf_scheduled_reports";
+// TODO: Persist scheduled reports server-side so recipients and schedule config
+// survive page reloads without any client storage. The sessionStorage used here
+// is a minimum-viable fix — data is cleared on tab close and recipients are
+// redacted so PII is never written to client storage.
+const SS_KEY = "raf_scheduled_reports";
 
 function loadScheduled(): ScheduledReport[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
+    return JSON.parse(sessionStorage.getItem(SS_KEY) ?? "[]");
   } catch {
     return [];
   }
@@ -1649,7 +1653,9 @@ function loadScheduled(): ScheduledReport[] {
 
 function saveScheduled(list: ScheduledReport[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(LS_KEY, JSON.stringify(list));
+  // Redact recipient email addresses before persisting to client storage.
+  const redacted = list.map((r) => ({ ...r, recipients: "[stored-server-side]" }));
+  sessionStorage.setItem(SS_KEY, JSON.stringify(redacted));
 }
 
 function ScheduledReportsTab() {

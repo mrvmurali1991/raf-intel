@@ -2,6 +2,7 @@
 
 import React, { use, useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Printer } from "lucide-react";
 import {
@@ -89,7 +90,18 @@ export default function PatientDetailPage({
   const { pid } = use(params);
   const toast = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("overview");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // Initialise from URL so refresh / shared links restore the correct tab.
+  const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") ?? "overview");
+
+  // Write-through: keep ?tab= in sync without adding browser history entries.
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`?${params.toString()}`);
+  };
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [lastAnalysisResult, setLastAnalysisResult] = useState<Record<number, AnalysisResult>>({});
 
@@ -773,7 +785,7 @@ export default function PatientDetailPage({
                 role="tab"
                 aria-selected={activeTab === tab.id}
                 id={`tab-${tab.id}`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 style={{
                   padding: "14px 20px", fontSize: 13,
                   fontWeight: activeTab === tab.id ? 600 : 500,
@@ -820,7 +832,7 @@ export default function PatientDetailPage({
             sex={sex}
             rafScore={rafScore}
             analyzeMutation={analyzeMutation}
-            setActiveTab={setActiveTab}
+            setActiveTab={handleTabChange}
             aiAnalysis={aiAnalysis}
             selectedYear={selectedYear}
             meds={medsQ.data}

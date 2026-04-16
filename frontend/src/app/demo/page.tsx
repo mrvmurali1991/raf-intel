@@ -45,7 +45,8 @@ import { cn } from "@/lib/utils";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import { analyzeNote, getPatientsWithEncounters, getPatientEncounters, calculateRAF } from "@/lib/api";
 import api from "@/lib/api";
-import type { Patient, AnalysisResult } from "@/types";
+import { logger } from "@/lib/logger";
+import type { Patient, AnalysisResult, InteractionDetail, ReviewQueueResult } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1054,7 +1055,7 @@ function Step6Content({ data }: { data: any }) {
             </span>
           </div>
           <div className="space-y-2">
-            {(data.interaction_details as any[]).map((item: any, i: number) => (
+            {(data.interaction_details as InteractionDetail[]).map((item, i: number) => (
               <div key={item.term ?? i} className="flex items-center justify-between rounded-lg bg-white dark:bg-gray-900 px-3 py-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded px-1.5 py-0.5">
@@ -1890,7 +1891,7 @@ export default function DemoPage() {
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedEncounterId, setSelectedEncounterId] = useState<number | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [encounters, setEncounters] = useState<{ encounter_id: number; date: string; reason?: string }[]>([]);
+  const [encounters, setEncounters] = useState<{ encounter_id: number; date: string; reason?: string; has_notes?: number | boolean }[]>([]);
   const [encounterPreview, setEncounterPreview] = useState<Record<string, any> | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -1936,6 +1937,7 @@ export default function DemoPage() {
       setEncounterPreview(null);
       return;
     }
+    let cancelled = false;
     setPreviewLoading(true);
     const pid = selectedPatientId;
     Promise.all([
@@ -1944,6 +1946,7 @@ export default function DemoPage() {
       api.get(`/api/patients/${pid}/medications`).then(r => r.data).catch(() => ({ medications: [] })),
       api.get(`/api/patients/${pid}/clinical-notes/${selectedEncounterId}`).then(r => r.data).catch(() => ({ notes: [] })),
     ]).then(([patient, dxData, medData, notesData]) => {
+      if (cancelled) return;
       const enc = encounters.find(e => Math.round(e.encounter_id) === selectedEncounterId);
       const diagnoses = (dxData?.diagnoses ?? []).filter((d: any) => Math.round(d.encounter) === selectedEncounterId);
       const allDiagnoses = dxData?.diagnoses ?? [];
@@ -1960,7 +1963,8 @@ export default function DemoPage() {
         noteChars: clinicalNotes.reduce((sum: number, n: any) => sum + (n.note_text?.length ?? 0), 0),
       });
       setPreviewLoading(false);
-    }).catch(() => setPreviewLoading(false));
+    }).catch(() => { if (!cancelled) setPreviewLoading(false); });
+    return () => { cancelled = true; };
   }, [selectedEncounterId, selectedPatientId, encounters]);
 
   // ---------------------------------------------------------------------------
@@ -2131,7 +2135,7 @@ export default function DemoPage() {
               step9: {
                 diagnoses: cached.diagnoses ?? [],
                 verification: cached.verification ?? null,
-                backendQueue: (cached as any).review_queue ?? null,
+                backendQueue: (cached as AnalysisResult).review_queue ?? null,
               },
             });
             setRafResult(step6Data);
@@ -2246,10 +2250,10 @@ export default function DemoPage() {
 
       setAnalysisResult(result);
        
-      const pipeline = (result as any).pipeline ?? {};
-      const meta = (result as any)._meta ?? {};
-      const verification = (result as any).verification ?? null;
-      const extraction = (result as any).extraction ?? null;
+      const pipeline = result.pipeline ?? {};
+      const meta = result._meta ?? {};
+      const verification = (result as AnalysisResult & { extraction?: unknown }).verification ?? null;
+      const extraction = (result as AnalysisResult & { extraction?: unknown }).extraction ?? null;
 
       // Calculate how long the API call actually took
       const apiDuration = Date.now() - t1;
@@ -2277,7 +2281,7 @@ export default function DemoPage() {
       // Pre-extract all data from the result so we can populate steps before marking done
       const nerEntities = pipeline.medcat_entities ?? [];
        
-      const negatedConditions = (result as any).negated_conditions ?? result.negated_conditions ?? [];
+      const negatedConditions = result.negated_conditions ?? [];
       const afterNegation = pipeline.after_negation_filter ?? [];
       const candidates = pipeline.candidate_codes ?? [];
       const toolCalls: any[] = pipeline.tool_calls ?? [];
@@ -2400,7 +2404,7 @@ export default function DemoPage() {
           let interactionComponents: any[];
           if (serverRaf.interaction_details && serverRaf.interaction_details.length > 0) {
             // Use structured interaction_details from backend — each entry has term, coefficient, description
-            interactionComponents = (serverRaf.interaction_details as any[]).map((item: any) => ({
+            interactionComponents = (serverRaf.interaction_details as InteractionDetail[]).map((item) => ({
               component: item.term,
               coefficient: typeof item.coefficient === "number" ? item.coefficient : 0,
               description: item.description ?? item.term,
@@ -2658,7 +2662,7 @@ export default function DemoPage() {
       // Prefer the backend-computed review_queue when it is present; fall back to
       // the client-side routing helper for older pipeline responses that predate
       // the review_queue service.
-      const backendQueue = (result as any).review_queue ?? null;
+      const backendQueue: ReviewQueueResult | null = result.review_queue ?? null;
       setPipelineData((prev) => ({
         ...prev,
         step9: {
@@ -2671,7 +2675,10 @@ export default function DemoPage() {
       setTiming(9, Date.now() - t9);
       updateStep(9, "done");
     } catch (err) {
-      console.error("Pipeline error", err);
+      // Avoid dumping axios error objects (may contain PHI from response body)
+      // to the production console. A stringified summary is sufficient.
+      const msg = err instanceof Error ? err.message : "unknown error";
+      logger.error("demo", "Pipeline error", msg);
       if (apiTimerRef.current) clearInterval(apiTimerRef.current);
       setApiLoading(false);
     } finally {
@@ -3105,7 +3112,7 @@ export default function DemoPage() {
                   </div>
 
                   {(() => {
-                    const selEnc = encounters.find((e: any) => Math.round(e.encounter_id) === selectedEncounterId) as any;
+                    const selEnc = encounters.find((e) => Math.round(e.encounter_id) === selectedEncounterId);
                     const hasNotes = Number(selEnc?.has_notes ?? 0) > 0;
                     return hasNotes ? (
                       <div className="p-2.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
@@ -3135,7 +3142,7 @@ export default function DemoPage() {
             disabled={
               running ||
               (inputMode === "paste" && !noteText.trim()) ||
-              (inputMode === "patient" && (!selectedEncounterId || !Number((encounters.find((e: any) => Math.round(e.encounter_id) === selectedEncounterId) as any)?.has_notes ?? 0)))
+              (inputMode === "patient" && (!selectedEncounterId || !Number(encounters.find((e) => Math.round(e.encounter_id) === selectedEncounterId)?.has_notes ?? 0)))
             }
             onClick={runPipeline}
           >
@@ -3418,13 +3425,13 @@ export default function DemoPage() {
                 if (ageStr) return ageStr;
                 return inputMode === "paste" ? "Free-text note" : "N/A";
               })()}</strong></span>
-              <span>Stages: <strong>{(analysisResult as any)?.pipeline?.stages_run?.join(" > ") ?? (analysisResult as any)?._meta?.stages?.join(" > ") ?? "Clinical Analysis"}</strong></span>
+              <span>Stages: <strong>{(analysisResult?.pipeline as { stages_run?: string[] } | undefined)?.stages_run?.join(" > ") ?? analysisResult?._meta?.stages?.join(" > ") ?? "Clinical Analysis"}</strong></span>
               {pipelineData._verification?.quality_score != null && (
                 <QualityScoreBadge score={pipelineData._verification.quality_score} />
               )}
-              {(analysisResult as any)?._meta?.pipeline_version && (
+              {analysisResult?._meta?.pipeline_version && (
                 <Badge variant="outline" className="text-[10px] font-mono">
-                  {(analysisResult as any)._meta.pipeline_version}
+                  {analysisResult._meta.pipeline_version}
                 </Badge>
               )}
             </div>

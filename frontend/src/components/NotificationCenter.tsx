@@ -18,8 +18,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { getAccessToken } from "@/contexts/auth-context";
 import api, { API_BASE } from "@/lib/api";
+import logger from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -238,42 +238,54 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
         if (status === 423) emrBlocked = true;
       }
     })();
-    const token = getAccessToken();
-    if (!token || emrBlocked) return;
+    if (emrBlocked) return;
 
-    // Connect SSE Stream. EventSource builds URLs relative to the page
-    // origin by default — but our backend lives on a different origin in
-    // dev (localhost:8500), so we must prefix with NEXT_PUBLIC_API_URL.
-    // EventSource doesn't support custom headers, hence token in query.
-    const apiBase = API_BASE;
-    const es = new EventSource(
-      `${apiBase}/api/realtime/events?token=${token}`,
-      { withCredentials: true }
-    );
-
-    es.onmessage = (e) => {
+    // TODO: Replace this block with proper SSE-ticket auth once the backend
+    // endpoint is live. Required endpoint spec:
+    //   GET /api/notifications/sse-ticket
+    //   Auth: Bearer JWT (standard Authorization header)
+    //   Response: { ticket: string }  (short-lived one-time token, e.g. 30 s)
+    // Then open: EventSource(`${API_BASE}/api/notifications/stream?ticket=${ticket}`)
+    // This avoids sending the long-lived JWT in the URL query string.
+    let es: EventSource | null = null;
+    (async () => {
       try {
-        const payload = JSON.parse(e.data);
-        if (payload?.type || payload?.title) {
-          // Push to UI queue immediately on receive
-          setNotifications(prev => {
-            // deduplicate checking
-            if(prev.find((x) => x.id === payload.id)) return prev;
-            return [payload, ...prev].slice(0, 50);
-          });
-        }
-      } catch {}
-    };
+        const ticketRes = await api.get<{ ticket: string }>("/api/notifications/sse-ticket");
+        const ticket = ticketRes.data.ticket;
+        const apiBase = API_BASE;
+        es = new EventSource(
+          `${apiBase}/api/notifications/stream?ticket=${ticket}`,
+          { withCredentials: true }
+        );
 
-    // When the backend refuses the connection (e.g. 423 from emr_gate, or
-    // auth expiry), EventSource will otherwise retry forever. Close it so
-    // the browser doesn't hammer the server in an infinite loop.
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) return;
-      es.close();
-    };
+        es.onmessage = (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload?.type || payload?.title) {
+              // Push to UI queue immediately on receive
+              setNotifications(prev => {
+                // deduplicate checking
+                if(prev.find((x) => x.id === payload.id)) return prev;
+                return [payload, ...prev].slice(0, 50);
+              });
+            }
+          } catch {}
+        };
 
-    return () => es.close();
+        // When the backend refuses the connection (e.g. 423 from emr_gate, or
+        // auth expiry), EventSource will otherwise retry forever. Close it so
+        // the browser doesn't hammer the server in an infinite loop.
+        es.onerror = () => {
+          if (es && es.readyState === EventSource.CLOSED) return;
+          es?.close();
+        };
+      } catch {
+        // SSE ticket endpoint not yet available — SSE disabled until backend is ready.
+        logger.error("NotificationCenter", "SSE ticket endpoint unavailable; real-time notifications disabled");
+      }
+    })();
+
+    return () => { if (es) es.close(); };
   }, [fetchAlerts]);
 
   // Close on outside click

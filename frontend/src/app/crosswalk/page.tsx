@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2, Download, AlertCircle, Info } from "lucide-react";
 import { calculateRAFFull, RAFCalcResponse } from "@/lib/api";
 import { FONT_SYS, FONT_MONO } from "@/lib/ui-utils";
+import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 
 /* ================================================================== */
 /*  Design tokens — match patients / suspects pages                    */
@@ -161,16 +162,18 @@ export default function CrosswalkPage() {
   // Auto-run on mount
   useEffect(() => {
     runCalculation(SAMPLE_CODES);
+    // runCalculation is intentionally omitted: its deps (age/gender/riskFactor/
+    // riskModel) have deterministic initial values, and we only want a single
+    // mount-time invocation here; the effect below handles re-runs on change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-run whenever the demographic/model controls change (if we have input)
+  // Re-run whenever the demographic/model controls or the input text change.
   useEffect(() => {
     if (input.trim()) runCalculation(input);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [age, gender, riskFactor, riskModel]);
+  }, [age, gender, riskFactor, riskModel, input, runCalculation]);
 
-  const baseRate = result?.base_rate ?? 11015;
+  const baseRate = result?.base_rate ?? MA_PAYMENT_PER_RAF;
   const normFactor = result?.norm_factor ?? 1.199;
   const maci = result?.maci ?? 0.059;
   // Payment = coefficient × baseRate × adjustmentFactor

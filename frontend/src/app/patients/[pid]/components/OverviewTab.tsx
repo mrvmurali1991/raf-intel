@@ -52,11 +52,11 @@ function DataCompletenessChecklist({ profile, encounters, problems, meds, labSus
   const hasProblems = probList.length > 0;
   const hasMeds = medList.length > 0;
   const hasVitals = !!(profile?.vitals?.latest) || (Array.isArray(vitalsSuspects) ? vitalsSuspects.length > 0 : !!(vitalsSuspects?.suspects?.length));
-  const hasLabs = !!((profile?.labs as any)?.results?.length) || (Array.isArray(labSuspects) ? labSuspects.length > 0 : !!(labSuspects?.suspects?.length));
+  const hasLabs = !!(((profile?.labs as { results?: unknown[] } | undefined))?.results?.length) || (Array.isArray(labSuspects) ? labSuspects.length > 0 : !!(labSuspects?.suspects?.length));
   // These are not year-specific — use profile
-  const hasInsurance = !!(profile?.enrollment) && (profile?.enrollment as any)?.source !== "default";
+  const hasInsurance = !!(profile?.enrollment) && profile.enrollment?.source !== "default";
   const hasImmunizations = Array.isArray(profile?.immunizations) && profile.immunizations.length > 0;
-  const hasBilling = !!((profile?.billing as any)?.icd10_codes?.length);
+  const hasBilling = !!(profile?.billing?.icd10_codes?.length);
   const hasDemographics = !!(profile?.demographics?.race) && !!(profile?.demographics?.language);
 
   const sections = [
@@ -228,7 +228,7 @@ export function OverviewTab({
   const problemItems: ProblemItem[] = Array.isArray(problems) ? problems : (problems as ProblemListResponse | undefined)?.problems ?? [];
   const recaptureItems: RecaptureGapItem[] = (() => {
     if (Array.isArray(recapture)) return recapture;
-    const r = recapture as any;
+    const r = recapture as Partial<{ gaps: RecaptureGapItem[]; recapture_gaps: RecaptureGapItem[] }>;
     const raw = r?.gaps ?? r?.recapture_gaps ?? [];
     return raw.map((g: any) => ({
       ...g,

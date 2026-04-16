@@ -58,11 +58,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             An unexpected error occurred while rendering this page. You can try
             again, or reload the page.
           </p>
-          {this.state.error?.message && (
-            <pre className="max-w-xl overflow-auto rounded-md bg-muted p-3 text-left text-xs text-foreground">
-              <code>{this.state.error.message}</code>
-            </pre>
-          )}
+          {/* Intentionally omit error.message from the UI — it can contain PHI or
+              internal paths captured mid-render. The message is still reported
+              to server-side error tracking. */}
           <div className="flex gap-3">
             <button
               type="button"

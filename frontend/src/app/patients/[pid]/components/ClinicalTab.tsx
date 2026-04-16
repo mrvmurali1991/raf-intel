@@ -89,7 +89,14 @@ export function ClinicalTab({
   const immunizationItems: ImmunizationItem[] = Array.isArray(immunizations) ? immunizations : (immunizations as ImmunizationsResponse | undefined)?.immunizations ?? [];
   const familyItems: FamilyHistoryItem[] = (() => {
     if (Array.isArray(familyHistory)) return familyHistory;
-    const fhResp = familyHistory as any;
+    const fhResp = familyHistory as Partial<{
+      history: FamilyHistoryItem[];
+      family_history: {
+        history_father?: string; history_mother?: string; history_siblings?: string;
+        history_offspring?: string; history_spouse?: string;
+        [key: string]: string | undefined;
+      };
+    }>;
     if (fhResp?.history && Array.isArray(fhResp.history)) return fhResp.history;
     const fh = fhResp?.family_history;
     if (!fh || typeof fh !== "object") return [];
@@ -117,7 +124,12 @@ export function ClinicalTab({
 
   const sdohItems: SdohFactor[] = (() => {
     if (Array.isArray(sdoh)) return sdoh;
-    const sr = sdoh as any;
+    const sr = sdoh as Partial<{
+      factors: SdohFactor[];
+      billed_z_codes: Array<{ code?: string; code_text?: string }>;
+      sdoh_form: Record<string, string>;
+      billable_highlights: Record<string, string>;
+    }>;
     if (sr?.factors && Array.isArray(sr.factors)) return sr.factors;
     const items: SdohFactor[] = [];
     if (sr?.billed_z_codes?.length) {
@@ -140,7 +152,7 @@ export function ClinicalTab({
 
   const medGapItems: MedicationGapItem[] = (() => {
     if (Array.isArray(medGaps)) return medGaps;
-    const mg = medGaps as any;
+    const mg = medGaps as Partial<{ gaps: Array<{ description?: string; condition?: string; gap?: string; drug?: string; medication?: string; icd_code?: string; icd10_code?: string; evidence?: string; rationale?: string }> }>;
     if (mg?.gaps && Array.isArray(mg.gaps)) {
       return mg.gaps.map((g: any) => ({
         condition: g.description || g.condition || g.gap || "",

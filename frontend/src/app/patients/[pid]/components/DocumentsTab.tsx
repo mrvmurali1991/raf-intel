@@ -17,6 +17,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { MEATEvidence } from "@/types";
+import api from "@/lib/api";
 import type { DocumentsResponse } from "@/lib/api";
 import {
   uploadPatientDocument,
@@ -27,7 +28,6 @@ import {
   getDocumentDraftRAF,
   analyzeDocument,
 } from "@/lib/api";
-import { getAccessToken } from "@/contexts/auth-context";
 import { useToast } from "@/components/Toast";
 import {
   C,
@@ -358,9 +358,13 @@ export function DocumentsTab({
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                         <button
                           onClick={() => {
-                            const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-                            const token = getAccessToken() || "";
-                            window.open(`${apiBase}/api/documents/${docId}/view?token=${encodeURIComponent(token)}`, "_blank");
+                            api.get(`/api/documents/${docId}/view`, { responseType: "blob" })
+                              .then((res) => {
+                                const url = URL.createObjectURL(res.data as Blob);
+                                window.open(url, "_blank");
+                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              })
+                              .catch(() => {});
                           }}
                           className="btn-press"
                           style={{

@@ -601,7 +601,10 @@ function MfaSection() {
               Use Google Authenticator, Authy, 1Password, or any TOTP-compatible app.
             </p>
             <div className="flex justify-center py-3">
-              { }
+              {/* next/image skipped: qr_code_url is a dynamic external URL whose
+                  domain is not predictable at build time; adding remotePatterns
+                  for all TOTP providers would be overly broad. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={setupData.qr_code_url}
                 alt="MFA QR code"

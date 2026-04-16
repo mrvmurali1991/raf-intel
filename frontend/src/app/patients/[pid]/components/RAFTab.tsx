@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import type { MEATEvidence } from "@/types";
 import type {
   RafHistoryResponse,
@@ -576,7 +576,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
     return combined;
   }, [patientCodes, extraCodes]);
 
-  const handleLookup = async () => {
+  const handleLookup = useCallback(async () => {
     if (allCodes.length === 0) return;
     setLoading(true);
     setHasSearched(true);
@@ -585,12 +585,11 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
       setResults(data.results || []);
     } catch { setResults([]); }
     finally { setLoading(false); }
-  };
+  }, [allCodes]);
 
   useEffect(() => {
     if (patientCodes.length > 0 && !hasSearched) handleLookup();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientCodes]);
+  }, [patientCodes, hasSearched, handleLookup]);
 
   const isExtra = (code: string) => {
     const n = code.replace(/\./g, "").toUpperCase();
@@ -607,15 +606,17 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
   const extraCoeffSum = useMemo(() => {
     if (!results.length) return 0;
     return results
-      .filter(r => isExtra(r.icd10_code) && r.cms_hcc_v28)
+      .filter(r => {
+        const n = r.icd10_code.replace(/\./g, "").toUpperCase();
+        return !patientCodes.some(pc => pc.replace(/\./g, "").toUpperCase() === n) && r.cms_hcc_v28;
+      })
       .reduce((sum, r) => {
         const match = suspectSuggestions.find((s) =>
           s.code.replace(/\./g, "").toUpperCase() === r.icd10_code.replace(/\./g, "").toUpperCase()
         );
         return sum + (match?.coefficient || 0.15);
       }, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, suspectSuggestions]);
+  }, [results, suspectSuggestions, patientCodes]);
 
   const projectedRaf = currentRaf + extraCoeffSum;
   const hasExtras = results.some(r => isExtra(r.icd10_code));
