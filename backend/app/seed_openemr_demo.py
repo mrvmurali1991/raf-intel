@@ -832,18 +832,30 @@ def seed_openemr_demo() -> None:
                 if name in _company_id_cache:
                     return _company_id_cache[name]
                 cur.execute(
-                    "SELECT id FROM insurance_companies WHERE name=%s LIMIT 1",
+                    "SELECT id FROM insurance_companies WHERE name=%s ORDER BY id DESC LIMIT 1",
                     (name,),
                 )
                 row = cur.fetchone()
+                cid: int | None = None
                 if row:
                     cid = row["id"] if isinstance(row, dict) else row[0]
-                else:
+                # Treat id=0 as invalid (some OpenEMR installs reserve id=0)
+                if not cid:
                     cur.execute(
                         "INSERT INTO insurance_companies (name) VALUES (%s)",
                         (name,),
                     )
-                    cid = cur.lastrowid
+                    # lastrowid can return 0 on some MySQL configs -- re-SELECT to be safe
+                    cur.execute(
+                        "SELECT id FROM insurance_companies WHERE name=%s "
+                        "ORDER BY id DESC LIMIT 1",
+                        (name,),
+                    )
+                    row2 = cur.fetchone()
+                    if row2:
+                        cid = row2["id"] if isinstance(row2, dict) else row2[0]
+                if not cid:
+                    raise RuntimeError(f"Could not resolve insurance_companies.id for {name!r}")
                 _company_id_cache[name] = cid
                 return cid
 
