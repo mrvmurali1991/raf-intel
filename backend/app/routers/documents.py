@@ -709,12 +709,8 @@ def trigger_analysis(
     _perm: None = Depends(require_permission("documents", "write")),
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
-        raise _doc_not_found(document_id)
-
-    # Enforce tenant isolation — reject if document belongs to a different tenant
-    if str(doc.get("tenant_id", "")) != str(tenant_id):
         raise _doc_not_found(document_id)
 
     if doc["status"] == "processing":

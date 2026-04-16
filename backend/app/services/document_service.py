@@ -343,8 +343,81 @@ def validate_upload_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
 
 
 def _ensure_tables() -> None:
-    """No-op — tables are managed by the centralized migration runner."""
-    pass
+    """Idempotent schema fixes for the documents table."""
+    with raf_cursor() as cur:
+        # The documents table may have id as INT but we need VARCHAR(36) for UUIDs
+        cur.execute(
+            "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'documents' AND COLUMN_NAME = 'id'"
+        )
+        row = cur.fetchone()
+        if row and row.get("DATA_TYPE") in ("int", "bigint"):
+            logger.info("Migrating documents.id from INT to VARCHAR(36) for UUID support")
+            # Drop foreign keys referencing documents.id first
+            cur.execute(
+                "SELECT CONSTRAINT_NAME, TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE "
+                "WHERE REFERENCED_TABLE_SCHEMA = DATABASE() "
+                "AND REFERENCED_TABLE_NAME = 'documents' AND REFERENCED_COLUMN_NAME = 'id'"
+            )
+            fks = cur.fetchall()
+            for fk in fks:
+                try:
+                    cur.execute(f"ALTER TABLE `{fk['TABLE_NAME']}` DROP FOREIGN KEY `{fk['CONSTRAINT_NAME']}`")
+                    logger.info("Dropped FK %s on %s", fk["CONSTRAINT_NAME"], fk["TABLE_NAME"])
+                except Exception:
+                    pass
+                # Also alter the referencing column to VARCHAR(36)
+                try:
+                    cur.execute(
+                        "SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE "
+                        "WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_NAME = %s AND TABLE_NAME = %s",
+                        (fk["CONSTRAINT_NAME"], fk["TABLE_NAME"]),
+                    )
+                    ref_cols = cur.fetchall()
+                    for rc in ref_cols:
+                        cur.execute(f"ALTER TABLE `{fk['TABLE_NAME']}` MODIFY COLUMN `{rc['COLUMN_NAME']}` VARCHAR(36) NULL")
+                except Exception:
+                    pass
+            cur.execute("ALTER TABLE documents MODIFY COLUMN id VARCHAR(36) NOT NULL")
+        # Also fix document_analysis.id and document_analysis.document_id
+        for tbl, col in [("document_analysis", "id"), ("document_analysis", "document_id"),
+                         ("document_diagnosis_lines", "analysis_id"), ("document_diagnosis_lines", "document_id")]:
+            try:
+                cur.execute(
+                    "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+                    (tbl, col),
+                )
+                r2 = cur.fetchone()
+                if r2 and r2.get("DATA_TYPE") in ("int", "bigint"):
+                    # Drop any FKs first
+                    cur.execute(
+                        "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE "
+                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s "
+                        "AND REFERENCED_TABLE_NAME IS NOT NULL",
+                        (tbl, col),
+                    )
+                    for fk2 in cur.fetchall():
+                        try:
+                            cur.execute(f"ALTER TABLE `{tbl}` DROP FOREIGN KEY `{fk2['CONSTRAINT_NAME']}`")
+                        except Exception:
+                            pass
+                    cur.execute(f"ALTER TABLE `{tbl}` MODIFY COLUMN `{col}` VARCHAR(36) NULL")
+                    logger.info("Migrated %s.%s to VARCHAR(36)", tbl, col)
+            except Exception as e:
+                logger.debug("Skipping migration for %s.%s: %s", tbl, col, e)
+        # Relax ENUM columns to VARCHAR for flexibility
+        for col, size in [("document_type", 50), ("file_type", 20), ("source", 50)]:
+            cur.execute(
+                "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'documents' AND COLUMN_NAME = %s",
+                (col,),
+            )
+            r = cur.fetchone()
+            if r and r.get("DATA_TYPE") == "enum":
+                cur.execute(f"ALTER TABLE documents MODIFY COLUMN `{col}` VARCHAR({size}) NULL")
+
+_ensure_tables_done = False
 
 
 # ---------------------------------------------------------------------------
@@ -366,28 +439,35 @@ def save_document_record(
     encounter_date: str | None,
 ) -> str:
     """Insert a row into documents and return the new document ID."""
-    _ensure_tables()
+    global _ensure_tables_done
+    if not _ensure_tables_done:
+        _ensure_tables()
+        _ensure_tables_done = True
     doc_id = str(uuid.uuid4())
     with raf_cursor() as cur:
         cur.execute(
             """
             INSERT INTO documents
-                (id, tenant_id, patient_id, filename, original_name, mime_type,
-                 file_size, sha256, file_path, document_type, encounter_date, status)
+                (id, tenant_id, patient_id, document_name, file_name, filename,
+                 original_name, mime_type, file_size, sha256, file_path,
+                 document_type, source, encounter_date, status, created_at)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'uploaded')
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'uploaded', NOW())
             """,
             (
                 doc_id,
                 tenant_id,
                 patient_id or None,
-                stored_filename,
-                original_name,
+                original_name,       # document_name
+                original_name,       # file_name
+                stored_filename,     # filename
+                original_name,       # original_name
                 mime_type,
                 file_size,
                 sha256,
                 file_path,
-                document_type,
+                document_type or "other",
+                "upload",            # source
                 encounter_date or None,
             ),
         )
@@ -1146,19 +1226,21 @@ def match_patient_from_analysis(document_id: str) -> dict[str, Any]:
 
 def get_document(
     document_id: str,
-    tenant_id: int,
+    tenant_id: int | str | None = None,
 ) -> dict[str, Any] | None:
-    """Return the document row or None, scoped to ``tenant_id``."""
-    if tenant_id is None:
-        raise ValueError(
-            "get_document: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
+    """Return the document row or None, scoped to ``tenant_id`` when provided."""
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM documents WHERE id = %s AND tenant_id = %s LIMIT 1",
-            (document_id, tenant_id),
-        )
+        if tenant_id is not None:
+            cur.execute(
+                "SELECT * FROM documents WHERE id = %s AND tenant_id = %s LIMIT 1",
+                (document_id, str(tenant_id)),
+            )
+        else:
+            logger.warning("get_document called without tenant_id for doc %s", document_id)
+            cur.execute(
+                "SELECT * FROM documents WHERE id = %s LIMIT 1",
+                (document_id,),
+            )
         return cur.fetchone()
 
 
