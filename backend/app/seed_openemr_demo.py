@@ -821,62 +821,61 @@ def seed_openemr_demo() -> None:
                         (pid, title, begdate, comments),
                     )
 
-            # Insurance — OpenEMR expects:
-            #   type     : numeric tier string '1' (primary), '2' (secondary), '3' (tertiary)
-            #   provider : FK int -> insurance_companies.id  (NOT a name string)
-            # We upsert the insurance_companies row by name, then store its id.
-            _TIER_MAP = {"primary": "1", "secondary": "2", "tertiary": "3"}
-            _company_id_cache: dict[str, int] = {}
+            # Insurance — OpenEMR schema notes:
+            #   insurance_data.type     : ENUM('primary','secondary','tertiary')
+            #   insurance_data.provider : VARCHAR(255) — stores insurance_companies.id
+            #                             as a string (the UI joins on this).
+            #   insurance_companies.id  : int (NO AUTO_INCREMENT, default 0) —
+            #                             we must pick next_id = MAX(id)+1 manually,
+            #                             avoiding 0 which is treated as "unassigned".
+            _company_id_cache: dict[str, str] = {}
 
-            def _company_id(name: str) -> int:
+            def _company_id(name: str) -> str:
                 if name in _company_id_cache:
                     return _company_id_cache[name]
                 cur.execute(
-                    "SELECT id FROM insurance_companies WHERE name=%s ORDER BY id DESC LIMIT 1",
+                    "SELECT id FROM insurance_companies WHERE name=%s AND id>0 "
+                    "ORDER BY id ASC LIMIT 1",
                     (name,),
                 )
                 row = cur.fetchone()
                 cid: int | None = None
                 if row:
                     cid = row["id"] if isinstance(row, dict) else row[0]
-                # Treat id=0 as invalid (some OpenEMR installs reserve id=0)
                 if not cid:
+                    cur.execute("SELECT COALESCE(MAX(id), 0) + 1 AS nid FROM insurance_companies")
+                    nrow = cur.fetchone()
+                    next_id = nrow["nid"] if isinstance(nrow, dict) else nrow[0]
+                    if not next_id or next_id < 1:
+                        next_id = 1
                     cur.execute(
-                        "INSERT INTO insurance_companies (name) VALUES (%s)",
-                        (name,),
+                        "INSERT INTO insurance_companies (id, name) VALUES (%s, %s)",
+                        (next_id, name),
                     )
-                    # lastrowid can return 0 on some MySQL configs -- re-SELECT to be safe
-                    cur.execute(
-                        "SELECT id FROM insurance_companies WHERE name=%s "
-                        "ORDER BY id DESC LIMIT 1",
-                        (name,),
-                    )
-                    row2 = cur.fetchone()
-                    if row2:
-                        cid = row2["id"] if isinstance(row2, dict) else row2[0]
-                if not cid:
-                    raise RuntimeError(f"Could not resolve insurance_companies.id for {name!r}")
-                _company_id_cache[name] = cid
-                return cid
+                    cid = next_id
+                _company_id_cache[name] = str(cid)
+                return _company_id_cache[name]
 
             for pid, itype, provider, plan, mbi in _INSURANCE:
-                tier = _TIER_MAP.get(itype, itype)
                 try:
                     company_id = _company_id(provider)
                 except Exception as exc:
                     logger.warning("insurance_companies upsert failed for %s: %s", provider, exc)
                     continue
-                cur.execute(
-                    "SELECT id FROM insurance_data WHERE pid=%s AND type=%s AND plan_name=%s LIMIT 1",
-                    (pid, tier, plan),
-                )
-                if not cur.fetchone():
+                try:
                     cur.execute(
-                        "INSERT INTO insurance_data "
-                        "(pid, type, provider, plan_name, subscriber_ss) "
-                        "VALUES (%s, %s, %s, %s, %s)",
-                        (pid, tier, company_id, plan, mbi),
+                        "SELECT id FROM insurance_data WHERE pid=%s AND type=%s AND plan_name=%s LIMIT 1",
+                        (pid, itype, plan),
                     )
+                    if not cur.fetchone():
+                        cur.execute(
+                            "INSERT INTO insurance_data "
+                            "(pid, type, provider, plan_name, subscriber_ss, date) "
+                            "VALUES (%s, %s, %s, %s, %s, CURDATE())",
+                            (pid, itype, company_id, plan, mbi),
+                        )
+                except Exception as exc:
+                    logger.warning("Seed insurance skipped for pid=%s type=%s: %s", pid, itype, exc)
 
             # Immunizations (note: OpenEMR `immunizations` has no `title`
             # column — the vaccine name is stored in `note`).
