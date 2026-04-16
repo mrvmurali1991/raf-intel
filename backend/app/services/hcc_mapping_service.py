@@ -131,7 +131,11 @@ def map_icd10_to_hcc(
             Full hccinfhir model name string (str).
     """
     model = _resolve_model(model_version)
-    result = lookup_hcc(icd10_code, model=model)  # type: ignore[arg-type]
+    # Normalise input to CMS publication format: strip dots, uppercase.
+    # hccinfhir keys dx_to_cc by dot-less codes (e.g. "E119" not "E11.9"),
+    # so dotted inputs like "E11.9" would silently return no mapping here.
+    normalised = icd10_code.strip().upper().replace(".", "")
+    result = lookup_hcc(normalised, model=model)  # type: ignore[arg-type]
 
     if not result["maps_to_hcc"]:
         return None
@@ -168,7 +172,10 @@ def map_icd10_batch(
         Each value has the same structure as ``map_icd10_to_hcc()``.
     """
     model = _resolve_model(model_version)
-    raw_results = lookup_hcc_batch(icd10_codes, model=model)  # type: ignore[arg-type]
+    # Normalise every input to the dot-less uppercase CMS format before
+    # hitting hccinfhir so callers can pass either "E11.9" or "E119".
+    normalised_inputs = [c.strip().upper().replace(".", "") for c in icd10_codes]
+    raw_results = lookup_hcc_batch(normalised_inputs, model=model)  # type: ignore[arg-type]
 
     mapping: dict[str, dict] = {}
     for result in raw_results:
