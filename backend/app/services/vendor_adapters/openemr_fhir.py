@@ -535,6 +535,111 @@ class OpenEMRFhirAdapter:
             errors.append(f"MedicationRequest fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
+        # Phase 5 — DocumentReferences                                         #
+        # ------------------------------------------------------------------ #
+        documents_synced = 0
+        try:
+            doc_entries = self._fhir_get_all("DocumentReference")
+            logger.info(
+                "OpenEMR FHIR: fetched %d DocumentReference entries", len(doc_entries)
+            )
+            for entry in doc_entries:
+                resource = entry.get("resource", {})
+                if resource.get("resourceType") != "DocumentReference":
+                    continue
+                try:
+                    self._upsert_document_reference(resource)
+                    documents_synced += 1
+                except Exception as exc:
+                    errors.append(f"DocumentReference {resource.get('id')}: {exc}")
+        except Exception as exc:
+            errors.append(f"DocumentReference fetch failed: {exc}")
+
+        # ------------------------------------------------------------------ #
+        # Phase 6 — Observations (lab results, vitals, social history)         #
+        # ------------------------------------------------------------------ #
+        observations_synced = 0
+        try:
+            obs_entries = self._fhir_get_all("Observation")
+            logger.info(
+                "OpenEMR FHIR: fetched %d Observation entries", len(obs_entries)
+            )
+            for entry in obs_entries:
+                resource = entry.get("resource", {})
+                if resource.get("resourceType") != "Observation":
+                    continue
+                try:
+                    self._upsert_observation(resource)
+                    observations_synced += 1
+                except Exception as exc:
+                    errors.append(f"Observation {resource.get('id')}: {exc}")
+        except Exception as exc:
+            errors.append(f"Observation fetch failed: {exc}")
+
+        # ------------------------------------------------------------------ #
+        # Phase 8 — Immunizations                                              #
+        # ------------------------------------------------------------------ #
+        immunizations_synced = 0
+        try:
+            imm_entries = self._fhir_get_all("Immunization")
+            logger.info(
+                "OpenEMR FHIR: fetched %d Immunization entries", len(imm_entries)
+            )
+            for entry in imm_entries:
+                resource = entry.get("resource", {})
+                if resource.get("resourceType") != "Immunization":
+                    continue
+                try:
+                    self._upsert_immunization(resource)
+                    immunizations_synced += 1
+                except Exception as exc:
+                    errors.append(f"Immunization {resource.get('id')}: {exc}")
+        except Exception as exc:
+            errors.append(f"Immunization fetch failed: {exc}")
+
+        # ------------------------------------------------------------------ #
+        # Phase 9 — AllergyIntolerance                                         #
+        # ------------------------------------------------------------------ #
+        allergies_synced = 0
+        try:
+            allergy_entries = self._fhir_get_all("AllergyIntolerance")
+            logger.info(
+                "OpenEMR FHIR: fetched %d AllergyIntolerance entries", len(allergy_entries)
+            )
+            for entry in allergy_entries:
+                resource = entry.get("resource", {})
+                if resource.get("resourceType") != "AllergyIntolerance":
+                    continue
+                try:
+                    self._upsert_allergy(resource)
+                    allergies_synced += 1
+                except Exception as exc:
+                    errors.append(f"AllergyIntolerance {resource.get('id')}: {exc}")
+        except Exception as exc:
+            errors.append(f"AllergyIntolerance fetch failed: {exc}")
+
+        # ------------------------------------------------------------------ #
+        # Phase 7 — DiagnosticReports (lab panels, radiology, pathology)      #
+        # ------------------------------------------------------------------ #
+        diagnostic_reports_synced = 0
+        try:
+            dr_entries = self._fhir_get_all("DiagnosticReport")
+            logger.info(
+                "OpenEMR FHIR: fetched %d DiagnosticReport entries", len(dr_entries)
+            )
+            for entry in dr_entries:
+                resource = entry.get("resource", {})
+                if resource.get("resourceType") != "DiagnosticReport":
+                    continue
+                try:
+                    self._upsert_diagnostic_report(resource)
+                    diagnostic_reports_synced += 1
+                except Exception as exc:
+                    errors.append(f"DiagnosticReport {resource.get('id')}: {exc}")
+        except Exception as exc:
+            errors.append(f"DiagnosticReport fetch failed: {exc}")
+
+        # ------------------------------------------------------------------ #
         # Phase 4 — RAF score calculation                                      #
         # ------------------------------------------------------------------ #
         try:
@@ -544,12 +649,18 @@ class OpenEMRFhirAdapter:
 
         logger.info(
             "OpenEMR FHIR sync done: %d patients, %d conditions, %d conditions_skipped, "
-            "%d encounters, %d medications, %d RAF scores, %d errors",
+            "%d encounters, %d medications, %d documents, %d observations, "
+            "%d immunizations, %d allergies, %d diagnostic_reports, %d RAF scores, %d errors",
             patients_synced,
             conditions_found,
             conditions_skipped,
             encounters_synced,
             medications_synced,
+            documents_synced,
+            observations_synced,
+            immunizations_synced,
+            allergies_synced,
+            diagnostic_reports_synced,
             raf_scores_calculated,
             len(errors),
         )
@@ -559,6 +670,11 @@ class OpenEMRFhirAdapter:
             "conditions_skipped": conditions_skipped,
             "encounters_synced": encounters_synced,
             "medications_synced": medications_synced,
+            "documents_synced": documents_synced,
+            "observations_synced": observations_synced,
+            "immunizations_synced": immunizations_synced,
+            "allergies_synced": allergies_synced,
+            "diagnostic_reports_synced": diagnostic_reports_synced,
             "raf_scores_calculated": raf_scores_calculated,
             "errors": errors,
         }
@@ -1530,6 +1646,827 @@ class OpenEMRFhirAdapter:
                     start_date,
                     med_fhir_id[:100],
                 ),
+            )
+
+    # ------------------------------------------------------------------
+    # Immunization upsert
+    # ------------------------------------------------------------------
+
+    def _upsert_immunization(self, resource: dict) -> None:
+        """Store a FHIR Immunization in patient_immunizations for HEDIS measures."""
+        from app.db import raf_cursor
+
+        fhir_id: str = resource.get("id", "")
+        patient_ref: str = (
+            (resource.get("patient", {}).get("reference") or "").replace("Patient/", "").strip()
+        )
+        if not patient_ref:
+            return
+
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(patient_ref)
+        if raf_patient_id is None:
+            return
+
+        # Vaccine code and name from vaccineCode
+        vaccine_concept = resource.get("vaccineCode", {})
+        codings = vaccine_concept.get("coding", [])
+        vaccine_code = ""
+        vaccine_name = vaccine_concept.get("text", "")
+        for c in codings:
+            if c.get("system", "").endswith("cvx") or "cvx" in c.get("system", "").lower():
+                vaccine_code = c.get("code", "")
+                if not vaccine_name:
+                    vaccine_name = c.get("display", "")
+                break
+        if not vaccine_code and codings:
+            vaccine_code = codings[0].get("code", "")
+        if not vaccine_name and codings:
+            vaccine_name = codings[0].get("display", "")
+        if not vaccine_name:
+            vaccine_name = vaccine_code
+
+        # Occurrence date
+        occurrence = resource.get("occurrenceDateTime", "")
+        administered_date = occurrence[:10] if occurrence else None
+
+        status = resource.get("status", "completed")
+        lot_number = resource.get("lotNumber", None)
+
+        # Site and route display text (optional)
+        site_obj = resource.get("site", {})
+        site_codings = site_obj.get("coding", [])
+        site = site_obj.get("text", "") or (site_codings[0].get("display", "") if site_codings else "")
+
+        tenant_id: str = str(self.connection.get("tenant_id") or "")
+
+        with raf_cursor() as cur:
+            # Ensure table exists (compatible with existing structure used by patients router)
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS patient_immunizations (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    patient_id INT NOT NULL,
+                    tenant_id VARCHAR(64),
+                    fhir_immunization_id VARCHAR(255),
+                    vaccine_code VARCHAR(20),
+                    vaccine_name VARCHAR(255),
+                    administered_date DATE,
+                    status VARCHAR(20),
+                    lot_number VARCHAR(50) NULL,
+                    site VARCHAR(100) NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_tenant_fhir_imm (tenant_id, fhir_immunization_id)
+                )
+                """
+            )
+            cur.execute(
+                """
+                INSERT INTO patient_immunizations
+                    (patient_id, tenant_id, fhir_immunization_id, vaccine_code,
+                     vaccine_name, administered_date, status, lot_number, site)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    patient_id = VALUES(patient_id),
+                    vaccine_code = VALUES(vaccine_code),
+                    vaccine_name = VALUES(vaccine_name),
+                    administered_date = VALUES(administered_date),
+                    status = VALUES(status),
+                    lot_number = VALUES(lot_number),
+                    site = VALUES(site)
+                """,
+                (
+                    raf_patient_id,
+                    tenant_id,
+                    fhir_id[:255],
+                    vaccine_code[:20] if vaccine_code else None,
+                    vaccine_name[:255] if vaccine_name else None,
+                    administered_date,
+                    status[:20],
+                    lot_number[:50] if lot_number else None,
+                    site[:100] if site else None,
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # AllergyIntolerance upsert
+    # ------------------------------------------------------------------
+
+    def _upsert_allergy(self, resource: dict) -> None:
+        """Store a FHIR AllergyIntolerance in patient_allergies."""
+        from app.db import raf_cursor
+
+        fhir_id: str = resource.get("id", "")
+        patient_ref: str = (
+            (resource.get("patient", {}).get("reference") or "").replace("Patient/", "").strip()
+        )
+        if not patient_ref:
+            return
+
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(patient_ref)
+        if raf_patient_id is None:
+            return
+
+        tenant_id: str = str(self.connection.get("tenant_id") or "")
+
+        # Substance code and display
+        code_obj = resource.get("code", {})
+        codings = code_obj.get("coding", [])
+        substance = code_obj.get("text", "")
+        if not substance and codings:
+            substance = codings[0].get("display", "") or codings[0].get("code", "")
+
+        # Clinical status: code inside clinicalStatus.coding[0].code
+        clinical_status_obj = resource.get("clinicalStatus", {})
+        cs_codings = clinical_status_obj.get("coding", [])
+        clinical_status = cs_codings[0].get("code", "") if cs_codings else ""
+
+        # Verification status
+        verification_obj = resource.get("verificationStatus", {})
+        vs_codings = verification_obj.get("coding", [])
+        verification_status = vs_codings[0].get("code", "") if vs_codings else ""
+
+        allergy_type = resource.get("type", "")  # allergy | intolerance
+        criticality = resource.get("criticality", "")
+
+        # Category: first element of array
+        categories = resource.get("category", [])
+        category = categories[0] if categories else ""
+
+        # Reaction manifestation display
+        reactions = resource.get("reaction", [])
+        reaction_display = ""
+        if reactions:
+            manifestations = reactions[0].get("manifestation", [])
+            if manifestations:
+                mf = manifestations[0]
+                mf_codings = mf.get("coding", [])
+                reaction_display = mf.get("text", "") or (
+                    mf_codings[0].get("display", "") if mf_codings else ""
+                )
+
+        onset = resource.get("onsetDateTime", "")
+        onset_date = onset[:10] if onset else None
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS patient_allergies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    patient_id INT NOT NULL,
+                    tenant_id VARCHAR(64),
+                    fhir_allergy_id VARCHAR(255),
+                    substance VARCHAR(255),
+                    category VARCHAR(50),
+                    criticality VARCHAR(20),
+                    clinical_status VARCHAR(20),
+                    verification_status VARCHAR(20),
+                    allergy_type VARCHAR(20),
+                    reaction_display VARCHAR(500) NULL,
+                    onset_date DATE NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_tenant_fhir_allergy (tenant_id, fhir_allergy_id)
+                )
+                """
+            )
+            cur.execute(
+                """
+                INSERT INTO patient_allergies
+                    (patient_id, tenant_id, fhir_allergy_id, substance, category,
+                     criticality, clinical_status, verification_status, allergy_type,
+                     reaction_display, onset_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    patient_id = VALUES(patient_id),
+                    substance = VALUES(substance),
+                    category = VALUES(category),
+                    criticality = VALUES(criticality),
+                    clinical_status = VALUES(clinical_status),
+                    verification_status = VALUES(verification_status),
+                    allergy_type = VALUES(allergy_type),
+                    reaction_display = VALUES(reaction_display),
+                    onset_date = VALUES(onset_date)
+                """,
+                (
+                    raf_patient_id,
+                    tenant_id,
+                    fhir_id[:255],
+                    substance[:255] if substance else None,
+                    category[:50] if category else None,
+                    criticality[:20] if criticality else None,
+                    clinical_status[:20] if clinical_status else None,
+                    verification_status[:20] if verification_status else None,
+                    allergy_type[:20] if allergy_type else None,
+                    reaction_display[:500] if reaction_display else None,
+                    onset_date,
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # DocumentReference upsert
+    # ------------------------------------------------------------------
+
+    def _upsert_document_reference(self, resource: dict) -> None:
+        """Download and store a FHIR DocumentReference attachment.
+
+        Idempotent: uses ON DUPLICATE KEY UPDATE on (tenant_id, fhir_document_id).
+        After saving, queues the document for AI analysis.
+        """
+        import re
+        import uuid as _uuid
+        from pathlib import Path
+        from datetime import datetime as _dt, timezone as _tz
+        from app.db import raf_cursor
+
+        ALLOWED_MIME = {"application/pdf", "image/jpeg", "image/png", "text/plain"}
+
+        tenant_id: str = str(self.connection.get("tenant_id", "1"))
+        fhir_doc_id: str = resource.get("id", "")
+
+        # ---- idempotent schema migrations --------------------------------
+        with raf_cursor() as cur:
+            for ddl in (
+                "ALTER TABLE documents ADD COLUMN fhir_document_id VARCHAR(255) NULL",
+                "ALTER TABLE documents ADD COLUMN source VARCHAR(64) NULL",
+            ):
+                try:
+                    cur.execute(ddl)
+                except Exception as col_exc:
+                    if "Duplicate column name" not in str(col_exc):
+                        raise
+
+            try:
+                cur.execute(
+                    "ALTER TABLE documents ADD UNIQUE INDEX uq_tenant_fhir_doc "
+                    "(tenant_id, fhir_document_id)"
+                )
+            except Exception as idx_exc:
+                # Duplicate key name or already exists — safe to ignore
+                if "Duplicate key name" not in str(idx_exc) and "already exists" not in str(idx_exc):
+                    logger.debug("FHIR doc index note: %s", idx_exc)
+
+        # ---- extract FHIR fields -----------------------------------------
+        content_list = resource.get("content", [])
+        if not content_list:
+            logger.warning(
+                "DocumentReference %s has no content entries — skipping", fhir_doc_id
+            )
+            return
+
+        attachment = content_list[0].get("attachment", {})
+        attach_url: str = attachment.get("url", "")
+        content_type: str = attachment.get("contentType", "")
+        attach_title: str = attachment.get("title", "") or fhir_doc_id
+
+        if not attach_url:
+            logger.warning(
+                "DocumentReference %s has no attachment URL — skipping", fhir_doc_id
+            )
+            return
+
+        if content_type not in ALLOWED_MIME:
+            logger.info(
+                "DocumentReference %s contentType '%s' not in allowed set — skipping",
+                fhir_doc_id,
+                content_type,
+            )
+            return
+
+        # ---- resolve patient ---------------------------------------------
+        subject_ref: str = (resource.get("subject") or {}).get("reference", "")
+        external_patient_id = subject_ref.split("/")[-1] if subject_ref else ""
+        try:
+            raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+                external_patient_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "DocumentReference %s: could not resolve patient '%s': %s",
+                fhir_doc_id,
+                external_patient_id,
+                exc,
+            )
+            raf_patient_id = None
+
+        # ---- download content -------------------------------------------
+        try:
+            with httpx.Client(timeout=_TIMEOUT) as client:
+                resp = client.get(attach_url, headers=self._auth_headers())
+                resp.raise_for_status()
+                file_bytes: bytes = resp.content
+        except Exception as exc:
+            logger.warning(
+                "DocumentReference %s: failed to download attachment from %s: %s",
+                fhir_doc_id,
+                attach_url,
+                exc,
+            )
+            return
+
+        # ---- save to disk -----------------------------------------------
+        sha256_hex = hashlib.sha256(file_bytes).hexdigest()
+        safe_tenant = re.sub(r"[^a-zA-Z0-9_-]", "_", tenant_id)
+        month_dir = (
+            Path(__file__).resolve().parents[3]
+            / "uploads"
+            / "documents"
+            / safe_tenant
+            / _dt.now(_tz.utc).strftime("%Y-%m")
+        )
+        month_dir.mkdir(parents=True, exist_ok=True)
+
+        ext_map = {
+            "application/pdf": ".pdf",
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "text/plain": ".txt",
+        }
+        ext = ext_map.get(content_type, "")
+        safe_title = re.sub(r"[^a-zA-Z0-9._-]", "_", attach_title)[:100]
+        filename = f"fhir_{fhir_doc_id}_{safe_title}{ext}"
+        file_path = month_dir / filename
+
+        file_path.write_bytes(file_bytes)
+        relative_path = str(file_path.relative_to(Path(__file__).resolve().parents[3]))
+
+        # ---- insert into documents table --------------------------------
+        document_id = str(_uuid.uuid4())
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO documents
+                    (id, tenant_id, patient_id, original_filename, file_path,
+                     mime_type, file_size, sha256, status, source, fhir_document_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'uploaded', 'fhir_sync', %s)
+                ON DUPLICATE KEY UPDATE
+                    file_path           = VALUES(file_path),
+                    sha256              = VALUES(sha256),
+                    file_size           = VALUES(file_size),
+                    source              = VALUES(source)
+                """,
+                (
+                    document_id,
+                    tenant_id,
+                    raf_patient_id,
+                    filename,
+                    relative_path,
+                    content_type,
+                    len(file_bytes),
+                    sha256_hex,
+                    fhir_doc_id,
+                ),
+            )
+            # Retrieve the actual id in case the row was a duplicate update
+            cur.execute(
+                "SELECT id FROM documents WHERE tenant_id = %s AND fhir_document_id = %s LIMIT 1",
+                (tenant_id, fhir_doc_id),
+            )
+            row = cur.fetchone()
+            saved_doc_id: str = row["id"] if row else document_id
+
+        logger.info(
+            "DocumentReference %s saved as document %s (%d bytes)",
+            fhir_doc_id,
+            saved_doc_id,
+            len(file_bytes),
+        )
+
+        # ---- trigger analysis (lazy import to avoid circular imports) ----
+        try:
+            from app.services.document_service import analyze_document
+
+            analyze_document(saved_doc_id, tenant_id)
+        except Exception as exc:
+            logger.warning(
+                "DocumentReference %s: analysis trigger failed: %s", fhir_doc_id, exc
+            )
+
+
+    def _upsert_observation(self, resource: dict) -> None:
+        """Store a FHIR Observation (lab result, vital, social history) in
+        patient_observations for UI display and RAF enrichment."""
+        from app.db import raf_cursor
+
+        # --- Ensure table exists once per sync run ---
+        if not hasattr(self, "_obs_table_ensured"):
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS patient_observations (
+                        id                  INT AUTO_INCREMENT PRIMARY KEY,
+                        patient_id          INT NOT NULL,
+                        tenant_id           VARCHAR(64),
+                        fhir_observation_id VARCHAR(255),
+                        category            VARCHAR(64),
+                        loinc_code          VARCHAR(20),
+                        display_name        VARCHAR(255),
+                        value_numeric       DECIMAL(12,4) NULL,
+                        value_string        TEXT NULL,
+                        unit                VARCHAR(50),
+                        interpretation      VARCHAR(50),
+                        effective_date      DATE,
+                        status              VARCHAR(20),
+                        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uq_tenant_obs (tenant_id, fhir_observation_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """
+                )
+            self._obs_table_ensured = True  # type: ignore[attr-defined]
+
+        obs_fhir_id: str = resource.get("id", "")
+        if not obs_fhir_id:
+            return
+
+        # --- Resolve patient ---
+        subject = resource.get("subject", {})
+        patient_external_id: str = (
+            (subject.get("reference") or "").replace("Patient/", "").strip()
+        )
+        if not patient_external_id:
+            return
+
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+            patient_external_id
+        )
+        if raf_patient_id is None:
+            return
+
+        # --- Category (laboratory, vital-signs, social-history, …) ---
+        category_str = ""
+        for cat in resource.get("category", []):
+            codings = cat.get("coding", [])
+            if codings:
+                category_str = codings[0].get("code", "") or cat.get("text", "")
+                break
+        if not category_str and resource.get("category"):
+            category_str = resource["category"][0].get("text", "")
+
+        # --- LOINC code + display name ---
+        code_obj = resource.get("code", {})
+        loinc_code = ""
+        display_name = code_obj.get("text", "")
+        for coding in code_obj.get("coding", []):
+            system = coding.get("system", "")
+            if "loinc" in system.lower():
+                loinc_code = coding.get("code", "")
+                if not display_name:
+                    display_name = coding.get("display", "")
+                break
+        # Fallback: take first coding regardless of system
+        if not loinc_code and code_obj.get("coding"):
+            first = code_obj["coding"][0]
+            loinc_code = first.get("code", "")
+            if not display_name:
+                display_name = first.get("display", "")
+
+        # --- Value extraction ---
+        value_numeric: float | None = None
+        value_string: str | None = None
+        unit = ""
+
+        if "valueQuantity" in resource:
+            vq = resource["valueQuantity"]
+            raw_val = vq.get("value")
+            if raw_val is not None:
+                try:
+                    value_numeric = float(raw_val)
+                except (TypeError, ValueError):
+                    value_string = str(raw_val)
+            unit = vq.get("unit", "") or vq.get("code", "")
+        elif "valueString" in resource:
+            value_string = str(resource["valueString"])
+        elif "valueCodeableConcept" in resource:
+            vcc = resource["valueCodeableConcept"]
+            value_string = vcc.get("text", "")
+            if not value_string:
+                codings = vcc.get("coding", [])
+                if codings:
+                    value_string = (
+                        codings[0].get("display", "") or codings[0].get("code", "")
+                    )
+        elif "valueBoolean" in resource:
+            value_string = str(resource["valueBoolean"])
+        elif "valueInteger" in resource:
+            try:
+                value_numeric = float(resource["valueInteger"])
+            except (TypeError, ValueError):
+                value_string = str(resource["valueInteger"])
+
+        # --- Interpretation ---
+        interpretation_str = ""
+        _interp_map = {
+            "N": "normal",
+            "H": "high",
+            "L": "low",
+            "A": "abnormal",
+            "AA": "critical",
+            "HH": "critical",
+            "LL": "critical",
+            "POS": "positive",
+            "NEG": "negative",
+        }
+        for interp in resource.get("interpretation", []):
+            codings = interp.get("coding", [])
+            if codings:
+                code = codings[0].get("code", "").upper()
+                interpretation_str = _interp_map.get(code, code.lower())
+                break
+
+        # --- Effective date ---
+        effective_raw = resource.get("effectiveDateTime", "") or resource.get(
+            "effectivePeriod", {}
+        ).get("start", "")
+        effective_date = effective_raw[:10] if effective_raw else None
+
+        # --- Status ---
+        status = resource.get("status", "")
+
+        tenant_id = str(self.connection.get("tenant_id") or "")
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO patient_observations
+                    (patient_id, tenant_id, fhir_observation_id, category,
+                     loinc_code, display_name, value_numeric, value_string,
+                     unit, interpretation, effective_date, status, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON DUPLICATE KEY UPDATE
+                    category        = VALUES(category),
+                    loinc_code      = VALUES(loinc_code),
+                    display_name    = VALUES(display_name),
+                    value_numeric   = VALUES(value_numeric),
+                    value_string    = VALUES(value_string),
+                    unit            = VALUES(unit),
+                    interpretation  = VALUES(interpretation),
+                    effective_date  = VALUES(effective_date),
+                    status          = VALUES(status)
+                """,
+                (
+                    raf_patient_id,
+                    tenant_id[:64] if tenant_id else None,
+                    obs_fhir_id[:255],
+                    category_str[:64] if category_str else None,
+                    loinc_code[:20] if loinc_code else None,
+                    display_name[:255] if display_name else None,
+                    value_numeric,
+                    value_string,
+                    unit[:50] if unit else None,
+                    interpretation_str[:50] if interpretation_str else None,
+                    effective_date,
+                    status[:20] if status else None,
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # DiagnosticReport upsert
+    # ------------------------------------------------------------------
+
+    def _upsert_diagnostic_report(self, resource: dict) -> None:
+        """Store a FHIR DiagnosticReport in patient_diagnostic_reports.
+
+        Captures lab panels (CBC, BMP, etc.), radiology, and pathology reports.
+        The ``conclusion`` field contains clinician narrative that can be mined
+        for HCC suspects in a later NLP pass.
+        """
+        from app.db import raf_cursor
+
+        fhir_report_id: str = resource.get("id", "")
+        if not fhir_report_id:
+            return
+
+        # Patient reference
+        subject = resource.get("subject", {})
+        patient_external_id: str = (
+            (subject.get("reference") or "").replace("Patient/", "").strip()
+        )
+        if not patient_external_id:
+            return
+
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+            patient_external_id
+        )
+        if raf_patient_id is None:
+            return
+
+        tenant_id: str = str(self.connection.get("tenant_id", "1"))
+
+        # Category — typically a CodeableConcept array; pick the first code
+        category_str: str = ""
+        categories = resource.get("category", [])
+        if categories:
+            cat_codings = categories[0].get("coding", [])
+            if cat_codings:
+                category_str = cat_codings[0].get("code", "") or cat_codings[0].get(
+                    "display", ""
+                )
+            if not category_str:
+                category_str = categories[0].get("text", "")
+
+        # Report code (LOINC)
+        loinc_code: str = ""
+        display_name: str = ""
+        code_obj = resource.get("code", {})
+        code_codings = code_obj.get("coding", [])
+        if code_codings:
+            loinc_code = code_codings[0].get("code", "")
+            display_name = code_codings[0].get("display", "")
+        if not display_name:
+            display_name = code_obj.get("text", "")
+
+        # Dates
+        effective_raw: str = resource.get("effectiveDateTime", "") or resource.get(
+            "effectivePeriod", {}
+        ).get("start", "")
+        effective_date = effective_raw[:10] if effective_raw else None
+
+        issued_raw: str = resource.get("issued", "")
+        # issued is RFC-3339; MySQL DATETIME accepts "YYYY-MM-DD HH:MM:SS"
+        issued_date: str | None = None
+        if issued_raw:
+            issued_date = issued_raw[:19].replace("T", " ")
+
+        status: str = resource.get("status", "")[:20]
+
+        # Conclusion / narrative
+        conclusion: str | None = resource.get("conclusion") or None
+
+        # Attachments
+        presented_forms = resource.get("presentedForm", [])
+        has_attachment: int = 1 if presented_forms else 0
+
+        with raf_cursor() as cur:
+            # Ensure table exists exactly once per adapter instance
+            if not hasattr(self, "_diag_table_ensured"):
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS patient_diagnostic_reports (
+                        id                INT AUTO_INCREMENT PRIMARY KEY,
+                        patient_id        INT NOT NULL,
+                        tenant_id         VARCHAR(64),
+                        fhir_report_id    VARCHAR(255),
+                        category          VARCHAR(64),
+                        loinc_code        VARCHAR(20),
+                        display_name      VARCHAR(255),
+                        conclusion        TEXT NULL,
+                        effective_date    DATE,
+                        issued_date       DATETIME,
+                        status            VARCHAR(20),
+                        has_attachment    TINYINT DEFAULT 0,
+                        created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uq_tenant_fhir_report (tenant_id, fhir_report_id)
+                    )
+                    """
+                )
+                self._diag_table_ensured = True  # type: ignore[attr-defined]
+
+            cur.execute(
+                """
+                INSERT INTO patient_diagnostic_reports
+                    (patient_id, tenant_id, fhir_report_id, category, loinc_code,
+                     display_name, conclusion, effective_date, issued_date, status,
+                     has_attachment)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    patient_id     = VALUES(patient_id),
+                    category       = VALUES(category),
+                    loinc_code     = VALUES(loinc_code),
+                    display_name   = VALUES(display_name),
+                    conclusion     = VALUES(conclusion),
+                    effective_date = VALUES(effective_date),
+                    issued_date    = VALUES(issued_date),
+                    status         = VALUES(status),
+                    has_attachment = VALUES(has_attachment)
+                """,
+                (
+                    raf_patient_id,
+                    tenant_id,
+                    fhir_report_id[:255],
+                    category_str[:64] if category_str else None,
+                    loinc_code[:20] if loinc_code else None,
+                    display_name[:255] if display_name else None,
+                    conclusion,
+                    effective_date,
+                    issued_date,
+                    status or None,
+                    has_attachment,
+                ),
+            )
+
+        # Log substantial conclusion text for future NLP/HCC suspect detection
+        if conclusion and len(conclusion) > 50:
+            logger.info(
+                "DiagnosticReport %s (patient=%d) has conclusion text (%d chars) "
+                "available for NLP suspect detection",
+                fhir_report_id,
+                raf_patient_id,
+                len(conclusion),
+            )
+
+        # Download PDF/image attachments through the document pipeline if present
+        if presented_forms:
+            for form in presented_forms:
+                content_type: str = form.get("contentType", "")
+                url: str = form.get("url", "")
+                data_b64: str = form.get("data", "")
+                if not (url or data_b64):
+                    continue
+                try:
+                    self._save_diagnostic_report_attachment(
+                        fhir_report_id=fhir_report_id,
+                        raf_patient_id=raf_patient_id,
+                        content_type=content_type,
+                        url=url,
+                        data_b64=data_b64,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "DiagnosticReport %s: attachment download failed: %s",
+                        fhir_report_id,
+                        exc,
+                    )
+
+    def _save_diagnostic_report_attachment(
+        self,
+        *,
+        fhir_report_id: str,
+        raf_patient_id: int,
+        content_type: str,
+        url: str,
+        data_b64: str,
+    ) -> None:
+        """Fetch and persist a DiagnosticReport presentedForm attachment.
+
+        Downloads via FHIR bearer token when a URL is provided; decodes
+        inline base64 data otherwise.  Delegates to ``_save_document_bytes``
+        (the same hook used by the DocumentReference phase) so the binary
+        lands in the patient document list and can be queued for analysis.
+        """
+        import base64
+
+        raw_bytes: bytes | None = None
+
+        if url:
+            try:
+                token = self._get_access_token()
+                with httpx.Client(timeout=_TIMEOUT) as client:
+                    resp = client.get(
+                        url,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": content_type or "*/*",
+                        },
+                    )
+                    resp.raise_for_status()
+                    raw_bytes = resp.content
+            except Exception as exc:
+                logger.warning(
+                    "DiagnosticReport %s: could not fetch attachment from %s: %s",
+                    fhir_report_id,
+                    url,
+                    exc,
+                )
+                return
+        elif data_b64:
+            try:
+                raw_bytes = base64.b64decode(data_b64)
+            except Exception as exc:
+                logger.warning(
+                    "DiagnosticReport %s: base64 decode failed: %s",
+                    fhir_report_id,
+                    exc,
+                )
+                return
+
+        if not raw_bytes:
+            return
+
+        ext_map = {
+            "application/pdf": ".pdf",
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "text/plain": ".txt",
+            "text/html": ".html",
+        }
+        ext = ext_map.get(content_type.split(";")[0].strip(), ".bin")
+        file_name = f"diagnostic_report_{fhir_report_id}{ext}"
+
+        # Delegate to the shared document-save hook when available
+        save_fn = getattr(self, "_save_document_bytes", None)
+        if callable(save_fn):
+            save_fn(
+                raf_patient_id=raf_patient_id,
+                file_name=file_name,
+                content_type=content_type,
+                raw_bytes=raw_bytes,
+                source_ref=f"DiagnosticReport/{fhir_report_id}",
+            )
+        else:
+            logger.info(
+                "DiagnosticReport %s: attachment ready (%d bytes, %s) — "
+                "no _save_document_bytes hook; skipping persist",
+                fhir_report_id,
+                len(raw_bytes),
+                content_type,
             )
 
     # ------------------------------------------------------------------

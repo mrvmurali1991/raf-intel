@@ -190,6 +190,30 @@ def _ensure_pipeline_tables() -> None:
             "pipeline_chain: could not ensure pipeline_settings table: %s", exc
         )
 
+    # Idempotent: add document_sync_enabled column if it does not yet exist.
+    # MySQL raises error 1060 (ER_DUP_FIELDNAME) when the column is already
+    # present — we catch and ignore that specific error so repeated startups
+    # are safe.
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "ALTER TABLE pipeline_settings "
+                "ADD COLUMN document_sync_enabled TINYINT(1) NOT NULL DEFAULT 1"
+            )
+        logger.debug("pipeline_chain: added document_sync_enabled column to pipeline_settings.")
+    except mysql.connector.Error as exc:
+        if exc.errno == 1060:
+            # Column already exists — this is expected after the first run.
+            logger.debug("pipeline_chain: document_sync_enabled column already exists (ok).")
+        else:
+            logger.warning(
+                "pipeline_chain: could not add document_sync_enabled column: %s", exc
+            )
+    except Exception as exc:
+        logger.warning(
+            "pipeline_chain: could not add document_sync_enabled column: %s", exc
+        )
+
 
 # Backward-compat alias so external callers are not broken.
 _ensure_pipeline_runs_table = _ensure_pipeline_tables
@@ -392,6 +416,7 @@ def _get_pipeline_settings(tenant_id: str) -> dict:
         "gap_generation_enabled": True,
         "hierarchy_enabled": True,
         "webhook_enabled": False,
+        "document_sync_enabled": True,
     }
     try:
         with raf_cursor() as cur:
@@ -524,7 +549,27 @@ def _handle_emr_sync_completed(payload: dict[str, Any]) -> None:
         # exist in the database.  Partial progress is better than no progress.
 
     # ---- Record intermediate stats and pass run_id forward -----------------
-    combined_stats = {**enc_stats, **diag_stats, "diag_step_failed": diag_failed}
+    # Include document sync counts from the triggering payload when present
+    # (FHIR sync populates these; plain EMR syncs leave them absent).
+    documents_synced: int = int(payload.get("documents_synced") or 0)
+    documents_failed: int = int(payload.get("documents_failed") or 0)
+    if documents_synced or documents_failed:
+        logger.info(
+            "pipeline_chain: FHIR documents processed during sync "
+            "[tenant=%s synced=%d failed=%d] — document analysis already "
+            "performed inline by FHIR sync agent",
+            tenant_id,
+            documents_synced,
+            documents_failed,
+        )
+
+    combined_stats = {
+        **enc_stats,
+        **diag_stats,
+        "diag_step_failed": diag_failed,
+        "documents_synced": documents_synced,
+        "documents_failed": documents_failed,
+    }
     _update_run(run_id, stats=combined_stats, current_step="raf_calculation")
 
     # Call the next phase directly rather than relying on emit_internal,
