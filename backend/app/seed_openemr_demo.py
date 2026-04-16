@@ -1060,18 +1060,23 @@ def seed_openemr_demo() -> None:
                         (pid, enc, code, code_text),
                     )
 
-            # Referrals (transactions table)
+            # Referrals (transactions table). Column names vary across
+            # OpenEMR versions — wrap in try/except so a schema drift only
+            # affects referrals and doesn't abort the whole seed.
             for pid, specialty, refer_to, dt, reason_text in _REFERRALS:
-                cur.execute(
-                    "SELECT id FROM transactions WHERE pid=%s AND refer_to=%s AND date=%s LIMIT 1",
-                    (pid, refer_to, dt),
-                )
-                if not cur.fetchone():
+                try:
                     cur.execute(
-                        "INSERT INTO transactions (pid, title, refer_to, refer_from, date, reason, body, authorized) "
-                        "VALUES (%s, %s, %s, 'Dr. Primary Care', %s, %s, %s, 1)",
-                        (pid, f"Referral: {specialty}", refer_to, dt, reason_text, reason_text),
+                        "SELECT id FROM transactions WHERE pid=%s AND title=%s AND date=%s LIMIT 1",
+                        (pid, f"Referral: {specialty}", dt),
                     )
+                    if not cur.fetchone():
+                        cur.execute(
+                            "INSERT INTO transactions (pid, title, date, authorized) "
+                            "VALUES (%s, %s, %s, 1)",
+                            (pid, f"Referral: {specialty} -> {refer_to}: {reason_text}", dt),
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Seed referral skipped for pid=%s: %s", pid, exc)
 
             # Family history (history_data table)
             for pid, fh_text in _FAMILY_HISTORY:
@@ -1088,23 +1093,26 @@ def seed_openemr_demo() -> None:
                     elif p.startswith('No '):
                         siblings = (siblings + '. ' + p).strip('. ')
 
-                cur.execute(
-                    "SELECT id FROM history_data WHERE pid=%s LIMIT 1",
-                    (pid,),
-                )
-                existing = cur.fetchone()
-                if existing:
+                try:
                     cur.execute(
-                        "UPDATE history_data SET history_father=%s, history_mother=%s, history_siblings=%s "
-                        "WHERE pid=%s AND (history_father IS NULL OR history_father='')",
-                        (father, mother, siblings, pid),
+                        "SELECT id FROM history_data WHERE pid=%s LIMIT 1",
+                        (pid,),
                     )
-                else:
-                    cur.execute(
-                        "INSERT INTO history_data (pid, date, history_father, history_mother, history_siblings) "
-                        "VALUES (%s, NOW(), %s, %s, %s)",
-                        (pid, father, mother, siblings),
-                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            "UPDATE history_data SET history_father=%s, history_mother=%s, history_siblings=%s "
+                            "WHERE pid=%s AND (history_father IS NULL OR history_father='')",
+                            (father, mother, siblings, pid),
+                        )
+                    else:
+                        cur.execute(
+                            "INSERT INTO history_data (pid, date, history_father, history_mother, history_siblings) "
+                            "VALUES (%s, NOW(), %s, %s, %s)",
+                            (pid, father, mother, siblings),
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Seed family history skipped for pid=%s: %s", pid, exc)
 
         logger.info("OpenEMR demo data seeded successfully (all data types).")
 
