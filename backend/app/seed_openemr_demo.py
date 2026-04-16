@@ -821,18 +821,49 @@ def seed_openemr_demo() -> None:
                         (pid, title, begdate, comments),
                     )
 
-            # Insurance
+            # Insurance — OpenEMR expects:
+            #   type     : numeric tier string '1' (primary), '2' (secondary), '3' (tertiary)
+            #   provider : FK int -> insurance_companies.id  (NOT a name string)
+            # We upsert the insurance_companies row by name, then store its id.
+            _TIER_MAP = {"primary": "1", "secondary": "2", "tertiary": "3"}
+            _company_id_cache: dict[str, int] = {}
+
+            def _company_id(name: str) -> int:
+                if name in _company_id_cache:
+                    return _company_id_cache[name]
+                cur.execute(
+                    "SELECT id FROM insurance_companies WHERE name=%s LIMIT 1",
+                    (name,),
+                )
+                row = cur.fetchone()
+                if row:
+                    cid = row["id"] if isinstance(row, dict) else row[0]
+                else:
+                    cur.execute(
+                        "INSERT INTO insurance_companies (name) VALUES (%s)",
+                        (name,),
+                    )
+                    cid = cur.lastrowid
+                _company_id_cache[name] = cid
+                return cid
+
             for pid, itype, provider, plan, mbi in _INSURANCE:
+                tier = _TIER_MAP.get(itype, itype)
+                try:
+                    company_id = _company_id(provider)
+                except Exception as exc:
+                    logger.warning("insurance_companies upsert failed for %s: %s", provider, exc)
+                    continue
                 cur.execute(
                     "SELECT id FROM insurance_data WHERE pid=%s AND type=%s AND plan_name=%s LIMIT 1",
-                    (pid, itype, plan),
+                    (pid, tier, plan),
                 )
                 if not cur.fetchone():
                     cur.execute(
                         "INSERT INTO insurance_data "
                         "(pid, type, provider, plan_name, subscriber_ss) "
                         "VALUES (%s, %s, %s, %s, %s)",
-                        (pid, itype, provider, plan, mbi),
+                        (pid, tier, company_id, plan, mbi),
                     )
 
             # Immunizations (note: OpenEMR `immunizations` has no `title`
