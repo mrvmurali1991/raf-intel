@@ -22,6 +22,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Sparkles,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -923,6 +924,130 @@ function UserManagementSection() {
 }
 
 // ---------------------------------------------------------------------------
+// AI Analysis section (admin only) — cutoff date + per-patient daily cap
+// ---------------------------------------------------------------------------
+
+interface AiSettings {
+  ai_analysis_cutoff_date: string;
+  max_analyses_per_patient_per_day: number;
+}
+
+function AiAnalysisSection() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [cutoffDate, setCutoffDate] = useState("");
+  const [maxPerDay, setMaxPerDay] = useState<number>(2);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
+    null
+  );
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await authApi.get<AiSettings>("/api/config/ai-settings");
+        setCutoffDate(data.ai_analysis_cutoff_date);
+        setMaxPerDay(data.max_analyses_per_patient_per_day);
+      } catch (err: any) {
+        setFeedback({
+          type: "error",
+          message: err?.response?.data?.detail ?? "Failed to load AI settings.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const { data } = await authApi.put<AiSettings>("/api/config/ai-settings", {
+        ai_analysis_cutoff_date: cutoffDate,
+        max_analyses_per_patient_per_day: maxPerDay,
+      });
+      setCutoffDate(data.ai_analysis_cutoff_date);
+      setMaxPerDay(data.max_analyses_per_patient_per_day);
+      setFeedback({ type: "success", message: "AI settings saved successfully." });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.response?.data?.detail ?? "Failed to save AI settings.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Section
+      id="ai-analysis"
+      icon={Sparkles}
+      title="AI Analysis"
+      description="Control how AI analyses are bounded in time and throttled per patient."
+      staggerIndex={6}
+    >
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading AI settings...
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-5">
+          <FormField
+            label="AI Analysis Cutoff Date"
+            htmlFor="ai-cutoff-date"
+            hint="Clinical data dated after this day is excluded from AI analysis."
+          >
+            <Input
+              id="ai-cutoff-date"
+              type="date"
+              value={cutoffDate}
+              onChange={(e) => setCutoffDate(e.target.value)}
+              className={inputClasses}
+              required
+            />
+          </FormField>
+
+          <FormField
+            label="Max Analyses per Patient per Day"
+            htmlFor="ai-max-per-day"
+            hint="Upper bound on AI re-analyses of the same patient within a single calendar day."
+          >
+            <Input
+              id="ai-max-per-day"
+              type="number"
+              min={1}
+              max={100}
+              value={maxPerDay}
+              onChange={(e) => setMaxPerDay(Number(e.target.value))}
+              className={inputClasses}
+              required
+            />
+          </FormField>
+
+          {feedback && <Feedback type={feedback.type} message={feedback.message} />}
+
+          <div className="pt-1">
+            <Button type="submit" disabled={saving} className={primaryBtnClasses}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save AI Settings"
+              )}
+            </Button>
+          </div>
+        </form>
+      )}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page header
 // ---------------------------------------------------------------------------
 
@@ -956,6 +1081,7 @@ export default function SettingsPage() {
     { id: "password", label: "Password", icon: KeyRound },
     { id: "mfa", label: "Two-Factor Auth", icon: ShieldCheck },
     { id: "sessions", label: "Sessions", icon: MonitorSmartphone },
+    ...(isAdmin ? [{ id: "ai-analysis", label: "AI Analysis", icon: Sparkles }] : []),
     ...(isAdmin ? [{ id: "users", label: "User Management", icon: Users }] : []),
   ];
 
@@ -969,6 +1095,7 @@ export default function SettingsPage() {
         <MfaSection />
         {/* Active sessions — visible to ALL authenticated users (Fix 6) */}
         <SessionsSection />
+        {isAdmin && <AiAnalysisSection />}
         {isAdmin && <UserManagementSection />}
       </div>
     </div>
