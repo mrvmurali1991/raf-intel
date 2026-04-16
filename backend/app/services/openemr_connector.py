@@ -213,7 +213,7 @@ def get_patients_with_encounters(limit: int = 200) -> list[dict[str, Any]]:
           AND LOWER(pd.lname) NOT LIKE '%%test%%'
           AND LOWER(pd.lname) NOT LIKE '%%block%%'
           AND LENGTH(TRIM(pd.fname)) > 1
-          AND fcn.note IS NOT NULL AND fcn.note != ''
+          AND fcn.description IS NOT NULL AND fcn.description != ''
         GROUP BY pd.pid
         ORDER BY encounter_count DESC, pd.lname, pd.fname
         LIMIT %s
@@ -298,7 +298,7 @@ def get_encounters(pid: int) -> list[dict[str, Any]]:
             u.lname AS provider_lname,
             (SELECT COUNT(*) FROM form_clinical_notes fcn
              WHERE fcn.encounter = fe.encounter
-             AND fcn.note IS NOT NULL AND fcn.note != '') AS has_notes
+             AND fcn.description IS NOT NULL AND fcn.description != '') AS has_notes
         FROM form_encounter fe
         LEFT JOIN users u ON u.id = fe.provider_id
         WHERE fe.pid = %s
@@ -348,7 +348,7 @@ def get_encounters(pid: int) -> list[dict[str, Any]]:
                     cur.execute(
                         f"""
                         SELECT fcn.encounter AS encounter,
-                               COALESCE(fcn.note, '') AS note_text
+                               COALESCE(fcn.description, '') AS note_text
                         FROM form_clinical_notes fcn
                         WHERE fcn.encounter IN ({placeholders})
                         """,
@@ -1024,8 +1024,8 @@ def get_clinical_notes(encounter_id: int, tenant_id: str = "") -> list[dict[str,
             fcn.pid,
             fcn.encounter,
             fcn.date,
-            COALESCE(fcn.note_type, 'clinical_note') AS note_type,
-            COALESCE(fcn.note, '') AS note_text
+            COALESCE(fcn.clinical_notes_type, 'clinical_note') AS note_type,
+            COALESCE(fcn.description, '') AS note_text
         FROM form_clinical_notes fcn
         WHERE fcn.encounter = %s
     """
