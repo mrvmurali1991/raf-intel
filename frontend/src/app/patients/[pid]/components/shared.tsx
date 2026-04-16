@@ -637,3 +637,42 @@ export function FindingsList({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Model Segment label helpers (CMS-HCC V28 segment codes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map CMS-HCC V28 segment codes (as used in hccinfhir coefficient key prefixes)
+ * to human-readable long-form labels. Case-insensitive.
+ *
+ * Continuing Enrollee:
+ *   cna/cnd/cfa/cfd/cpa/cpd - Community {Non|Full|Partial}-Dual {Aged|Disabled}
+ *   ins                     - Institutional
+ * New Enrollee (ne_*):
+ *   ne_cna, ne_cnd, ne_cfa, ne_cfd, ne_cpa, ne_cpd, ne_ins
+ */
+const SEGMENT_LABELS: Record<string, string> = {
+  cna: "Community, Non-Dual Aged",
+  cnd: "Community, Non-Dual Disabled",
+  cfa: "Community, Full-Dual Aged",
+  cfd: "Community, Full-Dual Disabled",
+  cpa: "Community, Partial-Dual Aged",
+  cpd: "Community, Partial-Dual Disabled",
+  ins: "Institutional",
+};
+
+export function segmentLabel(code?: string | null): string {
+  if (!code) return "Community, Non-Dual Aged";
+  const key = String(code).trim().toLowerCase();
+  if (key.startsWith("ne_")) {
+    const base = key.slice(3);
+    const baseLabel = SEGMENT_LABELS[base];
+    return baseLabel ? `New Enrollee - ${baseLabel}` : `New Enrollee (${code})`;
+  }
+  return SEGMENT_LABELS[key] ?? code;
+}
+
+export function segmentCodeUpper(code?: string | null): string {
+  return (code ?? "CNA").toString().toUpperCase();
+}

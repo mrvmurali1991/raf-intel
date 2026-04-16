@@ -22,6 +22,8 @@ import {
   SectionLoader,
   Card,
   MeatDots,
+  segmentLabel,
+  segmentCodeUpper,
 } from "./shared";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import type {
@@ -125,8 +127,12 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.slate400, marginBottom: 4 }}>Est. MA Payment</div>
           <div style={{ fontSize: 28, fontWeight: 800, fontFamily: "monospace", color: C.emerald600, lineHeight: 1 }}>{fmtPay(grandTotal * MA_PAYMENT_PER_RAF)}</div>
           <div style={{ fontSize: 12, color: C.slate400, marginTop: 6 }}>
-            {["V28", breakdown.model_segment || "CNA", breakdown.measurement_year || selectedYear].map(t => (
-              <span key={t} style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`, marginLeft: 4 }}>{t}</span>
+            {["V28", segmentCodeUpper(breakdown.model_segment), breakdown.measurement_year || selectedYear].map(t => (
+              <span
+                key={t}
+                title={typeof t === "string" && t !== "V28" ? segmentLabel(t) : undefined}
+                style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`, marginLeft: 4 }}
+              >{t}</span>
             ))}
           </div>
         </div>

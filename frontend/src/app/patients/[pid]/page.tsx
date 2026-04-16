@@ -56,6 +56,8 @@ import {
   formatDate,
   rafScoreColor,
   Spinner,
+  segmentLabel,
+  segmentCodeUpper,
 } from "./components/shared";
 import type {
   ExtendedRafBreakdown,
@@ -684,8 +686,11 @@ export default function PatientDetailPage({
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 6 }}>
               Model Segment
             </div>
-            <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 14px", borderRadius: 6, fontSize: 14, fontWeight: 700, background: C.slate100, color: C.slate700, fontFamily: "monospace" }}>
-              {modelSegment}
+            <span
+              title={`Segment code: ${segmentCodeUpper(modelSegment)}`}
+              style={{ display: "inline-flex", alignItems: "center", padding: "4px 14px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: C.slate100, color: C.slate700, textAlign: "center" }}
+            >
+              {segmentLabel(modelSegment)}
             </span>
           </div>
 
