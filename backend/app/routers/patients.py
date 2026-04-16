@@ -741,26 +741,24 @@ def get_recapture_gaps(
 
     if not _require_emr_patient(pid, _tid):
         # FHIR fallback: CMS recapture logic — HCCs captured in PRIOR year not yet billed THIS year
-        from datetime import date as _date
+        from datetime import date as _date, datetime as _datetime
         _year = year or _date.today().year
         _prior_year = _year - 1
         try:
             import json as _json
             from app.db import raf_cursor
             with raf_cursor() as _gc:
-                # L5: Deceased patient check — skip recapture gap generation for deceased patients.
-                # NOTE: The patients table currently has no deceased/deceased_date column.
-                # This check should be enabled once FHIR sync populates a deceased_date field
-                # (e.g. from Patient.deceasedDateTime or Patient.deceasedBoolean in the FHIR resource).
-                # Example query once column exists:
-                #   _gc.execute("SELECT deceased_date FROM patients WHERE id = %s LIMIT 1", (pid,))
-                #   _deceased_row = _gc.fetchone()
-                #   if _deceased_row and _deceased_row.get("deceased_date"):
-                #       return {"pid": pid, "year": _year, "gaps": [], "source": "fhir", "note": "Patient is deceased — no recapture gaps generated"}
+                # Check if patient is deceased — no recapture needed
+                _gc.execute("SELECT deceased_date FROM patients WHERE id = %s LIMIT 1", (pid,))
+                p_row = _gc.fetchone()
+                if p_row and p_row.get("deceased_date"):
+                    return {"pid": pid, "year": _year, "gap_count": 0, "recapture_gaps": [], "note": "deceased"}
 
                 # Step 1: get HCCs captured in the prior measurement year
+                # updated_at is used to compute days since last documentation per CMS 365-day rule
                 _gc.execute(
-                    """SELECT hcc_code, icd10_codes, description
+                    """SELECT hcc_code, icd10_codes, description,
+                              COALESCE(updated_at, created_at) AS last_documented_at
                        FROM raf_patient_hcc
                        WHERE patient_id = %s AND measurement_year = %s""",
                     (pid, _prior_year),
@@ -784,6 +782,8 @@ def get_recapture_gaps(
                 current_hcc_codes = {r["hcc_code"] for r in _gc.fetchall()}
 
                 # Step 3: gap = chronic prior-year HCCs not present in current year
+                # For each gap, compute days since last documentation per CMS 365-day recapture rule.
+                _today = _date.today()
                 gaps = []
                 for row in chronic_prior:
                     hcc = row.get("hcc_code")
@@ -792,12 +792,41 @@ def get_recapture_gaps(
                             icd10_codes = _json.loads(row.get("icd10_codes") or "[]")
                         except (ValueError, TypeError):
                             icd10_codes = []
+
+                        # Resolve last_documented from updated_at / created_at
+                        raw_ts = row.get("last_documented_at")
+                        if raw_ts is None:
+                            last_doc_date = None
+                            days_since = None
+                        elif isinstance(raw_ts, _datetime):
+                            last_doc_date = raw_ts.date()
+                            days_since = (_today - last_doc_date).days
+                        elif isinstance(raw_ts, _date):
+                            last_doc_date = raw_ts
+                            days_since = (_today - last_doc_date).days
+                        else:
+                            # String fallback — strip time component if present
+                            try:
+                                last_doc_date = _date.fromisoformat(str(raw_ts)[:10])
+                                days_since = (_today - last_doc_date).days
+                            except (ValueError, TypeError):
+                                last_doc_date = None
+                                days_since = None
+
                         gaps.append({
                             "hcc_code": hcc,
                             "icd10_codes": icd10_codes,
                             "description": row.get("description") or "",
+                            "last_documented": last_doc_date.isoformat() if last_doc_date else None,
+                            "days_since_documented": days_since,
+                            # CMS requires recapture within 365 days of last documentation
+                            "overdue": (days_since > 365) if days_since is not None else None,
                             "source": "fhir",
                         })
+
+                # Sort most-overdue first so callers can surface the highest-risk gaps immediately
+                gaps.sort(key=lambda g: g["days_since_documented"] if g["days_since_documented"] is not None else -1, reverse=True)
+
                 return {"pid": pid, "year": _year, "prior_year": _prior_year, "gap_count": len(gaps), "recapture_gaps": gaps, "source": "fhir"}
         except Exception as exc:
             logger.debug("recapture-gaps FHIR fallback failed pid=%s: %s", pid, exc)

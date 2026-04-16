@@ -627,6 +627,18 @@ class OpenEMRFhirAdapter:
             address_state = addr.get("state", "")
             address_zip = addr.get("postalCode", "")
 
+        # Deceased status: prefer deceasedDateTime, fall back to deceasedBoolean
+        deceased_date = None
+        deceased_dt = resource.get("deceasedDateTime")
+        if deceased_dt:
+            # deceasedDateTime is ISO-8601; take the date portion only
+            deceased_date = str(deceased_dt)[:10]
+        elif resource.get("deceasedBoolean") is True:
+            # No exact date known — mark as deceased with a sentinel so the
+            # column is non-NULL (downstream filters check for non-NULL).
+            from datetime import date as _date
+            deceased_date = str(_date.today())
+
         return {
             "external_id": resource.get("id", ""),
             "first_name": first,
@@ -643,6 +655,7 @@ class OpenEMRFhirAdapter:
             "city": address_city,
             "state": address_state,
             "zip": address_zip,
+            "deceased_date": deceased_date,
         }
 
     # Common clinical text → ICD-10-CM mapping for conditions without coded entries
@@ -829,8 +842,17 @@ class OpenEMRFhirAdapter:
         dob = patient["date_of_birth"] or None
         fname = patient["first_name"]
         lname = patient["last_name"]
+        deceased_date = patient.get("deceased_date") or None
 
         with raf_cursor() as cur:
+            # Ensure deceased_date column exists (idempotent — silently ignores
+            # "Duplicate column" errors so it is safe to run on every sync).
+            try:
+                cur.execute(
+                    "ALTER TABLE patients ADD COLUMN deceased_date DATE DEFAULT NULL"
+                )
+            except Exception:
+                pass  # Column already exists — this is expected after first run
             # --- Check if a patient with the same name+DOB already exists
             #     (handles OpenEMR creating multiple FHIR resources for
             #     the same person with different UUIDs) ---
@@ -858,6 +880,7 @@ class OpenEMRFhirAdapter:
                            race = IF(%s NOT IN ('', 'Unknown'), %s, race),
                            ethnicity = IF(%s NOT IN ('', 'Unknown'), %s, ethnicity),
                            address = %s, city = %s, state = %s, zip = %s,
+                           deceased_date = COALESCE(%s, deceased_date),
                            updated_at = NOW()
                        WHERE id = %s""",
                     (
@@ -872,6 +895,7 @@ class OpenEMRFhirAdapter:
                         patient.get("city") or None,
                         patient.get("state") or None,
                         patient.get("zip") or None,
+                        deceased_date,
                         existing_id,
                     ),
                 )
@@ -883,9 +907,11 @@ class OpenEMRFhirAdapter:
                             emr_pid, emr_connection_id, data_source, is_active,
                             phone, email, preferred_language, race, ethnicity,
                             address, city, state, zip,
+                            deceased_date,
                             created_at, updated_at)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'fhir', 1,
                                %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                               %s,
                                NOW(), NOW())
                        ON DUPLICATE KEY UPDATE
                            first_name = VALUES(first_name),
@@ -903,6 +929,7 @@ class OpenEMRFhirAdapter:
                            city       = VALUES(city),
                            state      = VALUES(state),
                            zip        = VALUES(zip),
+                           deceased_date = COALESCE(VALUES(deceased_date), deceased_date),
                            updated_at = NOW()""",
                     (
                         tenant_id, fname, lname, fname, lname,
@@ -919,6 +946,7 @@ class OpenEMRFhirAdapter:
                         patient.get("city") or None,
                         patient.get("state") or None,
                         patient.get("zip") or None,
+                        deceased_date,
                     ),
                 )
             # Get the internal patient_id

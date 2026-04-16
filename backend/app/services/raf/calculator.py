@@ -1007,6 +1007,59 @@ def calculate_raf_score(
     if not patient:
         raise ValueError(f"Patient {patient_id} not found")
 
+    # 1a. Deceased patient guard — query deceased_date from patients table.
+    # The column is added idempotently by the FHIR sync adapter; if it does
+    # not yet exist the query falls back gracefully.
+    _deceased_date: Any = None
+    try:
+        with raf_cursor() as _dc:
+            _dc.execute(
+                "SELECT deceased_date FROM patients WHERE id = %s AND tenant_id = %s LIMIT 1",
+                (patient_id, tenant_id),
+            )
+            _d_row = _dc.fetchone()
+            if _d_row:
+                _deceased_date = _d_row.get("deceased_date")
+    except Exception as _de:
+        logger.debug("Could not query deceased_date for patient %s: %s", patient_id, _de)
+
+    if _deceased_date is not None:
+        from datetime import date as _date, datetime as _datetime
+        # Normalise to a date object
+        if isinstance(_deceased_date, str):
+            try:
+                _deceased_date = _datetime.strptime(_deceased_date[:10], "%Y-%m-%d").date()
+            except ValueError:
+                _deceased_date = None
+        elif isinstance(_deceased_date, _datetime):
+            _deceased_date = _deceased_date.date()
+
+        if _deceased_date is not None:
+            _year_start = _date(measurement_year, 1, 1)
+            if _deceased_date < _year_start:
+                # Died before the measurement year even started — zero RAF
+                logger.warning(
+                    "Patient %s deceased %s before measurement year %s — returning zero RAF",
+                    patient_id, _deceased_date, measurement_year,
+                )
+                return {
+                    "patient_id": patient_id,
+                    "measurement_year": measurement_year,
+                    "concurrent_raf": 0.0,
+                    "payment_raf": 0.0,
+                    "prospective_raf": 0.0,
+                    "hcc_list": [],
+                    "icd_codes": [],
+                    "note": "deceased_before_year",
+                    "deceased_date": str(_deceased_date),
+                }
+            # Died mid-year — RAF proceeds normally but deceased_date is
+            # attached to the result so callers can prorate if needed.
+            logger.info(
+                "Patient %s deceased %s mid-year %s — RAF calculated; caller may prorate",
+                patient_id, _deceased_date, measurement_year,
+            )
+
     dob = patient.get("DOB") or patient.get("dob")
     if not dob:
         logger.warning(
@@ -1440,6 +1493,9 @@ def calculate_raf_score(
         "plan_type": plan_type,
         # Sweep period applied
         "sweep_period_applied": sweep_info or None,
+        # Deceased patient — present only when patient died mid-year so callers
+        # can prorate the RAF score by months alive.  None for living patients.
+        "deceased_date": str(_deceased_date) if _deceased_date is not None else None,
         "_disclaimer": (
             "RAF scores are estimates based on CMS-HCC models via hccinfhir. "
             "Not for payment submission."
@@ -1927,3 +1983,196 @@ def get_age_band(dob: str, year: int = 2026) -> str:
     if age < 95:
         return "90-94"
     return "95+"
+
+
+# ---------------------------------------------------------------------------
+# CMS SAS Reconciliation
+# ---------------------------------------------------------------------------
+
+_CMS_SAS_TOLERANCE = 0.01  # ±0.01 is the industry-standard acceptable delta
+
+
+def reconcile_with_cms_sas(
+    patient_id: int,
+    measurement_year: int,
+    cms_sas_score: float | None = None,
+    tenant_id: str = "1",
+) -> dict[str, Any]:
+    """Compare our RAF calculation against CMS SAS expected values.
+
+    Runs the full RAF calculation for the patient and, when a reference score
+    from CMS's official SAS software is supplied, produces a side-by-side
+    reconciliation report.
+
+    Args:
+        patient_id:       OpenEMR patient PID.
+        measurement_year: CMS payment year (e.g. 2026).
+        cms_sas_score:    The expected payment RAF from CMS SAS output.
+                          Pass None to get our score only (no comparison).
+        tenant_id:        Tenant scope for HIPAA multi-tenant isolation.
+
+    Returns a reconciliation report with:
+        - our_score:        our calculated payment RAF
+        - cms_score:        the CMS SAS value (if provided, else None)
+        - delta:            (our_score - cms_score), None when cms_sas_score not given
+        - abs_delta:        absolute value of delta, None when not comparable
+        - tolerance:        True when abs_delta <= ±0.01, None when not comparable
+        - within_tolerance: human-readable verdict string
+        - breakdown:        component-by-component details from our engine
+        - model_version:    which CMS-HCC model(s) were used
+        - blend_weights:    V24/V28 blend weights applied
+        - enrollment_info:  segment, dual status, OREC, institutional flag
+        - engine_input:     full audit input passed to hccinfhir
+        - engine_output:    full hccinfhir raw output
+        - disclaimer:       CMS non-endorsement notice
+    """
+    result = calculate_raf_score(
+        patient_id,
+        measurement_year,
+        tenant_id=tenant_id,
+    )
+
+    our_score: float = round(float(result.get("payment_raf") or 0.0), 4)
+
+    # Build component breakdown from what calculate_raf_score already returns
+    hcc_contributions: list[dict[str, Any]] = result.get("hcc_contributions") or []
+    breakdown: dict[str, Any] = {
+        "demographic_score": result.get("demographic_score"),
+        "disease_score": result.get("disease_score"),
+        "interaction_score": result.get("interaction_score"),
+        "normalization_factor": result.get("normalization_factor"),
+        "maci_factor": result.get("maci_factor"),
+        "model_segment": result.get("model_segment"),
+        "new_enrollee": result.get("new_enrollee", False),
+        "esrd_segment": result.get("esrd_segment"),
+        "icd_codes": result.get("icd_codes", []),
+        "hcc_list": result.get("final_hcc_list") or result.get("raw_hcc_list") or [],
+        "hcc_count": len(hcc_contributions),
+        "hcc_contributions": [
+            {
+                "hcc_code": h.get("hcc_code"),
+                "label": h.get("label") or h.get("hcc_label"),
+                "coefficient": h.get("coefficient"),
+                "icd10_codes": h.get("icd10_codes", []),
+            }
+            for h in hcc_contributions
+        ],
+        "v24_score": result.get("v24_score"),
+        "v28_score": result.get("v28_score"),
+        "v24_hcc_list": result.get("v24_hcc_list"),
+        "v28_hcc_list": result.get("v28_hcc_list"),
+        "blended_raw_score": result.get("blended_raw_score"),
+        "concurrent_raf": result.get("concurrent_raf"),
+        "prospective_raf": result.get("prospective_raf"),
+        "suspected_raf_delta": result.get("suspected_raf_delta"),
+    }
+
+    # Comparison logic — only computed when a reference score is provided
+    delta: float | None = None
+    abs_delta: float | None = None
+    tolerance: bool | None = None
+    within_tolerance_label: str
+
+    if cms_sas_score is not None:
+        cms_score_rounded = round(float(cms_sas_score), 4)
+        delta = round(our_score - cms_score_rounded, 4)
+        abs_delta = round(abs(delta), 4)
+        tolerance = abs_delta <= _CMS_SAS_TOLERANCE
+        if tolerance:
+            within_tolerance_label = (
+                f"PASS — delta {delta:+.4f} is within ±{_CMS_SAS_TOLERANCE}"
+            )
+        else:
+            within_tolerance_label = (
+                f"FAIL — delta {delta:+.4f} exceeds ±{_CMS_SAS_TOLERANCE}; "
+                "review HCC mapping, ICD code dates, and enrollment segment"
+            )
+    else:
+        cms_score_rounded = None  # type: ignore[assignment]
+        within_tolerance_label = "N/A — no CMS SAS score provided for comparison"
+
+    return {
+        "patient_id": patient_id,
+        "measurement_year": measurement_year,
+        "our_score": our_score,
+        "cms_score": cms_score_rounded if cms_sas_score is not None else None,
+        "delta": delta,
+        "abs_delta": abs_delta,
+        "tolerance": tolerance,
+        "within_tolerance": within_tolerance_label,
+        "breakdown": breakdown,
+        "model_version": result.get("model_version"),
+        "blend_weights": result.get("blend_weights"),
+        "enrollment_info": result.get("enrollment_info"),
+        "engine_input": result.get("engine_input"),
+        "engine_output": result.get("engine_output"),
+        "disclaimer": result.get(
+            "_disclaimer",
+            "RAF scores are estimates based on CMS-HCC models via hccinfhir. "
+            "Not for payment submission.",
+        ),
+    }
+
+
+def reconcile_batch(
+    patient_ids: list[int],
+    measurement_year: int,
+    cms_sas_scores: dict[int, float] | None = None,
+    tenant_id: str = "1",
+) -> list[dict[str, Any]]:
+    """Run CMS SAS reconciliation for multiple patients.
+
+    Args:
+        patient_ids:      List of OpenEMR patient PIDs.
+        measurement_year: CMS payment year.
+        cms_sas_scores:   Optional mapping of {patient_id: cms_sas_score}.
+                          Patients not present in the map are reconciled without
+                          a reference score.
+        tenant_id:        Tenant scope for HIPAA multi-tenant isolation.
+
+    Returns:
+        List of reconciliation report dicts in the same order as patient_ids.
+        Each entry is the output of reconcile_with_cms_sas, extended with an
+        ``error`` key (None on success, error message string on failure) so that
+        one bad patient does not abort the entire batch.
+    """
+    cms_sas_scores = cms_sas_scores or {}
+    reports: list[dict[str, Any]] = []
+
+    for pid in patient_ids:
+        try:
+            report = reconcile_with_cms_sas(
+                patient_id=pid,
+                measurement_year=measurement_year,
+                cms_sas_score=cms_sas_scores.get(pid),
+                tenant_id=tenant_id,
+            )
+            report["error"] = None
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "reconcile_batch: pid=%s year=%s failed: %s",
+                pid,
+                measurement_year,
+                exc,
+            )
+            report = {
+                "patient_id": pid,
+                "measurement_year": measurement_year,
+                "our_score": None,
+                "cms_score": cms_sas_scores.get(pid),
+                "delta": None,
+                "abs_delta": None,
+                "tolerance": None,
+                "within_tolerance": f"ERROR — {exc}",
+                "breakdown": {},
+                "model_version": None,
+                "blend_weights": None,
+                "enrollment_info": None,
+                "engine_input": None,
+                "engine_output": None,
+                "disclaimer": None,
+                "error": str(exc),
+            }
+        reports.append(report)
+
+    return reports
