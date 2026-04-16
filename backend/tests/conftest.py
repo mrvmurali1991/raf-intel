@@ -468,12 +468,6 @@ def _patch_auth_resolution():
                 return dict(u)
         return None
 
-    def _fake_get_user_by_email(email: str) -> dict | None:
-        for u in _USERS_BY_ID.values():
-            if u.get("email") == email:
-                return dict(u)
-        return None
-
     with (
         patch("app.rate_limit.limiter.enabled", False),
         patch("app.services.auth_service.get_user", side_effect=_fake_get_user),

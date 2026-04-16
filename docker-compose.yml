@@ -20,7 +20,7 @@ services:
         --maxmemory-policy allkeys-lru
         --save 60 1000
         --loglevel warning
-        --requirepass ${REDIS_PASSWORD:-rafredis123}
+        --requirepass ${REDIS_PASSWORD:-rafredis123}  # DEV ONLY - never use in production
     volumes:
       - redis_data:/data
     networks:
@@ -174,7 +174,7 @@ services:
       --table-open-cache=200
       --performance-schema=OFF
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}  # DEV ONLY - never use in production
       MYSQL_DATABASE: openemr
     volumes:
       - mysql_data:/var/lib/mysql

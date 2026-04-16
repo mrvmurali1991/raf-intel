@@ -23,6 +23,7 @@ import {
   Card,
   MeatDots,
 } from "./shared";
+import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import type {
   ExtendedRafBreakdown,
   HCCDetail,
@@ -69,12 +70,11 @@ const DISEASE_INTERACTIONS: Array<{ name: string; groups: number[][]; coefficien
   { name: "HF_RENAL_DIABETES", groups: [[85, 86], [136, 137, 138, 141], [37, 38]], coefficient: 0.034 },
 ];
 
-const MA_PAYMENT_PER_RAF = 11015.04;
 
 // ---------------------------------------------------------------------------
 // RAF Score Calculator Table Component
 // ---------------------------------------------------------------------------
-function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, selectedYear }: { breakdown: ExtendedRafBreakdown | undefined; breakdownLoading: boolean; lastCalcResult?: any; selectedYear: number }) {
+function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, selectedYear }: { breakdown: ExtendedRafBreakdown | undefined; breakdownLoading: boolean; lastCalcResult?: { raf_score: number } | null; selectedYear: number }) {
   if (breakdownLoading) {
     return (
       <div className="animate-slide-up stagger-1">
@@ -232,6 +232,7 @@ function LLMInputPanel({ llmInput }: { llmInput: any }) {
     <div style={{ borderRadius: 8, border: `1px solid ${C.purple100}`, overflow: "hidden", marginBottom: 12 }}>
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         style={{
           width: "100%", padding: "10px 14px", background: `linear-gradient(135deg, ${C.purple50}, ${C.blue50})`,
           border: "none", cursor: "pointer", display: "flex",
@@ -381,7 +382,7 @@ function LLMInputPanel({ llmInput }: { llmInput: any }) {
 // Export LLMInputPanel for use in EncountersTab
 export { LLMInputPanel };
 
-function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { breakdown: ExtendedRafBreakdown; componentSum: number; grandTotal: number; lastCalcResult?: any }) {
+function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { breakdown: ExtendedRafBreakdown; componentSum: number; grandTotal: number; lastCalcResult?: { raf_score: number } | null }) {
   const [open, setOpen] = useState(false);
   const data = lastCalcResult || breakdown as any;
   const engineInput = data.engine_input || (breakdown as any)?.engine_input;
@@ -405,6 +406,7 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
     <div style={{ borderRadius: 12, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         style={{
           width: "100%", padding: "12px 20px", background: C.slate100,
           border: "none", cursor: "pointer", display: "flex",
@@ -659,6 +661,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
             <input
               value={extraCodes}
               onChange={e => setExtraCodes(e.target.value)}
+              aria-label="Add ICD-10 codes to test in crosswalk"
               placeholder="Add codes to test... e.g. N18.4, J44.1"
               style={{
                 flex: 1, padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.slate200}`,
@@ -889,7 +892,7 @@ export function RAFTab({
   recaptureLoading: boolean;
   rafScore: number | null;
   suspects: PatientSuspectsResponse | undefined;
-  lastCalcResult?: any;
+  lastCalcResult?: { raf_score: number } | null;
   selectedYear: number;
 }) {
   const recaptureItems: RecaptureGapItem[] = (() => {

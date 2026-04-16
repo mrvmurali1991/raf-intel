@@ -47,6 +47,7 @@ import type {
   ProblemListResponse,
   RecaptureGapsResponse,
   AuditPackagesResponse,
+  PatientSuspectsResponse,
 } from "@/lib/api";
 
 // Component imports
@@ -87,7 +88,7 @@ export default function PatientDetailPage({
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [lastAnalysisResult, setLastAnalysisResult] = useState<Record<number, any>>({});
+  const [lastAnalysisResult, setLastAnalysisResult] = useState<Record<number, AnalysisResult>>({});
 
   // ---- Core queries (always fetched) ----
   const patientQ = useQuery({
@@ -120,15 +121,15 @@ export default function PatientDetailPage({
     queryFn: () => getPatientProblemList(pid, selectedYear),
   });
 
-  const suspectsQ = useQuery<any>({
+  const suspectsQ = useQuery<PatientSuspectsResponse>({
     queryKey: ["patient-suspects", pid, selectedYear],
-    queryFn: () => getPatientSuspects(pid, "open", selectedYear) as Promise<any>,
+    queryFn: () => getPatientSuspects(pid, "open", selectedYear),
   });
 
   // All suspects (including accepted/dismissed) for timeline
-  const allSuspectsQ = useQuery<any>({
+  const allSuspectsQ = useQuery<PatientSuspectsResponse>({
     queryKey: ["patient-suspects-all", pid, selectedYear],
-    queryFn: () => getPatientSuspects(pid, "all", selectedYear) as Promise<any>,
+    queryFn: () => getPatientSuspects(pid, "all", selectedYear),
     enabled: activeTab === "activity",
   });
 
@@ -200,11 +201,11 @@ export default function PatientDetailPage({
   });
 
   // ---- Mutations ----
-  const [lastCalcResult, setLastCalcResult] = useState<any>(null);
+  const [lastCalcResult, setLastCalcResult] = useState<{ raf_score: number } | null>(null);
 
   const calcRAFMutation = useMutation({
     mutationFn: () => calculateRAF(pid, { year: selectedYear }),
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       setLastCalcResult(data);
       toast.success("RAF Calculated", `Score recalculated for ${selectedYear}.`);
       queryClient.invalidateQueries({ queryKey: ["raf-breakdown", pid, selectedYear] });
@@ -229,6 +230,7 @@ export default function PatientDetailPage({
       toast.success("Accepted", "Suspect condition accepted.");
       queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });
     },
+    onError: () => toast.error("Error", "Failed to accept suspect condition."),
   });
 
   const dismissMutation = useMutation({
@@ -237,6 +239,7 @@ export default function PatientDetailPage({
       toast.success("Dismissed", "Suspect condition dismissed.");
       queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });
     },
+    onError: () => toast.error("Error", "Failed to dismiss suspect condition."),
   });
 
   const analyzeMutation = useMutation({
@@ -271,6 +274,8 @@ export default function PatientDetailPage({
   });
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef<number>(0);
+  const MAX_POLL_COUNT = 60; // 60 × 5 s = 5 minutes maximum
 
   useEffect(() => {
     return () => {
@@ -283,9 +288,18 @@ export default function PatientDetailPage({
     mutationFn: () => batchAnalysis(Number(pid)),
     onSuccess: async (data) => {
       const jobId = data.job_id;
+      pollCountRef.current = 0;
       setBatchStatus("running");
       toast.success("Batch Started", "Analyzing all encounters...");
       pollRef.current = setInterval(async () => {
+        pollCountRef.current += 1;
+        if (pollCountRef.current >= MAX_POLL_COUNT) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setBatchStatus(null);
+          toast.error("Timeout", "Batch analysis is taking too long. Please check back later.");
+          return;
+        }
         try {
           const status = await getJobStatus(jobId);
           const done = status.status === "completed" || (status.status as string) === "SUCCESS";
@@ -742,37 +756,42 @@ export default function PatientDetailPage({
               </button>
             ))}
           </div>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: "14px 20px", fontSize: 13,
-                fontWeight: activeTab === tab.id ? 600 : 500,
-                color: activeTab === tab.id ? C.blue600 : C.slate500,
-                background: "transparent", border: "none",
-                borderBottom: activeTab === tab.id ? `2px solid ${C.blue600}` : "2px solid transparent",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                transition: "color 0.15s, border-color 0.15s",
-              }}
-            >
-              {tab.label}
-              {tab.badge !== undefined && (
-                <span style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999,
-                  fontSize: 10, fontWeight: 700, background: C.amber500, color: C.white,
-                }}>
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          ))}
+          <div role="tablist">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                id={`tab-${tab.id}`}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  padding: "14px 20px", fontSize: 13,
+                  fontWeight: activeTab === tab.id ? 600 : 500,
+                  color: activeTab === tab.id ? C.blue600 : C.slate500,
+                  background: "transparent", border: "none",
+                  borderBottom: activeTab === tab.id ? `2px solid ${C.blue600}` : "2px solid transparent",
+                  cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
+                  transition: "color 0.15s, border-color 0.15s",
+                }}
+              >
+                {tab.label}
+                {tab.badge !== undefined && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999,
+                    fontSize: 10, fontWeight: 700, background: C.amber500, color: C.white,
+                  }}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* TAB CONTENT */}
-      <div className="animate-slide-up stagger-2" style={{ padding: 24 }}>
+      <div role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="animate-slide-up stagger-2" style={{ padding: 24 }}>
         {activeTab === "overview" && (
           <OverviewTab
             pid={pid}

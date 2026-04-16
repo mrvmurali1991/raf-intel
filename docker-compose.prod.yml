@@ -64,8 +64,8 @@ x-backend-env: &backend-env
   LOG_FORMAT: ${LOG_FORMAT:-json}
   STRICT_MIGRATIONS: ${STRICT_MIGRATIONS:-false}
   PIPELINE_AI_ENABLED: ${PIPELINE_AI_ENABLED:-true}
-  ENCRYPTION_SALT: ${ENCRYPTION_SALT:-raf-intelligence-encryption-salt}
-  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-raf-intelligence-data-key-2024}
+  ENCRYPTION_SALT: ${ENCRYPTION_SALT:?ENCRYPTION_SALT must be set in production}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?DATA_ENCRYPTION_KEY must be set in production}
 
 services:
   # -------------------------------------------------------------------------
@@ -331,7 +331,7 @@ services:
       - no-new-privileges:true
     environment:
       <<: *backend-env
-      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:-admin:changeme}
+      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:?FLOWER_BASIC_AUTH must be set in production}
     networks:
       - raf-internal
       - raf-external
@@ -343,7 +343,7 @@ services:
     command: >
       celery -A app.services.celery_tasks flower
         --port=5555
-        --basic-auth=${FLOWER_BASIC_AUTH:-admin:changeme}
+        --basic-auth=${FLOWER_BASIC_AUTH:?FLOWER_BASIC_AUTH must be set in production}
         --url-prefix=${FLOWER_URL_PREFIX:-}
     deploy:
       resources:

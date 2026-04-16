@@ -235,6 +235,9 @@ def bulk_update(
     cannot spoof the ``reviewed_by`` field.
     """
     reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
     succeeded = 0
     failed = 0
     errors: list[dict[str, Any]] = []
@@ -242,9 +245,9 @@ def bulk_update(
     for sid in body.ids:
         try:
             if body.action == "accept":
-                accept_suspect(sid, reviewed_by=reviewed_by)
+                accept_suspect(sid, reviewed_by=reviewed_by, tenant_id=tenant_id)
             else:
-                dismiss_suspect(sid, reason=body.reason, reviewed_by=reviewed_by)
+                dismiss_suspect(sid, reason=body.reason, reviewed_by=reviewed_by, tenant_id=tenant_id)
             succeeded += 1
         except Exception as exc:
             failed += 1
@@ -403,8 +406,11 @@ def accept_suspect_endpoint(
     The reviewer identity is derived from the authenticated JWT.
     """
     reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
     try:
-        updated = accept_suspect(suspect_id, reviewed_by=reviewed_by)
+        updated = accept_suspect(suspect_id, reviewed_by=reviewed_by, tenant_id=tenant_id)
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -441,11 +447,15 @@ def dismiss_suspect_endpoint(
     The reviewer identity is derived from the authenticated JWT.
     """
     reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
     try:
         updated = dismiss_suspect(
             suspect_id,
             reason=body.reason,
             reviewed_by=reviewed_by,
+            tenant_id=tenant_id,
         )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)

@@ -840,21 +840,8 @@ def _calculate_esrd_demographic_score(
 
 
 def _get_hcc_label_v28(hcc_code: str) -> str:
-    """Get human-readable label for a V28 HCC code via hccinfhir."""
-    try:
-        cm = _processor_v28.coefficients_mapping or {}
-        prefix = "cna_hcc"
-        target = f"{prefix}{hcc_code}"
-        for (k, model), _ in cm.items():
-            if k.lower() == target and "V28" in model:
-                break
-        if not hasattr(_get_hcc_label_v28, "_cache"):
-            _get_hcc_label_v28._cache = {}
-        if hcc_code in _get_hcc_label_v28._cache:
-            return _get_hcc_label_v28._cache[hcc_code]
-        return f"HCC {hcc_code}"
-    except Exception:
-        return f"HCC {hcc_code}"
+    """Get human-readable label for a V28 HCC code."""
+    return f"HCC {hcc_code}"
 
 
 def _get_hcc_coefficient_v28(hcc_code: str, segment: str = "CNA") -> float:
@@ -872,7 +859,7 @@ def _get_hcc_coefficient_v28(hcc_code: str, segment: str = "CNA") -> float:
 
 def _enrich_hcc_details(
     hcc_codes: list[str], patient_id: int, year: int, segment: str, tenant_id: str = ""
-) -> list[dict]:
+) -> dict:
     """Get labels and coefficients for HCC codes by running hccinfhir calculation."""
     try:
         patient = _get_patient(patient_id, tenant_id=tenant_id)
@@ -916,7 +903,7 @@ def _enrich_hcc_details(
 
 def calculate_raf_score(
     patient_id: int,
-    measurement_year: int = 2026,
+    measurement_year: int | None = None,
     dual_status: str | None = None,
     institutional: bool = False,
     *,
@@ -976,6 +963,8 @@ def calculate_raf_score(
         - prospective_raf: the total opportunity score (including AI suspects)
         - suspected_raf_delta: (prospective_raf - concurrent_raf) numeric gap
     """
+    if measurement_year is None:
+        measurement_year = date.today().year
     if not tenant_id and patient_id != 0:
         raise ValueError(
             "calculate_raf_score: tenant_id is required for patient data access — "
@@ -1519,7 +1508,7 @@ def calculate_raf_score(
 
 def calculate_raf_score_multi_model(
     patient_id: int,
-    measurement_year: int = 2026,
+    measurement_year: int | None = None,
     *,
     encounter_year: int | None = None,
     enrollment_override: dict[str, Any] | None = None,
@@ -1540,6 +1529,8 @@ def calculate_raf_score_multi_model(
         - blended: blended payment RAF and raw score
         - hcc_comparison: codes present in V24 only, V28 only, or both
     """
+    if measurement_year is None:
+        measurement_year = date.today().year
     if not tenant_id and patient_id != 0:
         raise ValueError(
             "calculate_raf_score_multi_model: tenant_id is required — "
@@ -1654,10 +1645,12 @@ def calculate_raf_score_multi_model(
 
 
 def calculate_raf_for_all_patients(
-    year: int = 2026,
+    year: int | None = None,
     tenant_id: str = "",  # Required — empty string will raise below
 ) -> list[dict[str, Any]]:
     """Calculate RAF for all patients in raf_intelligence.patients."""
+    if year is None:
+        year = date.today().year
     if not tenant_id:
         raise ValueError(
             "calculate_raf_for_all_patients: tenant_id is required — "

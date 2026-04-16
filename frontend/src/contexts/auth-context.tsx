@@ -31,6 +31,20 @@ import api, { registerAuthInterceptors, type AuthInterceptorHandles } from "@/li
 // Types
 // ---------------------------------------------------------------------------
 
+/** Decoded JWT payload fields accessed by this module. */
+interface JwtPayload {
+  /** Unix timestamp (seconds) when the token expires. */
+  exp: number;
+  /** Subject — typically the user id. */
+  sub?: string;
+  tenant_id?: string;
+  role?: string;
+  /** Allow additional standard JWT claims without widening to `any`. */
+  iat?: number;
+  iss?: string;
+  aud?: string | string[];
+}
+
 export interface User {
   id: string | number;
   email: string;
@@ -185,10 +199,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // JWT helpers
   // -------------------------------------------------------------------------
 
-  function parseJwtPayload(token: string): any | null {
+  function parseJwtPayload(token: string): JwtPayload | null {
     try {
       const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-      return JSON.parse(atob(base64));
+      return JSON.parse(atob(base64)) as JwtPayload;
     } catch {
       return null;
     }

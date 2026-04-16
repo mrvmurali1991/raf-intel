@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
+import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 
 /* ================================================================== */
 /*  Page-specific constants                                            */
@@ -48,7 +49,7 @@ const SUSPECTS_GAP = 14;
 const SUSPECTS_PAD_X = 22;
 const ROW_MIN_HEIGHT = 84;
 
-const REVENUE_PER_RAF = 11015;
+const REVENUE_PER_RAF = MA_PAYMENT_PER_RAF;
 const PAGE_SIZE = 25;
 
 type StatusTab = "all" | "open" | "accepted" | "dismissed" | "coded";

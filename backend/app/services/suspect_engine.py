@@ -974,12 +974,14 @@ def get_all_open_suspects(
 # Accept / dismiss workflows
 # ---------------------------------------------------------------------------
 
-def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
+def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = None) -> dict[str, Any]:
     """
     Mark a suspect as accepted (provider agrees the condition should be coded).
     Also inserts the accepted HCC into raf_patient_hcc and recalculates RAF score.
     Returns the updated record.
     """
+    if not tenant_id:
+        raise ValueError("accept_suspect requires tenant_id to prevent cross-tenant mutation")
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -989,12 +991,13 @@ def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
                     reviewed_by = %s,
                     updated_at  = NOW()
                 WHERE id = %s
+                  AND tenant_id = %s
                 """,
-                (reviewed_by, suspect_id),
+                (reviewed_by, suspect_id, tenant_id),
             )
             cur.execute(
-                "SELECT * FROM raf_suspect_conditions WHERE id = %s",
-                (suspect_id,),
+                "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
+                (suspect_id, tenant_id),
             )
             row = cur.fetchone()
 
@@ -1013,18 +1016,29 @@ def accept_suspect(suspect_id: int, reviewed_by: str) -> dict[str, Any]:
                         "cannot safely promote HCC without tenant scope."
                     )
 
-                # HCC coefficient lookup
-                _HCC_COEFFICIENTS = {
-                    9: 0.309, 18: 0.166, 19: 0.088, 22: 0.236, 35: 0.346, 36: 0.346,
-                    37: 0.166, 55: 0.395, 85: 0.360, 96: 0.299, 108: 0.288,
-                    111: 0.335, 137: 0.289, 138: 0.069, 226: 0.360, 238: 0.299, 280: 0.319,
-                }
-                # _hcc may be stored as "85" or "HCC85"; strip prefix and convert to int for lookup
-                try:
-                    _hcc_int = int(str(_hcc).upper().lstrip("HC").lstrip("C"))
-                except (ValueError, TypeError):
-                    _hcc_int = -1
-                _coeff = _HCC_COEFFICIENTS.get(_hcc_int, 0.100)
+                # HCC coefficient lookup from database
+                # Determine model_segment from patient's most recent RAF score if available
+                cur.execute(
+                    "SELECT model_segment FROM raf_scores WHERE patient_id = %s AND measurement_year = %s ORDER BY updated_at DESC LIMIT 1",
+                    (_pid, _year),
+                )
+                _seg_row = cur.fetchone()
+                _model_segment = (_seg_row.get("model_segment") or "CNA") if _seg_row else "CNA"
+
+                cur.execute(
+                    "SELECT coefficient FROM hcc_raf_coefficients WHERE hcc_code = %s AND model_segment = %s LIMIT 1",
+                    (_hcc, _model_segment),
+                )
+                _coeff_row = cur.fetchone()
+                if _coeff_row:
+                    _coeff = float(_coeff_row["coefficient"])
+                else:
+                    _coeff = 0.100
+                    logger.warning(
+                        "accept_suspect: no coefficient found in hcc_raf_coefficients for "
+                        "hcc_code=%s model_segment=%s — using fallback 0.100",
+                        _hcc, _model_segment,
+                    )
 
                 # Check if already exists
                 cur.execute(
@@ -1081,11 +1095,14 @@ def dismiss_suspect(
     suspect_id: int,
     reason: str,
     reviewed_by: str,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Mark a suspect as dismissed with a documented reason.
     Returns the updated record.
     """
+    if not tenant_id:
+        raise ValueError("dismiss_suspect requires tenant_id to prevent cross-tenant mutation")
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -1096,12 +1113,13 @@ def dismiss_suspect(
                     reviewed_by      = %s,
                     updated_at       = NOW()
                 WHERE id = %s
+                  AND tenant_id = %s
                 """,
-                (reason, reviewed_by, suspect_id),
+                (reason, reviewed_by, suspect_id, tenant_id),
             )
             cur.execute(
-                "SELECT * FROM raf_suspect_conditions WHERE id = %s",
-                (suspect_id,),
+                "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
+                (suspect_id, tenant_id),
             )
             row = cur.fetchone()
         if not row:

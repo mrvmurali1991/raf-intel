@@ -156,7 +156,7 @@ async def run_in_db_executor(func, *args, **kwargs):
 
         result = await run_in_db_executor(my_sync_fn, arg1, kwarg=val)
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_db_executor, lambda: func(*args, **kwargs))
 
 
@@ -179,7 +179,7 @@ def async_db(func):
     """
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_db_executor, lambda: func(*args, **kwargs))
     return wrapper
 

@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import { analyzeNote, getPatientsWithEncounters, getPatientEncounters, calculateRAF } from "@/lib/api";
 import api from "@/lib/api";
 import type { Patient, AnalysisResult } from "@/types";
@@ -2605,7 +2606,7 @@ export default function DemoPage() {
         if (!billingRAF) billingRAF = patientContext?.raf_score ?? demographicScore;
       }
 
-      const revenueImpact = ((aiRAF - billingRAF) * 11015.04).toFixed(0);
+      const revenueImpact = ((aiRAF - billingRAF) * MA_PAYMENT_PER_RAF).toFixed(0);
 
       const billingHCCSet = new Set(billingComponents.filter((c: any) => c.component?.startsWith("HCC")).map((c: any) => c.component));
       const newAIHCCs = [...new Set(aiHCCs)].filter((h: string) => {
