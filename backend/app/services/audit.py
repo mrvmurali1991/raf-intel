@@ -37,8 +37,45 @@ import logging
 from typing import Any, Mapping
 
 from app.db import raf_cursor
+from app.services.ai_pipeline.guardrails import scrub_pii_from_logs
 
 log = logging.getLogger(__name__)
+
+# Keys whose values are always PHI-sensitive — redacted unconditionally.
+_REDACT_KEYS = frozenset({
+    "patient_mrn", "ssn", "mbi", "dob",
+    "patient_name", "phone", "email",
+})
+
+
+def _scrub_phi(value: Any) -> Any:
+    """Recursively scrub PHI from arbitrary jsonable structures.
+
+    - String leaves are run through :func:`scrub_pii_from_logs`.
+    - Keys in :data:`_REDACT_KEYS` have their values replaced with
+      ``"[REDACTED]"`` regardless of content/type.
+    - On any unexpected failure, fall back to the raw value and warn —
+      the audit path must never raise (see comment in :func:`log_event`).
+    """
+    try:
+        if isinstance(value, Mapping):
+            out: dict[str, Any] = {}
+            for k, v in value.items():
+                if isinstance(k, str) and k.lower() in _REDACT_KEYS:
+                    out[k] = "[REDACTED]"
+                else:
+                    out[k] = _scrub_phi(v)
+            return out
+        if isinstance(value, list):
+            return [_scrub_phi(v) for v in value]
+        if isinstance(value, tuple):
+            return [_scrub_phi(v) for v in value]
+        if isinstance(value, str):
+            return scrub_pii_from_logs(value)
+        return value
+    except Exception:
+        log.warning("audit PHI scrub failed; persisting raw value", exc_info=True)
+        return value
 
 # -- canonical action strings -------------------------------------------------
 
@@ -99,8 +136,8 @@ def log_event(
                     action,
                     target_type,
                     str(target_id) if target_id is not None else None,
-                    json.dumps(_jsonable(dict(before))) if before else None,
-                    json.dumps(_jsonable(dict(after))) if after else None,
+                    json.dumps(_scrub_phi(_jsonable(dict(before)))) if before else None,
+                    json.dumps(_scrub_phi(_jsonable(dict(after)))) if after else None,
                 ),
             )
             new_id = getattr(cur, "lastrowid", None)

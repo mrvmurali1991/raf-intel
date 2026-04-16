@@ -33,9 +33,19 @@ import logging
 import os
 import threading
 import time
+from contextvars import ContextVar
 from typing import Any, Optional
 
 import requests
+
+# Module-level contextvar for tenant propagation. Callers (e.g. request
+# middleware) can set this so audit events are correctly attributed without
+# threading a tenant_id through every internal function. Defaults to None;
+# unset reads resolve to "system" in the audit call to make log analysis
+# distinguishable from a real tenant literally named "default".
+current_tenant_id: ContextVar[str | None] = ContextVar(
+    "current_tenant_id", default=None
+)
 
 # Guardrails are imported lazily inside call sites to avoid a circular
 # import: ``app.services.ai_pipeline/__init__.py`` eagerly imports modules
@@ -54,13 +64,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _audit(action: str, *, model: str, before: dict | None = None,
-           after: dict | None = None) -> None:
+           after: dict | None = None,
+           tenant_id: str | None = None) -> None:
     """Best-effort audit emission. Never raises."""
     try:
         import importlib
         _audit_mod = importlib.import_module("app.services.audit")
+        resolved_tenant = tenant_id
+        if resolved_tenant is None:
+            try:
+                resolved_tenant = current_tenant_id.get()
+            except LookupError:
+                resolved_tenant = None
+        if not resolved_tenant:
+            resolved_tenant = "system"
         _audit_mod.log_event(
-            tenant_id="default",
+            tenant_id=resolved_tenant,
             action=action,
             actor_type="system",
             actor_id="llm_client",
@@ -323,6 +342,7 @@ def llm_generate_content(
     model: str = _DEFAULT_MODEL,
     *,
     timeout: int = _REQUEST_TIMEOUT_SEC,
+    tenant_id: str | None = None,
 ) -> dict:
     """Transport-layer helper — POST a raw ``generateContent`` payload.
 
@@ -365,6 +385,7 @@ def llm_generate_content(
             "raw_payload": True,
         },
         after=None,
+        tenant_id=tenant_id,
     )
     start = time.monotonic()
     try:
@@ -419,6 +440,7 @@ def llm_generate_content(
             model=model,
             before=None,
             after={"error": str(e), "type": type(e).__name__},
+            tenant_id=tenant_id,
         )
         raise
     elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -430,6 +452,7 @@ def llm_generate_content(
             "output_chars": len(json.dumps(body)) if body is not None else 0,
             "latency_ms": elapsed_ms,
         },
+        tenant_id=tenant_id,
     )
     return body
 
@@ -447,6 +470,7 @@ def llm_generate(
     system: Optional[str] = None,
     temperature: float = 0.1,
     output_schema: dict | None = None,
+    tenant_id: str | None = None,
 ) -> str:
     """Generate text from a Gemini model.
 
@@ -502,6 +526,7 @@ def llm_generate(
                 "temperature": temperature,
             },
             after=None,
+            tenant_id=tenant_id,
         )
 
     def _do_call(p: str, s: Optional[str]) -> str:
@@ -521,6 +546,7 @@ def llm_generate(
             model=model,
             before=None,
             after={"error": str(e), "type": type(e).__name__},
+            tenant_id=tenant_id,
         )
         raise
     elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -529,6 +555,7 @@ def llm_generate(
         model=model,
         before=None,
         after={"output_chars": len(output), "latency_ms": elapsed_ms},
+        tenant_id=tenant_id,
     )
 
     if output_schema is not None:
@@ -540,6 +567,7 @@ def llm_generate(
                 model=model,
                 before={"reason": "schema_validation_failed", "error": err},
                 after=None,
+                tenant_id=tenant_id,
             )
             retry_prompt = safe_prompt + _STRICT_JSON_REMINDER
             _emit_request(retry_prompt)
@@ -552,6 +580,7 @@ def llm_generate(
                     model=model,
                     before=None,
                     after={"error": str(e), "type": type(e).__name__},
+                    tenant_id=tenant_id,
                 )
                 raise
             elapsed2 = int((time.monotonic() - start2) * 1000)
@@ -560,6 +589,7 @@ def llm_generate(
                 model=model,
                 before=None,
                 after={"output_chars": len(output), "latency_ms": elapsed2},
+                tenant_id=tenant_id,
             )
             ok2, _parsed2, err2 = validate_llm_output(output, output_schema)
             if not ok2:

@@ -134,6 +134,7 @@ celery_app.conf.task_routes = {
     "raf.transmit_submission":           {"queue": "default",  "priority": 6},
     "raf.process_claims_batch":          {"queue": "default",  "priority": 5},
     "raf.sync_fhir":                     {"queue": "default",  "priority": 5},
+    "raf.fhir_sync":                     {"queue": "default",  "priority": 5},
 }
 
 # Enforce JSON serialization (safer than default which allows pickle).
@@ -1145,6 +1146,122 @@ def dispatch_transmit_submission(
         args_json=json.dumps({"tenant_id": tenant_id, "submission_id": submission_id}),
     )
     return task.id
+
+
+# ---------------------------------------------------------------------------
+# Task: FHIR connection sync (tenant-scoped)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.fhir_sync",
+    queue="default",
+    max_retries=3,
+    default_retry_delay=120,
+)
+def fhir_sync_task(
+    self,
+    connection_id: int,
+    tenant_id: str,
+    user_id: str,
+    sync_type: str = "incremental",
+    resource_types: list[str] | None = None,
+    use_bulk: bool = False,
+) -> dict[str, Any]:
+    """Sync a single FHIR connection, re-validating tenant ownership.
+
+    The daemon-thread implementation this replaces did not re-check which
+    tenant owns the connection, so a task queued by tenant A could end up
+    syncing a connection that had been re-assigned to tenant B.  This task
+    re-queries ``fhir_connections`` with an explicit tenant filter before
+    touching any PHI.
+    """
+    if not tenant_id:
+        raise ValueError(
+            "fhir_sync_task: tenant_id is required — refusing to run "
+            "without tenant scope (HIPAA multi-tenant isolation)"
+        )
+
+    job_id = self.request.id
+    _mark_started(
+        self,
+        "raf.fhir_sync",
+        {
+            "connection_id": connection_id,
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "sync_type": sync_type,
+        },
+    )
+    _audit(
+        "job_started",
+        job_id,
+        f"fhir_sync connection={connection_id} tenant={tenant_id} user={user_id}",
+    )
+
+    try:
+        from app.db import raf_cursor
+        import app.services.fhir_service as fhir_svc
+
+        # Re-validate tenant ownership inside the worker process.
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, tenant_id, is_active FROM fhir_connections "
+                "WHERE id = %s AND tenant_id = %s LIMIT 1",
+                (connection_id, tenant_id),
+            )
+            row = cur.fetchone()
+
+        if not row:
+            msg = (
+                f"fhir_sync_task: connection {connection_id} does not belong "
+                f"to tenant {tenant_id} — aborting (possible tenant leak)"
+            )
+            task_logger.error(msg)
+            _mark_failure(self, PermissionError(msg))
+            _audit("job_failed", job_id, msg[:500])
+            return {"status": "aborted", "reason": "tenant_mismatch"}
+
+        if not row.get("is_active"):
+            msg = f"fhir_sync_task: connection {connection_id} is disabled"
+            task_logger.warning(msg)
+            _mark_failure(self, RuntimeError(msg))
+            _audit("job_failed", job_id, msg[:500])
+            return {"status": "aborted", "reason": "inactive"}
+
+        _mark_progress(self, 0, 1, f"Running {sync_type} FHIR sync for connection {connection_id}")
+        result = fhir_svc.run_sync(
+            connection_id=connection_id,
+            sync_type=sync_type,
+            resource_types=resource_types,
+            use_bulk=use_bulk,
+        )
+        _mark_progress(self, 1, 1, "Sync complete")
+
+        outcome = {
+            "connection_id": connection_id,
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "sync_type": sync_type,
+            **(result or {}),
+        }
+        _mark_success(self, outcome)
+        _audit(
+            "job_completed",
+            job_id,
+            f"fhir_sync connection={connection_id} result={json.dumps(result or {})[:200]}",
+        )
+        return outcome
+
+    except Exception as exc:
+        _mark_failure(self, exc)
+        _audit("job_failed", job_id, str(exc)[:500])
+        task_logger.error(
+            "fhir_sync_task failed: connection=%d tenant=%s error=%s",
+            connection_id, tenant_id, exc, exc_info=True,
+        )
+        raise self.retry(exc=exc, countdown=120 * (2 ** self.request.retries))
 
 
 # ---------------------------------------------------------------------------

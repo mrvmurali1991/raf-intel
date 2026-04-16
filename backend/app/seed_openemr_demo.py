@@ -729,30 +729,49 @@ def seed_openemr_demo() -> None:
                 )
 
             # Clinical notes (check before insert to avoid duplicates)
+            # OpenEMR pattern: insert child row, capture lastrowid, then link via forms registry
             for pid, enc, dt, ntype, note in _CLINICAL_NOTES:
-                cur.execute(
-                    "SELECT id FROM form_clinical_notes WHERE pid=%s AND encounter=%s AND clinical_notes_type=%s LIMIT 1",
-                    (pid, enc, ntype),
-                )
-                if not cur.fetchone():
+                try:
                     cur.execute(
-                        "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description) "
-                        "VALUES (%s, %s, %s, %s, %s)",
-                        (pid, enc, dt, ntype, note),
+                        "SELECT id FROM form_clinical_notes WHERE pid=%s AND encounter=%s AND clinical_notes_type=%s LIMIT 1",
+                        (pid, enc, ntype),
                     )
+                    if not cur.fetchone():
+                        cur.execute(
+                            "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description, activity) "
+                            "VALUES (%s, %s, %s, %s, %s, 1)",
+                            (pid, enc, dt, ntype, note),
+                        )
+                        cn_id = cur.lastrowid
+                        cur.execute(
+                            "INSERT INTO forms (date, encounter, form_name, form_id, pid, formdir) "
+                            "VALUES (%s, %s, 'Clinical Notes', %s, %s, 'clinical_notes')",
+                            (dt, enc, cn_id, pid),
+                        )
+                except Exception as exc:
+                    logger.warning("Seed clinical_notes skipped for pid=%s enc=%s: %s", pid, enc, exc)
 
             # Vitals
             for pid, enc, dt, wt, ht, bps, bpd in _VITALS:
-                cur.execute(
-                    "SELECT id FROM form_vitals WHERE pid=%s AND encounter=%s LIMIT 1",
-                    (pid, enc),
-                )
-                if not cur.fetchone():
+                try:
                     cur.execute(
-                        "INSERT INTO form_vitals (pid, encounter, date, weight_metric, height_metric, bps, bpd) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                        (pid, enc, dt, wt, ht, bps, bpd),
+                        "SELECT id FROM form_vitals WHERE pid=%s AND encounter=%s LIMIT 1",
+                        (pid, enc),
                     )
+                    if not cur.fetchone():
+                        cur.execute(
+                            "INSERT INTO form_vitals (pid, encounter, date, weight_metric, height_metric, bps, bpd, activity) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
+                            (pid, enc, dt, wt, ht, bps, bpd),
+                        )
+                        v_id = cur.lastrowid
+                        cur.execute(
+                            "INSERT INTO forms (date, encounter, form_name, form_id, pid, formdir) "
+                            "VALUES (%s, %s, 'Vitals', %s, %s, 'vitals')",
+                            (dt, enc, v_id, pid),
+                        )
+                except Exception as exc:
+                    logger.warning("Seed vitals skipped for pid=%s enc=%s: %s", pid, enc, exc)
 
             # Problem list
             for pid, title, dx, begdate, comments in _PROBLEMS:
@@ -833,9 +852,9 @@ def seed_openemr_demo() -> None:
                     (note, f"%{drug_prefix}%"),
                 )
 
-            # Forms registry — link clinical notes, vitals to encounters
-            cur.execute("SELECT COUNT(*) AS cnt FROM forms")
-            if cur.fetchone()["cnt"] < 17:
+            # Forms registry backfill — safety net for any legacy child rows inserted
+            # without a parent `forms` entry (e.g. from older seed runs).
+            try:
                 cur.execute(
                     "INSERT IGNORE INTO forms (date, encounter, form_name, form_id, pid, formdir) "
                     "SELECT fcn.date, fcn.encounter, 'Clinical Notes', fcn.id, fcn.pid, 'clinical_notes' "
@@ -848,6 +867,8 @@ def seed_openemr_demo() -> None:
                     "FROM form_vitals fv "
                     "WHERE NOT EXISTS (SELECT 1 FROM forms f WHERE f.form_id=fv.id AND f.formdir='vitals')"
                 )
+            except Exception as exc:
+                logger.warning("Seed forms-registry backfill skipped: %s", exc)
 
             # SOAP notes — required for the AI analysis pipeline (Gemini)
             _SOAP_NOTES = [

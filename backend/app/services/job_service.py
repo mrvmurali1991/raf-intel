@@ -118,9 +118,10 @@ def _upsert_job(
             """
             INSERT INTO raf_jobs
                 (id, task_name, status, progress, total, tenant_id, submitted_by,
-                 args_json, result_json, error_message, started_at, finished_at)
+                 args_json, result_json, error_message, started_at, finished_at,
+                 submitted_at)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON DUPLICATE KEY UPDATE
                 status        = VALUES(status),
                 progress      = VALUES(progress),
@@ -128,7 +129,8 @@ def _upsert_job(
                 result_json   = COALESCE(VALUES(result_json),   result_json),
                 error_message = COALESCE(VALUES(error_message), error_message),
                 started_at    = COALESCE(VALUES(started_at),    started_at),
-                finished_at   = COALESCE(VALUES(finished_at),   finished_at)
+                finished_at   = COALESCE(VALUES(finished_at),   finished_at),
+                submitted_at  = COALESCE(submitted_at,          VALUES(submitted_at))
             """,
             (
                 job_id,
@@ -156,7 +158,7 @@ def _get_job(job_id: str) -> dict[str, Any] | None:
             """
             SELECT id, task_name, status, progress, total, tenant_id,
                    submitted_by, args_json, result_json, error_message,
-                   started_at, finished_at, created_at
+                   started_at, finished_at, created_at, submitted_at
             FROM raf_jobs WHERE id = %s
             """,
             (job_id,),
@@ -166,7 +168,7 @@ def _get_job(job_id: str) -> dict[str, Any] | None:
         return None
     result = dict(row)
     # Serialize datetimes
-    for key in ("started_at", "finished_at", "created_at"):
+    for key in ("started_at", "finished_at", "created_at", "submitted_at"):
         if isinstance(result.get(key), datetime):
             result[key] = result[key].isoformat()
     # Parse JSON fields
@@ -196,19 +198,29 @@ def recover_stale_jobs(stale_after_hours: int = 1) -> int:
     """
     from app.db import raf_cursor
 
-    with raf_cursor() as cur:
-        cur.execute(
-            """
-            UPDATE raf_jobs
-               SET status = 'FAILED',
-                   error_message = 'Interrupted by server restart',
-                   finished_at = NOW()
-             WHERE status IN ('QUEUED', 'RUNNING', 'PENDING', 'STARTED', 'PROGRESS')
-               AND submitted_at < NOW() - INTERVAL %s HOUR
-            """,
-            (stale_after_hours,),
-        )
-        return cur.rowcount or 0
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE raf_jobs
+                   SET status = 'FAILED',
+                       error_message = 'Interrupted by server restart',
+                       finished_at = NOW()
+                 WHERE status IN ('QUEUED', 'RUNNING', 'PENDING', 'STARTED', 'PROGRESS')
+                   AND submitted_at < NOW() - INTERVAL %s HOUR
+                """,
+                (stale_after_hours,),
+            )
+            return cur.rowcount or 0
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc)
+        if "Unknown column" in msg and "submitted_at" in msg:
+            logger.warning(
+                "recover_stale_jobs skipped: raf_jobs.submitted_at column missing "
+                "(run migrations to enable restart recovery)"
+            )
+            return 0
+        raise
 
 
 def _mark_started(task_self: Any, task_name: str, args_dict: dict) -> None:

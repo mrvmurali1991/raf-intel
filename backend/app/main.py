@@ -183,6 +183,22 @@ def _check_alembic_migrations() -> None:
     cur_rc, cur_out, cur_err = _run("current")
     head_rc, head_out, head_err = _run("heads")
 
+    # If BOTH invocations failed, the alembic binary/env is broken — not drift.
+    # Downgrade to a warning and skip the check unless STRICT_MIGRATIONS=true.
+    if cur_rc != 0 and head_rc != 0:
+        logger.warning(
+            "Alembic probe unavailable (current rc=%s, heads rc=%s) — skipping drift check. %s",
+            cur_rc,
+            head_rc,
+            (cur_err.strip() or head_err.strip()),
+        )
+        if strict:
+            raise RuntimeError(
+                f"Refusing to start: alembic probe unavailable (current rc={cur_rc}, "
+                f"heads rc={head_rc}). Set STRICT_MIGRATIONS=false to bypass."
+            )
+        return
+
     drift_detected = False
     drift_reason = ""
     if cur_rc != 0 or head_rc != 0:

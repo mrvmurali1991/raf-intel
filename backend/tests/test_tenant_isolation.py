@@ -385,3 +385,42 @@ class TestJWTTenantClaimOverride:
         assert resp.json().get("tenant_id") == 1, (
             "Server must use DB-sourced tenant_id, not the claim in the JWT"
         )
+
+
+# ===========================================================================
+# Analysis + Suspects write endpoints — new tenant gate added 2026-04-16
+# ===========================================================================
+
+
+class TestAnalysisBatchIsolation:
+    """POST /api/analysis/batch/{pid} must 404 for foreign-tenant PIDs."""
+
+    def test_tenant1_cannot_trigger_batch_on_tenant2_patient(self, client):
+        tenant1_user = dict(MOCK_ADMIN_USER)  # tenant_id=1
+        foreign_pid = _TENANT_2_PATIENT["pid"]
+        with (
+            _auth_as(tenant1_user),
+            patch("app.services.patient_service.patient_is_accessible", return_value=False),
+        ):
+            resp = client.post(
+                f"/api/analysis/batch/{foreign_pid}",
+                headers=_headers(tenant1_user),
+            )
+        assert resp.status_code in (404, 403)
+
+
+class TestSuspectsScanIsolation:
+    """POST /api/suspects/scan/{pid} must 404 for foreign-tenant PIDs."""
+
+    def test_tenant2_cannot_scan_tenant1_patient(self, client):
+        tenant2_user = dict(MOCK_TENANT_B_USER)  # tenant_id=2
+        foreign_pid = _TENANT_1_PATIENT["pid"]
+        with (
+            _auth_as(tenant2_user),
+            patch("app.services.patient_service.patient_is_accessible", return_value=False),
+        ):
+            resp = client.post(
+                f"/api/suspects/scan/{foreign_pid}",
+                headers=_headers(tenant2_user),
+            )
+        assert resp.status_code in (404, 403)

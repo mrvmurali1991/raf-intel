@@ -37,6 +37,7 @@ in tests or one-off scripts.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from app.config import settings
@@ -69,16 +70,55 @@ def _update_last_retention_sweep(ts: datetime | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def start_scheduler() -> None:
-    """No-op — periodic tasks are managed by Celery Beat.
+def _celery_beat_owns_scheduling() -> bool:
+    """Return True if Celery Beat is authoritative for periodic sync jobs.
 
-    Kept so that ``app/main.py`` lifespan does not need to change.
-    A log message reminds operators to start Beat alongside the worker.
+    Priority order:
+      1. Explicit env override ``CELERY_BEAT_ENABLED`` (truthy = Beat owns it).
+      2. Auto-detect: if ``celery_app.conf.beat_schedule`` contains entries
+         for the sync/retention tasks, Beat owns scheduling.
+      3. Default: True — Celery Beat is the production choice.
     """
-    logger.info(
-        "Sync scheduler: Celery Beat is the active scheduler. "
-        "Ensure the Beat process is running: "
-        "celery -A app.services.celery_tasks beat --loglevel=info"
+    raw = os.getenv("CELERY_BEAT_ENABLED")
+    if raw is not None:
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    try:
+        from app.services.celery_tasks import celery_app
+
+        schedule = getattr(celery_app.conf, "beat_schedule", {}) or {}
+        sync_tasks = {"raf.check_due_syncs", "raf.retention_sweep"}
+        for entry in schedule.values():
+            if isinstance(entry, dict) and entry.get("task") in sync_tasks:
+                return True
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Celery Beat auto-detect failed: %s", exc)
+
+    return True
+
+
+def start_scheduler() -> None:
+    """Start the in-process sync scheduler, unless Celery Beat owns it.
+
+    When Celery Beat is authoritative (the default, and the production
+    configuration), this function is a no-op so the in-process thread/loop
+    does NOT duplicate Beat's dispatches. See ``_celery_beat_owns_scheduling``
+    for the precedence rules.
+    """
+    if _celery_beat_owns_scheduling():
+        logger.info(
+            "sync_scheduler disabled — Celery Beat is authoritative "
+            "(set CELERY_BEAT_ENABLED=false to run the in-process scheduler instead). "
+            "Ensure Beat is running: celery -A app.services.celery_tasks beat --loglevel=info"
+        )
+        return
+
+    # If ever re-enabled in-process, scheduling would be started here. For now
+    # the in-process daemon has been removed in favor of Beat; log a warning so
+    # operators notice that no scheduler is running.
+    logger.warning(
+        "CELERY_BEAT_ENABLED=false but no in-process scheduler is implemented. "
+        "Periodic syncs will NOT run until Celery Beat is enabled."
     )
 
 

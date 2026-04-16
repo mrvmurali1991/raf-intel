@@ -14,10 +14,19 @@ registration of DDL steps has been neutralized (no import-time side effects).
 from __future__ import annotations
 
 import logging
+import re
 import warnings
 from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _safe_ident(name: str) -> str:
+    if not _IDENT.match(name):
+        raise ValueError(f"unsafe SQL identifier: {name!r}")
+    return f"`{name}`"
 
 _DEPRECATION_MESSAGE = (
     "app.migrations auto-DDL is deprecated; use Alembic migrations in "
@@ -88,7 +97,7 @@ def _add_column_if_missing(table_name: str, column_name: str, definition_sql: st
     """Add a column using portable SQL only when it does not already exist."""
     if _column_exists(table_name, column_name):
         return
-    _execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition_sql}")
+    _execute(f"ALTER TABLE {_safe_ident(table_name)} ADD COLUMN {_safe_ident(column_name)} {definition_sql}")
 
 
 # ---- Core tables -----------------------------------------------------------
@@ -109,6 +118,7 @@ def _jobs_table() -> None:
             args_json     TEXT,
             result_json   TEXT,
             error_message TEXT,
+            submitted_at  DATETIME      NULL,
             started_at    DATETIME,
             finished_at   DATETIME,
             created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -122,6 +132,7 @@ def _jobs_table() -> None:
     for col, defn in [
         ("finished_at", "DATETIME"),
         ("started_at", "DATETIME"),
+        ("submitted_at", "DATETIME NULL"),
         ("error_message", "TEXT"),
         ("result_json", "TEXT"),
         ("args_json", "TEXT"),
@@ -129,7 +140,7 @@ def _jobs_table() -> None:
         ("tenant_id", "INT"),
     ]:
         try:
-            _execute(f"ALTER TABLE raf_jobs ADD COLUMN {col} {defn}")
+            _execute(f"ALTER TABLE raf_jobs ADD COLUMN {_safe_ident(col)} {defn}")
         except Exception:
             pass  # column already exists
 
@@ -912,6 +923,7 @@ def _claims_tables() -> None:
             matched_patient_count   INT NOT NULL DEFAULT 0,
             unique_patient_count    INT NOT NULL DEFAULT 0,
             unique_provider_count   INT NOT NULL DEFAULT 0,
+            hcc_codes_found         INT NOT NULL DEFAULT 0,
             total_charges           DECIMAL(14,2) NOT NULL DEFAULT 0.00,
             error_message           TEXT,
             created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -931,6 +943,7 @@ def _claims_tables() -> None:
     _add_column_if_missing("claims_batches", "matched_patient_count", "INT NOT NULL DEFAULT 0")
     _add_column_if_missing("claims_batches", "unique_patient_count", "INT NOT NULL DEFAULT 0")
     _add_column_if_missing("claims_batches", "unique_provider_count", "INT NOT NULL DEFAULT 0")
+    _add_column_if_missing("claims_batches", "hcc_codes_found", "INT NOT NULL DEFAULT 0")
     _add_column_if_missing(
         "claims_batches",
         "total_charges",
@@ -1585,7 +1598,7 @@ def _create_raf_encounter_analysis():
         ("pid", "INT"),
     ]:
         try:
-            _execute(f"ALTER TABLE raf_encounter_analysis ADD COLUMN {col} {defn}")
+            _execute(f"ALTER TABLE raf_encounter_analysis ADD COLUMN {_safe_ident(col)} {defn}")
         except Exception:
             pass
 
@@ -1703,7 +1716,7 @@ def _add_constraints_and_indexes() -> None:
                 )
                 if cur.fetchone():
                     continue
-                cur.execute(f"CREATE INDEX {idx_name} ON {tbl}{cols}")
+                cur.execute(f"CREATE INDEX {_safe_ident(idx_name)} ON {_safe_ident(tbl)}{cols}")
             logger.debug("index applied: %s", idx_name)
         except Exception as exc:
             logger.warning("composite index %s skipped: %s", idx_name, exc)
@@ -1979,7 +1992,7 @@ def _add_constraints_and_indexes() -> None:
                 )
                 if cur.fetchone():
                     continue
-                cur.execute(f"CREATE INDEX {idx_name} ON {tbl}{cols}")
+                cur.execute(f"CREATE INDEX {_safe_ident(idx_name)} ON {_safe_ident(tbl)}{cols}")
             logger.debug("extra index applied: %s", idx_name)
         except Exception as exc:
             logger.warning("extra index %s skipped: %s", idx_name, exc)
@@ -2035,8 +2048,8 @@ def _add_constraints_and_indexes() -> None:
             continue
         try:
             _execute(
-                f"ALTER TABLE {child_tbl} ADD CONSTRAINT {fk_name} "
-                f"FOREIGN KEY ({child_col}) REFERENCES {parent_tbl}({parent_col}) "
+                f"ALTER TABLE {_safe_ident(child_tbl)} ADD CONSTRAINT {_safe_ident(fk_name)} "
+                f"FOREIGN KEY ({_safe_ident(child_col)}) REFERENCES {_safe_ident(parent_tbl)}({_safe_ident(parent_col)}) "
                 f"ON DELETE CASCADE"
             )
             logger.info("FK applied: %s", fk_name)

@@ -321,6 +321,7 @@ def test_connection(connection_id: int,
 @router.post("/sync/{connection_id}", summary="Trigger a FHIR data sync")
 def trigger_sync(connection_id: int, body: SyncRequest = SyncRequest(),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("fhir", "write"))) -> dict[str, Any]:
     """
     Kick off a FHIR data sync for the given connection.
@@ -350,24 +351,27 @@ def trigger_sync(connection_id: int, body: SyncRequest = SyncRequest(),
         )
 
     if body.background:
-        t = threading.Thread(
-            target=_run_sync_background,
-            args=(
-                connection_id,
-                body.sync_type,
-                body.resource_types,
-                body.use_bulk,
-            ),
-            daemon=True,
+        # Dispatch to Celery so the sync runs in a worker that re-validates
+        # tenant ownership (previous implementation used a daemon thread that
+        # skipped that check and could leak across tenants).
+        from app.services.celery_tasks import fhir_sync_task
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "")
+        async_result = fhir_sync_task.delay(
+            connection_id=connection_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            sync_type=body.sync_type,
+            resource_types=body.resource_types,
+            use_bulk=body.use_bulk,
         )
-        t.start()
         return {
-            "message": "Sync started in the background",
+            "message": "Sync queued",
             "connection_id": connection_id,
             "sync_type": body.sync_type,
             "resource_types": body.resource_types or ["Patient", "Condition", "Encounter", "DiagnosticReport"],
             "use_bulk": body.use_bulk,
-            "status": "running",
+            "status": "queued",
+            "task_id": async_result.id,
             "poll_url": f"/api/fhir/sync/{connection_id}/status",
         }
 
