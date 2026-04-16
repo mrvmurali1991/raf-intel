@@ -1001,33 +1001,38 @@ def seed_openemr_demo() -> None:
                         (dt, enc, soap_id, pid),
                     )
 
-            # Labs (procedure_order + procedure_result — no procedure_report in this schema)
+            # Labs (procedure_order + procedure_result). OpenEMR's
+            # procedure_result schema is complex (no pid/encounter columns —
+            # it joins through procedure_report). We seed labs best-effort
+            # and log per-row failures so a schema drift doesn't abort the
+            # whole OpenEMR demo seed.
             for pid, test_name, result_val, units, ref_range, abnormal, dt in _LABS:
-                # Find encounter for this patient closest to the lab date
-                cur.execute(
-                    "SELECT encounter FROM form_encounter WHERE pid=%s ORDER BY ABS(DATEDIFF(date, %s)) LIMIT 1",
-                    (pid, dt),
-                )
-                row = cur.fetchone()
-                enc = row["encounter"] if row else 0
-                # Check if this lab already exists
-                cur.execute(
-                    "SELECT id FROM procedure_result WHERE pid=%s AND result_text LIKE %s LIMIT 1",
-                    (pid, f"%{test_name}%"),
-                )
-                if not cur.fetchone():
+                try:
                     cur.execute(
-                        "INSERT INTO procedure_order (patient_id, encounter_id, date_ordered) "
-                        "VALUES (%s, %s, %s)",
-                        (pid, enc, dt),
+                        "SELECT encounter FROM form_encounter WHERE pid=%s ORDER BY ABS(DATEDIFF(date, %s)) LIMIT 1",
+                        (pid, dt),
                     )
-                    # Pack all lab details into result_text
-                    detail = f"{test_name}: {result_val} {units} (Ref: {ref_range}) [{abnormal.upper()}]"
+                    row = cur.fetchone()
+                    enc = row["encounter"] if row else 0
                     cur.execute(
-                        "INSERT INTO procedure_result (pid, encounter, date, result_text) "
-                        "VALUES (%s, %s, %s, %s)",
-                        (pid, enc, dt, detail),
+                        "SELECT procedure_result_id FROM procedure_result "
+                        "WHERE result_text LIKE %s LIMIT 1",
+                        (f"%{test_name}%",),
                     )
+                    if not cur.fetchone():
+                        cur.execute(
+                            "INSERT INTO procedure_order (patient_id, encounter_id, date_ordered) "
+                            "VALUES (%s, %s, %s)",
+                            (pid, enc, dt),
+                        )
+                        detail = f"{test_name}: {result_val} {units} (Ref: {ref_range}) [{abnormal.upper()}]"
+                        cur.execute(
+                            "INSERT INTO procedure_result (result_text, date, abnormal) "
+                            "VALUES (%s, %s, %s)",
+                            (detail, dt, abnormal),
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Seed lab skipped for pid=%s test=%s: %s", pid, test_name, exc)
 
             # Billing ICD-10 codes
             for pid, enc, code, code_text in _BILLING:
