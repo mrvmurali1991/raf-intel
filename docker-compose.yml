@@ -20,7 +20,7 @@ services:
         --maxmemory-policy allkeys-lru
         --save 60 1000
         --loglevel warning
-        --requirepass ${REDIS_PASSWORD:-rafredis123}  # DEV ONLY - never use in production
+        --requirepass ${REDIS_PASSWORD:-rafredis123}
     volumes:
       - redis_data:/data
     networks:
