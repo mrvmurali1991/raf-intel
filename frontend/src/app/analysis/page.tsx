@@ -689,7 +689,7 @@ export default function AnalysisPage() {
           </div>
 
           {/* Routing Banner */}
-          {routing && (
+          {!!routing && (
             <div
               className="premium-card animate-fade-in"
               style={{
