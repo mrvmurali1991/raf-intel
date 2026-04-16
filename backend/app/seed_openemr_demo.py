@@ -747,8 +747,8 @@ def seed_openemr_demo() -> None:
                         )
                         forms_id = cur.lastrowid
                         cur.execute(
-                            "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description, activity, form_id) "
-                            "VALUES (%s, %s, %s, %s, %s, 1, %s)",
+                            "INSERT INTO form_clinical_notes (pid, encounter, date, clinical_notes_type, description, form_id) "
+                            "VALUES (%s, %s, %s, %s, %s, %s)",
                             (pid, enc, dt, ntype, note, forms_id),
                         )
                         cn_id = cur.lastrowid
@@ -777,7 +777,7 @@ def seed_openemr_demo() -> None:
                         )
                         forms_id = cur.lastrowid
                         cur.execute(
-                            "INSERT INTO form_vitals (pid, date, weight_metric, height_metric, bps, bpd, activity) "
+                            "INSERT INTO form_vitals (pid, date, weight, height, bps, bpd, activity) "
                             "VALUES (%s, %s, %s, %s, %s, %s, 1)",
                             (pid, dt, wt, ht, bps, bpd),
                         )

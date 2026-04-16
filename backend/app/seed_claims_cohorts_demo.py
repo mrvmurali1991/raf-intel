@@ -303,13 +303,13 @@ def seed():
     for row in CLAIMS_DIAGNOSES:
         batch_id, claim_id, icd10, hcc, mapped = row
         cur.execute(
-            "SELECT COUNT(*) FROM claims_diagnoses WHERE batch_id=%s AND claim_id=%s AND icd10_code=%s",
+            "SELECT COUNT(*) FROM claims_diagnoses WHERE batch_id=%s AND claim_record_id=%s AND icd10_code=%s",
             (batch_id, claim_id, icd10),
         )
         if cur.fetchone()[0] == 0:
             cur.execute(
                 """INSERT INTO claims_diagnoses
-                   (batch_id, claim_id, icd10_code, hcc_code, hcc_mapped)
+                   (batch_id, claim_record_id, icd10_code, hcc_code, hcc_mapped)
                    VALUES (%s,%s,%s,%s,%s)""",
                 row,
             )

@@ -264,20 +264,24 @@ def seed_providers_demo() -> None:
                  "2026-03-11 13:00:00", "default"),
             ]
             for a in attestations:
+                # Resolve provider_user_id from provider NPI (required on some
+                # deployments where the column has been altered to NOT NULL).
+                provider_npi = a[7]
+                resolved_pid = npi_to_id.get(provider_npi) or 0
                 cur.execute(
                     """INSERT INTO provider_attestations
                        (patient_id, encounter_id, hcc_code, hcc_description,
                         icd10_code, icd10_description, source, provider_npi,
                         status, attestation_type, clinical_justification,
-                        attested_at, tenant_id)
-                       SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                        attested_at, tenant_id, provider_user_id)
+                       SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                        FROM DUAL
                        WHERE NOT EXISTS (
                            SELECT 1 FROM provider_attestations
                            WHERE patient_id = %s AND hcc_code = %s
                              AND icd10_code = %s AND provider_npi = %s AND source = %s
                        )""",
-                    (*a, a[0], a[2], a[4], a[7], a[6]),
+                    (*a, resolved_pid, a[0], a[2], a[4], a[7], a[6]),
                 )
 
             # ----------------------------------------------------------
