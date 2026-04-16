@@ -1294,7 +1294,10 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
                 names_by_tier[ins_type] = display
 
             # Detect plan type from plan name (HMO, PPO, SNP, etc.)
-            if ins_type == "1" and plan_type is None:
+            # Only classify when we actually have a plan name — otherwise we'd
+            # label a row with no plan_name / company_name as "Medicare
+            # Advantage" purely because tier=1, producing a misleading UI.
+            if ins_type == "1" and plan_type is None and plan.strip():
                 plan_upper = plan.upper()
                 if "HMO-POS" in plan_upper:
                     plan_type = "MA-HMO-POS"

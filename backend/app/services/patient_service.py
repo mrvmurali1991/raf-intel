@@ -1843,6 +1843,17 @@ def svc_get_comprehensive_profile(
             )
             _enr_row = _enr_cur.fetchone()
             if _enr_row:
+                # Use raf.patients.insurance_plan / insurance_type as a display fallback
+                # for primary_insurance when OpenEMR insurance_data is unavailable.
+                # This covers non-seeded patients whose insurance fields only live in
+                # raf.patients (e.g. imported via FHIR / CSV / manual entry).
+                if not enrollment.get("primary_insurance"):
+                    fallback_name = (
+                        _enr_row.get("insurance_plan")
+                        or _enr_row.get("insurance_type")
+                    )
+                    if fallback_name:
+                        enrollment["primary_insurance"] = fallback_name
                 if not enrollment.get("plan_type") and _enr_row.get("insurance_plan"):
                     enrollment["plan_type"] = _enr_row["insurance_plan"]
                 if not enrollment.get("plan_type") and _enr_row.get("insurance_type"):
