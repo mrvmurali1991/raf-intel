@@ -77,6 +77,11 @@ os.environ.setdefault("RAF_DB_PASSWORD", "test_password")
 os.environ.setdefault("DB_SSL_ENABLED", "false")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("GOOGLE_API_KEY", "fake-google-api-key-for-tests")
+# Force tests to use the legacy API-key transport rather than Vertex AI so
+# that llm_generate() does not attempt to load GCP service-account credentials
+# during unit tests.  Individual tests that exercise Vertex transport
+# explicitly re-set LLM_USE_VERTEX=true via monkeypatch.
+os.environ.setdefault("LLM_USE_VERTEX", "false")
 # Force env vars for test session before any app imports.
 # Use assignment instead of setdefault to ensure they are overridden.
 os.environ["RATE_LIMITING_ENABLED"] = "false"

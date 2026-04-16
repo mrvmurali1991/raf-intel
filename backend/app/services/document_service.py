@@ -31,9 +31,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from google import genai
-from google.genai import types as genai_types
-
 from app.config import settings
 from app.db import raf_cursor
 from app.services.icd_validator import (
@@ -490,33 +487,17 @@ def find_duplicate(sha256: str, tenant_id: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _build_gemini_part(file_bytes: bytes, mime_type: str) -> genai_types.Part:
-    """
-    Build a Gemini Part for inline document data.
-    For PDFs and large images the file is sent as inline_data bytes.
-    """
-    return genai_types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-
-
 def _call_gemini_vision(file_bytes: bytes, mime_type: str) -> dict[str, Any]:
     """
-    Send the document to Gemini Vision via Vertex AI REST endpoint
-    (same endpoint used by the pipeline demo) and return parsed JSON extraction.
+    Send the document to Gemini Vision via the shared LLM transport
+    (Vertex AI with SA auth when LLM_USE_VERTEX=true; legacy API key
+    fallback otherwise) and return parsed JSON extraction.
     """
     import base64
-    import requests as _requests
 
-    api_key = settings.google_api_key or os.environ.get("GOOGLE_API_KEY", "")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY is not configured")
+    from app.services.llm import llm_generate_content
 
     model = settings.gemini_model or "gemini-2.5-pro"
-    # Vertex AI Express endpoint — works with API keys prefixed "AQ."
-    # Key must be passed as ?key= query param (NOT x-goog-api-key header).
-    url = (
-        f"https://aiplatform.googleapis.com/v1beta1/publishers/google/"
-        f"models/{model}:generateContent?key={api_key}"
-    )
 
     b64_data = base64.b64encode(file_bytes).decode("utf-8")
 
@@ -536,17 +517,7 @@ def _call_gemini_vision(file_bytes: bytes, mime_type: str) -> dict[str, Any]:
         },
     }
 
-    resp = _requests.post(
-        url,
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=120,
-    )
-
-    if resp.status_code != 200:
-        raise RuntimeError(f"{resp.status_code} {resp.text[:500]}")
-
-    data = resp.json()
+    data = llm_generate_content(payload, model=model, timeout=120)
     try:
         candidates = data.get("candidates", [])
         candidate = candidates[0] if candidates else {}

@@ -26,7 +26,6 @@ import json
 import logging
 import os
 import time
-import requests
 from typing import Any
 
 from app.services.api_rate_limiter import gemini_limiter
@@ -929,16 +928,9 @@ def run_pipeline(
       med_diagnoses   — medications that carry an indication/diagnosis note
     """
     total_start = time.time()
-    api_key = settings.google_api_key or os.getenv("GOOGLE_API_KEY", "")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY is not configured — cannot call Gemini API")
+    from app.services.llm import llm_generate_content
+
     model = settings.gemini_model or "gemini-2.5-pro"
-    # Vertex AI Express endpoint — works with API keys prefixed "AQ."
-    # Key must be passed as ?key= query param (NOT x-goog-api-key header).
-    url = (
-        f"https://aiplatform.googleapis.com/v1beta1/publishers/google/"
-        f"models/{model}:generateContent?key={api_key}"
-    )
 
     # Build the user prompt
     context_parts = []
@@ -1092,14 +1084,7 @@ Analyze this note completely. Use ALL context provided above (problem list, reca
                     "Increase GEMINI_RATE_LIMIT_RPS or reduce batch concurrency."
                 )
             t_start = time.time()
-            resp = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=180,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            data = llm_generate_content(payload, model=model, timeout=180)
             t_elapsed = time.time() - t_start
 
             candidates = data.get("candidates", [])

@@ -670,28 +670,11 @@ _AI_HEALTH_TTL = 60.0
 
 def _probe_gemini() -> dict[str, Any]:
     """Make a tiny live call against Gemini; return {ok, reason|model}."""
-    import os
-    import requests as _requests
+    from app.services.llm import llm_generate
 
-    api_key = settings.gemini_api_key or os.environ.get("GOOGLE_API_KEY", "")
     model = settings.gemini_model or "gemini-2.5-pro"
-    if not api_key:
-        return {"ok": False, "reason": "GOOGLE_API_KEY not configured", "model": model}
-
-    url = (
-        "https://aiplatform.googleapis.com/v1beta1/publishers/google/models/"
-        f"{model}:generateContent?key={api_key}"
-    )
-    payload = {
-        "contents": [{"role": "user", "parts": [{"text": "ping"}]}],
-        "generationConfig": {"maxOutputTokens": 1, "temperature": 0},
-    }
     try:
-        resp = _requests.post(url, json=payload, timeout=20)
-        if resp.status_code >= 400:
-            # Surface a compact reason (truncated).
-            reason = f"HTTP {resp.status_code}: {resp.text[:180]}"
-            return {"ok": False, "reason": reason[:200], "model": model}
+        llm_generate("ping", model=model, temperature=0.0)
         return {"ok": True, "model": model}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "reason": str(exc)[:200], "model": model}
