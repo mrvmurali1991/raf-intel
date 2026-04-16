@@ -67,11 +67,15 @@ def seed_providers_demo() -> None:
             # yield 1..6 on re-seed / multi-tenant / prior rows).
             # ----------------------------------------------------------
             cur.execute(
-                "SELECT id, npi FROM providers WHERE tenant_id = 'default' "
-                "AND npi IN ('1234567890','1234567891','1234567892',"
-                "'1234567893','1234567894','1234567895')"
+                "SELECT id, npi FROM providers "
+                "WHERE npi IN ('1234567890','1234567891','1234567892',"
+                "'1234567893','1234567894','1234567895') "
+                "ORDER BY id ASC"
             )
-            npi_to_id = {row["npi"]: row["id"] for row in cur.fetchall()}
+            # first match per NPI wins (older/canonical row)
+            npi_to_id: dict[str, int] = {}
+            for row in cur.fetchall():
+                npi_to_id.setdefault(row["npi"], row["id"])
             # Ordered list of NPIs matching the providers list above (indexes 1..6)
             ordered_npis = [
                 "1234567890", "1234567891", "1234567892",

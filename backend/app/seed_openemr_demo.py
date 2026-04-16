@@ -844,8 +844,9 @@ def seed_openemr_demo() -> None:
                 )
                 if not cur.fetchone():
                     cur.execute(
-                        "INSERT INTO immunizations (patient_id, administered_date, cvx_code, note) "
-                        "VALUES (%s, %s, %s, %s)",
+                        "INSERT INTO immunizations "
+                        "(patient_id, administered_date, cvx_code, note, create_date, update_date) "
+                        "VALUES (%s, %s, %s, %s, NOW(), NOW())",
                         (pid, dt, cvx, title),
                     )
 
