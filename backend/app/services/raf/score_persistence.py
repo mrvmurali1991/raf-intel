@@ -15,6 +15,8 @@ import json
 import logging
 from typing import Any
 
+from hccinfhir.defaults import is_chronic_default
+
 from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,14 @@ def _store_patient_hccs(
         cc_to_dx: dict = result.cc_to_dx or {}
 
         with raf_cursor() as cur:
+            # Add is_chronic column if not yet present (idempotent migration).
+            try:
+                cur.execute(
+                    "ALTER TABLE raf_patient_hcc ADD COLUMN is_chronic TINYINT(1) DEFAULT 1"
+                )
+            except Exception:
+                pass  # Column already exists
+
             # Only delete existing HCC rows if we have new ones to insert.
             # FHIR patients get HCC rows from the condition sync — the RAF
             # calculator may find icd_codes=[] (no encounters table data) and
@@ -109,16 +119,24 @@ def _store_patient_hccs(
                     else 0.0
                 )
 
+                is_chronic = (
+                    1
+                    if is_chronic_default.get((hcc_str, "CMS-HCC Model V28"), True)
+                    else 0
+                )
+
                 cur.execute(
                     """
                     INSERT INTO raf_patient_hcc
                         (patient_id, measurement_year, hcc_code, icd10_codes,
-                         source_encounter_ids, raf_coefficient, meat_status, tenant_id)
-                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s)
+                         source_encounter_ids, raf_coefficient, meat_status, tenant_id,
+                         is_chronic)
+                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s)
                     ON DUPLICATE KEY UPDATE
                         icd10_codes     = VALUES(icd10_codes),
                         raf_coefficient = VALUES(raf_coefficient),
-                        tenant_id       = VALUES(tenant_id)
+                        tenant_id       = VALUES(tenant_id),
+                        is_chronic      = VALUES(is_chronic)
                     """,
                     (
                         patient_id,
@@ -127,6 +145,7 @@ def _store_patient_hccs(
                         json.dumps(related_icd),
                         coefficient,
                         tenant_id,
+                        is_chronic,
                     ),
                 )
     except Exception as exc:

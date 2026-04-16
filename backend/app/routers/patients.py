@@ -767,6 +767,13 @@ def get_recapture_gaps(
                 )
                 prior_rows = _gc.fetchall()
 
+                # Only chronic HCCs need annual recapture per CMS rules
+                from hccinfhir.defaults import is_chronic_default
+                chronic_prior = [
+                    r for r in prior_rows
+                    if is_chronic_default.get((str(r.get("hcc_code", "")), "CMS-HCC Model V28"), True)
+                ]
+
                 # Step 2: get HCC codes already captured in the current year
                 _gc.execute(
                     """SELECT hcc_code
@@ -776,9 +783,9 @@ def get_recapture_gaps(
                 )
                 current_hcc_codes = {r["hcc_code"] for r in _gc.fetchall()}
 
-                # Step 3: gap = prior-year HCCs not present in current year
+                # Step 3: gap = chronic prior-year HCCs not present in current year
                 gaps = []
-                for row in prior_rows:
+                for row in chronic_prior:
                     hcc = row.get("hcc_code")
                     if hcc and hcc not in current_hcc_codes:
                         try:

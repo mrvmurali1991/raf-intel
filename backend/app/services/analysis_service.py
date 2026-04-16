@@ -13,9 +13,12 @@ import logging
 from datetime import date as _date
 from typing import Any
 
+from hccinfhir.defaults import is_chronic_default
+
 from app.db import raf_cursor
 from app.services.audit_logger import log_phi_access
 from app.services.icd_validator import validate_code
+from app.services.hccinfhir_utils import lookup_hcc
 from app.services.meat_evidence_service import store_analysis_meat, update_hcc_meat_status
 
 logger = logging.getLogger(__name__)
@@ -189,6 +192,23 @@ def save_encounter_analysis(
                         )
                         continue
 
+                    # Cross-validate AI HCC mapping against official CMS crosswalk
+                    if icd10:
+                        official = lookup_hcc(icd10)
+                        official_hcc = official.get("hcc_code")
+                        if official_hcc and str(official_hcc) != hcc_code:
+                            logger.warning(
+                                "AI HCC mismatch for %s: AI=%s, CMS crosswalk=%s (encounter %s) — using CMS value",
+                                icd10, hcc_code, official_hcc, encounter_id,
+                            )
+                            hcc_code = str(official_hcc)
+                        elif not official_hcc:
+                            logger.warning(
+                                "ICD-10 %s has no CMS HCC mapping but AI assigned HCC %s (encounter %s) — skipping",
+                                icd10, hcc_code, encounter_id,
+                            )
+                            continue
+
                     cur.execute(
                         "SELECT id, icd10_codes, source_encounter_ids "
                         "FROM raf_patient_hcc "
@@ -221,17 +241,26 @@ def save_encounter_analysis(
                             ),
                         )
                     else:
+                        _is_chronic = (
+                            1
+                            if is_chronic_default.get(
+                                (hcc_code, "CMS-HCC Model V28"), True
+                            )
+                            else 0
+                        )
                         cur.execute(
                             """INSERT INTO raf_patient_hcc
                                (patient_id, measurement_year, hcc_code, icd10_codes,
-                                source_encounter_ids, raf_coefficient, meat_status, is_trumped)
-                               VALUES (%s, %s, %s, %s, %s, 0, 'pending', 0)""",
+                                source_encounter_ids, raf_coefficient, meat_status, is_trumped,
+                                is_chronic)
+                               VALUES (%s, %s, %s, %s, %s, 0, 'pending', 0, %s)""",
                             (
                                 pid,
                                 measurement_year,
                                 hcc_code,
                                 json.dumps([icd10] if icd10 else []),
                                 json.dumps([encounter_id]),
+                                _is_chronic,
                             ),
                         )
             logger.info(
