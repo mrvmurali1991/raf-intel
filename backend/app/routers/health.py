@@ -683,11 +683,11 @@ def _probe_gemini() -> dict[str, Any]:
         f"{model}:generateContent?key={api_key}"
     )
     payload = {
-        "contents": [{"parts": [{"text": "ping"}]}],
+        "contents": [{"role": "user", "parts": [{"text": "ping"}]}],
         "generationConfig": {"maxOutputTokens": 1, "temperature": 0},
     }
     try:
-        resp = _requests.post(url, json=payload, timeout=5)
+        resp = _requests.post(url, json=payload, timeout=20)
         if resp.status_code >= 400:
             # Surface a compact reason (truncated).
             reason = f"HTTP {resp.status_code}: {resp.text[:180]}"
