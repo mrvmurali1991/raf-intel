@@ -859,8 +859,9 @@ def seed_openemr_demo() -> None:
                 if not cur.fetchone():
                     cur.execute(
                         "INSERT INTO prescriptions "
-                        "(patient_id, drug, dosage, quantity, note, txDate, date_added) "
-                        "VALUES (%s, %s, %s, %s, %s, CURDATE(), NOW())",
+                        "(patient_id, drug, dosage, quantity, note, txDate, "
+                        " date_added, usage_category_title, request_intent_title) "
+                        "VALUES (%s, %s, %s, %s, %s, CURDATE(), NOW(), '', '')",
                         (pid, drug, dosage, qty, note),
                     )
 
