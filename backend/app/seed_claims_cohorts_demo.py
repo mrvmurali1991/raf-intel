@@ -14,11 +14,13 @@ import os
 import sys
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "127.0.0.1"),
-    "port": int(os.getenv("DB_PORT", 3306)),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", "root"),
-    "database": os.getenv("DB_NAME", "raf_intelligence"),
+    # Prefer RAF_DB_* (used by the FastAPI pool and docker-compose .env) and
+    # fall back to DB_* for backward-compat with older local environments.
+    "host": os.getenv("RAF_DB_HOST") or os.getenv("DB_HOST", "127.0.0.1"),
+    "port": int(os.getenv("RAF_DB_PORT") or os.getenv("DB_PORT", 3306)),
+    "user": os.getenv("RAF_DB_USER") or os.getenv("DB_USER", "root"),
+    "password": os.getenv("RAF_DB_PASSWORD") or os.getenv("DB_PASSWORD", "root"),
+    "database": os.getenv("RAF_DB_NAME") or os.getenv("DB_NAME", "raf_intelligence"),
     "charset": "utf8mb4",
 }
 

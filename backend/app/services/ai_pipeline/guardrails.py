@@ -49,7 +49,17 @@ _CONTROL_CHARS = re.compile(
 
 
 def sanitize_note_for_llm(text: str) -> str:
-    """Return a sanitized copy of *text* safe to embed in an LLM prompt."""
+    """Return a sanitized copy of *text* safe to embed in an LLM prompt.
+
+    In addition to stripping control chars and neutralizing prompt-injection
+    patterns, this redacts identifier-level PHI that is never clinically
+    relevant for HCC / MEAT extraction (SSN, Medicare MBI, phone, email).
+
+    DOB is intentionally *not* redacted here because age-at-encounter is
+    used by downstream age/sex gates — and patient age is already derived
+    server-side from the structured patient record, so leaving raw DOB in
+    the note does not leak anything the downstream code doesn't already have.
+    """
     if not text:
         return ""
     # Normalize unicode (fold look-alike chars used to hide payloads).
@@ -61,6 +71,15 @@ def sanitize_note_for_llm(text: str) -> str:
         cleaned = pat.sub(
             lambda m: f"[REDACTED:{len(m.group(0))}chars]", cleaned
         )
+    # Identifier-level PHI redaction (defense-in-depth; Vertex BAA still applies).
+    cleaned = _SSN.sub("***-**-****", cleaned)
+    try:
+        cleaned = _MBI.sub("[MBI]", cleaned)
+    except re.error:
+        pass
+    cleaned = _MBI_LOOSE.sub("[MBI]", cleaned)
+    cleaned = _PHONE.sub("[PHONE]", cleaned)
+    cleaned = _EMAIL.sub("[EMAIL]", cleaned)
     # Collapse runaway whitespace so prompt-token budgets are predictable.
     cleaned = re.sub(r"[ \t]{3,}", "  ", cleaned)
     cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)

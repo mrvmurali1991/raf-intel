@@ -111,24 +111,8 @@ def log_event(
         return None
 
 
-# Convenience wrapper matching the signature requested in the task spec.
-def log(action: str, target: tuple[str, Any] | None, actor: tuple[str, str],
-        before: Mapping[str, Any] | None = None,
-        after: Mapping[str, Any] | None = None,
-        tenant_id: str = "default") -> int | None:
-    """
-    ``log("coder.decision.accept", ("candidate", 42),
-         ("user", "coder@x.com"), before=..., after=...)``
-    """
-    actor_type, actor_id = actor
-    target_type, target_id = (target if target else (None, None))
-    return log_event(
-        tenant_id=tenant_id,
-        action=action,
-        actor_type=actor_type,
-        actor_id=actor_id,
-        target_type=target_type,
-        target_id=target_id,
-        before=before,
-        after=after,
-    )
+# NOTE: a previous convenience wrapper named ``log`` was removed because it
+# shadowed the module-level ``log = logging.getLogger(__name__)``. That
+# collision silently broke the error handler inside :func:`log_event` — any
+# DB failure raised ``AttributeError`` on ``log.exception(...)`` and the real
+# cause never reached logs. Use :func:`log_event` directly.

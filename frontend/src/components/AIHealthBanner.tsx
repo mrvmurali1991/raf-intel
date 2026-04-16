@@ -18,22 +18,44 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { useAIHealth } from "@/lib/useAIHealth";
 
-const DISMISS_KEY = "ai-health-banner-dismissed";
+const DISMISS_KEY_PREFIX = "ai-health-banner-dismissed:";
+
+/**
+ * Hash the outage reason to a short, stable key so a NEW failure reason after
+ * a user dismissed an EARLIER failure still surfaces (instead of staying
+ * hidden under a single global dismissal flag).  Falls back to the literal
+ * "unknown" bucket when no reason is available.
+ */
+function reasonKey(reason: string | undefined): string {
+  if (!reason) return "unknown";
+  let h = 0;
+  for (let i = 0; i < reason.length; i++) {
+    h = (h * 31 + reason.charCodeAt(i)) | 0;
+  }
+  return String(h);
+}
 
 export function AIHealthBanner() {
   const { data } = useAIHealth();
   const [dismissed, setDismissed] = useState(false);
 
+  const dismissKey = data && !data.ok
+    ? `${DISMISS_KEY_PREFIX}${reasonKey(data.reason)}`
+    : null;
+
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    setDismissed(sessionStorage.getItem(DISMISS_KEY) === "1");
-  }, []);
+    if (typeof window === "undefined" || !dismissKey) {
+      setDismissed(false);
+      return;
+    }
+    setDismissed(sessionStorage.getItem(dismissKey) === "1");
+  }, [dismissKey]);
 
   if (!data || data.ok || dismissed) return null;
 
   const handleDismiss = () => {
     try {
-      sessionStorage.setItem(DISMISS_KEY, "1");
+      if (dismissKey) sessionStorage.setItem(dismissKey, "1");
     } catch {
       /* sessionStorage may be unavailable in private mode — ignore */
     }
