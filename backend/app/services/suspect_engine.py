@@ -17,12 +17,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 from datetime import date
 from typing import Any
 
 from app.db import raf_cursor
 from app.services import openemr_connector as emr
+from app.services.hcc_hierarchy import apply_hierarchy
 
 logger = logging.getLogger(__name__)
 
@@ -36,26 +38,29 @@ _lab_signals_cache: list[dict] | None = None
 _lab_signals_ts: float = 0
 
 _SIGNAL_CACHE_TTL = 300  # seconds
+_signal_cache_lock = threading.Lock()
 
 
 def _get_medication_signals(cur) -> list[dict]:
     global _medication_signals_cache, _medication_signals_ts
-    if _medication_signals_cache is None or time.time() - _medication_signals_ts > _SIGNAL_CACHE_TTL:
-        cur.execute("SELECT * FROM raf_medication_signals")
-        _medication_signals_cache = cur.fetchall()
-        _medication_signals_ts = time.time()
-        logger.debug("Refreshed medication signals cache: %d rows", len(_medication_signals_cache))
-    return _medication_signals_cache
+    with _signal_cache_lock:
+        if _medication_signals_cache is None or time.time() - _medication_signals_ts > _SIGNAL_CACHE_TTL:
+            cur.execute("SELECT * FROM raf_medication_signals")
+            _medication_signals_cache = cur.fetchall()
+            _medication_signals_ts = time.time()
+            logger.debug("Refreshed medication signals cache: %d rows", len(_medication_signals_cache))
+        return _medication_signals_cache
 
 
 def _get_lab_signals(cur) -> list[dict]:
     global _lab_signals_cache, _lab_signals_ts
-    if _lab_signals_cache is None or time.time() - _lab_signals_ts > _SIGNAL_CACHE_TTL:
-        cur.execute("SELECT * FROM raf_lab_signals")
-        _lab_signals_cache = cur.fetchall()
-        _lab_signals_ts = time.time()
-        logger.debug("Refreshed lab signals cache: %d rows", len(_lab_signals_cache))
-    return _lab_signals_cache
+    with _signal_cache_lock:
+        if _lab_signals_cache is None or time.time() - _lab_signals_ts > _SIGNAL_CACHE_TTL:
+            cur.execute("SELECT * FROM raf_lab_signals")
+            _lab_signals_cache = cur.fetchall()
+            _lab_signals_ts = time.time()
+            logger.debug("Refreshed lab signals cache: %d rows", len(_lab_signals_cache))
+        return _lab_signals_cache
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +85,7 @@ def _get_all_patient_ids(tenant_id: str) -> list[int]:
         if row and row["connection_type"] in ("fhir_r4", "rest_api"):
             cur.execute(
                 """
-                SELECT epm.emr_pid AS patient_id
+                SELECT epm.patient_id AS patient_id
                 FROM emr_patient_matches epm
                 JOIN emr_connections ec ON ec.id = epm.connection_id
                 WHERE ec.is_active = 1
@@ -1055,6 +1060,24 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
                     """, (_pid, _year, _tenant, _hcc, _desc,
                           json.dumps([_icd]), _icd, _icd, _coeff, _coeff))
                     logger.info("Inserted HCC %s into raf_patient_hcc for patient %s", _hcc, _pid)
+
+                # Apply HCC hierarchy so subordinate HCCs are correctly trumped
+                cur.execute(
+                    "SELECT id, hcc_code, raf_coefficient FROM raf_patient_hcc "
+                    "WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s",
+                    (_pid, _year, _tenant),
+                )
+                all_hcc_rows = cur.fetchall()
+                apply_hierarchy(all_hcc_rows, model_version="V28")
+                for h in all_hcc_rows:
+                    cur.execute(
+                        "UPDATE raf_patient_hcc SET is_trumped = %s, trumped_by_hcc = %s WHERE id = %s",
+                        (1 if h.get("is_trumped") else 0, h.get("trumped_by_hcc"), h["id"]),
+                    )
+                logger.info(
+                    "Hierarchy applied for patient %s year %s: %d HCC(s) evaluated",
+                    _pid, _year, len(all_hcc_rows),
+                )
 
                 # Recalculate RAF score
                 cur.execute(
