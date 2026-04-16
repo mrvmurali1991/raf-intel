@@ -522,7 +522,7 @@ async def upload_response(
         logger.error("upload_response file read error: %s", exc)
         raise HTTPException(
             status_code=422,
-            detail=f"Could not read uploaded file: {exc}",
+            detail="Could not read uploaded file. Ensure it is a valid UTF-8 text file.",
         )
 
     if not content.strip():

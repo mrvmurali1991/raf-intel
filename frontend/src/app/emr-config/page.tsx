@@ -920,7 +920,7 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
       onClose();
     } catch (err: unknown) {
       const axErr = err as { response?: { data?: any; status?: number } };
-      console.error("[DEBUG] Save error:", axErr?.response?.status, JSON.stringify(axErr?.response?.data));
+      // Log save error for troubleshooting (non-debug)
       const detail = axErr?.response?.data?.detail;
       const msg = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d: any) => `${d.loc?.join(".")}: ${d.msg}`).join("; ") : "Save failed. Please try again.";
       setErrors({ _global: msg });

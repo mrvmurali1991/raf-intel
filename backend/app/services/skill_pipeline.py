@@ -933,11 +933,12 @@ def run_pipeline(
     if not api_key:
         raise ValueError("GOOGLE_API_KEY is not configured — cannot call Gemini API")
     model = settings.gemini_model or "gemini-2.5-pro"
-    # API-key auth only works against the Generative Language endpoint.
-    # aiplatform.googleapis.com (Vertex AI) requires OAuth Bearer tokens from
-    # service account credentials — the x-goog-api-key header is silently
-    # ignored there and the call fails with 401/403.
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    # Vertex AI Express endpoint — works with API keys prefixed "AQ."
+    # Key must be passed as ?key= query param (NOT x-goog-api-key header).
+    url = (
+        f"https://aiplatform.googleapis.com/v1beta1/publishers/google/"
+        f"models/{model}:generateContent?key={api_key}"
+    )
 
     # Build the user prompt
     context_parts = []
@@ -1094,7 +1095,7 @@ Analyze this note completely. Use ALL context provided above (problem list, reca
             resp = requests.post(
                 url,
                 json=payload,
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                headers={"Content-Type": "application/json"},
                 timeout=180,
             )
             resp.raise_for_status()

@@ -3,17 +3,33 @@
 
 import mysql.connector
 import json
+import os
 from datetime import datetime, date
 from decimal import Decimal
 
-conn = mysql.connector.connect(host='127.0.0.1', port=3306, user='root', password='root', database='raf_intelligence')
+conn = mysql.connector.connect(
+    host=os.getenv("RAF_DB_HOST", "127.0.0.1"),
+    port=int(os.getenv("RAF_DB_PORT", "3306")),
+    user=os.getenv("RAF_DB_USER", "root"),
+    password=os.getenv("RAF_DB_PASSWORD", ""),
+    database=os.getenv("RAF_DB_NAME", "raf_intelligence"),
+)
 cur = conn.cursor()
 
 # ============================================================
 # STEP 0: Clear existing data
+# Whitelist tables to prevent SQL injection via table-name interpolation.
 # ============================================================
 print("Clearing existing data...")
+_ALLOWED_TABLES = {
+    "raf_suspect_conditions",
+    "raf_scores",
+    "raf_patient_hcc",
+    "raf_patient_demographics",
+}
 for table in ['raf_suspect_conditions', 'raf_scores', 'raf_patient_hcc', 'raf_patient_demographics']:
+    if table not in _ALLOWED_TABLES:
+        raise ValueError(f"Refusing to DELETE from non-whitelisted table: {table!r}")
     cur.execute(f'DELETE FROM {table}')
     print(f"  Deleted {cur.rowcount} rows from {table}")
 

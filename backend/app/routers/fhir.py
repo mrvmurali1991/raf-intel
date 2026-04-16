@@ -300,7 +300,7 @@ def test_connection(connection_id: int,
         logger.warning("FHIR circuit breaker open for connection %s: %s", connection_id, exc)
         raise HTTPException(
             status_code=503,
-            detail=f"FHIR service temporarily unavailable. {exc}",
+            detail="FHIR service temporarily unavailable. Please retry later.",
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except Exception as exc:
@@ -383,7 +383,7 @@ def trigger_sync(connection_id: int, body: SyncRequest = SyncRequest(),
         logger.warning("FHIR circuit breaker open for sync %s: %s", connection_id, exc)
         raise HTTPException(
             status_code=503,
-            detail=f"FHIR service temporarily unavailable. {exc}",
+            detail="FHIR service temporarily unavailable. Please retry later.",
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except ValueError as exc:

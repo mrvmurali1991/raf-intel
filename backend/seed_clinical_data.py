@@ -227,7 +227,8 @@ def main():
                         if val < float(ref_range[1:]): abnormal = " [LOW]"
                     elif ref_range.startswith("<"):
                         if val > float(ref_range[1:]): abnormal = " [HIGH]"
-                except: pass
+                except (ValueError, TypeError):
+                    pass
 
                 result_text = f"{name} ({loinc}): {val} {units} (Ref: {ref_range}){abnormal}"
                 cur.execute(
@@ -296,7 +297,7 @@ def main():
         try:
             cur.execute("SELECT 1 FROM history_data LIMIT 1")
             cur.fetchall()
-        except:
+        except Exception:
             print("  Creating history_data table...")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS history_data (
@@ -429,7 +430,7 @@ def main():
         try:
             cur.execute("SELECT 1 FROM transactions LIMIT 1")
             cur.fetchall()
-        except:
+        except Exception:
             print("  Creating transactions table...")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS transactions (

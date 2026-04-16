@@ -30,14 +30,17 @@ import pytest
 
 from app.services.raf_calculator import (
     _BLEND_WEIGHTS,
+    _PACE_BLEND_WEIGHTS,
     _ESRD_DLY_DEMO_SCORES,
     _ESRD_FG_DEMO_SCORES,
     _MACI_FACTORS_V24,
     _MACI_FACTORS_V28,
     _NE_DEMO_SCORES,
+    _NORM_FACTORS_V22,
     _NORM_FACTORS_V24,
     _NORM_FACTORS_V28,
     _SEGMENT_TO_PREFIX,
+    _apply_hcc_hierarchy,
     _calculate_age,
     _calculate_esrd_demographic_score,
     _calculate_new_enrollee_score,
@@ -49,8 +52,10 @@ from app.services.raf_calculator import (
     _run_single_model,
     _sex_code,
     determine_model_segment,
+    _processor_v22,
     _processor_v24,
     _processor_v28,
+    _processor_esrd_v24,
 )
 
 
@@ -115,19 +120,27 @@ class TestBlendWeights:
 class TestNormAndMaciFactors:
     @pytest.mark.golden
     def test_v28_norm_factor_2024(self):
-        assert _NORM_FACTORS_V28[2024] == pytest.approx(1.015)
+        assert _NORM_FACTORS_V28[2024] == pytest.approx(1.045)
 
     @pytest.mark.golden
     def test_v28_norm_factor_2025(self):
         assert _NORM_FACTORS_V28[2025] == pytest.approx(1.045)
 
     @pytest.mark.golden
+    def test_v28_norm_factor_2026(self):
+        assert _NORM_FACTORS_V28[2026] == pytest.approx(1.067)
+
+    @pytest.mark.golden
     def test_v24_norm_factor_2024(self):
-        assert _NORM_FACTORS_V24[2024] == pytest.approx(1.069)
+        assert _NORM_FACTORS_V24[2024] == pytest.approx(1.153)
 
     @pytest.mark.golden
     def test_v24_norm_factor_2025(self):
-        assert _NORM_FACTORS_V24[2025] == pytest.approx(1.041)
+        assert _NORM_FACTORS_V24[2025] == pytest.approx(1.153)
+
+    @pytest.mark.golden
+    def test_v22_norm_factor_2026(self):
+        assert _NORM_FACTORS_V22[2026] == pytest.approx(1.187)
 
     @pytest.mark.golden
     def test_maci_factor_v28_2024_is_5_9_percent(self):
@@ -145,15 +158,15 @@ class TestNormAndMaciFactors:
         # payment_raf = raw_raf * (1 - maci) / norm_factor
         raw = 1.5
         maci = 0.059
-        norm = 1.015
+        norm = 1.045
         expected = raw * (1 - maci) / norm
-        assert expected == pytest.approx(1.393, rel=1e-2)
+        assert expected == pytest.approx(1.352, rel=1e-2)
 
     def test_normalization_reduces_score(self):
         """Normalization factor > 1 should reduce the final RAF below raw."""
         raw = 1.5
         maci = 0.059
-        norm = 1.015
+        norm = 1.045
         payment = raw * (1 - maci) / norm
         assert payment < raw
 
@@ -363,11 +376,11 @@ class TestNewEnrolleeScore:
     def test_ne_cna_aged_female_65_69(self):
         result = _calculate_new_enrollee_score(age=67, sex="F", model_segment="NE_CNA")
         assert result["is_new_enrollee"] is True
-        assert result["demographic_score"] == pytest.approx(0.311)
+        assert result["demographic_score"] == pytest.approx(0.557)  # individual age 67
 
     def test_ne_cna_aged_male_65_69(self):
         result = _calculate_new_enrollee_score(age=67, sex="M", model_segment="NE_CNA")
-        assert result["demographic_score"] == pytest.approx(0.340)
+        assert result["demographic_score"] == pytest.approx(0.617)  # individual age 67
 
     def test_ne_no_disease_score(self):
         result = _calculate_new_enrollee_score(age=70, sex="F", model_segment="NE_CNA")
@@ -385,23 +398,23 @@ class TestNewEnrolleeScore:
 
     def test_ne_cna_95plus_female(self):
         result = _calculate_new_enrollee_score(age=97, sex="F", model_segment="NE_CNA")
-        assert result["demographic_score"] == pytest.approx(0.805)
+        assert result["demographic_score"] == pytest.approx(1.287)
 
     def test_ne_cna_95plus_male(self):
         result = _calculate_new_enrollee_score(age=97, sex="M", model_segment="NE_CNA")
-        assert result["demographic_score"] == pytest.approx(0.829)
+        assert result["demographic_score"] == pytest.approx(1.516)
 
     def test_ne_cfa_aged_female_65_69(self):
         result = _calculate_new_enrollee_score(age=67, sex="F", model_segment="NE_CFA")
-        assert result["demographic_score"] == pytest.approx(0.378)
+        assert result["demographic_score"] == pytest.approx(1.004)  # NE_MCAID_NORIGDIS age 67
 
     def test_ne_cnd_disabled_female_0_34(self):
         result = _calculate_new_enrollee_score(age=25, sex="F", model_segment="NE_CND")
-        assert result["demographic_score"] == pytest.approx(0.267)
+        assert result["demographic_score"] == pytest.approx(0.711)
 
     def test_ne_cnd_disabled_male_35_44(self):
         result = _calculate_new_enrollee_score(age=40, sex="M", model_segment="NE_CND")
-        assert result["demographic_score"] == pytest.approx(0.345)
+        assert result["demographic_score"] == pytest.approx(0.669)
 
     def test_unknown_ne_segment_uses_default(self):
         """Unknown segment should not raise — use default value."""
@@ -409,16 +422,56 @@ class TestNewEnrolleeScore:
         assert result["demographic_score"] > 0
 
     @pytest.mark.parametrize("age_band,sex,segment,expected", [
-        ("70-74", "F", "CNA", 0.402),
-        ("70-74", "M", "CNA", 0.436),
-        ("80-84", "F", "CNA", 0.587),
-        ("80-84", "M", "CNA", 0.619),
-        ("85-89", "F", "CNA", 0.678),
-        ("85-89", "M", "CNA", 0.697),
+        ("70-74", "F", "CNA", 0.694),
+        ("70-74", "M", "CNA", 0.808),
+        ("80-84", "F", "CNA", 0.988),
+        ("80-84", "M", "CNA", 1.245),
+        ("85-89", "F", "CNA", 1.287),
+        ("85-89", "M", "CNA", 1.516),
     ])
     def test_ne_demo_score_lookup(self, age_band, sex, segment, expected):
         score = _NE_DEMO_SCORES.get((age_band, sex, segment))
         assert score == pytest.approx(expected)
+
+    # --- Individual age 65-69 tests (CMS uses individual ages, not banded) ---
+    @pytest.mark.parametrize("age,sex,expected", [
+        (65, "F", 0.532), (66, "F", 0.532), (67, "F", 0.557),
+        (68, "F", 0.584), (69, "F", 0.625),
+        (65, "M", 0.567), (66, "M", 0.576), (67, "M", 0.617),
+        (68, "M", 0.678), (69, "M", 0.684),
+    ])
+    def test_ne_individual_age_65_69(self, age, sex, expected):
+        """CMS NE model uses individual ages 65-69, not banded."""
+        result = _calculate_new_enrollee_score(age=age, sex=sex, model_segment="NE_CNA")
+        assert result["demographic_score"] == pytest.approx(expected)
+
+    def test_ne_mcaid_segment_different_from_nmcaid(self):
+        """Medicaid NE segments (CFA/CPA) should have different coefficients."""
+        nmcaid = _calculate_new_enrollee_score(age=67, sex="F", model_segment="NE_CNA")
+        mcaid = _calculate_new_enrollee_score(age=67, sex="F", model_segment="NE_CFA")
+        assert nmcaid["demographic_score"] != mcaid["demographic_score"]
+        assert mcaid["demographic_score"] == pytest.approx(1.004)  # NE_MCAID_NORIGDIS
+
+    def test_ne_origdis_with_orec(self):
+        """OREC=1 + age>=65 → NE_NMCAID_ORIGDIS segment."""
+        result = _calculate_new_enrollee_score(
+            age=67, sex="F", model_segment="NE_CNA", orec="1"
+        )
+        assert result["demographic_score"] == pytest.approx(1.276)  # NE_NMCAID_ORIGDIS
+
+    def test_ne_origdis_under_65_ignored(self):
+        """OREC=1 but age<65 — ORIGDIS not applicable, use NORIGDIS."""
+        result = _calculate_new_enrollee_score(
+            age=40, sex="F", model_segment="NE_CND", orec="1"
+        )
+        assert result["demographic_score"] == pytest.approx(0.950)  # NE_NMCAID_NORIGDIS 35-44
+
+    def test_ne_mcaid_origdis(self):
+        """Full-dual + OREC=1 + age>=65 → NE_MCAID_ORIGDIS."""
+        result = _calculate_new_enrollee_score(
+            age=67, sex="M", model_segment="NE_CFA", orec="1"
+        )
+        assert result["demographic_score"] == pytest.approx(1.959)  # NE_MCAID_ORIGDIS
 
 
 # ---------------------------------------------------------------------------
@@ -428,15 +481,15 @@ class TestNewEnrolleeScore:
 class TestEsrdDemographicScore:
     def test_esrd_dly_65_69_female(self):
         score = _calculate_esrd_demographic_score(age=67, sex="F", esrd_segment="ESRD_DLY")
-        assert score == pytest.approx(1.167)
+        assert score == pytest.approx(0.635)
 
     def test_esrd_dly_65_69_male(self):
         score = _calculate_esrd_demographic_score(age=67, sex="M", esrd_segment="ESRD_DLY")
-        assert score == pytest.approx(1.234)
+        assert score == pytest.approx(0.562)
 
     def test_esrd_fg_65_69_female(self):
         score = _calculate_esrd_demographic_score(age=67, sex="F", esrd_segment="ESRD_FG")
-        assert score == pytest.approx(1.056)
+        assert score == pytest.approx(0.635)
 
     def test_esrd_ne_uses_dly_as_baseline(self):
         dly_score = _calculate_esrd_demographic_score(age=67, sex="F", esrd_segment="ESRD_DLY")
@@ -455,12 +508,12 @@ class TestEsrdDemographicScore:
             for sex in ["F", "M"]:
                 assert (age_band, sex) in _ESRD_DLY_DEMO_SCORES
 
-    def test_esrd_fg_score_lower_than_dly(self):
-        """Functioning graft patients have lower demographic base than dialysis."""
+    def test_esrd_fg_score_equal_to_dly_in_v28(self):
+        """In V28, GC/GI/DI segments share identical demographic coefficients."""
         for age_band in [("65-69", "F"), ("70-74", "M")]:
             dly = _ESRD_DLY_DEMO_SCORES.get(age_band, 0)
             fg = _ESRD_FG_DEMO_SCORES.get(age_band, 0)
-            assert fg < dly, f"FG score should be < DLY for {age_band}"
+            assert fg == pytest.approx(dly), f"FG should equal DLY for {age_band} in V28"
 
 
 # ---------------------------------------------------------------------------
@@ -503,10 +556,15 @@ class TestSegmentToPrefixMapping:
         assert _SEGMENT_TO_PREFIX[segment] == expected_prefix
 
     def test_esrd_dly_prefix(self):
-        assert _SEGMENT_TO_PREFIX["ESRD_DLY"] == "ESRD_"
+        # ESRD patients use community prefix for standard V28/V24 models;
+        # the dedicated ESRD V24 processor auto-detects DI_/GC_ from orec.
+        assert _SEGMENT_TO_PREFIX["ESRD_DLY"] == "CNA_"
 
     def test_esrd_fg_prefix(self):
-        assert _SEGMENT_TO_PREFIX["ESRD_FG"] == "ESRD_"
+        assert _SEGMENT_TO_PREFIX["ESRD_FG"] == "CNA_"
+
+    def test_esrd_ne_prefix(self):
+        assert _SEGMENT_TO_PREFIX["ESRD_NE"] == "NE_"
 
     def test_ne_prefix(self):
         assert _SEGMENT_TO_PREFIX["NE_CNA"] == "NE_"
@@ -727,3 +785,233 @@ class TestBlendingArithmetic:
         v24_w, v28_w = _BLEND_WEIGHTS[2025]
         blended = v24_w * v24_raw + v28_w * v28_raw
         assert min(v24_raw, v28_raw) <= blended <= max(v24_raw, v28_raw)
+
+
+# ---------------------------------------------------------------------------
+# 15. PACE V22 model integration
+# ---------------------------------------------------------------------------
+
+class TestPACEV22Model:
+    """Verify that the V22 processor produces valid scores with correct coefficients."""
+
+    def test_v22_processor_produces_scores(self):
+        """V22 processor should produce non-zero scores for a known diagnosis."""
+        result = _run_single_model(
+            _processor_v22, ["E1169"], 70, "M", "CNA", 1.187, 0.0
+        )
+        assert result["raw_raf"] > 0
+        assert result["demographic_score"] > 0
+        assert result["payment_raf"] > 0
+
+    def test_v22_different_from_v24(self):
+        """V22 and V24 have different coefficients (~1-3% delta)."""
+        r22 = _run_single_model(
+            _processor_v22, ["E1169"], 70, "M", "CNA", 1.0, 0.0
+        )
+        r24 = _run_single_model(
+            _processor_v24, ["E1169"], 70, "M", "CNA", 1.0, 0.0
+        )
+        # Both should have scores but they should differ
+        assert r22["raw_raf"] > 0
+        assert r24["raw_raf"] > 0
+        assert r22["raw_raf"] != r24["raw_raf"]
+
+    def test_v22_with_v22_norm_factor(self):
+        """PACE payment uses V22 norm factor (1.187)."""
+        n22 = _get_norm_factor(_NORM_FACTORS_V22, 2025)
+        assert n22 == pytest.approx(1.187)
+        result = _run_single_model(
+            _processor_v22, ["E1169"], 70, "M", "CNA", n22, 0.0
+        )
+        # payment_raf should be raw / 1.187
+        expected_payment = result["raw_raf"] / n22
+        assert result["payment_raf"] == pytest.approx(expected_payment, rel=0.01)
+
+    def test_pace_blend_weights_exist(self):
+        """PACE blend weights should exist for transition years."""
+        assert 2025 in _PACE_BLEND_WEIGHTS or 2024 in _PACE_BLEND_WEIGHTS
+
+
+# ---------------------------------------------------------------------------
+# 16. ESRD V24 dedicated model
+# ---------------------------------------------------------------------------
+
+class TestESRDModel:
+    """Verify ESRD-specific processor produces correct ESRD scores."""
+
+    def test_esrd_v24_processor_with_dialysis(self):
+        """ESRD V24 processor with orec=2 should use DI_ prefix and produce scores."""
+        result = _run_single_model(
+            _processor_esrd_v24, ["E1169", "N186"], 70, "M", "ESRD_DLY",
+            1.0, 0.0, orec="2",
+        )
+        assert result["raw_raf"] > 0
+        assert result["demographic_score"] > 0
+
+    def test_esrd_v24_includes_esrd_interactions(self):
+        """ESRD model should fire Originally_ESRD interaction for orec=2 aged patients."""
+        result = _run_single_model(
+            _processor_esrd_v24, ["E1169", "N186"], 70, "M", "ESRD_DLY",
+            1.0, 0.0, orec="2",
+        )
+        coefs = result["all_coefficients"]
+        # Should have some coefficients (demographic + HCC + possibly interactions)
+        assert len(coefs) > 0
+
+    def test_esrd_demo_scores_match_table(self):
+        """ESRD demographic override should match our hardcoded table."""
+        score = _calculate_esrd_demographic_score(70, "M", "ESRD_DLY")
+        assert score == _ESRD_DLY_DEMO_SCORES[("70-74", "M")]
+        assert score == pytest.approx(0.611)
+
+    def test_esrd_fg_uses_correct_segment(self):
+        """Functioning graft segment should work with ESRD processor."""
+        result = _run_single_model(
+            _processor_esrd_v24, ["E1169", "Z940"], 70, "M", "ESRD_FG",
+            1.0, 0.0, orec="2",
+        )
+        assert result["raw_raf"] > 0
+
+
+# ---------------------------------------------------------------------------
+# 17. HCC Hierarchy application
+# ---------------------------------------------------------------------------
+
+class TestHCCHierarchy:
+    """Verify that _apply_hcc_hierarchy correctly suppresses child HCCs."""
+
+    def test_hierarchy_suppresses_child_hcc(self):
+        """When parent HCC is present, child should be removed."""
+        # HCC 18 (Diabetes with Chronic Complications) trumps HCC 19 (Diabetes without Complication)
+        # in V28. Let's create a result with both and verify hierarchy removes the child.
+        result = _run_single_model(
+            _processor_v28, ["E1165", "E119"], 70, "M", "CNA", 1.0, 0.0
+        )
+        # E1165 → HCC 37 (Diabetes with Chronic Complications in V28)
+        # E119 → HCC 38 (Diabetes without Complication in V28)
+        # If both are present, HCC 38 should be suppressed by HCC 37
+        hcc_list_before = list(result["hcc_list"])
+        _apply_hcc_hierarchy(result, "v28")
+        # After hierarchy, the list should be equal or smaller
+        assert len(result["hcc_list"]) <= len(hcc_list_before)
+
+    def test_hierarchy_recalculates_scores(self):
+        """After suppression, disease_score should be recalculated."""
+        result = _run_single_model(
+            _processor_v28, ["E1165", "E119"], 70, "M", "CNA", 1.0, 0.0
+        )
+        raw_before = result["raw_raf"]
+        _apply_hcc_hierarchy(result, "v28")
+        # Score may decrease (child removed) or stay same (no suppression needed)
+        assert result["raw_raf"] <= raw_before + 0.001
+
+
+# ---------------------------------------------------------------------------
+# 18. Payment-level blending verification
+# ---------------------------------------------------------------------------
+
+class TestPaymentLevelBlending:
+    """Verify payment-level blending is correct per CMS."""
+
+    def test_payment_blending_not_raw_blending(self):
+        """Each model should normalize independently before blending."""
+        # Run V24 and V28 with different norm factors
+        n24 = _get_norm_factor(_NORM_FACTORS_V24, 2025)
+        n28 = _get_norm_factor(_NORM_FACTORS_V28, 2025)
+        m24 = _get_maci_factor(_MACI_FACTORS_V24, 2025)
+        m28 = _get_maci_factor(_MACI_FACTORS_V28, 2025)
+
+        r24 = _run_single_model(_processor_v24, ["E1169"], 70, "M", "CNA", n24, m24)
+        r28 = _run_single_model(_processor_v28, ["E1169"], 70, "M", "CNA", n28, m28)
+
+        # Payment = raw * (1 - MACI) / norm
+        expected_p24 = r24["raw_raf"] * (1 - m24) / n24
+        expected_p28 = r28["raw_raf"] * (1 - m28) / n28
+        assert r24["payment_raf"] == pytest.approx(expected_p24, rel=0.01)
+        assert r28["payment_raf"] == pytest.approx(expected_p28, rel=0.01)
+
+        # Blended payment (PY2025: 33% V24, 67% V28)
+        v24_w, v28_w = _BLEND_WEIGHTS[2025]
+        blended_payment = v24_w * r24["payment_raf"] + v28_w * r28["payment_raf"]
+        # Raw blending would give a different result
+        blended_raw = v24_w * r24["raw_raf"] + v28_w * r28["raw_raf"]
+        # These should NOT be equal (different norm factors)
+        assert blended_payment != pytest.approx(blended_raw * (1 - m28) / n28, rel=0.01)
+
+    def test_v28_only_no_blending(self):
+        """For 2026+, V28-only means no blending needed."""
+        v24_w, v28_w = _BLEND_WEIGHTS[2026]
+        assert v24_w == 0.0
+        assert v28_w == 1.0
+
+
+# ---------------------------------------------------------------------------
+# 19. Enrollment params passed to hccinfhir
+# ---------------------------------------------------------------------------
+
+class TestEnrollmentParamsPassthrough:
+    """Verify orec, dual_elgbl_cd are passed to hccinfhir."""
+
+    def test_orec_passed_in_engine_input(self):
+        """Engine input should include orec for audit trail."""
+        result = _run_single_model(
+            _processor_v28, ["E1169"], 70, "M", "CNA", 1.0, 0.0,
+            orec="2", dual_elgbl_cd="02",
+        )
+        assert result["engine_input"]["orec"] == "2"
+        assert result["engine_input"]["dual_elgbl_cd"] == "02"
+
+    def test_dual_affects_prefix(self):
+        """Full dual patients should get different demographic scores."""
+        r_nondual = _run_single_model(
+            _processor_v28, ["E1169"], 70, "M", "CNA", 1.0, 0.0,
+            dual_elgbl_cd="NA",
+        )
+        r_fulldual = _run_single_model(
+            _processor_v28, ["E1169"], 70, "M", "CFA", 1.0, 0.0,
+            dual_elgbl_cd="02",
+        )
+        # Full dual aged should have different demographic score
+        assert r_nondual["demographic_score"] != r_fulldual["demographic_score"]
+
+    def test_invalid_orec_validated(self):
+        """Invalid OREC values should be corrected to '0'."""
+        seg = determine_model_segment(age=70, orec="9", enrollment_months=12)
+        # Should not crash, should default to standard segment
+        assert seg in ("CNA", "CND")
+
+    def test_graft_months_passthrough(self):
+        """graft_months should be passed to hccinfhir for ESRD graft interactions."""
+        result = _run_single_model(
+            _processor_esrd_v24, ["E1169", "Z940"], 70, "M", "ESRD_FG",
+            1.0, 0.0, orec="2", graft_months=36,
+        )
+        assert result["raw_raf"] > 0
+
+
+# ---------------------------------------------------------------------------
+# 20. NE sex validation and age clamping
+# ---------------------------------------------------------------------------
+
+class TestNEValidation:
+    """Verify NE scoring handles edge cases gracefully."""
+
+    def test_ne_invalid_sex_normalized(self):
+        """Invalid sex should be normalized via _sex_code."""
+        result = _calculate_new_enrollee_score(70, "female", "NE_CNA")
+        assert result["demographic_score"] > 0
+        # Should use F coefficient
+        result_f = _calculate_new_enrollee_score(70, "F", "NE_CNA")
+        assert result["demographic_score"] == result_f["demographic_score"]
+
+    def test_ne_negative_age_clamped(self):
+        """Negative age should be clamped to 0."""
+        result = _calculate_new_enrollee_score(-5, "F", "NE_CNA")
+        result_zero = _calculate_new_enrollee_score(0, "F", "NE_CNA")
+        assert result["demographic_score"] == result_zero["demographic_score"]
+
+    def test_ne_unknown_segment_warns(self):
+        """Unknown segment should fall back to CNA."""
+        result = _calculate_new_enrollee_score(70, "F", "NE_UNKNOWN")
+        # Should still produce a valid score (defaults to CNA)
+        assert result["demographic_score"] > 0

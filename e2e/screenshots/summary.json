@@ -1,0 +1,30 @@
+{
+  "patient": {
+    "name": "Eleanor Grace Whitfield",
+    "dob": "1952-07-14",
+    "sex": "Female",
+    "fhirId": "a18cd1dc-9054-4be1-8b1d-36d3cc16aa83"
+  },
+  "timestamps": {
+    "syncTriggered": "2026-04-15T14:09:05.846Z"
+  },
+  "rafPid": null,
+  "screenshots": [
+    "01_openemr_login.png",
+    "02_openemr_dashboard.png",
+    "03_openemr_search_whitfield.png",
+    "04_openemr_patient_context.png",
+    "05_openemr_no_demographics.png",
+    "06_encounter_creation.png",
+    "07_after_encounter.png",
+    "08_vitals_page.png",
+    "09_after_vitals.png",
+    "10_issues_page.png",
+    "11_final_openemr_view.png",
+    "12_raf_login.png",
+    "13_raf_dashboard.png",
+    "14_raf_patients.png",
+    "15_raf_search_whitfield.png",
+    "16_raf_patient_not_in_list.png"
+  ]
+}

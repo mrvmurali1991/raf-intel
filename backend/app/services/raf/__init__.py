@@ -50,8 +50,13 @@ from app.services.raf.calculator import (  # noqa: F401
     _processor,
     _processor_v24,
     _processor_v28,
+    _processor_v22,
+    _processor_esrd_v24,
     # demographic score tables
     _NE_DEMO_SCORES,
+    _NE_CMS_COEFFICIENTS,
+    _SEGMENT_TO_NE_CMS,
+    _ne_age_key,
     _ESRD_DLY_DEMO_SCORES,
     _ESRD_FG_DEMO_SCORES,
     # helpers

@@ -45,10 +45,13 @@ _SEGMENT_TO_PREFIX: dict[str, str] = {
     "NE_CFD": "NE_",
     "NE_CPA": "NE_",
     "NE_CPD": "NE_",
-    # ESRD segments
-    "ESRD_DLY": "ESRD_",  # ESRD Dialysis (OREC=2 on active dialysis)
-    "ESRD_FG": "ESRD_",  # ESRD Functioning Graft (post-transplant, functioning)
-    "ESRD_NE": "ESRD_NE_",  # ESRD New Enrollee
+    # ESRD segments — for standard V28/V24 models, ESRD patients use community
+    # prefixes (CNA_, CFA_, etc.) since ESRD-specific coefficients live in the
+    # dedicated ESRD model. We default to CNA_ here; the dedicated ESRD processor
+    # in _run_single_model uses its own DI_/GC_/DNE_ prefix auto-detection.
+    "ESRD_DLY": "CNA_",  # ESRD Dialysis — standard model uses community prefix
+    "ESRD_FG": "CNA_",   # ESRD Functioning Graft — standard model uses community prefix
+    "ESRD_NE": "NE_",    # ESRD New Enrollee — demographic-only
 }
 
 
@@ -91,6 +94,11 @@ def determine_model_segment(
     # When OREC indicates ESRD, detect dialysis vs functioning graft from ICD codes
     # -----------------------------------------------------------------------
     _orec = str(orec or "0").strip()
+    if _orec not in ("0", "1", "2", "3"):
+        logger.warning(
+            "Invalid OREC=%r (expected 0-3), treating as 0", _orec,
+        )
+        _orec = "0"
     if _orec in ("2", "3"):
         codes_to_check: set[str] = {
             c.strip().upper().replace(".", "") for c in (icd_codes or [])

@@ -202,6 +202,9 @@ function TenantSwitcher({ isDark }: { isDark: boolean }) {
     <div style={{ position: "relative", marginTop: 6, marginBottom: 2 }}>
       <button
         onClick={() => setOpen(!open)}
+        aria-label={`Switch tenant. Current: ${displayName}`}
+        aria-expanded={open}
+        aria-haspopup="listbox"
         style={{
           width: "100%",
           display: "flex",

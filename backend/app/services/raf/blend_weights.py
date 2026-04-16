@@ -47,23 +47,34 @@ _PACE_BLEND_WEIGHTS: dict[int, tuple[float, float]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Normalization factors by payment year (V28)
+# Normalization factors by payment year
+# Source: CMS 2026 Rate Announcement (and prior year Rate Announcements)
 # ---------------------------------------------------------------------------
 
+# V28 normalization factors
 _NORM_FACTORS_V28: dict[int, float] = {
-    2024: 1.015,
+    2024: 1.045,
     2025: 1.045,
-    2026: 1.050,  # estimated
+    2026: 1.067,
 }
 
 # Backward-compat alias
 _NORM_FACTORS = _NORM_FACTORS_V28
 
-# V24 normalization factors — CMS published values for the transition years
+# V24 normalization factors — remained constant across the transition years
+# per CMS 2026 Rate Announcement
 _NORM_FACTORS_V24: dict[int, float] = {
-    2024: 1.069,
-    2025: 1.041,
-    2026: 1.000,  # not used in pure V28 years, but defined for safety
+    2024: 1.153,
+    2025: 1.153,
+    2026: 1.153,
+}
+
+# V22 (legacy 2017 model) normalization factors — used for the PACE legacy side
+# per CMS 2026 Rate Announcement
+_NORM_FACTORS_V22: dict[int, float] = {
+    2024: 1.187,
+    2025: 1.187,
+    2026: 1.187,
 }
 
 # ---------------------------------------------------------------------------

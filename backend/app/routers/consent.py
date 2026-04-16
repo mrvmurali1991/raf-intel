@@ -66,7 +66,8 @@ def api_record_consent(
         )
         return {"status": "ok", "consent": result}
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.warning("Consent record error: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid consent data. Please check your input.")
 
 
 @router.post("/check")

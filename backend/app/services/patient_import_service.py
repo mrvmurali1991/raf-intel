@@ -31,6 +31,7 @@ import io
 import json
 import logging
 import re
+import threading
 from datetime import date, datetime
 from typing import Any, Optional
 
@@ -843,28 +844,30 @@ def validate_patient_row(row: dict[str, str], line_num: int) -> list[str]:
 # ---------------------------------------------------------------------------
 
 _PATIENTS_COLS_CACHE: set[str] | None = None
+_PATIENTS_COLS_LOCK = threading.Lock()
 
 
 def _get_patients_columns(cur: Any) -> set[str]:
     """Return the set of column names on ``patients`` table (cached)."""
     global _PATIENTS_COLS_CACHE
-    if _PATIENTS_COLS_CACHE is not None:
-        return _PATIENTS_COLS_CACHE
-    cur.execute(
-        """
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = 'raf_intelligence'
-          AND TABLE_NAME = 'patients'
-        """
-    )
-    raw = cur.fetchall()
-    cols = {
-        (r["COLUMN_NAME"] if isinstance(r, dict) else r[0])
-        for r in raw
-    }
-    _PATIENTS_COLS_CACHE = cols
-    return cols
+    with _PATIENTS_COLS_LOCK:
+        if _PATIENTS_COLS_CACHE is not None:
+            return _PATIENTS_COLS_CACHE
+        cur.execute(
+            """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'raf_intelligence'
+              AND TABLE_NAME = 'patients'
+            """
+        )
+        raw = cur.fetchall()
+        cols = {
+            (r["COLUMN_NAME"] if isinstance(r, dict) else r[0])
+            for r in raw
+        }
+        _PATIENTS_COLS_CACHE = cols
+        return cols
 
 
 # ---------------------------------------------------------------------------

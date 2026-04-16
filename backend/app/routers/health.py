@@ -679,7 +679,7 @@ def _probe_gemini() -> dict[str, Any]:
         return {"ok": False, "reason": "GOOGLE_API_KEY not configured", "model": model}
 
     url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
+        "https://aiplatform.googleapis.com/v1beta1/publishers/google/models/"
         f"{model}:generateContent?key={api_key}"
     )
     payload = {

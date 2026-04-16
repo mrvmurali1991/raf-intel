@@ -201,7 +201,7 @@ def test_connection(user: dict = Depends(get_current_user), tenant_id: str = Dep
         logger.exception("SFTP connection test failed for tenant %s", tenant_id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"SFTP connection test encountered an unexpected error: {exc}",
+            detail="SFTP connection test encountered an unexpected error. Check server logs.",
         ) from exc
 
     return result
@@ -229,7 +229,7 @@ def transmit(
         logger.warning("CMS SFTP circuit breaker open: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"CMS SFTP service is temporarily unavailable. {exc}",
+            detail="CMS SFTP service is temporarily unavailable. Please retry later.",
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except FileNotFoundError as exc:
@@ -243,7 +243,7 @@ def transmit(
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Transmission to CMS failed: {exc}",
+            detail="Transmission to CMS failed. Check server logs for details.",
         ) from exc
 
     return result
@@ -267,14 +267,14 @@ def check_responses(user: dict = Depends(get_current_user), tenant_id: str = Dep
         logger.warning("CMS SFTP circuit breaker open: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"CMS SFTP service is temporarily unavailable. {exc}",
+            detail="CMS SFTP service is temporarily unavailable. Please retry later.",
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except Exception as exc:
         logger.exception("Response check failed for tenant %s", tenant_id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Could not retrieve CMS response files: {exc}",
+            detail="Could not retrieve CMS response files. Check server logs.",
         ) from exc
 
     return result

@@ -13,10 +13,17 @@ export function initErrorTracking() {
 }
 
 function reportError(error: any) {
-  // Fire and forget — don't block the UI
+  // Fire and forget — don't block the UI. Errors in reporting itself
+  // are suppressed by design to avoid infinite loops (reporting error
+  // → reporting failure → reporting error …). Dev-mode surfaces them.
   fetch("/api/admin/errors/report", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(error),
-  }).catch(() => {});
+  }).catch((e) => {
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.warn("error-tracking: failed to report error", e);
+    }
+  });
 }

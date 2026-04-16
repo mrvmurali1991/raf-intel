@@ -4,9 +4,16 @@
 import mysql.connector
 import json
 import hashlib
+import os
 import random
 
-conn = mysql.connector.connect(host='127.0.0.1', port=3306, user='root', password='root', database='raf_intelligence')
+conn = mysql.connector.connect(
+    host=os.getenv("RAF_DB_HOST", "127.0.0.1"),
+    port=int(os.getenv("RAF_DB_PORT", "3306")),
+    user=os.getenv("RAF_DB_USER", "root"),
+    password=os.getenv("RAF_DB_PASSWORD", ""),
+    database=os.getenv("RAF_DB_NAME", "raf_intelligence"),
+)
 cur = conn.cursor()
 
 # Clear existing demo data

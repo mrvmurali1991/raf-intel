@@ -38,6 +38,7 @@ from app.services.raf.blend_weights import (
     _PACE_BLEND_WEIGHTS,
     _NORM_FACTORS_V28,
     _NORM_FACTORS_V24,
+    _NORM_FACTORS_V22,
     _NORM_FACTORS,
     _MACI_FACTORS_V28,
     _MACI_FACTORS_V24,
@@ -72,6 +73,8 @@ logger = logging.getLogger(__name__)
 
 _processor_v28 = HCCInFHIR(model_name="CMS-HCC Model V28")
 _processor_v24 = HCCInFHIR(model_name="CMS-HCC Model V24")
+_processor_v22 = HCCInFHIR(model_name="CMS-HCC Model V22")
+_processor_esrd_v24 = HCCInFHIR(model_name="CMS-HCC ESRD Model V24")
 
 # Backward-compat alias so existing callers referencing _processor still work
 _processor = _processor_v28
@@ -83,145 +86,192 @@ _processor = _processor_v28
 # of Part B enrollment (no HCC disease coding applied).
 # ---------------------------------------------------------------------------
 
-# NE Community Non-Dual Aged/Disabled (CNA segment new enrollees)
-_NE_DEMO_SCORES: dict[tuple[str, str, str], float] = {
-    # (age_band, sex, ne_segment) → coefficient
-    # Community Non-dual Aged (CNA-NE)
-    ("65-69", "F", "CNA"): 0.311,
-    ("65-69", "M", "CNA"): 0.340,
-    ("70-74", "F", "CNA"): 0.402,
-    ("70-74", "M", "CNA"): 0.436,
-    ("75-79", "F", "CNA"): 0.499,
-    ("75-79", "M", "CNA"): 0.528,
-    ("80-84", "F", "CNA"): 0.587,
-    ("80-84", "M", "CNA"): 0.619,
-    ("85-89", "F", "CNA"): 0.678,
-    ("85-89", "M", "CNA"): 0.697,
-    ("90-94", "F", "CNA"): 0.741,
-    ("90-94", "M", "CNA"): 0.763,
-    ("95+", "F", "CNA"): 0.805,
-    ("95+", "M", "CNA"): 0.829,
-    # Community Non-dual Disabled (CND-NE) — under 65
-    ("0-34", "F", "CND"): 0.267,
-    ("0-34", "M", "CND"): 0.298,
-    ("35-44", "F", "CND"): 0.312,
-    ("35-44", "M", "CND"): 0.345,
-    ("45-54", "F", "CND"): 0.389,
-    ("45-54", "M", "CND"): 0.421,
-    ("55-59", "F", "CND"): 0.456,
-    ("55-59", "M", "CND"): 0.492,
-    ("60-64", "F", "CND"): 0.534,
-    ("60-64", "M", "CND"): 0.567,
-    # Community Full-dual Aged (CFA-NE)
-    ("65-69", "F", "CFA"): 0.378,
-    ("65-69", "M", "CFA"): 0.401,
-    ("70-74", "F", "CFA"): 0.456,
-    ("70-74", "M", "CFA"): 0.489,
-    ("75-79", "F", "CFA"): 0.534,
-    ("75-79", "M", "CFA"): 0.567,
-    ("80-84", "F", "CFA"): 0.612,
-    ("80-84", "M", "CFA"): 0.645,
-    ("85-89", "F", "CFA"): 0.698,
-    ("85-89", "M", "CFA"): 0.723,
-    ("90-94", "F", "CFA"): 0.756,
-    ("90-94", "M", "CFA"): 0.779,
-    ("95+", "F", "CFA"): 0.812,
-    ("95+", "M", "CFA"): 0.836,
-    # Community Full-dual Disabled (CFD-NE)
-    ("0-34", "F", "CFD"): 0.345,
-    ("0-34", "M", "CFD"): 0.378,
-    ("35-44", "F", "CFD"): 0.401,
-    ("35-44", "M", "CFD"): 0.434,
-    ("45-54", "F", "CFD"): 0.467,
-    ("45-54", "M", "CFD"): 0.498,
-    ("55-59", "F", "CFD"): 0.523,
-    ("55-59", "M", "CFD"): 0.556,
-    ("60-64", "F", "CFD"): 0.589,
-    ("60-64", "M", "CFD"): 0.612,
-    # Community Partial-dual Aged (CPA-NE)
-    ("65-69", "F", "CPA"): 0.343,
-    ("65-69", "M", "CPA"): 0.367,
-    ("70-74", "F", "CPA"): 0.423,
-    ("70-74", "M", "CPA"): 0.456,
-    ("75-79", "F", "CPA"): 0.512,
-    ("75-79", "M", "CPA"): 0.545,
-    ("80-84", "F", "CPA"): 0.601,
-    ("80-84", "M", "CPA"): 0.634,
-    ("85-89", "F", "CPA"): 0.689,
-    ("85-89", "M", "CPA"): 0.712,
-    ("90-94", "F", "CPA"): 0.745,
-    ("90-94", "M", "CPA"): 0.768,
-    ("95+", "F", "CPA"): 0.812,
-    ("95+", "M", "CPA"): 0.834,
-    # Community Partial-dual Disabled (CPD-NE)
-    ("0-34", "F", "CPD"): 0.312,
-    ("0-34", "M", "CPD"): 0.345,
-    ("35-44", "F", "CPD"): 0.367,
-    ("35-44", "M", "CPD"): 0.401,
-    ("45-54", "F", "CPD"): 0.434,
-    ("45-54", "M", "CPD"): 0.467,
-    ("55-59", "F", "CPD"): 0.489,
-    ("55-59", "M", "CPD"): 0.523,
-    ("60-64", "F", "CPD"): 0.545,
-    ("60-64", "M", "CPD"): 0.578,
+# ---------------------------------------------------------------------------
+# Official CMS V28 New Enrollee Demographic Coefficients
+# Source: risk_adjustment_model v0.5.3 → CMS V28 2024 weights.csv
+#
+# CMS NE model has 4 segments based on two axes:
+#   Medicaid: NMCAID (non-Medicaid) vs MCAID (Medicaid — full or partial dual)
+#   Originally Disabled: NORIGDIS (not) vs ORIGDIS (originally disabled)
+#
+# Internal segment mapping:
+#   CNA (non-dual aged)         → NE_NMCAID_NORIGDIS
+#   CND (non-dual disabled)     → NE_NMCAID_ORIGDIS
+#   CFA (full-dual aged)        → NE_MCAID_NORIGDIS
+#   CFD (full-dual disabled)    → NE_MCAID_ORIGDIS
+#   CPA (partial-dual aged)     → NE_MCAID_NORIGDIS
+#   CPD (partial-dual disabled) → NE_MCAID_ORIGDIS
+#
+# Ages 65-69 use individual-age coefficients per CMS (not banded).
+# ---------------------------------------------------------------------------
+
+# CMS NE segment coefficients keyed by (age_key, sex, cms_ne_segment)
+# age_key: individual age str for 65-69 ("65","66",...), age band otherwise
+_NE_CMS_COEFFICIENTS: dict[str, dict[tuple[str, str], float]] = {
+    # ── NE_NMCAID_NORIGDIS (CNA / non-Medicaid, not originally disabled) ──
+    "NE_NMCAID_NORIGDIS": {
+        ("0-34", "F"): 0.711, ("0-34", "M"): 0.409,
+        ("35-44", "F"): 0.950, ("35-44", "M"): 0.669,
+        ("45-54", "F"): 1.155, ("45-54", "M"): 0.906,
+        ("55-59", "F"): 1.152, ("55-59", "M"): 0.984,
+        ("60-64", "F"): 1.212, ("60-64", "M"): 1.057,
+        ("65", "F"): 0.532, ("65", "M"): 0.567,
+        ("66", "F"): 0.532, ("66", "M"): 0.576,
+        ("67", "F"): 0.557, ("67", "M"): 0.617,
+        ("68", "F"): 0.584, ("68", "M"): 0.678,
+        ("69", "F"): 0.625, ("69", "M"): 0.684,
+        ("70-74", "F"): 0.694, ("70-74", "M"): 0.808,
+        ("75-79", "F"): 0.901, ("75-79", "M"): 1.049,
+        ("80-84", "F"): 0.988, ("80-84", "M"): 1.245,
+        ("85-89", "F"): 1.287, ("85-89", "M"): 1.516,
+        ("90-94", "F"): 1.287, ("90-94", "M"): 1.516,
+        ("95+", "F"): 1.287, ("95+", "M"): 1.516,
+    },
+    # ── NE_MCAID_NORIGDIS (CFA, CPA / Medicaid, not originally disabled) ──
+    "NE_MCAID_NORIGDIS": {
+        ("0-34", "F"): 1.025, ("0-34", "M"): 0.738,
+        ("35-44", "F"): 1.303, ("35-44", "M"): 1.264,
+        ("45-54", "F"): 1.415, ("45-54", "M"): 1.420,
+        ("55-59", "F"): 1.289, ("55-59", "M"): 1.477,
+        ("60-64", "F"): 1.396, ("60-64", "M"): 1.542,
+        ("65", "F"): 0.986, ("65", "M"): 1.182,
+        ("66", "F"): 0.990, ("66", "M"): 1.234,
+        ("67", "F"): 1.004, ("67", "M"): 1.319,
+        ("68", "F"): 1.004, ("68", "M"): 1.367,
+        ("69", "F"): 1.004, ("69", "M"): 1.455,
+        ("70-74", "F"): 1.043, ("70-74", "M"): 1.455,
+        ("75-79", "F"): 1.128, ("75-79", "M"): 1.455,
+        ("80-84", "F"): 1.342, ("80-84", "M"): 1.503,
+        ("85-89", "F"): 1.563, ("85-89", "M"): 1.682,
+        ("90-94", "F"): 1.712, ("90-94", "M"): 1.981,
+        ("95+", "F"): 1.712, ("95+", "M"): 1.981,
+    },
+    # ── NE_NMCAID_ORIGDIS (CND / non-Medicaid, originally disabled) ──
+    # Under-65 coefficients are 0.0 (can't be originally disabled under 65 in this segment)
+    "NE_NMCAID_ORIGDIS": {
+        ("65", "F"): 1.212, ("65", "M"): 1.057,
+        ("66", "F"): 1.276, ("66", "M"): 1.155,
+        ("67", "F"): 1.276, ("67", "M"): 1.155,
+        ("68", "F"): 1.276, ("68", "M"): 1.155,
+        ("69", "F"): 1.276, ("69", "M"): 1.297,
+        ("70-74", "F"): 1.276, ("70-74", "M"): 1.297,
+        ("75-79", "F"): 1.276, ("75-79", "M"): 1.297,
+        ("80-84", "F"): 1.276, ("80-84", "M"): 1.297,
+        ("85-89", "F"): 1.287, ("85-89", "M"): 1.516,
+        ("90-94", "F"): 1.287, ("90-94", "M"): 1.516,
+        ("95+", "F"): 1.287, ("95+", "M"): 1.516,
+    },
+    # ── NE_MCAID_ORIGDIS (CFD, CPD / Medicaid, originally disabled) ──
+    "NE_MCAID_ORIGDIS": {
+        ("65", "F"): 1.599, ("65", "M"): 1.727,
+        ("66", "F"): 1.599, ("66", "M"): 1.959,
+        ("67", "F"): 1.599, ("67", "M"): 1.959,
+        ("68", "F"): 2.021, ("68", "M"): 1.959,
+        ("69", "F"): 2.021, ("69", "M"): 1.959,
+        ("70-74", "F"): 2.021, ("70-74", "M"): 1.959,
+        ("75-79", "F"): 2.021, ("75-79", "M"): 2.813,
+        ("80-84", "F"): 2.021, ("80-84", "M"): 2.813,
+        ("85-89", "F"): 2.021, ("85-89", "M"): 2.813,
+        ("90-94", "F"): 2.021, ("90-94", "M"): 2.813,
+        ("95+", "F"): 2.021, ("95+", "M"): 2.813,
+    },
 }
 
-# ESRD Dialysis (ESRD_DLY) demographic base scores by age/sex
-# Source: CMS ESRD Table — CMS-HCC V28 PY2026 — verify against official CMS Advance Notice before production use
-# TODO: Replace with official CMS coefficients when PY2026 Final Rule is published
+# Internal segment → CMS NE segment mapping
+# Note: ORIGDIS segments are for 65+ beneficiaries who originally qualified via
+# disability (OREC=1). Under-65 disabled use the NORIGDIS segment.
+# The ORIGDIS determination requires OREC and is handled in _calculate_new_enrollee_score.
+_SEGMENT_TO_NE_CMS: dict[str, str] = {
+    "CNA": "NE_NMCAID_NORIGDIS",
+    "CND": "NE_NMCAID_NORIGDIS",   # under-65 disabled → NORIGDIS
+    "CFA": "NE_MCAID_NORIGDIS",
+    "CFD": "NE_MCAID_NORIGDIS",    # under-65 disabled → NORIGDIS
+    "CPA": "NE_MCAID_NORIGDIS",    # partial dual = Medicaid
+    "CPD": "NE_MCAID_NORIGDIS",    # under-65 disabled → NORIGDIS
+}
+
+
+def _ne_age_key(age: int) -> str:
+    """Return NE-specific age key: individual age for 65-69, band otherwise."""
+    if 65 <= age <= 69:
+        return str(age)
+    return _get_age_band_from_age(age)
+
+
+# Backward-compat shim: flat dict used by tests and external callers.
+# Populated from _NE_CMS_COEFFICIENTS using averaged 65-69 band for compat.
+_NE_DEMO_SCORES: dict[tuple[str, str, str], float] = {}
+for _seg_internal, _cms_seg in _SEGMENT_TO_NE_CMS.items():
+    _coeffs = _NE_CMS_COEFFICIENTS[_cms_seg]
+    for (_age_key, _sex), _val in _coeffs.items():
+        # For individual ages 65-69, aggregate into "65-69" band via first-wins
+        if _age_key in ("65", "66", "67", "68", "69"):
+            _band_key = ("65-69", _sex, _seg_internal)
+            if _band_key not in _NE_DEMO_SCORES:
+                # Use age-67 as representative midpoint for backward compat
+                _mid = _coeffs.get(("67", _sex), _val)
+                _NE_DEMO_SCORES[_band_key] = _mid
+        else:
+            _NE_DEMO_SCORES[(_age_key, _sex, _seg_internal)] = _val
+
+# Official CMS V28 ESRD Dialysis (DI) demographic base scores by age/sex
+# Source: hccpy ESRDhcccoefn.csv — CMS V28 ESRD model coefficients
+# GC (Graft Complication) and GI (Graft Failure) have identical demographic
+# coefficients to DI in the current V28 ESRD model.
 _ESRD_DLY_DEMO_SCORES: dict[tuple[str, str], float] = {
-    ("0-34", "F"): 0.821,
-    ("0-34", "M"): 0.876,
-    ("35-44", "F"): 0.923,
-    ("35-44", "M"): 0.987,
-    ("45-54", "F"): 1.012,
-    ("45-54", "M"): 1.089,
-    ("55-59", "F"): 1.089,
-    ("55-59", "M"): 1.156,
-    ("60-64", "F"): 1.134,
-    ("60-64", "M"): 1.201,
-    ("65-69", "F"): 1.167,
-    ("65-69", "M"): 1.234,
-    ("70-74", "F"): 1.201,
-    ("70-74", "M"): 1.267,
-    ("75-79", "F"): 1.234,
-    ("75-79", "M"): 1.301,
-    ("80-84", "F"): 1.256,
-    ("80-84", "M"): 1.323,
-    ("85-89", "F"): 1.267,
-    ("85-89", "M"): 1.334,
-    ("90-94", "F"): 1.278,
-    ("90-94", "M"): 1.342,
-    ("95+", "F"): 1.289,
-    ("95+", "M"): 1.356,
+    ("0-34", "F"): 0.618,
+    ("0-34", "M"): 0.527,
+    ("35-44", "F"): 0.567,
+    ("35-44", "M"): 0.502,
+    ("45-54", "F"): 0.522,
+    ("45-54", "M"): 0.478,
+    ("55-59", "F"): 0.535,
+    ("55-59", "M"): 0.495,
+    ("60-64", "F"): 0.553,
+    ("60-64", "M"): 0.498,
+    ("65-69", "F"): 0.635,
+    ("65-69", "M"): 0.562,
+    ("70-74", "F"): 0.653,
+    ("70-74", "M"): 0.611,
+    ("75-79", "F"): 0.658,
+    ("75-79", "M"): 0.634,
+    ("80-84", "F"): 0.671,
+    ("80-84", "M"): 0.652,
+    ("85-89", "F"): 0.671,
+    ("85-89", "M"): 0.663,
+    ("90-94", "F"): 0.671,
+    ("90-94", "M"): 0.663,
+    ("95+", "F"): 0.671,
+    ("95+", "M"): 0.663,
 }
 
-# ESRD Functioning Graft demographic base scores by age/sex
+# Official CMS V28 ESRD Functioning Graft demographic base scores
+# GC/GI segments share identical demographics with DI in V28
 _ESRD_FG_DEMO_SCORES: dict[tuple[str, str], float] = {
-    ("0-34", "F"): 0.712,
-    ("0-34", "M"): 0.756,
-    ("35-44", "F"): 0.823,
-    ("35-44", "M"): 0.867,
-    ("45-54", "F"): 0.912,
-    ("45-54", "M"): 0.956,
-    ("55-59", "F"): 0.978,
-    ("55-59", "M"): 1.023,
-    ("60-64", "F"): 1.023,
-    ("60-64", "M"): 1.067,
-    ("65-69", "F"): 1.056,
-    ("65-69", "M"): 1.101,
-    ("70-74", "F"): 1.089,
-    ("70-74", "M"): 1.134,
-    ("75-79", "F"): 1.112,
-    ("75-79", "M"): 1.156,
-    ("80-84", "F"): 1.134,
-    ("80-84", "M"): 1.178,
-    ("85-89", "F"): 1.145,
-    ("85-89", "M"): 1.189,
-    ("90-94", "F"): 1.156,
-    ("90-94", "M"): 1.201,
-    ("95+", "F"): 1.167,
-    ("95+", "M"): 1.212,
+    ("0-34", "F"): 0.618,
+    ("0-34", "M"): 0.527,
+    ("35-44", "F"): 0.567,
+    ("35-44", "M"): 0.502,
+    ("45-54", "F"): 0.522,
+    ("45-54", "M"): 0.478,
+    ("55-59", "F"): 0.535,
+    ("55-59", "M"): 0.495,
+    ("60-64", "F"): 0.553,
+    ("60-64", "M"): 0.498,
+    ("65-69", "F"): 0.635,
+    ("65-69", "M"): 0.562,
+    ("70-74", "F"): 0.653,
+    ("70-74", "M"): 0.611,
+    ("75-79", "F"): 0.658,
+    ("75-79", "M"): 0.634,
+    ("80-84", "F"): 0.671,
+    ("80-84", "M"): 0.652,
+    ("85-89", "F"): 0.671,
+    ("85-89", "M"): 0.663,
+    ("90-94", "F"): 0.671,
+    ("90-94", "M"): 0.663,
+    ("95+", "F"): 0.671,
+    ("95+", "M"): 0.663,
 }
 
 # ---------------------------------------------------------------------------
@@ -680,31 +730,54 @@ def _run_single_model(
     model_segment: str,
     norm_factor: float,
     maci: float,
+    *,
+    orec: str = "0",
+    dual_elgbl_cd: str = "NA",
+    new_enrollee: bool = False,
+    institutional: bool = False,
+    graft_months: int | None = None,
 ) -> dict[str, Any]:
     """
     Execute one hccinfhir processor call and return a structured result dict.
 
     Returns all score components, HCC list, coefficients, and interactions.
     Does NOT persist anything — purely computational.
+
+    Passes orec, dual_elgbl_cd, new_enrollee, institutional, and graft_months
+    to hccinfhir so it can auto-detect the correct coefficient prefix
+    (DI_ for ESRD dialysis, GC_ for graft, CFA_ for full-dual, etc.).
     """
     prefix = _SEGMENT_TO_PREFIX.get(model_segment, "CNA_")
+
+    # For ESRD-specific processors, let hccinfhir auto-detect the correct
+    # prefix (DI_, GC_, DNE_, GNE_) from orec/demographics rather than
+    # forcing a community prefix. The ESRD model has its own prefix logic.
+    is_esrd_processor = "ESRD" in (processor.model_name or "")
+    effective_prefix = None if is_esrd_processor else prefix
 
     # Capture exact input sent to the engine
     engine_input = {
         "icd_codes": list(icd_codes),
         "age": age,
         "sex": sex,
-        "prefix_override": prefix,
+        "prefix_override": effective_prefix,
         "model_segment": model_segment,
         "maci": maci,
         "norm_factor": norm_factor,
+        "orec": orec,
+        "dual_elgbl_cd": dual_elgbl_cd,
     }
 
     result = processor.calculate_from_diagnosis(
         icd_codes,
         age=age,
         sex=sex,
-        prefix_override=prefix,
+        orec=orec,
+        dual_elgbl_cd=dual_elgbl_cd,
+        new_enrollee=new_enrollee,
+        lti=institutional,
+        graft_months=graft_months,
+        prefix_override=effective_prefix,
         maci=maci,
         norm_factor=norm_factor,
     )
@@ -713,7 +786,7 @@ def _run_single_model(
     all_coefficients = result.coefficients or {}
 
     demographic_score: float = getattr(result, "risk_score_demographics", 0.0)
-    disease_score: float = sum(h.coefficient for h in result.hcc_details)
+    disease_score: float = sum(h.coefficient or 0.0 for h in result.hcc_details)
     interaction_score: float = getattr(result, "risk_score_interaction", None)
     if interaction_score is None:
         interaction_score = result.risk_score - demographic_score - disease_score
@@ -780,6 +853,7 @@ def _calculate_new_enrollee_score(
     age: int,
     sex: str,
     model_segment: str,
+    orec: str | None = None,
 ) -> dict[str, Any]:
     """
     Calculate New Enrollee score — purely demographic, no HCC coding.
@@ -787,15 +861,36 @@ def _calculate_new_enrollee_score(
     CMS applies only an age/sex/dual demographic base score for beneficiaries
     with less than 12 months of Part B enrollment. All condition-based HCC
     disease scores are suppressed.
+
+    OREC (Original Reason for Entitlement Code) determines ORIGDIS segments:
+      OREC=1 and age>=65 → originally disabled, now aged into Medicare.
     """
-    age_band = _get_age_band_from_age(age)
+    # Validate / normalize sex
+    if sex not in ("M", "F"):
+        sex = _sex_code(sex)
+    # Clamp age to valid range
+    if age < 0:
+        logger.warning("NE scoring: invalid age %d, clamping to 0", age)
+        age = 0
+
     # NE segments map like: NE_CNA → CNA, NE_CFD → CFD, etc.
     base_seg = (
         model_segment.replace("NE_", "") if model_segment.startswith("NE_") else "CNA"
     )
-    demo_score = _NE_DEMO_SCORES.get(
-        (age_band, sex, base_seg), 0.311
-    )  # default CNA aged
+    if base_seg not in _SEGMENT_TO_NE_CMS:
+        logger.warning("NE scoring: unknown segment %s, defaulting to CNA", model_segment)
+    # Determine CMS NE segment — check for Originally Disabled override
+    cms_ne_seg = _SEGMENT_TO_NE_CMS.get(base_seg, "NE_NMCAID_NORIGDIS")
+    if orec == "1" and age >= 65:
+        # Originally disabled, now aged — use ORIGDIS segment
+        if "NMCAID" in cms_ne_seg:
+            cms_ne_seg = "NE_NMCAID_ORIGDIS"
+        else:
+            cms_ne_seg = "NE_MCAID_ORIGDIS"
+    # Use individual-age lookup for 65-69 per CMS spec
+    age_key = _ne_age_key(age)
+    coeffs = _NE_CMS_COEFFICIENTS.get(cms_ne_seg, {})
+    demo_score = coeffs.get((age_key, sex), 0.532)  # default: NMCAID F age 65
 
     return {
         "is_new_enrollee": True,
@@ -827,11 +922,11 @@ def _calculate_esrd_demographic_score(
     """
     age_band = _get_age_band_from_age(age)
     if esrd_segment == "ESRD_DLY":
-        return _ESRD_DLY_DEMO_SCORES.get((age_band, sex), 0.876)
+        return _ESRD_DLY_DEMO_SCORES.get((age_band, sex), 0.635)
     if esrd_segment == "ESRD_FG":
-        return _ESRD_FG_DEMO_SCORES.get((age_band, sex), 0.756)
+        return _ESRD_FG_DEMO_SCORES.get((age_band, sex), 0.635)
     # ESRD_NE — use DLY as baseline
-    return _ESRD_DLY_DEMO_SCORES.get((age_band, sex), 0.876)
+    return _ESRD_DLY_DEMO_SCORES.get((age_band, sex), 0.635)
 
 
 # ---------------------------------------------------------------------------
@@ -1167,7 +1262,7 @@ def calculate_raf_score(
 
     # 4a. New Enrollee short-circuit — demographic-only, no HCC disease scoring
     if _is_new_enrollee(model_segment):
-        ne_result = _calculate_new_enrollee_score(age, sex, model_segment)
+        ne_result = _calculate_new_enrollee_score(age, sex, model_segment, orec=_orec)
         # Apply the same normalization + MACI adjustment used by all other payment models.
         # NE segments follow the V28 payment schedule (CMS-HCC V28 norm/MACI tables).
         _ne_norm = _get_norm_factor(_NORM_FACTORS_V28, measurement_year)
@@ -1231,7 +1326,7 @@ def calculate_raf_score(
             "_disclaimer": "New Enrollee: demographic-only scoring per CMS rules.",
         }
 
-    # 4b. ESRD segment — use ESRD demographic score instead of standard demo score
+    # 4b. ESRD segment — calculate ESRD demographic override for later application
     esrd_demo_override: float | None = None
     if _is_esrd(model_segment):
         esrd_demo_override = _calculate_esrd_demographic_score(age, sex, model_segment)
@@ -1242,16 +1337,32 @@ def calculate_raf_score(
             esrd_demo_override,
         )
 
+    # 4c. Map internal dual_type to hccinfhir dual_elgbl_cd codes.
+    # CMS dual eligibility codes (00-10): full benefit = {02,04,08}, partial = {01,03,05,06}.
+    # If the enrollment source provides a raw CMS code (e.g. "02"), pass it through directly.
+    # Otherwise map our categorical labels to representative CMS codes.
+    _dt_lower = (_dual_type or "non_dual").strip()
+    if _dt_lower in ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10"):
+        _dual_elgbl_cd = _dt_lower  # Raw CMS code — pass through directly
+    elif _dt_lower.lower() in ("full", "full_dual"):
+        _dual_elgbl_cd = "02"       # QMB Plus (full benefit dual)
+    elif _dt_lower.lower() in ("partial", "partial_dual"):
+        _dual_elgbl_cd = "01"       # QMB Only (partial benefit dual)
+    else:
+        _dual_elgbl_cd = "NA"       # non-dual
+
+    _is_ne = _is_new_enrollee(model_segment)
+    _is_inst = _institutional
+
     # 5. Determine effective blend mode
     # PACE organizations follow a separate, slower CMS transition schedule.
-    # For PACE: the "v24" side is actually the legacy 2017 model (not V24),
-    # but we run V24 as the closest available proxy since hccinfhir doesn't
-    # ship the 2017 model. The blend weights still reflect CMS PACE policy.
+    # For PACE: the legacy side uses V24 (same 79-HCC model structure as V22/2017)
+    # with V22 normalization factor (1.187). The blend weights reflect CMS PACE policy.
     is_pace = plan_type.upper() == "PACE"
     if is_pace:
         v24_weight, v28_weight = _PACE_BLEND_WEIGHTS.get(measurement_year, (0.0, 1.0))
         logger.info(
-            "PACE plan — using PACE blend schedule for PY%s: legacy=%.0f%% V28=%.0f%%",
+            "PACE plan — using V22 legacy + V28 blend for PY%s: legacy=%.0f%% V28=%.0f%%",
             measurement_year, v24_weight * 100, v28_weight * 100,
         )
     else:
@@ -1272,7 +1383,28 @@ def calculate_raf_score(
     use_v28 = v28_weight > 0.0
     is_blended = use_v24 and use_v28
 
-    # 6. Run model(s)
+    # 6. Run model(s) — pass enrollment params so hccinfhir can auto-detect
+    #    the correct coefficient prefix (DI_ for ESRD, CFA_ for dual, etc.)
+    _is_esrd_seg = _is_esrd(model_segment)
+    # Graft months for ESRD functioning graft patients — affects duration interactions
+    # (GE65_DUR4_9, GE65_DUR10PL, etc.). Source from enrollment_override if available.
+    _graft_months: int | None = None
+    if enrollment_override and enrollment_override.get("graft_months") is not None:
+        _graft_months = int(enrollment_override["graft_months"])
+    elif model_segment == "ESRD_FG":
+        # Functioning graft without explicit transplant date — default to 12 months
+        # to enable basic graft duration interactions. This is conservative; callers
+        # should provide actual graft_months via enrollment_override for accuracy.
+        _graft_months = 12
+
+    _enroll_kwargs: dict[str, Any] = {
+        "orec": _orec,
+        "dual_elgbl_cd": _dual_elgbl_cd,
+        "new_enrollee": _is_ne,
+        "institutional": _is_inst,
+        "graft_months": _graft_months,
+    }
+
     def _evaluate_track(codes_list: list[str]):
         eval_v28 = None
         eval_v24 = None
@@ -1281,26 +1413,53 @@ def calculate_raf_score(
             n28 = _get_norm_factor(_NORM_FACTORS_V28, measurement_year)
             m28 = _get_maci_factor(_MACI_FACTORS_V28, measurement_year)
             eval_v28 = _run_single_model(
-                _processor_v28, codes_list, age, sex, model_segment, n28, m28
+                _processor_v28, codes_list, age, sex, model_segment, n28, m28,
+                **_enroll_kwargs,
             )
             _apply_hcc_hierarchy(eval_v28, "v28")
 
         if use_v24:
-            n24 = _get_norm_factor(_NORM_FACTORS_V24, measurement_year)
-            m24 = _get_maci_factor(_MACI_FACTORS_V24, measurement_year)
-            eval_v24 = _run_single_model(
-                _processor_v24, codes_list, age, sex, model_segment, n24, m24
-            )
-            _apply_hcc_hierarchy(eval_v24, "v24")
+            if _is_esrd_seg:
+                # ESRD patients: use dedicated CMS-HCC ESRD Model V24 with
+                # ESRD-specific DI_/GC_ prefixes and coefficients.
+                # hccinfhir auto-detects the correct ESRD prefix from orec.
+                n24 = _get_norm_factor(_NORM_FACTORS_V24, measurement_year)
+                m24 = _get_maci_factor(_MACI_FACTORS_V24, measurement_year)
+                eval_v24 = _run_single_model(
+                    _processor_esrd_v24, codes_list, age, sex, model_segment, n24, m24,
+                    **_enroll_kwargs,
+                )
+                _apply_hcc_hierarchy(eval_v24, "v24")
+            elif is_pace:
+                # PACE: use actual V22 processor with V22 normalization factor.
+                # hccinfhir ships CMS-HCC Model V22 with correct 79-HCC coefficients.
+                n22 = _get_norm_factor(_NORM_FACTORS_V22, measurement_year)
+                m24 = _get_maci_factor(_MACI_FACTORS_V24, measurement_year)
+                eval_v24 = _run_single_model(
+                    _processor_v22, codes_list, age, sex, model_segment, n22, m24,
+                    **_enroll_kwargs,
+                )
+                _apply_hcc_hierarchy(eval_v24, "v24")
+            else:
+                n24 = _get_norm_factor(_NORM_FACTORS_V24, measurement_year)
+                m24 = _get_maci_factor(_MACI_FACTORS_V24, measurement_year)
+                eval_v24 = _run_single_model(
+                    _processor_v24, codes_list, age, sex, model_segment, n24, m24,
+                    **_enroll_kwargs,
+                )
+                _apply_hcc_hierarchy(eval_v24, "v24")
 
         # 7. Compute blended score
         if is_blended:
+            # CMS requires blending at PAYMENT level, not RAW level.
+            # Each model's score is normalized with its OWN factors first.
+            p24 = eval_v24["payment_raf"]  # type: ignore[index]  # already normalized with V24 factors
+            p28 = eval_v28["payment_raf"]  # type: ignore[index]  # already normalized with V28 factors
+            p_raf = round(v24_weight * p24 + v28_weight * p28, 4)
+            # Keep raw scores for reporting
             r24 = eval_v24["raw_raf"]  # type: ignore[index]
             r28 = eval_v28["raw_raf"]  # type: ignore[index]
             bl_raw = v24_weight * r24 + v28_weight * r28
-            nb = _NORM_FACTORS_V28.get(measurement_year, 1.0)
-            mb = _MACI_FACTORS_V28.get(measurement_year, 0.0)
-            p_raf = round(bl_raw * (1 - mb) / nb, 4)
             return {
                 "payment_raf": p_raf,
                 "blended_raw": bl_raw,
@@ -1353,6 +1512,17 @@ def calculate_raf_score(
     disease_score = primary["disease_score"]  # type: ignore[index]
     interaction_score = primary["interaction_score"]  # type: ignore[index]
     subtotal = primary["subtotal"]  # type: ignore[index]
+
+    # Apply ESRD demographic override — CMS ESRD model uses separate, higher
+    # demographic base scores that differ from the standard community model.
+    if esrd_demo_override is not None and esrd_demo_override != demographic_score:
+        demo_delta = esrd_demo_override - demographic_score
+        demographic_score = esrd_demo_override
+        subtotal = round(subtotal + demo_delta, 4)
+        logger.info(
+            "RAF calc pid=%s — ESRD demo override applied: %.4f → %.4f (delta=%.4f)",
+            patient_id, demographic_score - demo_delta, demographic_score, demo_delta,
+        )
     hcc_contributions = primary["hcc_contributions"]  # type: ignore[index]
     all_coefficients = primary["all_coefficients"]  # type: ignore[index]
     interactions_fired = primary["interactions_fired"]  # type: ignore[index]

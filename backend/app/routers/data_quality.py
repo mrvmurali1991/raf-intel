@@ -167,7 +167,7 @@ def list_all_checks(
     except Exception as exc:  # noqa: BLE001
         logger.exception("run_all_checks failed")
         raise HTTPException(
-            status_code=500, detail=f"Data quality run failed: {exc!s}"
+            status_code=500, detail="Data quality run failed. Check server logs for details."
         ) from exc
 
 
@@ -205,5 +205,5 @@ def run_single_check(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Data quality check %s failed", check_name)
         raise HTTPException(
-            status_code=500, detail=f"Check '{check_name}' failed: {exc!s}"
+            status_code=500, detail=f"Check '{check_name}' failed. Check server logs for details."
         ) from exc

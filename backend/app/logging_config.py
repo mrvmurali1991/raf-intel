@@ -43,7 +43,11 @@ class JSONFormatter(logging.Formatter):
         re.compile(r"password[=:]\S+", re.IGNORECASE),
         re.compile(r"token[=:]\S+", re.IGNORECASE),
         re.compile(r"api[_-]?key[=:]\S+", re.IGNORECASE),
+        re.compile(r"secret[=:]\S+", re.IGNORECASE),
+        re.compile(r"credential[s]?[=:]\S+", re.IGNORECASE),
+        re.compile(r"authorization[=:]\s*(?:Bearer|Basic)\s+\S+", re.IGNORECASE),
         re.compile(r"redis://:[^@]+@"),
+        re.compile(r"mysql://[^@]+@"),
     )
 
     @classmethod

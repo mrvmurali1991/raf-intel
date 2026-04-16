@@ -483,7 +483,7 @@ export default function LoginPage() {
         window.location.href = "/";
       }
     } catch (err) {
-      console.error("LOGIN ERROR:", err);
+      // Login error handled by UI state below
       setError(getApiError(err));
     } finally {
       setIsSubmitting(false);
