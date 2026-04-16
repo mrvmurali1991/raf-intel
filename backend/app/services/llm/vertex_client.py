@@ -97,6 +97,25 @@ def _use_vertex() -> bool:
     return _env_bool("LLM_USE_VERTEX", True)
 
 
+def _use_vertex_api_key() -> bool:
+    """Route through the global Vertex publishers endpoint using GOOGLE_API_KEY.
+
+    This is the BAA-eligible `aiplatform.googleapis.com/v1/publishers/...`
+    endpoint that accepts API keys (Vertex AI Express/publisher mode), as
+    distinct from the project-scoped endpoint that requires a service account.
+    Enabled when ``LLM_VERTEX_API_KEY=true`` OR (Vertex is on, a GOOGLE_API_KEY
+    is configured, and no project / SA credentials are set).
+    """
+    if _env_bool("LLM_VERTEX_API_KEY", False):
+        return True
+    if not _use_vertex():
+        return False
+    has_key = bool(os.getenv("GOOGLE_API_KEY", "").strip())
+    has_sa = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()) or \
+             bool(os.getenv("GCP_PROJECT_ID", "").strip())
+    return has_key and not has_sa
+
+
 # ---------------------------------------------------------------------------
 # Credential cache — avoid re-loading the service account JSON on every call.
 # google.auth.transport.requests.Request refreshes tokens in-place.
@@ -220,6 +239,46 @@ def _call_vertex(
 
 
 # ---------------------------------------------------------------------------
+# Vertex AI publisher transport (API key, BAA-eligible via aiplatform endpoint)
+# ---------------------------------------------------------------------------
+
+_VERTEX_APIKEY_BASE = "https://aiplatform.googleapis.com/v1/publishers/google/models"
+
+
+def _vertex_apikey_url(model: str, method: str = "generateContent") -> str:
+    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not configured — required for Vertex API-key transport"
+        )
+    return f"{_VERTEX_APIKEY_BASE}/{model}:{method}?key={api_key}"
+
+
+def _call_vertex_apikey(
+    prompt: str,
+    model: str,
+    system: Optional[str],
+    temperature: float,
+) -> str:
+    url = _vertex_apikey_url(model)
+    payload = _build_payload(prompt, system, temperature)
+    resp = requests.post(
+        url,
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(payload),
+        timeout=_REQUEST_TIMEOUT_SEC,
+    )
+    if resp.status_code >= 400:
+        logger.error(
+            "Vertex API-key generateContent failed: status=%s body=%s",
+            resp.status_code,
+            resp.text[:500],
+        )
+        resp.raise_for_status()
+    return _extract_text(resp.json())
+
+
+# ---------------------------------------------------------------------------
 # Legacy Generative Language API transport (API key, NOT BAA-covered)
 # ---------------------------------------------------------------------------
 
@@ -309,7 +368,15 @@ def llm_generate_content(
     )
     start = time.monotonic()
     try:
-        if _use_vertex():
+        if _use_vertex_api_key():
+            url = _vertex_apikey_url(model)
+            resp = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                data=json.dumps(payload),
+                timeout=timeout,
+            )
+        elif _use_vertex():
             creds = _load_credentials()
             url = _vertex_url(model)
             headers = {
@@ -438,6 +505,8 @@ def llm_generate(
         )
 
     def _do_call(p: str, s: Optional[str]) -> str:
+        if _use_vertex_api_key():
+            return _call_vertex_apikey(p, model, s, temperature)
         if _use_vertex():
             return _call_vertex(p, model, s, temperature)
         return _call_generative_language(p, model, s, temperature)
