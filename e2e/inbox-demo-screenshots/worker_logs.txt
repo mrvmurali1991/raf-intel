@@ -1,0 +1,3 @@
+[2026-04-17 04:52:37,509: INFO/ForkPoolWorker-22] RAF score pid=855 model=v28 → raw=0.5710 payment=0.5036 (demo=0.5710 disease=0.0000 int=0.0000) V24=0.0000(w=0.00) V28=0.5710(w=1.00)
+[2026-04-17 04:52:37,971: INFO/ForkPoolWorker-22] realtime: publish_raf_updated_sync pid=855 tenant=1 raf_score=0.5036 (redis)
+[2026-04-17 04:52:38,067: INFO/ForkPoolWorker-22] raf.drain_raf_inbox[038aa153-6fd7-4b43-93eb-52b443962963]: drain_raf_inbox: drained=1 errored=0

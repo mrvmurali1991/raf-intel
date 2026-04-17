@@ -1,0 +1,17 @@
+{
+  "patient_id": 855,
+  "patient_name": "RONALD ABEYTA",
+  "measurement_year": 2026,
+  "model_segment": "CNA",
+  "score_type": "prospective",
+  "raf_score": 1.035,
+  "demographic_score": 0.55,
+  "disease_score": 0.485,
+  "interaction_score": 0,
+  "hcc_count": 2,
+  "blend_weights": {
+    "v24": 0,
+    "v28": 1
+  },
+  "calculated_at": "2026-04-17 04:49:37"
+}

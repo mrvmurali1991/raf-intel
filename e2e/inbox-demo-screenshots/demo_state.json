@@ -1,0 +1,77 @@
+{
+  "before": {
+    "patient_id": 855,
+    "patient_name": "RONALD ABEYTA",
+    "measurement_year": 2026,
+    "model_segment": "CNA",
+    "score_type": "prospective",
+    "raf_score": 0.849,
+    "demographic_score": 0.55,
+    "disease_score": 0.299,
+    "interaction_score": 0.0,
+    "hcc_count": 1,
+    "blend_weights": {
+      "v24": 0.0,
+      "v28": 1.0
+    },
+    "calculated_at": "2026-04-17 05:25:36"
+  },
+  "after": {
+    "patient_id": 855,
+    "patient_name": "RONALD ABEYTA",
+    "measurement_year": 2026,
+    "model_segment": "CNA",
+    "score_type": "prospective",
+    "raf_score": 1.328,
+    "demographic_score": 0.55,
+    "disease_score": 0.778,
+    "interaction_score": 0.0,
+    "hcc_count": 3,
+    "blend_weights": {
+      "v24": 0.0,
+      "v28": 1.0
+    },
+    "calculated_at": "2026-04-17 05:28:36"
+  },
+  "after_hccs": [
+    {
+      "hcc_code": "226",
+      "icd10_code": null,
+      "icd10_codes": "[\"I509\"]",
+      "raf_coefficient": "0.3600",
+      "meat_status": "missing"
+    },
+    {
+      "hcc_code": "228",
+      "icd10_code": null,
+      "icd10_codes": "[\"I214\"]",
+      "raf_coefficient": "0.2520",
+      "meat_status": "missing"
+    },
+    {
+      "hcc_code": "37",
+      "icd10_code": null,
+      "icd10_codes": "[\"E1022\"]",
+      "raf_coefficient": "0.1660",
+      "meat_status": "missing"
+    }
+  ],
+  "demo_encounter_id": 94,
+  "inserted_diagnoses": [
+    [
+      "I50.9",
+      226,
+      "Heart failure, unspecified"
+    ],
+    [
+      "E10.22",
+      36,
+      "Type 1 diabetes with diabetic CKD"
+    ],
+    [
+      "I21.4",
+      85,
+      "Non-ST elevation MI"
+    ]
+  ]
+}

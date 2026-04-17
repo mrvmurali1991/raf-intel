@@ -1,0 +1,293 @@
+{
+  "events": [
+    {
+      "step": 1,
+      "name": "raf_login",
+      "caption": "RAF Intelligence login screen",
+      "file": "01_raf_login.png"
+    },
+    {
+      "step": 2,
+      "name": "raf_before_patient_detail",
+      "caption": "BEFORE: Ronald Abeyta (pid 855) — RAF 1.035, 2 HCCs.",
+      "file": "02_raf_before_patient_detail.png"
+    },
+    {
+      "step": 3,
+      "name": "openemr_login",
+      "caption": "OpenEMR login (ehrservicedesk.com)",
+      "file": "03_openemr_login.png"
+    },
+    {
+      "step": 4,
+      "name": "openemr_dashboard",
+      "caption": "OpenEMR dashboard after admin login",
+      "file": "04_openemr_dashboard.png"
+    },
+    {
+      "step": 5,
+      "name": "openemr_patient_summary",
+      "caption": "Ronald Abeyta patient summary in OpenEMR (before edit)",
+      "file": "05_openemr_patient_summary.png"
+    },
+    {
+      "step": 6,
+      "name": "openemr_issues_before",
+      "caption": "Issues / Medical Problems page — BEFORE add",
+      "file": "06_openemr_issues_before.png"
+    },
+    {
+      "step": 7,
+      "name": "openemr_add_form_blank",
+      "caption": "Add Issue form — blank",
+      "file": "07_openemr_add_form_blank.png"
+    },
+    {
+      "step": 8,
+      "name": "openemr_add_form_filled",
+      "caption": "Add Issue form filled — I50.9 Heart failure, unspecified",
+      "file": "08_openemr_add_form_filled.png"
+    },
+    {
+      "step": 9,
+      "name": "openemr_after_save",
+      "caption": "OpenEMR — after saving the new problem",
+      "file": "09_openemr_after_save.png"
+    },
+    {
+      "step": 10,
+      "name": "openemr_issues_after",
+      "caption": "Issues list after adding I50.9 — verify Heart failure, unspecified is present",
+      "file": "10_openemr_issues_after.png"
+    },
+    {
+      "step": 11,
+      "name": "raf_after_patient_detail",
+      "caption": "AFTER: Ronald Abeyta — new RAF 1.035, 2 HCCs",
+      "file": "11_raf_after_patient_detail.png"
+    }
+  ],
+  "before": {
+    "patient_id": 855,
+    "patient_name": "RONALD ABEYTA",
+    "measurement_year": 2026,
+    "model_segment": "CNA",
+    "score_type": "prospective",
+    "raf_score": 1.035,
+    "demographic_score": 0.55,
+    "disease_score": 0.485,
+    "interaction_score": 0,
+    "hcc_count": 2,
+    "blend_weights": {
+      "v24": 0,
+      "v28": 1
+    },
+    "calculated_at": "2026-04-17 04:49:37"
+  },
+  "after": {
+    "patient_id": 855,
+    "patient_name": "RONALD ABEYTA",
+    "measurement_year": 2026,
+    "model_segment": "CNA",
+    "score_type": "prospective",
+    "raf_score": 1.328,
+    "demographic_score": 0.55,
+    "disease_score": 0.778,
+    "interaction_score": 0,
+    "hcc_count": 3,
+    "blend_weights": {
+      "v24": 0,
+      "v28": 1
+    },
+    "calculated_at": "2026-04-17 05:30:37"
+  },
+  "drained": true,
+  "beforeProblems": {
+    "pid": 855,
+    "count": 8,
+    "problems": [
+      {
+        "title": "Type 2 diabetes mellitus without complications",
+        "diagnosis": "ICD10:E11.9",
+        "begdate": "2025-01-15",
+        "activity": "1",
+        "icd10_code": "E11.9",
+        "diagnosis_code": "E11.9",
+        "has_icd_code": true,
+        "hcc_code": 19,
+        "severity": "moderate"
+      },
+      {
+        "title": "COPD with acute exacerbation",
+        "diagnosis": "ICD10:J44.1",
+        "begdate": "2025-01-15",
+        "activity": "1",
+        "icd10_code": "J44.1",
+        "diagnosis_code": "J44.1",
+        "has_icd_code": true,
+        "hcc_code": 111,
+        "severity": "severe"
+      },
+      {
+        "title": "Chronic kidney disease, stage 3",
+        "diagnosis": "ICD10:N18.3",
+        "begdate": "2025-01-15",
+        "activity": "1",
+        "icd10_code": "N18.3",
+        "diagnosis_code": "N18.3",
+        "has_icd_code": true,
+        "hcc_code": 138,
+        "severity": "moderate"
+      },
+      {
+        "title": "Hypothyroidism, unspecified",
+        "diagnosis": "ICD10:E03.9",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "E03.9",
+        "diagnosis_code": "E03.9",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "mild"
+      },
+      {
+        "title": "Hyperlipidemia, unspecified",
+        "diagnosis": "ICD10:E78.5",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "E78.5",
+        "diagnosis_code": "E78.5",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "mild"
+      },
+      {
+        "title": "Essential (primary) hypertension",
+        "diagnosis": "ICD10:I10",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "I10",
+        "diagnosis_code": "I10",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "moderate"
+      },
+      {
+        "title": "Atherosclerotic heart disease",
+        "diagnosis": "ICD10:I25.10",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "I25.10",
+        "diagnosis_code": "I25.10",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "moderate"
+      },
+      {
+        "title": "Primary osteoarthritis, right knee",
+        "diagnosis": "ICD10:M17.11",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "M17.11",
+        "diagnosis_code": "M17.11",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "moderate"
+      }
+    ]
+  },
+  "afterProblems": {
+    "pid": 855,
+    "count": 8,
+    "problems": [
+      {
+        "title": "Type 2 diabetes mellitus without complications",
+        "diagnosis": "ICD10:E11.9",
+        "begdate": "2025-01-15",
+        "activity": "1",
+        "icd10_code": "E11.9",
+        "diagnosis_code": "E11.9",
+        "has_icd_code": true,
+        "hcc_code": 19,
+        "severity": "moderate"
+      },
+      {
+        "title": "COPD with acute exacerbation",
+        "diagnosis": "ICD10:J44.1",
+        "begdate": "2025-01-15",
+        "activity": "1",
+        "icd10_code": "J44.1",
+        "diagnosis_code": "J44.1",
+        "has_icd_code": true,
+        "hcc_code": 111,
+        "severity": "severe"
+      },
+      {
+        "title": "Chronic kidney disease, stage 3",
+        "diagnosis": "ICD10:N18.3",
+        "begdate": "2025-01-15",
+        "activity": "1",
+        "icd10_code": "N18.3",
+        "diagnosis_code": "N18.3",
+        "has_icd_code": true,
+        "hcc_code": 138,
+        "severity": "moderate"
+      },
+      {
+        "title": "Hypothyroidism, unspecified",
+        "diagnosis": "ICD10:E03.9",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "E03.9",
+        "diagnosis_code": "E03.9",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "mild"
+      },
+      {
+        "title": "Hyperlipidemia, unspecified",
+        "diagnosis": "ICD10:E78.5",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "E78.5",
+        "diagnosis_code": "E78.5",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "mild"
+      },
+      {
+        "title": "Essential (primary) hypertension",
+        "diagnosis": "ICD10:I10",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "I10",
+        "diagnosis_code": "I10",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "moderate"
+      },
+      {
+        "title": "Atherosclerotic heart disease",
+        "diagnosis": "ICD10:I25.10",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "I25.10",
+        "diagnosis_code": "I25.10",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "moderate"
+      },
+      {
+        "title": "Primary osteoarthritis, right knee",
+        "diagnosis": "ICD10:M17.11",
+        "begdate": "2024-06-01",
+        "activity": "1",
+        "icd10_code": "M17.11",
+        "diagnosis_code": "M17.11",
+        "has_icd_code": true,
+        "hcc_code": null,
+        "severity": "moderate"
+      }
+    ]
+  }
+}

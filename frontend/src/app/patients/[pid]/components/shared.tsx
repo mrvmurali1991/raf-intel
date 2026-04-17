@@ -410,7 +410,7 @@ export function MeatDots({ evidence }: { evidence?: MEATEvidence | Record<string
   const letters = [
     { key: "monitor" as const, alt: ["M", "m"], label: "M", full: "Monitor",  color: C.blue600 },
     { key: "evaluate" as const, alt: ["E", "e"], label: "E", full: "Evaluate", color: C.purple600 },
-    { key: "assess" as const,   alt: ["A", "a"], label: "A", full: "Assess",   color: C.amber600 },
+    { key: "assess" as const,   alt: ["A", "a"], label: "A", full: "Addressed", color: C.amber600 },
     { key: "treat" as const,    alt: ["T", "t"], label: "T", full: "Treat",    color: C.emerald600 },
   ];
   const e = evidence as any;

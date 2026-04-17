@@ -1,0 +1,15 @@
+{
+  "message": "Sync queued",
+  "connection_id": 1,
+  "sync_type": "incremental",
+  "resource_types": [
+    "Patient",
+    "Condition",
+    "Encounter",
+    "DiagnosticReport"
+  ],
+  "use_bulk": false,
+  "status": "queued",
+  "task_id": "f6c8b135-733c-4e65-a484-a6995f3792ea",
+  "poll_url": "/api/fhir/sync/1/status"
+}

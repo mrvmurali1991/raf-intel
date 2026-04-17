@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const letters: { key: keyof MEATEvidence; label: string; full: string; filledColor: string; filledBg: string }[] = [
   { key: "monitor", label: "M", full: "Monitor", filledColor: "text-teal-700 dark:text-teal-200", filledBg: "bg-teal-500 dark:bg-teal-600" },
   { key: "evaluate", label: "E", full: "Evaluate", filledColor: "text-purple-700 dark:text-purple-200", filledBg: "bg-purple-500 dark:bg-purple-600" },
-  { key: "assess", label: "A", full: "Assess", filledColor: "text-amber-700 dark:text-amber-200", filledBg: "bg-amber-500 dark:bg-amber-600" },
+  { key: "assess", label: "A", full: "Addressed", filledColor: "text-amber-700 dark:text-amber-200", filledBg: "bg-amber-500 dark:bg-amber-600" },
   { key: "treat", label: "T", full: "Treat", filledColor: "text-green-700 dark:text-green-200", filledBg: "bg-green-500 dark:bg-green-600" },
 ];
 
