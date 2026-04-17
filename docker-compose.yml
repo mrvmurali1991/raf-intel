@@ -44,7 +44,7 @@ services:
     image: raf-backend:${IMAGE_TAG:-latest}
     container_name: raf-backend
     restart: unless-stopped
-    mem_limit: 512m
+    mem_limit: 1g
     ports:
       - "${BACKEND_PORT:-8500}:8500"
     env_file: .env
@@ -93,7 +93,7 @@ services:
     image: raf-worker:${IMAGE_TAG:-latest}
     container_name: raf-worker
     restart: unless-stopped
-    mem_limit: 512m
+    mem_limit: 1g
     env_file: .env
     environment:
       RAF_DB_HOST: ${RAF_DB_HOST:-host.docker.internal}
@@ -166,7 +166,7 @@ services:
     image: mysql:8.0
     container_name: raf-mysql
     restart: unless-stopped
-    mem_limit: 512m
+    mem_limit: 1g
     command: >
       --innodb-buffer-pool-size=128M
       --innodb-log-file-size=32M
