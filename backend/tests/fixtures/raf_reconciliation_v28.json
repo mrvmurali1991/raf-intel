@@ -1,0 +1,6863 @@
+{
+  "$schema_version": "1",
+  "description": "Reconciliation fixtures for CMS-HCC V28 PY2026. Expected values are the deterministic output of hccinfhir==0.1.5 for each scenario. These lock in the contract between the RAF engine and its coefficient provider: any drift flips the test red. When CMS ships its official Python reference software (early 2026), replace the expected values with the CMS reference output and tighten the tolerance to 1e-4.",
+  "model_name": "CMS-HCC Model V28",
+  "coefficient_source": "hccinfhir==0.1.5",
+  "manifest_version": "2026-04-17",
+  "absolute_tolerance": 0.001,
+  "scenarios": [
+    {
+      "id": "CNA_72F_DM_no_complications",
+      "description": "Community non-dual aged, 72F, uncomplicated diabetes \u2192 HCC 38 constrained.",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.561,
+        "demographic_score": 0.395,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_72F_DM_DKA_maps_to_HCC36",
+      "description": "Diabetes with ketoacidosis (E11.10) maps to HCC 36 \u2014 constrained, identical 0.166 coefficient.",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.561,
+        "demographic_score": 0.395,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_72F_DM",
+      "description": "Community full-dual aged, 72F, diabetes \u2192 HCC 38 with CFA coefficient 0.186.",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.692,
+        "demographic_score": 0.506,
+        "hcc_score": 0.186,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.186
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_72F_DM",
+      "description": "Community partial-dual aged, 72F, diabetes \u2192 HCC 38 with CPA coefficient 0.166.",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.589,
+        "demographic_score": 0.423,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_55M_disabled_DM",
+      "description": "Community non-dual disabled, 55M, diabetes \u2192 HCC 38 with CND coefficient 0.191.",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.474,
+        "demographic_score": 0.283,
+        "hcc_score": 0.191,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.191
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_55M_disabled_full_dual_DM",
+      "description": "Community full-dual disabled, 55M, diabetes \u2192 HCC 38 with CFD coefficient 0.235.",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.645,
+        "demographic_score": 0.41,
+        "hcc_score": 0.235,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.235
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_72F_CHF_constrained",
+      "description": "Community non-dual aged, 72F, acute on chronic HF \u2192 HCC 226 at constrained 0.36.",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.755,
+        "demographic_score": 0.395,
+        "hcc_score": 0.36,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_72F_multi_HCC_interaction",
+      "description": "Diabetes + CHF + CKD triggers interaction terms on top of disease score.",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119",
+        "I5022",
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 1.033,
+        "demographic_score": 0.395,
+        "hcc_score": 0.638,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          },
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_NE_67F_demographic_only",
+      "description": "New enrollee, 67F, no HCCs \u2014 demographic-only score, no disease score.",
+      "demographics": {
+        "age": 67,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "new_enrollee": true
+      },
+      "diagnosis_codes": [],
+      "expected": {
+        "risk_score": 0.557,
+        "demographic_score": 0.557,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_78M_DM_long_term_institutional",
+      "description": "Institutional (LTI) 78M with diabetes \u2192 HCC 38 at INS coefficient 0.28.",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 1.599,
+        "demographic_score": 1.319,
+        "hcc_score": 0.28,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.28
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_HIV",
+      "description": "CNA: HIV",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 0.696,
+        "demographic_score": 0.395,
+        "hcc_score": 0.301,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 0.301
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_HIV",
+      "description": "CFA: HIV",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 0.903,
+        "demographic_score": 0.506,
+        "hcc_score": 0.397,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 0.397
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_HIV",
+      "description": "CPA: HIV",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 0.619,
+        "demographic_score": 0.423,
+        "hcc_score": 0.196,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 0.196
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_HIV",
+      "description": "CND: HIV",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 0.496,
+        "demographic_score": 0.283,
+        "hcc_score": 0.213,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 0.213
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_HIV",
+      "description": "CFD: HIV",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 0.647,
+        "demographic_score": 0.41,
+        "hcc_score": 0.237,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 0.237
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_HIV",
+      "description": "CPD: HIV",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 0.462,
+        "demographic_score": 0.353,
+        "hcc_score": 0.109,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 0.109
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_HIV",
+      "description": "INS: HIV",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "B20"
+      ],
+      "expected": {
+        "risk_score": 2.641,
+        "demographic_score": 1.319,
+        "hcc_score": 1.322,
+        "hcc_list": [
+          {
+            "hcc": "1",
+            "coefficient": 1.322
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Type1_DM_complications",
+      "description": "CNA: Type1_DM_complications",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Type1_DM_complications",
+      "description": "CFA: Type1_DM_complications",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Type1_DM_complications",
+      "description": "CPA: Type1_DM_complications",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Type1_DM_complications",
+      "description": "CND: Type1_DM_complications",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Type1_DM_complications",
+      "description": "CFD: Type1_DM_complications",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Type1_DM_complications",
+      "description": "CPD: Type1_DM_complications",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Type1_DM_complications",
+      "description": "INS: Type1_DM_complications",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "E10329"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_DM_uncomplicated",
+      "description": "CNA: DM_uncomplicated",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.561,
+        "demographic_score": 0.395,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_DM_uncomplicated",
+      "description": "CFA: DM_uncomplicated",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.692,
+        "demographic_score": 0.506,
+        "hcc_score": 0.186,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.186
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_DM_uncomplicated",
+      "description": "CPA: DM_uncomplicated",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.589,
+        "demographic_score": 0.423,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_DM_uncomplicated",
+      "description": "CND: DM_uncomplicated",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.474,
+        "demographic_score": 0.283,
+        "hcc_score": 0.191,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.191
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_DM_uncomplicated",
+      "description": "CFD: DM_uncomplicated",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.645,
+        "demographic_score": 0.41,
+        "hcc_score": 0.235,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.235
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_DM_uncomplicated",
+      "description": "CPD: DM_uncomplicated",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.563,
+        "demographic_score": 0.353,
+        "hcc_score": 0.21,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.21
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_DM_uncomplicated",
+      "description": "INS: DM_uncomplicated",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 1.599,
+        "demographic_score": 1.319,
+        "hcc_score": 0.28,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.28
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_DM_ketoacidosis",
+      "description": "CNA: DM_ketoacidosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.561,
+        "demographic_score": 0.395,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_DM_ketoacidosis",
+      "description": "CFA: DM_ketoacidosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.692,
+        "demographic_score": 0.506,
+        "hcc_score": 0.186,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.186
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_DM_ketoacidosis",
+      "description": "CPA: DM_ketoacidosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.589,
+        "demographic_score": 0.423,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_DM_ketoacidosis",
+      "description": "CND: DM_ketoacidosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.474,
+        "demographic_score": 0.283,
+        "hcc_score": 0.191,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.191
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_DM_ketoacidosis",
+      "description": "CFD: DM_ketoacidosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.645,
+        "demographic_score": 0.41,
+        "hcc_score": 0.235,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.235
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_DM_ketoacidosis",
+      "description": "CPD: DM_ketoacidosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 0.563,
+        "demographic_score": 0.353,
+        "hcc_score": 0.21,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.21
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_DM_ketoacidosis",
+      "description": "INS: DM_ketoacidosis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "E1110"
+      ],
+      "expected": {
+        "risk_score": 1.599,
+        "demographic_score": 1.319,
+        "hcc_score": 0.28,
+        "hcc_list": [
+          {
+            "hcc": "36",
+            "coefficient": 0.28
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Morbid_obesity",
+      "description": "CNA: Morbid_obesity",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 0.581,
+        "demographic_score": 0.395,
+        "hcc_score": 0.186,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.186
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Morbid_obesity",
+      "description": "CFA: Morbid_obesity",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 0.806,
+        "demographic_score": 0.506,
+        "hcc_score": 0.3,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.3
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Morbid_obesity",
+      "description": "CPA: Morbid_obesity",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 0.587,
+        "demographic_score": 0.423,
+        "hcc_score": 0.164,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.164
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Morbid_obesity",
+      "description": "CND: Morbid_obesity",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 0.427,
+        "demographic_score": 0.283,
+        "hcc_score": 0.144,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.144
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Morbid_obesity",
+      "description": "CFD: Morbid_obesity",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 0.588,
+        "demographic_score": 0.41,
+        "hcc_score": 0.178,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.178
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Morbid_obesity",
+      "description": "CPD: Morbid_obesity",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 0.471,
+        "demographic_score": 0.353,
+        "hcc_score": 0.118,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.118
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Morbid_obesity",
+      "description": "INS: Morbid_obesity",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "E6601"
+      ],
+      "expected": {
+        "risk_score": 1.761,
+        "demographic_score": 1.319,
+        "hcc_score": 0.442,
+        "hcc_list": [
+          {
+            "hcc": "48",
+            "coefficient": 0.442
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Specified_arrhythmias",
+      "description": "CNA: Specified_arrhythmias",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Specified_arrhythmias",
+      "description": "CFA: Specified_arrhythmias",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Specified_arrhythmias",
+      "description": "CPA: Specified_arrhythmias",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Specified_arrhythmias",
+      "description": "CND: Specified_arrhythmias",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Specified_arrhythmias",
+      "description": "CFD: Specified_arrhythmias",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Specified_arrhythmias",
+      "description": "CPD: Specified_arrhythmias",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Specified_arrhythmias",
+      "description": "INS: Specified_arrhythmias",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "I485"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Cerebral_palsy",
+      "description": "CNA: Cerebral_palsy",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Cerebral_palsy",
+      "description": "CFA: Cerebral_palsy",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Cerebral_palsy",
+      "description": "CPA: Cerebral_palsy",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Cerebral_palsy",
+      "description": "CND: Cerebral_palsy",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Cerebral_palsy",
+      "description": "CFD: Cerebral_palsy",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Cerebral_palsy",
+      "description": "CPD: Cerebral_palsy",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Cerebral_palsy",
+      "description": "INS: Cerebral_palsy",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "G8000"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Major_depressive_disorder",
+      "description": "CNA: Major_depressive_disorder",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 0.694,
+        "demographic_score": 0.395,
+        "hcc_score": 0.299,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.299
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Major_depressive_disorder",
+      "description": "CFA: Major_depressive_disorder",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 0.822,
+        "demographic_score": 0.506,
+        "hcc_score": 0.316,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.316
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Major_depressive_disorder",
+      "description": "CPA: Major_depressive_disorder",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 0.692,
+        "demographic_score": 0.423,
+        "hcc_score": 0.269,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.269
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Major_depressive_disorder",
+      "description": "CND: Major_depressive_disorder",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 0.449,
+        "demographic_score": 0.283,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Major_depressive_disorder",
+      "description": "CFD: Major_depressive_disorder",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 0.536,
+        "demographic_score": 0.41,
+        "hcc_score": 0.126,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.126
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Major_depressive_disorder",
+      "description": "CPD: Major_depressive_disorder",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 0.461,
+        "demographic_score": 0.353,
+        "hcc_score": 0.108,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.108
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Major_depressive_disorder",
+      "description": "INS: Major_depressive_disorder",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "F322"
+      ],
+      "expected": {
+        "risk_score": 1.518,
+        "demographic_score": 1.319,
+        "hcc_score": 0.199,
+        "hcc_list": [
+          {
+            "hcc": "155",
+            "coefficient": 0.199
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multiple_sclerosis",
+      "description": "CNA: Multiple_sclerosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 1.042,
+        "demographic_score": 0.395,
+        "hcc_score": 0.647,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 0.647
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Multiple_sclerosis",
+      "description": "CFA: Multiple_sclerosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 1.297,
+        "demographic_score": 0.506,
+        "hcc_score": 0.791,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 0.791
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Multiple_sclerosis",
+      "description": "CPA: Multiple_sclerosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 0.992,
+        "demographic_score": 0.423,
+        "hcc_score": 0.569,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 0.569
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Multiple_sclerosis",
+      "description": "CND: Multiple_sclerosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 1.191,
+        "demographic_score": 0.283,
+        "hcc_score": 0.908,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 0.908
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Multiple_sclerosis",
+      "description": "CFD: Multiple_sclerosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 1.553,
+        "demographic_score": 0.41,
+        "hcc_score": 1.143,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 1.143
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Multiple_sclerosis",
+      "description": "CPD: Multiple_sclerosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 1.123,
+        "demographic_score": 0.353,
+        "hcc_score": 0.77,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 0.77
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Multiple_sclerosis",
+      "description": "INS: Multiple_sclerosis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "G35"
+      ],
+      "expected": {
+        "risk_score": 1.545,
+        "demographic_score": 1.319,
+        "hcc_score": 0.226,
+        "hcc_list": [
+          {
+            "hcc": "198",
+            "coefficient": 0.226
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Parkinson",
+      "description": "CNA: Parkinson",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Parkinson",
+      "description": "CFA: Parkinson",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Parkinson",
+      "description": "CPA: Parkinson",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Parkinson",
+      "description": "CND: Parkinson",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Parkinson",
+      "description": "CFD: Parkinson",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Parkinson",
+      "description": "CPD: Parkinson",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Parkinson",
+      "description": "INS: Parkinson",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "G20"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Quadriplegia",
+      "description": "CNA: Quadriplegia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 1.52,
+        "demographic_score": 0.395,
+        "hcc_score": 1.125,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 1.125
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Quadriplegia",
+      "description": "CFA: Quadriplegia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 1.574,
+        "demographic_score": 0.506,
+        "hcc_score": 1.068,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 1.068
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Quadriplegia",
+      "description": "CPA: Quadriplegia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 1.734,
+        "demographic_score": 0.423,
+        "hcc_score": 1.311,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 1.311
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Quadriplegia",
+      "description": "CND: Quadriplegia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 1.269,
+        "demographic_score": 0.283,
+        "hcc_score": 0.986,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 0.986
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Quadriplegia",
+      "description": "CFD: Quadriplegia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 1.505,
+        "demographic_score": 0.41,
+        "hcc_score": 1.095,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 1.095
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Quadriplegia",
+      "description": "CPD: Quadriplegia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 1.752,
+        "demographic_score": 0.353,
+        "hcc_score": 1.399,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 1.399
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Quadriplegia",
+      "description": "INS: Quadriplegia",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "G8250"
+      ],
+      "expected": {
+        "risk_score": 2.054,
+        "demographic_score": 1.319,
+        "hcc_score": 0.735,
+        "hcc_list": [
+          {
+            "hcc": "180",
+            "coefficient": 0.735
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Bone_Joint_Infections",
+      "description": "CNA: Bone_Joint_Infections",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Bone_Joint_Infections",
+      "description": "CFA: Bone_Joint_Infections",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Bone_Joint_Infections",
+      "description": "CPA: Bone_Joint_Infections",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Bone_Joint_Infections",
+      "description": "CND: Bone_Joint_Infections",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Bone_Joint_Infections",
+      "description": "CFD: Bone_Joint_Infections",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Bone_Joint_Infections",
+      "description": "CPD: Bone_Joint_Infections",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Bone_Joint_Infections",
+      "description": "INS: Bone_Joint_Infections",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "M8666"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Rheumatoid_arthritis",
+      "description": "CNA: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 1.012,
+        "demographic_score": 0.395,
+        "hcc_score": 0.617,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.617
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Rheumatoid_arthritis",
+      "description": "CFA: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 0.945,
+        "demographic_score": 0.506,
+        "hcc_score": 0.439,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.439
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Rheumatoid_arthritis",
+      "description": "CPA: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 0.828,
+        "demographic_score": 0.423,
+        "hcc_score": 0.405,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.405
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Rheumatoid_arthritis",
+      "description": "CND: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 0.753,
+        "demographic_score": 0.283,
+        "hcc_score": 0.47,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.47
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Rheumatoid_arthritis",
+      "description": "CFD: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 0.794,
+        "demographic_score": 0.41,
+        "hcc_score": 0.384,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.384
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Rheumatoid_arthritis",
+      "description": "CPD: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 0.641,
+        "demographic_score": 0.353,
+        "hcc_score": 0.288,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.288
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Rheumatoid_arthritis",
+      "description": "INS: Rheumatoid_arthritis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "M069"
+      ],
+      "expected": {
+        "risk_score": 1.616,
+        "demographic_score": 1.319,
+        "hcc_score": 0.297,
+        "hcc_list": [
+          {
+            "hcc": "93",
+            "coefficient": 0.297
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Vascular_Disease_complications",
+      "description": "CNA: Vascular_Disease_complications",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Vascular_Disease_complications",
+      "description": "CFA: Vascular_Disease_complications",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Vascular_Disease_complications",
+      "description": "CPA: Vascular_Disease_complications",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Vascular_Disease_complications",
+      "description": "CND: Vascular_Disease_complications",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Vascular_Disease_complications",
+      "description": "CFD: Vascular_Disease_complications",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Vascular_Disease_complications",
+      "description": "CPD: Vascular_Disease_complications",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Vascular_Disease_complications",
+      "description": "INS: Vascular_Disease_complications",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "I7022"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Vascular_Disease",
+      "description": "CNA: Vascular_Disease",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Vascular_Disease",
+      "description": "CFA: Vascular_Disease",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Vascular_Disease",
+      "description": "CPA: Vascular_Disease",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Vascular_Disease",
+      "description": "CND: Vascular_Disease",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Vascular_Disease",
+      "description": "CFD: Vascular_Disease",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Vascular_Disease",
+      "description": "CPD: Vascular_Disease",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Vascular_Disease",
+      "description": "INS: Vascular_Disease",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "I70209"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_COPD",
+      "description": "CNA: COPD",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 0.714,
+        "demographic_score": 0.395,
+        "hcc_score": 0.319,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.319
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_COPD",
+      "description": "CFA: COPD",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 0.896,
+        "demographic_score": 0.506,
+        "hcc_score": 0.39,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.39
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_COPD",
+      "description": "CPA: COPD",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 0.744,
+        "demographic_score": 0.423,
+        "hcc_score": 0.321,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.321
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_COPD",
+      "description": "CND: COPD",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 0.492,
+        "demographic_score": 0.283,
+        "hcc_score": 0.209,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.209
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_COPD",
+      "description": "CFD: COPD",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 0.691,
+        "demographic_score": 0.41,
+        "hcc_score": 0.281,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.281
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_COPD",
+      "description": "CPD: COPD",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 0.587,
+        "demographic_score": 0.353,
+        "hcc_score": 0.234,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.234
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_COPD",
+      "description": "INS: COPD",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "J441"
+      ],
+      "expected": {
+        "risk_score": 1.631,
+        "demographic_score": 1.319,
+        "hcc_score": 0.312,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.312
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Fibrosis_of_lung",
+      "description": "CNA: Fibrosis_of_lung",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 0.714,
+        "demographic_score": 0.395,
+        "hcc_score": 0.319,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.319
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Fibrosis_of_lung",
+      "description": "CFA: Fibrosis_of_lung",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 0.896,
+        "demographic_score": 0.506,
+        "hcc_score": 0.39,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.39
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Fibrosis_of_lung",
+      "description": "CPA: Fibrosis_of_lung",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 0.744,
+        "demographic_score": 0.423,
+        "hcc_score": 0.321,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.321
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Fibrosis_of_lung",
+      "description": "CND: Fibrosis_of_lung",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 0.492,
+        "demographic_score": 0.283,
+        "hcc_score": 0.209,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.209
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Fibrosis_of_lung",
+      "description": "CFD: Fibrosis_of_lung",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 0.691,
+        "demographic_score": 0.41,
+        "hcc_score": 0.281,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.281
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Fibrosis_of_lung",
+      "description": "CPD: Fibrosis_of_lung",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 0.587,
+        "demographic_score": 0.353,
+        "hcc_score": 0.234,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.234
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Fibrosis_of_lung",
+      "description": "INS: Fibrosis_of_lung",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "J8410"
+      ],
+      "expected": {
+        "risk_score": 1.631,
+        "demographic_score": 1.319,
+        "hcc_score": 0.312,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.312
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Aspiration_pneumonia",
+      "description": "CNA: Aspiration_pneumonia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 0.835,
+        "demographic_score": 0.395,
+        "hcc_score": 0.44,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.44
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Aspiration_pneumonia",
+      "description": "CFA: Aspiration_pneumonia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 1.044,
+        "demographic_score": 0.506,
+        "hcc_score": 0.538,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.538
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Aspiration_pneumonia",
+      "description": "CPA: Aspiration_pneumonia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 0.832,
+        "demographic_score": 0.423,
+        "hcc_score": 0.409,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.409
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Aspiration_pneumonia",
+      "description": "CND: Aspiration_pneumonia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 0.645,
+        "demographic_score": 0.283,
+        "hcc_score": 0.362,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.362
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Aspiration_pneumonia",
+      "description": "CFD: Aspiration_pneumonia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 0.679,
+        "demographic_score": 0.41,
+        "hcc_score": 0.269,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.269
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Aspiration_pneumonia",
+      "description": "CPD: Aspiration_pneumonia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 0.526,
+        "demographic_score": 0.353,
+        "hcc_score": 0.173,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.173
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Aspiration_pneumonia",
+      "description": "INS: Aspiration_pneumonia",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "J690"
+      ],
+      "expected": {
+        "risk_score": 1.672,
+        "demographic_score": 1.319,
+        "hcc_score": 0.353,
+        "hcc_list": [
+          {
+            "hcc": "282",
+            "coefficient": 0.353
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Tracheostomy_Status",
+      "description": "CNA: Tracheostomy_Status",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 1.274,
+        "demographic_score": 0.395,
+        "hcc_score": 0.879,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 0.879
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Tracheostomy_Status",
+      "description": "CFA: Tracheostomy_Status",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 2.487,
+        "demographic_score": 0.506,
+        "hcc_score": 1.981,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 1.981
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Tracheostomy_Status",
+      "description": "CPA: Tracheostomy_Status",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 1.445,
+        "demographic_score": 0.423,
+        "hcc_score": 1.022,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 1.022
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Tracheostomy_Status",
+      "description": "CND: Tracheostomy_Status",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 1.161,
+        "demographic_score": 0.283,
+        "hcc_score": 0.878,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 0.878
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Tracheostomy_Status",
+      "description": "CFD: Tracheostomy_Status",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 1.828,
+        "demographic_score": 0.41,
+        "hcc_score": 1.418,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 1.418
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Tracheostomy_Status",
+      "description": "CPD: Tracheostomy_Status",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 0.943,
+        "demographic_score": 0.353,
+        "hcc_score": 0.59,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 0.59
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Tracheostomy_Status",
+      "description": "INS: Tracheostomy_Status",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "Z930"
+      ],
+      "expected": {
+        "risk_score": 2.889,
+        "demographic_score": 1.319,
+        "hcc_score": 1.57,
+        "hcc_list": [
+          {
+            "hcc": "211",
+            "coefficient": 1.57
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_End_Stage_Liver_Disease",
+      "description": "CNA: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 0.842,
+        "demographic_score": 0.395,
+        "hcc_score": 0.447,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.447
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_End_Stage_Liver_Disease",
+      "description": "CFA: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 0.981,
+        "demographic_score": 0.506,
+        "hcc_score": 0.475,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.475
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_End_Stage_Liver_Disease",
+      "description": "CPA: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 0.814,
+        "demographic_score": 0.423,
+        "hcc_score": 0.391,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.391
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_End_Stage_Liver_Disease",
+      "description": "CND: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 0.666,
+        "demographic_score": 0.283,
+        "hcc_score": 0.383,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.383
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_End_Stage_Liver_Disease",
+      "description": "CFD: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 0.824,
+        "demographic_score": 0.41,
+        "hcc_score": 0.414,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.414
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_End_Stage_Liver_Disease",
+      "description": "CPD: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 0.623,
+        "demographic_score": 0.353,
+        "hcc_score": 0.27,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.27
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_End_Stage_Liver_Disease",
+      "description": "INS: End_Stage_Liver_Disease",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "K7030"
+      ],
+      "expected": {
+        "risk_score": 1.697,
+        "demographic_score": 1.319,
+        "hcc_score": 0.378,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.378
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Acute_Renal_Failure",
+      "description": "CNA: Acute_Renal_Failure",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Acute_Renal_Failure",
+      "description": "CFA: Acute_Renal_Failure",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Acute_Renal_Failure",
+      "description": "CPA: Acute_Renal_Failure",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Acute_Renal_Failure",
+      "description": "CND: Acute_Renal_Failure",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Acute_Renal_Failure",
+      "description": "CFD: Acute_Renal_Failure",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Acute_Renal_Failure",
+      "description": "CPD: Acute_Renal_Failure",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Acute_Renal_Failure",
+      "description": "INS: Acute_Renal_Failure",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "N170"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Drug_Psychotic",
+      "description": "CNA: Drug_Psychotic",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Drug_Psychotic",
+      "description": "CFA: Drug_Psychotic",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Drug_Psychotic",
+      "description": "CPA: Drug_Psychotic",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Drug_Psychotic",
+      "description": "CND: Drug_Psychotic",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Drug_Psychotic",
+      "description": "CFD: Drug_Psychotic",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Drug_Psychotic",
+      "description": "CPD: Drug_Psychotic",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Drug_Psychotic",
+      "description": "INS: Drug_Psychotic",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "F1450"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Reactive_Psychosis",
+      "description": "CNA: Reactive_Psychosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 0.879,
+        "demographic_score": 0.395,
+        "hcc_score": 0.484,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.484
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Reactive_Psychosis",
+      "description": "CFA: Reactive_Psychosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 1.085,
+        "demographic_score": 0.506,
+        "hcc_score": 0.579,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.579
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Reactive_Psychosis",
+      "description": "CPA: Reactive_Psychosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 0.924,
+        "demographic_score": 0.423,
+        "hcc_score": 0.501,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.501
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Reactive_Psychosis",
+      "description": "CND: Reactive_Psychosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 0.573,
+        "demographic_score": 0.283,
+        "hcc_score": 0.29,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.29
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Reactive_Psychosis",
+      "description": "CFD: Reactive_Psychosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 0.665,
+        "demographic_score": 0.41,
+        "hcc_score": 0.255,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.255
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Reactive_Psychosis",
+      "description": "CPD: Reactive_Psychosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 0.6,
+        "demographic_score": 0.353,
+        "hcc_score": 0.247,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.247
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Reactive_Psychosis",
+      "description": "INS: Reactive_Psychosis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "F29"
+      ],
+      "expected": {
+        "risk_score": 1.527,
+        "demographic_score": 1.319,
+        "hcc_score": 0.208,
+        "hcc_list": [
+          {
+            "hcc": "152",
+            "coefficient": 0.208
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Dementia_Moderate_Severe",
+      "description": "CNA: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Dementia_Moderate_Severe",
+      "description": "CFA: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Dementia_Moderate_Severe",
+      "description": "CPA: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Dementia_Moderate_Severe",
+      "description": "CND: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Dementia_Moderate_Severe",
+      "description": "CFD: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Dementia_Moderate_Severe",
+      "description": "CPD: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Dementia_Moderate_Severe",
+      "description": "INS: Dementia_Moderate_Severe",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "F0281"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Dementia_Mild",
+      "description": "CNA: Dementia_Mild",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 0.736,
+        "demographic_score": 0.395,
+        "hcc_score": 0.341,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.341
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Dementia_Mild",
+      "description": "CFA: Dementia_Mild",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 0.944,
+        "demographic_score": 0.506,
+        "hcc_score": 0.438,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.438
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Dementia_Mild",
+      "description": "CPA: Dementia_Mild",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 0.824,
+        "demographic_score": 0.423,
+        "hcc_score": 0.401,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.401
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Dementia_Mild",
+      "description": "CND: Dementia_Mild",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 0.579,
+        "demographic_score": 0.283,
+        "hcc_score": 0.296,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.296
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Dementia_Mild",
+      "description": "CFD: Dementia_Mild",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 0.777,
+        "demographic_score": 0.41,
+        "hcc_score": 0.367,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.367
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Dementia_Mild",
+      "description": "CPD: Dementia_Mild",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 0.698,
+        "demographic_score": 0.353,
+        "hcc_score": 0.345,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.345
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Dementia_Mild",
+      "description": "INS: Dementia_Mild",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "F0390"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": [
+          {
+            "hcc": "127",
+            "coefficient": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Cystic_Fibrosis",
+      "description": "CNA: Cystic_Fibrosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 1.393,
+        "demographic_score": 0.395,
+        "hcc_score": 0.998,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 0.998
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Cystic_Fibrosis",
+      "description": "CFA: Cystic_Fibrosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 1.846,
+        "demographic_score": 0.506,
+        "hcc_score": 1.34,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 1.34
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Cystic_Fibrosis",
+      "description": "CPA: Cystic_Fibrosis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 1.073,
+        "demographic_score": 0.423,
+        "hcc_score": 0.65,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 0.65
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Cystic_Fibrosis",
+      "description": "CND: Cystic_Fibrosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 3.101,
+        "demographic_score": 0.283,
+        "hcc_score": 2.818,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 2.818
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Cystic_Fibrosis",
+      "description": "CFD: Cystic_Fibrosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 4.17,
+        "demographic_score": 0.41,
+        "hcc_score": 3.76,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 3.76
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Cystic_Fibrosis",
+      "description": "CPD: Cystic_Fibrosis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 4.182,
+        "demographic_score": 0.353,
+        "hcc_score": 3.829,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 3.829
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Cystic_Fibrosis",
+      "description": "INS: Cystic_Fibrosis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "E840"
+      ],
+      "expected": {
+        "risk_score": 2.192,
+        "demographic_score": 1.319,
+        "hcc_score": 0.873,
+        "hcc_list": [
+          {
+            "hcc": "277",
+            "coefficient": 0.873
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_ALS",
+      "description": "CNA: ALS",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 1.57,
+        "demographic_score": 0.395,
+        "hcc_score": 1.175,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 1.175
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_ALS",
+      "description": "CFA: ALS",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 1.933,
+        "demographic_score": 0.506,
+        "hcc_score": 1.427,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 1.427
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_ALS",
+      "description": "CPA: ALS",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 1.063,
+        "demographic_score": 0.423,
+        "hcc_score": 0.64,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 0.64
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_ALS",
+      "description": "CND: ALS",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 2.075,
+        "demographic_score": 0.283,
+        "hcc_score": 1.792,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 1.792
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_ALS",
+      "description": "CFD: ALS",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 4.052,
+        "demographic_score": 0.41,
+        "hcc_score": 3.642,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 3.642
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_ALS",
+      "description": "CPD: ALS",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 1.596,
+        "demographic_score": 0.353,
+        "hcc_score": 1.243,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 1.243
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_ALS",
+      "description": "INS: ALS",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "G1221"
+      ],
+      "expected": {
+        "risk_score": 1.947,
+        "demographic_score": 1.319,
+        "hcc_score": 0.628,
+        "hcc_list": [
+          {
+            "hcc": "190",
+            "coefficient": 0.628
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Respirator_Dependence",
+      "description": "CNA: Respirator_Dependence",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 1.068,
+        "demographic_score": 0.395,
+        "hcc_score": 0.673,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.673
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Respirator_Dependence",
+      "description": "CFA: Respirator_Dependence",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 1.397,
+        "demographic_score": 0.506,
+        "hcc_score": 0.891,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.891
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Respirator_Dependence",
+      "description": "CPA: Respirator_Dependence",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 0.949,
+        "demographic_score": 0.423,
+        "hcc_score": 0.526,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.526
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Respirator_Dependence",
+      "description": "CND: Respirator_Dependence",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 1.197,
+        "demographic_score": 0.283,
+        "hcc_score": 0.914,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.914
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Respirator_Dependence",
+      "description": "CFD: Respirator_Dependence",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 1.357,
+        "demographic_score": 0.41,
+        "hcc_score": 0.947,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.947
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Respirator_Dependence",
+      "description": "CPD: Respirator_Dependence",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 1.206,
+        "demographic_score": 0.353,
+        "hcc_score": 0.853,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.853
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Respirator_Dependence",
+      "description": "INS: Respirator_Dependence",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "Z931"
+      ],
+      "expected": {
+        "risk_score": 1.953,
+        "demographic_score": 1.319,
+        "hcc_score": 0.634,
+        "hcc_list": [
+          {
+            "hcc": "463",
+            "coefficient": 0.634
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Heart_Transplant",
+      "description": "CNA: Heart_Transplant",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 1.448,
+        "demographic_score": 0.395,
+        "hcc_score": 1.053,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 1.053
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Heart_Transplant",
+      "description": "CFA: Heart_Transplant",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 1.918,
+        "demographic_score": 0.506,
+        "hcc_score": 1.412,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 1.412
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Heart_Transplant",
+      "description": "CPA: Heart_Transplant",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 1.303,
+        "demographic_score": 0.423,
+        "hcc_score": 0.88,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 0.88
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Heart_Transplant",
+      "description": "CND: Heart_Transplant",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 1.282,
+        "demographic_score": 0.283,
+        "hcc_score": 0.999,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 0.999
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Heart_Transplant",
+      "description": "CFD: Heart_Transplant",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 2.191,
+        "demographic_score": 0.41,
+        "hcc_score": 1.781,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 1.781
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Heart_Transplant",
+      "description": "CPD: Heart_Transplant",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 1.724,
+        "demographic_score": 0.353,
+        "hcc_score": 1.371,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 1.371
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Heart_Transplant",
+      "description": "INS: Heart_Transplant",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "Z941"
+      ],
+      "expected": {
+        "risk_score": 2.159,
+        "demographic_score": 1.319,
+        "hcc_score": 0.84,
+        "hcc_list": [
+          {
+            "hcc": "221",
+            "coefficient": 0.84
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Acute_MI",
+      "description": "CNA: Acute_MI",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 0.647,
+        "demographic_score": 0.395,
+        "hcc_score": 0.252,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.252
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Acute_MI",
+      "description": "CFA: Acute_MI",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 0.999,
+        "demographic_score": 0.506,
+        "hcc_score": 0.493,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.493
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Acute_MI",
+      "description": "CPA: Acute_MI",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 0.747,
+        "demographic_score": 0.423,
+        "hcc_score": 0.324,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.324
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Acute_MI",
+      "description": "CND: Acute_MI",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 0.537,
+        "demographic_score": 0.283,
+        "hcc_score": 0.254,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.254
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Acute_MI",
+      "description": "CFD: Acute_MI",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 0.927,
+        "demographic_score": 0.41,
+        "hcc_score": 0.517,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.517
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Acute_MI",
+      "description": "CPD: Acute_MI",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 0.76,
+        "demographic_score": 0.353,
+        "hcc_score": 0.407,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.407
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Acute_MI",
+      "description": "INS: Acute_MI",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "I2102"
+      ],
+      "expected": {
+        "risk_score": 1.629,
+        "demographic_score": 1.319,
+        "hcc_score": 0.31,
+        "hcc_list": [
+          {
+            "hcc": "228",
+            "coefficient": 0.31
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_CHF_acute_chronic",
+      "description": "CNA: CHF_acute_chronic",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.755,
+        "demographic_score": 0.395,
+        "hcc_score": 0.36,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_CHF_acute_chronic",
+      "description": "CFA: CHF_acute_chronic",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.912,
+        "demographic_score": 0.506,
+        "hcc_score": 0.406,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.406
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_CHF_acute_chronic",
+      "description": "CPA: CHF_acute_chronic",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.734,
+        "demographic_score": 0.423,
+        "hcc_score": 0.311,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.311
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_CHF_acute_chronic",
+      "description": "CND: CHF_acute_chronic",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.725,
+        "demographic_score": 0.283,
+        "hcc_score": 0.442,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.442
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_CHF_acute_chronic",
+      "description": "CFD: CHF_acute_chronic",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.947,
+        "demographic_score": 0.41,
+        "hcc_score": 0.537,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.537
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_CHF_acute_chronic",
+      "description": "CPD: CHF_acute_chronic",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 0.764,
+        "demographic_score": 0.353,
+        "hcc_score": 0.411,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.411
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_CHF_acute_chronic",
+      "description": "INS: CHF_acute_chronic",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 1.536,
+        "demographic_score": 1.319,
+        "hcc_score": 0.217,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.217
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Substance_Use_mild",
+      "description": "CNA: Substance_Use_mild",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Substance_Use_mild",
+      "description": "CFA: Substance_Use_mild",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Substance_Use_mild",
+      "description": "CPA: Substance_Use_mild",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Substance_Use_mild",
+      "description": "CND: Substance_Use_mild",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Substance_Use_mild",
+      "description": "CFD: Substance_Use_mild",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Substance_Use_mild",
+      "description": "CPD: Substance_Use_mild",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Substance_Use_mild",
+      "description": "INS: Substance_Use_mild",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "F1010"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Spinal_cord_disorders",
+      "description": "CNA: Spinal_cord_disorders",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 0.873,
+        "demographic_score": 0.395,
+        "hcc_score": 0.478,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.478
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Spinal_cord_disorders",
+      "description": "CFA: Spinal_cord_disorders",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 0.908,
+        "demographic_score": 0.506,
+        "hcc_score": 0.402,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.402
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Spinal_cord_disorders",
+      "description": "CPA: Spinal_cord_disorders",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 0.824,
+        "demographic_score": 0.423,
+        "hcc_score": 0.401,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.401
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Spinal_cord_disorders",
+      "description": "CND: Spinal_cord_disorders",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 0.651,
+        "demographic_score": 0.283,
+        "hcc_score": 0.368,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.368
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Spinal_cord_disorders",
+      "description": "CFD: Spinal_cord_disorders",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 0.718,
+        "demographic_score": 0.41,
+        "hcc_score": 0.308,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.308
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Spinal_cord_disorders",
+      "description": "CPD: Spinal_cord_disorders",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 0.669,
+        "demographic_score": 0.353,
+        "hcc_score": 0.316,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.316
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Spinal_cord_disorders",
+      "description": "INS: Spinal_cord_disorders",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "G9519"
+      ],
+      "expected": {
+        "risk_score": 1.589,
+        "demographic_score": 1.319,
+        "hcc_score": 0.27,
+        "hcc_list": [
+          {
+            "hcc": "182",
+            "coefficient": 0.27
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Chronic_Hepatitis",
+      "description": "CNA: Chronic_Hepatitis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 0.842,
+        "demographic_score": 0.395,
+        "hcc_score": 0.447,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.447
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Chronic_Hepatitis",
+      "description": "CFA: Chronic_Hepatitis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 0.981,
+        "demographic_score": 0.506,
+        "hcc_score": 0.475,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.475
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Chronic_Hepatitis",
+      "description": "CPA: Chronic_Hepatitis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 0.814,
+        "demographic_score": 0.423,
+        "hcc_score": 0.391,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.391
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Chronic_Hepatitis",
+      "description": "CND: Chronic_Hepatitis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 0.666,
+        "demographic_score": 0.283,
+        "hcc_score": 0.383,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.383
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Chronic_Hepatitis",
+      "description": "CFD: Chronic_Hepatitis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 0.824,
+        "demographic_score": 0.41,
+        "hcc_score": 0.414,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.414
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Chronic_Hepatitis",
+      "description": "CPD: Chronic_Hepatitis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 0.623,
+        "demographic_score": 0.353,
+        "hcc_score": 0.27,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.27
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Chronic_Hepatitis",
+      "description": "INS: Chronic_Hepatitis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "K7031"
+      ],
+      "expected": {
+        "risk_score": 1.697,
+        "demographic_score": 1.319,
+        "hcc_score": 0.378,
+        "hcc_list": [
+          {
+            "hcc": "64",
+            "coefficient": 0.378
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Dysphagia",
+      "description": "CNA: Dysphagia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_Dysphagia",
+      "description": "CFA: Dysphagia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_Dysphagia",
+      "description": "CPA: Dysphagia",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_Dysphagia",
+      "description": "CND: Dysphagia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_Dysphagia",
+      "description": "CFD: Dysphagia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_Dysphagia",
+      "description": "CPD: Dysphagia",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_Dysphagia",
+      "description": "INS: Dysphagia",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "R1314"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_CKD_Stage_5",
+      "description": "CNA: CKD_Stage_5",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 1.21,
+        "demographic_score": 0.395,
+        "hcc_score": 0.815,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 0.815
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_CKD_Stage_5",
+      "description": "CFA: CKD_Stage_5",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 1.491,
+        "demographic_score": 0.506,
+        "hcc_score": 0.985,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 0.985
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_CKD_Stage_5",
+      "description": "CPA: CKD_Stage_5",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 1.388,
+        "demographic_score": 0.423,
+        "hcc_score": 0.965,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 0.965
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_CKD_Stage_5",
+      "description": "CND: CKD_Stage_5",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 1.21,
+        "demographic_score": 0.283,
+        "hcc_score": 0.927,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 0.927
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_CKD_Stage_5",
+      "description": "CFD: CKD_Stage_5",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 1.356,
+        "demographic_score": 0.41,
+        "hcc_score": 0.946,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 0.946
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_CKD_Stage_5",
+      "description": "CPD: CKD_Stage_5",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 1.403,
+        "demographic_score": 0.353,
+        "hcc_score": 1.05,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 1.05
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_CKD_Stage_5",
+      "description": "INS: CKD_Stage_5",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "N185"
+      ],
+      "expected": {
+        "risk_score": 2.277,
+        "demographic_score": 1.319,
+        "hcc_score": 0.958,
+        "hcc_list": [
+          {
+            "hcc": "326",
+            "coefficient": 0.958
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_CKD_Stage_4",
+      "description": "CNA: CKD_Stage_4",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 0.909,
+        "demographic_score": 0.395,
+        "hcc_score": 0.514,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.514
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_CKD_Stage_4",
+      "description": "CFA: CKD_Stage_4",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 1.071,
+        "demographic_score": 0.506,
+        "hcc_score": 0.565,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.565
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_CKD_Stage_4",
+      "description": "CPA: CKD_Stage_4",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 0.907,
+        "demographic_score": 0.423,
+        "hcc_score": 0.484,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.484
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_CKD_Stage_4",
+      "description": "CND: CKD_Stage_4",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 0.806,
+        "demographic_score": 0.283,
+        "hcc_score": 0.523,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.523
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_CKD_Stage_4",
+      "description": "CFD: CKD_Stage_4",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 1.071,
+        "demographic_score": 0.41,
+        "hcc_score": 0.661,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.661
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_CKD_Stage_4",
+      "description": "CPD: CKD_Stage_4",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 0.8,
+        "demographic_score": 0.353,
+        "hcc_score": 0.447,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.447
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_CKD_Stage_4",
+      "description": "INS: CKD_Stage_4",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 1.781,
+        "demographic_score": 1.319,
+        "hcc_score": 0.462,
+        "hcc_list": [
+          {
+            "hcc": "327",
+            "coefficient": 0.462
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_CKD_Stage_3",
+      "description": "CNA: CKD_Stage_3",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 0.395,
+        "demographic_score": 0.395,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFA_CKD_Stage_3",
+      "description": "CFA: CKD_Stage_3",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 0.506,
+        "demographic_score": 0.506,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPA_CKD_Stage_3",
+      "description": "CPA: CKD_Stage_3",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 0.423,
+        "demographic_score": 0.423,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CND_CKD_Stage_3",
+      "description": "CND: CKD_Stage_3",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 0.283,
+        "demographic_score": 0.283,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CFD_CKD_Stage_3",
+      "description": "CFD: CKD_Stage_3",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 0.41,
+        "demographic_score": 0.41,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CPD_CKD_Stage_3",
+      "description": "CPD: CKD_Stage_3",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 0.353,
+        "demographic_score": 0.353,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "INS_CKD_Stage_3",
+      "description": "INS: CKD_Stage_3",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 1.319,
+        "demographic_score": 1.319,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "CNA_Sepsis_with_shock",
+      "description": "CNA: Sepsis_with_shock",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 0.895,
+        "demographic_score": 0.395,
+        "hcc_score": 0.5,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Sepsis_with_shock",
+      "description": "CFA: Sepsis_with_shock",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 1.155,
+        "demographic_score": 0.506,
+        "hcc_score": 0.649,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.649
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Sepsis_with_shock",
+      "description": "CPA: Sepsis_with_shock",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 0.87,
+        "demographic_score": 0.423,
+        "hcc_score": 0.447,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.447
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Sepsis_with_shock",
+      "description": "CND: Sepsis_with_shock",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 0.881,
+        "demographic_score": 0.283,
+        "hcc_score": 0.598,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.598
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Sepsis_with_shock",
+      "description": "CFD: Sepsis_with_shock",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 1.19,
+        "demographic_score": 0.41,
+        "hcc_score": 0.78,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.78
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Sepsis_with_shock",
+      "description": "CPD: Sepsis_with_shock",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 0.944,
+        "demographic_score": 0.353,
+        "hcc_score": 0.591,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.591
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Sepsis_with_shock",
+      "description": "INS: Sepsis_with_shock",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "A400"
+      ],
+      "expected": {
+        "risk_score": 1.924,
+        "demographic_score": 1.319,
+        "hcc_score": 0.605,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.605
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Sepsis",
+      "description": "CNA: Sepsis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 0.895,
+        "demographic_score": 0.395,
+        "hcc_score": 0.5,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFA_Sepsis",
+      "description": "CFA: Sepsis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 1.155,
+        "demographic_score": 0.506,
+        "hcc_score": 0.649,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.649
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPA_Sepsis",
+      "description": "CPA: Sepsis",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 0.87,
+        "demographic_score": 0.423,
+        "hcc_score": 0.447,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.447
+          }
+        ]
+      }
+    },
+    {
+      "id": "CND_Sepsis",
+      "description": "CND: Sepsis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 0.881,
+        "demographic_score": 0.283,
+        "hcc_score": 0.598,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.598
+          }
+        ]
+      }
+    },
+    {
+      "id": "CFD_Sepsis",
+      "description": "CFD: Sepsis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "02",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 1.19,
+        "demographic_score": 0.41,
+        "hcc_score": 0.78,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.78
+          }
+        ]
+      }
+    },
+    {
+      "id": "CPD_Sepsis",
+      "description": "CPD: Sepsis",
+      "demographics": {
+        "age": 55,
+        "sex": "M",
+        "dual_elgbl_cd": "03",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 0.944,
+        "demographic_score": 0.353,
+        "hcc_score": 0.591,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.591
+          }
+        ]
+      }
+    },
+    {
+      "id": "INS_Sepsis",
+      "description": "INS: Sepsis",
+      "demographics": {
+        "age": 78,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "lti": true
+      },
+      "diagnosis_codes": [
+        "A419"
+      ],
+      "expected": {
+        "risk_score": 1.924,
+        "demographic_score": 1.319,
+        "hcc_score": 0.605,
+        "hcc_list": [
+          {
+            "hcc": "2",
+            "coefficient": 0.605
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multi_HCC_DM_CHF_CKD",
+      "description": "CNA: Multi_HCC_DM_CHF_CKD",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119",
+        "I5022",
+        "N183"
+      ],
+      "expected": {
+        "risk_score": 1.033,
+        "demographic_score": 0.395,
+        "hcc_score": 0.638,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          },
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multi_HCC_DM_CHF",
+      "description": "CNA: Multi_HCC_DM_CHF",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119",
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 1.033,
+        "demographic_score": 0.395,
+        "hcc_score": 0.638,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          },
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multi_HCC_DM_CKD",
+      "description": "CNA: Multi_HCC_DM_CKD",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119",
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 1.075,
+        "demographic_score": 0.395,
+        "hcc_score": 0.68,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          },
+          {
+            "hcc": "327",
+            "coefficient": 0.514
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multi_HCC_CHF_CKD",
+      "description": "CNA: Multi_HCC_CHF_CKD",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "I5022",
+        "N184"
+      ],
+      "expected": {
+        "risk_score": 1.445,
+        "demographic_score": 0.395,
+        "hcc_score": 1.05,
+        "hcc_list": [
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          },
+          {
+            "hcc": "327",
+            "coefficient": 0.514
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multi_HCC_COPD_CHF",
+      "description": "CNA: Multi_HCC_COPD_CHF",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "J441",
+        "I5022"
+      ],
+      "expected": {
+        "risk_score": 1.152,
+        "demographic_score": 0.395,
+        "hcc_score": 0.757,
+        "hcc_list": [
+          {
+            "hcc": "280",
+            "coefficient": 0.319
+          },
+          {
+            "hcc": "226",
+            "coefficient": 0.36
+          }
+        ]
+      }
+    },
+    {
+      "id": "CNA_Multi_HCC_Sepsis_DM",
+      "description": "CNA: Multi_HCC_Sepsis_DM",
+      "demographics": {
+        "age": 72,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "A419",
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 1.061,
+        "demographic_score": 0.395,
+        "hcc_score": 0.666,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          },
+          {
+            "hcc": "2",
+            "coefficient": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "AgeBoundary_65F_DM",
+      "description": "Boundary: AgeBoundary_65F_DM",
+      "demographics": {
+        "age": 65,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.496,
+        "demographic_score": 0.33,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "AgeBoundary_66M_DM",
+      "description": "Boundary: AgeBoundary_66M_DM",
+      "demographics": {
+        "age": 66,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.498,
+        "demographic_score": 0.332,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "AgeBoundary_94F_DM",
+      "description": "Boundary: AgeBoundary_94F_DM",
+      "demographics": {
+        "age": 94,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.903,
+        "demographic_score": 0.737,
+        "hcc_score": 0.166,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.166
+          }
+        ]
+      }
+    },
+    {
+      "id": "Young_45M_DM",
+      "description": "Boundary: Young_45M_DM",
+      "demographics": {
+        "age": 45,
+        "sex": "M",
+        "dual_elgbl_cd": "NA",
+        "orec": "0"
+      },
+      "diagnosis_codes": [
+        "E119"
+      ],
+      "expected": {
+        "risk_score": 0.406,
+        "demographic_score": 0.215,
+        "hcc_score": 0.191,
+        "hcc_list": [
+          {
+            "hcc": "38",
+            "coefficient": 0.191
+          }
+        ]
+      }
+    },
+    {
+      "id": "NE_68F_empty",
+      "description": "Boundary: NE_68F_empty",
+      "demographics": {
+        "age": 68,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "new_enrollee": true
+      },
+      "diagnosis_codes": [],
+      "expected": {
+        "risk_score": 0.584,
+        "demographic_score": 0.584,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    },
+    {
+      "id": "NE_65F_empty",
+      "description": "Boundary: NE_65F_empty",
+      "demographics": {
+        "age": 65,
+        "sex": "F",
+        "dual_elgbl_cd": "NA",
+        "orec": "0",
+        "new_enrollee": true
+      },
+      "diagnosis_codes": [],
+      "expected": {
+        "risk_score": 0.532,
+        "demographic_score": 0.532,
+        "hcc_score": 0.0,
+        "hcc_list": []
+      }
+    }
+  ]
+}

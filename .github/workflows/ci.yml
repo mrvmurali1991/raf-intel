@@ -59,6 +59,144 @@ jobs:
         run: ruff format --check backend/app backend/tests
 
   # ---------------------------------------------------------------------------
+  # Job: raf-coefficient-gate
+  # Fails any PR that edits a CMS coefficient file without citing a CMS source
+  # in the PR body. Waiver label: `cms-reviewed`.
+  # ---------------------------------------------------------------------------
+  raf-coefficient-gate:
+    name: "RAF — Coefficient-change PR gate"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect coefficient-sensitive file changes
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/changed-files.txt
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+          # Patterns that require a CMS citation in the PR body.
+          if grep -E '(backend/app/services/raf/|_manifest\.json$|_coefficient_snapshot\.json$|frailty_adjuster\.py$|hccinfhir)' /tmp/changed-files.txt; then
+            echo "sensitive=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sensitive=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check PR body cites CMS or carries waiver label
+        if: steps.changed.outputs.sensitive == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          python - <<'PY'
+          import json, os, sys, re
+
+          body = os.environ.get("PR_BODY", "") or ""
+          labels = json.loads(os.environ.get("PR_LABELS", "[]") or "[]")
+
+          if "cms-reviewed" in labels:
+              print("PR carries 'cms-reviewed' waiver label — gate satisfied.")
+              sys.exit(0)
+
+          # Require either a CMS source link or an explicit SSA §1853 cite.
+          patterns = [
+              r"cms\.gov",
+              r"Final Rate Announcement",
+              r"Advance Notice",
+              r"Social Security Act.*1853",
+              r"§\s*1853",
+              r"SSA\s*§?\s*1853",
+          ]
+          if any(re.search(p, body, re.IGNORECASE) for p in patterns):
+              print("PR body cites a CMS source — gate satisfied.")
+              sys.exit(0)
+
+          print(
+              "FAIL: this PR edits coefficient-sensitive files but the body "
+              "does not cite a CMS source.",
+              file=sys.stderr,
+          )
+          print(
+              "Add a CMS link (cms.gov), a Final Rate Announcement / Advance "
+              "Notice reference, or an SSA §1853 cite. "
+              "Alternatively, a repo maintainer can attach the "
+              "'cms-reviewed' label to waive.",
+              file=sys.stderr,
+          )
+          sys.exit(1)
+          PY
+
+      - name: No coefficient-sensitive changes
+        if: steps.changed.outputs.sensitive == 'false'
+        run: echo "No coefficient-sensitive files touched — gate skipped."
+
+  # ---------------------------------------------------------------------------
+  # Job: raf-changelog-gate
+  # Fails any commit that ships a new coefficients_manifest.json SHA-256 without
+  # a matching entry in backend/app/services/raf/coefficient_change_log.md.
+  # Runs in ~100 ms with no deps — the cheapest possible governance gate.
+  # ---------------------------------------------------------------------------
+  raf-changelog-gate:
+    name: "RAF — Coefficient change-log gate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify coefficient change log carries current manifest hash
+        working-directory: backend
+        run: python scripts/verify_coefficient_changelog.py
+
+  # ---------------------------------------------------------------------------
+  # Job: raf-drift-watch
+  # Fast-lane RAF engine verification — no database, no Docker, ~5s.
+  # Locks every V28 coefficient, hierarchy pair, and 300+ reconciliation
+  # scenarios. Any drift in hccinfhir or the coefficient manifest fails here
+  # before the slower backend-test job runs.
+  # ---------------------------------------------------------------------------
+  raf-drift-watch:
+    name: "RAF — Payment-grade drift watcher"
+    runs-on: ubuntu-latest
+    needs: backend-lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install RAF engine dependencies
+        working-directory: backend
+        run: pip install hccinfhir pytest pytest-asyncio hypothesis
+
+      - name: Run RAF drift watcher
+        working-directory: backend
+        run: python scripts/verify_raf_drift.py
+
+  # ---------------------------------------------------------------------------
   # Job: backend-test
   # Full pytest suite with MySQL integration-test service container.
   # Coverage is uploaded as an artifact so it can be reviewed in PRs.

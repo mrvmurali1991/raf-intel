@@ -1,0 +1,495 @@
+{
+  "$schema_version": "1",
+  "description": "New Enrollee V28 demographic-only reconciliation: every age band x sex x dual status.",
+  "model_name": "CMS-HCC Model V28",
+  "coefficient_source": "hccinfhir==0.1.5",
+  "absolute_tolerance": 0.001,
+  "scenarios": [
+    {
+      "id": "NE_M65_non_dual",
+      "age": 65,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.567,
+      "expected_demographic_score": 0.567,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M65_full_dual",
+      "age": 65,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.182,
+      "expected_demographic_score": 1.182,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M65_partial_dual",
+      "age": 65,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.182,
+      "expected_demographic_score": 1.182,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F65_non_dual",
+      "age": 65,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.532,
+      "expected_demographic_score": 0.532,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F65_full_dual",
+      "age": 65,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 0.986,
+      "expected_demographic_score": 0.986,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F65_partial_dual",
+      "age": 65,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 0.986,
+      "expected_demographic_score": 0.986,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M66_non_dual",
+      "age": 66,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.576,
+      "expected_demographic_score": 0.576,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M66_full_dual",
+      "age": 66,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.234,
+      "expected_demographic_score": 1.234,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M66_partial_dual",
+      "age": 66,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.234,
+      "expected_demographic_score": 1.234,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F66_non_dual",
+      "age": 66,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.532,
+      "expected_demographic_score": 0.532,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F66_full_dual",
+      "age": 66,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 0.99,
+      "expected_demographic_score": 0.99,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F66_partial_dual",
+      "age": 66,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 0.99,
+      "expected_demographic_score": 0.99,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M67_non_dual",
+      "age": 67,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.617,
+      "expected_demographic_score": 0.617,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M67_full_dual",
+      "age": 67,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.319,
+      "expected_demographic_score": 1.319,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M67_partial_dual",
+      "age": 67,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.319,
+      "expected_demographic_score": 1.319,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F67_non_dual",
+      "age": 67,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.557,
+      "expected_demographic_score": 0.557,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F67_full_dual",
+      "age": 67,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.004,
+      "expected_demographic_score": 1.004,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F67_partial_dual",
+      "age": 67,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.004,
+      "expected_demographic_score": 1.004,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M70_non_dual",
+      "age": 70,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.808,
+      "expected_demographic_score": 0.808,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M70_full_dual",
+      "age": 70,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.455,
+      "expected_demographic_score": 1.455,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M70_partial_dual",
+      "age": 70,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.455,
+      "expected_demographic_score": 1.455,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F70_non_dual",
+      "age": 70,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.694,
+      "expected_demographic_score": 0.694,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F70_full_dual",
+      "age": 70,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.043,
+      "expected_demographic_score": 1.043,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F70_partial_dual",
+      "age": 70,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.043,
+      "expected_demographic_score": 1.043,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M75_non_dual",
+      "age": 75,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.049,
+      "expected_demographic_score": 1.049,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M75_full_dual",
+      "age": 75,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.455,
+      "expected_demographic_score": 1.455,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M75_partial_dual",
+      "age": 75,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.455,
+      "expected_demographic_score": 1.455,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F75_non_dual",
+      "age": 75,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.901,
+      "expected_demographic_score": 0.901,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F75_full_dual",
+      "age": 75,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.128,
+      "expected_demographic_score": 1.128,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F75_partial_dual",
+      "age": 75,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.128,
+      "expected_demographic_score": 1.128,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M80_non_dual",
+      "age": 80,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.245,
+      "expected_demographic_score": 1.245,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M80_full_dual",
+      "age": 80,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.503,
+      "expected_demographic_score": 1.503,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M80_partial_dual",
+      "age": 80,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.503,
+      "expected_demographic_score": 1.503,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F80_non_dual",
+      "age": 80,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 0.988,
+      "expected_demographic_score": 0.988,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F80_full_dual",
+      "age": 80,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.342,
+      "expected_demographic_score": 1.342,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F80_partial_dual",
+      "age": 80,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.342,
+      "expected_demographic_score": 1.342,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M85_non_dual",
+      "age": 85,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.516,
+      "expected_demographic_score": 1.516,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M85_full_dual",
+      "age": 85,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.682,
+      "expected_demographic_score": 1.682,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M85_partial_dual",
+      "age": 85,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.682,
+      "expected_demographic_score": 1.682,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F85_non_dual",
+      "age": 85,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.287,
+      "expected_demographic_score": 1.287,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F85_full_dual",
+      "age": 85,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.563,
+      "expected_demographic_score": 1.563,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F85_partial_dual",
+      "age": 85,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.563,
+      "expected_demographic_score": 1.563,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M90_non_dual",
+      "age": 90,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.516,
+      "expected_demographic_score": 1.516,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M90_full_dual",
+      "age": 90,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.981,
+      "expected_demographic_score": 1.981,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M90_partial_dual",
+      "age": 90,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.981,
+      "expected_demographic_score": 1.981,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F90_non_dual",
+      "age": 90,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.287,
+      "expected_demographic_score": 1.287,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F90_full_dual",
+      "age": 90,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.712,
+      "expected_demographic_score": 1.712,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F90_partial_dual",
+      "age": 90,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.712,
+      "expected_demographic_score": 1.712,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M94_non_dual",
+      "age": 94,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.516,
+      "expected_demographic_score": 1.516,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M94_full_dual",
+      "age": 94,
+      "sex": "M",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.981,
+      "expected_demographic_score": 1.981,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_M94_partial_dual",
+      "age": 94,
+      "sex": "M",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.981,
+      "expected_demographic_score": 1.981,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F94_non_dual",
+      "age": 94,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "expected_risk_score": 1.287,
+      "expected_demographic_score": 1.287,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F94_full_dual",
+      "age": 94,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "expected_risk_score": 1.712,
+      "expected_demographic_score": 1.712,
+      "expected_hcc_score": 0.0
+    },
+    {
+      "id": "NE_F94_partial_dual",
+      "age": 94,
+      "sex": "F",
+      "dual_elgbl_cd": "03",
+      "expected_risk_score": 1.712,
+      "expected_demographic_score": 1.712,
+      "expected_hcc_score": 0.0
+    }
+  ]
+}

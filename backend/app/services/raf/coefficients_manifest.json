@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Pinned, source-cited manifest of CMS-HCC coefficients and factors used by the RAF calculation engine. Any drift between this manifest and the values actually applied at runtime MUST be caught by tests/test_raf_manifest_parity.py. Updating this file requires a paired PR to the test fixture and the upstream source URL/hash.",
+  "manifest_version": "2026-04-17",
+  "last_reviewed_by": "raf-calc-10of10 branch",
+  "sources": {
+    "cms_2026_final_rate_announcement": {
+      "url": "https://www.cms.gov/files/document/2026-announcement.pdf",
+      "fact_sheet": "https://www.cms.gov/newsroom/fact-sheets/2026-medicare-advantage-part-d-advance-notice-fact-sheet",
+      "impl_memo": "https://www.cms.gov/files/document/cy-2026-risk-adjustment-implementation-memo-g.pdf",
+      "published": "2024-04",
+      "title": "CY2026 Medicare Advantage and Part D Final Rate Announcement"
+    },
+    "hccinfhir": {
+      "package": "hccinfhir",
+      "pinned_version": "0.3.0",
+      "runtime_probed_version": "0.1.5",
+      "repo": "https://github.com/mimilabs/hccinfhir",
+      "note": "Coefficients delegated to this third-party library. This manifest pins the publicly documented CMS PY2026 values and the constrained-family invariants; unit tests verify hccinfhir still honors them."
+    }
+  },
+  "blend_weights": {
+    "non_pace": {
+      "2024": {"v24": 0.67, "v28": 0.33, "source": "CMS CY2024 Final Rate Announcement"},
+      "2025": {"v24": 0.33, "v28": 0.67, "source": "CMS CY2025 Final Rate Announcement"},
+      "2026": {"v24": 0.0,  "v28": 1.0,  "source": "CMS CY2026 Final Rate Announcement — 100% V28"},
+      "2027": {"v24": 0.0,  "v28": 1.0,  "source": "Projected — stable pure V28"}
+    },
+    "pace": {
+      "2024": {"legacy_2017": 1.0,  "v28": 0.0,  "source": "CMS CY2024 Final Rate Announcement — PACE 100% legacy"},
+      "2025": {"legacy_2017": 1.0,  "v28": 0.0,  "source": "CMS CY2025 Final Rate Announcement — PACE 100% legacy"},
+      "2026": {"legacy_2017": 0.90, "v28": 0.10, "source": "CMS CY2026 Final Rate Announcement — PACE 90/10 blend"},
+      "2027": {"legacy_2017": 0.50, "v28": 0.50, "source": "CMS CY2026 Advance Notice — PACE 50/50 proposed"}
+    }
+  },
+  "normalization_factors": {
+    "v28": {
+      "2024": 1.045,
+      "2025": 1.045,
+      "2026": 1.067,
+      "source": "CMS CY2026 Final Rate Announcement, 2024 CMS-HCC model normalization factor"
+    },
+    "v24": {
+      "2024": 1.153,
+      "2025": 1.153,
+      "2026": 1.153,
+      "source": "CMS CY2026 Final Rate Announcement, 2020 CMS-HCC model normalization factor"
+    },
+    "v22_legacy_2017": {
+      "2024": 1.187,
+      "2025": 1.187,
+      "2026": 1.187,
+      "source": "CMS CY2026 Final Rate Announcement, 2017 CMS-HCC model normalization factor"
+    }
+  },
+  "maci_factors": {
+    "v28": {
+      "2024": 0.059,
+      "2025": 0.059,
+      "2026": 0.059,
+      "source": "Statutory MA Coding Intensity Adjustment minimum (Social Security Act §1853(a)(1)(C)(ii)(II)); CMS confirmed 5.9% for CY2026"
+    },
+    "v24": {
+      "2024": 0.059,
+      "2025": 0.059,
+      "2026": 0.059,
+      "source": "Same statutory floor as V28"
+    }
+  },
+  "v28_constrained_families": {
+    "description": "HCCs within each family must share identical segment coefficients per CMS CY2026 V28 specification.",
+    "diabetes": {
+      "hccs": [36, 37, 38],
+      "note": "HCC 35 (pancreas transplant status) is NOT in the constrained group.",
+      "cna_coefficient_py2026": 0.166,
+      "source": "CMS CY2026 Final Rate Announcement, Attachment VI — V28 model coefficients; AAPC V28 guidance 2024"
+    },
+    "chf": {
+      "hccs": [224, 225, 226],
+      "cna_coefficient_py2026": 0.36,
+      "source": "CMS CY2026 Final Rate Announcement, Attachment VI — V28 model coefficients; CodingIntel V24→V28 analysis"
+    }
+  },
+  "v28_structural_facts": {
+    "hcc_category_count": 115,
+    "disease_family_count": 26,
+    "valid_icd10_count": 7770,
+    "source": "CMS CY2026 Final Rate Announcement Fact Sheet; AAPC/RAAPID 2024 guidance"
+  }
+}

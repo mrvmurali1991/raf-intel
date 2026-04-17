@@ -929,6 +929,30 @@ def _calculate_esrd_demographic_score(
     return _ESRD_DLY_DEMO_SCORES.get((age_band, sex), 0.635)
 
 
+def _resolve_graft_months(
+    *,
+    model_segment: str,
+    enrollment_months: int | None,
+    enrollment_override: dict[str, Any] | None,
+) -> int | None:
+    """Resolve ``graft_months`` for ESRD functioning-graft beneficiaries.
+
+    Priority order:
+      1. explicit ``enrollment_override["graft_months"]`` — authoritative.
+      2. For ESRD_FG only, fall back to ``min(12, max(1, enrollment_months))``.
+         A beneficiary cannot have a functioning graft older than their current
+         MA enrollment span, so clamping prevents the prior hard-coded-12
+         behaviour that overstated duration interactions
+         (GE65_DUR4_9 / GE65_DUR10PL) for partial-year enrollees.
+      3. For all other segments, return ``None`` (field is inert upstream).
+    """
+    if enrollment_override and enrollment_override.get("graft_months") is not None:
+        return int(enrollment_override["graft_months"])
+    if model_segment == "ESRD_FG":
+        return min(12, max(1, int(enrollment_months or 12)))
+    return None
+
+
 # ---------------------------------------------------------------------------
 # HCC label/coefficient lookup helpers (kept for backward compat)
 # ---------------------------------------------------------------------------
@@ -1386,16 +1410,21 @@ def calculate_raf_score(
     # 6. Run model(s) — pass enrollment params so hccinfhir can auto-detect
     #    the correct coefficient prefix (DI_ for ESRD, CFA_ for dual, etc.)
     _is_esrd_seg = _is_esrd(model_segment)
-    # Graft months for ESRD functioning graft patients — affects duration interactions
-    # (GE65_DUR4_9, GE65_DUR10PL, etc.). Source from enrollment_override if available.
-    _graft_months: int | None = None
-    if enrollment_override and enrollment_override.get("graft_months") is not None:
-        _graft_months = int(enrollment_override["graft_months"])
-    elif model_segment == "ESRD_FG":
-        # Functioning graft without explicit transplant date — default to 12 months
-        # to enable basic graft duration interactions. This is conservative; callers
-        # should provide actual graft_months via enrollment_override for accuracy.
-        _graft_months = 12
+    _graft_months = _resolve_graft_months(
+        model_segment=model_segment,
+        enrollment_months=enrollment_months,
+        enrollment_override=enrollment_override,
+    )
+    if _graft_months is not None and model_segment == "ESRD_FG" and not (
+        enrollment_override and enrollment_override.get("graft_months") is not None
+    ):
+        logger.debug(
+            "ESRD_FG pid=%s: no explicit graft_months; defaulting to min(12, "
+            "enrollment_months=%s) = %s months",
+            patient_id,
+            enrollment_months,
+            _graft_months,
+        )
 
     _enroll_kwargs: dict[str, Any] = {
         "orec": _orec,

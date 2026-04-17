@@ -87,34 +87,69 @@ V24_HIERARCHY_CHAINS: list[tuple[int, ...]] = [
     (134, 135, 136, 137, 138),
 ]
 
-# V28-specific additions / extensions to the chain set
-# (V28 renumbered many codes; these chains reflect V28 numbering)
-V28_HIERARCHY_CHAINS: list[tuple[int, ...]] = [
-    # Cancer / tumors
-    (17, 18, 19, 20),           # V28 cancer chain (renumbered from V24 8–12)
-    # Diabetes (V28 uses 35, 36, 37)
-    (35, 36, 37),
-    # Liver (V28: 27–30 → 27–30 unchanged in many releases; keep both)
+# V28 hierarchy chains.
+#
+# Historical note: this module previously hard-coded ~12 chains based on CMS
+# documentation.  That list was incomplete (CMS V28 defines hierarchy
+# relationships for 58 parent HCCs spanning the full 26-family model) and
+# introduced silent gaps where more-severe HCCs would fail to dominate their
+# less-severe descendants — e.g. the 17→23 cancer chain, the 276→280 cancer
+# chain, and the 379→383 chain were all missing.
+#
+# To guarantee parity with CMS, we now derive V28 chains from the
+# coefficient-provider's bundled hierarchy tables (hccinfhir ships the CMS
+# CY2026 hierarchy file).  A small hard-coded fallback is retained so the
+# module still imports cleanly if hccinfhir is unavailable (e.g. in lint-only
+# environments).
+def _load_v28_chains_from_hccinfhir() -> list[tuple[int, ...]] | None:
+    """Return V28 chains derived from the CMS hierarchy bundled with hccinfhir.
+
+    hccinfhir exposes ``hierarchies_default`` as ``{(hcc, model): {trumped}}``.
+    We flatten that into 2-tuples ``(parent, child)``; ``_build_lookup`` below
+    produces the correct transitive closure regardless of whether the chains
+    are expressed as long tuples or pair-wise edges.
+    """
+    try:
+        from hccinfhir.defaults import hierarchies_default
+    except Exception:  # pragma: no cover — hccinfhir always installed in prod
+        return None
+    chains: list[tuple[int, ...]] = []
+    for (hcc, model), trumped in hierarchies_default.items():
+        if "V28" not in model:
+            continue
+        try:
+            parent = int(hcc)
+        except (TypeError, ValueError):
+            continue
+        for child in trumped:
+            try:
+                chains.append((parent, int(child)))
+            except (TypeError, ValueError):
+                continue
+    return chains or None
+
+
+_V28_FALLBACK_CHAINS: list[tuple[int, ...]] = [
+    # Minimal fallback — preserved so the module imports even when hccinfhir
+    # is absent.  These are the pre-2026 chains that predated the derive-from-
+    # hccinfhir approach.
+    (17, 18, 19, 20),
+    (35, 36, 37, 38),
     (27, 28, 29, 80),
-    # CHF / AMI (V28 renumbered: 221, 222, 223, 224)
-    (221, 222, 223, 224),
-    # Renal (V28: 326, 327, 328, 329)
+    (221, 222, 223, 224, 225, 226, 227),
     (326, 327, 328, 329),
-    # COPD (V28: 310, 311)
     (310, 311),
-    # Vascular (V28: 107, 108 still used)
     (107, 108),
-    # CVD (V28: 99, 100 still used)
     (99, 100),
-    # Blood (V28)
     (46, 48),
-    # Substance (V28: 135, 136, 137)
-    (135, 136, 137),
-    # Psychiatric (V28: 151, 152, 153, 154)
-    (151, 152, 153, 154),
-    # Neurological (V28: 180, 181, 182, 183)
+    (135, 136, 137, 138, 139),
+    (151, 152, 153, 154, 155),
     (180, 181, 182, 183),
 ]
+
+V28_HIERARCHY_CHAINS: list[tuple[int, ...]] = (
+    _load_v28_chains_from_hccinfhir() or _V28_FALLBACK_CHAINS
+)
 
 # ---------------------------------------------------------------------------
 # Combined lookup structures built from the chains above

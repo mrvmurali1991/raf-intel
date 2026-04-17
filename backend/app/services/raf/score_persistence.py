@@ -18,6 +18,7 @@ from typing import Any
 from hccinfhir.defaults import is_chronic_default
 
 from app.db import raf_cursor
+from app.services.raf.provenance import provenance_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,14 @@ def _upsert_raf_score(
     v24_hcc_count: int | None = len(v24_hcc_list) if v24_hcc_list is not None else None
     v28_hcc_count: int | None = len(v28_hcc_list) if v28_hcc_list is not None else None
 
+    # Provenance stamp — model_version derives from score_type; "blended" rows
+    # are labelled BLEND so that auditors can distinguish a blended row from a
+    # pure single-model row at a glance.
+    model_version_label = {"v24": "V24", "v28": "V28", "blended": "BLEND"}.get(
+        score_type, score_type.upper()
+    )
+    stamp = provenance_stamp(model_version_label)
+
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -220,7 +229,9 @@ def _upsert_raf_score(
                     hcc_count, calculated_at, tenant_id,
                     v24_score, v28_score, blended_raw_score,
                     blend_v24_weight, blend_v28_weight,
-                    v24_hcc_count, v28_hcc_count
+                    v24_hcc_count, v28_hcc_count,
+                    model_version, coefficient_source,
+                    coefficient_manifest_hash, calculator_commit_sha
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
@@ -228,25 +239,31 @@ def _upsert_raf_score(
                     %s, NOW(), %s,
                     %s, %s, %s,
                     %s, %s,
+                    %s, %s,
+                    %s, %s,
                     %s, %s
                 )
                 ON DUPLICATE KEY UPDATE
-                    demographic_score    = VALUES(demographic_score),
-                    disease_score        = VALUES(disease_score),
-                    interaction_score    = VALUES(interaction_score),
-                    total_raw            = VALUES(total_raw),
-                    normalization_factor = VALUES(normalization_factor),
-                    final_raf            = VALUES(final_raf),
-                    hcc_count            = VALUES(hcc_count),
-                    tenant_id            = VALUES(tenant_id),
-                    v24_score            = VALUES(v24_score),
-                    v28_score            = VALUES(v28_score),
-                    blended_raw_score    = VALUES(blended_raw_score),
-                    blend_v24_weight     = VALUES(blend_v24_weight),
-                    blend_v28_weight     = VALUES(blend_v28_weight),
-                    v24_hcc_count        = VALUES(v24_hcc_count),
-                    v28_hcc_count        = VALUES(v28_hcc_count),
-                    calculated_at        = NOW()
+                    demographic_score        = VALUES(demographic_score),
+                    disease_score            = VALUES(disease_score),
+                    interaction_score        = VALUES(interaction_score),
+                    total_raw                = VALUES(total_raw),
+                    normalization_factor     = VALUES(normalization_factor),
+                    final_raf                = VALUES(final_raf),
+                    hcc_count                = VALUES(hcc_count),
+                    tenant_id                = VALUES(tenant_id),
+                    v24_score                = VALUES(v24_score),
+                    v28_score                = VALUES(v28_score),
+                    blended_raw_score        = VALUES(blended_raw_score),
+                    blend_v24_weight         = VALUES(blend_v24_weight),
+                    blend_v28_weight         = VALUES(blend_v28_weight),
+                    v24_hcc_count            = VALUES(v24_hcc_count),
+                    v28_hcc_count            = VALUES(v28_hcc_count),
+                    model_version            = VALUES(model_version),
+                    coefficient_source       = VALUES(coefficient_source),
+                    coefficient_manifest_hash = VALUES(coefficient_manifest_hash),
+                    calculator_commit_sha    = VALUES(calculator_commit_sha),
+                    calculated_at            = NOW()
                 """,
                 (
                     result["patient_id"],
@@ -268,6 +285,10 @@ def _upsert_raf_score(
                     v28_w,
                     v24_hcc_count,
                     v28_hcc_count,
+                    stamp["model_version"],
+                    stamp["coefficient_source"],
+                    stamp["coefficient_manifest_hash"],
+                    stamp["calculator_commit_sha"],
                 ),
             )
 

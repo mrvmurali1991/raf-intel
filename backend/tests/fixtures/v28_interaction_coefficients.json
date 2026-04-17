@@ -1,0 +1,89 @@
+{
+  "$schema_version": "1",
+  "model_name": "CMS-HCC Model V28",
+  "payment_year": 2026,
+  "coefficient_source": "hccinfhir==0.1.5",
+  "cms_reference": "CMS-HCC V28 interaction and special-population coefficients. Source: 2026 Final Rate Announcement \u2014 V28 segment tables (CFA/CFD/CNA/CND/CPA/CPD/INS).",
+  "description": "Every V28 interaction and special-population coefficient. Locks the HF_CHR_LUNG and HF_HCC238 disease crosses across 7 segments, OREC=1 originally-disabled-aged premium, institutional disabled \u00d7 disease-family addends, and the LTI Medicaid adjustment.",
+  "interaction_groups": {
+    "hf_chr_lung_v28": {
+      "description": "Heart failure \u00d7 chronic lung disease interaction (7 segments).",
+      "coefficients": {
+        "cfa_hf_chr_lung_v28": 0.109,
+        "cfd_hf_chr_lung_v28": 0.097,
+        "cna_hf_chr_lung_v28": 0.078,
+        "cnd_hf_chr_lung_v28": 0.062,
+        "cpa_hf_chr_lung_v28": 0.14,
+        "cpd_hf_chr_lung_v28": 0.108,
+        "ins_hf_chr_lung_v28": 0.145
+      }
+    },
+    "hf_hcc238_v28": {
+      "description": "Heart failure \u00d7 HCC 238 (specified cardiac arrhythmia) interaction (7 segments).",
+      "coefficients": {
+        "cfa_hf_hcc238_v28": 0.14,
+        "cfd_hf_hcc238_v28": 0.372,
+        "cna_hf_hcc238_v28": 0.077,
+        "cnd_hf_hcc238_v28": 0.257,
+        "cpa_hf_hcc238_v28": 0.135,
+        "cpd_hf_hcc238_v28": 0.314
+      }
+    },
+    "originally_disabled": {
+      "description": "OREC=1 aged-beneficiary premium by segment \u00d7 sex (6 entries).",
+      "coefficients": {
+        "cfa_originallydisabled_female": 0.16,
+        "cfa_originallydisabled_male": 0.158,
+        "cna_originallydisabled_female": 0.228,
+        "cna_originallydisabled_male": 0.135,
+        "cpa_originallydisabled_female": 0.103,
+        "cpa_originallydisabled_male": 0.075
+      }
+    },
+    "institutional_disabled": {
+      "description": "Institutional \u00d7 disabled \u00d7 disease-family interactions (5 families).",
+      "coefficients": {
+        "ins_disabled_cancer_v28": 0.367,
+        "ins_disabled_chr_lung_v28": 0.278,
+        "ins_disabled_hf_v28": 0.488,
+        "ins_disabled_neuro_v28": 0.154,
+        "ins_disabled_ulcer_v28": 0.537
+      }
+    },
+    "institutional_other": {
+      "description": "Institutional non-disabled interactions and LTI Medicaid.",
+      "coefficients": {
+        "ins_hf_chr_lung_v28": 0.145,
+        "ins_ltimcaid": 0.13
+      }
+    }
+  },
+  "all_interactions": {
+    "cfa_hf_chr_lung_v28": 0.109,
+    "cfa_hf_hcc238_v28": 0.14,
+    "cfa_originallydisabled_female": 0.16,
+    "cfa_originallydisabled_male": 0.158,
+    "cfd_hf_chr_lung_v28": 0.097,
+    "cfd_hf_hcc238_v28": 0.372,
+    "cna_hf_chr_lung_v28": 0.078,
+    "cna_hf_hcc238_v28": 0.077,
+    "cna_originallydisabled_female": 0.228,
+    "cna_originallydisabled_male": 0.135,
+    "cnd_hf_chr_lung_v28": 0.062,
+    "cnd_hf_hcc238_v28": 0.257,
+    "cpa_hf_chr_lung_v28": 0.14,
+    "cpa_hf_hcc238_v28": 0.135,
+    "cpa_originallydisabled_female": 0.103,
+    "cpa_originallydisabled_male": 0.075,
+    "cpd_hf_chr_lung_v28": 0.108,
+    "cpd_hf_hcc238_v28": 0.314,
+    "ins_disabled_cancer_v28": 0.367,
+    "ins_disabled_chr_lung_v28": 0.278,
+    "ins_disabled_hf_v28": 0.488,
+    "ins_disabled_neuro_v28": 0.154,
+    "ins_disabled_ulcer_v28": 0.537,
+    "ins_hf_chr_lung_v28": 0.145,
+    "ins_ltimcaid": 0.13
+  },
+  "interaction_count": 25
+}

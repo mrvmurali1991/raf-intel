@@ -1,0 +1,162 @@
+{
+  "$schema_version": "1",
+  "model_name": "RxHCC Model V08",
+  "payment_year": 2026,
+  "coefficient_source": "hccinfhir==0.1.5",
+  "absolute_tolerance": 0.001,
+  "description": "Part D (RxHCC V08) reconciliation scenarios \u2014 locks total, demographic, HCC, and triggered-HCC list for 10 representative profiles.",
+  "scenarios": [
+    {
+      "id": "partd_72F_no_dx",
+      "age": 72,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [],
+      "expected_total": 0.078,
+      "expected_demographic": 0.078,
+      "expected_hcc": 0.0,
+      "expected_hcc_list": []
+    },
+    {
+      "id": "partd_72M_no_dx",
+      "age": 72,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [],
+      "expected_total": 0.144,
+      "expected_demographic": 0.144,
+      "expected_hcc": 0.0,
+      "expected_hcc_list": []
+    },
+    {
+      "id": "partd_72F_dm",
+      "age": 72,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [
+        "E119"
+      ],
+      "expected_total": 0.325,
+      "expected_demographic": 0.078,
+      "expected_hcc": 0.247,
+      "expected_hcc_list": [
+        "31"
+      ]
+    },
+    {
+      "id": "partd_72F_dm_chf",
+      "age": 72,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [
+        "E119",
+        "I5022"
+      ],
+      "expected_total": 0.508,
+      "expected_demographic": 0.078,
+      "expected_hcc": 0.43,
+      "expected_hcc_list": [
+        "186",
+        "31"
+      ]
+    },
+    {
+      "id": "partd_72F_copd",
+      "age": 72,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [
+        "J449"
+      ],
+      "expected_total": 0.286,
+      "expected_demographic": 0.078,
+      "expected_hcc": 0.208,
+      "expected_hcc_list": [
+        "229"
+      ]
+    },
+    {
+      "id": "partd_80F_multi",
+      "age": 80,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [
+        "E119",
+        "I5022",
+        "J449"
+      ],
+      "expected_total": 0.646,
+      "expected_demographic": 0.008,
+      "expected_hcc": 0.638,
+      "expected_hcc_list": [
+        "186",
+        "229",
+        "31"
+      ]
+    },
+    {
+      "id": "partd_72F_full_dual",
+      "age": 72,
+      "sex": "F",
+      "dual_elgbl_cd": "02",
+      "orec": "0",
+      "new_enrollee": false,
+      "diagnoses": [],
+      "expected_total": 0.078,
+      "expected_demographic": 0.078,
+      "expected_hcc": 0.0,
+      "expected_hcc_list": []
+    },
+    {
+      "id": "partd_NE_65F",
+      "age": 65,
+      "sex": "F",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": true,
+      "diagnoses": [],
+      "expected_total": 0.0,
+      "expected_demographic": 0.0,
+      "expected_hcc": 0.0,
+      "expected_hcc_list": []
+    },
+    {
+      "id": "partd_NE_65M",
+      "age": 65,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "orec": "0",
+      "new_enrollee": true,
+      "diagnoses": [],
+      "expected_total": 0.0,
+      "expected_demographic": 0.0,
+      "expected_hcc": 0.0,
+      "expected_hcc_list": []
+    },
+    {
+      "id": "partd_NE_66M_disabled",
+      "age": 66,
+      "sex": "M",
+      "dual_elgbl_cd": "NA",
+      "orec": "1",
+      "new_enrollee": true,
+      "diagnoses": [],
+      "expected_total": 0.0,
+      "expected_demographic": 0.0,
+      "expected_hcc": 0.0,
+      "expected_hcc_list": []
+    }
+  ]
+}

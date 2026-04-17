@@ -1,0 +1,131 @@
+{
+  "$schema_version": "1",
+  "model_name": "CMS-HCC Model V28",
+  "payment_year": 2026,
+  "coefficient_source": "hccinfhir==0.1.5",
+  "absolute_tolerance": 0.001,
+  "description": "Named CMS-pattern exemplar beneficiaries. Each scenario is chosen to exercise a specific, publicly-documented V28 behaviour: demographic-only floor, dual premium, disease-interaction additivity, origin-of-entry disabled tracks, and institutional / full-benefit segments. Scores are locked against hccinfhir (pinned version above); drift fails fast.",
+  "cms_reference": "Scenarios mirror illustrative patterns from the CY2026 CMS Medicare Advantage Rate Announcement (Part C payment) technical notes, V28 segment tables.",
+  "scenarios": [
+    {
+      "id": "CNA_female_72_no_dx",
+      "label": "Community Non-dual Aged female, 72yo, no diagnoses",
+      "cms_pattern": "Demographic floor — community non-dual aged female 70-74 band (Table I-7, V28 CNA).",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": [],
+      "expected_risk_score": 0.395
+    },
+    {
+      "id": "CNA_male_72_no_dx",
+      "label": "Community Non-dual Aged male, 72yo, no diagnoses",
+      "cms_pattern": "Demographic floor — male 70-74 band should slightly exceed female (typical V28 CNA).",
+      "age": 72, "sex": "M", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": [],
+      "expected_risk_score": 0.396
+    },
+    {
+      "id": "CFA_female_72_full_dual_no_dx",
+      "label": "Community Full-dual Aged female, 72yo, no diagnoses",
+      "cms_pattern": "Dual-status premium — full-dual aged female 70-74 must exceed her non-dual peer (CMS full-benefit dual adjustment).",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "02", "orec": "0", "new_enrollee": false,
+      "diagnoses": [],
+      "expected_risk_score": 0.506
+    },
+    {
+      "id": "CFA_male_72_full_dual_no_dx",
+      "label": "Community Full-dual Aged male, 72yo, no diagnoses",
+      "cms_pattern": "Dual-status premium — full-dual aged male 70-74 (parallel to CFA female check).",
+      "age": 72, "sex": "M", "dual_elgbl_cd": "02", "orec": "0", "new_enrollee": false,
+      "diagnoses": [],
+      "expected_risk_score": 0.626
+    },
+    {
+      "id": "CNA_female_72_dm_uncomplicated",
+      "label": "CNA 72yo female + E11.9 (DM, no complications → HCC 38)",
+      "cms_pattern": "Single-HCC additivity — diabetes without complications adds the V28 HCC 38 constrained-family coefficient on top of the demographic floor.",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["E119"],
+      "expected_risk_score": 0.561
+    },
+    {
+      "id": "CNA_female_72_chf_only",
+      "label": "CNA 72yo female + I50.22 (acute-on-chronic HF → HCC 226)",
+      "cms_pattern": "Single-HCC additivity — CHF HCC 226 added to demographic floor.",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["I5022"],
+      "expected_risk_score": 0.755
+    },
+    {
+      "id": "CNA_female_72_dm_plus_chf",
+      "label": "CNA 72yo female + DM + CHF (interaction check)",
+      "cms_pattern": "Two-HCC additivity with interaction — DM (HCC 38) + CHF (HCC 226) exercises the DIABETES_HF_V28 interaction coefficient.",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["E119", "I5022"],
+      "expected_risk_score": 1.033
+    },
+    {
+      "id": "CNA_female_72_ckd_stage3",
+      "label": "CNA 72yo female + N18.3 (CKD stage 3 — no V28 HCC)",
+      "cms_pattern": "Negative control — CKD stage 3 is excluded from V28 HCC mapping (not severe enough); score must equal demographic floor.",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["N183"],
+      "expected_risk_score": 0.395
+    },
+    {
+      "id": "CNA_female_72_copd",
+      "label": "CNA 72yo female + J44.9 (COPD → HCC 280)",
+      "cms_pattern": "Single-HCC additivity — COPD V28 HCC 280 on top of demographic floor.",
+      "age": 72, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["J449"],
+      "expected_risk_score": 0.714
+    },
+    {
+      "id": "NE_female_65_entry",
+      "label": "New Enrollee female, 65yo, non-dual, community",
+      "cms_pattern": "New Enrollee table — female 65 community non-dual (NE V28 Table I-14 structural lock).",
+      "age": 65, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": true,
+      "diagnoses": [],
+      "expected_risk_score": 0.532
+    },
+    {
+      "id": "NE_female_65_full_dual_entry",
+      "label": "New Enrollee female, 65yo, full-dual, community",
+      "cms_pattern": "New Enrollee dual premium — full-dual NE must exceed non-dual NE at same age/sex.",
+      "age": 65, "sex": "F", "dual_elgbl_cd": "02", "orec": "0", "new_enrollee": true,
+      "diagnoses": [],
+      "expected_risk_score": 0.986
+    },
+    {
+      "id": "NE_male_66_origds_disabled",
+      "label": "New Enrollee male, 66yo, OREC=1 (originally disabled)",
+      "cms_pattern": "OREC track — originally-disabled entrants carry a higher NE coefficient than aged-in peers (CMS NE Table OREC=1 rows).",
+      "age": 66, "sex": "M", "dual_elgbl_cd": "NA", "orec": "1", "new_enrollee": true,
+      "diagnoses": [],
+      "expected_risk_score": 1.155
+    },
+    {
+      "id": "CNA_male_55_orig_disabled_dm",
+      "label": "CNA disabled male 55yo + DM",
+      "cms_pattern": "Disabled non-aged segment — originally disabled under-65 male with DM (V28 disabled-segment coefficient applies).",
+      "age": 55, "sex": "M", "dual_elgbl_cd": "NA", "orec": "1", "new_enrollee": false,
+      "diagnoses": ["E119"],
+      "expected_risk_score": 0.474
+    },
+    {
+      "id": "CNA_female_80_multi_hcc",
+      "label": "CNA 80yo female with DM + CHF + CKD3 + COPD",
+      "cms_pattern": "Multi-HCC stack — four-condition profile in aged 80-84 band exercises multiple interactions and demographics simultaneously.",
+      "age": 80, "sex": "F", "dual_elgbl_cd": "NA", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["E119", "I5022", "N183", "J449"],
+      "expected_risk_score": 1.559
+    },
+    {
+      "id": "CFA_female_80_multi_hcc",
+      "label": "CFA 80yo full-dual female with DM + CHF + CKD3 + COPD",
+      "cms_pattern": "Multi-HCC stack + dual premium — same profile under CFA segment must exceed CNA version (monotonicity invariant).",
+      "age": 80, "sex": "F", "dual_elgbl_cd": "02", "orec": "0", "new_enrollee": false,
+      "diagnoses": ["E119", "I5022", "N183", "J449"],
+      "expected_risk_score": 1.939
+    }
+  ]
+}

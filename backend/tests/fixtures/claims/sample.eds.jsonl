@@ -1,0 +1,7 @@
+{"beneficiary_id":"EDS-001","encounter_id":"E1","service_date":"2025-03-12","diagnosis_codes":["E11.9"]}
+{"beneficiary_id":"EDS-001","encounter_id":"E2","service_date":"2025-05-07","diagnosis_codes":["I50.22","J44.9"]}
+{"beneficiary_id":"EDS-002","encounter_id":"E3","service_date":"2025-02-01","diagnosis_codes":["E11.22","N18.4"]}
+{"beneficiary_id":"EDS-002","encounter_id":"E4","service_date":"2025-06-18","diagnosis_codes":["I50.33","F32.9"]}
+{"beneficiary_id":"EDS-003","encounter_id":"E5","service_date":"2025-04-23","diagnosis_codes":["C50.911"]}
+{"beneficiary_id":"EDS-004","encounter_id":"E6","service_date":"2025-01-09","diagnosis_codes":[]}
+{"beneficiary_id":"EDS-005","encounter_id":"E7","service_date":"2025-07-15","diagnosis_codes":["E119","I5022"]}
