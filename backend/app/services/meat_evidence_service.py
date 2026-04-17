@@ -483,6 +483,27 @@ def calculate_meat_completeness(patient_id: int, year: int = None) -> dict[str, 
             r["patient_hcc_id"]: r for r in cur.fetchall()
         }
 
+        # Fetch representative extracted phrases + raw_note_excerpt per HCC.
+        # Pull the most recent row per HCC (by encounter_date DESC, id DESC) so
+        # the UI can show the current clinical excerpt in the MEAT tooltip.
+        cur.execute(
+            f"""
+            SELECT me.patient_hcc_id, me.meat_m, me.meat_e, me.meat_a, me.meat_t,
+                   me.raw_note_excerpt, me.encounter_date
+            FROM raf_meat_evidence me
+            JOIN (
+                SELECT patient_hcc_id, MAX(id) AS latest_id
+                FROM raf_meat_evidence
+                WHERE patient_hcc_id IN ({fmt_placeholders})
+                GROUP BY patient_hcc_id
+            ) latest ON latest.latest_id = me.id
+            """,
+            hcc_ids,
+        )
+        phrases_by_hcc: dict[int, dict[str, Any]] = {
+            r["patient_hcc_id"]: r for r in cur.fetchall()
+        }
+
     complete_count = 0
     partial_count = 0
     missing_count = 0
@@ -515,6 +536,7 @@ def calculate_meat_completeness(patient_id: int, year: int = None) -> dict[str, 
             status = "missing"
             missing_count += 1
 
+        phrases = phrases_by_hcc.get(phcc_id) or {}
         per_hcc.append(
             {
                 "hcc_code": str(hcc_code),
@@ -525,6 +547,11 @@ def calculate_meat_completeness(patient_id: int, year: int = None) -> dict[str, 
                 "e": has_e,
                 "a": has_a,
                 "t": has_t,
+                "monitor": phrases.get("meat_m") or None,
+                "evaluate": phrases.get("meat_e") or None,
+                "assess": phrases.get("meat_a") or None,
+                "treat": phrases.get("meat_t") or None,
+                "raw_note_excerpt": phrases.get("raw_note_excerpt") or None,
                 "evidence_count": evidence_count,
             }
         )
@@ -664,6 +691,27 @@ def store_analysis_meat(
             continue
 
         raw_excerpt: str = dx.get("supporting_text") or ""
+        # Fallback 1: look up the source clinical note linked to this encounter
+        # so the UI tooltip can show a real clinical excerpt even when the LLM
+        # didn't return a supporting_text quote.
+        if not raw_excerpt and encounter_id:
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        "SELECT text FROM clinical_notes WHERE encounter_id=%s ORDER BY id DESC LIMIT 1",
+                        (encounter_id,),
+                    )
+                    r = cur.fetchone()
+                    if r and r.get("text"):
+                        raw_excerpt = str(r["text"])[:500]
+            except Exception:
+                pass
+        # Fallback 2: stitch MEAT phrases together so the excerpt is never
+        # empty when we have any MEAT signal.
+        if not raw_excerpt:
+            raw_excerpt = " | ".join(
+                s for s in (monitoring, evaluation, assessment, treatment) if s
+            )[:500]
         confidence: float = float(dx.get("confidence", 0.0))
 
         try:

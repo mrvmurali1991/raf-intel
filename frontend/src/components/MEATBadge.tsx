@@ -12,6 +12,7 @@ const letters: { key: keyof MEATEvidence; label: string; full: string; filledCol
 ];
 
 export function MEATBadge({ evidence }: { evidence?: MEATEvidence | null }) {
+  const rawExcerpt = evidence?.raw_note_excerpt;
   return (
     <div className="flex gap-1">
       {letters.map(({ key, label, full, filledBg }) => {
@@ -35,6 +36,14 @@ export function MEATBadge({ evidence }: { evidence?: MEATEvidence | null }) {
               ) : (
                 <p className="text-xs text-muted-foreground">No evidence</p>
               )}
+              {rawExcerpt ? (
+                <>
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Source note
+                  </p>
+                  <p className="max-w-xs text-xs italic opacity-80">“{rawExcerpt}”</p>
+                </>
+              ) : null}
             </TooltipContent>
           </Tooltip>
         );

@@ -408,19 +408,31 @@ export function Card({
 // ---------------------------------------------------------------------------
 export function MeatDots({ evidence }: { evidence?: MEATEvidence | Record<string, any> | null }) {
   const letters = [
-    { key: "monitor" as const, alt: ["M", "m"], label: "M", color: C.blue600 },
-    { key: "evaluate" as const, alt: ["E", "e"], label: "E", color: C.purple600 },
-    { key: "assess" as const, alt: ["A", "a"], label: "A", color: C.amber600 },
-    { key: "treat" as const, alt: ["T", "t"], label: "T", color: C.emerald600 },
+    { key: "monitor" as const, alt: ["M", "m"], label: "M", full: "Monitor",  color: C.blue600 },
+    { key: "evaluate" as const, alt: ["E", "e"], label: "E", full: "Evaluate", color: C.purple600 },
+    { key: "assess" as const,   alt: ["A", "a"], label: "A", full: "Assess",   color: C.amber600 },
+    { key: "treat" as const,    alt: ["T", "t"], label: "T", full: "Treat",    color: C.emerald600 },
   ];
+  const e = evidence as any;
+  const rawExcerpt: string | undefined =
+    e && (e.raw_note_excerpt || e.rawNoteExcerpt || e.excerpt);
   return (
     <div style={{ display: "inline-flex", gap: 4 }}>
-      {letters.map(({ key, alt, label, color }) => {
-        const e = evidence as any;
-        const filled = e && (e[key] || alt.some((a) => e[a]));
+      {letters.map(({ key, alt, label, full, color }) => {
+        const rawVal = e && (e[key] || alt.map((a) => e[a]).find(Boolean));
+        const filled = !!rawVal;
+        const phrase = typeof rawVal === "string" ? rawVal : undefined;
+        const tooltipText =
+          [
+            `${full}: ${filled ? (phrase || "present") : "not documented"}`,
+            rawExcerpt ? `\nSource note:\n“${rawExcerpt}”` : "",
+          ]
+            .filter(Boolean)
+            .join("");
         return (
           <span
             key={key}
+            title={tooltipText}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -435,6 +447,7 @@ export function MeatDots({ evidence }: { evidence?: MEATEvidence | Record<string
               border: `2px solid ${filled ? color : C.gray200}`,
               transition: "all 0.2s",
               boxShadow: filled ? `0 2px 6px ${color}25` : "none",
+              cursor: "help",
             }}
           >
             {label}

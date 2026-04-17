@@ -58,6 +58,7 @@ export interface MEATEvidence {
   evaluate: string | null;
   assess: string | null;
   treat: string | null;
+  raw_note_excerpt?: string | null;
 }
 
 export interface MEATStatus {
