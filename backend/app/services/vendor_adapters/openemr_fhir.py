@@ -552,6 +552,12 @@ class OpenEMRFhirAdapter:
                     documents_synced += 1
                 except Exception as exc:
                     errors.append(f"DocumentReference {resource.get('id')}: {exc}")
+                try:
+                    self._upsert_clinical_note_from_ref(resource)
+                except Exception as exc:
+                    errors.append(
+                        f"DocumentReference note {resource.get('id')}: {exc}"
+                    )
         except Exception as exc:
             errors.append(f"DocumentReference fetch failed: {exc}")
 
@@ -678,6 +684,123 @@ class OpenEMRFhirAdapter:
             "raf_scores_calculated": raf_scores_calculated,
             "errors": errors,
         }
+
+    def fetch_document_references(self, patient_id: str) -> list[dict]:
+        """Fetch DocumentReference notes for a patient from OpenEMR FHIR.
+
+        Returns a list of {external_id, note_date, note_type, encounter_ref, text}
+        dicts, drawn from inline base64 attachments or narrative text.div. Entries
+        with remote attachment URLs are skipped (no extra HTTP calls). Text bodies
+        shorter than 20 chars are dropped. Follows Bundle.link[relation=next].
+        """
+        import base64
+        import re
+
+        notes: list[dict] = []
+        url = f"{self.base_url}/DocumentReference"
+        p: dict | None = {"patient": patient_id, "_count": "100"}
+
+        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
+            for page in range(50):
+                resp = client.get(
+                    url, headers=self._auth_headers(), params=p if page == 0 else None
+                )
+                if resp.status_code == 401:
+                    logger.warning(
+                        "FHIR DocumentReference page %d -> 401 body: %s",
+                        page,
+                        resp.text[:300],
+                    )
+                    self._force_refresh()
+                    resp = client.get(
+                        url,
+                        headers=self._auth_headers(),
+                        params=p if page == 0 else None,
+                    )
+                if resp.status_code != 200:
+                    logger.warning(
+                        "FHIR DocumentReference page %d -> %s body: %s",
+                        page,
+                        resp.status_code,
+                        resp.text[:300],
+                    )
+                    break
+                bundle = resp.json()
+                entries = bundle.get("entry", [])
+                for entry in entries:
+                    resource = entry.get("resource", {})
+                    if resource.get("resourceType") != "DocumentReference":
+                        continue
+                    external_id = resource.get("id", "")
+                    text_body = ""
+                    content_list = resource.get("content", [])
+                    attachment = (content_list[0].get("attachment", {})
+                                  if content_list else {})
+                    b64_data = attachment.get("data")
+                    attach_url = attachment.get("url")
+                    if b64_data:
+                        try:
+                            text_body = base64.b64decode(b64_data).decode(
+                                "utf-8", errors="replace"
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "DocumentReference %s: base64 decode failed: %s",
+                                external_id,
+                                exc,
+                            )
+                    elif attach_url:
+                        logger.info(
+                            "DocumentReference %s: attachment.url present, skipping remote fetch",
+                            external_id,
+                        )
+                    if not text_body:
+                        div = (resource.get("text") or {}).get("div", "")
+                        if div:
+                            text_body = re.sub(r"<[^>]+>", "", div)
+                    text_body = (text_body or "").strip()
+                    if len(text_body) < 20:
+                        continue
+                    raw_date = resource.get("date", "") or ""
+                    note_date: str | None = None
+                    if raw_date:
+                        try:
+                            note_date = datetime.fromisoformat(
+                                raw_date.replace("Z", "+00:00")
+                            ).date().isoformat()
+                        except Exception:
+                            note_date = raw_date[:10] or None
+                    type_obj = resource.get("type") or {}
+                    coding = type_obj.get("coding") or []
+                    note_type = (
+                        (coding[0].get("display") if coding else None)
+                        or type_obj.get("text")
+                        or "clinical_note"
+                    )
+                    encounter_ref: str | None = None
+                    context_enc = (resource.get("context") or {}).get("encounter") or []
+                    if context_enc:
+                        encounter_ref = context_enc[0].get("reference") or None
+                    notes.append(
+                        {
+                            "external_id": external_id,
+                            "note_date": note_date,
+                            "note_type": note_type,
+                            "encounter_ref": encounter_ref,
+                            "text": text_body,
+                        }
+                    )
+                next_url = None
+                for link in bundle.get("link", []):
+                    if link.get("relation") == "next":
+                        next_url = link.get("url")
+                        break
+                if not next_url or not entries:
+                    break
+                url = next_url
+                p = None
+
+        return notes
 
     # ------------------------------------------------------------------
     # Normalizers
@@ -2039,6 +2162,96 @@ class OpenEMRFhirAdapter:
         except Exception as exc:
             logger.warning(
                 "DocumentReference %s: analysis trigger failed: %s", fhir_doc_id, exc
+            )
+
+
+    def _upsert_clinical_note_from_ref(self, resource: dict) -> None:
+        """Extract inline clinical text from a FHIR DocumentReference and upsert
+        it into ``clinical_notes`` for MEAT extraction. Complements
+        ``_upsert_document_reference`` (which stores URL-backed binary attachments).
+        """
+        import base64
+        import re
+        from app.db import raf_cursor
+
+        fhir_doc_id: str = resource.get("id", "")
+        tenant_id: str = str(self.connection.get("tenant_id", "1"))
+
+        # ---- extract inline text ------------------------------------------
+        text_body = ""
+        content_list = resource.get("content", [])
+        attachment = content_list[0].get("attachment", {}) if content_list else {}
+        b64_data = attachment.get("data")
+        if b64_data:
+            try:
+                text_body = base64.b64decode(b64_data).decode(
+                    "utf-8", errors="replace"
+                )
+            except Exception as exc:
+                logger.warning(
+                    "DocumentReference %s: base64 decode failed: %s",
+                    fhir_doc_id,
+                    exc,
+                )
+        if not text_body:
+            div = (resource.get("text") or {}).get("div", "")
+            if div:
+                text_body = re.sub(r"<[^>]+>", "", div)
+        text_body = (text_body or "").strip()
+        if len(text_body) < 20:
+            return  # nothing extractable — URL-only attachment, handled elsewhere
+
+        # ---- resolve patient ----------------------------------------------
+        subject_ref: str = (resource.get("subject") or {}).get("reference", "")
+        external_patient_id = subject_ref.split("/")[-1] if subject_ref else ""
+        if not external_patient_id:
+            return
+        raf_patient_id: int | None = self._resolve_or_create_raf_patient_id(
+            external_patient_id
+        )
+        if raf_patient_id is None:
+            return
+
+        # ---- note_date, note_type -----------------------------------------
+        raw_date = resource.get("date", "") or ""
+        note_date: str | None = None
+        if raw_date:
+            try:
+                note_date = datetime.fromisoformat(
+                    raw_date.replace("Z", "+00:00")
+                ).date().isoformat()
+            except Exception:
+                note_date = raw_date[:10] or None
+        type_obj = resource.get("type") or {}
+        coding = type_obj.get("coding") or []
+        note_type = (
+            (coding[0].get("display") if coding else None)
+            or type_obj.get("text")
+            or "clinical_note"
+        )
+
+        # ---- upsert into clinical_notes -----------------------------------
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO clinical_notes
+                    (tenant_id, patient_id, source_system, external_id,
+                     note_date, note_type, text)
+                VALUES (%s, %s, 'openemr_fhir', %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    patient_id = VALUES(patient_id),
+                    note_date  = VALUES(note_date),
+                    note_type  = VALUES(note_type),
+                    text       = VALUES(text)
+                """,
+                (
+                    tenant_id,
+                    raf_patient_id,
+                    fhir_doc_id,
+                    note_date,
+                    note_type,
+                    text_body,
+                ),
             )
 
 

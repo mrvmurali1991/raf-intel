@@ -26,7 +26,7 @@ from typing import Any, Optional
 
 import mysql.connector
 
-from app.db import openemr_cursor, NoActiveEMRConnection
+from app.db import openemr_cursor, raf_cursor, NoActiveEMRConnection
 from app.services.circuit_breaker import openemr_breaker
 
 logger = logging.getLogger(__name__)
@@ -1046,7 +1046,15 @@ def get_clinical_notes(encounter_id: int, tenant_id: str = "") -> list[dict[str,
 
 @_empty_on_no_emr()
 def get_all_clinical_notes_for_patient(pid: int) -> list[dict[str, Any]]:
-    """Return all clinical notes across all encounters for a patient."""
+    """Return all clinical notes across all encounters for a patient.
+
+    Sources:
+      * OpenEMR ``form_soap`` (local EMR) — original path.
+      * ``raf_intelligence.clinical_notes`` — notes ingested from external
+        sources (e.g. FHIR, direct messaging, chart chase). This table may
+        not yet exist if the migration hasn't run; we treat its absence as
+        an empty result rather than raising.
+    """
     sql = """
         SELECT
             fs.id,
@@ -1068,7 +1076,39 @@ def get_all_clinical_notes_for_patient(pid: int) -> list[dict[str, Any]]:
     with openemr_cursor() as cur:
         cur.execute(sql, (pid,))
         rows = cur.fetchall()
-    return [_serialize(r) for r in rows]
+    notes = [_serialize(r) for r in rows]
+
+    # Also pull notes stored in the RAF Intelligence clinical_notes table
+    # (external / ingested notes). Map to the same dict shape callers expect.
+    cn_sql = """
+        SELECT
+            id,
+            patient_id AS pid,
+            encounter_id AS encounter,
+            note_date AS date,
+            note_type,
+            text AS note_text
+        FROM clinical_notes
+        WHERE patient_id = %s
+        ORDER BY note_date DESC
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(cn_sql, (pid,))
+            cn_rows = cur.fetchall()
+        notes.extend(_serialize(r) for r in cn_rows)
+    except Exception as exc:
+        # Table may not exist yet (migration hasn't run). Stay safe.
+        logger.warning(
+            "get_all_clinical_notes_for_patient: clinical_notes query failed "
+            "for pid=%s (table may not exist yet): %s",
+            pid, exc,
+        )
+
+    # Merge and sort by date DESC. Some rows may have a None date; push
+    # those to the end so real dates dominate the ordering.
+    notes.sort(key=lambda n: (n.get("date") or ""), reverse=True)
+    return notes
 
 
 # ---------------------------------------------------------------------------
