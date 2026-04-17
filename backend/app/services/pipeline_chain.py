@@ -79,6 +79,8 @@ from typing import Any
 
 import mysql.connector
 
+from app.services import raf_inbox
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -682,6 +684,25 @@ def _handle_normalization_completed(payload: dict[str, Any]) -> None:
         run_id or "none",
     )
 
+    if raf_inbox.is_enabled():
+        # New path: enqueue per-patient dirty markers; the async worker
+        # (task_drain_raf_inbox, Beat-scheduled every 15s) runs the actual calc.
+        _update_run(run_id, current_step="raf_calculation_enqueued", status="running")
+        pids_to_mark = [int(p) for p in patient_ids] if patient_ids else _discover_tenant_patients(tenant_id)
+        inserted = raf_inbox.mark_many_dirty(pids_to_mark, tenant_id=tenant_id, reason="sync")
+        logger.info(
+            "pipeline_chain: enqueued %d/%d patients to RAF inbox [tenant=%s]",
+            inserted, len(pids_to_mark), tenant_id,
+        )
+        # Still emit raf_calculation_completed so downstream phases (suspects, gaps) run.
+        _handle_raf_calculation_completed({
+            "tenant_id": tenant_id,
+            "pipeline_run_id": run_id,
+            "inbox_enqueued": inserted,
+        })
+        return
+
+    # Legacy path (RAF_INBOX_ENABLED=false): synchronous recalculation.
     _update_run(run_id, current_step="raf_calculation", status="running")
 
     try:
@@ -1014,6 +1035,27 @@ def _handle_analysis_completed(payload: dict[str, Any]) -> None:
         )
 
     run_id: int = payload.get("pipeline_run_id") or _pop_run_id(tenant_id) or 0
+    patient_ids: list = payload.get("patient_ids") or []
+
+    if raf_inbox.is_enabled():
+        # New path: enqueue per-patient dirty markers; the async worker
+        # (task_drain_raf_inbox, Beat-scheduled every 15s) runs the actual calc.
+        _update_run(run_id, current_step="raf_calculation_enqueued", status="running")
+        pids_to_mark = [int(p) for p in patient_ids] if patient_ids else _discover_tenant_patients(tenant_id)
+        inserted = raf_inbox.mark_many_dirty(pids_to_mark, tenant_id=tenant_id, reason="analysis")
+        logger.info(
+            "pipeline_chain: enqueued %d/%d patients to RAF inbox [tenant=%s]",
+            inserted, len(pids_to_mark), tenant_id,
+        )
+        # Still emit raf_calculation_completed so downstream phases (suspects, gaps) run.
+        _handle_raf_calculation_completed({
+            "tenant_id": tenant_id,
+            "pipeline_run_id": run_id,
+            "inbox_enqueued": inserted,
+        })
+        return
+
+    # Legacy path (RAF_INBOX_ENABLED=false): synchronous recalculation.
     _update_run(run_id, current_step="raf_calculation", status="running")
 
     results: list = []
@@ -1386,6 +1428,18 @@ def _parse_run_row(row: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Stale run cleanup
 # ---------------------------------------------------------------------------
+
+
+def _discover_tenant_patients(tenant_id: str) -> list[int]:
+    """Return all patient IDs for a tenant from raf.patients (lightweight fallback)."""
+    from app.db import raf_cursor
+
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT id FROM patients WHERE tenant_id = %s",
+            (tenant_id,),
+        )
+        return [row[0] for row in cur.fetchall()]
 
 
 def cleanup_stale_runs() -> int:

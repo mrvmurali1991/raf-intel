@@ -65,6 +65,9 @@ from celery.utils.log import get_task_logger
 # ---------------------------------------------------------------------------
 # Single Celery application — imported from job_service, NOT re-created here.
 # ---------------------------------------------------------------------------
+from app.services import raf_inbox
+from app.services.raf.calculator import calculate_raf_score
+
 from app.services.job_service import (  # noqa: F401  (re-export for Beat)
     celery_app,
     _mark_started,
@@ -191,7 +194,63 @@ celery_app.conf.beat_schedule = {
         "schedule": 1800.0,
         "options": {"queue": "default"},
     },
+    # Drain the RAF recompute inbox every 15 seconds.
+    "drain-raf-inbox-every-15s": {
+        "task": "raf.drain_raf_inbox",
+        "schedule": 15.0,
+        "options": {"queue": "default"},
+    },
 }
+
+
+# ---------------------------------------------------------------------------
+# Task: drain the RAF recompute inbox
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.drain_raf_inbox",
+    queue="default",
+    max_retries=3,
+    default_retry_delay=10,
+)
+def task_drain_raf_inbox(self) -> dict[str, Any]:
+    """Drain the raf_recompute_pending inbox, recalculating RAF scores."""
+    if not raf_inbox.is_enabled():
+        task_logger.info("drain_raf_inbox: feature disabled, skipping")
+        return {"drained": 0, "skipped": 1}
+
+    drained = 0
+    errored = 0
+    max_rows = 200
+
+    while drained + errored < max_rows:
+        row = raf_inbox.claim_next()
+        if row is None:
+            break
+        try:
+            result = calculate_raf_score(patient_id=row["pid"], tenant_id=row["tenant_id"])
+            raf_inbox.mark_done(row["id"])
+            drained += 1
+            try:
+                from app.services.realtime_service import publish_raf_updated_sync
+                publish_raf_updated_sync(
+                    pid=row["pid"],
+                    tenant_id=row["tenant_id"],
+                    raf_score=result.get("final_raf"),
+                )
+            except (ImportError, AttributeError) as pub_exc:
+                task_logger.info("drain_raf_inbox: publish skipped: %s", pub_exc)
+            except Exception as pub_exc:
+                task_logger.warning("drain_raf_inbox: publish failed (non-fatal): %s", pub_exc)
+        except Exception as exc:
+            raf_inbox.mark_failed(row["id"], repr(exc))
+            errored += 1
+            task_logger.warning("drain_raf_inbox: row %d failed: %s", row["id"], exc)
+
+    task_logger.info("drain_raf_inbox: drained=%d errored=%d", drained, errored)
+    return {"drained": drained, "errored": errored, "skipped": 0}
 
 
 # ---------------------------------------------------------------------------

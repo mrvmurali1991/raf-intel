@@ -18,8 +18,32 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import api, { API_BASE } from "@/lib/api";
 import logger from "@/lib/logger";
+
+// ---------------------------------------------------------------------------
+// RAF score silent-refresh event type
+// ---------------------------------------------------------------------------
+
+type RafUpdatedEvent = {
+  type: "raf_updated";
+  pid: number;
+  tenant_id: string;
+  raf_score: number | null;
+  ts: string;
+};
+
+function isRafUpdatedEvent(v: unknown): v is RafUpdatedEvent {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    o.type === "raf_updated" &&
+    typeof o.pid === "number" &&
+    typeof o.tenant_id === "string" &&
+    typeof o.ts === "string"
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -205,6 +229,7 @@ interface NotificationCenterProps {
 
 export function NotificationCenter({ collapsed = false }: NotificationCenterProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -261,6 +286,30 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
         es.onmessage = (e) => {
           try {
             const payload = JSON.parse(e.data);
+
+            // ---------------------------------------------------------------
+            // raf_updated — silent cache invalidation, no toast
+            // ---------------------------------------------------------------
+            if (isRafUpdatedEvent(payload)) {
+              const pid = payload.pid;
+              logger.info("NotificationCenter", "raf_updated: invalidating caches", { pid });
+
+              queryClient.invalidateQueries({
+                predicate: (q) =>
+                  Array.isArray(q.queryKey) &&
+                  q.queryKey[0] === "raf-breakdown" &&
+                  String(q.queryKey[1]) === String(pid),
+              });
+              queryClient.invalidateQueries({ queryKey: ["raf-history", pid] });
+              queryClient.invalidateQueries({ queryKey: ["patient-profile", pid] });
+              queryClient.invalidateQueries({ queryKey: ["patient", pid] });
+              queryClient.invalidateQueries({ queryKey: ["model-comparison", pid] });
+              return; // do NOT show a toast for this event type
+            }
+
+            // ---------------------------------------------------------------
+            // All other events — push to notification UI (toast/bell)
+            // ---------------------------------------------------------------
             if (payload?.type || payload?.title) {
               // Push to UI queue immediately on receive
               setNotifications(prev => {

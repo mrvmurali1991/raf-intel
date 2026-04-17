@@ -404,6 +404,12 @@ def analyze_encounter(
         result["encounter_date"] = encounter.get("date", _date.today().isoformat())
         _svc_save_encounter_analysis(encounter_id, pid, result)
 
+    try:
+        from app.services import raf_inbox
+        raf_inbox.mark_dirty(pid=int(pid), tenant_id=tenant_id, reason="analysis")
+    except Exception:
+        logger.debug("raf_inbox.mark_dirty failed — non-fatal", exc_info=True)
+
     log_phi_access(
         action="analyze",
         resource="encounter",
@@ -831,6 +837,12 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
             result_json=_json.dumps({"results": results}),
             finished_at=datetime.now(timezone.utc),
         )
+
+        try:
+            from app.services import raf_inbox
+            raf_inbox.mark_dirty(pid=int(pid), tenant_id=tenant_id, reason="analysis")
+        except Exception:
+            logger.debug("raf_inbox.mark_dirty failed — non-fatal", exc_info=True)
 
     except Exception as exc:
         _upsert_job(

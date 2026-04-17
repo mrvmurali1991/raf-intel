@@ -1108,6 +1108,11 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
 
         if not row:
             raise ValueError(f"Suspect {suspect_id} not found")
+        try:
+            from app.services import raf_inbox
+            raf_inbox.mark_dirty(pid=int(_pid), tenant_id=_tenant, reason="suspect")
+        except Exception:
+            logger.debug("raf_inbox.mark_dirty failed — non-fatal", exc_info=True)
         logger.info("Suspect %s accepted by %s", suspect_id, reviewed_by)
         return _serialize_suspect(row)
     except Exception as exc:
@@ -1148,6 +1153,11 @@ def dismiss_suspect(
             row = cur.fetchone()
         if not row:
             raise ValueError(f"Suspect {suspect_id} not found")
+        try:
+            from app.services import raf_inbox
+            raf_inbox.mark_dirty(pid=int(row["patient_id"]), tenant_id=tenant_id, reason="suspect")
+        except Exception:
+            logger.debug("raf_inbox.mark_dirty failed — non-fatal", exc_info=True)
         logger.info("Suspect %s dismissed by %s: %s", suspect_id, reviewed_by, reason)
         return _serialize_suspect(row)
     except Exception as exc:

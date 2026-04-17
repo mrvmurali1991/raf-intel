@@ -812,3 +812,67 @@ def emit_event(
         "realtime: emit_event type=%s tenant=%s user=%s alert_id=%s",
         event_type, tenant_id, user_id, alert_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# RAF score publish helpers — called by the RAF inbox worker
+# ---------------------------------------------------------------------------
+
+async def publish_raf_updated(
+    pid: int,
+    tenant_id: str,
+    raf_score: float | None,
+) -> None:
+    """
+    Push a ``raf_updated`` event to every SSE client in the given tenant.
+
+    The frontend receives the event for all users of the tenant and filters
+    by ``pid`` client-side.  Never raises — errors are logged and swallowed.
+    """
+    event: dict[str, Any] = {
+        "type": "raf_updated",
+        "pid": int(pid),
+        "tenant_id": str(tenant_id),
+        "raf_score": float(raf_score) if raf_score is not None else None,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await connection_manager.broadcast(event, str(tenant_id))
+        logger.debug(
+            "realtime: publish_raf_updated pid=%s tenant=%s raf_score=%s",
+            pid, tenant_id, raf_score,
+        )
+    except Exception as exc:
+        logger.error(
+            "realtime: publish_raf_updated failed pid=%s tenant=%s: %s",
+            pid, tenant_id, exc,
+        )
+
+
+def publish_raf_updated_sync(
+    pid: int,
+    tenant_id: str,
+    raf_score: float | None,
+) -> None:
+    """
+    Synchronous shim for ``publish_raf_updated``.
+
+    Schedules the coroutine onto the running event loop (Celery worker
+    thread-pool context) or falls back to ``asyncio.run`` when no loop
+    is running.  Never raises.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        asyncio.run_coroutine_threadsafe(
+            publish_raf_updated(pid, tenant_id, raf_score),
+            loop,
+        )
+    except RuntimeError:
+        # No running loop — e.g. standalone Celery worker process
+        try:
+            asyncio.run(publish_raf_updated(pid, tenant_id, raf_score))
+        except Exception as exc:
+            logger.error(
+                "realtime: publish_raf_updated_sync asyncio.run failed pid=%s tenant=%s: %s",
+                pid, tenant_id, exc,
+            )

@@ -165,6 +165,7 @@ def sync_encounters(tenant_id: str, connection_id: int) -> dict:
     creds = _get_emr_connection_creds(connection_id)
 
     synced = skipped = errors = 0
+    affected_pids: set[int] = set()
 
     with dynamic_db_cursor(
         host=creds["host"],
@@ -229,6 +230,7 @@ def sync_encounters(tenant_id: str, connection_id: int) -> dict:
                         row["facility"],
                     ),
                 )
+                affected_pids.add(patient_id)
                 synced += 1
             except Exception as exc:
                 logger.error(
@@ -242,6 +244,14 @@ def sync_encounters(tenant_id: str, connection_id: int) -> dict:
         "sync_encounters [tenant=%s connection_id=%s]: synced=%d skipped=%d errors=%d",
         tenant_id, connection_id, synced, skipped, errors,
     )
+
+    if affected_pids and tenant_id:
+        try:
+            from app.services import raf_inbox
+            raf_inbox.mark_many_dirty(list(affected_pids), tenant_id=tenant_id, reason="sync")
+        except Exception:
+            logger.debug("raf_inbox.mark_many_dirty failed — non-fatal", exc_info=True)
+
     return {"synced": synced, "skipped": skipped, "errors": errors}
 
 
@@ -293,6 +303,7 @@ def sync_diagnoses(tenant_id: str, connection_id: int) -> dict:
     }
 
     synced = skipped = errors = 0
+    affected_pids: set[int] = set()
 
     with dynamic_db_cursor(
         host=creds["host"],
@@ -394,6 +405,7 @@ def sync_diagnoses(tenant_id: str, connection_id: int) -> dict:
                         hcc_info.get("model_version"),
                     ),
                 )
+                affected_pids.add(patient_id)
                 synced += 1
             except Exception as exc:
                 logger.error(
@@ -410,6 +422,13 @@ def sync_diagnoses(tenant_id: str, connection_id: int) -> dict:
     # NOTE: normalization_completed is handled by pipeline_chain._do_normalization
     # calling _handle_normalization_completed directly. No event emit needed here
     # — emitting caused duplicate Gemini dispatches (3x API cost).
+
+    if affected_pids and tenant_id:
+        try:
+            from app.services import raf_inbox
+            raf_inbox.mark_many_dirty(list(affected_pids), tenant_id=tenant_id, reason="sync")
+        except Exception:
+            logger.debug("raf_inbox.mark_many_dirty failed — non-fatal", exc_info=True)
 
     return {"synced": synced, "skipped": skipped, "errors": errors}
 
