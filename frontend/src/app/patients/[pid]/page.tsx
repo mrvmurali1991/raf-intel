@@ -23,7 +23,7 @@ import {
   getPatientSdoh,
   getPatientMedicationGaps,
   getAuditPackages,
-  calculateRAF,
+  markRafDirty,
   generateAudit,
   acceptSuspect,
   dismissSuspect,
@@ -216,18 +216,20 @@ export default function PatientDetailPage({
   });
 
   // ---- Mutations ----
-  const [lastCalcResult, setLastCalcResult] = useState<{ raf_score: number } | null>(null);
+  // Previously populated from the sync /calculate/{pid} response; now null
+  // since RAF recomputes go through the async inbox and update via SSE
+  // (NotificationCenter invalidates raf-breakdown on `raf_updated`).
+  const lastCalcResult: { raf_score: number } | null = null;
 
   const calcRAFMutation = useMutation({
-    mutationFn: () => calculateRAF(pid, { year: selectedYear }),
-    onSuccess: (data) => {
-      setLastCalcResult(data);
-      toast.success("RAF Calculated", `Score recalculated for ${selectedYear}.`);
-      queryClient.invalidateQueries({ queryKey: ["raf-breakdown", pid, selectedYear] });
-      queryClient.invalidateQueries({ queryKey: ["raf-history", pid] });
-      queryClient.invalidateQueries({ queryKey: ["patient-profile", pid] });
+    mutationFn: () => markRafDirty(pid),
+    onSuccess: () => {
+      // Async path: worker drains the inbox within ~15 s and publishes a
+      // `raf_updated` SSE event. NotificationCenter invalidates the RAF
+      // caches on receipt, so we don't need to refetch here.
+      toast.info("Recalculating…", "New RAF score will appear in a few seconds.");
     },
-    onError: () => toast.error("Error", "Failed to calculate RAF score."),
+    onError: () => toast.error("Error", "Failed to enqueue RAF recompute."),
   });
 
   const auditMutation = useMutation({
@@ -268,18 +270,17 @@ export default function PatientDetailPage({
       setLastAnalysisResult((prev) => ({ ...prev, [encId]: data }));
       toast.success(
         "Analysis Complete",
-        `Found ${dxCount} diagnoses, ${hccCnt} HCC codes. Recalculating RAF...`
+        `Found ${dxCount} diagnoses, ${hccCnt} HCC codes. Recalculating RAF…`
       );
+      // Async RAF recompute via inbox — SSE `raf_updated` will refresh the
+      // RAF caches once the worker finishes.
       try {
-        await calculateRAF(pid, { year: selectedYear });
-      } catch { /* ignore */ }
+        await markRafDirty(pid);
+      } catch { /* non-fatal; analyze_encounter also marks dirty server-side */ }
+      // Analysis-driven caches that SSE does not cover:
       queryClient.invalidateQueries({ queryKey: ["patient-encounters", pid] });
       queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });
       queryClient.invalidateQueries({ queryKey: ["patient-problems", pid, selectedYear] });
-      queryClient.invalidateQueries({ queryKey: ["raf-breakdown", pid, selectedYear] });
-      queryClient.invalidateQueries({ queryKey: ["raf-history", pid] });
-      queryClient.invalidateQueries({ queryKey: ["patient-profile", pid] });
-      queryClient.invalidateQueries({ queryKey: ["model-comparison", pid, selectedYear] });
     },
     onError: (e: ApiError) =>
       toast.error(
@@ -324,21 +325,16 @@ export default function PatientDetailPage({
             setBatchStatus(null);
             toast.success(
               "Batch Complete",
-              `Analyzed ${status.processed ?? (status as unknown as { progress?: number }).progress ?? 0} encounters. Recalculating RAF score...`
+              `Analyzed ${status.processed ?? (status as unknown as { progress?: number }).progress ?? 0} encounters. Recalculating RAF score…`
             );
+            // Async RAF recompute via inbox — SSE updates the RAF caches.
             try {
-              await calculateRAF(pid, { year: selectedYear });
-              toast.success("RAF Updated", "RAF score has been recalculated with new analysis results.");
-            } catch {
-              toast.info("Note", "Analysis complete. Click 'Calculate RAF' to update the score.");
-            }
+              await markRafDirty(pid);
+            } catch { /* non-fatal */ }
+            // Analysis-driven caches that SSE does not cover:
             queryClient.invalidateQueries({ queryKey: ["patient-encounters", pid] });
             queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });
             queryClient.invalidateQueries({ queryKey: ["patient-problems", pid, selectedYear] });
-            queryClient.invalidateQueries({ queryKey: ["raf-breakdown", pid, selectedYear] });
-            queryClient.invalidateQueries({ queryKey: ["raf-history", pid] });
-            queryClient.invalidateQueries({ queryKey: ["patient-profile", pid] });
-            queryClient.invalidateQueries({ queryKey: ["model-comparison", pid, selectedYear] });
           } else if (status.status === "failed" || (status.status as string) === "FAILED") {
             clearInterval(pollRef.current!);
             pollRef.current = null;

@@ -268,6 +268,54 @@ async def calculate_raf(
 
 
 # ---------------------------------------------------------------------------
+# POST /recompute/{pid} — async inbox enqueue (user-facing wrapper)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/recompute/{pid}", summary="Enqueue async RAF recompute for a patient")
+@limiter.limit("30/minute")
+async def recompute_raf(
+    request: Request,
+    pid: int,
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("raf_scores", "write")),
+) -> dict[str, bool]:
+    """
+    Enqueue an async RAF recompute for *pid* via the inbox pipeline.
+
+    The Celery worker drains ``raf_recompute_pending`` every 15 s (see
+    ``task_drain_raf_inbox``), runs ``calculate_raf_score``, and publishes a
+    ``raf_updated`` SSE event over Redis pub/sub. Clients should listen for
+    that event (NotificationCenter) and invalidate their caches, rather than
+    blocking on the synchronous ``/calculate/{pid}`` endpoint.
+
+    Multiple rapid clicks on the same patient coalesce into a single
+    recompute thanks to the ``(pid, tenant_id, status='pending')`` unique
+    constraint in the inbox.
+    """
+    from app.services import raf_inbox  # local import to keep module load-time lean
+
+    patient = await run_in_db_executor(_get_patient, pid, tenant_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+
+    enqueued = raf_inbox.mark_dirty(
+        pid=pid,
+        tenant_id=str(tenant_id),
+        reason="manual",
+    )
+    logger.info(
+        "recompute_raf enqueued pid=%s tenant=%s user=%s enqueued=%s",
+        pid,
+        tenant_id,
+        current_user.get("id"),
+        enqueued,
+    )
+    return {"enqueued": enqueued}
+
+
+# ---------------------------------------------------------------------------
 # POST /calculate-all
 # ---------------------------------------------------------------------------
 

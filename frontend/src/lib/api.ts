@@ -1019,6 +1019,23 @@ export async function calculateRaf(
 /** @alias calculateRaf — kept for callers using the old name */
 export const calculateRAF = calculateRaf;
 
+/**
+ * Enqueue an async RAF recompute via the inbox pipeline.
+ *
+ * Returns immediately after the patient is marked dirty; the actual
+ * recompute runs on the Celery worker within ~15 s and pushes a
+ * ``raf_updated`` SSE event. Listeners (NotificationCenter) invalidate
+ * React Query caches on receipt, so callers typically do not need to
+ * manually refetch after this call — just show a lightweight
+ * "Recalculating…" toast and let SSE drive the UI.
+ */
+export async function markRafDirty(
+  pid: string | number
+): Promise<{ enqueued: boolean }> {
+  const { data } = await api.post(`/api/raf/recompute/${pid}`);
+  return data;
+}
+
 export async function calculateAllRAF(): Promise<{ job_id?: string; status?: string; patients_calculated?: number }> {
   const { data } = await api.post("/api/raf/calculate-all");
   return data;
