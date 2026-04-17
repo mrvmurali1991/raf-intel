@@ -216,21 +216,10 @@ export default function PatientDetailPage({
   });
 
   // ---- Mutations ----
-  // Previously populated from the sync /calculate/{pid} response; now null
-  // since RAF recomputes go through the async inbox and update via SSE
-  // (NotificationCenter invalidates raf-breakdown on `raf_updated`).
+  // RAF score is now async; breakdown query is the source of truth.
+  // The old `lastCalcResult` (filled from sync /calculate response) is
+  // retired — RAFTab falls back to `breakdown` when this is null.
   const lastCalcResult: { raf_score: number } | null = null;
-
-  const calcRAFMutation = useMutation({
-    mutationFn: () => markRafDirty(pid),
-    onSuccess: () => {
-      // Async path: worker drains the inbox within ~15 s and publishes a
-      // `raf_updated` SSE event. NotificationCenter invalidates the RAF
-      // caches on receipt, so we don't need to refetch here.
-      toast.info("Recalculating…", "New RAF score will appear in a few seconds.");
-    },
-    onError: () => toast.error("Error", "Failed to enqueue RAF recompute."),
-  });
 
   const auditMutation = useMutation({
     mutationFn: (year?: number) => generateAudit(Number(pid), { year: year ?? selectedYear }),
@@ -589,21 +578,6 @@ export default function PatientDetailPage({
               >
                 {(batchMutation.isPending || batchStatus === "running") && <Spinner size={14} />}
                 {batchStatus === "running" ? "Analyzing..." : "Analyze All Encounters"}
-              </button>
-              <button
-                onClick={() => calcRAFMutation.mutate()}
-                disabled={calcRAFMutation.isPending}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "8px 16px", borderRadius: 8,
-                  border: `1px solid ${C.slate200}`, background: C.white,
-                  color: C.slate700, fontSize: 13, fontWeight: 600,
-                  cursor: calcRAFMutation.isPending ? "not-allowed" : "pointer",
-                  opacity: calcRAFMutation.isPending ? 0.6 : 1,
-                }}
-              >
-                {calcRAFMutation.isPending && <Spinner size={14} />}
-                Calculate RAF
               </button>
               <button
                 onClick={() => auditMutation.mutate(selectedYear)}

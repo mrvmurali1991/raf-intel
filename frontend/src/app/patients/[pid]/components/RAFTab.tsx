@@ -428,7 +428,7 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
 
           {!hasEngineData && (
             <div style={{ padding: "10px 14px", borderRadius: 8, background: C.amber50, border: `1px solid ${C.amber100}`, fontSize: 11, color: C.amber600, marginBottom: 16 }}>
-              Click <strong>Calculate RAF</strong> to see the exact data sent to and received from the calculation engine.
+              Engine input/output appears after the next RAF recompute. Analyze an encounter or sync EMR to trigger one — the score updates automatically.
             </div>
           )}
 
