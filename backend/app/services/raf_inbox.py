@@ -220,6 +220,55 @@ def mark_failed(row_id: int, error: str) -> None:
         logger.exception("raf_inbox.mark_failed failed id=%s: %s", row_id, exc)
 
 
+def reap_stale_processing(stale_seconds: int | None = None) -> int:
+    """Recover rows stuck in ``processing`` after a worker crash.
+
+    The unique key ``(pid, tenant_id, status)`` means a single orphaned
+    processing row blocks every future recompute for that patient with
+    ``Duplicate entry '...-processing'``. We resolve it by deleting stale
+    rows outright — the pending row (if any) for the same patient then
+    claims cleanly on the next tick.
+
+    ``stale_seconds`` defaults to ``RAF_INBOX_STALE_SECONDS`` (300s / 5 min).
+    Returns the number of rows reaped.
+    """
+    if stale_seconds is None:
+        try:
+            stale_seconds = int(os.getenv("RAF_INBOX_STALE_SECONDS", "300"))
+        except ValueError:
+            stale_seconds = 300
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, pid, tenant_id, attempts, "
+                "TIMESTAMPDIFF(SECOND, claimed_at, NOW()) AS age_s "
+                "FROM raf_recompute_pending "
+                "WHERE status = 'processing' "
+                "AND claimed_at < NOW() - INTERVAL %s SECOND",
+                (int(stale_seconds),),
+            )
+            stale = cur.fetchall() or []
+            if not stale:
+                return 0
+            for row in stale:
+                logger.warning(
+                    "raf_inbox: reaping stale processing row id=%s pid=%s "
+                    "tenant=%s attempts=%s age=%ss",
+                    row.get("id"), row.get("pid"), row.get("tenant_id"),
+                    row.get("attempts"), row.get("age_s"),
+                )
+            ids = [int(r["id"]) for r in stale]
+            placeholders = ",".join(["%s"] * len(ids))
+            cur.execute(
+                f"DELETE FROM raf_recompute_pending WHERE id IN ({placeholders})",
+                ids,
+            )
+            return len(ids)
+    except Exception as exc:
+        logger.exception("raf_inbox.reap_stale_processing failed: %s", exc)
+        return 0
+
+
 def requeue_failed(tenant_id: str | None = None, max_rows: int = 100) -> int:
     """
     Move failed rows back to pending so the worker retries them.
@@ -304,6 +353,7 @@ __all__ = [
     "claim_next",
     "mark_done",
     "mark_failed",
+    "reap_stale_processing",
     "requeue_failed",
     "get_stats",
 ]

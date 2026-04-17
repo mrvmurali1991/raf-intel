@@ -221,6 +221,12 @@ def task_drain_raf_inbox(self) -> dict[str, Any]:
         task_logger.info("drain_raf_inbox: feature disabled, skipping")
         return {"drained": 0, "skipped": 1}
 
+    # Reap orphaned processing rows (worker crashed mid-flight). Runs every
+    # tick — cheap when there's nothing stale, unblocks the queue otherwise.
+    reaped = raf_inbox.reap_stale_processing()
+    if reaped:
+        task_logger.warning("drain_raf_inbox: reaped %d stale processing rows", reaped)
+
     drained = 0
     errored = 0
     max_rows = 200
@@ -249,8 +255,11 @@ def task_drain_raf_inbox(self) -> dict[str, Any]:
             errored += 1
             task_logger.warning("drain_raf_inbox: row %d failed: %s", row["id"], exc)
 
-    task_logger.info("drain_raf_inbox: drained=%d errored=%d", drained, errored)
-    return {"drained": drained, "errored": errored, "skipped": 0}
+    task_logger.info(
+        "drain_raf_inbox: drained=%d errored=%d reaped=%d",
+        drained, errored, reaped,
+    )
+    return {"drained": drained, "errored": errored, "reaped": reaped, "skipped": 0}
 
 
 # ---------------------------------------------------------------------------
