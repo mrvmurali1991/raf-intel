@@ -818,27 +818,32 @@ def emit_event(
 # RAF score publish helpers — called by the RAF inbox worker
 # ---------------------------------------------------------------------------
 
-async def publish_raf_updated(
-    pid: int,
-    tenant_id: str,
-    raf_score: float | None,
-) -> None:
-    """
-    Push a ``raf_updated`` event to every SSE client in the given tenant.
-
-    The frontend receives the event for all users of the tenant and filters
-    by ``pid`` client-side.  Never raises — errors are logged and swallowed.
-    """
-    event: dict[str, Any] = {
+def _build_raf_updated_event(
+    pid: int, tenant_id: str, raf_score: float | None
+) -> dict[str, Any]:
+    return {
         "type": "raf_updated",
         "pid": int(pid),
         "tenant_id": str(tenant_id),
         "raf_score": float(raf_score) if raf_score is not None else None,
         "ts": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def publish_raf_updated(
+    pid: int,
+    tenant_id: str,
+    raf_score: float | None,
+) -> None:
+    """
+    Push a ``raf_updated`` event to every SSE client in the given tenant
+    (backend-side, async context). Uses the in-process ConnectionManager
+    which itself routes through Redis pub/sub when configured.
+    """
+    event = _build_raf_updated_event(pid, tenant_id, raf_score)
     try:
         await connection_manager.broadcast(event, str(tenant_id))
-        logger.debug(
+        logger.info(
             "realtime: publish_raf_updated pid=%s tenant=%s raf_score=%s",
             pid, tenant_id, raf_score,
         )
@@ -855,24 +860,31 @@ def publish_raf_updated_sync(
     raf_score: float | None,
 ) -> None:
     """
-    Synchronous shim for ``publish_raf_updated``.
+    Publish a ``raf_updated`` event from a worker process (no event loop,
+    no local SSE clients). Writes the event to the same Redis pub/sub
+    channel that the backend's ConnectionManager subscribes to, so the
+    event fans out to all SSE clients attached to the backend processes.
 
-    Schedules the coroutine onto the running event loop (Celery worker
-    thread-pool context) or falls back to ``asyncio.run`` when no loop
-    is running.  Never raises.
+    Never raises — errors are logged and swallowed.
     """
+    import json as _json
+    import redis as _redis
+
+    event = _build_raf_updated_event(pid, tenant_id, raf_score)
+    payload = {
+        "event": event,
+        "tenant_id": str(tenant_id),
+        "user_id": None,
+    }
     try:
-        loop = asyncio.get_running_loop()
-        asyncio.run_coroutine_threadsafe(
-            publish_raf_updated(pid, tenant_id, raf_score),
-            loop,
+        client = _redis.from_url(settings.redis_url, decode_responses=True)
+        client.publish(connection_manager._redis_channel, _json.dumps(payload))
+        logger.info(
+            "realtime: publish_raf_updated_sync pid=%s tenant=%s raf_score=%s (redis)",
+            pid, tenant_id, raf_score,
         )
-    except RuntimeError:
-        # No running loop — e.g. standalone Celery worker process
-        try:
-            asyncio.run(publish_raf_updated(pid, tenant_id, raf_score))
-        except Exception as exc:
-            logger.error(
-                "realtime: publish_raf_updated_sync asyncio.run failed pid=%s tenant=%s: %s",
-                pid, tenant_id, exc,
-            )
+    except Exception as exc:
+        logger.error(
+            "realtime: publish_raf_updated_sync failed pid=%s tenant=%s: %s",
+            pid, tenant_id, exc,
+        )

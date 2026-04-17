@@ -38,7 +38,7 @@ import sqlalchemy as sa
 
 
 revision: str = "018_raf_recompute_inbox"
-down_revision: Union[str, None] = "017_ai_pipeline_tables"
+down_revision: Union[str, None] = "2431d3f065b7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
