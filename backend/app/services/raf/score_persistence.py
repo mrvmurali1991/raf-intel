@@ -95,15 +95,25 @@ def _store_patient_hccs(
             except Exception:
                 pass  # Column already exists
 
-            # Only delete existing HCC rows if we have new ones to insert.
-            # FHIR patients get HCC rows from the condition sync — the RAF
-            # calculator may find icd_codes=[] (no encounters table data) and
-            # we must NOT wipe those FHIR-sourced HCCs.
+            # Prune only HCCs that are no longer present in the new hcc_list.
+            # Preserving row IDs for still-valid HCCs is critical: raf_meat_evidence
+            # has FK patient_hcc_id → raf_patient_hcc(id) ON DELETE CASCADE, so a
+            # wholesale DELETE+INSERT would wipe all MEAT evidence on every recompute.
+            # The UNIQUE KEY uq_patient_hcc_year (patient_id, hcc_code, measurement_year)
+            # combined with ON DUPLICATE KEY UPDATE below handles the upsert for
+            # still-valid HCCs without touching their row IDs.
             if hcc_list:
-                cur.execute(
-                    "DELETE FROM raf_patient_hcc WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s",
-                    (patient_id, year, tenant_id),
-                )
+                new_hcc_ints = [
+                    int(str(h)) for h in hcc_list if str(h).isdigit()
+                ]
+                if new_hcc_ints:
+                    placeholders = ",".join(["%s"] * len(new_hcc_ints))
+                    cur.execute(
+                        f"DELETE FROM raf_patient_hcc "
+                        f"WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s "
+                        f"AND hcc_code NOT IN ({placeholders})",
+                        (patient_id, year, tenant_id, *new_hcc_ints),
+                    )
             for hcc in hcc_list:
                 hcc_str = str(hcc)
                 hcc_int = int(hcc_str) if hcc_str.isdigit() else 0
