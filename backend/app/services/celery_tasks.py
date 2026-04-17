@@ -238,7 +238,7 @@ def task_drain_raf_inbox(self) -> dict[str, Any]:
                 publish_raf_updated_sync(
                     pid=row["pid"],
                     tenant_id=row["tenant_id"],
-                    raf_score=result.get("final_raf"),
+                    raf_score=result.get("payment_raf") or result.get("raf_score"),
                 )
             except (ImportError, AttributeError) as pub_exc:
                 task_logger.info("drain_raf_inbox: publish skipped: %s", pub_exc)
