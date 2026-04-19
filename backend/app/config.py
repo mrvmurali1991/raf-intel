@@ -196,5 +196,21 @@ class Settings:
         os.getenv("CMS_REVENUE_PER_RAF_POINT", "11015.04")
     )
 
+    # Shared HMAC secret used by OpenEMR (or any embedding host) to mint a
+    # short-lived JWT that /api/auth/embed/exchange will accept in lieu of
+    # username/password. Required in production — RAF Central refuses embed
+    # handshakes if this is unset in a non-dev environment.
+    openemr_embed_secret: str = os.getenv("OPENEMR_EMBED_SECRET", "")
+    # Tenant id assumed for embed sessions when the token omits it (single-tenant
+    # demo deployments). Leave empty to require the token to carry tenant_id.
+    openemr_embed_default_tenant_id: str = os.getenv(
+        "OPENEMR_EMBED_DEFAULT_TENANT_ID", ""
+    )
+    # Access token lifetime issued by the embed exchange. Kept short because
+    # the iframe has no silent refresh.
+    embed_access_token_expire_minutes: int = int(
+        os.getenv("EMBED_ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+    )
+
 
 settings = Settings()

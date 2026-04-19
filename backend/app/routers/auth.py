@@ -40,9 +40,11 @@ from app.config import settings
 from app.db import raf_cursor
 from app.rate_limit import limiter
 from app.services.auth_service import (
+    authenticate_embed_token,
     authenticate_user,
     change_password,
     complete_mfa_login,
+    create_embed_token,
     create_user,
     deactivate_user,
     disable_mfa,
@@ -390,6 +392,118 @@ def refresh_token_endpoint(
             path="/",
         )
     return resp
+
+
+# ---------------------------------------------------------------------------
+# Embed handshake (OpenEMR iframe exchange)
+# ---------------------------------------------------------------------------
+
+
+class EmbedExchangeRequest(BaseModel):
+    embed_token: str = Field(..., min_length=16, max_length=4096)
+
+
+class EmbedMintRequest(BaseModel):
+    """Admin-only: mint an embed token for QA / demo harnesses."""
+    user_email: EmailStr
+    pid: int = Field(..., ge=1)
+    tenant_id: str | None = None
+    ttl_seconds: int = Field(default=300, ge=30, le=600)
+
+
+@router.post(
+    "/embed/exchange",
+    summary="Exchange an OpenEMR embed JWT for a RAF session",
+)
+@limiter.limit("30/minute")
+def embed_exchange(request: Request, body: EmbedExchangeRequest) -> JSONResponse:
+    """Validate a short-lived embed JWT (signed with OPENEMR_EMBED_SECRET)
+    and issue a scoped RAF access + refresh token pair.
+
+    Designed for the OpenEMR chart iframe: the host plugin mints a token
+    with the patient id + RAF user email, hands it to the iframe via URL,
+    and the iframe POSTs it here exactly once on load.
+    """
+    ip = _get_client_ip(request)
+    ua = request.headers.get("User-Agent", "")
+    try:
+        result = authenticate_embed_token(
+            embed_token=body.embed_token, ip_address=ip, user_agent=ua
+        )
+    except ValueError as exc:
+        log_audit(
+            action="embed_exchange_failed",
+            resource_type="auth",
+            ip_address=ip,
+            user_agent=ua,
+            request_method="POST",
+            request_path="/api/auth/embed/exchange",
+            response_status=401,
+            details={"reason": str(exc)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+        )
+
+    log_audit(
+        action="embed_exchange_success",
+        user_id=result["user"]["id"],
+        resource_type="auth",
+        ip_address=ip,
+        user_agent=ua,
+        request_method="POST",
+        request_path="/api/auth/embed/exchange",
+        response_status=200,
+        details={"embed_pid": result.get("embed_pid")},
+    )
+
+    refresh_token = result.pop("refresh_token", None)
+    resp = JSONResponse(content=result)
+    if refresh_token:
+        secure = settings.app_env != "development"
+        resp.set_cookie(
+            key="raf_refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=secure,
+            # Iframe embedding in a different origin (OpenEMR) needs SameSite=None
+            # to send the cookie on subsequent requests. Browsers require Secure
+            # with SameSite=None, which is correct for production (HTTPS only).
+            samesite="none" if secure else "lax",
+            max_age=_COOKIE_MAX_AGE,
+            path="/",
+        )
+    return resp
+
+
+@router.post(
+    "/embed/mint",
+    summary="Mint an embed token (admin/demo only)",
+)
+def embed_mint(
+    body: EmbedMintRequest,
+    current_user: dict = Depends(require_role("admin", "developer")),
+) -> dict[str, Any]:
+    """Issue an embed JWT for use by QA tooling or the demo PHP widget.
+
+    This is NOT the production path — real embedders mint tokens with the
+    shared secret on their side. It only exists so the RAF demo can show the
+    end-to-end flow without a live OpenEMR plugin wired up yet.
+    """
+    try:
+        token = create_embed_token(
+            user_email=body.user_email,
+            pid=body.pid,
+            tenant_id=body.tenant_id,
+            ttl_seconds=body.ttl_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {
+        "embed_token": token,
+        "expires_in": body.ttl_seconds,
+        "iframe_url": f"{settings.frontend_url}/embed/raf-central/{body.pid}?t={token}",
+    }
 
 
 # ---------------------------------------------------------------------------

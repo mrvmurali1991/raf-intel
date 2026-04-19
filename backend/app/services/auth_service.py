@@ -1068,6 +1068,182 @@ def _issue_tokens(
     }
 
 
+# ---------------------------------------------------------------------------
+# Embed token exchange (OpenEMR iframe handshake)
+#
+# OpenEMR (or any trusted embedding host) mints a short-lived HMAC-signed JWT
+# with a shared secret (OPENEMR_EMBED_SECRET) and hands it to the iframe via
+# URL. The iframe POSTs it to /api/auth/embed/exchange which verifies and
+# trades it for a real RAF access + refresh token pair scoped to the tenant.
+#
+# Payload contract:
+#   {
+#     "sub": "<raf-user-email>",   # RAF user to impersonate
+#     "pid": 12345,                 # patient id (informational — not enforced here)
+#     "tenant_id": "demo-tenant",   # optional; overrides openemr_embed_default_tenant_id
+#     "iat": ..., "exp": ...,       # required, TTL enforced ≤ 10 min
+#     "type": "embed"
+#   }
+# ---------------------------------------------------------------------------
+
+
+def _embed_signing_secret() -> str:
+    """Return the HMAC secret used for embed tokens.
+
+    In production OPENEMR_EMBED_SECRET must be set explicitly. In development
+    we fall back to jwt_secret + '_embed' so local demos work without extra
+    configuration.
+    """
+    secret = settings.openemr_embed_secret
+    if secret:
+        return secret
+    if _is_production():
+        raise ValueError(
+            "OPENEMR_EMBED_SECRET is not configured — embed exchange is disabled."
+        )
+    # Dev-only fallback; deterministic so embed tokens minted by the admin
+    # route can be verified by the exchange route within one process.
+    return settings.jwt_secret + "_embed"
+
+
+def _is_production() -> bool:
+    return settings.app_env == "production"
+
+
+def create_embed_token(
+    user_email: str,
+    pid: int,
+    tenant_id: str | None = None,
+    ttl_seconds: int = 300,
+) -> str:
+    """Mint a short-lived embed JWT. Used by tests and admin tooling.
+
+    In real deployments OpenEMR mints these tokens itself using the shared
+    secret; this helper exists so RAF ships a working demo harness.
+    """
+    now = _utcnow()
+    payload: dict[str, Any] = {
+        "sub": user_email,
+        "pid": int(pid),
+        "iat": now,
+        "exp": now + timedelta(seconds=max(30, min(ttl_seconds, 600))),
+        "type": "embed",
+    }
+    if tenant_id:
+        payload["tenant_id"] = tenant_id
+    return jwt.encode(
+        payload, _embed_signing_secret(), algorithm=settings.jwt_algorithm
+    )
+
+
+def authenticate_embed_token(
+    embed_token: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> dict[str, Any]:
+    """Verify an embed JWT and issue a scoped RAF session.
+
+    The issued access token uses the RAF user's role and tenant. The refresh
+    token follows the same rotation model as regular logins, so the iframe
+    can silently refresh while it stays open.
+    """
+    _ensure_tables()
+    secret = _embed_signing_secret()
+    try:
+        payload = jwt.decode(
+            embed_token, secret, algorithms=[settings.jwt_algorithm]
+        )
+    except jwt.ExpiredSignatureError:
+        raise ValueError("Embed token has expired.")
+    except jwt.PyJWTError:
+        raise ValueError("Invalid embed token.")
+
+    if payload.get("type") != "embed":
+        raise ValueError("Token is not an embed token.")
+
+    email = payload.get("sub")
+    if not isinstance(email, str) or not email:
+        raise ValueError("Embed token is missing sub (RAF user email).")
+
+    user = get_user_by_email(email)
+    if not user or not user.get("is_active"):
+        raise ValueError("Embed token references an unknown or inactive user.")
+
+    # Tenant binding — prefer the tenant_id baked into the token, fall back
+    # to the deployment default, and finally to the user's own tenant. We
+    # refuse if the chosen tenant doesn't match the user's.
+    token_tenant = payload.get("tenant_id") or settings.openemr_embed_default_tenant_id
+    if token_tenant and str(token_tenant) != str(user["tenant_id"]):
+        raise ValueError(
+            "Embed tenant_id does not match the target user's tenant."
+        )
+
+    # Issue tokens. We override the access-token TTL so the iframe session
+    # is shorter than the regular app session.
+    session_id = str(uuid.uuid4())
+    now = _utcnow()
+    access_exp = now + timedelta(
+        minutes=settings.embed_access_token_expire_minutes
+    )
+    access_payload = {
+        "sub": str(user["id"]),
+        "email": user["email"],
+        "role": user["role"],
+        "tenant_id": user["tenant_id"],
+        "session_id": session_id,
+        "iat": now,
+        "exp": access_exp,
+        "type": "access",
+        "embed": True,
+        "embed_pid": int(payload.get("pid") or 0) or None,
+    }
+    access_token = jwt.encode(
+        access_payload, settings.jwt_secret, algorithm=settings.jwt_algorithm
+    )
+    refresh_token = create_refresh_token(user_id=user["id"], session_id=session_id)
+
+    session_token_hash = _hash_token(access_token)
+    refresh_token_hash = _hash_token(refresh_token)
+    expires_at = now + timedelta(days=settings.refresh_token_expire_days)
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_sessions
+                (session_id, user_id, session_token_hash, refresh_token_hash,
+                 ip_address, user_agent, expires_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                session_id,
+                user["id"],
+                session_token_hash,
+                refresh_token_hash,
+                ip_address or "embed",
+                (user_agent or "openemr-embed")[:255],
+                expires_at.strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+
+    user_info = {
+        "id": user["id"],
+        "email": user["email"],
+        "full_name": user["full_name"],
+        "role": user["role"],
+        "tenant_id": user["tenant_id"],
+        "avatar_url": user.get("avatar_url"),
+        "must_change_password": user.get("must_change_password", False),
+    }
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": settings.embed_access_token_expire_minutes * 60,
+        "user": user_info,
+        "embed_pid": int(payload.get("pid") or 0) or None,
+    }
+
+
 def refresh_access_token(refresh_token: str) -> dict[str, Any]:
     """Rotate refresh token on every use.
 

@@ -30,6 +30,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   const isLoginPage = pathname === "/login";
   // Cover /settings and any nested path (e.g. /settings/security)
   const isSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/");
+  // /embed/* routes render the authenticated panel inside a third-party iframe
+  // (OpenEMR chart). They must NOT redirect to /login, must NOT show the sidebar
+  // or header chrome, and handle their own short-lived-JWT handshake.
+  const isEmbedPage = pathname.startsWith("/embed/");
 
   // Initialize client-side error tracking once on mount
   useEffect(() => {
@@ -57,6 +61,8 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading) {
+      // Embed pages manage their own token flow — never redirect them.
+      if (isEmbedPage) return;
       // NOTE: The cookie check below is purely for flash-prevention (avoiding a
       // brief redirect to /login when auth state hasn't hydrated yet). It is NOT
       // a security gate — the real auth gate is `isAuthenticated` from the auth
@@ -73,7 +79,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         router.push("/settings?force_password_change=true");
       }
     }
-  }, [isLoading, isAuthenticated, isLoginPage, isSettingsPage, mustChangePassword, router]);
+  }, [isLoading, isAuthenticated, isLoginPage, isEmbedPage, isSettingsPage, mustChangePassword, router]);
 
   // While the auth context is bootstrapping (checking stored refresh token),
   // show a full-page spinner. ThemeProvider wraps this so dark mode applies.
@@ -94,6 +100,13 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   // Login page — no sidebar, no shell, no redirect loop risk.
   // ThemeProvider and QueryProvider are still active (mounted in layout.tsx).
   if (isLoginPage) {
+    return <>{children}</>;
+  }
+
+  // Embed page — rendered inside OpenEMR iframe. No sidebar, no chrome,
+  // no auth redirect. The page itself completes the token handshake and
+  // renders RAFCentralPanel directly.
+  if (isEmbedPage) {
     return <>{children}</>;
   }
 

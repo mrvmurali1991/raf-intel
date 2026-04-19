@@ -74,6 +74,12 @@ interface AuthContextType {
   ) => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   completeMfaVerify: (mfaToken: string, code: string, isRecovery?: boolean) => Promise<void>;
+  /**
+   * Trade an OpenEMR-minted embed JWT for a RAF session.
+   * Used exclusively by `/embed/raf-central/[pid]`. On success the access
+   * token is stored in memory and every subsequent API call is authenticated.
+   */
+  completeEmbedExchange: (embedToken: string) => Promise<{ embed_pid: number | null }>;
   clearMustChangePassword: () => void;
   switchTenant: (tenantId: string) => Promise<void>;
   /** The axios instance pre-configured for auth endpoints. */
@@ -466,6 +472,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const completeEmbedExchange = useCallback(
+    async (embedToken: string): Promise<{ embed_pid: number | null }> => {
+      isLoggingInRef.current = true;
+      try {
+        const { data } = await authApi.post<{
+          access_token: string;
+          user: User;
+          embed_pid?: number | null;
+          must_change_password?: boolean;
+        }>("/api/auth/embed/exchange", { embed_token: embedToken });
+
+        if (!data.access_token || !data.user) {
+          throw new Error("Embed exchange returned an incomplete response.");
+        }
+
+        setAccessToken(data.access_token);
+        scheduleRefresh(data.access_token);
+        setUser(data.user);
+        setAuthCookie();
+        if (data.must_change_password) setMustChangePassword(true);
+        return { embed_pid: data.embed_pid ?? null };
+      } finally {
+        isLoggingInRef.current = false;
+      }
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     try {
       // Best-effort server-side token invalidation
@@ -533,6 +567,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateProfile,
         changePassword,
         completeMfaVerify,
+        completeEmbedExchange,
         clearMustChangePassword,
         switchTenant,
         authApi,

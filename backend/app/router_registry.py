@@ -71,6 +71,7 @@ from app.routers import config as config_router
 from app.routers import recapture_gaps as recapture_gaps_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
+from app.routers import raf_central as raf_central_router
 
 
 def register_routers(app: FastAPI) -> None:
@@ -82,6 +83,7 @@ def register_routers(app: FastAPI) -> None:
     # Core clinical entities
     app.include_router(patients.router)
     app.include_router(raf.router)
+    app.include_router(raf_central_router.router)
     app.include_router(analysis.router)
     app.include_router(suspects.router)
     app.include_router(attestations.router)
