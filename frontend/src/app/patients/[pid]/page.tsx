@@ -77,6 +77,7 @@ import { SuspectsTab } from "./components/SuspectsTab";
 import { AuditTab } from "./components/AuditTab";
 import { ActivityTab } from "./components/ActivityTab";
 import { DocumentsTab } from "./components/DocumentsTab";
+import { RAFCentralTab } from "./components/RAFCentralTab";
 
 // ===========================================================================
 // MAIN PAGE COMPONENT
@@ -455,6 +456,7 @@ export default function PatientDetailPage({
   // Tab definitions
   const tabs = [
     { id: "overview", label: "Overview" },
+    { id: "rafcentral", label: "RAF Central" },
     { id: "raf", label: "RAF Details" },
     { id: "models", label: "Model Comparison" },
     { id: "clinical", label: "Clinical Data" },
@@ -487,18 +489,20 @@ export default function PatientDetailPage({
           zIndex: 30,
           background: C.white,
           borderBottom: `1px solid ${C.slate200}`,
-          height: 80,
+          minHeight: 80,
           borderRadius: 0,
         }}
       >
         <div
           style={{
             width: "100%",
-            padding: "0 24px",
-            height: 80,
+            padding: "12px 16px",
+            minHeight: 80,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
           }}
         >
           {/* Left: back + avatar + patient name */}
@@ -554,13 +558,13 @@ export default function PatientDetailPage({
           </div>
 
           {/* Right: demographics + actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: C.slate500 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: C.slate500, flexWrap: "wrap" }}>
               {age !== null && <span>{age} yrs</span>}
               {sex && <span style={{ textTransform: "capitalize" }}>{sex}</span>}
               {dob && <span>{formatDate(dob)}</span>}
             </div>
-            <div style={{ width: 1, height: 32, background: C.slate200 }} />
+            <div style={{ width: 1, height: 32, background: C.slate200 }} className="hidden sm:block" />
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button
                 onClick={() => batchMutation.mutate()}
@@ -727,9 +731,17 @@ export default function PatientDetailPage({
 
       {/* TAB NAVIGATION */}
       <div style={{ background: C.white, borderBottom: `1px solid ${C.slate200}`, padding: "0 24px" }}>
-        <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
+        <div
+          className="raf-tabbar-scroll"
+          style={{
+            display: "flex", gap: 0, alignItems: "center",
+            overflowX: "auto", overflowY: "hidden",
+            flexWrap: "nowrap", whiteSpace: "nowrap",
+            scrollbarWidth: "thin",
+          }}
+        >
           {/* Year Selector */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 16, paddingRight: 16, borderRight: `1px solid ${C.slate200}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 16, paddingRight: 16, borderRight: `1px solid ${C.slate200}`, flexShrink: 0 }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Year</span>
             {Array.from({length: 3}, (_, i) => new Date().getFullYear() - i).map((yr) => (
               <button
@@ -742,13 +754,14 @@ export default function PatientDetailPage({
                   background: selectedYear === yr ? C.blue600 : "transparent",
                   border: selectedYear === yr ? "none" : `1px solid ${C.slate200}`,
                   borderRadius: 6, cursor: "pointer", transition: "all 0.15s",
+                  flexShrink: 0,
                 }}
               >
                 {yr}
               </button>
             ))}
           </div>
-          <div role="tablist">
+          <div role="tablist" style={{ display: "flex", flexWrap: "nowrap" }}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -764,6 +777,7 @@ export default function PatientDetailPage({
                   borderBottom: activeTab === tab.id ? `2px solid ${C.blue600}` : "2px solid transparent",
                   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
                   transition: "color 0.15s, border-color 0.15s",
+                  flexShrink: 0,
                 }}
               >
                 {tab.label}
@@ -888,6 +902,9 @@ export default function PatientDetailPage({
             auditMutation={auditMutation}
             selectedYear={selectedYear}
           />
+        )}
+        {activeTab === "rafcentral" && (
+          <RAFCentralTab pid={pid} year={selectedYear} />
         )}
         {activeTab === "activity" && (
           <ActivityTab

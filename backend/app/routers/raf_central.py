@@ -999,3 +999,222 @@ def action_order_lab(
         "procedure_order_id": int(order_id),
         "suggested_lab_code": lab_code,
     }
+
+
+# ---------------------------------------------------------------------------
+# Why? — explainability drill-down for a single suspect
+# ---------------------------------------------------------------------------
+
+
+class ContributingSignal(BaseModel):
+    source: Literal["medication", "lab", "history", "nlp", "note", "other"]
+    label: str
+    value: str | None = None
+    timestamp: str | None = None
+
+
+class ExplainResponse(BaseModel):
+    suspect_id: int
+    patient_id: int
+    suspect_icd10: str
+    suspect_hcc: str
+    confidence: float
+    evidence_type: str
+    contributing_signals: list[ContributingSignal]
+    summary: str
+
+
+def _decompose_evidence_detail(
+    evidence_detail: Any,
+    evidence_type: str,
+) -> list[ContributingSignal]:
+    """Best-effort parse of raf_suspect_conditions.evidence_detail JSON into
+    a typed list of ContributingSignal rows. The blob shape varies per
+    engine (meds/labs/history/nlp) — we accept a few common layouts.
+    """
+    import json as _json
+
+    if evidence_detail in (None, "", "null"):
+        return []
+
+    raw: Any = evidence_detail
+    if isinstance(evidence_detail, (bytes, bytearray)):
+        raw = evidence_detail.decode("utf-8", errors="ignore")
+    if isinstance(raw, str):
+        try:
+            raw = _json.loads(raw)
+        except Exception:
+            return [ContributingSignal(source="other", label=raw[:200])]
+
+    signals: list[ContributingSignal] = []
+
+    def _src_from_type() -> str:
+        t = (evidence_type or "").lower()
+        if t.startswith("med"):
+            return "medication"
+        if t.startswith("lab"):
+            return "lab"
+        if t.startswith("hist") or t.startswith("recap"):
+            return "history"
+        if t.startswith("nlp") or t.startswith("note"):
+            return "nlp"
+        return "other"
+
+    default_src = _src_from_type()
+
+    def _push(item: Any) -> None:
+        if isinstance(item, dict):
+            label = (
+                item.get("label")
+                or item.get("name")
+                or item.get("drug")
+                or item.get("medication")
+                or item.get("test")
+                or item.get("code")
+                or item.get("icd")
+                or item.get("snippet")
+                or str(item)[:120]
+            )
+            src = item.get("source") or default_src
+            if src not in ("medication", "lab", "history", "nlp", "note", "other"):
+                src = default_src
+            value = (
+                item.get("value")
+                or item.get("result")
+                or item.get("dose")
+                or item.get("note")
+                or None
+            )
+            ts = item.get("date") or item.get("timestamp") or item.get("ts") or None
+            signals.append(
+                ContributingSignal(
+                    source=src,  # type: ignore[arg-type]
+                    label=str(label)[:200],
+                    value=str(value)[:200] if value is not None else None,
+                    timestamp=str(ts)[:40] if ts else None,
+                )
+            )
+        elif isinstance(item, str):
+            signals.append(
+                ContributingSignal(source=default_src, label=item[:200])  # type: ignore[arg-type]
+            )
+
+    if isinstance(raw, list):
+        for it in raw:
+            _push(it)
+    elif isinstance(raw, dict):
+        # Common shape: {"medications": [...], "labs": [...], "summary": "..."}
+        for key in ("medications", "labs", "history", "notes", "signals", "items"):
+            v = raw.get(key)
+            if isinstance(v, list):
+                for it in v:
+                    _push(it)
+        # Fallback: treat the dict itself as one signal
+        if not signals:
+            _push(raw)
+    else:
+        _push(raw)
+
+    return signals
+
+
+@router.get("/{pid}/suspect/{suspect_id}/explain", response_model=ExplainResponse)
+def explain_suspect(
+    pid: int,
+    suspect_id: int,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("raf", "read")),
+) -> ExplainResponse:
+    """Return the contributing signals that triggered a suspect.
+
+    Reads `raf_suspect_conditions.evidence_detail` (JSON) and decomposes it
+    into a typed list so the UI can render icons/grouped rows per source.
+    """
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, patient_id, suspect_icd10, suspect_hcc, evidence_type,
+                   evidence_detail, confidence_score
+            FROM raf_suspect_conditions
+            WHERE id = %s AND tenant_id = %s
+            """,
+            (suspect_id, tenant_id),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Suspect not found")
+    if int(row["patient_id"]) != int(pid):
+        raise HTTPException(
+            status_code=403, detail="Suspect does not belong to this patient"
+        )
+
+    signals = _decompose_evidence_detail(
+        row.get("evidence_detail"), row.get("evidence_type") or ""
+    )
+    if signals:
+        summary = (
+            f"{len(signals)} contributing signal(s) "
+            f"from {row.get('evidence_type') or 'mixed sources'}."
+        )
+    else:
+        summary = "No evidence logged for this suspect."
+
+    return ExplainResponse(
+        suspect_id=int(row["id"]),
+        patient_id=int(row["patient_id"]),
+        suspect_icd10=str(row.get("suspect_icd10") or ""),
+        suspect_hcc=str(row.get("suspect_hcc") or ""),
+        confidence=float(row.get("confidence_score") or 0.0),
+        evidence_type=str(row.get("evidence_type") or ""),
+        contributing_signals=signals,
+        summary=summary,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Refresh MEAT — rule-based extractor across all notes for this patient
+# ---------------------------------------------------------------------------
+
+class RefreshMEATRequest(BaseModel):
+    max_days_lookback: int = 365
+    year: int | None = None
+
+
+@router.post("/{pid}/actions/refresh-meat")
+def action_refresh_meat(
+    pid: int,
+    body: RefreshMEATRequest | None = None,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("raf", "write")),
+) -> dict[str, Any]:
+    """Run the rule-based MEAT extractor against every recent note.
+
+    Writes into raf_meat_evidence and recomputes raf_patient_hcc.meat_status.
+    Safe to call repeatedly — store_meat_evidence de-dupes on
+    (patient_hcc_id, encounter_id).
+    """
+    from app.services.auto_meat_extractor import run_auto_meat_for_patient
+
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    req = body or RefreshMEATRequest()
+    try:
+        summary = run_auto_meat_for_patient(
+            pid,
+            tenant_id=tenant_id,
+            year=req.year,
+            max_days_lookback=req.max_days_lookback,
+        )
+    except Exception as exc:
+        logger.exception("refresh-meat failed pid=%s", pid)
+        raise HTTPException(status_code=500, detail=f"MEAT extraction failed: {exc}")
+
+    _invalidate_panel_cache(pid, tenant_id)
+    return {"ok": True, "summary": summary}

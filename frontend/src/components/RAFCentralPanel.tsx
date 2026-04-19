@@ -40,9 +40,16 @@ import {
   XCircle,
   RefreshCcw,
   Loader2,
+  HelpCircle,
+  X,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StartTreatmentButton from "@/components/StartTreatmentButton";
+import ExplainPanel from "@/components/ExplainPanel";
 
 // ---------------------------------------------------------------------------
 // Types — mirror backend response (see app/routers/raf_central.py)
@@ -210,8 +217,8 @@ export function RAFCentralPanel({
             <RefreshCcw className={cn("h-4 w-4", recalcing && "animate-spin")} />
           </Button>
           {onClose ? (
-            <Button size="sm" variant="ghost" onClick={onClose}>
-              ✕
+            <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close panel">
+              <X className="h-4 w-4" />
             </Button>
           ) : null}
         </div>
@@ -344,12 +351,20 @@ function LiveRAFSection({ raf }: { raf: LiveRAFBar }) {
   const deltaColor =
     raf.delta === null
       ? "text-muted-foreground"
-      : raf.delta >= 0
+      : raf.delta > 0
       ? "text-emerald-600"
-      : "text-red-600";
+      : raf.delta < 0
+      ? "text-red-600"
+      : "text-muted-foreground";
   const deltaSign = raf.delta !== null && raf.delta >= 0 ? "+" : "";
+  const TrendIcon =
+    raf.delta === null || raf.delta === 0
+      ? Minus
+      : raf.delta > 0
+      ? TrendingUp
+      : TrendingDown;
   return (
-    <div className="grid grid-cols-4 gap-2 border-b bg-muted/30 px-4 py-3">
+    <div className="grid grid-cols-2 gap-2 border-b bg-muted/30 px-4 py-3 sm:grid-cols-4">
       <Metric label={`PY${raf.year}`} value={raf.current.toFixed(3)} />
       <Metric
         label="vs. prior"
@@ -357,6 +372,7 @@ function LiveRAFSection({ raf }: { raf: LiveRAFBar }) {
           raf.delta === null ? "—" : `${deltaSign}${raf.delta.toFixed(3)}`
         }
         valueClassName={deltaColor}
+        icon={<TrendIcon className={cn("h-3.5 w-3.5", deltaColor)} aria-hidden />}
       />
       <Metric label="HCCs" value={String(raf.hcc_count)} />
       <Metric
@@ -371,18 +387,21 @@ function Metric({
   label,
   value,
   valueClassName,
+  icon,
 }: {
   label: string;
   value: string;
   valueClassName?: string;
+  icon?: React.ReactNode;
 }) {
   return (
     <div>
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <div className={cn("text-lg font-bold tabular-nums", valueClassName)}>
-        {value}
+      <div className={cn("flex items-center gap-1 text-lg font-bold tabular-nums", valueClassName)}>
+        {icon}
+        <span className="truncate">{value}</span>
       </div>
     </div>
   );
@@ -405,9 +424,10 @@ function MEATSection({
 }) {
   if (!gaps.length)
     return (
-      <p className="py-4 text-center text-xs text-muted-foreground">
-        No HCC coded for this patient yet. Accept a suspect below to start.
-      </p>
+      <EmptyState
+        title="No HCCs coded yet"
+        subtitle="Accept a suspect below to start building evidence."
+      />
     );
 
   return (
@@ -562,9 +582,10 @@ function SuspectsSection({
 }) {
   if (!suspects.length)
     return (
-      <p className="py-4 text-center text-xs text-muted-foreground">
-        No open suspects. Run a suspect scan from the patient page to discover HCC lift.
-      </p>
+      <EmptyState
+        title="No open suspects"
+        subtitle="Run a suspect scan from the patient page to discover HCC lift."
+      />
     );
 
   return (
@@ -591,6 +612,7 @@ function SuspectCardView({
   onChange: () => void;
 }) {
   const [busy, setBusy] = useState<"accept" | "dismiss" | null>(null);
+  const [showExplain, setShowExplain] = useState(false);
 
   const act = async (kind: "accept" | "dismiss") => {
     setBusy(kind);
@@ -648,7 +670,23 @@ function SuspectCardView({
             </>
           )}
         </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowExplain(true)}
+          disabled={busy !== null}
+          aria-label="Why was this flagged?"
+        >
+          <HelpCircle className="h-3 w-3 mr-1" /> Why?
+        </Button>
       </div>
+      <ExplainPanel
+        patientId={patientId}
+        suspectId={suspect.id}
+        suspectLabel={suspect.label}
+        open={showExplain}
+        onClose={() => setShowExplain(false)}
+      />
     </Card>
   );
 }
@@ -660,9 +698,10 @@ function SuspectCardView({
 function RecaptureSection({ recapture }: { recapture: RecaptureCard[] }) {
   if (!recapture.length)
     return (
-      <p className="py-4 text-center text-xs text-muted-foreground">
-        No recapture gaps. Every prior-year HCC is documented this year.
-      </p>
+      <EmptyState
+        title="No recapture gaps"
+        subtitle="Every prior-year HCC is documented this year."
+      />
     );
 
   const totalRisk = recapture.reduce((acc, r) => acc + r.revenue_at_risk, 0);
@@ -721,12 +760,31 @@ function AuditSection({ audit }: { audit: AuditReadiness }) {
 }
 
 // ---------------------------------------------------------------------------
+// EmptyState — consistent "nothing here" block for section bodies
+// ---------------------------------------------------------------------------
+
+function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-6 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Inbox className="h-5 w-5" aria-hidden />
+      </div>
+      <div className="text-sm font-medium text-foreground">{title}</div>
+      {subtitle ? (
+        <div className="max-w-[32ch] text-xs text-muted-foreground">{subtitle}</div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Financial — current vs projected
 // ---------------------------------------------------------------------------
 
 function FinancialSection({ financial }: { financial: FinancialImpact }) {
   const gain = financial.annual_delta;
   const pct = financial.current_raf ? ((financial.projected_raf - financial.current_raf) / financial.current_raf) * 100 : 0;
+  const hasUplift = gain > 0;
   return (
     <div className="space-y-3 pt-1">
       <div className="grid grid-cols-2 gap-3">
@@ -747,18 +805,22 @@ function FinancialSection({ financial }: { financial: FinancialImpact }) {
           </div>
         </div>
       </div>
-      <Separator />
-      <div className="rounded-md border border-emerald-500/30 bg-emerald-50 p-3 dark:bg-emerald-950">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
-          Potential uplift
-        </div>
-        <div className="text-lg font-bold text-emerald-700 tabular-nums dark:text-emerald-100">
-          +${gain.toLocaleString()}
-          <span className="ml-2 text-xs font-medium text-emerald-700/70 dark:text-emerald-300/80">
-            {pct.toFixed(1)}% · ${financial.pmpm_delta.toLocaleString()}/mo
-          </span>
-        </div>
-      </div>
+      {hasUplift ? (
+        <>
+          <Separator />
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-50 p-3 dark:bg-emerald-950">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
+              Potential uplift
+            </div>
+            <div className="text-lg font-bold text-emerald-700 tabular-nums dark:text-emerald-100">
+              +${gain.toLocaleString()}
+              <span className="ml-2 text-xs font-medium text-emerald-700/70 dark:text-emerald-300/80">
+                {pct.toFixed(1)}% · ${financial.pmpm_delta.toLocaleString()}/mo
+              </span>
+            </div>
+          </div>
+        </>
+      ) : null}
       <div className="text-[10px] text-muted-foreground">
         ${financial.revenue_per_raf_point.toLocaleString()}/RAF point · CMS MA benchmark
       </div>

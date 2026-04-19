@@ -635,3 +635,69 @@ def test_order_lab_rejects_unmapped_hcc_without_suggestion(client, admin_headers
         assert resp.status_code == 400
         assert "default lab mapping" in resp.json()["detail"].lower()
         push.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# /actions/refresh-meat
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_meat_happy_path(client, admin_headers):
+    """POST refresh-meat should invoke run_auto_meat_for_patient and return summary."""
+    stub_summary = {
+        "patient_id": 1,
+        "year": 2026,
+        "notes_scanned": 3,
+        "hccs_processed": 2,
+        "evidence_written": 4,
+        "by_status": {"COMPLETE": 1, "PARTIAL": 3, "MISSING": 0},
+        "skipped_no_match": 1,
+    }
+    with (
+        patch(
+            "app.services.auto_meat_extractor.run_auto_meat_for_patient",
+            return_value=stub_summary,
+        ) as run_auto,
+        patch("app.routers.raf_central._invalidate_panel_cache") as inv,
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/refresh-meat",
+            headers=admin_headers,
+            json={"max_days_lookback": 180},
+        )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["summary"]["evidence_written"] == 4
+    run_auto.assert_called_once()
+    kwargs = run_auto.call_args.kwargs
+    assert kwargs["max_days_lookback"] == 180
+    inv.assert_called_once()
+
+
+def test_refresh_meat_requires_auth(client):
+    """Missing bearer token should 401 before the extractor runs."""
+    with patch(
+        "app.services.auto_meat_extractor.run_auto_meat_for_patient"
+    ) as run_auto:
+        resp = client.post("/api/raf-central/1/actions/refresh-meat", json={})
+    assert resp.status_code in (401, 403)
+    run_auto.assert_not_called()
+
+
+def test_refresh_meat_500_on_extractor_error(client, admin_headers):
+    """Unexpected extractor exception must surface as 500."""
+    with (
+        patch(
+            "app.services.auto_meat_extractor.run_auto_meat_for_patient",
+            side_effect=RuntimeError("nlp exploded"),
+        ),
+        patch("app.routers.raf_central._invalidate_panel_cache"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/refresh-meat",
+            headers=admin_headers,
+            json={},
+        )
+    assert resp.status_code == 500
+    assert "meat extraction failed" in resp.json()["detail"].lower()

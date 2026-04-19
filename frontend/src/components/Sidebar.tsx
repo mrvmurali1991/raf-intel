@@ -1042,11 +1042,18 @@ export function Sidebar() {
         {sidebarContent}
       </aside>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar.
+          NOTE: do NOT add `display` to the inline style — the Tailwind
+          `hidden lg:flex` classes must control visibility. An inline
+          `display:flex` would override `hidden` (higher specificity than
+          classes) and leak the desktop sidebar into mobile viewports. */}
       <aside
         className="fixed left-0 top-0 z-30 hidden lg:flex"
         style={{
-          ...sidebarBaseStyle,
+          background: sidebarBaseStyle.background,
+          flexDirection: "column",
+          height: "100%",
+          fontFamily: sidebarBaseStyle.fontFamily,
           width,
           transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
         }}
