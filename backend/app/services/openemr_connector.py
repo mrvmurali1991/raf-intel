@@ -2622,7 +2622,7 @@ def get_referrals(pid: int) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Prescriptions — write path for the "Start Treatment" RAF Central action
+# Write: prescriptions ("Start Treatment" RAF Central action)
 # ---------------------------------------------------------------------------
 
 
@@ -2636,29 +2636,7 @@ def push_prescription(
     route: str = "PO",
     note: str = "",
 ) -> int | None:
-    """Insert a new active prescription row into OpenEMR `prescriptions`.
-
-    Mirrors the column set used by ``get_medications()`` so the new row
-    is immediately visible in the medications list. Sets ``active=1`` and
-    ``date_added=NOW()`` so downstream MEAT-Treatment evidence picks it up
-    without an additional UI step.
-
-    Parameters
-    ----------
-    pid         : OpenEMR patient id
-    ordered_by  : clinician email / handle; written to the ``note`` prefix
-                  so the audit log surfaces who started treatment
-    drug_name   : human-readable drug name (e.g. "Metformin 500mg")
-    rxnorm_code : optional RxNorm code for the drug concept
-    dosage      : dose string (e.g. "500mg BID"); stored verbatim
-    route       : administration route abbreviation; defaults to "PO"
-    note        : free-text clinical note, appended after the ordered-by tag
-
-    Returns
-    -------
-    The new prescription's primary-key id on success, or None when no
-    active EMR connection exists (decorator short-circuits).
-    """
+    """Insert a new active prescription row into OpenEMR `prescriptions`."""
     audit_note = f"Ordered via RAF Central by {ordered_by}"
     if note:
         audit_note = f"{audit_note} — {note}"
@@ -2696,3 +2674,97 @@ def push_prescription(
         new_id, drug_name, rxnorm_code, pid, ordered_by,
     )
     return int(new_id) if new_id else None
+
+
+# ---------------------------------------------------------------------------
+# Write: procedure_order (lab / imaging orders for "Order Lab" action)
+# ---------------------------------------------------------------------------
+
+
+@_empty_on_no_emr(default=None)
+def push_procedure_order(
+    pid: int,
+    ordered_by: str,
+    procedure_code: str,
+    procedure_name: str,
+    diagnosis_code: str,
+    lab_code_type: str = "LOINC",
+) -> int | None:
+    """Insert a lab/procedure order for a patient into OpenEMR.
+
+    Writes a parent row in `procedure_order` and a child row in
+    `procedure_order_code`. Returns the new procedure_order_id or None.
+    """
+    try:
+        from datetime import datetime
+        today_date = datetime.now().strftime("%Y-%m-%d")
+
+        formatted_dx = (
+            diagnosis_code
+            if diagnosis_code.startswith("ICD10:")
+            else f"ICD10:{diagnosis_code}"
+        )
+
+        try:
+            provider_id_int = int(ordered_by)
+        except (TypeError, ValueError):
+            provider_id_int = 0
+
+        order_sql = """
+            INSERT INTO procedure_order (
+                date_ordered,
+                provider_id,
+                patient_id,
+                encounter,
+                status,
+                procedure_order_type,
+                order_diagnosis,
+                activity
+            ) VALUES (
+                %s, %s, %s, 0, 'pending', 'laboratory_test', %s, 1
+            )
+        """
+        code_sql = """
+            INSERT INTO procedure_order_code (
+                procedure_order_id,
+                procedure_order_seq,
+                procedure_code,
+                procedure_name,
+                procedure_type,
+                diagnoses
+            ) VALUES (
+                %s, 1, %s, %s, 'ord', %s
+            )
+        """
+
+        with openemr_cursor() as cur:
+            cur.execute(
+                order_sql,
+                (today_date, provider_id_int, pid, formatted_dx),
+            )
+            new_order_id = getattr(cur, "lastrowid", None)
+            if not new_order_id:
+                cur.execute("SELECT LAST_INSERT_ID() AS id")
+                row = cur.fetchone()
+                new_order_id = int(row["id"]) if row and row.get("id") else None
+
+            if new_order_id:
+                cur.execute(
+                    code_sql,
+                    (new_order_id, procedure_code, procedure_name, formatted_dx),
+                )
+
+        logger.info(
+            "push_procedure_order: pid=%s code=%s (%s) dx=%s order_id=%s",
+            pid, procedure_code, lab_code_type, formatted_dx, new_order_id,
+        )
+        return int(new_order_id) if new_order_id else None
+
+    except NoActiveEMRConnection:
+        raise
+    except Exception as exc:
+        logger.error(
+            "push_procedure_order failed pid=%s code=%s: %s",
+            pid, procedure_code, exc,
+        )
+        return None

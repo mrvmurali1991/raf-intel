@@ -22,6 +22,7 @@ POST /api/raf-central/{pid}/actions/mark-meat-reviewed
 POST /api/raf-central/{pid}/actions/add-assessment-note
 POST /api/raf-central/{pid}/actions/upgrade-code
 POST /api/raf-central/{pid}/actions/recalculate
+POST /api/raf-central/{pid}/actions/order-lab
 """
 
 import logging
@@ -40,6 +41,7 @@ from app.services.openemr_connector import (
     get_patient,
     push_medical_problem,
     push_prescription,
+    push_procedure_order,
 )
 from app.services.raf.calculator import calculate_raf_score, get_raf_breakdown
 from app.services.recapture_gap_service import get_patient_gaps
@@ -790,14 +792,7 @@ def action_start_treatment(
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
 ) -> dict[str, Any]:
-    """Write a new prescription into OpenEMR to satisfy a MEAT-Treatment gap.
-
-    Clinical safety: this is a write-back to the patient's active medication
-    list, so the caller MUST confirm intent via the `StartTreatmentButton`
-    confirm dialog. The endpoint itself does not enforce a separate confirm
-    token — the UI layer owns that gate — but every call is audited via the
-    prescription's `note` field (ordered-by clinician email).
-    """
+    """Write a new prescription into OpenEMR to satisfy a MEAT-Treatment gap."""
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
@@ -843,3 +838,164 @@ def action_start_treatment(
     _invalidate_panel_cache(pid, tenant_id)
 
     return {"status": "ok", "prescription_id": int(rx_id), "drug": drug}
+
+
+# ---------------------------------------------------------------------------
+# Order Lab — inline action wired from the MEAT Gaps card (Monitoring ❌).
+# ---------------------------------------------------------------------------
+
+# Keyed by HCC code (string, without the "HCC" prefix).
+_HCC_DEFAULT_LAB: dict[str, dict[str, str]] = {
+    # Diabetes family (HCC 35-38 in V28) → Hemoglobin A1C
+    "35":  {"code": "4548-4",  "name": "Hemoglobin A1c", "code_type": "LOINC"},
+    "36":  {"code": "4548-4",  "name": "Hemoglobin A1c", "code_type": "LOINC"},
+    "37":  {"code": "4548-4",  "name": "Hemoglobin A1c", "code_type": "LOINC"},
+    "38":  {"code": "4548-4",  "name": "Hemoglobin A1c", "code_type": "LOINC"},
+    # CHF (HCC 222-226 family) → BNP
+    "222": {"code": "30934-4", "name": "BNP",            "code_type": "LOINC"},
+    "223": {"code": "30934-4", "name": "BNP",            "code_type": "LOINC"},
+    "224": {"code": "30934-4", "name": "BNP",            "code_type": "LOINC"},
+    "225": {"code": "30934-4", "name": "BNP",            "code_type": "LOINC"},
+    "226": {"code": "30934-4", "name": "BNP",            "code_type": "LOINC"},
+    # CKD (HCC 326-329) → eGFR (CKD-EPI)
+    "326": {"code": "33914-3", "name": "eGFR",           "code_type": "LOINC"},
+    "327": {"code": "33914-3", "name": "eGFR",           "code_type": "LOINC"},
+    "328": {"code": "33914-3", "name": "eGFR",           "code_type": "LOINC"},
+    "329": {"code": "33914-3", "name": "eGFR",           "code_type": "LOINC"},
+}
+
+
+class OrderLabRequest(BaseModel):
+    hcc_code: str
+    icd10: str
+    suggested_lab_code: str | None = Field(
+        default=None,
+        description="Explicit lab code to order. Overrides the HCC default map.",
+    )
+    suggested_lab_name: str | None = Field(
+        default=None,
+        description="Human-readable lab name paired with suggested_lab_code.",
+    )
+
+
+def _resolve_lab_for_hcc(
+    hcc_code: str,
+    suggested_code: str | None,
+    suggested_name: str | None,
+) -> tuple[str, str, str] | None:
+    if suggested_code:
+        return (
+            str(suggested_code),
+            str(suggested_name) if suggested_name else str(suggested_code),
+            "LOINC",
+        )
+    key = str(hcc_code).replace("HCC", "").strip()
+    entry = _HCC_DEFAULT_LAB.get(key)
+    if not entry:
+        return None
+    return entry["code"], entry["name"], entry["code_type"]
+
+
+def _log_raf_action(
+    tenant_id: str,
+    pid: int,
+    action: str,
+    reviewer: str,
+    payload: dict[str, Any],
+) -> None:
+    try:
+        with raf_cursor() as cur:
+            cur.execute("SHOW TABLES LIKE 'raf_action_log'")
+            if not cur.fetchone():
+                return
+            import json
+            cur.execute(
+                """
+                INSERT INTO raf_action_log
+                    (tenant_id, patient_id, action, reviewed_by, payload_json, created_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                """,
+                (tenant_id, pid, action, reviewer, json.dumps(payload, default=str)),
+            )
+    except Exception as exc:
+        logger.debug("raf_action_log insert skipped (pid=%s action=%s): %s", pid, action, exc)
+
+
+@router.post("/{pid}/actions/order-lab")
+def action_order_lab(
+    pid: int,
+    body: OrderLabRequest,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("raf", "write")),
+) -> dict[str, Any]:
+    """Place a lab order in OpenEMR to close a MEAT 'Monitoring' gap."""
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
+
+    resolved = _resolve_lab_for_hcc(
+        body.hcc_code, body.suggested_lab_code, body.suggested_lab_name
+    )
+    if not resolved:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No default lab mapping for HCC {body.hcc_code}. "
+                f"Provide suggested_lab_code in the request body."
+            ),
+        )
+    lab_code, lab_name, code_type = resolved
+
+    try:
+        order_id = push_procedure_order(
+            pid=pid,
+            ordered_by=reviewer,
+            procedure_code=lab_code,
+            procedure_name=lab_name,
+            diagnosis_code=body.icd10,
+            lab_code_type=code_type,
+        )
+    except Exception as exc:
+        logger.error("order-lab push failed pid=%s hcc=%s: %s", pid, body.hcc_code, exc)
+        raise HTTPException(status_code=500, detail=f"order-lab write failed: {exc}")
+
+    if order_id is None:
+        from app.db import NoActiveEMRConnection  # local import — avoid cycle
+        try:
+            with openemr_cursor() as _cur:
+                pass
+        except NoActiveEMRConnection:
+            return {
+                "status": "skipped",
+                "reason": "no emr configured",
+                "suggested_lab_code": lab_code,
+            }
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=500,
+            detail="order-lab write failed (procedure_order insert returned no id)",
+        )
+
+    _log_raf_action(
+        tenant_id=tenant_id,
+        pid=pid,
+        action="order_lab",
+        reviewer=reviewer,
+        payload={
+            "hcc_code": body.hcc_code,
+            "icd10": body.icd10,
+            "procedure_code": lab_code,
+            "procedure_name": lab_name,
+            "procedure_order_id": order_id,
+        },
+    )
+
+    _invalidate_panel_cache(pid, tenant_id)
+    return {
+        "status": "ok",
+        "procedure_order_id": int(order_id),
+        "suggested_lab_code": lab_code,
+    }
