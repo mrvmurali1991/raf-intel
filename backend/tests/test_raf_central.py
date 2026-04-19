@@ -389,6 +389,128 @@ def test_action_endpoints_require_auth(client):
         ("/api/raf-central/1/actions/accept-suspect", {"suspect_id": 1}),
         ("/api/raf-central/1/actions/dismiss-suspect", {"suspect_id": 1}),
         ("/api/raf-central/1/actions/mark-meat-reviewed", {"patient_hcc_id": 1}),
+        (
+            "/api/raf-central/1/actions/start-treatment",
+            {"hcc_code": "37", "icd10": "E11.9"},
+        ),
     ]:
         resp = client.post(path, json=body)
         assert resp.status_code == 401, f"{path} did not require auth"
+
+
+# ---------------------------------------------------------------------------
+# Start-Treatment action — writes a prescription into OpenEMR
+# ---------------------------------------------------------------------------
+
+
+def test_start_treatment_happy_path_uses_hcc_fallback(client, admin_headers):
+    """When the client does not supply a drug, the endpoint falls back to
+    the hardcoded HCC→treatment map (HCC 37 → Metformin) and returns the
+    new prescription id."""
+    with (
+        patch(
+            "app.routers.raf_central.push_prescription", return_value=9123,
+        ) as push_rx,
+        patch("app.routers.raf_central.cache_delete_pattern") as inv,
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/start-treatment",
+            headers=admin_headers,
+            json={"hcc_code": "37", "icd10": "E11.9"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["prescription_id"] == 9123
+    assert body["drug"] == "Metformin 500mg"
+
+    # push_prescription was called with the fallback drug + dosage
+    push_rx.assert_called_once()
+    _, kwargs = push_rx.call_args
+    assert kwargs["drug_name"] == "Metformin 500mg"
+    assert kwargs["rxnorm_code"] == "6809"
+    assert kwargs["dosage"] == "500mg BID"
+    assert kwargs["pid"] == 1
+    # Cache invalidation fires — at least the raf_central:{pid}:* pattern
+    assert inv.call_count >= 1
+
+
+def test_start_treatment_uses_client_supplied_drug(client, admin_headers):
+    """Client-supplied drug/rxnorm/dosage override the fallback map."""
+    with (
+        patch(
+            "app.routers.raf_central.push_prescription", return_value=9124,
+        ) as push_rx,
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/start-treatment",
+            headers=admin_headers,
+            json={
+                "hcc_code": "999",  # not in fallback map
+                "icd10": "Z99.9",
+                "suggested_drug": "Atorvastatin 20mg",
+                "suggested_rxnorm": "83367",
+                "dosage": "20mg QHS",
+            },
+        )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["drug"] == "Atorvastatin 20mg"
+    _, kwargs = push_rx.call_args
+    assert kwargs["drug_name"] == "Atorvastatin 20mg"
+    assert kwargs["rxnorm_code"] == "83367"
+    assert kwargs["dosage"] == "20mg QHS"
+
+
+def test_start_treatment_rejects_unknown_hcc_without_override(
+    client, admin_headers,
+):
+    """An HCC with no fallback and no client override → 400, no EMR write."""
+    with (
+        patch("app.routers.raf_central.push_prescription") as push_rx,
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/start-treatment",
+            headers=admin_headers,
+            json={"hcc_code": "999", "icd10": "Z99.9"},
+        )
+    assert resp.status_code == 400
+    push_rx.assert_not_called()
+
+
+def test_start_treatment_accepts_without_ui_confirm(client, admin_headers):
+    """Confirm-dialog protection is a UI concern — the endpoint itself
+    must accept a direct POST without any confirm token/flag."""
+    with (
+        patch(
+            "app.routers.raf_central.push_prescription", return_value=9125,
+        ),
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/start-treatment",
+            headers=admin_headers,
+            json={"hcc_code": "85", "icd10": "I50.9"},  # CHF → Lisinopril
+        )
+    assert resp.status_code == 200
+    assert resp.json()["drug"] == "Lisinopril 10mg"
+
+
+def test_start_treatment_502_when_emr_disconnected(client, admin_headers):
+    """push_prescription returns None when the decorator catches
+    NoActiveEMRConnection — endpoint maps that to 502."""
+    with (
+        patch(
+            "app.routers.raf_central.push_prescription", return_value=None,
+        ),
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/start-treatment",
+            headers=admin_headers,
+            json={"hcc_code": "37", "icd10": "E11.9"},
+        )
+    assert resp.status_code == 502

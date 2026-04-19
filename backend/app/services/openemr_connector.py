@@ -2619,3 +2619,80 @@ def get_referrals(pid: int) -> list[dict[str, Any]]:
             "get_referrals: transactions table unavailable for pid=%s (%s)", pid, exc
         )
         return []
+
+
+# ---------------------------------------------------------------------------
+# Prescriptions — write path for the "Start Treatment" RAF Central action
+# ---------------------------------------------------------------------------
+
+
+@_empty_on_no_emr(default=None)
+def push_prescription(
+    pid: int,
+    ordered_by: str,
+    drug_name: str,
+    rxnorm_code: str | None,
+    dosage: str,
+    route: str = "PO",
+    note: str = "",
+) -> int | None:
+    """Insert a new active prescription row into OpenEMR `prescriptions`.
+
+    Mirrors the column set used by ``get_medications()`` so the new row
+    is immediately visible in the medications list. Sets ``active=1`` and
+    ``date_added=NOW()`` so downstream MEAT-Treatment evidence picks it up
+    without an additional UI step.
+
+    Parameters
+    ----------
+    pid         : OpenEMR patient id
+    ordered_by  : clinician email / handle; written to the ``note`` prefix
+                  so the audit log surfaces who started treatment
+    drug_name   : human-readable drug name (e.g. "Metformin 500mg")
+    rxnorm_code : optional RxNorm code for the drug concept
+    dosage      : dose string (e.g. "500mg BID"); stored verbatim
+    route       : administration route abbreviation; defaults to "PO"
+    note        : free-text clinical note, appended after the ordered-by tag
+
+    Returns
+    -------
+    The new prescription's primary-key id on success, or None when no
+    active EMR connection exists (decorator short-circuits).
+    """
+    audit_note = f"Ordered via RAF Central by {ordered_by}"
+    if note:
+        audit_note = f"{audit_note} — {note}"
+
+    sql = """
+        INSERT INTO prescriptions (
+            patient_id,
+            drug,
+            rxnorm_drugcode,
+            dosage,
+            route,
+            note,
+            active,
+            date_added,
+            start_date
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, 1, NOW(), CURDATE()
+        )
+    """
+    with openemr_cursor() as cur:
+        cur.execute(
+            sql,
+            (
+                pid,
+                drug_name,
+                rxnorm_code or "",
+                dosage,
+                route,
+                audit_note,
+            ),
+        )
+        new_id = cur.lastrowid
+    logger.info(
+        "Pushed prescription id=%s drug=%s rxnorm=%s for pid=%s by %s",
+        new_id, drug_name, rxnorm_code, pid, ordered_by,
+    )
+    return int(new_id) if new_id else None

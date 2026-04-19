@@ -36,7 +36,11 @@ from app.cache import cache_get, cache_set, cache_delete_pattern
 from app.config import settings
 from app.db import openemr_cursor, raf_cursor
 from app.services.cache_strategy import get_active_connection_id
-from app.services.openemr_connector import get_patient, push_medical_problem
+from app.services.openemr_connector import (
+    get_patient,
+    push_medical_problem,
+    push_prescription,
+)
 from app.services.raf.calculator import calculate_raf_score, get_raf_breakdown
 from app.services.recapture_gap_service import get_patient_gaps
 from app.services.suspect_engine import (
@@ -750,3 +754,92 @@ def action_recalculate(
         "model_segment": result.get("model_segment"),
         "measurement_year": measurement_year,
     }
+
+
+# ---------------------------------------------------------------------------
+# Start-Treatment action — inline "Prescribe" from a MEAT-T gap card
+# ---------------------------------------------------------------------------
+
+# Small hardcoded fallback map (HCC code → default starter therapy) used when
+# the client does not supply a suggested drug. Intentionally minimal — real
+# drug selection should come from the suspect engine / provider judgment.
+_DEFAULT_TREATMENT_BY_HCC: dict[str, dict[str, str]] = {
+    # Diabetes — Metformin (first-line, type-2 DM)
+    "37": {"drug": "Metformin 500mg", "rxnorm": "6809", "dosage": "500mg BID"},
+    "38": {"drug": "Metformin 500mg", "rxnorm": "6809", "dosage": "500mg BID"},
+    # CHF — Lisinopril (ACE-I)
+    "85": {"drug": "Lisinopril 10mg", "rxnorm": "29046", "dosage": "10mg daily"},
+    # CKD — Losartan (ARB, renoprotective)
+    "136": {"drug": "Losartan 50mg", "rxnorm": "52175", "dosage": "50mg daily"},
+    "137": {"drug": "Losartan 50mg", "rxnorm": "52175", "dosage": "50mg daily"},
+}
+
+
+class StartTreatmentRequest(BaseModel):
+    hcc_code: str
+    icd10: str
+    suggested_drug: str | None = None
+    suggested_rxnorm: str | None = None
+    dosage: str | None = None
+
+
+@router.post("/{pid}/actions/start-treatment")
+def action_start_treatment(
+    pid: int,
+    body: StartTreatmentRequest,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("raf", "write")),
+) -> dict[str, Any]:
+    """Write a new prescription into OpenEMR to satisfy a MEAT-Treatment gap.
+
+    Clinical safety: this is a write-back to the patient's active medication
+    list, so the caller MUST confirm intent via the `StartTreatmentButton`
+    confirm dialog. The endpoint itself does not enforce a separate confirm
+    token — the UI layer owns that gate — but every call is audited via the
+    prescription's `note` field (ordered-by clinician email).
+    """
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    hcc_key = str(body.hcc_code).replace("HCC", "").strip()
+    fallback = _DEFAULT_TREATMENT_BY_HCC.get(hcc_key, {})
+
+    drug = body.suggested_drug or fallback.get("drug")
+    rxnorm = body.suggested_rxnorm or fallback.get("rxnorm")
+    dosage = body.dosage or fallback.get("dosage")
+
+    if not drug or not dosage:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No suggested treatment for HCC {body.hcc_code} "
+                "and no drug/dosage supplied"
+            ),
+        )
+
+    ordered_by = current_user.get("email") or current_user.get("sub") or "raf-central"
+    note = f"HCC {body.hcc_code} / ICD-10 {body.icd10}"
+
+    rx_id = push_prescription(
+        pid=pid,
+        ordered_by=ordered_by,
+        drug_name=drug,
+        rxnorm_code=rxnorm,
+        dosage=dosage,
+        note=note,
+    )
+
+    if rx_id is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Prescription write failed — no active EMR connection",
+        )
+
+    try:
+        cache_delete_pattern(f"raf_central:{pid}:*")
+    except Exception:
+        pass
+    _invalidate_panel_cache(pid, tenant_id)
+
+    return {"status": "ok", "prescription_id": int(rx_id), "drug": drug}
