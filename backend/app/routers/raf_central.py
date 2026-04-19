@@ -1047,6 +1047,7 @@ def _decompose_evidence_detail(
             return [ContributingSignal(source="other", label=raw[:200])]
 
     signals: list[ContributingSignal] = []
+    VALID_SOURCES = ("medication", "lab", "history", "nlp", "note", "other")
 
     def _src_from_type() -> str:
         t = (evidence_type or "").lower()
@@ -1064,6 +1065,17 @@ def _decompose_evidence_detail(
 
     def _push(item: Any) -> None:
         if isinstance(item, dict):
+            src_raw = item.get("source")
+            if isinstance(src_raw, str) and src_raw in VALID_SOURCES:
+                src = src_raw
+                src_as_label: str | None = None
+            else:
+                src = default_src
+                src_as_label = (
+                    src_raw.strip()
+                    if isinstance(src_raw, str) and src_raw.strip()
+                    else None
+                )
             label = (
                 item.get("label")
                 or item.get("name")
@@ -1073,11 +1085,9 @@ def _decompose_evidence_detail(
                 or item.get("code")
                 or item.get("icd")
                 or item.get("snippet")
+                or src_as_label
                 or str(item)[:120]
             )
-            src = item.get("source") or default_src
-            if src not in ("medication", "lab", "history", "nlp", "note", "other"):
-                src = default_src
             value = (
                 item.get("value")
                 or item.get("result")

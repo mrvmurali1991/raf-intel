@@ -53,6 +53,19 @@ test("RAF Central tab — desktop + mobile screenshots", async ({ page }) => {
     fullPage: true,
   });
 
+  // Open ExplainPanel via "Why?" button on first suspect card
+  const whyBtn = page.getByRole("button", { name: /Why\?/i }).first();
+  if (await whyBtn.isVisible().catch(() => false)) {
+    await whyBtn.click().catch(() => {});
+    await page.waitForTimeout(1500);
+    await page.screenshot({
+      path: path.join(OUT_DIR, "05-desktop-explain-panel.png"),
+      fullPage: false,
+    });
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(400);
+  }
+
   // Dismiss any stray modal/overlay before mobile
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(300);

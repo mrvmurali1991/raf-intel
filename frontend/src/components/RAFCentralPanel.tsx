@@ -320,20 +320,30 @@ function Section({
     <div className={cn("border-l-4 bg-background", rail)}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/40"
+        aria-expanded={open}
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <div className="flex items-center gap-2">
           {icon}
           <span className="text-sm font-semibold">{title}</span>
           {count !== undefined && count > 0 ? (
-            <Badge variant="outline" className="text-xs">
+            <Badge
+              className={cn(
+                "text-[10px] font-semibold border-0",
+                severity === "high"
+                  ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                  : severity === "medium"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+              )}
+            >
               {count}
             </Badge>
           ) : null}
         </div>
         <ChevronDown
           className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform",
+            "h-4 w-4 text-muted-foreground transition-transform duration-200",
             open && "rotate-180"
           )}
         />
@@ -494,8 +504,14 @@ function MEATCard({
           <div className="mt-0.5 truncate text-xs text-muted-foreground">{gap.label}</div>
         </div>
         <Badge
-          variant={gap.status === "COMPLETE" ? "default" : "outline"}
-          className={cn("text-[10px]", statusColor)}
+          className={cn(
+            "text-[10px] font-semibold border-0",
+            gap.status === "COMPLETE"
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+              : gap.status === "PARTIAL"
+              ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+          )}
         >
           {gap.status}
         </Badge>
@@ -634,7 +650,13 @@ function SuspectCardView({
 
   const confPct = Math.round(suspect.confidence * 100);
   const confColor =
-    confPct >= 85 ? "text-emerald-600" : confPct >= 70 ? "text-amber-600" : "text-muted-foreground";
+    confPct >= 85
+      ? "text-emerald-600"
+      : confPct >= 70
+      ? "text-amber-600"
+      : "text-muted-foreground";
+  const confBarColor =
+    confPct >= 85 ? "bg-emerald-500" : confPct >= 70 ? "bg-amber-500" : "bg-slate-400";
 
   return (
     <Card className="p-3">
@@ -647,9 +669,16 @@ function SuspectCardView({
             HCC {suspect.hcc} · {suspect.icd10} · {suspect.trigger}
           </div>
         </div>
-        <div className={cn("text-sm font-bold tabular-nums", confColor)}>
+        <div className={cn("text-sm font-bold tabular-nums flex-shrink-0", confColor)}>
           {confPct}%
         </div>
+      </div>
+      {/* Confidence mini-bar */}
+      <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full", confBarColor)}
+          style={{ width: `${confPct}%` }}
+        />
       </div>
       <div className="mt-3 flex gap-2">
         <Button size="sm" onClick={() => act("accept")} disabled={busy !== null}>

@@ -7,9 +7,8 @@
  *
  *   GET /api/raf-central/{patientId}/suspect/{suspectId}/explain
  *
- * Decomposes raf_suspect_conditions.evidence_detail into a typed list of
- * contributing signals (medications, labs, prior HCCs, note excerpts) so
- * the clinician can verify why the suspect engine triggered.
+ * Renders as a right-anchored Sheet (shadcn) so it never clips inside the
+ * panel, and fills remaining space with a confidence bar + signal list.
  */
 
 import { useEffect, useState } from "react";
@@ -20,10 +19,12 @@ import {
   Loader2,
   Pill,
   X,
+  AlertCircle,
 } from "lucide-react";
 
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface ExplainPanelProps {
   patientId: number;
@@ -67,6 +68,35 @@ function iconFor(source: ContributingSignal["source"]) {
   }
 }
 
+function ConfidenceBar({ pct }: { pct: number }) {
+  const color =
+    pct >= 85
+      ? "bg-emerald-500"
+      : pct >= 70
+      ? "bg-amber-500"
+      : "bg-red-400";
+  const label =
+    pct >= 85 ? "High confidence" : pct >= 70 ? "Moderate confidence" : "Low confidence";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground font-medium">{label}</span>
+        <span className="font-bold tabular-nums">{pct}%</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all duration-500", color)}
+          style={{ width: `${pct}%` }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ExplainPanel({
   patientId,
   suspectId,
@@ -108,29 +138,37 @@ export function ExplainPanel({
 
   if (!open) return null;
 
+  const confPct = data ? Math.round(data.confidence * 100) : null;
+
   return (
+    /* Backdrop */
     <div
-      className="fixed inset-0 z-50 flex items-end justify-end bg-black/30"
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]"
       onClick={onClose}
+      aria-hidden="true"
     >
+      {/* Drawer */}
       <div
-        className="h-full w-full max-w-md overflow-y-auto bg-background shadow-xl animate-in slide-in-from-right"
+        className="absolute right-0 top-0 h-full w-full max-w-[440px] flex flex-col bg-background shadow-2xl border-l animate-in slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        aria-modal="true"
         aria-label={`Evidence for ${suspectLabel}`}
       >
-        <header className="sticky top-0 flex items-center justify-between border-b bg-background px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">
+        {/* Header — no overlap, fixed height */}
+        <header className="flex-shrink-0 flex items-start justify-between gap-3 border-b bg-background px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
               Why was this flagged?
-            </h2>
-            <p className="truncate text-xs text-muted-foreground">
-              {suspectLabel}
             </p>
+            <h2 className="text-sm font-bold leading-snug line-clamp-2">
+              {suspectLabel}
+            </h2>
           </div>
           <Button
             size="icon"
             variant="ghost"
+            className="flex-shrink-0 mt-0.5 h-8 w-8"
             aria-label="Close evidence panel"
             onClick={onClose}
           >
@@ -138,60 +176,86 @@ export function ExplainPanel({
           </Button>
         </header>
 
-        <div className="p-4">
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {loading && (
-            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading evidence…
+            <div className="flex items-center gap-2 py-12 justify-center text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>Loading evidence…</span>
             </div>
           )}
+
           {error && (
-            <p className="py-4 text-sm text-red-600" role="alert">
-              {error}
-            </p>
+            <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300" role="alert">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
           )}
+
           {!loading && !error && data && (
             <>
-              <div className="mb-4 rounded-md border bg-muted/40 p-3 text-xs">
-                <div>
-                  <span className="text-muted-foreground">HCC:</span>{" "}
-                  <span className="font-medium">{data.suspect_hcc}</span>
-                  <span className="text-muted-foreground"> · ICD-10:</span>{" "}
-                  <span className="font-medium">{data.suspect_icd10}</span>
-                </div>
-                <div className="mt-1 text-muted-foreground">{data.summary}</div>
+              {/* Metadata chip row */}
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
+                  HCC {data.suspect_hcc}
+                </span>
+                <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
+                  {data.suspect_icd10}
+                </span>
+                <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground capitalize">
+                  {data.evidence_type.replace(/_/g, " ")}
+                </span>
               </div>
 
-              {data.contributing_signals.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  No additional evidence recorded.
+              {/* Confidence bar */}
+              {confPct !== null && <ConfidenceBar pct={confPct} />}
+
+              {/* Summary */}
+              {data.summary && (
+                <p className="text-xs text-muted-foreground leading-relaxed border-l-2 border-muted pl-3">
+                  {data.summary}
                 </p>
+              )}
+
+              {/* Contributing signals */}
+              {data.contributing_signals.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">No additional evidence recorded.</p>
+                </div>
               ) : (
-                <ul className="space-y-2">
-                  {data.contributing_signals.map((sig, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start gap-3 rounded-md border p-2"
-                    >
-                      <span className="mt-0.5">{iconFor(sig.source)}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">
-                          {sig.label}
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Contributing signals ({data.contributing_signals.length})
+                  </p>
+                  <ul className="space-y-2">
+                    {data.contributing_signals.map((sig, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3 hover:bg-muted/40 transition-colors"
+                      >
+                        <span className="mt-0.5 flex-shrink-0">{iconFor(sig.source)}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium leading-snug">
+                            {sig.label}
+                          </div>
+                          {sig.value && (
+                            <div className="mt-0.5 text-xs text-muted-foreground break-words">
+                              {sig.value}
+                            </div>
+                          )}
+                          {sig.timestamp && (
+                            <div className="mt-0.5 text-[10px] text-muted-foreground/70">
+                              {sig.timestamp}
+                            </div>
+                          )}
                         </div>
-                        {sig.value && (
-                          <div className="truncate text-xs text-muted-foreground">
-                            {sig.value}
-                          </div>
-                        )}
-                        {sig.timestamp && (
-                          <div className="text-[10px] text-muted-foreground">
-                            {sig.timestamp}
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </>
           )}
