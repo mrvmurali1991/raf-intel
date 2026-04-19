@@ -26,6 +26,7 @@ import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { OrderLabButton } from "@/components/OrderLabButton";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -487,10 +488,21 @@ function MEATCard({
       </div>
 
       {gap.status !== "COMPLETE" && gap.patient_hcc_id ? (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={markReviewed} disabled={busy}>
             {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Mark reviewed"}
           </Button>
+          {/* Monitoring gap ❌ → offer to order the standard-of-care lab.
+              Keeps the clinician in the panel instead of bouncing to the
+              OpenEMR order screen. */}
+          {!gap.gaps.monitor ? (
+            <OrderLabButton
+              patientId={patientId}
+              hccCode={gap.hcc}
+              icd10={gap.icd10_codes[0] || ""}
+              onOrdered={onChange}
+            />
+          ) : null}
         </div>
       ) : null}
     </Card>

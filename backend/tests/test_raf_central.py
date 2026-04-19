@@ -389,6 +389,127 @@ def test_action_endpoints_require_auth(client):
         ("/api/raf-central/1/actions/accept-suspect", {"suspect_id": 1}),
         ("/api/raf-central/1/actions/dismiss-suspect", {"suspect_id": 1}),
         ("/api/raf-central/1/actions/mark-meat-reviewed", {"patient_hcc_id": 1}),
+        ("/api/raf-central/1/actions/order-lab", {"hcc_code": "37", "icd10": "E11.9"}),
     ]:
         resp = client.post(path, json=body)
         assert resp.status_code == 401, f"{path} did not require auth"
+
+
+# ---------------------------------------------------------------------------
+# Order-lab action — happy path, explicit override, no-EMR skip, unmapped HCC
+# ---------------------------------------------------------------------------
+
+
+def test_order_lab_happy_path_uses_hcc_default_map(client, admin_headers):
+    """HCC 37 (diabetes family) must default to Hemoglobin A1c (LOINC 4548-4)."""
+    with (
+        patch(
+            "app.routers.raf_central.push_procedure_order",
+            return_value=9001,
+        ) as push,
+        patch("app.routers.raf_central._log_raf_action") as log_action,
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/order-lab",
+            headers=admin_headers,
+            json={
+                "hcc_code": "37",
+                "icd10": "E11.9",
+                "suggested_lab_code": None,
+                "suggested_lab_name": None,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["procedure_order_id"] == 9001
+        assert body["suggested_lab_code"] == "4548-4"
+
+        # Verify push_procedure_order got the mapped code + icd10 diagnosis
+        _, kwargs = push.call_args
+        assert kwargs["procedure_code"] == "4548-4"
+        assert kwargs["procedure_name"] == "Hemoglobin A1c"
+        assert kwargs["diagnosis_code"] == "E11.9"
+        assert kwargs["pid"] == 1
+        assert log_action.called
+
+
+def test_order_lab_uses_explicit_override(client, admin_headers):
+    """An explicit suggested_lab_code must win over the HCC default map."""
+    with (
+        patch(
+            "app.routers.raf_central.push_procedure_order",
+            return_value=9100,
+        ) as push,
+        patch("app.routers.raf_central._log_raf_action"),
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/order-lab",
+            headers=admin_headers,
+            json={
+                "hcc_code": "37",
+                "icd10": "E11.9",
+                "suggested_lab_code": "2857-1",
+                "suggested_lab_name": "PSA",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["suggested_lab_code"] == "2857-1"
+        _, kwargs = push.call_args
+        assert kwargs["procedure_code"] == "2857-1"
+        assert kwargs["procedure_name"] == "PSA"
+
+
+def test_order_lab_returns_skipped_when_no_emr(client, admin_headers):
+    """push_procedure_order→None + no EMR configured must yield 200/skipped,
+    not 500 — explicit spec constraint."""
+    from app.db import NoActiveEMRConnection
+
+    class _RaisingCM:
+        def __enter__(self):
+            raise NoActiveEMRConnection("no active connection")
+
+        def __exit__(self, *args):
+            return False
+
+    with (
+        patch(
+            "app.routers.raf_central.push_procedure_order",
+            return_value=None,
+        ),
+        patch(
+            "app.routers.raf_central.openemr_cursor",
+            return_value=_RaisingCM(),
+        ),
+        patch("app.routers.raf_central._log_raf_action"),
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/order-lab",
+            headers=admin_headers,
+            json={"hcc_code": "37", "icd10": "E11.9"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "skipped"
+        assert "no emr" in (body.get("reason") or "").lower()
+        assert body["suggested_lab_code"] == "4548-4"
+
+
+def test_order_lab_rejects_unmapped_hcc_without_suggestion(client, admin_headers):
+    """Unknown HCC + no explicit suggested_lab_code → 400 (not a silent pick)."""
+    with (
+        patch("app.routers.raf_central.push_procedure_order") as push,
+        patch("app.routers.raf_central._log_raf_action"),
+        patch("app.routers.raf_central.cache_delete_pattern"),
+    ):
+        resp = client.post(
+            "/api/raf-central/1/actions/order-lab",
+            headers=admin_headers,
+            json={"hcc_code": "9999", "icd10": "Z99.9"},
+        )
+        assert resp.status_code == 400
+        assert "default lab mapping" in resp.json()["detail"].lower()
+        push.assert_not_called()

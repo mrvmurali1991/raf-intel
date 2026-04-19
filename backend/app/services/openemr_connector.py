@@ -2619,3 +2619,141 @@ def get_referrals(pid: int) -> list[dict[str, Any]]:
             "get_referrals: transactions table unavailable for pid=%s (%s)", pid, exc
         )
         return []
+
+
+# ---------------------------------------------------------------------------
+# Write: procedure_order (lab / imaging orders)
+# ---------------------------------------------------------------------------
+
+
+@_empty_on_no_emr(default=None)
+def push_procedure_order(
+    pid: int,
+    ordered_by: str,
+    procedure_code: str,
+    procedure_name: str,
+    diagnosis_code: str,
+    lab_code_type: str = "LOINC",
+) -> int | None:
+    """
+    Insert a lab/procedure order for a patient into OpenEMR.
+
+    Writes a parent row in `procedure_order` and a child row in
+    `procedure_order_code` (the actual code details).  Mirrors the
+    write-back style used by :func:`push_medical_problem`: wraps the
+    work in try/except, logs on failure, and returns ``None`` so callers
+    can branch instead of catching exceptions.
+
+    Parameters
+    ----------
+    pid
+        OpenEMR ``patient_data.pid``.
+    ordered_by
+        Free-text provider identifier (email or login). Stored on
+        ``procedure_order.provider_id`` — callers may pass a user email
+        when no numeric provider_id is readily available; OpenEMR casts
+        to int and falls back to 0.
+    procedure_code
+        The code that identifies the ordered procedure (e.g. LOINC
+        "4548-4" for Hemoglobin A1C).
+    procedure_name
+        Human-readable name for the order, e.g. "HEMOGLOBIN A1C".
+    diagnosis_code
+        ICD-10 diagnosis that justifies the order, e.g. "E11.9".  Stored
+        on both the order header (``order_diagnosis``) and order line
+        (``diagnoses``) using OpenEMR's ``ICD10:<code>`` convention.
+    lab_code_type
+        Code system for ``procedure_code``.  Defaults to ``"LOINC"``;
+        callers may pass ``"CPT4"`` etc.
+
+    Returns
+    -------
+    int | None
+        The new ``procedure_order.procedure_order_id`` on success, or
+        ``None`` if the write failed (EMR offline, schema drift, permission
+        denied, missing tables, etc.).  The ``_empty_on_no_emr`` decorator
+        also makes this return ``None`` when no active EMR connection
+        is configured.
+    """
+    try:
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        today_date = datetime.now().strftime("%Y-%m-%d")
+
+        # Diagnosis code is stored with the OpenEMR "ICD10:" prefix — match
+        # the convention used by push_medical_problem() and the billing code.
+        formatted_dx = (
+            diagnosis_code
+            if diagnosis_code.startswith("ICD10:")
+            else f"ICD10:{diagnosis_code}"
+        )
+
+        # OpenEMR's `provider_id` is an integer FK; when we only have a
+        # user email (the typical case for inline RAF actions), fall back
+        # to 0 so the insert still succeeds.  The caller's identity is
+        # captured in raf_action_log by the router.
+        try:
+            provider_id_int = int(ordered_by)
+        except (TypeError, ValueError):
+            provider_id_int = 0
+
+        order_sql = """
+            INSERT INTO procedure_order (
+                date_ordered,
+                provider_id,
+                patient_id,
+                encounter,
+                status,
+                procedure_order_type,
+                order_diagnosis,
+                activity
+            ) VALUES (
+                %s, %s, %s, 0, 'pending', 'laboratory_test', %s, 1
+            )
+        """
+        code_sql = """
+            INSERT INTO procedure_order_code (
+                procedure_order_id,
+                procedure_order_seq,
+                procedure_code,
+                procedure_name,
+                procedure_type,
+                diagnoses
+            ) VALUES (
+                %s, 1, %s, %s, 'ord', %s
+            )
+        """
+
+        with openemr_cursor() as cur:
+            cur.execute(
+                order_sql,
+                (today_date, provider_id_int, pid, formatted_dx),
+            )
+            new_order_id = getattr(cur, "lastrowid", None)
+            if not new_order_id:
+                # Fallback: some MySQL drivers need an explicit select
+                cur.execute("SELECT LAST_INSERT_ID() AS id")
+                row = cur.fetchone()
+                new_order_id = int(row["id"]) if row and row.get("id") else None
+
+            if new_order_id:
+                cur.execute(
+                    code_sql,
+                    (new_order_id, procedure_code, procedure_name, formatted_dx),
+                )
+
+        logger.info(
+            "push_procedure_order: pid=%s code=%s (%s) dx=%s order_id=%s",
+            pid, procedure_code, lab_code_type, formatted_dx, new_order_id,
+        )
+        return int(new_order_id) if new_order_id else None
+
+    except NoActiveEMRConnection:
+        # Let the decorator handle — surface as None to the caller.
+        raise
+    except Exception as exc:
+        logger.error(
+            "push_procedure_order failed pid=%s code=%s: %s",
+            pid, procedure_code, exc,
+        )
+        return None
