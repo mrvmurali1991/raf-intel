@@ -11,17 +11,17 @@
  *
  * Renders six action-first accordions:
  *   - LIVE RAF bar (top strip, always visible)
- *   - MEAT gaps      (🔴 compliance risk, top priority)
- *   - Suspect conds  (🟡 RAF lift opportunity)
- *   - HCC recapture  (🔵 prior-year loss)
- *   - Audit readiness (🧾 documentation risk score)
- *   - Financial impact (📈 revenue breakdown)
+ *   - MEAT gaps      (compliance risk, top priority)
+ *   - Suspect conds  (RAF lift opportunity)
+ *   - HCC recapture  (prior-year loss)
+ *   - Audit readiness (documentation risk score)
+ *   - Financial impact (revenue breakdown)
  *
  * Every interactive button calls an action endpoint, re-fetches the panel
  * on success, and keeps the user in context — no page reload, no modal.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ import {
   History,
   ClipboardCheck,
   DollarSign,
-  CheckCircle2,
+  Check,
   XCircle,
   RefreshCcw,
   Loader2,
@@ -46,6 +46,7 @@ import {
   TrendingDown,
   Minus,
   Inbox,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StartTreatmentButton from "@/components/StartTreatmentButton";
@@ -128,6 +129,29 @@ export interface RAFCentralPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Tooltip — lightweight, no extra dependency
+// ---------------------------------------------------------------------------
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)}
+      onBlur={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md border">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -146,6 +170,7 @@ export function RAFCentralPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recalcing, setRecalcing] = useState(false);
+  const meatRef = useRef<HTMLDivElement>(null);
 
   const fetchPanel = useCallback(async () => {
     try {
@@ -194,6 +219,15 @@ export function RAFCentralPanel({
 
   if (!data) return null;
 
+  const incompleteGaps = data.meat_gaps.filter((g) => g.status !== "COMPLETE");
+  const openSuspects = data.suspects.filter((s) => s.status !== "dismissed");
+
+  const actionCount = incompleteGaps.length + openSuspects.length;
+
+  const scrollToMeat = () => {
+    meatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className={cn("flex h-full flex-col", embedded ? "bg-background" : "")}>
       {/* Header */}
@@ -212,7 +246,7 @@ export function RAFCentralPanel({
             variant="ghost"
             onClick={recalc}
             disabled={recalcing}
-            title="Force RAF recalculation"
+            aria-label="Force RAF recalculation"
           >
             <RefreshCcw className={cn("h-4 w-4", recalcing && "animate-spin")} />
           </Button>
@@ -227,21 +261,44 @@ export function RAFCentralPanel({
       {/* LIVE RAF bar */}
       <LiveRAFSection raf={data.raf_score} />
 
-      <div className="flex-1 overflow-y-auto divide-y">
-        <Section
-          title="MEAT Gaps"
-          icon={<AlertTriangle className="h-4 w-4 text-red-500" />}
-          count={data.meat_gaps.filter((g) => g.status !== "COMPLETE").length}
-          severity="high"
-          defaultOpen
+      {/* Next Best Action banner — informational, subtle */}
+      {actionCount > 0 && (
+        <button
+          onClick={scrollToMeat}
+          className="mx-4 my-2 flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-left hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Review ${actionCount} documentation gaps`}
         >
-          <MEATSection
-            patientId={patientId}
-            year={year}
-            gaps={data.meat_gaps}
-            onChange={fetchPanel}
-          />
-        </Section>
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+              <Check className="h-3 w-3" aria-hidden />
+            </span>
+            <span className="text-xs font-medium text-foreground truncate">
+              {actionCount} gap{actionCount !== 1 ? "s" : ""} require documentation review
+            </span>
+          </span>
+          <span className="flex-shrink-0 text-[11px] font-medium text-muted-foreground">
+            Review →
+          </span>
+        </button>
+      )}
+
+      <div className="flex-1 overflow-y-auto divide-y">
+        <div ref={meatRef}>
+          <Section
+            title="MEAT Gaps"
+            icon={<AlertTriangle className="h-4 w-4 text-red-500" />}
+            count={data.meat_gaps.length}
+            severity="high"
+            defaultOpen
+          >
+            <MEATSection
+              patientId={patientId}
+              year={year}
+              gaps={data.meat_gaps}
+              onChange={fetchPanel}
+            />
+          </Section>
+        </div>
 
         <Section
           title="Suspect Conditions"
@@ -268,7 +325,7 @@ export function RAFCentralPanel({
 
         <Section
           title="Audit Readiness"
-          icon={<ClipboardCheck className="h-4 w-4 text-emerald-600" />}
+          icon={<ClipboardCheck className="h-4 w-4 text-slate-500" />}
           severity={data.audit_readiness.risk_level === "HIGH" ? "high" : "low"}
         >
           <AuditSection audit={data.audit_readiness} />
@@ -276,7 +333,7 @@ export function RAFCentralPanel({
 
         <Section
           title="Financial Impact"
-          icon={<DollarSign className="h-4 w-4 text-emerald-600" />}
+          icon={<DollarSign className="h-4 w-4 text-slate-500" />}
           severity="low"
         >
           <FinancialSection financial={data.financial_impact} />
@@ -314,18 +371,20 @@ function Section({
     severity === "high"
       ? "border-l-red-500"
       : severity === "medium"
-      ? "border-l-amber-500"
-      : "border-l-emerald-500";
+      ? "border-l-amber-400"
+      : "border-l-slate-300 dark:border-l-slate-600";
   return (
     <div className={cn("border-l-4 bg-background", rail)}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-muted/50 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <div className="flex items-center gap-2">
           {icon}
-          <span className="text-sm font-semibold">{title}</span>
+          <span className="text-sm font-semibold">
+            {title}{count !== undefined ? ` (${count})` : ""}
+          </span>
           {count !== undefined && count > 0 ? (
             <Badge
               className={cn(
@@ -334,7 +393,7 @@ function Section({
                   ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
                   : severity === "medium"
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
               )}
             >
               {count}
@@ -348,7 +407,7 @@ function Section({
           )}
         />
       </button>
-      {open ? <div className="px-4 pb-4">{children}</div> : null}
+      {open ? <div className="px-4 pb-4 pt-1 bg-muted/20 dark:bg-muted/10">{children}</div> : null}
     </div>
   );
 }
@@ -374,26 +433,38 @@ function LiveRAFSection({ raf }: { raf: LiveRAFBar }) {
       ? TrendingUp
       : TrendingDown;
   return (
-    <div className="grid grid-cols-2 gap-2 border-b bg-muted/30 px-4 py-3 sm:grid-cols-4">
-      <Metric label={`PY${raf.year}`} value={raf.current.toFixed(3)} />
-      <Metric
-        label="vs. prior"
-        value={
-          raf.delta === null ? "—" : `${deltaSign}${raf.delta.toFixed(3)}`
-        }
-        valueClassName={deltaColor}
-        icon={<TrendIcon className={cn("h-3.5 w-3.5", deltaColor)} aria-hidden />}
-      />
-      <Metric label="HCCs" value={String(raf.hcc_count)} />
-      <Metric
-        label="Model"
-        value={`${raf.model_segment} · ${raf.model_version.toUpperCase()}`}
-      />
+    <div className="flex items-center gap-4 border-b bg-muted/30 px-4 py-3 flex-wrap">
+      {/* PY score — dominant */}
+      <div className="flex-shrink-0">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          PY{raf.year}
+        </div>
+        <div className="text-2xl font-bold tabular-nums leading-tight">
+          {raf.current.toFixed(3)}
+        </div>
+      </div>
+
+      <Separator orientation="vertical" className="h-8 hidden sm:block" />
+
+      {/* Secondary metrics — smaller */}
+      <div className="flex gap-4 flex-wrap text-sm">
+        <SmallMetric
+          label="vs prior"
+          value={raf.delta === null ? "—" : `${deltaSign}${raf.delta.toFixed(3)}`}
+          valueClassName={deltaColor}
+          icon={<TrendIcon className={cn("h-3 w-3", deltaColor)} aria-hidden />}
+        />
+        <SmallMetric label="HCCs" value={String(raf.hcc_count)} />
+        <SmallMetric
+          label="Model"
+          value={`${raf.model_segment} · ${raf.model_version.toUpperCase()}`}
+        />
+      </div>
     </div>
   );
 }
 
-function Metric({
+function SmallMetric({
   label,
   value,
   valueClassName,
@@ -409,7 +480,7 @@ function Metric({
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <div className={cn("flex items-center gap-1 text-lg font-bold tabular-nums", valueClassName)}>
+      <div className={cn("flex items-center gap-0.5 text-sm font-semibold tabular-nums text-foreground", valueClassName)}>
         {icon}
         <span className="truncate">{value}</span>
       </div>
@@ -418,8 +489,10 @@ function Metric({
 }
 
 // ---------------------------------------------------------------------------
-// MEAT Gaps — per-HCC card with 4 letter-dots + "Mark Reviewed" button
+// MEAT Gaps — per-HCC card with 4 letter-dots + filter chips
 // ---------------------------------------------------------------------------
+
+type MeatFilter = "all" | "incomplete" | "high-impact";
 
 function MEATSection({
   patientId,
@@ -432,6 +505,8 @@ function MEATSection({
   gaps: MEATGap[];
   onChange: () => void;
 }) {
+  const [filter, setFilter] = useState<MeatFilter>("all");
+
   if (!gaps.length)
     return (
       <EmptyState
@@ -440,9 +515,48 @@ function MEATSection({
       />
     );
 
+  const filtered = gaps
+    .filter((g) => {
+      if (filter === "incomplete") return g.status !== "COMPLETE";
+      return true;
+    })
+    .sort((a, b) => {
+      if (filter === "high-impact") return b.coefficient - a.coefficient;
+      return 0;
+    });
+
+  const options: { id: MeatFilter; label: string }[] = [
+    { id: "all", label: "All gaps" },
+    { id: "incomplete", label: "Incomplete only" },
+    { id: "high-impact", label: "High impact first" },
+  ];
+  const activeLabel = options.find((o) => o.id === filter)?.label ?? "All gaps";
+
   return (
     <div className="space-y-3">
-      {gaps.map((g) => (
+      {/* Filter dropdown — right-aligned, single control */}
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Filter
+        </span>
+        <div className="relative">
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as MeatFilter)}
+            className="appearance-none rounded-md border border-border bg-background pl-2.5 pr-7 py-1 text-xs font-medium text-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+            aria-label="Filter MEAT gaps"
+          >
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        </div>
+      </div>
+
+      {filtered.map((g) => (
         <MEATCard
           key={`${g.hcc}-${g.patient_hcc_id}`}
           gap={g}
@@ -485,47 +599,60 @@ function MEATCard({
     }
   };
 
-  const statusColor = gap.status === "COMPLETE"
-    ? "text-emerald-600"
-    : gap.status === "PARTIAL"
-    ? "text-amber-600"
-    : "text-red-600";
+  const isComplete = gap.status === "COMPLETE";
 
   return (
-    <Card className="p-3">
+    <Card className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
+      {/* Row 1: HCC code + ICD + label + status pill */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">HCC {gap.hcc}</span>
-            <span className="text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Tooltip text={`HCC ${gap.hcc} — ${gap.label}`}>
+              <span className="text-sm font-bold cursor-default">HCC {gap.hcc}</span>
+            </Tooltip>
+            <span className="text-muted-foreground select-none">·</span>
+            <span className="text-xs text-muted-foreground font-normal">
               {gap.icd10_codes.slice(0, 3).join(", ")}
             </span>
           </div>
-          <div className="mt-0.5 truncate text-xs text-muted-foreground">{gap.label}</div>
+          <div className="mt-0.5 text-xs font-medium leading-relaxed text-foreground/80 truncate">
+            {gap.label}
+          </div>
         </div>
-        <Badge
-          className={cn(
-            "text-[10px] font-semibold border-0",
-            gap.status === "COMPLETE"
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
-              : gap.status === "PARTIAL"
-              ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-              : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-          )}
-        >
-          {gap.status}
-        </Badge>
+
+        {/* Status pill — emerald for COMPLETE (success), amber for PARTIAL, red for MISSING */}
+        {isComplete ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 flex-shrink-0">
+            <Check className="h-3 w-3" aria-hidden /> Complete
+          </span>
+        ) : (
+          <Badge
+            className={cn(
+              "text-[10px] font-semibold border-0 flex-shrink-0",
+              gap.status === "PARTIAL"
+                ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+            )}
+          >
+            {gap.status}
+          </Badge>
+        )}
       </div>
 
+      {/* Row 2: MEAT dots + coef */}
       <div className="mt-2 flex items-center gap-3">
         <LetterDots gaps={gap.gaps} />
-        <span className="text-xs text-muted-foreground">
-          coef {gap.coefficient.toFixed(3)}
-        </span>
+        <Tooltip text="Model coefficient contribution to RAF score">
+          <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground tabular-nums cursor-default">
+            <Info className="h-3 w-3 text-muted-foreground/60" aria-hidden />
+            coef {gap.coefficient.toFixed(3)}
+          </span>
+        </Tooltip>
       </div>
 
-      {gap.status !== "COMPLETE" && gap.patient_hcc_id ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+      {/* Actions */}
+      {!isComplete && gap.patient_hcc_id ? (
+        <div className="mt-2.5 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={markReviewed} disabled={busy}>
             {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Mark reviewed"}
           </Button>
@@ -557,22 +684,24 @@ function LetterDots({
   gaps: MEATGap["gaps"];
 }) {
   const items = [
-    { key: "monitor", letter: "M", color: "bg-teal-500" },
-    { key: "evaluate", letter: "E", color: "bg-purple-500" },
-    { key: "assess", letter: "A", color: "bg-amber-500" },
-    { key: "treat", letter: "T", color: "bg-green-500" },
+    { key: "monitor", letter: "M", on: "bg-cyan-500", label: "Monitor" },
+    { key: "evaluate", letter: "E", on: "bg-indigo-500", label: "Evaluate" },
+    { key: "assess", letter: "A", on: "bg-amber-500", label: "Assess" },
+    { key: "treat", letter: "T", on: "bg-emerald-500", label: "Treat" },
   ] as const;
   return (
     <div className="flex gap-1">
-      {items.map(({ key, letter, color }) => {
+      {items.map(({ key, letter, on: onColor, label }) => {
         const on = gaps[key];
         return (
           <span
             key={key}
-            title={on ? `${letter} documented` : `${letter} missing`}
+            title={on ? `${label} documented` : `${label} missing`}
             className={cn(
-              "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
-              on ? `${color} text-white` : "bg-muted text-muted-foreground"
+              "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
+              on
+                ? `${onColor} text-white shadow-sm`
+                : "bg-muted text-muted-foreground/60 ring-1 ring-inset ring-border"
             )}
           >
             {letter}
@@ -629,6 +758,13 @@ function SuspectCardView({
 }) {
   const [busy, setBusy] = useState<"accept" | "dismiss" | null>(null);
   const [showExplain, setShowExplain] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Trigger confidence bar animation on mount
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
 
   const act = async (kind: "accept" | "dismiss") => {
     setBusy(kind);
@@ -649,54 +785,53 @@ function SuspectCardView({
   };
 
   const confPct = Math.round(suspect.confidence * 100);
-  const confColor =
-    confPct >= 85
-      ? "text-emerald-600"
-      : confPct >= 70
-      ? "text-amber-600"
-      : "text-muted-foreground";
   const confBarColor =
-    confPct >= 85 ? "bg-emerald-500" : confPct >= 70 ? "bg-amber-500" : "bg-slate-400";
+    confPct >= 85 ? "bg-slate-500" : confPct >= 70 ? "bg-amber-400" : "bg-slate-300";
 
   return (
-    <Card className="p-3">
+    <Card className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold truncate">{suspect.label}</span>
-          </div>
+          <span className="text-sm font-semibold leading-snug truncate block">{suspect.label}</span>
           <div className="mt-0.5 text-xs text-muted-foreground">
             HCC {suspect.hcc} · {suspect.icd10} · {suspect.trigger}
           </div>
         </div>
-        <div className={cn("text-sm font-bold tabular-nums flex-shrink-0", confColor)}>
-          {confPct}%
+      </div>
+
+      {/* Confidence bar with labels */}
+      <div className="mt-2 space-y-0.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground font-medium">Confidence</span>
+          <span className="font-semibold tabular-nums text-foreground">{confPct}%</span>
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+          <div
+            className={cn("h-full rounded-full transition-[width] duration-500", confBarColor)}
+            style={{ width: mounted ? `${confPct}%` : "0%" }}
+            role="progressbar"
+            aria-valuenow={confPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Confidence ${confPct}%`}
+          />
         </div>
       </div>
-      {/* Confidence mini-bar */}
-      <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn("h-full rounded-full", confBarColor)}
-          style={{ width: `${confPct}%` }}
-        />
-      </div>
-      <div className="mt-3 flex gap-2">
+
+      {/* Button hierarchy: Accept primary, Dismiss outline, Why? ghost */}
+      <div className="mt-2.5 flex gap-2 items-center">
         <Button size="sm" onClick={() => act("accept")} disabled={busy !== null}>
           {busy === "accept" ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
-            <>
-              <CheckCircle2 className="h-3 w-3 mr-1" /> Accept
-            </>
+            <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept</>
           )}
         </Button>
         <Button size="sm" variant="outline" onClick={() => act("dismiss")} disabled={busy !== null}>
           {busy === "dismiss" ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
-            <>
-              <XCircle className="h-3 w-3 mr-1" /> Dismiss
-            </>
+            <><XCircle className="h-3 w-3 mr-1" aria-hidden /> Dismiss</>
           )}
         </Button>
         <Button
@@ -705,8 +840,9 @@ function SuspectCardView({
           onClick={() => setShowExplain(true)}
           disabled={busy !== null}
           aria-label="Why was this flagged?"
+          className="text-muted-foreground hover:text-foreground px-2"
         >
-          <HelpCircle className="h-3 w-3 mr-1" /> Why?
+          <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
         </Button>
       </div>
       <ExplainPanel
@@ -740,7 +876,7 @@ function RecaptureSection({ recapture }: { recapture: RecaptureCard[] }) {
         <strong>${totalRisk.toLocaleString()}</strong> revenue at risk across {recapture.length} gaps
       </div>
       {recapture.map((r) => (
-        <Card key={r.id} className="p-3">
+        <Card key={r.id} className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{r.label}</div>
@@ -768,7 +904,7 @@ function AuditSection({ audit }: { audit: AuditReadiness }) {
       ? "text-red-600"
       : audit.risk_level === "MEDIUM"
       ? "text-amber-600"
-      : "text-emerald-600";
+      : "text-slate-600 dark:text-slate-400";
   return (
     <div className="space-y-2 pt-1">
       <div className="flex items-center justify-between text-sm">
@@ -837,13 +973,13 @@ function FinancialSection({ financial }: { financial: FinancialImpact }) {
       {hasUplift ? (
         <>
           <Separator />
-          <div className="rounded-md border border-emerald-500/30 bg-emerald-50 p-3 dark:bg-emerald-950">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
+          <div className="rounded-md border border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Potential uplift
             </div>
-            <div className="text-lg font-bold text-emerald-700 tabular-nums dark:text-emerald-100">
+            <div className="text-lg font-bold tabular-nums text-foreground">
               +${gain.toLocaleString()}
-              <span className="ml-2 text-xs font-medium text-emerald-700/70 dark:text-emerald-300/80">
+              <span className="ml-2 text-xs font-medium text-muted-foreground">
                 {pct.toFixed(1)}% · ${financial.pmpm_delta.toLocaleString()}/mo
               </span>
             </div>
