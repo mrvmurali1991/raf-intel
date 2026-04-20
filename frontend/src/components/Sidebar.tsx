@@ -69,15 +69,11 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    title: "MAIN",
+    title: "CORE WORKFLOW",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
-      { href: "/uploads", label: "Data Uploads", icon: Upload },
       { href: "/review-queue", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
-      { href: "/suspects", label: "Suspects", icon: ClipboardCheck },
-      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
-      { href: "/prospective", label: "Prospective", icon: Target },
     ],
   },
   {
@@ -85,19 +81,11 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
       { href: "/batch", label: "Batch Analysis", icon: Layers },
+      { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
       { href: "/documents", label: "Documents", icon: FileImage },
       { href: "/claims", label: "Claims", icon: FileText },
       { href: "/demo", label: "Pipeline Demo", icon: Workflow },
       { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
-    ],
-  },
-  {
-    title: "REPORTS",
-    items: [
-      { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
-      { href: "/providers", label: "Provider Performance", icon: UserCheck },
-      { href: "/quality", label: "Quality & STARS", icon: Star },
-      { href: "/submissions", label: "CMS Submissions", icon: Send },
       { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
       { href: "/roi", label: "ROI Calculator", icon: Calculator },
       { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
@@ -106,15 +94,19 @@ const navGroups: NavGroup[] = [
   {
     title: "ADMIN",
     items: [
-      { href: "/users",      label: "Users",          icon: UsersRound },
-      { href: "/system",     label: "System Health",  icon: Activity },
-      { href: "/developer",  label: "Developer",      icon: Code },
-      { href: "/emr-config", label: "EMR Config",     icon: Database, shortcut: "g e" },
+      { href: "/users", label: "Users", icon: UsersRound },
+      { href: "/system", label: "System Health", icon: Activity },
+      { href: "/developer", label: "Developer", icon: Code },
+      { href: "/submissions", label: "CMS Submissions", icon: Send },
+      { href: "/quality", label: "Quality & STARS", icon: Star },
+      { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
+      { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/uploads", label: "Data Uploads", icon: Upload },
+      { href: "/suspects", label: "Suspects", icon: ClipboardCheck },
+      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
+      { href: "/prospective", label: "Prospective", icon: Target },
+      { href: "/providers", label: "Provider Performance", icon: UserCheck },
     ],
-  },
-  {
-    title: "ACCOUNT",
-    items: [{ href: "/settings", label: "Settings", icon: Settings }],
   },
 ];
 
@@ -518,10 +510,10 @@ export function Sidebar() {
             )}
             <div
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 600,
                 textTransform: "uppercase",
-                letterSpacing: "0.08em",
+                letterSpacing: "0.1em",
                 color: TEXT_SECTION,
                 marginTop: index > 0 ? 10 : 8,
                 marginBottom: 4,

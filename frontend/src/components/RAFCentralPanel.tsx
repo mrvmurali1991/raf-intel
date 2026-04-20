@@ -37,6 +37,7 @@ import {
   ClipboardCheck,
   DollarSign,
   Check,
+  CheckCircle2,
   XCircle,
   RefreshCcw,
   Loader2,
@@ -47,6 +48,8 @@ import {
   Minus,
   Inbox,
   Info,
+  MoreHorizontal,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StartTreatmentButton from "@/components/StartTreatmentButton";
@@ -291,21 +294,21 @@ function SparklineTrend({
     >
       <defs>
         <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="#64748b" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#64748b" stopOpacity="0.02" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#sparkFill)" />
       <polyline
         points={polyline}
         fill="none"
-        stroke="#10b981"
+        stroke="#64748b"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
       {/* terminal dot */}
-      <circle cx={xs[2]} cy={ys[2]} r="2" fill="#10b981" />
+      <circle cx={xs[2]} cy={ys[2]} r="2" fill="#64748b" />
     </svg>
   );
 }
@@ -335,21 +338,18 @@ function AuditDonut({
   const cy = size / 2;
   const circumference = 2 * Math.PI * r;
   const pct = total > 0 ? compliant / total : 0;
+  const pctNum = Math.round(pct * 100);
   const dashOffset = circumference * (1 - (animated ? pct : 0));
 
+  // Color semantics: emerald ≥90%, amber 70–89%, red <70%
   const arcColor =
-    riskLevel === "HIGH"
-      ? "#ef4444"
-      : riskLevel === "MEDIUM"
-      ? "#f59e0b"
-      : "#10b981";
-
+    pctNum >= 90 ? "#10b981" : pctNum >= 70 ? "#f59e0b" : "#ef4444";
   const riskBg =
-    riskLevel === "HIGH"
-      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-      : riskLevel === "MEDIUM"
+    pctNum >= 90
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+      : pctNum >= 70
       ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+      : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 
   return (
     <div className="flex items-center gap-4">
@@ -374,7 +374,7 @@ function AuditDonut({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-lg font-bold tabular-nums text-foreground leading-none">
-            {Math.round(pct * 100)}%
+            {pctNum}%
           </span>
           <span className="text-[10px] text-muted-foreground leading-tight">
             {compliant}/{total}
@@ -387,7 +387,7 @@ function AuditDonut({
           {compliant}/{total} HCCs
         </div>
         <span className={cn("inline-flex w-fit rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", riskBg)}>
-          {riskLevel} RISK
+          {pctNum >= 90 ? "LOW" : pctNum >= 70 ? "MEDIUM" : "HIGH"} RISK
         </span>
       </div>
     </div>
@@ -429,19 +429,15 @@ function FinancialAreaChart({
       className="w-full"
     >
       <defs>
-        <linearGradient id="finAreaGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0.25" />
-        </linearGradient>
-        <linearGradient id="finLineGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#10b981" />
+        <linearGradient id="finAreaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#64748b" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#64748b" stopOpacity="0.02" />
         </linearGradient>
       </defs>
       <path d={area} fill="url(#finAreaGrad)" />
-      <path d={path} fill="none" stroke="url(#finLineGrad)" strokeWidth="2" strokeLinecap="round" />
-      <circle cx={x0} cy={y0} r="3" fill="#6366f1" />
-      <circle cx={x1} cy={y1} r="3" fill="#10b981" />
+      <path d={path} fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" />
+      <circle cx={x0} cy={y0} r="3" fill="#94a3b8" />
+      <circle cx={x1} cy={y1} r="3" fill="#475569" />
     </svg>
   );
 }
@@ -569,6 +565,7 @@ export function RAFCentralPanel({
   const [error, setError] = useState<string | null>(null);
   const [recalcing, setRecalcing] = useState(false);
   const [cardsVisible, setCardsVisible] = useState(false);
+  const [dashMeatFilter, setDashMeatFilter] = useState<MeatFilter>("all");
   const meatRef = useRef<HTMLDivElement>(null);
   // Track first mount for stagger animation (point 8)
   const mountedOnce = useRef(false);
@@ -746,17 +743,18 @@ export function RAFCentralPanel({
         <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[3fr_2fr] lg:items-start gap-6 p-6">
           {/* LEFT: primary workspace */}
           <div className="flex flex-col gap-6 min-w-0">
-            {/* MEAT Gaps — point 7: top accent border, shadow, hover elevation */}
+            {/* ── MEAT Gaps — primary workspace card ──────────────────── */}
             <div
               ref={meatRef}
               className={cn(
-                "rounded-lg border bg-card overflow-hidden border-t-[3px] border-t-red-500 shadow-sm hover:shadow-md transition-shadow",
+                "rounded-lg border border-t-[3px] border-t-red-500 bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden",
                 stagger("delay-100")
               )}
             >
+              {/* Header with filter in-line — Issue #5 */}
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" aria-hidden />
-                <span className="text-sm font-semibold">MEAT Gaps</span>
+                <span className="text-base font-bold">MEAT Gaps</span>
                 <Badge
                   className={cn(
                     "ml-1 text-[10px] font-semibold border-0",
@@ -767,27 +765,43 @@ export function RAFCentralPanel({
                 >
                   {data.meat_gaps.length}
                 </Badge>
+                {/* Filter moved into header row */}
+                <div className="ml-auto relative">
+                  <select
+                    value={dashMeatFilter}
+                    onChange={(e) => setDashMeatFilter(e.target.value as MeatFilter)}
+                    className="appearance-none rounded-md border border-border bg-background pl-2.5 pr-7 py-1 text-xs font-medium text-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                    aria-label="Filter MEAT gaps"
+                  >
+                    <option value="all">All gaps</option>
+                    <option value="incomplete">Incomplete only</option>
+                    <option value="high-impact">High impact first</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                </div>
               </div>
-              <div className="px-5 py-4">
+              <div className="px-4 py-4">
                 <MEATSection
                   patientId={patientId}
                   year={year}
                   gaps={data.meat_gaps}
                   onChange={fetchPanel}
+                  filter={dashMeatFilter}
+                  onFilterChange={setDashMeatFilter}
                 />
               </div>
             </div>
 
-            {/* Suspect Conditions — point 7: top amber accent */}
+            {/* ── Suspect Conditions ───────────────────────────────────── */}
             <div
               className={cn(
-                "rounded-lg border bg-card overflow-hidden border-t-[3px] border-t-amber-400 shadow-sm hover:shadow-md transition-shadow",
+                "rounded-lg border border-t-[3px] border-t-amber-400 bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden",
                 stagger("delay-200")
               )}
             >
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden />
-                <span className="text-sm font-semibold">Suspect Conditions</span>
+                <span className="text-sm font-semibold text-muted-foreground">Suspect Conditions</span>
                 <Badge
                   className={cn(
                     "ml-1 text-[10px] font-semibold border-0",
@@ -809,58 +823,81 @@ export function RAFCentralPanel({
             </div>
           </div>
 
-          {/* RIGHT: context / secondary */}
-          <div className="flex flex-col gap-6 min-w-0">
-            {/* HCC Recapture */}
-            <div
-              className={cn(
-                "rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden",
-                stagger("delay-100")
-              )}
-            >
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
-                <History className="h-4 w-4 text-blue-500 flex-shrink-0" aria-hidden />
-                <span className="text-sm font-semibold">HCC Recapture</span>
+          {/* ── RIGHT: secondary context (quieter) ──────────────────────── */}
+          <div className="flex flex-col gap-4 min-w-0">
+            {/* HCC Recapture — flat card, border-b only separators — Issue #1, #4 */}
+            <div className={cn("rounded-lg bg-card overflow-hidden", stagger("delay-100"))}>
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-muted/40">
+                <History className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">HCC Recapture</span>
                 {data.recapture.length > 0 && (
-                  <Badge className="ml-1 text-[10px] font-semibold border-0 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                  <Badge className="ml-1 text-[10px] font-semibold border-0 bg-muted text-muted-foreground">
                     {data.recapture.length}
                   </Badge>
                 )}
               </div>
-              <div className="px-5 py-4">
+              <div className="px-4 py-3">
                 <RecaptureSection recapture={data.recapture} />
               </div>
             </div>
 
-            {/* Audit Readiness — point 2: donut + gradient bg (point 9) */}
+            {/* ── Performance card (merged Audit + Financial) — Issue #4 ── */}
             <div
               className={cn(
-                "rounded-lg border bg-gradient-to-br from-background to-muted/40 dark:from-background dark:to-muted/20 shadow-sm hover:shadow-md transition-shadow overflow-hidden",
+                "rounded-lg border bg-card shadow-sm overflow-hidden",
                 stagger("delay-200")
               )}
             >
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card/80">
-                <ClipboardCheck className="h-4 w-4 text-slate-500 flex-shrink-0" aria-hidden />
-                <span className="text-sm font-semibold">Audit Readiness</span>
+              <div className="flex items-center gap-2 px-4 py-3 border-b bg-card">
+                <ClipboardCheck className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Performance</span>
               </div>
-              <div className="px-5 py-4">
+              <div className="px-4 py-3 space-y-4">
+                {/* Top: MEAT compliance donut */}
                 <AuditSection audit={data.audit_readiness} />
-              </div>
-            </div>
-
-            {/* Financial Impact */}
-            <div
-              className={cn(
-                "rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden",
-                stagger("delay-300")
-              )}
-            >
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
-                <DollarSign className="h-4 w-4 text-slate-500 flex-shrink-0" aria-hidden />
-                <span className="text-sm font-semibold">Financial Impact</span>
-              </div>
-              <div className="px-5 py-4">
-                <FinancialSection financial={data.financial_impact} />
+                {/* Divider */}
+                <div className="border-t border-muted/40" />
+                {/* Middle: current → projected with arrow */}
+                <div className="flex items-center gap-3">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Current annual</div>
+                    <div className="text-sm font-bold tabular-nums">${data.financial_impact.current_annual.toLocaleString()}</div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden />
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Projected annual</div>
+                    <div className="text-sm font-bold tabular-nums">${data.financial_impact.projected_annual.toLocaleString()}</div>
+                  </div>
+                </div>
+                {/* Area chart */}
+                {data.financial_impact.annual_delta > 0 && (
+                  <FinancialAreaChart
+                    current={data.financial_impact.current_annual}
+                    projected={data.financial_impact.projected_annual}
+                  />
+                )}
+                {/* Potential uplift callout */}
+                {data.financial_impact.annual_delta > 0 && (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 px-3 py-2">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Potential uplift</div>
+                    <div className="text-base font-bold tabular-nums text-foreground">
+                      +${data.financial_impact.annual_delta.toLocaleString()}
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                        {(
+                          data.financial_impact.current_raf
+                            ? ((data.financial_impact.projected_raf - data.financial_impact.current_raf) /
+                                data.financial_impact.current_raf) *
+                              100
+                            : 0
+                        ).toFixed(1)}
+                        % · ${data.financial_impact.pmpm_delta.toLocaleString()}/mo
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground">
+                  ${data.financial_impact.revenue_per_raf_point.toLocaleString()}/RAF point · CMS MA benchmark
+                </div>
               </div>
             </div>
           </div>
@@ -1166,19 +1203,26 @@ function MEATSection({
   year,
   gaps,
   onChange,
+  filter: filterProp,
+  onFilterChange,
 }: {
   patientId: number;
   year?: number;
   gaps: MEATGap[];
   onChange: () => void;
+  filter?: MeatFilter;
+  onFilterChange?: (f: MeatFilter) => void;
 }) {
-  const [filter, setFilter] = useState<MeatFilter>("all");
+  const [filterInternal, setFilterInternal] = useState<MeatFilter>("all");
+  const filter = filterProp ?? filterInternal;
+  const setFilter = onFilterChange ?? setFilterInternal;
 
   if (!gaps.length)
     return (
       <EmptyState
-        title="No HCCs coded yet"
-        subtitle="Accept a suspect below to start building evidence."
+        variant="success"
+        title="All MEAT elements documented"
+        subtitle="Accept a suspect below to add conditions requiring evidence."
       />
     );
 
@@ -1192,49 +1236,268 @@ function MEATSection({
       return 0;
     });
 
+  // Priority buckets: High ≥0.4, Medium 0.15–0.4, Low <0.15
+  const high = filtered.filter((g) => g.coefficient >= 0.4);
+  const medium = filtered.filter((g) => g.coefficient >= 0.15 && g.coefficient < 0.4);
+  const low = filtered.filter((g) => g.coefficient < 0.15);
+
   const options: { id: MeatFilter; label: string }[] = [
     { id: "all", label: "All gaps" },
     { id: "incomplete", label: "Incomplete only" },
     { id: "high-impact", label: "High impact first" },
   ];
 
-  return (
-    <div className="space-y-3">
-      {/* Filter dropdown — right-aligned, single control */}
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Filter
-        </span>
-        <div className="relative">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as MeatFilter)}
-            className="appearance-none rounded-md border border-border bg-background pl-2.5 pr-7 py-1 text-xs font-medium text-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-            aria-label="Filter MEAT gaps"
-          >
-            {options.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+  function PriorityGroup({
+    label,
+    dotColor,
+    items,
+  }: {
+    label: string;
+    dotColor: string;
+    items: MEATGap[];
+  }) {
+    if (items.length === 0) return null;
+    return (
+      <div>
+        <div className="flex items-center gap-1.5 px-1 py-2">
+          <span className={cn("h-2 w-2 rounded-full flex-shrink-0", dotColor)} aria-hidden />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {label}
+          </span>
+        </div>
+        <div className="rounded-md overflow-hidden border border-border/40">
+          {items.map((g, idx) => (
+            <MEATRow
+              key={`${g.hcc}-${g.patient_hcc_id}`}
+              gap={g}
+              patientId={patientId}
+              year={year}
+              onChange={onChange}
+              isOdd={idx % 2 === 1}
+            />
+          ))}
         </div>
       </div>
+    );
+  }
 
-      {filtered.map((g) => (
-        <MEATCard
-          key={`${g.hcc}-${g.patient_hcc_id}`}
-          gap={g}
-          patientId={patientId}
-          year={year}
-          onChange={onChange}
-        />
-      ))}
+  return (
+    <div className="space-y-3">
+      <PriorityGroup label="High Priority" dotColor="bg-red-500" items={high} />
+      <PriorityGroup label="Medium Priority" dotColor="bg-amber-500" items={medium} />
+      <PriorityGroup label="Low Priority" dotColor="bg-slate-400" items={low} />
     </div>
   );
 }
 
+function MEATRow({
+  gap,
+  patientId,
+  year,
+  onChange,
+  isOdd,
+}: {
+  gap: MEATGap;
+  patientId: number;
+  year?: number;
+  onChange: () => void;
+  isOdd: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+
+  const railColor =
+    gap.coefficient >= 0.4
+      ? "bg-red-500"
+      : gap.coefficient >= 0.15
+      ? "bg-amber-500"
+      : "bg-slate-400";
+
+  const doneCount = [gap.gaps.monitor, gap.gaps.evaluate, gap.gaps.assess, gap.gaps.treat].filter(
+    Boolean
+  ).length;
+  const isComplete = gap.status === "COMPLETE";
+
+  const statusLabel = isComplete
+    ? "Complete"
+    : gap.status === "PARTIAL"
+    ? `Partial (${doneCount}/4)`
+    : "Missing";
+  const statusClass = isComplete
+    ? "text-emerald-700 dark:text-emerald-400"
+    : gap.status === "PARTIAL"
+    ? "text-amber-700 dark:text-amber-400"
+    : "text-red-700 dark:text-red-400";
+
+  const markReviewed = async () => {
+    if (!gap.patient_hcc_id) return;
+    const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
+      .filter(([, on]) => !on)
+      .map(([k]) => k);
+    if (missing.length === 0) return;
+    const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
+    const attestation = window.prompt(
+      `Attestation for HCC ${gap.hcc} — ${gap.label}\n` +
+        `Missing elements: ${missingLabel}\n\n` +
+        `Enter a clinician note documenting these elements. ` +
+        `Already-documented MEAT letters will not be overwritten. ` +
+        `Leave blank to cancel.`,
+      ""
+    );
+    if (!attestation || !attestation.trim()) return;
+    const note = attestation.trim();
+    setBusy(true);
+    try {
+      await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
+        patient_hcc_id: gap.patient_hcc_id,
+        monitor_note: gap.gaps.monitor ? null : note,
+        evaluate_note: gap.gaps.evaluate ? null : note,
+        assess_note: gap.gaps.assess ? null : note,
+        treat_note: gap.gaps.treat ? null : note,
+      });
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addNotes = async () => {
+    if (!gap.patient_hcc_id) return;
+    const noteText = window.prompt(
+      `Add note for HCC ${gap.hcc} — ${gap.label}\n\nEnter your clinical note. Leave blank to cancel.`,
+      ""
+    );
+    if (!noteText || !noteText.trim()) return;
+    const note = noteText.trim();
+    setBusy(true);
+    try {
+      await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
+        patient_hcc_id: gap.patient_hcc_id,
+        monitor_note: gap.gaps.monitor ? null : note,
+        evaluate_note: gap.gaps.evaluate ? null : note,
+        assess_note: gap.gaps.assess ? null : note,
+        treat_note: gap.gaps.treat ? null : note,
+      });
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        "relative flex items-center gap-3 py-3 pr-3 pl-0 transition-colors",
+        isOdd ? "bg-muted/20 dark:bg-muted/10" : "bg-card"
+      )}
+    >
+      {/* 4px severity rail */}
+      <div className={cn("absolute left-0 top-0 bottom-0 w-1 rounded-sm flex-shrink-0", railColor)} aria-hidden />
+
+      {/* MEAT dots — smaller */}
+      <div className="ml-3 flex-shrink-0">
+        <LetterDots gaps={gap.gaps} size="sm" />
+      </div>
+
+      {/* Identity + status */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          <Tooltip text={`HCC ${gap.hcc} — ${gap.label}`}>
+            <span className="text-xs font-bold cursor-default">HCC {gap.hcc}</span>
+          </Tooltip>
+          <span className="text-[11px] text-muted-foreground truncate max-w-[20ch]">{gap.label}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className={cn("text-[11px] font-semibold", statusClass)}>{statusLabel}</span>
+          <Tooltip text="Model coefficient contribution to RAF score">
+            <span className="text-[10px] text-muted-foreground/70 tabular-nums cursor-default">
+              coef {gap.coefficient.toFixed(3)}
+            </span>
+          </Tooltip>
+        </div>
+      </div>
+
+      {/* Right-aligned actions */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {!isComplete && gap.patient_hcc_id && (
+          <>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={markReviewed}
+              disabled={busy}
+              className="h-7 px-2.5 text-xs"
+              aria-label={`Review HCC ${gap.hcc}`}
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Review"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={addNotes}
+              disabled={busy}
+              className="h-7 px-2.5 text-xs"
+              aria-label={`Add notes for HCC ${gap.hcc}`}
+            >
+              Add Notes
+            </Button>
+            {/* Overflow: Order Lab + Start Treatment */}
+            <div className="relative">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                onClick={() => setOverflowOpen((o) => !o)}
+                aria-label="More actions"
+                aria-expanded={overflowOpen}
+                aria-haspopup="menu"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+              {overflowOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-20 rounded-md border border-border bg-popover shadow-md py-1 min-w-[140px]"
+                  role="menu"
+                >
+                  {!gap.gaps.monitor && (
+                    <div role="menuitem" className="px-1 py-0.5">
+                      <OrderLabButton
+                        patientId={patientId}
+                        hccCode={gap.hcc}
+                        icd10={gap.icd10_codes[0] || ""}
+                        onOrdered={() => { setOverflowOpen(false); onChange(); }}
+                      />
+                    </div>
+                  )}
+                  {!gap.gaps.treat && (
+                    <div role="menuitem" className="px-1 py-0.5">
+                      <StartTreatmentButton
+                        patientId={patientId}
+                        hccCode={gap.hcc}
+                        icd10={gap.icd10_codes[0] ?? ""}
+                        onStarted={() => { setOverflowOpen(false); onChange(); }}
+                      />
+                    </div>
+                  )}
+                  {gap.gaps.monitor && gap.gaps.treat && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">No additional actions</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {isComplete && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+            <Check className="h-3 w-3" aria-hidden />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// MEATCard is kept for the panel layout (unchanged)
 function MEATCard({
   gap,
   patientId,
@@ -1333,7 +1596,7 @@ function MEATCard({
         </Tooltip>
       </div>
 
-      {/* point 5: MEAT completion progress bar */}
+      {/* MEAT completion progress bar */}
       <MEATProgressBar gaps={gap.gaps} />
 
       {/* Actions */}
@@ -1366,8 +1629,10 @@ function MEATCard({
 
 function LetterDots({
   gaps,
+  size = "md",
 }: {
   gaps: MEATGap["gaps"];
+  size?: "sm" | "md";
 }) {
   const items = [
     { key: "monitor", letter: "M", on: "bg-cyan-500", label: "Monitor" },
@@ -1375,6 +1640,7 @@ function LetterDots({
     { key: "assess", letter: "A", on: "bg-amber-500", label: "Assess" },
     { key: "treat", letter: "T", on: "bg-emerald-500", label: "Treat" },
   ] as const;
+  const dim = size === "sm" ? "h-4 w-4 text-[9px]" : "h-5 w-5 text-[10px]";
   return (
     <div className="flex gap-1">
       {items.map(({ key, letter, on: onColor, label }) => {
@@ -1384,7 +1650,8 @@ function LetterDots({
             key={key}
             title={on ? `${label} documented` : `${label} missing`}
             className={cn(
-              "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
+              "inline-flex items-center justify-center rounded-full font-bold transition-colors",
+              dim,
               on
                 ? `${onColor} text-white shadow-sm`
                 : "bg-muted text-muted-foreground/60 ring-1 ring-inset ring-border"
@@ -1414,6 +1681,7 @@ function SuspectsSection({
   if (!suspects.length)
     return (
       <EmptyState
+        variant="success"
         title="No open suspects"
         subtitle="Run a suspect scan from the patient page to discover HCC lift."
       />
@@ -1527,31 +1795,30 @@ function RecaptureSection({ recapture }: { recapture: RecaptureCard[] }) {
   if (!recapture.length)
     return (
       <EmptyState
-        title="No recapture gaps"
-        subtitle="Every prior-year HCC is documented this year."
+        variant="success"
+        title="All recapture gaps closed"
+        subtitle="Every prior-year HCC is re-documented this year."
       />
     );
 
   const totalRisk = recapture.reduce((acc, r) => acc + r.revenue_at_risk, 0);
   return (
     <div className="space-y-2">
-      <div className="rounded-md bg-blue-50 p-2 text-xs text-blue-900 dark:bg-blue-950 dark:text-blue-200">
+      <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 p-2 text-xs text-amber-900 dark:text-amber-200">
         <strong>${totalRisk.toLocaleString()}</strong> revenue at risk across {recapture.length} gaps
       </div>
       {recapture.map((r) => (
-        <Card key={r.id} className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold truncate">{r.label}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                HCC {r.hcc} · {r.icd10} · last seen {r.last_encounter_date || r.prior_year}
-              </div>
-            </div>
-            <div className="text-sm font-bold text-blue-600 tabular-nums">
-              ${r.revenue_at_risk.toLocaleString()}
+        <div key={r.id} className="flex items-start justify-between gap-2 py-2 border-b border-muted/40 last:border-0">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold truncate">{r.label}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              HCC {r.hcc} · {r.icd10} · last seen {r.last_encounter_date || r.prior_year}
             </div>
           </div>
-        </Card>
+          <div className="text-xs font-bold text-amber-700 dark:text-amber-400 tabular-nums flex-shrink-0">
+            ${r.revenue_at_risk.toLocaleString()}
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -1577,7 +1844,28 @@ function AuditSection({ audit }: { audit: AuditReadiness }) {
 // EmptyState — consistent "nothing here" block for section bodies
 // ---------------------------------------------------------------------------
 
-function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
+function EmptyState({
+  title,
+  subtitle,
+  variant = "neutral",
+}: {
+  title: string;
+  subtitle?: string;
+  variant?: "neutral" | "success";
+}) {
+  if (variant === "success") {
+    return (
+      <div className="flex flex-col items-center gap-2 py-6 text-center rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="h-5 w-5" aria-hidden />
+        </div>
+        <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">{title}</div>
+        {subtitle ? (
+          <div className="max-w-[36ch] text-xs text-emerald-700 dark:text-emerald-300">{subtitle}</div>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center gap-2 py-6 text-center">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
