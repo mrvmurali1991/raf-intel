@@ -16,6 +16,26 @@ scores each ICD code against the note text and returns a compliance
 status that maps to the `raf_patient_hcc.meat_status` enum
 (COMPLETE / PARTIAL / MISSING).
 
+IMPORTANT — ADVISORY-ONLY STATUS
+----------------------------------
+This module is a **triage / pre-filter signal only**.  Its output MUST NOT be
+used to set ``meat_status = 'complete'`` in ``raf_patient_hcc`` for billing
+purposes.  Specifically:
+
+  * Keyword spotting cannot detect negation ("no worsening" matches "worsening").
+  * It cannot distinguish historical context ("mother had diabetes") from
+    current encounter documentation.
+  * It has no temporal reasoning to confirm the evidence belongs to THIS
+    encounter's note and not a copied/pasted HPI from a prior visit.
+  * It cannot validate that MEAT quotes are verbatim substrings of the source
+    note (the LLM path uses ``validate_quote_in_source`` for this).
+
+For CMS RADV-defensible billing, only the LLM-validated path
+(``app.services.ai_pipeline.meat_extractor.extract_meat_evidence``) may
+promote an HCC to ``meat_status = 'complete'``.  This validator drives the
+``raf_patient_hcc.meat_status = 'partial'`` triage track at most, controlled
+by ``settings.require_llm_meat_for_billing``.
+
 Limitations (rule-based keyword match)
 --------------------------------------
 * Pure keyword spotting — cannot distinguish negation ("no worsening"),

@@ -26,6 +26,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from app.config import settings
 from app.db import raf_cursor
 from app.services import meat_evidence_service
 from app.services.meat_validator import validate_meat
@@ -217,8 +218,13 @@ def run_auto_meat_for_patient(
                     patient_id, hcc["hcc_code"], enc_id, exc,
                 )
 
+    # When require_llm_meat_for_billing is True (default), cap the meat_status
+    # written by this rule-based pass at 'partial'.  Only the LLM-validated
+    # pipeline (task_analyze_encounters_batch → store_analysis_meat) may
+    # promote an HCC to 'complete' for RADV-defensible billing.
+    _max_status = "partial" if settings.require_llm_meat_for_billing else "complete"
     try:
-        meat_evidence_service.update_hcc_meat_status(patient_id, year)
+        meat_evidence_service.update_hcc_meat_status(patient_id, year, max_status=_max_status)
     except Exception as exc:
         logger.warning("auto_meat: update_hcc_meat_status failed pid=%s: %s", patient_id, exc)
 

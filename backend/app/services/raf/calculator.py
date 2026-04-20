@@ -1211,7 +1211,25 @@ def calculate_raf_score(
         )
 
     # 2b. Merge ICD codes from raf_patient_hcc (document analysis, manual entries)
-    # Require MEAT verification for strict billing codes if require_meat is True
+    # Require MEAT verification for strict billing codes if require_meat is True.
+    #
+    # RADV BILLING GATE — meat_status authoritativeness invariant:
+    #   meat_status = 'complete' is ONLY authoritative for billing when it was
+    #   written by the LLM-validated path (task_analyze_encounters_batch →
+    #   store_analysis_meat → update_hcc_meat_status with max_status="complete").
+    #
+    #   The rule-based regex validator (meat_validator.py / auto_meat_extractor.py)
+    #   is advisory-only. When settings.require_llm_meat_for_billing is True
+    #   (the default), auto_meat_extractor caps its writes at max_status="partial",
+    #   so 'complete' here is guaranteed to come from the LLM path.
+    #
+    #   'passed' is reserved for future CMS-acknowledged status from a RADV
+    #   attestation workflow and is already LLM-only by construction.
+    #
+    #   If you see meat_status='complete' being set by a code path that does NOT
+    #   go through store_analysis_meat (i.e., the LLM pipeline), that is a bug.
+    #   Raise an alarm: grep for update_hcc_meat_status calls and confirm every
+    #   caller from the regex path passes max_status="partial".
     suspected_codes = set()
     try:
         with raf_cursor() as cur:

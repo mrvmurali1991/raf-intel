@@ -745,13 +745,18 @@ def store_analysis_meat(
 # 6. update_hcc_meat_status
 # ---------------------------------------------------------------------------
 
-def update_hcc_meat_status(patient_id: int, year: int = None) -> None:
+def update_hcc_meat_status(
+    patient_id: int,
+    year: int = None,
+    *,
+    max_status: str = "complete",
+) -> None:
     """Recompute and persist meat_status for every HCC of a patient/year.
 
     Reads the best (MAX) MEAT element presence across all evidence rows for
     each HCC and writes the appropriate enum value back to raf_patient_hcc:
 
-        all 4 present → "complete"
+        all 4 present → "complete"  (capped by *max_status*)
         1–3 present   → "partial"
         none          → "missing"
 
@@ -762,9 +767,32 @@ def update_hcc_meat_status(patient_id: int, year: int = None) -> None:
     patient_id:
         RAF Intelligence patient ID.
     year:
-        Measurement year (defaults to 2026).
+        Measurement year (defaults to current year).
+    max_status:
+        Ceiling on the status this call may write.  Pass ``"partial"`` when
+        the evidence comes exclusively from the rule-based regex validator so
+        that an HCC can never reach ``"complete"`` via keyword matching alone.
+        The LLM-validated path (``store_analysis_meat``) keeps the default
+        ``"complete"`` ceiling.  This enforces ``settings.require_llm_meat_for_billing``.
+
+    Notes
+    -----
+    The rule-based ``meat_validator`` is advisory-only (see its module
+    docstring).  Callers from ``auto_meat_extractor`` MUST pass
+    ``max_status="partial"`` when ``settings.require_llm_meat_for_billing``
+    is True so that billed RAF scores are never gated on regex evidence.
     """
     year = year or date.today().year
+
+    # Validate the ceiling value so callers cannot accidentally pass an
+    # invalid enum string.
+    _valid_statuses = ("complete", "partial", "missing")
+    if max_status not in _valid_statuses:
+        raise ValueError(
+            f"update_hcc_meat_status: max_status={max_status!r} is not valid; "
+            f"must be one of {_valid_statuses}"
+        )
+
     # Reuse calculate_meat_completeness to get per-HCC MEAT scores.
     # We do an independent targeted UPDATE so we touch only the rows that
     # actually need changing (avoids spurious updated_at bumps).
@@ -777,11 +805,25 @@ def update_hcc_meat_status(patient_id: int, year: int = None) -> None:
         )
         return
 
+    # Status ordering for ceiling enforcement
+    _status_rank = {"missing": 0, "partial": 1, "complete": 2}
+    cap_rank = _status_rank[max_status]
+
     updated = 0
     with raf_cursor() as cur:
         for hcc_entry in report["per_hcc"]:
             phcc_id: int = hcc_entry["patient_hcc_id"]
-            new_status: str = hcc_entry["status"]
+            raw_status: str = hcc_entry["status"]
+
+            # Apply the ceiling: never promote beyond max_status.
+            effective_status = raw_status
+            if _status_rank.get(raw_status, 0) > cap_rank:
+                effective_status = max_status
+                logger.debug(
+                    "update_hcc_meat_status: hcc_id=%d status capped from %s → %s "
+                    "(require_llm_meat_for_billing gate)",
+                    phcc_id, raw_status, effective_status,
+                )
 
             cur.execute(
                 """
@@ -790,15 +832,15 @@ def update_hcc_meat_status(patient_id: int, year: int = None) -> None:
                 WHERE id = %s
                   AND meat_status != %s
                 """,
-                (new_status, phcc_id, new_status),
+                (effective_status, phcc_id, effective_status),
             )
             if cur.rowcount:
                 updated += 1
                 logger.debug(
-                    "update_hcc_meat_status: hcc_id=%d → %s", phcc_id, new_status
+                    "update_hcc_meat_status: hcc_id=%d → %s", phcc_id, effective_status
                 )
 
     logger.info(
-        "update_hcc_meat_status: patient_id=%d year=%d — %d/%d rows updated",
-        patient_id, year, updated, report["total_hccs"],
+        "update_hcc_meat_status: patient_id=%d year=%d max_status=%s — %d/%d rows updated",
+        patient_id, year, max_status, updated, report["total_hccs"],
     )
