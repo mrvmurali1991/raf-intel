@@ -30,6 +30,13 @@ import { OrderLabButton } from "@/components/OrderLabButton";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   ChevronDown,
   AlertTriangle,
   Sparkles,
@@ -161,6 +168,97 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
         </span>
       )}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MEATAttestationDialog — replaces window.prompt for MEAT attestation
+// ---------------------------------------------------------------------------
+
+interface MEATAttestationDialogProps {
+  open: boolean;
+  hcc: string;
+  label: string;
+  missingLabel: string;
+  placeholder?: string;
+  onCancel: () => void;
+  onSubmit: (note: string) => void;
+}
+
+function MEATAttestationDialog({
+  open,
+  hcc,
+  label,
+  missingLabel,
+  placeholder,
+  onCancel,
+  onSubmit,
+}: MEATAttestationDialogProps) {
+  const [note, setNote] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Reset note when dialog opens; autofocus textarea
+  useEffect(() => {
+    if (open) {
+      setNote("");
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [open]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      const trimmed = note.trim();
+      if (trimmed) onSubmit(trimmed);
+    }
+  };
+
+  const handleSubmit = () => {
+    const trimmed = note.trim();
+    if (trimmed) onSubmit(trimmed);
+  };
+
+  const defaultPlaceholder =
+    placeholder ||
+    `e.g., Patient on medication for HCC ${hcc}, condition monitored quarterly, no acute complications.`;
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel(); }}>
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>MEAT Attestation — HCC {hcc}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-1">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-semibold">{label}</span>
+            {missingLabel && (
+              <> — missing: <span className="font-medium">{missingLabel}</span></>
+            )}
+          </p>
+          <textarea
+            ref={textareaRef}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={defaultPlaceholder}
+            rows={4}
+            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Clinician attestation note"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Cmd+Enter / Ctrl+Enter to submit. Already-documented MEAT letters will not be overwritten.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!note.trim()}>
+            Submit attestation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1315,6 +1413,7 @@ function MEATRow({
 }) {
   const [busy, setBusy] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"review" | "notes" | null>(null);
 
   const railColor =
     gap.coefficient >= 0.4
@@ -1339,24 +1438,15 @@ function MEATRow({
     ? "text-amber-700 dark:text-amber-400"
     : "text-red-700 dark:text-red-400";
 
-  const markReviewed = async () => {
+  const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
+    .filter(([, on]) => !on)
+    .map(([k]) => k);
+  const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
+
+  const submitMeat = async (note: string) => {
     if (!gap.patient_hcc_id) return;
-    const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
-      .filter(([, on]) => !on)
-      .map(([k]) => k);
-    if (missing.length === 0) return;
-    const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
-    const attestation = window.prompt(
-      `Attestation for HCC ${gap.hcc} — ${gap.label}\n` +
-        `Missing elements: ${missingLabel}\n\n` +
-        `Enter a clinician note documenting these elements. ` +
-        `Already-documented MEAT letters will not be overwritten. ` +
-        `Leave blank to cancel.`,
-      ""
-    );
-    if (!attestation || !attestation.trim()) return;
-    const note = attestation.trim();
     setBusy(true);
+    setDialogMode(null);
     try {
       await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
         patient_hcc_id: gap.patient_hcc_id,
@@ -1371,27 +1461,14 @@ function MEATRow({
     }
   };
 
-  const addNotes = async () => {
+  const markReviewed = () => {
+    if (!gap.patient_hcc_id || missing.length === 0) return;
+    setDialogMode("review");
+  };
+
+  const addNotes = () => {
     if (!gap.patient_hcc_id) return;
-    const noteText = window.prompt(
-      `Add note for HCC ${gap.hcc} — ${gap.label}\n\nEnter your clinical note. Leave blank to cancel.`,
-      ""
-    );
-    if (!noteText || !noteText.trim()) return;
-    const note = noteText.trim();
-    setBusy(true);
-    try {
-      await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
-        patient_hcc_id: gap.patient_hcc_id,
-        monitor_note: gap.gaps.monitor ? null : note,
-        evaluate_note: gap.gaps.evaluate ? null : note,
-        assess_note: gap.gaps.assess ? null : note,
-        treat_note: gap.gaps.treat ? null : note,
-      });
-      onChange();
-    } finally {
-      setBusy(false);
-    }
+    setDialogMode("notes");
   };
 
   return (
@@ -1503,6 +1580,16 @@ function MEATRow({
           </span>
         )}
       </div>
+
+      {/* MEAT attestation dialog — replaces window.prompt */}
+      <MEATAttestationDialog
+        open={dialogMode !== null}
+        hcc={gap.hcc}
+        label={gap.label}
+        missingLabel={dialogMode === "review" ? missingLabel : ""}
+        onCancel={() => setDialogMode(null)}
+        onSubmit={submitMeat}
+      />
     </div>
   );
 }
@@ -1520,27 +1607,17 @@ function MEATCard({
   onChange: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const markReviewed = async () => {
+  const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
+    .filter(([, on]) => !on)
+    .map(([k]) => k);
+  const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
+
+  const submitMeat = async (note: string) => {
     if (!gap.patient_hcc_id) return;
-    const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
-      .filter(([, on]) => !on)
-      .map(([k]) => k);
-    if (missing.length === 0) return;
-    const missingLabel = missing
-      .map((k) => k[0].toUpperCase() + k.slice(1))
-      .join(", ");
-    const attestation = window.prompt(
-      `Attestation for HCC ${gap.hcc} — ${gap.label}\n` +
-        `Missing elements: ${missingLabel}\n\n` +
-        `Enter a clinician note documenting these elements. ` +
-        `Already-documented MEAT letters will not be overwritten. ` +
-        `Leave blank to cancel.`,
-      "",
-    );
-    if (!attestation || !attestation.trim()) return;
-    const note = attestation.trim();
     setBusy(true);
+    setDialogOpen(false);
     try {
       await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
         patient_hcc_id: gap.patient_hcc_id,
@@ -1553,6 +1630,11 @@ function MEATCard({
     } finally {
       setBusy(false);
     }
+  };
+
+  const markReviewed = () => {
+    if (!gap.patient_hcc_id || missing.length === 0) return;
+    setDialogOpen(true);
   };
 
   const isComplete = gap.status === "COMPLETE";
@@ -1633,6 +1715,16 @@ function MEATCard({
           ) : null}
         </div>
       ) : null}
+
+      {/* MEAT attestation dialog */}
+      <MEATAttestationDialog
+        open={dialogOpen}
+        hcc={gap.hcc}
+        label={gap.label}
+        missingLabel={missingLabel}
+        onCancel={() => setDialogOpen(false)}
+        onSubmit={submitMeat}
+      />
     </Card>
   );
 }
