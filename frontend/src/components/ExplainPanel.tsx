@@ -91,6 +91,7 @@ function ConfidenceBar({ pct }: { pct: number }) {
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
+          aria-label={`Confidence ${pct}%`}
         />
       </div>
     </div>

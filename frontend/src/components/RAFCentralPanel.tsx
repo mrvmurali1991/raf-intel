@@ -195,6 +195,9 @@ export function RAFCentralPanel({
     try {
       await api.post(`/api/raf-central/${patientId}/actions/recalculate${year ? `?year=${year}` : ""}`);
       await fetchPanel();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Recalculation failed";
+      setError(msg);
     } finally {
       setRecalcing(false);
     }
@@ -273,7 +276,7 @@ export function RAFCentralPanel({
               <Check className="h-3 w-3" aria-hidden />
             </span>
             <span className="text-xs font-medium text-foreground truncate">
-              {actionCount} gap{actionCount !== 1 ? "s" : ""} require documentation review
+              {actionCount} gap{actionCount !== 1 ? "s" : ""} require{actionCount === 1 ? "s" : ""} documentation review
             </span>
           </span>
           <span className="flex-shrink-0 text-[11px] font-medium text-muted-foreground">
@@ -382,14 +385,14 @@ function Section({
       >
         <div className="flex items-center gap-2">
           {icon}
-          <span className="text-sm font-semibold">
-            {title}{count !== undefined ? ` (${count})` : ""}
-          </span>
-          {count !== undefined && count > 0 ? (
+          <span className="text-sm font-semibold">{title}</span>
+          {count !== undefined ? (
             <Badge
               className={cn(
                 "text-[10px] font-semibold border-0",
-                severity === "high"
+                count === 0
+                  ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  : severity === "high"
                   ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
                   : severity === "medium"
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
@@ -584,14 +587,31 @@ function MEATCard({
 
   const markReviewed = async () => {
     if (!gap.patient_hcc_id) return;
+    const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
+      .filter(([, on]) => !on)
+      .map(([k]) => k);
+    if (missing.length === 0) return;
+    const missingLabel = missing
+      .map((k) => k[0].toUpperCase() + k.slice(1))
+      .join(", ");
+    const attestation = window.prompt(
+      `Attestation for HCC ${gap.hcc} — ${gap.label}\n` +
+        `Missing elements: ${missingLabel}\n\n` +
+        `Enter a clinician note documenting these elements. ` +
+        `Already-documented MEAT letters will not be overwritten. ` +
+        `Leave blank to cancel.`,
+      "",
+    );
+    if (!attestation || !attestation.trim()) return;
+    const note = attestation.trim();
     setBusy(true);
     try {
       await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
         patient_hcc_id: gap.patient_hcc_id,
-        monitor_note: "Reviewed during encounter",
-        evaluate_note: "Reviewed during encounter",
-        assess_note: "Reviewed during encounter",
-        treat_note: "Reviewed during encounter",
+        monitor_note: gap.gaps.monitor ? null : note,
+        evaluate_note: gap.gaps.evaluate ? null : note,
+        assess_note: gap.gaps.assess ? null : note,
+        treat_note: gap.gaps.treat ? null : note,
       });
       onChange();
     } finally {
@@ -786,7 +806,7 @@ function SuspectCardView({
 
   const confPct = Math.round(suspect.confidence * 100);
   const confBarColor =
-    confPct >= 85 ? "bg-slate-500" : confPct >= 70 ? "bg-amber-400" : "bg-slate-300";
+    confPct >= 85 ? "bg-emerald-500" : confPct >= 70 ? "bg-amber-500" : "bg-red-400";
 
   return (
     <Card className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">

@@ -958,9 +958,22 @@ def _resolve_graft_months(
 # ---------------------------------------------------------------------------
 
 
+try:
+    from hccinfhir.defaults import labels_default as _labels_default
+except ImportError:  # pragma: no cover — hccinfhir missing would break everything
+    _labels_default = {}
+
+_V28_MODEL_NAME = "CMS-HCC Model V28"
+
+
 def _get_hcc_label_v28(hcc_code: str) -> str:
-    """Get human-readable label for a V28 HCC code."""
-    return f"HCC {hcc_code}"
+    """Get human-readable label for a V28 HCC code.
+
+    Looks up hccinfhir's labels_default (keyed on string code + model name).
+    Falls back to ``HCC {code}`` only when the label is genuinely unknown.
+    """
+    code = str(hcc_code).replace("HCC", "").strip()
+    return _labels_default.get((code, _V28_MODEL_NAME)) or f"HCC {code}"
 
 
 def _get_hcc_coefficient_v28(hcc_code: str, segment: str = "CNA") -> float:
@@ -1993,7 +2006,7 @@ def get_raf_breakdown(
             hcc_details.append(
                 {
                     "hcc_code": str(h["hcc_code"]),
-                    "hcc_label": f"HCC {h['hcc_code']}",
+                    "hcc_label": _get_hcc_label_v28(h["hcc_code"]),
                     "coefficient": float(h.get("raf_coefficient") or 0.0),
                     "icd10_codes": codes or [],
                     "meat_status": h.get("meat_status") or "missing",
@@ -2131,7 +2144,7 @@ def get_raf_breakdown(
         result["hcc_details"] = [
             {
                 "hcc_code": h["hcc_code"],
-                "hcc_label": h.get("label", f"HCC {h['hcc_code']}"),
+                "hcc_label": h.get("label") or _get_hcc_label_v28(h["hcc_code"]),
                 "coefficient": h.get("coefficient", 0.0),
                 "icd10_codes": h.get("icd10_codes", []),
                 "meat_status": h.get("meat_status", "missing"),

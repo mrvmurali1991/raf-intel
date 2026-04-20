@@ -604,8 +604,10 @@ def action_mark_meat_reviewed(
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
     today = date.today()
 
-    filled = [v for v in (body.monitor_note, body.evaluate_note, body.assess_note, body.treat_note) if v]
-    status = "complete" if len(filled) == 4 else ("partial" if filled else "missing")
+    # Require at least one actual note — guards against the frontend sending
+    # an empty payload to flip status without clinician attestation.
+    if not any((body.monitor_note, body.evaluate_note, body.assess_note, body.treat_note)):
+        raise HTTPException(status_code=400, detail="At least one MEAT attestation note is required")
 
     try:
         with raf_cursor() as cur:
@@ -623,6 +625,24 @@ def action_mark_meat_reviewed(
                     reviewer,
                 ),
             )
+            # Roll up status from ALL evidence rows for this HCC so previously
+            # documented letters (from earlier encounters) are not lost. A letter
+            # is considered documented if ANY row has a non-null note for it.
+            cur.execute(
+                """
+                SELECT
+                    MAX(CASE WHEN meat_monitoring IS NOT NULL AND meat_monitoring <> '' THEN 1 ELSE 0 END) AS m,
+                    MAX(CASE WHEN meat_evaluation IS NOT NULL AND meat_evaluation <> '' THEN 1 ELSE 0 END) AS e,
+                    MAX(CASE WHEN meat_assessment IS NOT NULL AND meat_assessment <> '' THEN 1 ELSE 0 END) AS a,
+                    MAX(CASE WHEN meat_treatment  IS NOT NULL AND meat_treatment  <> '' THEN 1 ELSE 0 END) AS t
+                FROM raf_meat_evidence
+                WHERE patient_hcc_id = %s
+                """,
+                (body.patient_hcc_id,),
+            )
+            row = cur.fetchone() or {}
+            trues = sum(int(row.get(k) or 0) for k in ("m", "e", "a", "t"))
+            status = "complete" if trues == 4 else ("partial" if trues else "missing")
             cur.execute(
                 """
                 UPDATE raf_patient_hcc
@@ -631,6 +651,8 @@ def action_mark_meat_reviewed(
                 """,
                 (status, body.patient_hcc_id, tenant_id),
             )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("raf-central mark-meat-reviewed failed pid=%s: %s", pid, exc)
         raise HTTPException(status_code=500, detail=f"MEAT write failed: {exc}")
@@ -831,10 +853,6 @@ def action_start_treatment(
             detail="Prescription write failed — no active EMR connection",
         )
 
-    try:
-        cache_delete_pattern(f"raf_central:{pid}:*")
-    except Exception:
-        pass
     _invalidate_panel_cache(pid, tenant_id)
 
     return {"status": "ok", "prescription_id": int(rx_id), "drug": drug}
