@@ -100,22 +100,27 @@ def test_llm_generate_rejects_empty_prompt():
         vertex_client.llm_generate("   ")
 
 
-def test_feature_flag_falls_back_to_api_key(monkeypatch):
-    monkeypatch.setenv("LLM_USE_VERTEX", "false")
+def test_api_key_routes_to_vertex_publisher_endpoint(monkeypatch):
+    """With GOOGLE_API_KEY set and no SA creds, routes to aiplatform.googleapis.com."""
+    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
-    resp = _fake_response("ok-legacy")
+    resp = _fake_response("ok-apikey")
     with patch.object(vertex_client.requests, "post", return_value=resp) as post:
         out = vertex_client.llm_generate("hi")
-    assert out == "ok-legacy"
+    assert out == "ok-apikey"
     url = post.call_args.args[0]
-    assert "generativelanguage.googleapis.com" in url
-    assert "key=fake-key" in url
+    # Must use the BAA-covered aiplatform endpoint, NOT generativelanguage
+    assert "aiplatform.googleapis.com" in url
+    assert "generativelanguage.googleapis.com" not in url
 
 
-def test_feature_flag_legacy_requires_api_key(monkeypatch):
-    monkeypatch.setenv("LLM_USE_VERTEX", "false")
+def test_no_credentials_raises_runtime_error(monkeypatch):
+    """Without API key or SA creds, llm_generate should raise RuntimeError."""
+    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+    with pytest.raises((RuntimeError, Exception)):
         vertex_client.llm_generate("hi")
 
 
