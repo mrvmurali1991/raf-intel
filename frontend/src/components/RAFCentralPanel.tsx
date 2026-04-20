@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
@@ -792,10 +793,32 @@ export function RAFCentralPanel({
   const [error, setError] = useState<string | null>(null);
   const [recalcing, setRecalcing] = useState(false);
   const [cardsVisible, setCardsVisible] = useState(false);
-  const [dashMeatFilter, setDashMeatFilter] = useState<MeatFilter>("all");
   const meatRef = useRef<HTMLDivElement>(null);
   // Track first mount for stagger animation (point 8)
   const mountedOnce = useRef(false);
+
+  // Persist dashMeatFilter via URL search param "meatFilter"
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const MEAT_FILTER_PARAM = "meatFilter";
+  const VALID_MEAT_FILTERS: MeatFilter[] = ["all", "incomplete", "high-impact"];
+
+  const initialFilter = (() => {
+    const raw = searchParams.get(MEAT_FILTER_PARAM);
+    return VALID_MEAT_FILTERS.includes(raw as MeatFilter) ? (raw as MeatFilter) : "all";
+  })();
+
+  const [dashMeatFilter, setDashMeatFilterState] = useState<MeatFilter>(initialFilter);
+
+  const setDashMeatFilter = useCallback(
+    (f: MeatFilter) => {
+      setDashMeatFilterState(f);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set(MEAT_FILTER_PARAM, f);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
 
   const fetchPanel = useCallback(async () => {
     try {
