@@ -94,7 +94,7 @@ export default function PatientDetailPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   // Initialise from URL so refresh / shared links restore the correct tab.
-  const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") ?? "overview");
+  const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") ?? "rafcentral");
 
   // Write-through: keep ?tab= in sync without adding browser history entries.
   const handleTabChange = (tab: string) => {
