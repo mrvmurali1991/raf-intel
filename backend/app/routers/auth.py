@@ -512,6 +512,7 @@ def embed_mint(
 
 
 @router.post("/mfa/verify", summary="Complete MFA login")
+@limiter.limit("5/minute")
 def verify_mfa(body: MFAVerifyRequest, request: Request) -> JSONResponse:
     """After /login returns mfa_required=true, submit the mfa_token + TOTP code here.
 
