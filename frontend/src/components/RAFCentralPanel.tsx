@@ -160,11 +160,13 @@ export function RAFCentralPanel({
   year,
   embedded = false,
   onClose,
+  layout = "panel",
 }: {
   patientId: number;
   year?: number;
   embedded?: boolean;
   onClose?: () => void;
+  layout?: "dashboard" | "panel";
 }) {
   const [data, setData] = useState<RAFCentralPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -231,6 +233,191 @@ export function RAFCentralPanel({
     meatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // ── Dashboard layout (in-app tab, ≥1024px two-column) ─────────────────────
+  if (layout === "dashboard") {
+    return (
+      <div className="flex flex-col min-h-full bg-muted/30 dark:bg-background">
+        {/* ── Top strip: patient header + RAF metrics + controls ─────────── */}
+        <header className="border-b bg-background px-6 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            {/* Left: identity */}
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                RAF Intelligence
+              </div>
+              <div className="mt-0.5 text-lg font-bold text-foreground">
+                Patient {data.patient_id}
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  · PY{data.measurement_year}
+                </span>
+              </div>
+            </div>
+            {/* Right: recalc button */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={recalc}
+                disabled={recalcing}
+                aria-label="Force RAF recalculation"
+              >
+                <RefreshCcw className={cn("h-4 w-4 mr-1.5", recalcing && "animate-spin")} />
+                Recalculate
+              </Button>
+              {onClose ? (
+                <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close panel">
+                  <X className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Live RAF metrics bar — inline in header */}
+          <div className="mt-4">
+            <LiveRAFSection raf={data.raf_score} variant="inline" />
+          </div>
+
+          {/* Next Best Action banner */}
+          {actionCount > 0 && (
+            <button
+              onClick={scrollToMeat}
+              className="mt-3 flex w-full items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-left hover:bg-emerald-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60"
+              aria-label={`Review ${actionCount} documentation gaps`}
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+                  <Check className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                  {actionCount} gap{actionCount !== 1 ? "s" : ""} require
+                  {actionCount === 1 ? "s" : ""} documentation review
+                </span>
+              </span>
+              <span className="flex-shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                Scroll to MEAT Gaps →
+              </span>
+            </button>
+          )}
+        </header>
+
+        {/* ── Two-column body ─────────────────────────────────────────────── */}
+        <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[3fr_2fr] lg:items-start gap-6 p-6">
+          {/* LEFT: primary workspace */}
+          <div className="flex flex-col gap-6 min-w-0">
+            {/* MEAT Gaps */}
+            <div ref={meatRef} className="rounded-lg border bg-card shadow-sm border-l-4 border-l-red-500 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
+                <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" aria-hidden />
+                <span className="text-sm font-semibold">MEAT Gaps</span>
+                <Badge
+                  className={cn(
+                    "ml-1 text-[10px] font-semibold border-0",
+                    data.meat_gaps.length === 0
+                      ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                  )}
+                >
+                  {data.meat_gaps.length}
+                </Badge>
+              </div>
+              <div className="px-5 py-4">
+                <MEATSection
+                  patientId={patientId}
+                  year={year}
+                  gaps={data.meat_gaps}
+                  onChange={fetchPanel}
+                />
+              </div>
+            </div>
+
+            {/* Suspect Conditions */}
+            <div className="rounded-lg border bg-card shadow-sm border-l-4 border-l-amber-400 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
+                <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden />
+                <span className="text-sm font-semibold">Suspect Conditions</span>
+                <Badge
+                  className={cn(
+                    "ml-1 text-[10px] font-semibold border-0",
+                    data.suspects.length === 0
+                      ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  )}
+                >
+                  {data.suspects.length}
+                </Badge>
+              </div>
+              <div className="px-5 py-4">
+                <SuspectsSection
+                  patientId={patientId}
+                  suspects={data.suspects}
+                  onChange={fetchPanel}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: context / secondary */}
+          <div className="flex flex-col gap-6 min-w-0">
+            {/* HCC Recapture */}
+            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
+                <History className="h-4 w-4 text-blue-500 flex-shrink-0" aria-hidden />
+                <span className="text-sm font-semibold">HCC Recapture</span>
+                {data.recapture.length > 0 && (
+                  <Badge className="ml-1 text-[10px] font-semibold border-0 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                    {data.recapture.length}
+                  </Badge>
+                )}
+              </div>
+              <div className="px-5 py-4">
+                <RecaptureSection recapture={data.recapture} />
+              </div>
+            </div>
+
+            {/* Audit Readiness */}
+            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
+                <ClipboardCheck className="h-4 w-4 text-slate-500 flex-shrink-0" aria-hidden />
+                <span className="text-sm font-semibold">Audit Readiness</span>
+                <span
+                  className={cn(
+                    "ml-auto text-[10px] font-bold uppercase tracking-wide",
+                    data.audit_readiness.risk_level === "HIGH"
+                      ? "text-red-600"
+                      : data.audit_readiness.risk_level === "MEDIUM"
+                      ? "text-amber-600"
+                      : "text-emerald-600"
+                  )}
+                >
+                  {data.audit_readiness.risk_level} RISK
+                </span>
+              </div>
+              <div className="px-5 py-4">
+                <AuditSection audit={data.audit_readiness} />
+              </div>
+            </div>
+
+            {/* Financial Impact */}
+            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
+                <DollarSign className="h-4 w-4 text-slate-500 flex-shrink-0" aria-hidden />
+                <span className="text-sm font-semibold">Financial Impact</span>
+              </div>
+              <div className="px-5 py-4">
+                <FinancialSection financial={data.financial_impact} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer className="border-t px-6 py-3 text-[10px] text-muted-foreground bg-background">
+          Generated {new Date(data.generated_at).toLocaleString()}
+        </footer>
+      </div>
+    );
+  }
+
+  // ── Panel layout (default — iframe embed, single-column accordion) ─────────
   return (
     <div className={cn("flex h-full flex-col", embedded ? "bg-background" : "")}>
       {/* Header */}
@@ -419,7 +606,15 @@ function Section({
 // LIVE RAF — top strip with score + delta
 // ---------------------------------------------------------------------------
 
-function LiveRAFSection({ raf }: { raf: LiveRAFBar }) {
+function LiveRAFSection({
+  raf,
+  variant = "strip",
+}: {
+  raf: LiveRAFBar;
+  /** strip: full-bleed row with border-b (panel layout)
+   *  inline: no border/bg wrapper, just the metrics row (dashboard layout) */
+  variant?: "strip" | "inline";
+}) {
   const deltaColor =
     raf.delta === null
       ? "text-muted-foreground"
@@ -435,8 +630,9 @@ function LiveRAFSection({ raf }: { raf: LiveRAFBar }) {
       : raf.delta > 0
       ? TrendingUp
       : TrendingDown;
-  return (
-    <div className="flex items-center gap-4 border-b bg-muted/30 px-4 py-3 flex-wrap">
+
+  const metrics = (
+    <>
       {/* PY score — dominant */}
       <div className="flex-shrink-0">
         <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -463,6 +659,20 @@ function LiveRAFSection({ raf }: { raf: LiveRAFBar }) {
           value={`${raf.model_segment} · ${raf.model_version.toUpperCase()}`}
         />
       </div>
+    </>
+  );
+
+  if (variant === "inline") {
+    return (
+      <div className="flex items-center gap-4 flex-wrap rounded-lg border bg-muted/40 px-4 py-3 dark:bg-muted/20">
+        {metrics}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-4 border-b bg-muted/30 px-4 py-3 flex-wrap">
+      {metrics}
     </div>
   );
 }

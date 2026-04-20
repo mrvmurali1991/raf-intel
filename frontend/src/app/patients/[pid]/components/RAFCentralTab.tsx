@@ -17,8 +17,8 @@ export function RAFCentralTab({
   year: number;
 }) {
   return (
-    <div className="mx-auto max-w-4xl overflow-hidden rounded-lg border bg-background shadow-sm">
-      <RAFCentralPanel patientId={Number(pid)} year={year} />
+    <div className="w-full">
+      <RAFCentralPanel patientId={Number(pid)} year={year} layout="dashboard" />
     </div>
   );
 }
