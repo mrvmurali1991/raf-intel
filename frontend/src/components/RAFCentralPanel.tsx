@@ -118,6 +118,16 @@ export interface FinancialImpact {
   revenue_per_raf_point: number;
 }
 
+/** Mirrors backend CodingOptCard Pydantic model (app/routers/raf_central.py). */
+export interface CodingOptCard {
+  current_icd10: string;
+  current_label: string;
+  suggested_icd10: string;
+  suggested_label: string;
+  raf_impact: number;
+  source: string;
+}
+
 export interface RAFCentralPayload {
   patient_id: number;
   measurement_year: number;
@@ -126,7 +136,7 @@ export interface RAFCentralPayload {
   meat_gaps: MEATGap[];
   suspects: SuspectCard[];
   recapture: RecaptureCard[];
-  coding_opt: unknown[];
+  coding_opt: CodingOptCard[];
   audit_readiness: AuditReadiness;
   financial_impact: FinancialImpact;
 }
