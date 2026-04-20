@@ -11,8 +11,9 @@
  * panel, and fills remaining space with a confidence bar + signal list.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { FocusTrap } from "@/components/ui/focus-trap";
 import {
   FileText,
   FlaskConical,
@@ -110,11 +111,35 @@ export function ExplainPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ExplainResponse | null>(null);
+  // Store the element that had focus before the drawer opened so we can restore it on close.
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   // SSR guard — createPortal requires a DOM target
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Capture previously focused element on open; restore on close.
+  useEffect(() => {
+    if (open) {
+      previouslyFocusedRef.current = document.activeElement as HTMLElement;
+    } else {
+      previouslyFocusedRef.current?.focus();
+    }
+  }, [open]);
+
+  // Escape key closes the drawer.
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [open, onClose]);
 
   // Lock body scroll while drawer is open
   useEffect(() => {
@@ -165,34 +190,35 @@ export function ExplainPanel({
       onClick={onClose}
       aria-hidden="true"
     >
-      {/* Drawer */}
-      <div
-        className="absolute right-0 top-0 h-full w-full max-w-[440px] flex flex-col bg-background shadow-2xl border-l animate-in slide-in-from-right duration-200"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Evidence for ${suspectLabel}`}
-      >
-        {/* Header — no overlap, fixed height */}
-        <header className="flex-shrink-0 flex items-start justify-between gap-3 border-b bg-background px-5 py-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-              Why was this flagged?
-            </p>
-            <h2 className="text-sm font-bold leading-snug line-clamp-2">
-              {suspectLabel}
-            </h2>
-          </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="flex-shrink-0 mt-0.5 h-8 w-8"
-            aria-label="Close evidence panel"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </header>
+      {/* Drawer — FocusTrap wraps the entire drawer so Tab cycles within it */}
+      <FocusTrap enabled restoreFocus={false}>
+        <div
+          className="absolute right-0 top-0 h-full w-full max-w-[440px] flex flex-col bg-background shadow-2xl border-l animate-in slide-in-from-right duration-200"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Evidence for ${suspectLabel}`}
+        >
+          {/* Header — no overlap, fixed height */}
+          <header className="flex-shrink-0 flex items-start justify-between gap-3 border-b bg-background px-5 py-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                Why was this flagged?
+              </p>
+              <h2 className="text-sm font-bold leading-snug line-clamp-2">
+                {suspectLabel}
+              </h2>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="flex-shrink-0 mt-0.5 h-8 w-8"
+              aria-label="Close evidence panel"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </header>
 
         {/* Body — scrollable */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -278,7 +304,8 @@ export function ExplainPanel({
             </>
           )}
         </div>
-      </div>
+        </div>
+      </FocusTrap>
     </div>,
     document.body,
   );
