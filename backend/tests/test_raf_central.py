@@ -115,13 +115,11 @@ def patch_panel_services(fake_breakdown, fake_suspects, fake_recapture):
         patch("app.routers.raf_central.cache_set", return_value=None),
         patch("app.routers.raf_central.cache_delete_pattern", return_value=None),
         # Silence letter-level MEAT lookups — table queries against mocked cursor.
+        # _fetch_meat_letters now returns (letter_map, hcc_id_map) as a tuple;
+        # _fetch_patient_hcc_id is no longer called in the main panel loop.
         patch(
             "app.routers.raf_central._fetch_meat_letters",
-            return_value={},
-        ),
-        patch(
-            "app.routers.raf_central._fetch_patient_hcc_id",
-            return_value=42,
+            return_value=({}, {}),
         ),
     ):
         yield
@@ -643,61 +641,55 @@ def test_order_lab_rejects_unmapped_hcc_without_suggestion(client, admin_headers
 
 
 def test_refresh_meat_happy_path(client, admin_headers):
-    """POST refresh-meat should invoke run_auto_meat_for_patient and return summary."""
-    stub_summary = {
-        "patient_id": 1,
-        "year": 2026,
-        "notes_scanned": 3,
-        "hccs_processed": 2,
-        "evidence_written": 4,
-        "by_status": {"COMPLETE": 1, "PARTIAL": 3, "MISSING": 0},
-        "skipped_no_match": 1,
-    }
-    with (
-        patch(
-            "app.services.auto_meat_extractor.run_auto_meat_for_patient",
-            return_value=stub_summary,
-        ) as run_auto,
-        patch("app.routers.raf_central._invalidate_panel_cache") as inv,
-    ):
+    """POST refresh-meat should enqueue a Celery task and return 202/queued."""
+    from unittest.mock import MagicMock
+
+    fake_task = MagicMock()
+    fake_task.id = "celery-task-uuid-1234"
+
+    with patch(
+        "app.routers.raf_central.task_refresh_meat_for_patient"
+    ) as mock_task_cls:
+        mock_task_cls.apply_async.return_value = fake_task
         resp = client.post(
             "/api/raf-central/1/actions/refresh-meat",
             headers=admin_headers,
             json={"max_days_lookback": 180},
         )
-    assert resp.status_code == 200, resp.text
+
+    assert resp.status_code == 202, resp.text
     body = resp.json()
-    assert body["ok"] is True
-    assert body["summary"]["evidence_written"] == 4
-    run_auto.assert_called_once()
-    kwargs = run_auto.call_args.kwargs
-    assert kwargs["max_days_lookback"] == 180
-    inv.assert_called_once()
+    assert body["status"] == "queued"
+    assert body["job_id"] == "celery-task-uuid-1234"
+    mock_task_cls.apply_async.assert_called_once()
+    call_kwargs = mock_task_cls.apply_async.call_args.kwargs["kwargs"]
+    assert call_kwargs["max_days_lookback"] == 180
+    assert call_kwargs["patient_id"] == 1
 
 
 def test_refresh_meat_requires_auth(client):
-    """Missing bearer token should 401 before the extractor runs."""
+    """Missing bearer token should 401 before the task is enqueued."""
+    from unittest.mock import MagicMock
+
     with patch(
-        "app.services.auto_meat_extractor.run_auto_meat_for_patient"
-    ) as run_auto:
+        "app.routers.raf_central.task_refresh_meat_for_patient"
+    ) as mock_task_cls:
+        mock_task_cls.apply_async.return_value = MagicMock(id="x")
         resp = client.post("/api/raf-central/1/actions/refresh-meat", json={})
     assert resp.status_code in (401, 403)
-    run_auto.assert_not_called()
+    mock_task_cls.apply_async.assert_not_called()
 
 
-def test_refresh_meat_500_on_extractor_error(client, admin_headers):
-    """Unexpected extractor exception must surface as 500."""
-    with (
-        patch(
-            "app.services.auto_meat_extractor.run_auto_meat_for_patient",
-            side_effect=RuntimeError("nlp exploded"),
-        ),
-        patch("app.routers.raf_central._invalidate_panel_cache"),
-    ):
+def test_refresh_meat_500_on_enqueue_error(client, admin_headers):
+    """apply_async raising must surface as 500."""
+    with patch(
+        "app.routers.raf_central.task_refresh_meat_for_patient"
+    ) as mock_task_cls:
+        mock_task_cls.apply_async.side_effect = RuntimeError("redis down")
         resp = client.post(
             "/api/raf-central/1/actions/refresh-meat",
             headers=admin_headers,
             json={},
         )
     assert resp.status_code == 500
-    assert "meat extraction failed" in resp.json()["detail"].lower()
+    assert "enqueue" in resp.json()["detail"].lower()

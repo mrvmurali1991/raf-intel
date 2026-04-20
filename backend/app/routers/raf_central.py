@@ -26,6 +26,7 @@ POST /api/raf-central/{pid}/actions/order-lab
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from typing import Any, Literal
 
@@ -43,6 +44,7 @@ from app.services.openemr_connector import (
     push_prescription,
     push_procedure_order,
 )
+from app.services.celery_tasks import task_refresh_meat_for_patient
 from app.services.raf.calculator import calculate_raf_score, get_raf_breakdown
 from app.services.recapture_gap_service import get_patient_gaps
 from app.services.suspect_engine import (
@@ -181,18 +183,32 @@ def _meat_status_to_gaps(status: str) -> tuple[str, dict[str, bool]]:
     return "MISSING", {"monitor": False, "evaluate": False, "assess": False, "treat": False}
 
 
-def _fetch_meat_letters(patient_id: int, year: int, tenant_id: str) -> dict[str, dict[str, bool]]:
-    """Return per-HCC letter-level MEAT coverage keyed by hcc_code string.
+def _fetch_meat_letters(
+    patient_id: int, year: int, tenant_id: str
+) -> tuple[dict[str, dict[str, bool]], dict[str, int | None]]:
+    """Return per-HCC letter-level MEAT coverage and patient_hcc_id map in ONE query.
 
-    Scans raf_meat_evidence joined to raf_patient_hcc for the most recent
-    evidence row per HCC. Missing → zeros. Non-existent table → zeros.
+    Previously two separate queries were issued: one for MEAT letters
+    (joining raf_meat_evidence) and one ``_fetch_patient_hcc_id`` call **per
+    HCC** (N+1).  This function eliminates the N+1 by returning both datasets
+    from a single JOIN so callers never need ``_fetch_patient_hcc_id`` in a loop.
+
+    Returns
+    -------
+    (letter_map, hcc_id_map) where:
+      letter_map  — ``{hcc_code: {monitor, evaluate, assess, treat}}``
+      hcc_id_map  — ``{hcc_code: patient_hcc_id | None}``
+
+    Missing → empty dicts. Non-existent table → empty dicts.
     """
-    out: dict[str, dict[str, bool]] = {}
+    letter_map: dict[str, dict[str, bool]] = {}
+    hcc_id_map: dict[str, int | None] = {}
     try:
         with raf_cursor() as cur:
             cur.execute(
                 """
-                SELECT ph.hcc_code,
+                SELECT ph.id          AS patient_hcc_id,
+                       ph.hcc_code,
                        MAX(CASE WHEN ev.meat_monitoring IS NOT NULL AND ev.meat_monitoring != '' THEN 1 ELSE 0 END) AS m,
                        MAX(CASE WHEN ev.meat_evaluation IS NOT NULL AND ev.meat_evaluation != '' THEN 1 ELSE 0 END) AS e,
                        MAX(CASE WHEN ev.meat_assessment IS NOT NULL AND ev.meat_assessment != '' THEN 1 ELSE 0 END) AS a,
@@ -200,24 +216,32 @@ def _fetch_meat_letters(patient_id: int, year: int, tenant_id: str) -> dict[str,
                 FROM raf_patient_hcc ph
                 LEFT JOIN raf_meat_evidence ev ON ev.patient_hcc_id = ph.id
                 WHERE ph.patient_id = %s AND ph.measurement_year = %s AND ph.tenant_id = %s
-                GROUP BY ph.hcc_code
+                GROUP BY ph.id, ph.hcc_code
                 """,
                 (patient_id, year, tenant_id),
             )
             for row in cur.fetchall():
-                out[str(row["hcc_code"])] = {
+                code = str(row["hcc_code"])
+                letter_map[code] = {
                     "monitor": bool(row.get("m")),
                     "evaluate": bool(row.get("e")),
                     "assess":   bool(row.get("a")),
                     "treat":    bool(row.get("t")),
                 }
+                hcc_id_map[code] = int(row["patient_hcc_id"]) if row.get("patient_hcc_id") is not None else None
     except Exception as exc:
         logger.debug("meat letter fetch failed pid=%s: %s", patient_id, exc)
-    return out
+    return letter_map, hcc_id_map
 
 
 def _fetch_patient_hcc_id(patient_id: int, year: int, hcc_code: str, tenant_id: str) -> int | None:
-    """Return the raf_patient_hcc.id so the UI can target a specific row."""
+    """Return the raf_patient_hcc.id so the UI can target a specific row.
+
+    DEPRECATED — prefer ``_fetch_meat_letters`` which returns the
+    ``patient_hcc_id`` alongside MEAT letters in a single JOIN query, avoiding
+    the N+1 pattern this function creates when called in a loop.  Retained only
+    for callers outside ``_build_raf_section``.
+    """
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -276,8 +300,10 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
         year=year,
     )
 
-    # MEAT gaps — one card per HCC in the breakdown
-    letter_map = _fetch_meat_letters(pid, year, tenant_id)
+    # MEAT gaps — one card per HCC in the breakdown.
+    # Single JOIN query returns both letter-level MEAT coverage AND patient_hcc_id,
+    # eliminating the N+1 pattern from calling _fetch_patient_hcc_id per HCC.
+    letter_map, hcc_id_map = _fetch_meat_letters(pid, year, tenant_id)
     meat_gaps: list[MEATGap] = []
     for hcc in breakdown.get("hcc_details") or []:
         code = str(hcc.get("hcc_code") or hcc.get("hcc") or "")
@@ -290,7 +316,7 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
             actual_status = "COMPLETE" if trues == 4 else ("PARTIAL" if trues else "MISSING")
         meat_gaps.append(
             MEATGap(
-                patient_hcc_id=_fetch_patient_hcc_id(pid, year, code, tenant_id),
+                patient_hcc_id=hcc_id_map.get(code),
                 hcc=code,
                 icd10_codes=list(hcc.get("icd10_codes") or []),
                 label=hcc.get("hcc_label") or _hcc_label(code),
@@ -456,10 +482,24 @@ def get_raf_central(
         logger.warning("raf-central: get_patient failed pid=%s: %s", pid, exc)
         # Continue — OpenEMR may be offline in dev but we still have RAF DB data.
 
-    # --- Fan out -----------------------------------------------------------
-    raf_bar, meat_gaps, _breakdown = _build_raf_section(pid, measurement_year, tenant_id)
-    suspects = _build_suspects(pid, measurement_year, tenant_id)
-    recapture = _build_recapture(pid, tenant_id)
+    # --- Fan out (parallelised) --------------------------------------------
+    # _build_raf_section, _build_suspects, and _build_recapture are independent
+    # I/O-bound calls.  Run them concurrently inside a small ThreadPoolExecutor
+    # so total latency is bounded by the slowest single builder, not their sum.
+    # Each builder has its own internal error handling and returns empty/zero
+    # payloads on failure; exceptions propagate here and are re-raised so the
+    # caller receives a 500 rather than a silent partial result.
+    _panel_futures: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="panel") as _pool:
+        _panel_futures["raf"] = _pool.submit(_build_raf_section, pid, measurement_year, tenant_id)
+        _panel_futures["suspects"] = _pool.submit(_build_suspects, pid, measurement_year, tenant_id)
+        _panel_futures["recapture"] = _pool.submit(_build_recapture, pid, tenant_id)
+
+        # Collect results — any exception from a sub-builder is re-raised here.
+        raf_bar, meat_gaps, _breakdown = _panel_futures["raf"].result()
+        suspects = _panel_futures["suspects"].result()
+        recapture = _panel_futures["recapture"].result()
+
     audit = _build_audit(raf_bar, meat_gaps)
     financial = _build_financial(raf_bar, suspects, recapture)
 
@@ -1213,36 +1253,50 @@ class RefreshMEATRequest(BaseModel):
     year: int | None = None
 
 
-@router.post("/{pid}/actions/refresh-meat")
+@router.post("/{pid}/actions/refresh-meat", status_code=202)
 def action_refresh_meat(
     pid: int,
     body: RefreshMEATRequest | None = None,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
 ) -> dict[str, Any]:
-    """Run the rule-based MEAT extractor against every recent note.
+    """Enqueue MEAT extraction for this patient as a background Celery task.
 
-    Writes into raf_meat_evidence and recomputes raf_patient_hcc.meat_status.
-    Safe to call repeatedly — store_meat_evidence de-dupes on
-    (patient_hcc_id, encounter_id).
+    Returns HTTP 202 immediately with ``{status: "queued", job_id: <task_id>}``
+    so the request completes in milliseconds instead of blocking for the
+    multi-second MEAT extraction run.
+
+    Polling follow-up (frontend concern):
+        The frontend should poll ``GET /api/jobs/{job_id}`` until the job
+        reaches SUCCEEDED/FAILED status, then refresh the RAF Central panel
+        (``GET /api/raf-central/{pid}``) to reflect the updated MEAT evidence.
+        This is tracked separately in the frontend backlog.
+
+    Previously this endpoint ran ``run_auto_meat_for_patient`` synchronously
+    in the request path, which could take 5–30 seconds for patients with many
+    notes and HCCs, blocking a FastAPI threadpool worker for the full duration.
     """
-    from app.services.auto_meat_extractor import run_auto_meat_for_patient
-
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
 
     req = body or RefreshMEATRequest()
     try:
-        summary = run_auto_meat_for_patient(
-            pid,
-            tenant_id=tenant_id,
-            year=req.year,
-            max_days_lookback=req.max_days_lookback,
+        task = task_refresh_meat_for_patient.apply_async(
+            kwargs={
+                "tenant_id": tenant_id,
+                "patient_id": pid,
+                "year": req.year,
+                "max_days_lookback": req.max_days_lookback,
+            },
+            queue="default",
         )
     except Exception as exc:
-        logger.exception("refresh-meat failed pid=%s", pid)
-        raise HTTPException(status_code=500, detail=f"MEAT extraction failed: {exc}")
+        logger.exception("refresh-meat enqueue failed pid=%s", pid)
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue MEAT refresh: {exc}")
 
-    _invalidate_panel_cache(pid, tenant_id)
-    return {"ok": True, "summary": summary}
+    logger.info(
+        "refresh-meat: enqueued task_id=%s pid=%s tenant=%s year=%s",
+        task.id, pid, tenant_id, req.year,
+    )
+    return {"status": "queued", "job_id": task.id}
