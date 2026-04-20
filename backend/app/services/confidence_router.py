@@ -53,6 +53,47 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# MEAT score extraction helper
+# ---------------------------------------------------------------------------
+
+def _extract_meat_score(diagnosis: dict[str, Any]) -> int:
+    """Return the MEAT completeness score (0–4) for a single diagnosis dict.
+
+    Resolution order:
+    1. Try ``diagnosis["meat_score"]``, cast to int, clamp to [0, 4].
+    2. If that yields 0 (or is absent / invalid), fall back to counting the
+       number of non-empty string values among the four MEAT field keys:
+       monitoring, evaluation, assessment, treatment.
+
+    Returns
+    -------
+    int
+        Score in [0, 4].
+    """
+    raw = diagnosis.get("meat_score", 0)
+    try:
+        score = max(0, min(4, int(raw)))
+    except (TypeError, ValueError):
+        score = 0
+
+    if score == 0:
+        meat_dict = diagnosis.get("meat", {})
+        if isinstance(meat_dict, dict):
+            score = sum(
+                1
+                for v in (
+                    meat_dict.get("monitoring", ""),
+                    meat_dict.get("evaluation", ""),
+                    meat_dict.get("assessment", ""),
+                    meat_dict.get("treatment", ""),
+                )
+                if v and str(v).strip()
+            )
+
+    return score
+
+
+# ---------------------------------------------------------------------------
 # Routing thresholds
 # ---------------------------------------------------------------------------
 
@@ -406,28 +447,7 @@ def calculate_confidence(
     s_candidate = _candidate_presence_score(icd_code, candidate_codes)
 
     # -- Signal 4: MEAT completeness ---------------------------------------
-    raw_meat_score = diagnosis.get("meat_score", 0)
-    try:
-        meat_score = max(0, min(4, int(raw_meat_score)))
-    except (TypeError, ValueError):
-        meat_score = 0
-
-    # Check whether individual MEAT fields are populated (richer signal)
-    meat_dict = diagnosis.get("meat", {})
-    if isinstance(meat_dict, dict):
-        filled_fields = sum(
-            1
-            for v in (
-                meat_dict.get("monitoring", ""),
-                meat_dict.get("evaluation", ""),
-                meat_dict.get("assessment", ""),
-                meat_dict.get("treatment", ""),
-            )
-            if v and str(v).strip()
-        )
-        meat_score = max(meat_score, filled_fields)
-
-    s_meat = meat_score / 4.0
+    s_meat = _extract_meat_score(diagnosis) / 4.0
 
     # -- Signal 5: Negation agreement --------------------------------------
     s_negation = _negation_agreement_score(icd_code, gemini_neg, negation_results)
@@ -550,26 +570,7 @@ def should_auto_accept(
         return False
 
     # Gate 5: MEAT – at least one element must be documented
-    raw_meat = diagnosis.get("meat_score", 0)
-    try:
-        meat_score = max(0, min(4, int(raw_meat)))
-    except (TypeError, ValueError):
-        meat_score = 0
-
-    if meat_score == 0:
-        # Recheck using individual meat field text
-        meat_dict = diagnosis.get("meat", {})
-        if isinstance(meat_dict, dict):
-            meat_score = sum(
-                1
-                for v in (
-                    meat_dict.get("monitoring", ""),
-                    meat_dict.get("evaluation", ""),
-                    meat_dict.get("assessment", ""),
-                    meat_dict.get("treatment", ""),
-                )
-                if v and str(v).strip()
-            )
+    meat_score = _extract_meat_score(diagnosis)
 
     if meat_score < 1:
         logger.debug(
@@ -892,25 +893,7 @@ def _detect_flags(
 
         # MEAT absence check
         if not meat_absent_flagged:
-            raw_meat = dx.get("meat_score", 0)
-            try:
-                meat = max(0, min(4, int(raw_meat)))
-            except (TypeError, ValueError):
-                meat = 0
-            if meat == 0:
-                meat_dict = dx.get("meat", {})
-                if isinstance(meat_dict, dict):
-                    meat = sum(
-                        1
-                        for v in (
-                            meat_dict.get("monitoring", ""),
-                            meat_dict.get("evaluation", ""),
-                            meat_dict.get("assessment", ""),
-                            meat_dict.get("treatment", ""),
-                        )
-                        if v and str(v).strip()
-                    )
-            if meat == 0:
+            if _extract_meat_score(dx) == 0:
                 flags.append("meat_absent")
                 meat_absent_flagged = True
 
