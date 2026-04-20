@@ -152,6 +152,402 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 }
 
 // ---------------------------------------------------------------------------
+// RAFGauge — SVG circular progress ring (point 1)
+// ---------------------------------------------------------------------------
+function RAFGauge({
+  score,
+  delta,
+  year,
+}: {
+  score: number;
+  delta: number | null;
+  year: number;
+}) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setAnimated(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  const size = 140;
+  const strokeWidth = 10;
+  const r = (size - strokeWidth) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  // Max displayable score is 2.5
+  const pct = Math.min(score / 2.5, 1);
+  const dashOffset = circumference * (1 - (animated ? pct : 0));
+
+  const deltaSign = delta !== null && delta >= 0 ? "+" : "";
+  const deltaColor =
+    delta === null ? "text-muted-foreground" : delta > 0 ? "text-emerald-500" : "text-red-500";
+
+  return (
+    <div className="flex flex-col items-center gap-1" aria-label={`RAF score ${score.toFixed(3)}`}>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+          <defs>
+            <linearGradient id="rafRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#06b6d4" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+          </defs>
+          {/* Track */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            className="text-muted/40"
+          />
+          {/* Progress arc */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke="url(#rafRingGrad)"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.34,1.56,0.64,1)" }}
+          />
+        </svg>
+        {/* Center text — rotated back upright */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground leading-none">
+            PY{year}
+          </span>
+          <span className="text-4xl font-bold tabular-nums leading-tight text-foreground">
+            {score.toFixed(2)}
+          </span>
+          <span className="text-[11px] tabular-nums text-muted-foreground leading-none">
+            {score.toFixed(3)}
+          </span>
+        </div>
+      </div>
+      {/* Delta pill below ring */}
+      {delta !== null && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+            delta > 0
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+              : delta < 0
+              ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {delta > 0 ? (
+            <TrendingUp className="h-3 w-3" aria-hidden />
+          ) : delta < 0 ? (
+            <TrendingDown className="h-3 w-3" aria-hidden />
+          ) : (
+            <Minus className="h-3 w-3" aria-hidden />
+          )}
+          <span className={deltaColor}>
+            {deltaSign}{delta.toFixed(3)} vs prior
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SparklineTrend — 3-point SVG sparkline (point 10)
+// ---------------------------------------------------------------------------
+function SparklineTrend({
+  prior,
+  current,
+  projected,
+}: {
+  prior: number;
+  current: number;
+  projected: number;
+}) {
+  const w = 44;
+  const h = 20;
+  const values = [prior, current, projected];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const xs = [0, w / 2, w];
+  const ys = values.map((v) => h - ((v - min) / range) * (h - 4) - 2);
+  const polyline = xs.map((x, i) => `${x},${ys[i]}`).join(" ");
+  const areaPath = `M${xs[0]},${ys[0]} L${xs[1]},${ys[1]} L${xs[2]},${ys[2]} L${w},${h} L0,${h} Z`;
+
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-label="RAF trend sparkline"
+      className="flex-shrink-0"
+    >
+      <defs>
+        <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#sparkFill)" />
+      <polyline
+        points={polyline}
+        fill="none"
+        stroke="#10b981"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {/* terminal dot */}
+      <circle cx={xs[2]} cy={ys[2]} r="2" fill="#10b981" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AuditDonut — SVG donut chart (point 2)
+// ---------------------------------------------------------------------------
+function AuditDonut({
+  compliant,
+  total,
+  riskLevel,
+}: {
+  compliant: number;
+  total: number;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+}) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setAnimated(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  const size = 88;
+  const strokeWidth = 9;
+  const r = (size - strokeWidth) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const pct = total > 0 ? compliant / total : 0;
+  const dashOffset = circumference * (1 - (animated ? pct : 0));
+
+  const arcColor =
+    riskLevel === "HIGH"
+      ? "#ef4444"
+      : riskLevel === "MEDIUM"
+      ? "#f59e0b"
+      : "#10b981";
+
+  const riskBg =
+    riskLevel === "HIGH"
+      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+      : riskLevel === "MEDIUM"
+      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none" stroke="currentColor"
+            strokeWidth={strokeWidth}
+            className="text-muted/40"
+          />
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={arcColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            style={{ transition: "stroke-dashoffset 0.9s ease-out" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-bold tabular-nums text-foreground leading-none">
+            {Math.round(pct * 100)}%
+          </span>
+          <span className="text-[10px] text-muted-foreground leading-tight">
+            {compliant}/{total}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="text-xs text-muted-foreground">MEAT compliance</div>
+        <div className="text-sm font-bold text-foreground">
+          {compliant}/{total} HCCs
+        </div>
+        <span className={cn("inline-flex w-fit rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", riskBg)}>
+          {riskLevel} RISK
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FinancialAreaChart — 2-point SVG area chart (point 3)
+// ---------------------------------------------------------------------------
+function FinancialAreaChart({
+  current,
+  projected,
+}: {
+  current: number;
+  projected: number;
+}) {
+  const w = 100;
+  const h = 44;
+  const pad = 4;
+  const min = Math.min(current, projected) * 0.97;
+  const max = projected * 1.02;
+  const range = max - min || 1;
+  const toY = (v: number) => h - pad - ((v - min) / range) * (h - pad * 2);
+
+  const x0 = pad;
+  const x1 = w - pad;
+  const y0 = toY(current);
+  const y1 = toY(projected);
+
+  const path = `M${x0},${y0} C${(x0 + x1) / 2},${y0} ${(x0 + x1) / 2},${y1} ${x1},${y1}`;
+  const area = `M${x0},${y0} C${(x0 + x1) / 2},${y0} ${(x0 + x1) / 2},${y1} ${x1},${y1} L${x1},${h} L${x0},${h} Z`;
+
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-label="Financial uplift area chart"
+      className="w-full"
+    >
+      <defs>
+        <linearGradient id="finAreaGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0.25" />
+        </linearGradient>
+        <linearGradient id="finLineGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#6366f1" />
+          <stop offset="100%" stopColor="#10b981" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#finAreaGrad)" />
+      <path d={path} fill="none" stroke="url(#finLineGrad)" strokeWidth="2" strokeLinecap="round" />
+      <circle cx={x0} cy={y0} r="3" fill="#6366f1" />
+      <circle cx={x1} cy={y1} r="3" fill="#10b981" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SemiGauge — semicircle SVG confidence gauge (point 4)
+// ---------------------------------------------------------------------------
+function SemiGauge({
+  value,
+  color,
+}: {
+  value: number; // 0-100
+  color: "emerald" | "amber" | "red";
+}) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setAnimated(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  const w = 80;
+  const h = 44;
+  const strokeWidth = 8;
+  const r = (w - strokeWidth) / 2;
+  const cx = w / 2;
+  const cy = h - 2;
+  // Semicircle: from 180° to 0° (top arc)
+  const circumference = Math.PI * r; // half circle
+  const pct = value / 100;
+  const dashOffset = circumference * (1 - (animated ? pct : 0));
+
+  const strokeColor =
+    color === "emerald" ? "#10b981" : color === "amber" ? "#f59e0b" : "#ef4444";
+
+  return (
+    <div className="flex flex-col items-center" style={{ width: w }}>
+      <svg
+        width={w}
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        aria-label={`Confidence ${value}%`}
+        aria-valuenow={value}
+      >
+        {/* Track — semicircle */}
+        <path
+          d={`M${strokeWidth / 2},${cy} A${r},${r} 0 0,1 ${w - strokeWidth / 2},${cy}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-muted/40"
+          strokeLinecap="round"
+        />
+        {/* Arc fill */}
+        <path
+          d={`M${strokeWidth / 2},${cy} A${r},${r} 0 0,1 ${w - strokeWidth / 2},${cy}`}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          style={{ transition: "stroke-dashoffset 0.8s ease-out" }}
+        />
+      </svg>
+      <span
+        className="text-base font-bold tabular-nums -mt-2 leading-none"
+        style={{ color: strokeColor }}
+      >
+        {value}%
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MEATProgressBar — thin completion bar per HCC card (point 5)
+// ---------------------------------------------------------------------------
+function MEATProgressBar({ gaps }: { gaps: MEATGap["gaps"] }) {
+  const total = 4;
+  const done = [gaps.monitor, gaps.evaluate, gaps.assess, gaps.treat].filter(Boolean).length;
+  const pct = (done / total) * 100;
+  const barColor =
+    done === 4
+      ? "bg-emerald-500"
+      : done >= 1
+      ? "bg-amber-500"
+      : "bg-red-400";
+
+  return (
+    <div className="mt-2">
+      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-[width] duration-700", barColor)}
+          style={{ width: `${pct}%` }}
+          role="progressbar"
+          aria-valuenow={done}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-label={`MEAT completion ${done}/4`}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -172,7 +568,10 @@ export function RAFCentralPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recalcing, setRecalcing] = useState(false);
+  const [cardsVisible, setCardsVisible] = useState(false);
   const meatRef = useRef<HTMLDivElement>(null);
+  // Track first mount for stagger animation (point 8)
+  const mountedOnce = useRef(false);
 
   const fetchPanel = useCallback(async () => {
     try {
@@ -191,6 +590,14 @@ export function RAFCentralPanel({
   useEffect(() => {
     fetchPanel();
   }, [fetchPanel]);
+
+  // Trigger stagger only on first data load
+  useEffect(() => {
+    if (data && !mountedOnce.current) {
+      mountedOnce.current = true;
+      requestAnimationFrame(() => setCardsVisible(true));
+    }
+  }, [data]);
 
   const recalc = useCallback(async () => {
     setRecalcing(true);
@@ -235,25 +642,65 @@ export function RAFCentralPanel({
 
   // ── Dashboard layout (in-app tab, ≥1024px two-column) ─────────────────────
   if (layout === "dashboard") {
+    // Stagger helper (point 8)
+    const stagger = (delay: string) =>
+      cn(
+        "transition-all duration-500",
+        cardsVisible
+          ? "opacity-100 translate-y-0"
+          : "opacity-0 translate-y-3",
+        delay
+      );
+
     return (
       <div className="flex flex-col min-h-full bg-muted/30 dark:bg-background">
-        {/* ── Top strip: patient header + RAF metrics + controls ─────────── */}
-        <header className="border-b bg-background px-6 py-4">
+        {/* ── Top strip: patient header + RAF gauge + controls ─────────── */}
+        {/* point 9: subtle gradient on header */}
+        <header className="border-b bg-gradient-to-br from-background to-muted/40 dark:from-background dark:to-muted/20 px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            {/* Left: identity */}
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-                RAF Intelligence
-              </div>
-              <div className="mt-0.5 text-lg font-bold text-foreground">
-                Patient {data.patient_id}
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  · PY{data.measurement_year}
-                </span>
+            {/* Left: RAF gauge hero (point 1) + identity */}
+            <div className="flex items-center gap-6">
+              <RAFGauge
+                score={data.raf_score.current}
+                delta={data.raf_score.delta}
+                year={data.raf_score.year}
+              />
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                  RAF Intelligence
+                </div>
+                {/* point 6: ~20% bigger patient identity */}
+                <div className="mt-0.5 text-xl font-bold text-foreground">
+                  Patient {data.patient_id}
+                  <span className="ml-2 text-base font-normal text-muted-foreground">
+                    · PY{data.measurement_year}
+                  </span>
+                </div>
+                {/* Sparkline trend (point 10) */}
+                {data.raf_score.prior_year !== null && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <SparklineTrend
+                      prior={data.raf_score.prior_year}
+                      current={data.raf_score.current}
+                      projected={data.financial_impact.projected_raf}
+                    />
+                    <span className="text-[11px] text-muted-foreground">
+                      prior → current → projected
+                    </span>
+                  </div>
+                )}
+                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="font-medium">{data.raf_score.hcc_count} HCCs</span>
+                  <span className="text-border">·</span>
+                  <span>{data.raf_score.model_segment}</span>
+                  <span className="text-border">·</span>
+                  <span className="uppercase">{data.raf_score.model_version}</span>
+                </div>
               </div>
             </div>
+
             {/* Right: recalc button */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-start">
               <Button
                 size="sm"
                 variant="outline"
@@ -272,16 +719,11 @@ export function RAFCentralPanel({
             </div>
           </div>
 
-          {/* Live RAF metrics bar — inline in header */}
-          <div className="mt-4">
-            <LiveRAFSection raf={data.raf_score} variant="inline" />
-          </div>
-
           {/* Next Best Action banner */}
           {actionCount > 0 && (
             <button
               onClick={scrollToMeat}
-              className="mt-3 flex w-full items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-left hover:bg-emerald-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60"
+              className="mt-4 flex w-full items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-left hover:bg-emerald-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60"
               aria-label={`Review ${actionCount} documentation gaps`}
             >
               <span className="flex items-center gap-2.5 min-w-0">
@@ -294,7 +736,7 @@ export function RAFCentralPanel({
                 </span>
               </span>
               <span className="flex-shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                Scroll to MEAT Gaps →
+                Scroll to MEAT Gaps
               </span>
             </button>
           )}
@@ -304,8 +746,14 @@ export function RAFCentralPanel({
         <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[3fr_2fr] lg:items-start gap-6 p-6">
           {/* LEFT: primary workspace */}
           <div className="flex flex-col gap-6 min-w-0">
-            {/* MEAT Gaps */}
-            <div ref={meatRef} className="rounded-lg border bg-card shadow-sm border-l-4 border-l-red-500 overflow-hidden">
+            {/* MEAT Gaps — point 7: top accent border, shadow, hover elevation */}
+            <div
+              ref={meatRef}
+              className={cn(
+                "rounded-lg border bg-card overflow-hidden border-t-[3px] border-t-red-500 shadow-sm hover:shadow-md transition-shadow",
+                stagger("delay-100")
+              )}
+            >
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" aria-hidden />
                 <span className="text-sm font-semibold">MEAT Gaps</span>
@@ -330,8 +778,13 @@ export function RAFCentralPanel({
               </div>
             </div>
 
-            {/* Suspect Conditions */}
-            <div className="rounded-lg border bg-card shadow-sm border-l-4 border-l-amber-400 overflow-hidden">
+            {/* Suspect Conditions — point 7: top amber accent */}
+            <div
+              className={cn(
+                "rounded-lg border bg-card overflow-hidden border-t-[3px] border-t-amber-400 shadow-sm hover:shadow-md transition-shadow",
+                stagger("delay-200")
+              )}
+            >
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden />
                 <span className="text-sm font-semibold">Suspect Conditions</span>
@@ -359,7 +812,12 @@ export function RAFCentralPanel({
           {/* RIGHT: context / secondary */}
           <div className="flex flex-col gap-6 min-w-0">
             {/* HCC Recapture */}
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div
+              className={cn(
+                "rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden",
+                stagger("delay-100")
+              )}
+            >
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <History className="h-4 w-4 text-blue-500 flex-shrink-0" aria-hidden />
                 <span className="text-sm font-semibold">HCC Recapture</span>
@@ -374,23 +832,16 @@ export function RAFCentralPanel({
               </div>
             </div>
 
-            {/* Audit Readiness */}
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
+            {/* Audit Readiness — point 2: donut + gradient bg (point 9) */}
+            <div
+              className={cn(
+                "rounded-lg border bg-gradient-to-br from-background to-muted/40 dark:from-background dark:to-muted/20 shadow-sm hover:shadow-md transition-shadow overflow-hidden",
+                stagger("delay-200")
+              )}
+            >
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card/80">
                 <ClipboardCheck className="h-4 w-4 text-slate-500 flex-shrink-0" aria-hidden />
                 <span className="text-sm font-semibold">Audit Readiness</span>
-                <span
-                  className={cn(
-                    "ml-auto text-[10px] font-bold uppercase tracking-wide",
-                    data.audit_readiness.risk_level === "HIGH"
-                      ? "text-red-600"
-                      : data.audit_readiness.risk_level === "MEDIUM"
-                      ? "text-amber-600"
-                      : "text-emerald-600"
-                  )}
-                >
-                  {data.audit_readiness.risk_level} RISK
-                </span>
               </div>
               <div className="px-5 py-4">
                 <AuditSection audit={data.audit_readiness} />
@@ -398,7 +849,12 @@ export function RAFCentralPanel({
             </div>
 
             {/* Financial Impact */}
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div
+              className={cn(
+                "rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden",
+                stagger("delay-300")
+              )}
+            >
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <DollarSign className="h-4 w-4 text-slate-500 flex-shrink-0" aria-hidden />
                 <span className="text-sm font-semibold">Financial Impact</span>
@@ -467,7 +923,7 @@ export function RAFCentralPanel({
             </span>
           </span>
           <span className="flex-shrink-0 text-[11px] font-medium text-muted-foreground">
-            Review →
+            Review
           </span>
         </button>
       )}
@@ -603,7 +1059,7 @@ function Section({
 }
 
 // ---------------------------------------------------------------------------
-// LIVE RAF — top strip with score + delta
+// LIVE RAF — top strip with score + delta (panel layout only)
 // ---------------------------------------------------------------------------
 
 function LiveRAFSection({
@@ -611,8 +1067,6 @@ function LiveRAFSection({
   variant = "strip",
 }: {
   raf: LiveRAFBar;
-  /** strip: full-bleed row with border-b (panel layout)
-   *  inline: no border/bg wrapper, just the metrics row (dashboard layout) */
   variant?: "strip" | "inline";
 }) {
   const deltaColor =
@@ -743,7 +1197,6 @@ function MEATSection({
     { id: "incomplete", label: "Incomplete only" },
     { id: "high-impact", label: "High impact first" },
   ];
-  const activeLabel = options.find((o) => o.id === filter)?.label ?? "All gaps";
 
   return (
     <div className="space-y-3">
@@ -850,7 +1303,7 @@ function MEATCard({
           </div>
         </div>
 
-        {/* Status pill — emerald for COMPLETE (success), amber for PARTIAL, red for MISSING */}
+        {/* Status pill */}
         {isComplete ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 flex-shrink-0">
             <Check className="h-3 w-3" aria-hidden /> Complete
@@ -879,6 +1332,9 @@ function MEATCard({
           </span>
         </Tooltip>
       </div>
+
+      {/* point 5: MEAT completion progress bar */}
+      <MEATProgressBar gaps={gap.gaps} />
 
       {/* Actions */}
       {!isComplete && gap.patient_hcc_id ? (
@@ -943,7 +1399,7 @@ function LetterDots({
 }
 
 // ---------------------------------------------------------------------------
-// Suspects — confidence + accept/reject
+// Suspects — confidence semicircle gauge + accept/reject
 // ---------------------------------------------------------------------------
 
 function SuspectsSection({
@@ -988,13 +1444,6 @@ function SuspectCardView({
 }) {
   const [busy, setBusy] = useState<"accept" | "dismiss" | null>(null);
   const [showExplain, setShowExplain] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    // Trigger confidence bar animation on mount
-    const t = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(t);
-  }, []);
 
   const act = async (kind: "accept" | "dismiss") => {
     setBusy(kind);
@@ -1015,65 +1464,49 @@ function SuspectCardView({
   };
 
   const confPct = Math.round(suspect.confidence * 100);
-  const confBarColor =
-    confPct >= 85 ? "bg-emerald-500" : confPct >= 70 ? "bg-amber-500" : "bg-red-400";
+  const gaugeColor: "emerald" | "amber" | "red" =
+    confPct >= 85 ? "emerald" : confPct >= 70 ? "amber" : "red";
 
   return (
     <Card className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start gap-3">
+        {/* point 4: semicircle confidence gauge */}
+        <SemiGauge value={confPct} color={gaugeColor} />
+
         <div className="flex-1 min-w-0">
           <span className="text-sm font-semibold leading-snug truncate block">{suspect.label}</span>
           <div className="mt-0.5 text-xs text-muted-foreground">
             HCC {suspect.hcc} · {suspect.icd10} · {suspect.trigger}
           </div>
-        </div>
-      </div>
 
-      {/* Confidence bar with labels */}
-      <div className="mt-2 space-y-0.5">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground font-medium">Confidence</span>
-          <span className="font-semibold tabular-nums text-foreground">{confPct}%</span>
+          {/* Button hierarchy: Accept primary, Dismiss outline, Why? ghost */}
+          <div className="mt-2.5 flex gap-2 items-center flex-wrap">
+            <Button size="sm" onClick={() => act("accept")} disabled={busy !== null}>
+              {busy === "accept" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept</>
+              )}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => act("dismiss")} disabled={busy !== null}>
+              {busy === "dismiss" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <><XCircle className="h-3 w-3 mr-1" aria-hidden /> Dismiss</>
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowExplain(true)}
+              disabled={busy !== null}
+              aria-label="Why was this flagged?"
+              className="text-muted-foreground hover:text-foreground px-2"
+            >
+              <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
+            </Button>
+          </div>
         </div>
-        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-          <div
-            className={cn("h-full rounded-full transition-[width] duration-500", confBarColor)}
-            style={{ width: mounted ? `${confPct}%` : "0%" }}
-            role="progressbar"
-            aria-valuenow={confPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Confidence ${confPct}%`}
-          />
-        </div>
-      </div>
-
-      {/* Button hierarchy: Accept primary, Dismiss outline, Why? ghost */}
-      <div className="mt-2.5 flex gap-2 items-center">
-        <Button size="sm" onClick={() => act("accept")} disabled={busy !== null}>
-          {busy === "accept" ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept</>
-          )}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => act("dismiss")} disabled={busy !== null}>
-          {busy === "dismiss" ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <><XCircle className="h-3 w-3 mr-1" aria-hidden /> Dismiss</>
-          )}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setShowExplain(true)}
-          disabled={busy !== null}
-          aria-label="Why was this flagged?"
-          className="text-muted-foreground hover:text-foreground px-2"
-        >
-          <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
-        </Button>
       </div>
       <ExplainPanel
         patientId={patientId}
@@ -1125,31 +1558,17 @@ function RecaptureSection({ recapture }: { recapture: RecaptureCard[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Audit readiness — compliance % + progress bar
+// Audit readiness — donut chart (point 2)
 // ---------------------------------------------------------------------------
 
 function AuditSection({ audit }: { audit: AuditReadiness }) {
-  const riskColor =
-    audit.risk_level === "HIGH"
-      ? "text-red-600"
-      : audit.risk_level === "MEDIUM"
-      ? "text-amber-600"
-      : "text-slate-600 dark:text-slate-400";
   return (
-    <div className="space-y-2 pt-1">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">MEAT compliance</span>
-        <span className="font-bold tabular-nums">
-          {audit.meat_compliance_pct}% ({audit.hccs_compliant}/{audit.hccs_total})
-        </span>
-      </div>
-      <Progress value={audit.meat_compliance_pct} className="h-2" />
-      <div className="flex items-center justify-between pt-1 text-xs">
-        <span className="text-muted-foreground">Risk level</span>
-        <span className={cn("font-semibold uppercase", riskColor)}>
-          {audit.risk_level}
-        </span>
-      </div>
+    <div className="pt-1">
+      <AuditDonut
+        compliant={audit.hccs_compliant}
+        total={audit.hccs_total}
+        riskLevel={audit.risk_level}
+      />
     </div>
   );
 }
@@ -1173,12 +1592,14 @@ function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Financial — current vs projected
+// Financial — current vs projected + area chart (point 3)
 // ---------------------------------------------------------------------------
 
 function FinancialSection({ financial }: { financial: FinancialImpact }) {
   const gain = financial.annual_delta;
-  const pct = financial.current_raf ? ((financial.projected_raf - financial.current_raf) / financial.current_raf) * 100 : 0;
+  const pct = financial.current_raf
+    ? ((financial.projected_raf - financial.current_raf) / financial.current_raf) * 100
+    : 0;
   const hasUplift = gain > 0;
   return (
     <div className="space-y-3 pt-1">
@@ -1200,10 +1621,19 @@ function FinancialSection({ financial }: { financial: FinancialImpact }) {
           </div>
         </div>
       </div>
+
+      {/* point 3: area chart */}
+      {hasUplift && (
+        <FinancialAreaChart
+          current={financial.current_annual}
+          projected={financial.projected_annual}
+        />
+      )}
+
       {hasUplift ? (
         <>
           <Separator />
-          <div className="rounded-md border border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30">
             <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Potential uplift
             </div>
