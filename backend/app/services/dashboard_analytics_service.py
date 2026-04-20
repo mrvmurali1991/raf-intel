@@ -20,13 +20,10 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
+from app.config import settings
 from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
-
-# CMS Medicare Advantage per-member per-year benchmark — same rate used across
-# reports.py / insights.py so revenue estimates are consistent.
-_PMPY: float = 11_015.04
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +213,7 @@ def get_raf_overview(tenant_id: str, measurement_year: int) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("get_raf_overview: trend query failed: %s", exc)
 
-    estimated_annual_revenue = round(avg_raf * _PMPY * total_patients, 2)
+    estimated_annual_revenue = round(avg_raf * settings.cms_revenue_per_raf_point * total_patients, 2)
 
     return {
         "measurement_year": measurement_year,

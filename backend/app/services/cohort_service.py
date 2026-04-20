@@ -32,15 +32,10 @@ import math
 from datetime import date, datetime
 from typing import Any
 
+from app.config import settings
 from app.db import openemr_cursor, raf_cursor
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Revenue estimation constant — dollars per RAF unit (CMS MA benchmark proxy).
-# Override via environment variable or pass explicitly.
-# ---------------------------------------------------------------------------
-_REVENUE_PER_RAF_UNIT: float = 9_000.0  # $9 000 / year per 1.0 RAF unit (approximate)
 
 # ---------------------------------------------------------------------------
 # Active EMR patient filter — only include patients matched to active
@@ -630,7 +625,7 @@ def refresh_cohort_membership(
             )
 
         if avg_raf is not None:
-            total_revenue = round(avg_raf * patient_count * _REVENUE_PER_RAF_UNIT, 2)
+            total_revenue = round(avg_raf * patient_count * settings.cms_revenue_per_raf_point, 2)
 
         cur.execute(
             """
@@ -846,7 +841,7 @@ def take_snapshot(cohort_id: int, tenant_id: str) -> dict[str, Any]:
             logger.warning("cohort snapshot: top_hccs query failed: %s", exc)
 
         total_revenue = (
-            round(avg_raf * len(patient_ids) * _REVENUE_PER_RAF_UNIT, 2)
+            round(avg_raf * len(patient_ids) * settings.cms_revenue_per_raf_point, 2)
             if avg_raf
             else None
         )
@@ -1108,7 +1103,7 @@ def _build_cohort_metrics(
 
     avg_age = round(sum(ages) / len(ages), 2) if ages else None
     total_revenue = (
-        round(avg_raf * len(patient_ids) * _REVENUE_PER_RAF_UNIT, 2)
+        round(avg_raf * len(patient_ids) * settings.cms_revenue_per_raf_point, 2)
         if avg_raf
         else None
     )
@@ -1416,7 +1411,7 @@ def get_population_health_metrics(
         reverse=True,
     )[:10]
 
-    total_revenue = round(avg_raf * n * _REVENUE_PER_RAF_UNIT, 2) if avg_raf else None
+    total_revenue = round(avg_raf * n * settings.cms_revenue_per_raf_point, 2) if avg_raf else None
 
     return {
         "tenant_id": tenant_id,

@@ -24,6 +24,7 @@ from collections import Counter
 
 from app.db import raf_cursor, openemr_cursor, NoActiveEMRConnection
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.config import settings
 from app.services.emr_manager import active_patients_subquery
 from app.cache import cache_get, cache_set
 from app.services.cache_strategy import get_active_connection_id as _active_connection_id
@@ -31,9 +32,6 @@ from app.services.cache_strategy import get_active_connection_id as _active_conn
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
-
-# CMS per-member per-year revenue multiplier (MA benchmark rate)
-_ANNUAL_REVENUE_PER_RAF_POINT = 11_015.04
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +197,7 @@ def revenue_opportunity(year: int = Query(default=None),
     else:
         total_gap = round(total_ai_raf - total_billing_raf, 4)
 
-    estimated_annual_revenue = round(total_gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
+    estimated_annual_revenue = round(total_gap * settings.cms_revenue_per_raf_point, 2)
 
     # Average across the AI/calculated RAF per patient — billing-only RAF is
     # often empty for demo data because there are no submitted claims yet, so
@@ -344,13 +342,13 @@ def patient_scorecard(year: int = Query(default=None),
 
         if billing_raf is not None and ai_raf is not None:
             gap = round(ai_raf - billing_raf, 4)
-            revenue_opportunity = round(gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
+            revenue_opportunity = round(gap * settings.cms_revenue_per_raf_point, 2)
         elif billing_raf is not None and pid in suspect_by_pid:
             # Estimate gap from open suspect conditions
             est_gap = float(suspect_by_pid[pid]["estimated_gap"] or 0)
             gap = round(est_gap, 4)
             ai_raf = round(billing_raf + gap, 4)
-            revenue_opportunity = round(gap * _ANNUAL_REVENUE_PER_RAF_POINT, 2)
+            revenue_opportunity = round(gap * settings.cms_revenue_per_raf_point, 2)
             hcc_count_ai = int(suspect_by_pid[pid]["suspect_count"])
         else:
             gap = None
