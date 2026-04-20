@@ -115,13 +115,14 @@ def test_api_key_routes_to_vertex_publisher_endpoint(monkeypatch):
     assert "generativelanguage.googleapis.com" not in url
 
 
-def test_no_credentials_raises_runtime_error(monkeypatch):
-    """Without API key or SA creds, llm_generate should raise RuntimeError."""
+def test_no_project_raises_runtime_error(monkeypatch):
+    """Without GCP_PROJECT_ID (and no API key), _vertex_url raises RuntimeError."""
     monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    with pytest.raises((RuntimeError, Exception)):
-        vertex_client.llm_generate("hi")
+    # _use_vertex_api_key() → False (no key); _call_vertex → _vertex_url → RuntimeError
+    with pytest.raises(RuntimeError, match="GCP_PROJECT_ID"):
+        vertex_client._vertex_url("gemini-2.0-flash")
 
 
 def test_extract_text_handles_empty_candidates():
