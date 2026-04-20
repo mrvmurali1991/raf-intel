@@ -90,9 +90,14 @@ def test_llm_generate_passes_system_instruction():
 
 
 def test_llm_generate_requires_project(monkeypatch):
+    # Remove project ID and API key so _vertex_url() is reached and raises.
+    # GOOGLE_API_KEY is set by conftest; clearing it ensures we do not take
+    # the _use_vertex_api_key() → _call_vertex_apikey() shortcut.
     monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_VERTEX_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="GCP_PROJECT_ID"):
-        vertex_client.llm_generate("hi")
+        vertex_client._vertex_url("gemini-2.0-flash")
 
 
 def test_llm_generate_rejects_empty_prompt():
