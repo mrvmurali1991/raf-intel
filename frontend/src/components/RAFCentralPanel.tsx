@@ -201,25 +201,21 @@ interface MEATAttestationDialogProps {
   onSubmit: (note: string) => void;
 }
 
-function MEATAttestationDialog({
-  open,
+function MEATAttestationDialogInner({
   hcc,
   label,
   missingLabel,
   placeholder,
   onCancel,
   onSubmit,
-}: MEATAttestationDialogProps) {
+}: Omit<MEATAttestationDialogProps, "open">) {
   const [note, setNote] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Reset note when dialog opens; autofocus textarea
+  // Autofocus textarea on mount (this inner component is only mounted when open=true)
   useEffect(() => {
-    if (open) {
-      setNote("");
-      requestAnimationFrame(() => textareaRef.current?.focus());
-    }
-  }, [open]);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -239,41 +235,65 @@ function MEATAttestationDialog({
     `e.g., Patient on medication for HCC ${hcc}, condition monitored quarterly, no acute complications.`;
 
   return (
+    <DialogContent showCloseButton={false} className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>MEAT Attestation — HCC {hcc}</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-2 py-1">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold">{label}</span>
+          {missingLabel && (
+            <> — missing: <span className="font-medium">{missingLabel}</span></>
+          )}
+        </p>
+        <textarea
+          ref={textareaRef}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={defaultPlaceholder}
+          rows={4}
+          className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Clinician attestation note"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Cmd+Enter / Ctrl+Enter to submit. Already-documented MEAT letters will not be overwritten.
+        </p>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} disabled={!note.trim()}>
+          Submit attestation
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+function MEATAttestationDialog({
+  open,
+  hcc,
+  label,
+  missingLabel,
+  placeholder,
+  onCancel,
+  onSubmit,
+}: MEATAttestationDialogProps) {
+  return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel(); }}>
-      <DialogContent showCloseButton={false} className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>MEAT Attestation — HCC {hcc}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-2 py-1">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-semibold">{label}</span>
-            {missingLabel && (
-              <> — missing: <span className="font-medium">{missingLabel}</span></>
-            )}
-          </p>
-          <textarea
-            ref={textareaRef}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={defaultPlaceholder}
-            rows={4}
-            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Clinician attestation note"
-          />
-          <p className="text-[10px] text-muted-foreground">
-            Cmd+Enter / Ctrl+Enter to submit. Already-documented MEAT letters will not be overwritten.
-          </p>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!note.trim()}>
-            Submit attestation
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+      {/* Remount inner component on each open to reset note state cleanly */}
+      {open && (
+        <MEATAttestationDialogInner
+          hcc={hcc}
+          label={label}
+          missingLabel={missingLabel}
+          placeholder={placeholder}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+        />
+      )}
     </Dialog>
   );
 }
@@ -289,17 +309,10 @@ interface DismissReasonDialogProps {
   onSubmit: (reason: string) => void;
 }
 
-function DismissReasonDialog({ open, suspectLabel, onCancel, onSubmit }: DismissReasonDialogProps) {
+function DismissReasonDialogInner({ suspectLabel, onCancel, onSubmit }: Omit<DismissReasonDialogProps, "open">) {
   const [selected, setSelected] = useState<DismissReasonCode>("not_clinically_supported");
   const [otherText, setOtherText] = useState("");
   const otherTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setSelected("not_clinically_supported");
-      setOtherText("");
-    }
-  }, [open]);
 
   useEffect(() => {
     if (selected === "other") {
@@ -326,58 +339,71 @@ function DismissReasonDialog({ open, suspectLabel, onCancel, onSubmit }: Dismiss
   };
 
   return (
+    <DialogContent showCloseButton={false} className="sm:max-w-sm" onKeyDown={handleKeyDown}>
+      <DialogHeader>
+        <DialogTitle>Dismiss reason</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-3 py-1">
+        <p className="text-xs text-muted-foreground line-clamp-1">{suspectLabel}</p>
+        <fieldset className="space-y-2">
+          <legend className="sr-only">Select a dismiss reason</legend>
+          {(Object.entries(DISMISS_REASONS) as [DismissReasonCode, string][]).map(([code, label]) => (
+            <label
+              key={code}
+              className={cn(
+                "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors",
+                selected === code
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-muted/50"
+              )}
+            >
+              <input
+                type="radio"
+                name="dismiss-reason"
+                value={code}
+                checked={selected === code}
+                onChange={() => setSelected(code)}
+                className="accent-primary"
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+        {selected === "other" && (
+          <textarea
+            ref={otherTextareaRef}
+            value={otherText}
+            onChange={(e) => setOtherText(e.target.value)}
+            placeholder="Describe the reason…"
+            rows={3}
+            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Other dismiss reason"
+          />
+        )}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="destructive" onClick={handleSubmit} disabled={!isValid}>
+          Dismiss suspect
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+function DismissReasonDialog({ open, suspectLabel, onCancel, onSubmit }: DismissReasonDialogProps) {
+  return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel(); }}>
-      <DialogContent showCloseButton={false} className="sm:max-w-sm" onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle>Dismiss reason</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-1">
-          <p className="text-xs text-muted-foreground line-clamp-1">{suspectLabel}</p>
-          <fieldset className="space-y-2">
-            <legend className="sr-only">Select a dismiss reason</legend>
-            {(Object.entries(DISMISS_REASONS) as [DismissReasonCode, string][]).map(([code, label]) => (
-              <label
-                key={code}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors",
-                  selected === code
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:bg-muted/50"
-                )}
-              >
-                <input
-                  type="radio"
-                  name="dismiss-reason"
-                  value={code}
-                  checked={selected === code}
-                  onChange={() => setSelected(code)}
-                  className="accent-primary"
-                />
-                {label}
-              </label>
-            ))}
-          </fieldset>
-          {selected === "other" && (
-            <textarea
-              ref={otherTextareaRef}
-              value={otherText}
-              onChange={(e) => setOtherText(e.target.value)}
-              placeholder="Describe the reason…"
-              rows={3}
-              className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Other dismiss reason"
-            />
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={handleSubmit} disabled={!isValid}>
-            Dismiss suspect
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+      {/* Remount inner component on each open to reset radio/text state cleanly */}
+      {open && (
+        <DismissReasonDialogInner
+          suspectLabel={suspectLabel}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+        />
+      )}
     </Dialog>
   );
 }
