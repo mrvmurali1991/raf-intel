@@ -24,6 +24,7 @@ from typing import Any
 import httpx
 
 from app.db import raf_cursor, openemr_cursor
+from app.security.ssrf import _assert_safe_outbound_url
 from app.services.encryption_service import decrypt, encrypt
 from app.services.circuit_breaker import fhir_breaker
 
@@ -104,6 +105,8 @@ async def _fetch_token_async(connection: dict[str, Any]) -> str:
 
     if not token_url:
         raise ValueError(f"Connection {conn_id} has no token_url configured")
+
+    _assert_safe_outbound_url(token_url)
 
     # OpenEMR uses password grant with client_secret_post auth method
     if vendor == "openemr":
@@ -197,6 +200,7 @@ async def _fhir_get(
     Automatically attaches Authorization header when auth_type is oauth2 or api_key.
     """
     base_url: str = connection["base_url"].rstrip("/")
+    _assert_safe_outbound_url(base_url)
     url = f"{base_url}/{path.lstrip('/')}"
 
     headers: dict[str, str] = {
@@ -1794,6 +1798,7 @@ async def _bulk_export_async(
     Returns {"files": [...], "error": None} or {"files": [], "error": "..."}.
     """
     base_url = connection["base_url"].rstrip("/")
+    _assert_safe_outbound_url(base_url)
     params: dict[str, Any] = {"_outputFormat": "application/fhir+ndjson"}
     if resource_types:
         params["_type"] = ",".join(resource_types)

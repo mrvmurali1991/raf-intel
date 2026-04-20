@@ -44,6 +44,7 @@ from typing import Any, Optional
 import httpx
 
 from app.db import raf_cursor
+from app.security.ssrf import _assert_safe_outbound_url
 from app.services.encryption_service import decrypt, encrypt
 from app.services.vendor_adapters.registry import get_adapter, get_fhir_adapter
 from app.services.hcc_mapping_service import map_icd10_batch, get_hcc_coefficient as _hcc_coefficient
@@ -1016,6 +1017,11 @@ def _test_fhir_r4(connection: dict) -> dict:
             "latency_ms": 0,
         }
 
+    try:
+        _assert_safe_outbound_url(base_url)
+    except ValueError as exc:
+        return {"success": False, "message": str(exc), "latency_ms": 0}
+
     metadata_url = f"{base_url}/metadata"
     start = time.monotonic()
     try:
@@ -1077,6 +1083,11 @@ def _test_rest_api(connection: dict) -> dict:
             "message": "api_base_url is not configured",
             "latency_ms": 0,
         }
+
+    try:
+        _assert_safe_outbound_url(base_url)
+    except ValueError as exc:
+        return {"success": False, "message": str(exc), "latency_ms": 0}
 
     api_key = connection.get("api_key", "")
     auth_type = (connection.get("api_auth_type") or "bearer").lower()
