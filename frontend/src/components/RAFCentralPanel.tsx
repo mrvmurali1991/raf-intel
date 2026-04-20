@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useToast } from "@/components/Toast";
 import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -149,6 +150,20 @@ export interface RAFCentralPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Dismiss reason codes — single source of truth for UI labels ↔ API values
+// ---------------------------------------------------------------------------
+
+export const DISMISS_REASONS = {
+  not_clinically_supported: "Not clinically supported",
+  already_documented: "Already documented under different code",
+  patient_transferred: "Patient transferred",
+  clinical_override: "Clinical judgment override",
+  other: "Other",
+} as const;
+
+export type DismissReasonCode = keyof typeof DISMISS_REASONS;
+
+// ---------------------------------------------------------------------------
 // Tooltip — lightweight, no extra dependency
 // ---------------------------------------------------------------------------
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
@@ -255,6 +270,110 @@ function MEATAttestationDialog({
           </Button>
           <Button onClick={handleSubmit} disabled={!note.trim()}>
             Submit attestation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DismissReasonDialog — structured reason picker before dismissing a suspect
+// ---------------------------------------------------------------------------
+
+interface DismissReasonDialogProps {
+  open: boolean;
+  suspectLabel: string;
+  onCancel: () => void;
+  onSubmit: (reason: string) => void;
+}
+
+function DismissReasonDialog({ open, suspectLabel, onCancel, onSubmit }: DismissReasonDialogProps) {
+  const [selected, setSelected] = useState<DismissReasonCode>("not_clinically_supported");
+  const [otherText, setOtherText] = useState("");
+  const otherTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelected("not_clinically_supported");
+      setOtherText("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (selected === "other") {
+      requestAnimationFrame(() => otherTextareaRef.current?.focus());
+    }
+  }, [selected]);
+
+  const isValid = selected !== "other" || otherText.trim().length > 0;
+
+  const handleSubmit = () => {
+    if (!isValid) return;
+    const reason =
+      selected === "other"
+        ? `other: ${otherText.trim()}`
+        : `${selected}: ${DISMISS_REASONS[selected]}`;
+    onSubmit(reason);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel(); }}>
+      <DialogContent showCloseButton={false} className="sm:max-w-sm" onKeyDown={handleKeyDown}>
+        <DialogHeader>
+          <DialogTitle>Dismiss reason</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <p className="text-xs text-muted-foreground line-clamp-1">{suspectLabel}</p>
+          <fieldset className="space-y-2">
+            <legend className="sr-only">Select a dismiss reason</legend>
+            {(Object.entries(DISMISS_REASONS) as [DismissReasonCode, string][]).map(([code, label]) => (
+              <label
+                key={code}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors",
+                  selected === code
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:bg-muted/50"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="dismiss-reason"
+                  value={code}
+                  checked={selected === code}
+                  onChange={() => setSelected(code)}
+                  className="accent-primary"
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          {selected === "other" && (
+            <textarea
+              ref={otherTextareaRef}
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+              placeholder="Describe the reason…"
+              rows={3}
+              className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Other dismiss reason"
+            />
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleSubmit} disabled={!isValid}>
+            Dismiss suspect
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1814,20 +1933,47 @@ function SuspectCardView({
 }) {
   const [busy, setBusy] = useState<"accept" | "dismiss" | null>(null);
   const [showExplain, setShowExplain] = useState(false);
+  const [showDismissDialog, setShowDismissDialog] = useState(false);
+  const toast = useToast();
 
-  const act = async (kind: "accept" | "dismiss") => {
-    setBusy(kind);
+  const acceptSuspect = async () => {
+    setBusy("accept");
     try {
-      const path =
-        kind === "accept"
-          ? `/api/raf-central/${patientId}/actions/accept-suspect`
-          : `/api/raf-central/${patientId}/actions/dismiss-suspect`;
-      const body =
-        kind === "accept"
-          ? { suspect_id: suspect.id, push_to_emr: true }
-          : { suspect_id: suspect.id, reason: "dismissed from raf-central panel" };
-      await api.post(path, body);
+      await api.post(`/api/raf-central/${patientId}/actions/accept-suspect`, {
+        suspect_id: suspect.id,
+        push_to_emr: true,
+      });
       onChange();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const dismissSuspect = async (reason: string) => {
+    setShowDismissDialog(false);
+    setBusy("dismiss");
+    try {
+      await api.post(`/api/raf-central/${patientId}/actions/dismiss-suspect`, {
+        suspect_id: suspect.id,
+        reason,
+      });
+      onChange();
+      // TODO: No restore endpoint exists yet — Undo button closes the toast without action.
+      // When a restore endpoint is added, call it here instead of just closing.
+      toast.success(
+        "Suspect dismissed",
+        suspect.label,
+        {
+          duration: 10_000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              // No restore endpoint available yet — dismiss the toast only.
+              // TODO: POST /api/raf-central/{pid}/actions/restore-suspect when endpoint exists.
+            },
+          },
+        }
+      );
     } finally {
       setBusy(null);
     }
@@ -1851,14 +1997,19 @@ function SuspectCardView({
 
           {/* Button hierarchy: Accept primary, Dismiss outline, Why? ghost */}
           <div className="mt-2.5 flex gap-2 items-center flex-wrap">
-            <Button size="sm" onClick={() => act("accept")} disabled={busy !== null}>
+            <Button size="sm" onClick={acceptSuspect} disabled={busy !== null}>
               {busy === "accept" ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept</>
               )}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => act("dismiss")} disabled={busy !== null}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowDismissDialog(true)}
+              disabled={busy !== null}
+            >
               {busy === "dismiss" ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
@@ -1884,6 +2035,12 @@ function SuspectCardView({
         suspectLabel={suspect.label}
         open={showExplain}
         onClose={() => setShowExplain(false)}
+      />
+      <DismissReasonDialog
+        open={showDismissDialog}
+        suspectLabel={suspect.label}
+        onCancel={() => setShowDismissDialog(false)}
+        onSubmit={dismissSuspect}
       />
     </Card>
   );

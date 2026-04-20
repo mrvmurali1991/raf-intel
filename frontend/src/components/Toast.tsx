@@ -13,16 +13,24 @@ import { cn } from "@/lib/utils";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface Toast {
   id: string;
   type: ToastType;
   title: string;
   message?: string;
+  action?: ToastAction;
+  /** ms before auto-dismiss — defaults to 4000, use a larger value for undo toasts */
+  duration?: number;
 }
 
 interface ToastContextValue {
-  toast: (type: ToastType, title: string, message?: string) => void;
-  success: (title: string, message?: string) => void;
+  toast: (type: ToastType, title: string, message?: string, opts?: { action?: ToastAction; duration?: number }) => void;
+  success: (title: string, message?: string, opts?: { action?: ToastAction; duration?: number }) => void;
   error: (title: string, message?: string) => void;
   warning: (title: string, message?: string) => void;
   info: (title: string, message?: string) => void;
@@ -77,10 +85,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToast = useCallback(
-    (type: ToastType, title: string, message?: string) => {
+    (type: ToastType, title: string, message?: string, opts?: { action?: ToastAction; duration?: number }) => {
       const id = crypto.randomUUID();
-      setToasts((prev) => [...prev, { id, type, title, message }]);
-      const timer = setTimeout(() => removeToast(id), 4000);
+      setToasts((prev) => [...prev, { id, type, title, message, action: opts?.action, duration: opts?.duration }]);
+      const timer = setTimeout(() => removeToast(id), opts?.duration ?? 4000);
       timers.current.set(id, timer);
     },
     [removeToast]
@@ -88,11 +96,52 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const value: ToastContextValue = {
     toast: addToast,
-    success: (title, message) => addToast("success", title, message),
+    success: (title, message, opts) => addToast("success", title, message, opts),
     error: (title, message) => addToast("error", title, message),
     warning: (title, message) => addToast("warning", title, message),
     info: (title, message) => addToast("info", title, message),
   };
+
+  function ToastItem({ t, isError }: { t: Toast; isError: boolean }) {
+    const Icon = icons[t.type];
+    return (
+      <div
+        className={cn(
+          "pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm premium-shadow animate-slide-up",
+          "animate-in slide-in-from-right-5 fade-in duration-300",
+          "min-w-[320px] max-w-[420px]",
+          styles[t.type]
+        )}
+        role={isError ? "alert" : "status"}
+      >
+        <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", iconStyles[t.type])} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">{t.title}</p>
+          {t.message && (
+            <p className="mt-0.5 text-xs opacity-80">{t.message}</p>
+          )}
+          {t.action && (
+            <button
+              onClick={() => {
+                t.action!.onClick();
+                removeToast(t.id);
+              }}
+              className="mt-1.5 text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
+            >
+              {t.action.label}
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => removeToast(t.id)}
+          className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity"
+          aria-label="Dismiss notification"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <ToastContext.Provider value={value}>
@@ -103,36 +152,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-label="Error notifications"
         className="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2 pointer-events-none"
       >
-        {toasts.filter((t) => t.type === "error").map((t) => {
-          const Icon = icons[t.type];
-          return (
-            <div
-              key={t.id}
-              className={cn(
-                "pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm premium-shadow animate-slide-up",
-                "animate-in slide-in-from-right-5 fade-in duration-300",
-                "min-w-[320px] max-w-[420px]",
-                styles[t.type]
-              )}
-              role="alert"
-            >
-              <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", iconStyles[t.type])} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{t.title}</p>
-                {t.message && (
-                  <p className="mt-0.5 text-xs opacity-80">{t.message}</p>
-                )}
-              </div>
-              <button
-                onClick={() => removeToast(t.id)}
-                className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity"
-                aria-label="Dismiss notification"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        })}
+        {toasts.filter((t) => t.type === "error").map((t) => (
+          <ToastItem key={t.id} t={t} isError={true} />
+        ))}
       </div>
       {/* Non-error toast container — polite so screen readers finish current speech */}
       <div
@@ -140,36 +162,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-label="Notifications"
         className="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2 pointer-events-none"
       >
-        {toasts.filter((t) => t.type !== "error").map((t) => {
-          const Icon = icons[t.type];
-          return (
-            <div
-              key={t.id}
-              className={cn(
-                "pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm premium-shadow animate-slide-up",
-                "animate-in slide-in-from-right-5 fade-in duration-300",
-                "min-w-[320px] max-w-[420px]",
-                styles[t.type]
-              )}
-              role="status"
-            >
-              <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", iconStyles[t.type])} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{t.title}</p>
-                {t.message && (
-                  <p className="mt-0.5 text-xs opacity-80">{t.message}</p>
-                )}
-              </div>
-              <button
-                onClick={() => removeToast(t.id)}
-                className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity"
-                aria-label="Dismiss notification"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        })}
+        {toasts.filter((t) => t.type !== "error").map((t) => (
+          <ToastItem key={t.id} t={t} isError={false} />
+        ))}
       </div>
     </ToastContext.Provider>
   );
