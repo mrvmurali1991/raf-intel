@@ -3,9 +3,12 @@
 This module provides a single entry point — :func:`llm_generate` — that
 wraps Google Vertex AI's ``generateContent`` endpoint using a service
 account for authentication.  Service-account auth is required for GCP
-BAA coverage; the legacy ``generativelanguage.googleapis.com`` API-key
-path is NOT covered by the BAA and is retained only as a fallback for
-local development / emergency rollback, gated by ``LLM_USE_VERTEX``.
+BAA coverage.
+
+The only permitted outbound endpoint is ``aiplatform.googleapis.com``
+(BAA-covered).  The legacy ``generativelanguage.googleapis.com`` consumer
+API-key path has been removed; it was NOT covered by the BAA and must not
+be used with PHI.
 
 Environment variables
 ---------------------
@@ -14,9 +17,11 @@ GCP_LOCATION                Vertex AI region (default: ``us-central1``).
 GOOGLE_APPLICATION_CREDENTIALS
                             Absolute path to the service-account JSON key
                             file.  Read by ``google.auth.default()``.
-LLM_USE_VERTEX              ``true`` (default) → Vertex AI + SA creds.
-                            ``false`` → legacy Generative Language API key.
-GOOGLE_API_KEY              Only used when ``LLM_USE_VERTEX=false``.
+GOOGLE_API_KEY              Used for the BAA-eligible Vertex AI publishers
+                            endpoint (aiplatform.googleapis.com) when
+                            LLM_VERTEX_API_KEY=true or no service account
+                            is configured.  Never routes to
+                            generativelanguage.googleapis.com.
 GEMINI_MODEL                Default model name (e.g. ``gemini-2.0-flash``).
 
 Usage
@@ -112,23 +117,17 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
-def _use_vertex() -> bool:
-    return _env_bool("LLM_USE_VERTEX", True)
-
-
 def _use_vertex_api_key() -> bool:
     """Route through the global Vertex publishers endpoint using GOOGLE_API_KEY.
 
-    This is the BAA-eligible `aiplatform.googleapis.com/v1/publishers/...`
+    This is the BAA-eligible ``aiplatform.googleapis.com/v1/publishers/...``
     endpoint that accepts API keys (Vertex AI Express/publisher mode), as
     distinct from the project-scoped endpoint that requires a service account.
-    Enabled when ``LLM_VERTEX_API_KEY=true`` OR (Vertex is on, a GOOGLE_API_KEY
-    is configured, and no project / SA credentials are set).
+    Enabled when ``LLM_VERTEX_API_KEY=true`` OR (a GOOGLE_API_KEY is
+    configured and no project / SA credentials are set).
     """
     if _env_bool("LLM_VERTEX_API_KEY", False):
         return True
-    if not _use_vertex():
-        return False
     has_key = bool(os.getenv("GOOGLE_API_KEY", "").strip())
     has_sa = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()) or \
              bool(os.getenv("GCP_PROJECT_ID", "").strip())
@@ -298,42 +297,6 @@ def _call_vertex_apikey(
 
 
 # ---------------------------------------------------------------------------
-# Legacy Generative Language API transport (API key, NOT BAA-covered)
-# ---------------------------------------------------------------------------
-
-def _call_generative_language(
-    prompt: str,
-    model: str,
-    system: Optional[str],
-    temperature: float,
-) -> str:
-    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "GOOGLE_API_KEY is not configured — required when LLM_USE_VERTEX=false"
-        )
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={api_key}"
-    )
-    payload = _build_payload(prompt, system, temperature)
-    resp = requests.post(
-        url,
-        headers={"Content-Type": "application/json"},
-        data=json.dumps(payload),
-        timeout=_REQUEST_TIMEOUT_SEC,
-    )
-    if resp.status_code >= 400:
-        logger.error(
-            "Generative Language API failed: status=%s body=%s",
-            resp.status_code,
-            resp.text[:500],
-        )
-        resp.raise_for_status()
-    return _extract_text(resp.json())
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -352,7 +315,7 @@ def llm_generate_content(
     response parsing) stays in the caller; only the HTTP transport and
     authentication are centralised here.
 
-    Routing honours ``LLM_USE_VERTEX`` identically to :func:`llm_generate`.
+    All requests are routed through ``aiplatform.googleapis.com`` (BAA-covered).
 
     Parameters
     ----------
@@ -397,7 +360,7 @@ def llm_generate_content(
                 data=json.dumps(payload),
                 timeout=timeout,
             )
-        elif _use_vertex():
+        else:
             creds = _load_credentials()
             url = _vertex_url(model)
             headers = {
@@ -407,22 +370,6 @@ def llm_generate_content(
             resp = requests.post(
                 url,
                 headers=headers,
-                data=json.dumps(payload),
-                timeout=timeout,
-            )
-        else:
-            api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-            if not api_key:
-                raise RuntimeError(
-                    "GOOGLE_API_KEY is not configured — required when LLM_USE_VERTEX=false"
-                )
-            url = (
-                f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{model}:generateContent?key={api_key}"
-            )
-            resp = requests.post(
-                url,
-                headers={"Content-Type": "application/json"},
                 data=json.dumps(payload),
                 timeout=timeout,
             )
@@ -472,11 +419,11 @@ def llm_generate(
     output_schema: dict | None = None,
     tenant_id: str | None = None,
 ) -> str:
-    """Generate text from a Gemini model.
+    """Generate text from a Gemini model via BAA-covered Vertex AI.
 
-    Routes through Vertex AI (service-account auth, BAA-covered) when the
-    ``LLM_USE_VERTEX`` flag is true (the default).  Set
-    ``LLM_USE_VERTEX=false`` to fall back to the legacy API-key path.
+    Only the ``aiplatform.googleapis.com`` endpoint is used.  The legacy
+    ``generativelanguage.googleapis.com`` consumer API path has been removed
+    — it is not covered by Google's BAA and must not be used with PHI.
 
     Parameters
     ----------
@@ -532,9 +479,7 @@ def llm_generate(
     def _do_call(p: str, s: Optional[str]) -> str:
         if _use_vertex_api_key():
             return _call_vertex_apikey(p, model, s, temperature)
-        if _use_vertex():
-            return _call_vertex(p, model, s, temperature)
-        return _call_generative_language(p, model, s, temperature)
+        return _call_vertex(p, model, s, temperature)
 
     _emit_request(safe_prompt)
     start = time.monotonic()
