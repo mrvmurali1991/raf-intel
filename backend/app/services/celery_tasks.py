@@ -129,6 +129,8 @@ celery_app.conf.task_routes = {
     "raf.calculate_provider_scorecards": {"queue": "heavy",    "priority": 4},
     # Pipeline chain event steps
     "raf.cleanup_stale_runs":            {"queue": "pipeline", "priority": 6},
+    # Per-patient MEAT refresh (user-triggered, short-lived)
+    "raf.refresh_meat_for_patient":      {"queue": "default",  "priority": 6},
     # Default operational tasks
     "raf.sync_emr_connection":           {"queue": "default",  "priority": 5},
     "raf.check_due_syncs":               {"queue": "default",  "priority": 3},
@@ -1330,6 +1332,112 @@ def fhir_sync_task(
             connection_id, tenant_id, exc, exc_info=True,
         )
         raise self.retry(exc=exc, countdown=120 * (2 ** self.request.retries))
+
+
+# ---------------------------------------------------------------------------
+# Task: refresh MEAT evidence for a single patient (async, request-scoped)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.refresh_meat_for_patient",
+    queue="default",
+    max_retries=2,
+    default_retry_delay=60,
+    soft_time_limit=300,   # 5 min soft limit — MEAT extraction is multi-second per note
+    time_limit=360,        # 6 min hard kill
+)
+def task_refresh_meat_for_patient(
+    self,
+    tenant_id: str,
+    patient_id: int,
+    year: int | None = None,
+    max_days_lookback: int = 365,
+) -> dict[str, Any]:
+    """Run the rule-based MEAT extractor for a single patient in the background.
+
+    Enqueued by POST /api/raf-central/{pid}/actions/refresh-meat instead of
+    running synchronously in the request path.  The endpoint returns HTTP 202
+    with ``{status: "queued", job_id: <celery_task_id>}``; the frontend should
+    poll GET /api/jobs/{job_id} for completion status.
+
+    Front-end polling follow-up required:
+        The refresh-meat endpoint now returns immediately with 202/queued.
+        The frontend needs to poll ``GET /api/jobs/{job_id}`` and refresh the
+        RAF Central panel when the job reaches SUCCEEDED status.  This is a
+        separate concern tracked in the frontend backlog.
+
+    Args:
+        tenant_id: Tenant identifier (required for HIPAA multi-tenant isolation).
+        patient_id: RAF Intelligence patient ID.
+        year: Measurement year. Defaults to current year if None.
+        max_days_lookback: Number of days back to look for clinical notes.
+
+    Returns:
+        Summary dict from ``run_auto_meat_for_patient`` with MEAT extraction stats.
+    """
+    if not tenant_id:
+        raise ValueError(
+            "task_refresh_meat_for_patient: tenant_id is required — "
+            "refusing to run without tenant scope (HIPAA multi-tenant isolation)"
+        )
+
+    job_id = self.request.id
+    _mark_started(
+        self,
+        "raf.refresh_meat_for_patient",
+        {"tenant_id": tenant_id, "patient_id": patient_id, "year": year},
+    )
+    _audit(
+        "job_started",
+        job_id,
+        f"refresh_meat_for_patient patient={patient_id} tenant={tenant_id} year={year}",
+    )
+    task_logger.info(
+        "refresh_meat_for_patient: starting patient=%d tenant=%s year=%s",
+        patient_id, tenant_id, year,
+    )
+
+    try:
+        from app.services.auto_meat_extractor import run_auto_meat_for_patient
+        from app.cache import cache_delete_pattern
+
+        _mark_progress(self, 0, 1, f"Running MEAT extraction for patient {patient_id}")
+        summary = run_auto_meat_for_patient(
+            patient_id,
+            tenant_id=tenant_id,
+            year=year,
+            max_days_lookback=max_days_lookback,
+        )
+        _mark_progress(self, 1, 1, "MEAT extraction complete")
+
+        # Invalidate the RAF Central panel cache so the next GET reflects new data.
+        try:
+            cache_delete_pattern(f"raf-central:{tenant_id}:*:{patient_id}:*")
+        except Exception as cache_exc:
+            task_logger.warning(
+                "refresh_meat_for_patient: cache invalidation failed (non-fatal): %s", cache_exc
+            )
+
+        _mark_success(self, summary)
+        _audit(
+            "job_completed",
+            job_id,
+            f"refresh_meat patient={patient_id} wrote={summary.get('evidence_written', 0)}",
+        )
+        task_logger.info(
+            "refresh_meat_for_patient: finished patient=%d summary=%s", patient_id, summary
+        )
+        return summary
+
+    except Exception as exc:
+        _mark_failure(self, exc)
+        _audit("job_failed", job_id, str(exc)[:500])
+        task_logger.error(
+            "refresh_meat_for_patient failed patient=%d: %s", patient_id, exc, exc_info=True
+        )
+        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
 
 
 # ---------------------------------------------------------------------------
