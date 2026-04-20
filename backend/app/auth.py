@@ -25,6 +25,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 import jwt
 
+from app.db import run_in_db_executor
 from app.services.auth_service import (
     check_permission,
     decode_token,
@@ -76,9 +77,14 @@ async def _resolve_user(request: Request) -> dict[str, Any] | None:
     if not session_id:
         return None
 
-    # Load user from DB
+    # Load user from DB.
+    # ``get_user`` and ``validate_session`` use the synchronous
+    # mysql-connector-python library.  Running them directly inside this
+    # ``async def`` would block the asyncio event loop on every authenticated
+    # request.  We offload both calls to the dedicated DB thread pool
+    # (``run_in_db_executor``) so the event loop remains free during I/O.
     try:
-        user = get_user(user_id)
+        user = await run_in_db_executor(get_user, user_id)
     except Exception as exc:
         logger.error("_resolve_user DB error (get_user): %s", exc)
         raise HTTPException(
@@ -91,7 +97,7 @@ async def _resolve_user(request: Request) -> dict[str, Any] | None:
 
     # Validate session is not revoked
     try:
-        session = validate_session(session_id)
+        session = await run_in_db_executor(validate_session, session_id)
     except Exception as exc:
         logger.error("_resolve_user DB error (validate_session): %s", exc)
         raise HTTPException(
