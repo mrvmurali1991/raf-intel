@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FileText,
   FlaskConical,
@@ -105,9 +106,25 @@ export function ExplainPanel({
   open,
   onClose,
 }: ExplainPanelProps) {
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ExplainResponse | null>(null);
+
+  // SSR guard — createPortal requires a DOM target
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Lock body scroll while drawer is open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -137,11 +154,11 @@ export function ExplainPanel({
     };
   }, [open, patientId, suspectId]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const confPct = data ? Math.round(data.confidence * 100) : null;
 
-  return (
+  return createPortal(
     /* Backdrop */
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]"
@@ -262,7 +279,8 @@ export function ExplainPanel({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
