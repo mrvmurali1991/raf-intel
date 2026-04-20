@@ -47,6 +47,56 @@ def _require_patient_access(pid: int, tenant_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
 
+def _assert_encounter_belongs(encounter_id: int, patient_id: int, tenant_id: str) -> None:
+    """Raise 404 when *encounter_id* does not belong to *patient_id* / *tenant_id*.
+
+    Checks both the OpenEMR form_encounter table (for direct-DB patients) and
+    the raf_intelligence encounters table (for uploaded/FHIR patients).  If
+    neither table has a matching row the encounter is considered inaccessible.
+
+    This prevents IDOR — a caller with a valid patient token for patient A
+    cannot probe data belonging to patient B by supplying patient B's
+    encounter_id in the URL path.
+    """
+    from app.db import raf_cursor, openemr_cursor
+
+    # Check raf_intelligence.encounters first (covers FHIR / uploaded patients).
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1 FROM encounters e
+                JOIN patients p ON p.id = e.patient_id
+                WHERE e.id = %s AND e.patient_id = %s AND p.tenant_id = %s
+                LIMIT 1
+                """,
+                (encounter_id, patient_id, tenant_id),
+            )
+            if cur.fetchone():
+                return  # found — access is valid
+    except Exception as exc:
+        logger.debug("_assert_encounter_belongs: raf encounters check failed: %s", exc)
+
+    # Fall back to OpenEMR form_encounter (direct-DB patients).
+    # form_encounter.pid maps to openemr patient pid; we need the emr pid.
+    emr_pid = svc._get_emr_pid(patient_id, tenant_id=tenant_id) or patient_id
+    try:
+        with openemr_cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM form_encounter WHERE id = %s AND pid = %s LIMIT 1",
+                (encounter_id, emr_pid),
+            )
+            if cur.fetchone():
+                return  # found — access is valid
+    except Exception as exc:
+        logger.debug("_assert_encounter_belongs: openemr check failed: %s", exc)
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Encounter {encounter_id} not found for patient {patient_id}",
+    )
+
+
 def _require_emr_patient(pid: int, tenant_id: str) -> bool:
     """Return True when patient exists in the local OpenEMR DB.
 
@@ -457,6 +507,7 @@ def get_clinical_notes_for_encounter(
     """Return clinical notes text for a specific encounter."""
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
+    _assert_encounter_belongs(encounter_id, pid, _tid)
 
     try:
         notes = svc.svc_get_clinical_notes(pid, encounter_id)
