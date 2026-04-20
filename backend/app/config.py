@@ -196,6 +196,25 @@ class Settings:
         os.getenv("CMS_REVENUE_PER_RAF_POINT", "11015.04")
     )
 
+    # RADV billing gate: when True (default), only LLM-validated MEAT evidence
+    # (nlp_model != 'rule-based:meat_validator') can promote an HCC to
+    # meat_status='complete' for billing purposes.  The regex validator remains
+    # a pre-filter triage signal but cannot be authoritative for RADV defense.
+    # Set REQUIRE_LLM_MEAT_FOR_BILLING=false to disable during a grace period
+    # while the LLM pipeline is being rolled out.
+    require_llm_meat_for_billing: bool = os.getenv(
+        "REQUIRE_LLM_MEAT_FOR_BILLING", "true"
+    ).lower() not in ("0", "false", "no")
+
+    # Coefficient drift gate — when False (default), a mismatch between the
+    # hccinfhir version pinned in coefficients_manifest.json and the version
+    # actually installed at runtime raises CoefficientPinDriftError and halts
+    # the score calculation.  Set to True only for emergency rollback / local
+    # experimentation; never in production.
+    allow_coefficient_drift: bool = os.getenv(
+        "ALLOW_COEFFICIENT_DRIFT", "false"
+    ).lower() in ("1", "true", "yes")
+
     # Shared HMAC secret used by OpenEMR (or any embedding host) to mint a
     # short-lived JWT that /api/auth/embed/exchange will accept in lieu of
     # username/password. Required in production — RAF Central refuses embed

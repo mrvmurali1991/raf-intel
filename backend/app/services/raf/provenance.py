@@ -21,6 +21,17 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
+class CoefficientPinDriftError(RuntimeError):
+    """Raised when the installed hccinfhir version diverges from the manifest pin.
+
+    This error is raised in non-development environments (or whenever
+    ``settings.allow_coefficient_drift`` is False) to prevent silently
+    producing scores from an off-spec coefficient library.  Set the
+    ``ALLOW_COEFFICIENT_DRIFT=true`` environment variable to downgrade this
+    to a warning in emergency situations.
+    """
+
 _MANIFEST_PATH = Path(__file__).resolve().parent / "coefficients_manifest.json"
 
 
@@ -137,6 +148,40 @@ def _runtime_vs_pin_drift() -> bool:
     return pin.strip() != live.strip()
 
 
+def _assert_no_coefficient_drift() -> None:
+    """Raise or warn when hccinfhir version diverges from the manifest pin.
+
+    Behaviour is controlled by two inputs:
+    - ``settings.app_env == "development"`` — in dev, never block; log a
+      warning so developers notice the mismatch without being hard-stopped.
+    - ``settings.allow_coefficient_drift`` — explicit opt-in flag (default
+      False).  When True, always warn and proceed regardless of environment.
+
+    In all other cases (production / staging) a ``CoefficientPinDriftError``
+    is raised to prevent silently producing scores from an off-spec library.
+    """
+    if not _runtime_vs_pin_drift():
+        return  # Happy path — no drift detected.
+
+    pin = _manifest_pin()
+    live = coefficient_source()
+    msg = (
+        f"hccinfhir coefficient version mismatch: manifest pins {pin!r} "
+        f"but runtime reports {live!r}. RAF scores may be inaccurate."
+    )
+
+    # Import settings lazily to avoid circular imports at module load time.
+    from app.config import settings  # noqa: PLC0415
+
+    if settings.app_env == "development" or settings.allow_coefficient_drift:
+        logger.warning(
+            "CoefficientPinDrift (proceeding anyway — dev/allow_drift): %s", msg
+        )
+        return
+
+    raise CoefficientPinDriftError(msg)
+
+
 def build_score_sbom(
     *,
     models_used: list[str],
@@ -145,6 +190,10 @@ def build_score_sbom(
     frailty_applied: bool = False,
 ) -> dict[str, Any]:
     """Return the per-score SBOM block to attach to a RAF response.
+
+    Also enforces the coefficient-pin drift gate: raises
+    ``CoefficientPinDriftError`` in non-development environments when the
+    installed hccinfhir version diverges from the manifest pin.
 
     Parameters
     ----------
@@ -163,7 +212,15 @@ def build_score_sbom(
     -------
     dict — stable keys, JSON-safe values. Intended to be embedded as
     ``response["provenance_sbom"]`` on every RAF response.
+
+    Raises
+    ------
+    CoefficientPinDriftError
+        In non-development environments when hccinfhir version is off-spec
+        and ``ALLOW_COEFFICIENT_DRIFT`` is not set to true.
     """
+    _assert_no_coefficient_drift()
+
     return {
         "schema_version": "1",
         "models_used": sorted(set(models_used)),
