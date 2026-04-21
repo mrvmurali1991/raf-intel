@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/recapture", tags=["recapture_gaps"])
 
 
 # ---------------------------------------------------------------------------
-# Pydantic request models
+# Pydantic request / response models
 # ---------------------------------------------------------------------------
 
 
@@ -56,17 +56,44 @@ class DetectGapsRequest(BaseModel):
     )
 
 
+class GapSummaryResponse(BaseModel):
+    total_open_gaps: int
+    total_raf_at_risk: float
+    gaps_by_hcc: list[dict[str, Any]]
+    top_patients_by_impact: list[dict[str, Any]]
+
+
+class DetectGapsResponse(BaseModel):
+    new_gaps: int
+    total_open: int
+    prior_year: int
+    current_year: int
+
+
+class GapListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    gaps: list[dict[str, Any]]
+
+
+class CloseGapResponse(BaseModel):
+    gap_id: int
+    status: str
+    detail: str
+
+
 # ---------------------------------------------------------------------------
 # Static-path routes — declared BEFORE /{gap_id} to avoid path shadowing
 # ---------------------------------------------------------------------------
 
 
-@router.get("/gaps/summary", summary="Aggregate recapture gap statistics")
+@router.get("/gaps/summary", summary="Aggregate recapture gap statistics", response_model=GapSummaryResponse)
 def gap_summary(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("recapture", "read")),
-) -> dict[str, Any]:
+) -> GapSummaryResponse:
     """
     Return tenant-level aggregate statistics for recapture gaps.
 
@@ -88,7 +115,7 @@ def gap_summary(
         }
     """
     try:
-        return get_gap_summary(tenant_id=tenant_id)
+        return GapSummaryResponse(**get_gap_summary(tenant_id=tenant_id))
     except Exception as exc:
         logger.error("gap_summary error tenant=%s: %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -98,13 +125,14 @@ def gap_summary(
     "/gaps/detect",
     summary="Trigger recapture gap detection",
     status_code=200,
+    response_model=DetectGapsResponse,
 )
 def trigger_detect(
     body: DetectGapsRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("recapture", "write")),
-) -> dict[str, Any]:
+) -> DetectGapsResponse:
     """
     Run the recapture gap detection engine for the given measurement year.
 
@@ -129,10 +157,10 @@ def trigger_detect(
         }
     """
     try:
-        return detect_gaps(
+        return DetectGapsResponse(**detect_gaps(
             tenant_id=tenant_id,
             measurement_year=body.measurement_year,
-        )
+        ))
     except Exception as exc:
         logger.error(
             "detect_gaps error tenant=%s year=%s: %s",
@@ -149,7 +177,7 @@ def trigger_detect(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/gaps", summary="List recapture gaps")
+@router.get("/gaps", summary="List recapture gaps", response_model=GapListResponse)
 def list_recapture_gaps(
     patient_id: int | None = Query(
         default=None,
@@ -168,7 +196,7 @@ def list_recapture_gaps(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("recapture", "read")),
-) -> dict[str, Any]:
+) -> GapListResponse:
     """
     Return a paginated list of recapture gaps for the authenticated tenant.
 
@@ -206,12 +234,12 @@ def list_recapture_gaps(
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "gaps": gaps,
-    }
+    return GapListResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        gaps=gaps,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -219,13 +247,13 @@ def list_recapture_gaps(
 # ---------------------------------------------------------------------------
 
 
-@router.put("/gaps/{gap_id}/close", summary="Close (recapture) a gap")
+@router.put("/gaps/{gap_id}/close", summary="Close (recapture) a gap", response_model=CloseGapResponse)
 def close_recapture_gap(
     gap_id: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("recapture", "write")),
-) -> dict[str, Any]:
+) -> CloseGapResponse:
     """
     Mark a recapture gap as closed / recaptured.
 
@@ -248,4 +276,4 @@ def close_recapture_gap(
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"gap_id": gap_id, "status": "recaptured", "detail": "Gap closed successfully"}
+    return CloseGapResponse(gap_id=gap_id, status="recaptured", detail="Gap closed successfully")

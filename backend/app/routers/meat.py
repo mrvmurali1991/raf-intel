@@ -86,6 +86,14 @@ class RunForPatientResponse(BaseModel):
     missing: int
 
 
+class ValidateSingleResponse(BaseModel):
+    status: str
+    icd_code: str
+    hcc_label: str | None = None
+    evidence: dict[str, Any] | None = None
+    score: float | None = None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -105,11 +113,11 @@ def validate_batch(
         raise HTTPException(status_code=500, detail=f"MEAT validation failed: {exc}")
 
 
-@router.post("/validate-single")
+@router.post("/validate-single", response_model_exclude_none=True)
 def validate_single(
     body: ValidateSingleRequest,
     current_user: dict = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Validate MEAT evidence for a single ICD code / HCC label."""
     try:
         return validate_meat(body.note_text, body.icd_code, body.hcc_label)

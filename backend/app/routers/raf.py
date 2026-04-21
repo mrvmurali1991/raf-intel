@@ -179,6 +179,85 @@ class CalculateRequest(BaseModel):
     )
 
 
+# Response models (defined here so they are in scope when route decorators are evaluated)
+
+class RAFScoreResponse(BaseModel):
+    patient_id: int
+    patient_name: str
+    measurement_year: int
+    model_segment: str
+    score_type: str
+    raf_score: float
+    demographic_score: float
+    disease_score: float
+    interaction_score: float
+    hcc_count: int
+    blend_weights: dict[str, Any]
+    calculated_at: str
+
+
+class RAFBreakdownResponse(BaseModel):
+    patient_id: int
+    patient_name: str
+    measurement_year: int
+    raf_score: float
+    final_raf: float
+    demographic_score: float
+    disease_score: float
+    interaction_score: float
+    hcc_count: int
+    model_segment: str
+    score_type: str
+    blend_weights: dict[str, Any]
+    calculated_at: str
+    hcc_details: list[dict[str, Any]]
+    engine_input: dict[str, Any] | None = None
+    engine_output: dict[str, Any] | None = None
+
+
+class RAFHistoryResponse(BaseModel):
+    patient_id: int
+    patient_name: str
+    years_calculated: int
+    history: list[dict[str, Any]]
+
+
+class PopulationSummaryResponse(BaseModel):
+    year: int
+    total_patients: int
+    patients_with_scores: int
+    average_raf_score: float
+    median_raf_score: float
+    patients_with_gaps: int
+    hcc_capture_rate: float
+    total_revenue_opportunity: float
+    raf_distribution: list[dict[str, Any]]
+    top_hccs: list[dict[str, Any]]
+    blend_weights: dict[str, Any]
+    score_type_breakdown: dict[str, Any]
+
+
+class CalculateAllResponse(BaseModel):
+    status: str
+    job_id: str
+    message: str
+    patient_count: int
+    measurement_year: int
+    poll_url: str
+
+
+class CrosswalkResponse(BaseModel):
+    results: list[dict[str, Any]]
+    summary: dict[str, Any]
+
+
+class ModelListResponse(BaseModel):
+    total_models: int
+    models: dict[str, Any]
+    quick_reference: dict[str, Any]
+    cms_blend_schedule: dict[str, Any]
+
+
 # ---------------------------------------------------------------------------
 # POST /calculate/{pid}
 # ---------------------------------------------------------------------------
@@ -262,6 +341,10 @@ async def calculate_raf(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return result
+
+
+class RecomputeResponse(BaseModel):
+    enqueued: bool
 
 
 # ---------------------------------------------------------------------------
@@ -1097,87 +1180,6 @@ def list_models(
 # ---------------------------------------------------------------------------
 # Request model for multi-model calculation
 # ---------------------------------------------------------------------------
-
-
-class RAFScoreResponse(BaseModel):
-    patient_id: int
-    patient_name: str
-    measurement_year: int
-    model_segment: str
-    score_type: str
-    raf_score: float
-    demographic_score: float
-    disease_score: float
-    interaction_score: float
-    hcc_count: int
-    blend_weights: dict[str, Any]
-    calculated_at: str
-
-
-class RAFBreakdownResponse(BaseModel):
-    patient_id: int
-    patient_name: str
-    measurement_year: int
-    raf_score: float
-    final_raf: float
-    demographic_score: float
-    disease_score: float
-    interaction_score: float
-    hcc_count: int
-    model_segment: str
-    score_type: str
-    blend_weights: dict[str, Any]
-    calculated_at: str
-    hcc_details: list[dict[str, Any]]
-    engine_input: dict[str, Any] | None = None
-    engine_output: dict[str, Any] | None = None
-
-
-class RAFHistoryResponse(BaseModel):
-    patient_id: int
-    patient_name: str
-    years_calculated: int
-    history: list[dict[str, Any]]
-
-
-class PopulationSummaryResponse(BaseModel):
-    year: int
-    total_patients: int
-    patients_with_scores: int
-    average_raf_score: float
-    median_raf_score: float
-    patients_with_gaps: int
-    hcc_capture_rate: float
-    total_revenue_opportunity: float
-    raf_distribution: list[dict[str, Any]]
-    top_hccs: list[dict[str, Any]]
-    blend_weights: dict[str, Any]
-    score_type_breakdown: dict[str, Any]
-
-
-class CalculateAllResponse(BaseModel):
-    status: str
-    job_id: str
-    message: str
-    patient_count: int
-    measurement_year: int
-    poll_url: str
-
-
-class CrosswalkResponse(BaseModel):
-    results: list[dict[str, Any]]
-    summary: dict[str, Any]
-
-
-class ModelListResponse(BaseModel):
-    total_models: int
-    models: dict[str, Any]
-    quick_reference: dict[str, Any]
-    cms_blend_schedule: dict[str, Any]
-
-
-class RecomputeResponse(BaseModel):
-    enqueued: bool
 
 
 class MultiModelRequest(BaseModel):
