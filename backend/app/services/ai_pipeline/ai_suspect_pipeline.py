@@ -152,6 +152,46 @@ def merge(rule_out: list[SuspectCandidate], llm_out: list[SuspectCandidate]) -> 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+def _apply_calibration(candidates: list[SuspectCandidate]) -> list[SuspectCandidate]:
+    """Populate raw_confidence + calibrated_confidence on each candidate.
+
+    ``confidence`` is kept as-is (historical callers use it as the raw
+    score).  When ``settings.use_calibrated_confidence`` is False the
+    calibrated field is set equal to the raw field — exposing the
+    attribute unconditionally keeps the API shape stable.
+    """
+    # Lazy-imported so the ai_pipeline package does not require the rest
+    # of app.services.raf (hccinfhir, etc.) at import time.
+    _calibrate = None
+    if settings.use_calibrated_confidence:
+        try:
+            from app.services.raf.calibration.persistence import (
+                calibrate as _calibrate,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "calibration module import failed; falling back to raw only"
+            )
+            _calibrate = None
+
+    for c in candidates:
+        raw = float(c.confidence or 0.0)
+        c.raw_confidence = raw
+        if _calibrate is not None:
+            try:
+                c.calibrated_confidence = _calibrate(c.source, raw)
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "calibration failed for source=%s raw=%.3f; falling back to raw",
+                    c.source,
+                    raw,
+                )
+                c.calibrated_confidence = raw
+        else:
+            c.calibrated_confidence = raw
+    return candidates
+
+
 def detect_suspects(
     bundle: dict,
     *,
@@ -161,4 +201,5 @@ def detect_suspects(
     """Run the full rule + LLM pipeline and return merged suspect list."""
     rule_hits = run_rules(bundle)
     llm_hits = run_llm(bundle, model=model) if use_llm else []
-    return merge(rule_hits, llm_hits)
+    merged = merge(rule_hits, llm_hits)
+    return _apply_calibration(merged)

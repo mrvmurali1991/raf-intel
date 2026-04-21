@@ -230,6 +230,29 @@ class Settings:
         "ALLOW_COEFFICIENT_DRIFT", "false"
     ).lower() in ("1", "true", "yes")
 
+    # Independent CMS hierarchy cross-check on every score. When True (default
+    # in production) the RAF hot path calls
+    # app.services.raf.reconcile.validate_hierarchy() on the HCC set returned
+    # by hccinfhir and raises HierarchyMismatchError if the library failed to
+    # drop a child HCC whose parent is present.  Defaults to False in dev so
+    # local experiments with custom hierarchies are not rejected.  Override
+    # via RAF_INDEPENDENT_VALIDATION=true|false in any environment.
+    raf_independent_validation: bool = os.getenv(
+        "RAF_INDEPENDENT_VALIDATION",
+        "true" if _APP_ENV == "production" else "false",
+    ).lower() in ("1", "true", "yes")
+
+    # Suspect-confidence calibration gate.  When True (prod default), the
+    # suspect pipelines expose calibrated_confidence on each suspect in
+    # addition to the raw score.  Turn OFF in dev / during A/B to keep
+    # behaviour identical to the pre-calibration baseline.
+    # See backend/app/services/raf/calibration/__init__.py for the full
+    # caveats — v1 artifacts are fit on synthetic bootstrap labels.
+    use_calibrated_confidence: bool = os.getenv(
+        "USE_CALIBRATED_CONFIDENCE",
+        "false" if _APP_ENV == "development" else "true",
+    ).lower() in ("1", "true", "yes")
+
     # Shared HMAC secret used by OpenEMR (or any embedding host) to mint a
     # short-lived JWT that /api/auth/embed/exchange will accept in lieu of
     # username/password. Required in production — RAF Central refuses embed

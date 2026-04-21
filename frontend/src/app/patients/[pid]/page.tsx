@@ -25,6 +25,7 @@ import {
   getAuditPackages,
   markRafDirty,
   generateAudit,
+  downloadRadvPacket,
   acceptSuspect,
   dismissSuspect,
   analyzeEncounter,
@@ -229,6 +230,24 @@ export default function PatientDetailPage({
       queryClient.invalidateQueries({ queryKey: ["patient-audits", pid] });
     },
     onError: () => toast.error("Error", "Failed to generate audit package."),
+  });
+
+  // RADV audit-packet PDF export — calls GET /api/radv/{pid}/packet
+  // and downloads the response blob directly. Uses the currently-selected
+  // year picker (same control used by every other tab on this page).
+  const radvPacketMutation = useMutation({
+    mutationFn: (year?: number) =>
+      downloadRadvPacket(Number(pid), year ?? selectedYear),
+    onSuccess: () => {
+      toast.success("RADV Packet Ready", "Downloaded audit PDF.");
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string };
+      toast.error(
+        "RADV Packet Failed",
+        e?.response?.data?.detail || e?.message || "Could not build RADV packet.",
+      );
+    },
   });
 
   const acceptMutation = useMutation({
@@ -597,6 +616,26 @@ export default function PatientDetailPage({
               >
                 {auditMutation.isPending && <Spinner size={14} />}
                 Generate Audit
+              </button>
+              {/* RADV Packet: per-patient, per-payment-year evidence PDF
+                  for CMS RADV audits. Uses the selected year from the page
+                  picker — no separate year dropdown needed. */}
+              <button
+                onClick={() => radvPacketMutation.mutate(selectedYear)}
+                disabled={radvPacketMutation.isPending}
+                aria-label={`Download RADV packet for payment year ${selectedYear}`}
+                title={`Download RADV packet for payment year ${selectedYear}`}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "8px 16px", borderRadius: 8,
+                  border: `1px solid ${C.slate200}`, background: C.white,
+                  color: C.slate700, fontSize: 13, fontWeight: 600,
+                  cursor: radvPacketMutation.isPending ? "not-allowed" : "pointer",
+                  opacity: radvPacketMutation.isPending ? 0.6 : 1,
+                }}
+              >
+                {radvPacketMutation.isPending && <Spinner size={14} />}
+                Download RADV Packet
               </button>
               <button
                 onClick={() => window.print()}

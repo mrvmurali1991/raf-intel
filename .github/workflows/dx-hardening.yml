@@ -321,3 +321,31 @@ jobs:
       - name: Run pytest (not slow)
         run: pytest -q -m "not slow" --timeout=60
         working-directory: backend
+
+  # ---------------------------------------------------------------------------
+  # CMS coefficient reconciliation — fails if hccinfhir's bundled coefficients
+  # drift from our committed CMS reference CSVs for any (model, year) combo.
+  # Epsilon = 0.0001 (see backend/app/services/raf/reconcile.py).
+  # ---------------------------------------------------------------------------
+  cms-reconciliation:
+    name: "CMS reconciliation — coefficient drift gate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Run CMS reconciliation gate
+        run: python scripts/check_cms_reconciliation.py
+        working-directory: backend

@@ -1,0 +1,249 @@
+/* RADV audit packet — print stylesheet for WeasyPrint */
+
+@page {
+  size: Letter;
+  margin: 0.6in 0.55in 0.75in;
+  @bottom-left {
+    content: "RADV Packet — Internal Audit";
+    font-size: 9pt;
+    color: #6b7280;
+  }
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font-size: 9pt;
+    color: #6b7280;
+  }
+}
+
+html {
+  font-family: "Helvetica", "Arial", sans-serif;
+  font-size: 10pt;
+  color: #111928;
+  line-height: 1.35;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Diagonal pre-submission watermark — applied via fixed positioning so
+   WeasyPrint paints it on every page behind the content. */
+.watermark {
+  position: fixed;
+  top: 45%;
+  left: -10%;
+  width: 120%;
+  text-align: center;
+  font-size: 64pt;
+  font-weight: 800;
+  color: rgba(220, 38, 38, 0.12);
+  transform: rotate(-24deg);
+  letter-spacing: 0.04em;
+  z-index: 0;
+  pointer-events: none;
+}
+
+header.cover {
+  page-break-after: always;
+  padding-top: 0.3in;
+}
+
+.banner {
+  font-size: 24pt;
+  font-weight: 800;
+  color: #1A56DB;
+  border-bottom: 3px solid #1A56DB;
+  padding-bottom: 6pt;
+  margin-bottom: 18pt;
+  letter-spacing: 0.02em;
+}
+
+.cover-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8pt 28pt;
+  margin-bottom: 22pt;
+}
+
+.cover-meta .label {
+  display: inline-block;
+  width: 110pt;
+  color: #6b7280;
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cover-meta .value {
+  font-weight: 600;
+  font-size: 11pt;
+}
+
+.summary-box {
+  display: flex;
+  gap: 18pt;
+  margin: 16pt 0;
+}
+
+.sb-item {
+  flex: 1;
+  padding: 14pt 18pt;
+  background: #EBF5FF;
+  border: 1px solid #BEE3F8;
+  border-radius: 6pt;
+  text-align: center;
+}
+
+.sb-value {
+  font-size: 26pt;
+  font-weight: 800;
+  color: #1A56DB;
+  line-height: 1;
+}
+
+.sb-label {
+  font-size: 9pt;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 6pt;
+}
+
+.warning {
+  margin-top: 20pt;
+  padding: 10pt 12pt;
+  background: #FDF6B2;
+  border-left: 4px solid #F59E0B;
+  color: #723B13;
+  font-size: 10pt;
+  border-radius: 3pt;
+}
+
+section.hcc {
+  page-break-inside: avoid;
+  break-after: page;
+  padding-bottom: 12pt;
+}
+
+.hcc-head {
+  display: grid;
+  grid-template-columns: 90pt 1fr 80pt 80pt 120pt;
+  gap: 8pt;
+  align-items: center;
+  padding: 10pt;
+  background: #F9FAFB;
+  border: 1px solid #D1D5DB;
+  border-radius: 5pt;
+  margin-bottom: 10pt;
+}
+
+.hcc-code {
+  font-weight: 800;
+  font-size: 14pt;
+  color: #1A56DB;
+}
+
+.hcc-label {
+  font-size: 11pt;
+  font-weight: 600;
+}
+
+.hcc-model, .hcc-raf {
+  font-size: 10pt;
+  color: #374151;
+  text-align: right;
+}
+
+.hcc-status {
+  font-weight: 700;
+  text-align: center;
+  padding: 4pt 8pt;
+  border-radius: 3pt;
+  font-size: 9pt;
+  letter-spacing: 0.02em;
+}
+
+.status-complete { background: #DEF7EC; color: #03543F; }
+.status-partial  { background: #FDF6B2; color: #723B13; }
+.status-missing  { background: #FDE8E8; color: #C81E1E; }
+
+h3 {
+  font-size: 11pt;
+  color: #1A56DB;
+  margin: 14pt 0 6pt;
+  border-bottom: 1px solid #D1D5DB;
+  padding-bottom: 3pt;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+table.data, table.meat {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+  margin-bottom: 6pt;
+}
+
+table.data th, table.data td,
+table.meat th, table.meat td {
+  padding: 5pt 7pt;
+  border: 1px solid #E5E7EB;
+  vertical-align: top;
+  text-align: left;
+}
+
+table.data th, table.meat th {
+  background: #F3F4F6;
+  color: #374151;
+  font-weight: 700;
+  font-size: 8.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+table.data code {
+  font-family: "Courier New", monospace;
+  font-size: 9.5pt;
+  background: #F3F4F6;
+  padding: 1pt 3pt;
+  border-radius: 2pt;
+}
+
+td.quote {
+  font-style: italic;
+  color: #374151;
+  max-width: 240pt;
+}
+
+td.empty, p.empty {
+  text-align: center;
+  color: #9CA3AF;
+  font-style: italic;
+}
+
+.meat-yes .meat-letter {
+  background: #DEF7EC;
+  color: #03543F;
+  font-weight: 800;
+  text-align: center;
+  border-radius: 3pt;
+}
+
+.meat-no .meat-letter {
+  background: #FDE8E8;
+  color: #C81E1E;
+  font-weight: 800;
+  text-align: center;
+  border-radius: 3pt;
+}
+
+footer {
+  position: fixed;
+  bottom: 0.3in;
+  left: 0;
+  right: 0;
+  font-size: 8pt;
+  color: #9CA3AF;
+  text-align: center;
+}

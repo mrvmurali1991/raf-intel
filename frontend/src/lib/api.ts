@@ -1908,6 +1908,57 @@ export async function generateAudit(
 export const generateAuditPackage = generateAudit;
 
 /**
+ * Download a RADV (Risk Adjustment Data Validation) audit packet PDF.
+ *
+ * Hits GET /api/radv/{pid}/packet?payment_year=YYYY and streams the blob
+ * back to the browser as a file download. Uses the authenticated axios
+ * instance so the Bearer token is attached.
+ *
+ * Throws on HTTP error — callers should surface `err.response?.data?.detail`
+ * (when present) or `err.message` to the user via toast.
+ */
+export async function downloadRadvPacket(
+  pid: number,
+  paymentYear: number,
+): Promise<void> {
+  let res;
+  try {
+    res = await api.get(`/api/radv/${pid}/packet`, {
+      params: { payment_year: paymentYear },
+      responseType: "blob",
+    });
+  } catch (err: unknown) {
+    // The server returns JSON error bodies; when responseType is 'blob' the
+    // error body is also a Blob, so extract the detail before rethrowing.
+    const axiosErr = err as { response?: { data?: unknown }; message?: string };
+    const responseData = axiosErr.response?.data;
+    if (responseData instanceof Blob) {
+      try {
+        const text = await responseData.text();
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) axiosErr.message = parsed.detail;
+        } catch {
+          if (text) axiosErr.message = text;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    throw err;
+  }
+  const blob = res.data as Blob;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `radv_packet_patient_${pid}_py${paymentYear}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
  * Fetch an audit package PDF as a blob and trigger a browser download.
  *
  * Uses the authenticated axios instance so the Bearer token is sent —

@@ -1177,7 +1177,14 @@ def dismiss_suspect(
 # ---------------------------------------------------------------------------
 
 def _serialize_suspect(row: dict[str, Any] | None) -> dict[str, Any]:
-    """Normalise date/Decimal types and parse stored evidence JSON."""
+    """Normalise date/Decimal types and parse stored evidence JSON.
+
+    Also splits ``confidence_score`` (what is persisted in
+    ``raf_suspect_conditions.confidence_score``) into ``raw_confidence``
+    plus a newly computed ``calibrated_confidence``.  The existing
+    ``confidence_score`` field is kept unchanged so all legacy UI code
+    paths keep working while the FE migrates.
+    """
     if not row:
         return {}
     result: dict[str, Any] = {}
@@ -1194,4 +1201,41 @@ def _serialize_suspect(row: dict[str, Any] | None) -> dict[str, Any]:
             result["evidence"] = json.loads(result["evidence"])
         except json.JSONDecodeError:
             pass
+
+    # ---- Calibration split -------------------------------------------------
+    # DB schema uses `confidence_score` + `evidence_type`.  Code inside this
+    # module also writes `confidence` and `source` in some paths; accept either.
+    raw = result.get("confidence_score")
+    if raw is None:
+        raw = result.get("confidence")
+    try:
+        raw_f = float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        raw_f = None
+    if raw_f is not None:
+        result["raw_confidence"] = raw_f
+        src = (
+            result.get("source")
+            or result.get("evidence_type")
+            or ""
+        )
+        calibrated: float
+        try:
+            # Imported lazily to avoid a hard dependency on sklearn/joblib
+            # when the calibration feature flag is off.
+            from app.config import settings as _settings
+            if _settings.use_calibrated_confidence:
+                from app.services.raf.calibration import calibrate as _calibrate
+                calibrated = _calibrate(src, raw_f)
+            else:
+                calibrated = raw_f
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "serialize_suspect: calibration failed src=%s raw=%.3f — raw fallback",
+                src,
+                raw_f,
+            )
+            calibrated = raw_f
+        result["calibrated_confidence"] = calibrated
+
     return result

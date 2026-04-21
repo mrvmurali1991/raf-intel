@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>RADV Audit Packet — Patient {{ patient.patient_id }} — PY {{ payment_year }}</title>
+</head>
+<body>
+
+<div class="watermark">{{ watermark }}</div>
+
+<header class="cover">
+  <div class="banner">RADV Audit Packet</div>
+  <div class="cover-meta">
+    <div><span class="label">Patient ID</span> <span class="value">{{ patient.patient_id }}</span></div>
+    <div><span class="label">Patient</span> <span class="value">{{ patient.name }}</span></div>
+    <div><span class="label">DOB</span> <span class="value">{{ patient.dob or "—" }}</span></div>
+    <div><span class="label">Gender</span> <span class="value">{{ patient.gender or "—" }}</span></div>
+    <div><span class="label">MBI</span> <span class="value">{{ patient.mbi or "—" }}</span></div>
+    <div><span class="label">Payment Year</span> <span class="value">{{ payment_year }}</span></div>
+    <div><span class="label">Tenant</span> <span class="value">{{ tenant_id }}</span></div>
+    <div><span class="label">Generated</span> <span class="value">{{ generated_at }}</span></div>
+  </div>
+  <div class="summary-box">
+    <div class="sb-item">
+      <div class="sb-value">{{ total_billed_hccs }}</div>
+      <div class="sb-label">Billed HCCs</div>
+    </div>
+    <div class="sb-item">
+      <div class="sb-value">{{ "%.3f"|format(total_raf) }}</div>
+      <div class="sb-label">Total RAF Contribution</div>
+    </div>
+  </div>
+  <div class="warning">
+    This packet is an internal pre-submission audit artifact. It has NOT been
+    transmitted to CMS. Review and correct any gaps before submission.
+  </div>
+</header>
+
+{% for block in hcc_blocks %}
+<section class="hcc">
+  <div class="hcc-head">
+    <div class="hcc-code">HCC {{ block.hcc_code }}</div>
+    <div class="hcc-label">{{ block.hcc_label }}</div>
+    <div class="hcc-model">Model: {{ block.model_version }}</div>
+    <div class="hcc-raf">RAF {{ "%.3f"|format(block.raf_coefficient) }}</div>
+    <div class="hcc-status status-{{ block.overall_status|lower }}">
+      MEAT {{ block.overall_status }} ({{ block.criteria_met }}/4)
+    </div>
+  </div>
+
+  <h3>Diagnosis Codes</h3>
+  <table class="data">
+    <thead>
+      <tr><th>ICD-10</th><th>Also Maps To (HCCs)</th></tr>
+    </thead>
+    <tbody>
+      {% for icd in block.icd_details %}
+      <tr>
+        <td><code>{{ icd.icd10_code }}</code></td>
+        <td>
+          {% if icd.hcc_codes %}
+            {{ icd.hcc_codes | join(", ") }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2" class="empty">No ICD-10 codes linked.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Supporting Encounters</h3>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Encounter ID</th><th>DOS</th><th>Type</th>
+        <th>Provider</th><th>NPI</th><th>Facility</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for enc in block.encounters %}
+      <tr>
+        <td>{{ enc.encounter_id }}</td>
+        <td>{{ enc.date }}</td>
+        <td>{{ enc.type or "—" }}</td>
+        <td>{{ enc.provider_name or "—" }}</td>
+        <td>{{ enc.provider_npi or "—" }}</td>
+        <td>{{ enc.facility or "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">No supporting encounters in {{ payment_year }}.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>MEAT Evidence</h3>
+  <table class="meat">
+    <thead>
+      <tr><th style="width: 44px">Letter</th><th>Criterion</th><th>Present</th><th>Quote</th><th>Encounter</th><th>Char Offset</th></tr>
+    </thead>
+    <tbody>
+      {% for letter in block.meat_letters %}
+      <tr class="meat-{{ 'yes' if letter.present else 'no' }}">
+        <td class="meat-letter">{{ letter.letter }}</td>
+        <td>{{ letter.name }}</td>
+        <td>{{ "✓" if letter.present else "✗" }}</td>
+        <td class="quote">
+          {% if letter.quote %}
+            {{ letter.quote }}
+          {% else %}
+            <em>no evidence</em>
+          {% endif %}
+        </td>
+        <td>{{ letter.encounter_id or "—" }}</td>
+        <td>
+          {% if letter.offset %}
+            [{{ letter.offset[0] }}..{{ letter.offset[1] }}]
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if block.llm_quotes %}
+  <h3>LLM-Extracted Evidence (Provenance)</h3>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>MEAT</th><th>Quote</th><th>Source Note ID</th>
+        <th>Char Span</th><th>Strength</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q in block.llm_quotes %}
+      <tr>
+        <td>{{ q.meat_type }}</td>
+        <td class="quote">{{ q.quote }}</td>
+        <td>{{ q.note_id or "—" }}</td>
+        <td>
+          {% if q.span_start is not none and q.span_end is not none %}
+            [{{ q.span_start }}..{{ q.span_end }}]
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>{{ "%.2f"|format(q.strength) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h3>Attestation / Suspect-Accept Trail</h3>
+  {% if block.suspect_trail %}
+  <table class="data">
+    <tbody>
+      <tr><th>Status</th><td>{{ block.suspect_trail.status }}</td></tr>
+      <tr><th>Accepted By</th><td>{{ block.suspect_trail.accepted_by or "—" }}</td></tr>
+      <tr><th>Accepted At</th><td>{{ block.suspect_trail.accepted_at or "—" }}</td></tr>
+      <tr><th>Confidence</th><td>{{ "%.2f"|format(block.suspect_trail.confidence) }}</td></tr>
+      <tr><th>Evidence Type</th><td>{{ block.suspect_trail.evidence_type or "—" }}</td></tr>
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No suspect-accept trail — HCC originated from submitted claims
+    or direct EMR coding, not from a suspect review workflow.</p>
+  {% endif %}
+</section>
+{% else %}
+<section class="hcc">
+  <h2>No Billed HCCs</h2>
+  <p>No HCCs billed for this patient in payment year {{ payment_year }}.</p>
+</section>
+{% endfor %}
+
+<footer>
+  <div>RADV Audit Packet — Patient {{ patient.patient_id }} — PY {{ payment_year }}</div>
+  <div>Internal Pre-Submission Artifact — Not for CMS transmission without review</div>
+</footer>
+
+</body>
+</html>

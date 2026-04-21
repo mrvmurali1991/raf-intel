@@ -25,6 +25,14 @@ class SuspectCandidate:
     confidence: float = 0.0
     source: Source = "rule"
     requires_provider_query: bool = True
+    # --- Calibration layer ---
+    # ``confidence`` above is treated as the raw score for legacy reasons.
+    # ``raw_confidence`` mirrors it and ``calibrated_confidence`` is filled
+    # in by the pipeline after ``merge`` (see ai_suspect_pipeline.detect_suspects).
+    # When settings.use_calibrated_confidence is False or no calibrator
+    # artifact exists, calibrated_confidence == raw_confidence.
+    raw_confidence: float = 0.0
+    calibrated_confidence: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

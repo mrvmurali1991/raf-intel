@@ -10,6 +10,16 @@ httpx==0.27.0
 celery==5.4.0
 redis==5.0.0
 reportlab==4.2.0
+# WeasyPrint: HTML/CSS -> PDF renderer used by app.services.radv.packet_builder
+# for the RADV audit packet export. Picked over plain ReportLab because an
+# HTML/Jinja template is dramatically easier to style and iterate on than
+# programmatic flowables. Tradeoff: WeasyPrint needs native GObject/Pango/
+# Cairo system libs at runtime (apt: libpango-1.0-0 libpangoft2-1.0-0,
+# libcairo2). Unit tests mock the renderer so CI does not need the native
+# stack; an integration skip-marker activates if WeasyPrint fails to import.
+weasyprint==62.3
+Jinja2==3.1.4
+pypdf==4.3.1
 hccinfhir==0.3.0
 requests==2.32.3
 passlib[bcrypt]==1.7.4  # NOTE: passlib is unmaintained; consider migrating to argon2-cffi
@@ -41,3 +51,9 @@ opentelemetry-instrumentation-redis>=0.45b0
 prometheus_client>=0.20.0
 # --- Resilience ---
 tenacity>=8.2
+# --- ML: suspect-confidence calibration (services/raf/calibration) ---
+# Fit step is a manual script (backend/scripts/fit_calibrators.py); runtime
+# only does a joblib.load + sklearn predict_proba per suspect.
+scikit-learn>=1.4
+joblib>=1.3
+numpy>=1.26

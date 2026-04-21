@@ -66,6 +66,7 @@ from app.routers import meat as meat_router
 from app.routers import pipeline as pipeline_router
 from app.routers import pipeline_settings as pipeline_settings_router
 from app.routers import provider_worklist as provider_worklist_router
+from app.routers import radv as radv_router
 from app.routers import radv_audit as radv_audit_router
 from app.routers import raf_central as raf_central_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
@@ -158,5 +159,8 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(admin.router)
     app.include_router(meat_router.router)
     app.include_router(radv_audit_router.router)
+    # RADV packet PDF export (per-patient, per-payment-year audit bundle).
+    # Shares the /api/radv prefix with radv_audit but owns distinct paths.
+    app.include_router(radv_router.router)
     app.include_router(data_quality_router.router)
     app.include_router(raf_inbox_admin_router.router)

@@ -73,6 +73,13 @@ class SuspectResponse(BaseModel):
     suspect_icd10: str
     evidence_type: str
     confidence_score: float
+    # Calibration layer — see services/raf/calibration/__init__.py for the
+    # full caveats.  raw_confidence mirrors confidence_score; the new
+    # calibrated_confidence is a probability in [0,1] produced by the
+    # per-source calibrator artifacts.  When the calibration feature flag
+    # is off or no artifact exists, calibrated_confidence == raw_confidence.
+    raw_confidence: float | None = None
+    calibrated_confidence: float | None = None
 
 
 class BulkUpdateResult(BaseModel):

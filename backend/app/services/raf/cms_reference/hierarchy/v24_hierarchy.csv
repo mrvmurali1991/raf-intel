@@ -1,0 +1,74 @@
+# CMS-HCC V24 — Disease hierarchy ("trumping") rules
+# Source: CMS 2020 CMS-HCC Model Software (V24) User Guide, Appendix B —
+#   "HCC Hierarchy".  Each row is one (parent, child) pair meaning:
+#   "if HCC=parent is present, HCC=child must be suppressed."
+# Source URL: https://www.cms.gov/medicare/payment/medicare-advantage-rates-statistics/risk-adjustment
+#   (select "2020 CMS-HCC Model Software"; ZIP includes V24_H79H1.pdf user guide)
+# Also cross-referenced against the CMS CY2024 Final Rate Announcement.
+# Transcribed: 2026-04-21 (independent of hccinfhir library) — anchor subset.
+#
+# Column semantics:
+#   hcc_parent  — the more-severe HCC whose presence suppresses the child
+#   hcc_child   — the less-severe HCC that is dropped when the parent is present
+hcc_parent,hcc_child
+8,9
+8,10
+8,11
+8,12
+9,10
+9,11
+9,12
+10,11
+10,12
+11,12
+17,18
+17,19
+18,19
+27,28
+27,29
+27,80
+28,29
+46,48
+54,55
+54,56
+55,56
+57,58
+57,59
+57,60
+58,59
+58,60
+59,60
+70,71
+70,72
+70,73
+71,72
+71,73
+72,73
+82,83
+82,84
+83,84
+85,86
+85,87
+85,88
+86,87
+86,88
+87,88
+99,100
+103,104
+106,107
+106,108
+107,108
+110,111
+110,112
+111,112
+114,115
+134,135
+134,136
+134,137
+134,138
+135,136
+135,137
+135,138
+136,137
+136,138
+137,138

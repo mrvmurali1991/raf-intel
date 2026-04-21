@@ -1,0 +1,40 @@
+# CMS-HCC V24 — Community Non-Dual Aged (CNA) coefficients, Payment Year 2024
+# Source: CMS CY2024 Medicare Advantage and Part D Final Rate Announcement,
+#   Table V-2 "Relative Factors for Community and Institutional Beneficiaries
+#   under the 2020 CMS-HCC Model (Version 24)" — Community, Non-Dual Aged column.
+# Source URL: https://www.cms.gov/files/document/2024-announcement.pdf
+# CMS landing page: https://www.cms.gov/medicare/payment/medicare-advantage-rates-statistics/risk-adjustment
+# Published: March/April 2023
+# Transcribed: 2026-04-21 (independent of hccinfhir library) — anchor subset.
+# Column semantics: see v28_community_nondual_aged_2026.csv header.
+kind,key,value,label
+hcc,8,2.659,"Metastatic Cancer and Acute Leukemia"
+hcc,9,1.024,"Lung and Other Severe Cancers"
+hcc,10,0.675,"Lymphoma and Other Cancers"
+hcc,11,0.307,"Colorectal, Bladder, and Other Cancers"
+hcc,12,0.150,"Breast, Prostate, and Other Cancers and Tumors"
+hcc,17,0.302,"Diabetes with Acute Complications"
+hcc,18,0.302,"Diabetes with Chronic Complications"
+hcc,19,0.105,"Diabetes without Complication"
+hcc,27,0.882,"End-Stage Liver Disease"
+hcc,28,0.363,"Cirrhosis of Liver"
+hcc,29,0.147,"Chronic Hepatitis"
+hcc,46,1.372,"Severe Hematological Disorders"
+hcc,48,0.192,"Coagulation Defects and Other Specified Hematological Disorders"
+hcc,54,0.329,"Substance Use with Psychotic Complications"
+hcc,55,0.329,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+hcc,56,0.329,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+hcc,84,0.282,"Cardio-Respiratory Failure and Shock"
+hcc,85,0.331,"Congestive Heart Failure"
+hcc,86,0.195,"Acute Myocardial Infarction"
+hcc,87,0.195,"Unstable Angina and Other Acute Ischemic Heart Disease"
+hcc,88,0.135,"Angina Pectoris"
+hcc,96,0.268,"Specified Heart Arrhythmias"
+hcc,111,0.335,"Chronic Obstructive Pulmonary Disease"
+hcc,112,0.219,"Fibrosis of Lung and Other Chronic Lung Disorders"
+demo,F65_69,0.323,"Community Non-Dual Aged Female 65-69"
+demo,F70_74,0.386,"Community Non-Dual Aged Female 70-74"
+demo,F75_79,0.451,"Community Non-Dual Aged Female 75-79"
+demo,F80_84,0.528,"Community Non-Dual Aged Female 80-84"
+demo,M65_69,0.308,"Community Non-Dual Aged Male 65-69"
+demo,M70_74,0.394,"Community Non-Dual Aged Male 70-74"

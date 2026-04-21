@@ -784,6 +784,43 @@ def _run_single_model(
     hcc_list = result.hcc_list or []
     all_coefficients = result.coefficients or {}
 
+    # Independent CMS hierarchy cross-check — defence-in-depth against
+    # hccinfhir silently emitting a child HCC whose parent is present.
+    # Gated by settings.raf_independent_validation; see
+    # app.services.raf.reconcile.validate_hierarchy.
+    try:
+        from app.config import settings as _raf_settings
+        if getattr(_raf_settings, "raf_independent_validation", False):
+            from app.services.raf.reconcile import (
+                HierarchyMismatchError,
+                validate_hierarchy,
+            )
+            # Derive the short model key ("V24" or "V28") from the processor name.
+            _name = processor.model_name or ""
+            if "V28" in _name:
+                _model_key = "V28"
+            elif "V24" in _name:
+                _model_key = "V24"
+            else:
+                _model_key = ""
+            if _model_key:
+                try:
+                    _ints = [int(h) for h in hcc_list if str(h).isdigit()]
+                    validate_hierarchy(_ints, _model_key)
+                except HierarchyMismatchError:
+                    # Re-raise so the score is NOT emitted — this is a safety
+                    # defect that must surface to the caller.
+                    raise
+                except Exception as exc:   # noqa: BLE001
+                    logger.warning(
+                        "raf_independent_validation: non-fatal error for model=%s: %s",
+                        _model_key, exc,
+                    )
+    except ImportError:
+        # If reconcile module is unavailable for some reason, skip validation
+        # rather than break scoring.  The CI gate covers the coefficient side.
+        pass
+
     demographic_score: float = getattr(result, "risk_score_demographics", 0.0)
     disease_score: float = sum(h.coefficient or 0.0 for h in result.hcc_details)
     interaction_score: float = getattr(result, "risk_score_interaction", None)
