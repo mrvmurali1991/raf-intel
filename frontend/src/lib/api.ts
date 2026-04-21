@@ -49,6 +49,49 @@ export type {
 };
 
 // ---------------------------------------------------------------------------
+// Generated OpenAPI types — re-exported for downstream consumers
+// ---------------------------------------------------------------------------
+// Run `npm run gen:api` to regenerate after backend changes.
+export type { paths, components, operations } from "./api.generated";
+import type { paths, components } from "./api.generated";
+
+/**
+ * Extract the 200-response body type for a given path+method combination.
+ *
+ * Usage:
+ *   type Payload = APIResponse<'/api/raf-central/{pid}', 'get'>;
+ */
+export type APIResponse<
+  P extends keyof paths,
+  M extends keyof paths[P],
+> = paths[P][M] extends { responses: { 200: { content: { "application/json": infer T } } } }
+  ? T
+  : never;
+
+/**
+ * Extract the request body type for a given path+method combination.
+ *
+ * Usage:
+ *   type Body = APIRequestBody<'/api/raf-central/{pid}/actions/accept-suspect', 'post'>;
+ */
+export type APIRequestBody<
+  P extends keyof paths,
+  M extends keyof paths[P],
+> = paths[P][M] extends { requestBody: { content: { "application/json": infer T } } }
+  ? T
+  : never;
+
+// Convenience aliases for the highest-traffic generated component schemas:
+export type GeneratedRAFCentralPayload = components["schemas"]["RAFCentralPayload"];
+export type GeneratedSuspectCard = components["schemas"]["SuspectCard"];
+export type GeneratedMEATGap = components["schemas"]["MEATGap"];
+export type GeneratedRecaptureCard = components["schemas"]["RecaptureCard"];
+export type GeneratedLiveRAFBar = components["schemas"]["LiveRAFBar"];
+export type GeneratedAuditReadiness = components["schemas"]["AuditReadiness"];
+export type GeneratedFinancialImpact = components["schemas"]["FinancialImpact"];
+export type GeneratedCodingOptCard = components["schemas"]["CodingOptCard"];
+
+// ---------------------------------------------------------------------------
 // Axios instance
 // ---------------------------------------------------------------------------
 
