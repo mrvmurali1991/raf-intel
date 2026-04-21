@@ -12,8 +12,10 @@ const eslintConfig = defineConfig([
       safety: safetyPlugin,
     },
     rules: {
-      "@typescript-eslint/no-explicit-any": 0,
-      "@typescript-eslint/no-unused-vars": 0,
+      // Surface any-sprawl in code review without blocking today's codebase.
+      "@typescript-eslint/no-explicit-any": "warn",
+      // Unused vars are a genuine bug risk — error so they are always caught.
+      "@typescript-eslint/no-unused-vars": "error",
       "@typescript-eslint/no-unused-expressions": 0,
       "@next/next/no-img-element": 0,
       "react/no-unescaped-entities": 0,
