@@ -25,6 +25,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import api from "@/lib/api";
+import { useRAFCentralPanel } from "@/hooks/queries/useRAFCentralPanel";
+import {
+  useRecalculateRAF,
+  useAcceptSuspectCentral,
+  useDismissSuspectCentral,
+  useMEATAttest,
+} from "@/hooks/mutations/useRAFCentralMutations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -814,10 +821,40 @@ export function RAFCentralPanel({
   onClose?: () => void;
   layout?: "dashboard" | "panel";
 }) {
-  const [data, setData] = useState<RAFCentralPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [recalcing, setRecalcing] = useState(false);
+  // ---------------------------------------------------------------------------
+  // Data — React Query replaces manual useState+useEffect+fetch
+  // ---------------------------------------------------------------------------
+  const {
+    data,
+    isLoading: loading,
+    isError,
+    error: queryError,
+    refetch: refetchPanel,
+  } = useRAFCentralPanel(patientId, year);
+
+  // Derive a user-friendly error string from React Query's error object
+  const error =
+    isError && queryError
+      ? queryError instanceof Error
+        ? queryError.message
+        : "Failed to load RAF Central"
+      : null;
+
+  // Recalculate mutation — isPending replaces local `recalcing` state
+  const recalcMutation = useRecalculateRAF(patientId, year);
+  const recalcing = recalcMutation.isPending;
+
+  // onChange callback forwarded to sub-sections (MEATRow, SuspectCardView).
+  // Mutations already invalidate the query key; this explicit refetch is a
+  // safety-net for any code path that still calls onChange() directly.
+  const fetchPanel = useCallback(() => {
+    void refetchPanel();
+  }, [refetchPanel]);
+
+  const recalc = useCallback(async () => {
+    await recalcMutation.mutateAsync();
+  }, [recalcMutation]);
+
   const [cardsVisible, setCardsVisible] = useState(false);
   const meatRef = useRef<HTMLDivElement>(null);
   // Track first mount for stagger animation (point 8)
@@ -846,24 +883,6 @@ export function RAFCentralPanel({
     [router, searchParams]
   );
 
-  const fetchPanel = useCallback(async () => {
-    try {
-      setError(null);
-      const url = `/api/raf-central/${patientId}${year ? `?year=${year}` : ""}`;
-      const res = await api.get<RAFCentralPayload>(url);
-      setData(res.data);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load RAF Central";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [patientId, year]);
-
-  useEffect(() => {
-    fetchPanel();
-  }, [fetchPanel]);
-
   // Trigger stagger only on first data load
   useEffect(() => {
     if (data && !mountedOnce.current) {
@@ -871,19 +890,6 @@ export function RAFCentralPanel({
       requestAnimationFrame(() => setCardsVisible(true));
     }
   }, [data]);
-
-  const recalc = useCallback(async () => {
-    setRecalcing(true);
-    try {
-      await api.post(`/api/raf-central/${patientId}/actions/recalculate${year ? `?year=${year}` : ""}`);
-      await fetchPanel();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Recalculation failed";
-      setError(msg);
-    } finally {
-      setRecalcing(false);
-    }
-  }, [patientId, year, fetchPanel]);
 
   if (loading && !data) {
     return (
@@ -1579,9 +1585,12 @@ function MEATRow({
   onChange: () => void;
   isOdd: boolean;
 }) {
-  const [busy, setBusy] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"review" | "notes" | null>(null);
+
+  // Mutation — invalidates raf-central query on success
+  const meatMut = useMEATAttest(patientId, year);
+  const busy = meatMut.isPending;
 
   const railColor =
     gap.coefficient >= 0.4
@@ -1613,20 +1622,15 @@ function MEATRow({
 
   const submitMeat = async (note: string) => {
     if (!gap.patient_hcc_id) return;
-    setBusy(true);
     setDialogMode(null);
-    try {
-      await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
-        patient_hcc_id: gap.patient_hcc_id,
-        monitor_note: gap.gaps.monitor ? null : note,
-        evaluate_note: gap.gaps.evaluate ? null : note,
-        assess_note: gap.gaps.assess ? null : note,
-        treat_note: gap.gaps.treat ? null : note,
-      });
-      onChange();
-    } finally {
-      setBusy(false);
-    }
+    await meatMut.mutateAsync({
+      patient_hcc_id: gap.patient_hcc_id,
+      monitor_note: gap.gaps.monitor ? null : note,
+      evaluate_note: gap.gaps.evaluate ? null : note,
+      assess_note: gap.gaps.assess ? null : note,
+      treat_note: gap.gaps.treat ? null : note,
+    });
+    onChange();
   };
 
   const markReviewed = () => {
@@ -1762,7 +1766,7 @@ function MEATRow({
   );
 }
 
-// MEATCard is kept for the panel layout (unchanged)
+// MEATCard is kept for the panel layout
 function MEATCard({
   gap,
   patientId,
@@ -1774,8 +1778,11 @@ function MEATCard({
   year?: number;
   onChange: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Mutation — invalidates raf-central query on success
+  const meatMut = useMEATAttest(patientId, year);
+  const busy = meatMut.isPending;
 
   const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
     .filter(([, on]) => !on)
@@ -1784,20 +1791,15 @@ function MEATCard({
 
   const submitMeat = async (note: string) => {
     if (!gap.patient_hcc_id) return;
-    setBusy(true);
     setDialogOpen(false);
-    try {
-      await api.post(`/api/raf-central/${patientId}/actions/mark-meat-reviewed`, {
-        patient_hcc_id: gap.patient_hcc_id,
-        monitor_note: gap.gaps.monitor ? null : note,
-        evaluate_note: gap.gaps.evaluate ? null : note,
-        assess_note: gap.gaps.assess ? null : note,
-        treat_note: gap.gaps.treat ? null : note,
-      });
-      onChange();
-    } finally {
-      setBusy(false);
-    }
+    await meatMut.mutateAsync({
+      patient_hcc_id: gap.patient_hcc_id,
+      monitor_note: gap.gaps.monitor ? null : note,
+      evaluate_note: gap.gaps.evaluate ? null : note,
+      assess_note: gap.gaps.assess ? null : note,
+      treat_note: gap.gaps.treat ? null : note,
+    });
+    onChange();
   };
 
   const markReviewed = () => {
@@ -1980,52 +1982,48 @@ function SuspectCardView({
   patientId: number;
   onChange: () => void;
 }) {
-  const [busy, setBusy] = useState<"accept" | "dismiss" | null>(null);
   const [showExplain, setShowExplain] = useState(false);
   const [showDismissDialog, setShowDismissDialog] = useState(false);
   const toast = useToast();
 
+  // Mutations — useAcceptSuspectCentral / useDismissSuspectCentral invalidate
+  // the raf-central query key on success; onChange() is called as an extra
+  // notification so parent code that depends on the callback still works.
+  const acceptMut = useAcceptSuspectCentral(patientId);
+  const dismissMut = useDismissSuspectCentral(patientId);
+
+  // busy mirrors the pending state of whichever mutation is in-flight
+  const busy: "accept" | "dismiss" | null = acceptMut.isPending
+    ? "accept"
+    : dismissMut.isPending
+    ? "dismiss"
+    : null;
+
   const acceptSuspect = async () => {
-    setBusy("accept");
-    try {
-      await api.post(`/api/raf-central/${patientId}/actions/accept-suspect`, {
-        suspect_id: suspect.id,
-        push_to_emr: true,
-      });
-      onChange();
-    } finally {
-      setBusy(null);
-    }
+    await acceptMut.mutateAsync({ suspect_id: suspect.id, push_to_emr: true });
+    onChange();
   };
 
   const dismissSuspect = async (reason: string) => {
     setShowDismissDialog(false);
-    setBusy("dismiss");
-    try {
-      await api.post(`/api/raf-central/${patientId}/actions/dismiss-suspect`, {
-        suspect_id: suspect.id,
-        reason,
-      });
-      onChange();
-      // TODO: No restore endpoint exists yet — Undo button closes the toast without action.
-      // When a restore endpoint is added, call it here instead of just closing.
-      toast.success(
-        "Suspect dismissed",
-        suspect.label,
-        {
-          duration: 10_000,
-          action: {
-            label: "Undo",
-            onClick: () => {
-              // No restore endpoint available yet — dismiss the toast only.
-              // TODO: POST /api/raf-central/{pid}/actions/restore-suspect when endpoint exists.
-            },
+    await dismissMut.mutateAsync({ suspect_id: suspect.id, reason });
+    onChange();
+    // TODO: No restore endpoint exists yet — Undo button closes the toast without action.
+    // When a restore endpoint is added, call it here instead of just closing.
+    toast.success(
+      "Suspect dismissed",
+      suspect.label,
+      {
+        duration: 10_000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            // No restore endpoint available yet — dismiss the toast only.
+            // TODO: POST /api/raf-central/{pid}/actions/restore-suspect when endpoint exists.
           },
-        }
-      );
-    } finally {
-      setBusy(null);
-    }
+        },
+      }
+    );
   };
 
   const confPct = Math.round(suspect.confidence * 100);

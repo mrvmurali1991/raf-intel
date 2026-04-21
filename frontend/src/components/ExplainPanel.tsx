@@ -24,7 +24,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-import api from "@/lib/api";
+import { useExplainSuspect } from "@/hooks/queries/useExplainSuspect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -36,25 +36,13 @@ export interface ExplainPanelProps {
   onClose: () => void;
 }
 
-interface ContributingSignal {
-  source: "medication" | "lab" | "history" | "nlp" | "note" | "other";
-  label: string;
-  value?: string | null;
-  timestamp?: string | null;
-}
+// Re-export types from hook for consumers that import from here
+export type {
+  ContributingSignal,
+  ExplainResponse,
+} from "@/hooks/queries/useExplainSuspect";
 
-interface ExplainResponse {
-  suspect_id: number;
-  patient_id: number;
-  suspect_icd10: string;
-  suspect_hcc: string;
-  confidence: number;
-  evidence_type: string;
-  contributing_signals: ContributingSignal[];
-  summary: string;
-}
-
-function iconFor(source: ContributingSignal["source"]) {
+function iconFor(source: "medication" | "lab" | "history" | "nlp" | "note" | "other") {
   switch (source) {
     case "medication":
       return <Pill className="h-4 w-4 text-indigo-500" />;
@@ -108,11 +96,23 @@ export function ExplainPanel({
   onClose,
 }: ExplainPanelProps) {
   const [mounted, setMounted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ExplainResponse | null>(null);
   // Store the element that had focus before the drawer opened so we can restore it on close.
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  // Data — React Query replaces manual useState+useEffect+api.get
+  // The query only fires when open=true (enabled flag).
+  const {
+    data,
+    isLoading: loading,
+    isError,
+    error: queryError,
+  } = useExplainSuspect(patientId, suspectId, open);
+
+  const error = isError
+    ? queryError instanceof Error
+      ? queryError.message
+      : "Failed to load evidence"
+    : null;
 
   // SSR guard — createPortal requires a DOM target
   useEffect(() => {
@@ -150,34 +150,6 @@ export function ExplainPanel({
       document.body.style.overflow = prev;
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    api
-      .get<ExplainResponse>(
-        `/api/raf-central/${patientId}/suspect/${suspectId}/explain`,
-      )
-      .then((r) => {
-        if (!cancelled) setData(r.data);
-      })
-      .catch((e) => {
-        if (!cancelled)
-          setError(
-            e?.response?.data?.detail ||
-              e?.message ||
-              "Failed to load evidence",
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, patientId, suspectId]);
 
   if (!open || !mounted) return null;
 
