@@ -1,0 +1,100 @@
+# .pre-commit-config.yaml — RAF Intelligence pre-commit hook configuration
+#
+# Install hooks:   pre-commit install
+# Run all hooks:   pre-commit run --all-files
+# Update hooks:    pre-commit autoupdate
+#
+# Hooks run on every `git commit` against staged files only (fast path).
+# The full baseline checks run in CI against the entire codebase.
+
+repos:
+  # ---------------------------------------------------------------------------
+  # Ruff — Python linter and formatter (replaces flake8, isort, black)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        name: ruff lint
+        args:
+          - --config=backend/pyproject.toml
+          - --fix
+          - --exit-non-zero-on-fix
+        files: ^backend/
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        args:
+          - --config=backend/pyproject.toml
+        files: ^backend/
+        types: [python]
+
+  # ---------------------------------------------------------------------------
+  # mypy — Python type checker (fast per-file check on staged files only)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        name: mypy type check
+        args:
+          - --config-file=backend/mypy.ini
+          - --ignore-missing-imports
+          - --no-error-summary
+        files: ^backend/app/
+        types: [python]
+        # mypy hooks are informational in pre-commit — CI enforces the baseline.
+        # Remove `verbose: true` if output is too noisy locally.
+        verbose: false
+
+  # ---------------------------------------------------------------------------
+  # ESLint — TypeScript / React linting (scoped to frontend)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.57.0
+    hooks:
+      - id: eslint
+        name: eslint (frontend)
+        files: ^frontend/src/
+        types_or: [javascript, ts, tsx]
+        args:
+          - --config=frontend/eslint.config.mjs
+          - --max-warnings=294
+        additional_dependencies:
+          - eslint@8.57.0
+          - typescript@5.4.5
+          - "@typescript-eslint/eslint-plugin@7.11.0"
+          - "@typescript-eslint/parser@7.11.0"
+
+  # ---------------------------------------------------------------------------
+  # Gitleaks — secret scanning (blocks commits with credentials/tokens)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        name: gitleaks secret scan
+        # Gitleaks scans the staged diff for credentials, API keys, tokens.
+        # Configuration is read from .gitleaks.toml if present.
+
+  # ---------------------------------------------------------------------------
+  # General hygiene hooks (no external deps, runs fast)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(frontend/public/|backend/data/)
+      - id: end-of-file-fixer
+        exclude: ^(frontend/public/|backend/data/)
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+        exclude: ^(frontend/public/|backend/data/|\.vscode/)
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
