@@ -170,6 +170,89 @@ jobs:
         working-directory: frontend
 
   # ---------------------------------------------------------------------------
+  # OpenAPI drift detector — fails if schema changed without refreshing snapshot
+  # ---------------------------------------------------------------------------
+  openapi-drift:
+    name: "OpenAPI — schema drift detector"
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: raf_intelligence_test
+          MYSQL_USER: raf_app
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      APP_ENV: development
+      RAF_DB_HOST: 127.0.0.1
+      RAF_DB_PORT: 3306
+      RAF_DB_USER: raf_app
+      RAF_DB_PASSWORD: testpassword
+      RAF_DB_NAME: raf_intelligence_test
+      OPENEMR_DB_HOST: 127.0.0.1
+      OPENEMR_DB_PORT: 3306
+      OPENEMR_DB_USER: raf_app
+      OPENEMR_DB_PASSWORD: testpassword
+      OPENEMR_DB_NAME: openemr_test
+      JWT_SECRET: ci-snapshot-jwt-secret-not-for-prod-64chars-padded-here
+      JWT_REFRESH_SECRET: ci-snapshot-refresh-not-for-prod-64chars-padded
+      REDIS_URL: redis://localhost:6379/0
+      GOOGLE_API_KEY: ""
+      SENTRY_DSN: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Generate live OpenAPI schema
+        run: python scripts/generate_openapi_snapshot.py --output /tmp/openapi.live.json
+        working-directory: backend
+
+      - name: Diff against committed snapshot
+        run: |
+          COMMITTED=backend/openapi.snapshot.json
+          LIVE=/tmp/openapi.live.json
+
+          # Bootstrap: if the snapshot is the placeholder, regenerate and skip diff.
+          if grep -q "_note" "$COMMITTED"; then
+            echo "Bootstrap placeholder detected — copying live schema as new snapshot."
+            echo "ACTION REQUIRED: Commit backend/openapi.snapshot.json after this run."
+            cp "$LIVE" "$COMMITTED"
+            exit 0
+          fi
+
+          if diff -u "$COMMITTED" "$LIVE" > /tmp/openapi.diff; then
+            echo "PASS: OpenAPI schema matches committed snapshot."
+          else
+            echo "FAIL: OpenAPI schema has drifted. Refresh the snapshot:"
+            echo "  python backend/scripts/generate_openapi_snapshot.py"
+            echo "  git add backend/openapi.snapshot.json && git commit"
+            head -80 /tmp/openapi.diff
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
   # pytest — fast suite (not slow) — must always pass
   # ---------------------------------------------------------------------------
   pytest-fast:

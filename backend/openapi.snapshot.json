@@ -1,0 +1,1 @@
+{"_note": "Bootstrap placeholder — replace by running: python backend/scripts/generate_openapi_snapshot.py", "openapi": "3.1.0", "info": {"title": "RAF Intelligence API", "version": "0.0.0"}, "paths": {}}
