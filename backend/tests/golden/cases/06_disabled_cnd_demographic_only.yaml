@@ -1,0 +1,27 @@
+# Case 06 — Community Non-dual Disabled (CND), demographic floor
+#
+# Source: CMS-HCC V28 CND segment, age 55-59 male. CND_M55_59 = 0.283.
+#
+# Purpose: verifies CND segment is selected for under-65 disabled; verifies
+# demographic floor behaves correctly for non-aged segment.
+#
+# Note: F33.41 (Major Depressive Disorder, partial remission) was explored
+# as the dx but under V28 it does NOT map to an HCC in the community model
+# when no other qualifying evidence is present (schizophrenia-spectrum and
+# bipolar I have their own HCCs). We keep this case demographic-only to avoid
+# guessing an HCC that may not be mapped — this is explicitly conservative.
+id: disabled_cnd_demographic_only
+description: 55M disabled (under 65), demographic-only — validates CND segment selection
+inputs:
+  age: 55
+  sex: M
+  model_segment: CND
+  icd10_codes: []
+expected:
+  total_raf: 0.283
+  demographic_score: 0.283
+  disease_score: 0.0
+  hcc_list: []
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

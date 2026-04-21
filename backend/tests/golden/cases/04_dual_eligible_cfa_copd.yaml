@@ -1,0 +1,27 @@
+# Case 04 — Full-dual Aged (CFA), COPD
+#
+# Source: CMS-HCC V28 CFA segment, age 75-79 female. CFA_F75_79 = 0.596.
+# HCC 280 (COPD, Chronic Bronchitis, Emphysema) coefficient under CFA = 0.390.
+# Note: dual-eligible coefficients differ from CNA (CNA HCC 280 = 0.319) —
+# this is the whole point of having separate segments. Sum = 0.986.
+#
+# ICD-10-CM J44.9 (COPD, unspecified) → HCC 280.
+#
+# Purpose: validates that the dual-eligible coefficient table is selected when
+# segment = CFA; regression if prefix_override ever stops being passed through.
+id: dual_eligible_cfa_copd
+description: 75F full-dual aged, COPD — validates CFA-specific coefficients
+inputs:
+  age: 75
+  sex: F
+  model_segment: CFA
+  icd10_codes: ["J449"]
+expected:
+  total_raf: 0.986
+  demographic_score: 0.596
+  hcc_list: ["280"]
+  hcc_coefficients:
+    "280": 0.390
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

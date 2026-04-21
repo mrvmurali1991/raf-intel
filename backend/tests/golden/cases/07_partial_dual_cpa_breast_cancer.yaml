@@ -1,0 +1,29 @@
+# Case 07 — Partial-dual Aged (CPA), breast cancer
+#
+# Source: CMS-HCC V28 CPA segment, age 70-74 female. CPA_F70_74 = 0.423.
+# HCC 23 (Breast/Prostate/other Cancers and Tumors) under CPA = 0.203.
+# Sum = 0.626.
+#
+# ICD-10-CM C50.911 (Malignant neoplasm of unspecified site of right female
+# breast) → HCC 23.
+#
+# Purpose: validates CPA (partial-dual) coefficient table selection; a non-
+# trivial HCC that clinical rules must also gate (active cancer needs active
+# treatment per CMS).
+id: partial_dual_cpa_breast_cancer
+description: 74F partial-dual aged, breast cancer — validates CPA segment
+inputs:
+  age: 74
+  sex: F
+  model_segment: CPA
+  icd10_codes: ["C50911"]
+expected:
+  total_raf: 0.626
+  demographic_score: 0.423
+  disease_score: 0.203
+  hcc_list: ["23"]
+  hcc_coefficients:
+    "23": 0.203
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

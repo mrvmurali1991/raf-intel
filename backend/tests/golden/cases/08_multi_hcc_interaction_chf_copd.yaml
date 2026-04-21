@@ -1,0 +1,36 @@
+# Case 08 — CHF + COPD interaction
+#
+# Source: CMS-HCC V28 interactions table (hccinfhir/data/ry2024_interactions.csv).
+# HF_CHR_LUNG_V28 interaction fires when HCC 226 (CHF) AND HCC 280 (COPD) are
+# both present; coefficient = 0.078 (CNA).
+#
+# CNA_F75_79 = 0.465
+# HCC 226 = 0.360
+# HCC 280 = 0.319
+# HF_CHR_LUNG_V28 = 0.078
+# Sum = 1.222
+#
+# ICD-10-CM:
+#   I50.22 → HCC 226 (CHF)
+#   J44.9  → HCC 280 (COPD)
+#
+# Purpose: regression for interaction scoring — change of interaction table
+# or accidental suppression of interactions would break this.
+id: multi_hcc_interaction_chf_copd
+description: 78F CHF + COPD — validates HF_CHR_LUNG_V28 interaction
+inputs:
+  age: 78
+  sex: F
+  model_segment: CNA
+  icd10_codes: ["I5022", "J449"]
+expected:
+  total_raf: 1.222
+  demographic_score: 0.465
+  hcc_list_unordered: ["226", "280"]
+  hcc_coefficients:
+    "226": 0.360
+    "280": 0.319
+  interactions_fired: ["HF_CHR_LUNG_V28"]
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

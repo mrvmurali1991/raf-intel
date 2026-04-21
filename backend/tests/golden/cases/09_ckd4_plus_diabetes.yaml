@@ -1,0 +1,30 @@
+# Case 09 — CKD stage 4 + Type 2 DM (no complication coded)
+#
+# Source: CMS-HCC V28 coefficient table (ry2024). CNA F70_74 = 0.395;
+# HCC 327 (CKD Stage 4) = 0.514; HCC 38 (DM w/o complication) = 0.166.
+# Sum = 1.075.
+#
+# ICD-10-CM:
+#   E11.9 → HCC 38
+#   N18.4 → HCC 327 (CKD Stage 4)
+#
+# Purpose: validates two unrelated HCCs co-score correctly. Also a canonical
+# input for the clinical-rules validator's CKD rule — we expect PASS because
+# N18.4 is stage-specific.
+id: ckd4_plus_diabetes
+description: 72F CKD4 + DM — two independent HCCs, no hierarchy collapse
+inputs:
+  age: 72
+  sex: F
+  model_segment: CNA
+  icd10_codes: ["E119", "N184"]
+expected:
+  total_raf: 1.075
+  demographic_score: 0.395
+  hcc_list_unordered: ["327", "38"]
+  hcc_coefficients:
+    "327": 0.514
+    "38": 0.166
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

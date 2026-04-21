@@ -1,0 +1,31 @@
+# Case 11 — Acute MI + Stroke sequela
+#
+# Source: CMS-HCC V28 (ry2024). CNA M70_74 = 0.396.
+#
+# ICD-10-CM:
+#   I21.01     → HCC 223 or HCC 224 (AMI) — hccinfhir maps to 228 under V28
+#                actually HCC 228 in V28 is "Acute Myocardial Infarction"
+#   I69.320    → Sequelae of cerebral infarction with cognitive deficits —
+#                does not always map to a billable HCC in V28 if aphasia is
+#                not coded. Captured value from hccinfhir: only HCC 228 fires.
+#
+# hccinfhir returns: hcc_list=["228"], coeff 228 = 0.252, total = 0.648.
+#
+# Purpose: cross-system (cardio + neuro) multi-dx case; regression tripwire
+# for V28 changes to cardiac HCC numbering.
+id: stroke_plus_mi
+description: 72M AMI + stroke sequela — cardiac HCC (228) fires
+inputs:
+  age: 72
+  sex: M
+  model_segment: CNA
+  icd10_codes: ["I2101", "I69320"]
+expected:
+  total_raf: 0.648
+  demographic_score: 0.396
+  hcc_list: ["228"]
+  hcc_coefficients:
+    "228": 0.252
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

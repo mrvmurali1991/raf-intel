@@ -1,0 +1,34 @@
+# Case 03 — HCC hierarchy collapse: DM w/ complications supersedes DM w/o
+#
+# Source: CMS-HCC V28 hierarchy file (hccinfhir/data/ry2024_hierarchy.csv).
+# HCC 37 (DM w/ chronic complications) supersedes HCC 38 (DM w/o complication).
+# Only the most-severe HCC in the hierarchy is scored; lower ones drop out.
+#
+# ICD-10-CM:
+#   E11.9   → HCC 38 (DM w/o complication)
+#   E11.22  → HCC 37 (DM w/ CKD — chronic complication)
+# Both present: HCC 38 must be collapsed out; only HCC 37 scored.
+#
+# CNA M70_74 = 0.396; HCC 37 coefficient = 0.166 (same numeric value as HCC 38
+# but categorized separately). Sum = 0.562.
+#
+# Purpose: regression guard against hierarchy bugs where both parent AND child
+# HCCs get billed (double-counting).
+id: hierarchy_collapse_diabetes
+description: 70M with E11.9 + E11.22 — hierarchy must collapse HCC 38 into HCC 37
+inputs:
+  age: 70
+  sex: M
+  model_segment: CNA
+  icd10_codes: ["E119", "E1122"]
+expected:
+  total_raf: 0.562
+  demographic_score: 0.396
+  disease_score: 0.166
+  hcc_list: ["37"]
+  hcc_list_must_not_contain: ["38"]
+  hcc_coefficients:
+    "37": 0.166
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

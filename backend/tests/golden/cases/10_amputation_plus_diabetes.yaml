@@ -1,0 +1,30 @@
+# Case 10 — Diabetes + Below-knee amputation (acquired absence)
+#
+# Source: CMS-HCC V28 (ry2024). CNA M70_74 = 0.396; HCC 409 (Amputation
+# Status, Lower Limb / Amputation Complications) = 0.598; HCC 38 = 0.166.
+# Sum = 1.160.
+#
+# ICD-10-CM:
+#   E11.9    → HCC 38
+#   Z89.511  → HCC 409 (Acquired absence of right leg below knee)
+#
+# Purpose: validates Z-code-based status HCC scoring; clinical rule for
+# HCC 409 requires an operative note or a documented historical amputation
+# on the chart — we gate this in the validator.
+id: amputation_plus_diabetes
+description: 72M DM + below-knee amputation status — Z-code HCC coding
+inputs:
+  age: 72
+  sex: M
+  model_segment: CNA
+  icd10_codes: ["E119", "Z89511"]
+expected:
+  total_raf: 1.160
+  demographic_score: 0.396
+  hcc_list_unordered: ["409", "38"]
+  hcc_coefficients:
+    "409": 0.598
+    "38": 0.166
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001

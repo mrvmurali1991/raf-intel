@@ -1,0 +1,23 @@
+# Case 12 — New-enrollee (NE) scoring
+#
+# The CMS-HCC NE (New Enrollee) model uses a different coefficient table for
+# beneficiaries with <12 months of prior Part B claims. The RAF calculator in
+# this repo does NOT currently expose an NE segment path — it maps segments to
+# one of {CNA, CND, CFA, CFD, CPA, CPD, INS} only.
+#
+# Because no published CMS expected number exists that we can translate into
+# a call of this engine without faking inputs, we explicitly skip this case.
+# Do NOT populate `expected` with a guessed number — patient-safety-adjacent.
+#
+# TODO: once calculate_raf_score supports a `new_enrollee=True` path,
+# populate this fixture from the CMS-HCC V28 NE coefficient table published
+# in the CY2024 Rate Announcement Attachment VI.
+id: new_enrollee_placeholder
+description: Placeholder for new-enrollee NE model — not yet supported in engine
+inputs:
+  age: 67
+  sex: F
+  model_segment: NE
+  icd10_codes: []
+expected: null
+skip_reason: "NE model path not yet supported by raf_calculator.calculate_raf_score"

@@ -1,0 +1,26 @@
+# Case 05 — Institutional (INS) beneficiary, CHF + DM
+#
+# Source: CMS-HCC V28 Institutional segment, age 80-84 male.
+# INS coefficients are markedly different from community — the INS table
+# in hccinfhir/data/ry2024_institutional_coefficients.csv is used when
+# prefix_override="INS_".
+#
+# ICD-10-CM:
+#   I50.22 (Chronic systolic CHF)        → HCC 226
+#   E11.9  (Type 2 DM w/o complications) → HCC 38
+#
+# Purpose: regression for institutional scoring path; both HCCs must count
+# (they are in different hierarchies so no collapse).
+id: institutional_ins_multi_hcc
+description: 80M institutional, CHF + DM — validates INS coefficient table
+inputs:
+  age: 80
+  sex: M
+  model_segment: INS
+  icd10_codes: ["I5022", "E119"]
+expected:
+  total_raf: 1.944
+  hcc_list_unordered: ["226", "38"]
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.001  # wider tolerance because institutional coeffs can shift year over year

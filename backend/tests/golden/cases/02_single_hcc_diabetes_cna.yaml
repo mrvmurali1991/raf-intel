@@ -1,0 +1,27 @@
+# Case 02 — Single HCC, DM without complications
+#
+# Source: CMS-HCC V28 coefficient table (hccinfhir v0.3.0, CY2024 Rate
+# Announcement). CNA F75_79 = 0.465; HCC 38 (Diabetes without Complication)
+# coefficient = 0.166. Sum = 0.631.
+#
+# ICD-10-CM E11.9 (Type 2 DM w/o complications) maps to HCC 38 under V28.
+# Ref: CMS-HCC V28 ICD-to-CC crosswalk (ry2024).
+#
+# Purpose: simplest billable case — a single chronic condition drives HCC 38.
+id: single_hcc_diabetes_cna
+description: 76F, Type 2 DM uncomplicated, CNA — single HCC scoring
+inputs:
+  age: 76
+  sex: F
+  model_segment: CNA
+  icd10_codes: ["E119"]
+expected:
+  total_raf: 0.631
+  demographic_score: 0.465
+  disease_score: 0.166
+  hcc_list: ["38"]
+  hcc_coefficients:
+    "38": 0.166
+  model_version: "CMS-HCC Model V28"
+  payment_year: 2024
+tolerance: 0.0001
