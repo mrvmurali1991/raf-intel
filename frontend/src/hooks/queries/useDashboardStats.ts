@@ -19,7 +19,8 @@ import {
   getDashboardTrends,
   getDashboardInsights,
 } from "@/lib/api";
-import type { DashboardStats, DashboardTrends } from "@/lib/api";
+import type { DashboardTrends } from "@/lib/api";
+import type { DashboardStats } from "@/types";
 
 export const DASHBOARD_STATS_QUERY_KEY = ["dashboard-stats"] as const;
 export const DASHBOARD_TRENDS_QUERY_KEY = ["dashboard-trends"] as const;

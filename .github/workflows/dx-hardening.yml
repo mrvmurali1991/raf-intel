@@ -1,0 +1,240 @@
+# ===========================================================================
+# RAF Intelligence — DX Hardening / Baseline-regression gate
+#
+# Runs on every PR targeting main or server branches.
+# Purpose: prevent regression in mypy, ruff, and ESLint error counts.
+# The job does NOT require zero errors today — it only fails if counts INCREASE.
+#
+# Baseline files (never delete these without also updating the counts):
+#   .github/mypy-baseline.txt   — 1574 mypy errors
+#   .github/ruff-baseline.txt   — 2133 ruff errors
+#   .github/eslint-baseline.txt — 294  ESLint errors
+# ===========================================================================
+
+name: DX Hardening
+
+on:
+  pull_request:
+    branches:
+      - main
+      - server
+      - develop
+
+concurrency:
+  group: dx-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # mypy baseline — fails if error count grows beyond locked baseline
+  # ---------------------------------------------------------------------------
+  mypy-baseline:
+    name: "mypy — baseline regression gate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install mypy
+        run: pip install mypy==1.10.0
+
+      - name: Install type stubs for key deps
+        run: pip install types-requests types-PyYAML types-python-dateutil || true
+
+      - name: Run mypy and check against baseline
+        run: |
+          BASELINE=$(cat .github/mypy-baseline.txt | tr -d '[:space:]')
+          echo "Locked baseline: $BASELINE errors"
+
+          CURRENT=$(mypy backend/app \
+            --config-file backend/mypy.ini \
+            2>&1 | grep -c " error:" || true)
+          echo "Current count:  $CURRENT errors"
+
+          if [ "$CURRENT" -gt "$BASELINE" ]; then
+            echo "FAIL: mypy error count increased from $BASELINE to $CURRENT."
+            exit 1
+          fi
+          echo "PASS: $CURRENT <= $BASELINE"
+
+  # ---------------------------------------------------------------------------
+  # ruff baseline — fails if error count grows beyond locked baseline
+  # ---------------------------------------------------------------------------
+  ruff-baseline:
+    name: "ruff — baseline regression gate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pip install ruff==0.4.4
+
+      - name: Run ruff and check against baseline
+        run: |
+          BASELINE=$(cat .github/ruff-baseline.txt | tr -d '[:space:]')
+          echo "Locked baseline: $BASELINE errors"
+
+          CURRENT=$(ruff check backend/app backend/tests \
+            --config backend/pyproject.toml \
+            --output-format=concise 2>&1 \
+            | grep -oE "Found [0-9]+ error" | grep -oE "[0-9]+" || echo "0")
+          echo "Current count:  $CURRENT errors"
+
+          if [ "$CURRENT" -gt "$BASELINE" ]; then
+            echo "FAIL: ruff error count increased from $BASELINE to $CURRENT."
+            exit 1
+          fi
+          echo "PASS: $CURRENT <= $BASELINE"
+
+  # ---------------------------------------------------------------------------
+  # ESLint baseline — fails if error count grows beyond locked ceiling
+  # ---------------------------------------------------------------------------
+  eslint-baseline:
+    name: "ESLint — baseline regression gate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run ESLint and check against baseline
+        working-directory: frontend
+        run: |
+          BASELINE=$(cat ../.github/eslint-baseline.txt | tr -d '[:space:]')
+          echo "Locked baseline: $BASELINE errors"
+
+          # Capture ESLint output; extract the errors count from summary line.
+          LINT_OUTPUT=$(npm run lint -- --format=compact 2>&1 || true)
+          CURRENT=$(echo "$LINT_OUTPUT" \
+            | grep -oE "[0-9]+ error" | grep -oE "[0-9]+" | head -1 || echo "0")
+          echo "Current count:  $CURRENT errors"
+
+          if [ "$CURRENT" -gt "$BASELINE" ]; then
+            echo "FAIL: ESLint error count increased from $BASELINE to $CURRENT."
+            exit 1
+          fi
+          echo "PASS: $CURRENT <= $BASELINE"
+
+  # ---------------------------------------------------------------------------
+  # TypeScript no-emit check — must always pass (zero tolerance)
+  # ---------------------------------------------------------------------------
+  typescript-check:
+    name: "TypeScript — tsc --noEmit"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: TypeScript compile check
+        run: npx tsc --noEmit
+        working-directory: frontend
+
+  # ---------------------------------------------------------------------------
+  # pytest — fast suite (not slow) — must always pass
+  # ---------------------------------------------------------------------------
+  pytest-fast:
+    name: "pytest — fast suite (not slow)"
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: raf_intelligence_test
+          MYSQL_USER: raf_app
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      APP_ENV: development
+      RAF_DB_HOST: 127.0.0.1
+      RAF_DB_PORT: 3306
+      RAF_DB_USER: raf_app
+      RAF_DB_PASSWORD: testpassword
+      RAF_DB_NAME: raf_intelligence_test
+      OPENEMR_DB_HOST: 127.0.0.1
+      OPENEMR_DB_PORT: 3306
+      OPENEMR_DB_USER: raf_app
+      OPENEMR_DB_PASSWORD: testpassword
+      OPENEMR_DB_NAME: openemr_test
+      JWT_SECRET: ci-test-jwt-secret-not-for-production-use-64chars-padding-here
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-not-for-production-64chars-padding
+      REDIS_URL: redis://localhost:6379/0
+      GOOGLE_API_KEY: ""
+      SENTRY_DSN: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Install test extras
+        run: pip install pytest-cov pytest-timeout pytest-asyncio
+
+      - name: Wait for MySQL
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -u root -prootpassword --silent; do
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+
+      - name: Run pytest (not slow)
+        run: pytest -q -m "not slow" --timeout=60
+        working-directory: backend
