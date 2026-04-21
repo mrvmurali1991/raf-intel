@@ -269,7 +269,7 @@ def bulk_update(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}", summary="Get suspect conditions for a specific patient")
+@router.get("/{pid}", summary="Get suspect conditions for a specific patient", response_model=SuspectPatientResponse)
 def get_patient_suspects(
     pid: int,
     status: str = Query(
@@ -282,7 +282,7 @@ def get_patient_suspects(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "read")),
-) -> dict[str, Any]:
+) -> SuspectPatientResponse:
     """
     Return all suspect conditions for the patient identified by ``pid``.
 
@@ -319,14 +319,14 @@ def get_patient_suspects(
         or f"Patient {pid}"
     )
 
-    return {
-        "pid": pid,
-        "patient_name": patient_name,
-        "status_filter": status,
-        "year_filter": year,
-        "count": len(suspects),
-        "suspects": suspects,
-    }
+    return SuspectPatientResponse(
+        pid=pid,
+        patient_name=patient_name,
+        status_filter=status,
+        year_filter=year,
+        count=len(suspects),
+        suspects=suspects,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -334,13 +334,13 @@ def get_patient_suspects(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/scan/{pid}", summary="Run full suspect scan for a patient")
+@router.post("/scan/{pid}", summary="Run full suspect scan for a patient", response_model=ScanPatientResponse)
 def scan_patient(
     pid: int,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
-) -> dict[str, Any]:
+) -> ScanPatientResponse:
     """
     Execute all suspect-detection passes for the given patient:
 
@@ -382,12 +382,12 @@ def scan_patient(
 
     logger.info("scan_patient: pid=%s found %s new suspects", pid, len(new_suspects))
 
-    return {
-        "pid": pid,
-        "patient_name": patient_name,
-        "new_suspects_found": len(new_suspects),
-        "suspects": new_suspects,
-    }
+    return ScanPatientResponse(
+        pid=pid,
+        patient_name=patient_name,
+        new_suspects_found=len(new_suspects),
+        suspects=new_suspects,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -395,13 +395,13 @@ def scan_patient(
 # ---------------------------------------------------------------------------
 
 
-@router.put("/{suspect_id}/accept", summary="Accept a suspect condition")
+@router.put("/{suspect_id}/accept", summary="Accept a suspect condition", response_model=AcceptActionResponse)
 def accept_suspect_endpoint(
     suspect_id: int,
     body: AcceptRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
-) -> dict[str, Any]:
+) -> AcceptActionResponse:
     """
     Mark a suspect condition as **accepted** (the clinician agrees it should
     be coded for this encounter).
@@ -423,12 +423,12 @@ def accept_suspect_endpoint(
             status_code=500, detail="Internal server error"
         )
 
-    return {
-        "suspect_id": suspect_id,
-        "action": "accepted",
-        "reviewed_by": reviewed_by,
-        "record": updated,
-    }
+    return AcceptActionResponse(
+        suspect_id=suspect_id,
+        action="accepted",
+        reviewed_by=reviewed_by,
+        record=updated,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -436,13 +436,13 @@ def accept_suspect_endpoint(
 # ---------------------------------------------------------------------------
 
 
-@router.put("/{suspect_id}/dismiss", summary="Dismiss a suspect condition")
+@router.put("/{suspect_id}/dismiss", summary="Dismiss a suspect condition", response_model=DismissActionResponse)
 def dismiss_suspect_endpoint(
     suspect_id: int,
     body: DismissRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
-) -> dict[str, Any]:
+) -> DismissActionResponse:
     """
     Mark a suspect condition as **dismissed** (the clinician reviewed and
     determined the condition is not present or not codeable this encounter).
@@ -469,10 +469,10 @@ def dismiss_suspect_endpoint(
             status_code=500, detail="Internal server error"
         )
 
-    return {
-        "suspect_id": suspect_id,
-        "action": "dismissed",
-        "reviewed_by": reviewed_by,
-        "reason": body.reason,
-        "record": updated,
-    }
+    return DismissActionResponse(
+        suspect_id=suspect_id,
+        action="dismissed",
+        reviewed_by=reviewed_by,
+        reason=body.reason,
+        record=updated,
+    )
