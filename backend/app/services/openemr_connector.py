@@ -1137,8 +1137,8 @@ def get_labs(pid: int, year: int | None = None) -> list[dict[str, Any]]:
             cur.execute(sql, params)
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
-    except Exception:
-        logger.debug("get_labs: procedure tables not available for pid=%s", pid)
+    except Exception as _exc:  # noqa: BLE001
+        logger.debug("get_labs: procedure tables not available for pid=%s: %s", pid, _exc)
         return []
 
 
@@ -1566,8 +1566,8 @@ def get_problem_list(pid: int, year: int | None = None, tenant_id: str = "") -> 
             cur.execute(sql, params)
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
-    except Exception:
-        logger.debug("lists table not available or accessible for pid=%s", pid)
+    except Exception as _exc:  # noqa: BLE001
+        logger.debug("lists table not available or accessible for pid=%s: %s", pid, _exc)
         return []
 
 
@@ -1614,9 +1614,9 @@ def get_recapture_gaps(pid: int, year: int, tenant_id: str = "") -> list[dict[st
             cur.execute(sql, (pid, year))
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.debug(
-            "get_recapture_gaps failed for pid=%s year=%s", pid, year
+            "get_recapture_gaps failed for pid=%s year=%s: %s", pid, year, _exc
         )
         return []
 
@@ -1965,8 +1965,8 @@ def get_immunizations(pid: int) -> list[dict[str, Any]]:
             cur.execute(sql, (pid,))
             rows = cur.fetchall()
         return [_serialize(r) for r in rows]
-    except Exception:
-        logger.debug("immunizations table not available for pid=%s", pid)
+    except Exception as _exc:  # noqa: BLE001
+        logger.debug("immunizations table not available for pid=%s: %s", pid, _exc)
         return []
 
 

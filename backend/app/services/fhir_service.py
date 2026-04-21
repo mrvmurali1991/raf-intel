@@ -115,7 +115,7 @@ async def _fetch_token_async(connection: dict[str, Any]) -> str:
             import json as _json
             try:
                 _extra = _json.loads(_extra)
-            except Exception:
+            except (json.JSONDecodeError, ValueError):  # noqa: BLE001
                 _extra = {}
         oauth_username: str = (
             connection.get("oauth_username", "")

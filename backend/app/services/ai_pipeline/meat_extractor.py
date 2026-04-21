@@ -198,7 +198,7 @@ def _parse_json(text: str) -> dict[str, Any]:
             stripped = stripped[4:]
     try:
         return json.loads(stripped)
-    except Exception:
+    except json.JSONDecodeError:
         m = _JSON_BLOCK_RE.search(stripped)
         if not m:
             raise
