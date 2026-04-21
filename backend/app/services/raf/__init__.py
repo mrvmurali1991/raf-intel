@@ -3,6 +3,10 @@ app.services.raf — CMS-HCC RAF calculation subpackage.
 
 Re-exports the complete public API so that ``from app.services.raf import X``
 works identically to importing from the original monolithic module.
+
+Also re-exports payment-policy rules from :mod:`app.services.raf.dos_rules`
+so that "is this encounter eligible to contribute an HCC for payment year Y"
+has a single canonical import site.
 """
 
 # ICD formatting
@@ -83,4 +87,14 @@ from app.services.raf.score_persistence import (  # noqa: F401
     _store_patient_hccs,
     _upsert_patient_demographics,
     _upsert_raf_score,
+)
+# Payment-policy rules (DOS windows + blend weights + eligibility)
+from app.services.raf.dos_rules import (  # noqa: F401
+    ELIGIBLE_ENCOUNTER_TYPES,
+    PAYMENT_YEARS,
+    PaymentYearWindow,
+    filter_encounters_for_py,
+    get_blend_weights,
+    get_payment_year_window,
+    is_eligible_encounter,
 )
