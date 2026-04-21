@@ -28,12 +28,14 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from app.config import settings
 from app.services.llm import llm_generate
 
 logger = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "meat_extract.md"
-_MODEL = "gemini-2.5-pro"
+# Model name read from settings; override via LLM_MODEL_MEAT env var.
+_MODEL: str = settings.llm_model_meat
 
 # ---------------------------------------------------------------------------
 # Face-to-face gate

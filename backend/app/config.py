@@ -93,6 +93,21 @@ class Settings:
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 
+    # LLM model names — per-pipeline overrides via environment variables.
+    # All model-name literals that were previously scattered across services
+    # are consolidated here so a single env change swaps every pipeline.
+    llm_model_blind: str = os.getenv("LLM_MODEL_BLIND", "gemini-2.0-flash")
+    """Fast, cheap model for blind (no-context) extraction (Pass 1)."""
+
+    llm_model_contextual: str = os.getenv("LLM_MODEL_CONTEXTUAL", "gemini-2.5-pro")
+    """High-quality model for contextual extraction / MEAT / suspect (Pass 2)."""
+
+    llm_model_meat: str = os.getenv("LLM_MODEL_MEAT", "gemini-2.5-pro")
+    """Model used by the MEAT evidence extractor (meat_extractor.py)."""
+
+    llm_model_suspect: str = os.getenv("LLM_MODEL_SUSPECT", "gemini-2.0-flash")
+    """Model used by the AI suspect pipeline (ai_pipeline/suspect_engine.py)."""
+
     @property
     def gemini_api_key(self) -> str:
         """Alias for google_api_key — used by readiness probe and health checks."""

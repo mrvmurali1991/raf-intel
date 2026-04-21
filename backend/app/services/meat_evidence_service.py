@@ -58,6 +58,7 @@ import logging
 from datetime import date
 from typing import Any
 
+from app.config import settings
 from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ def store_meat_evidence(
     meat_assessment: str | None,
     meat_treatment: str | None,
     raw_note_excerpt: str,
-    nlp_model: str = "gemini-2.5-pro",
+    nlp_model: str = settings.llm_model_meat,
     confidence: float = 0.0,
 ) -> int:
     """Store MEAT evidence for a specific HCC + encounter.
@@ -620,7 +621,7 @@ def store_analysis_meat(
     encounter_id: int = int(meta.get("encounter_id", 0))
     enc_date_raw = meta.get("encounter_date") or date.today().isoformat()
     enc_date_str = _resolve_encounter_date(enc_date_raw)
-    nlp_model: str = str(meta.get("model", "gemini-2.5-pro"))
+    nlp_model: str = str(meta.get("model", settings.llm_model_meat))
 
     # Load all HCC assignments for this patient/year once so we avoid
     # a per-diagnosis DB round-trip

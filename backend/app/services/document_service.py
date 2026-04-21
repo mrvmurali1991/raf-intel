@@ -495,7 +495,7 @@ def _call_gemini_vision(file_bytes: bytes, mime_type: str) -> dict[str, Any]:
 
     from app.services.llm import llm_generate_content
 
-    model = settings.gemini_model or "gemini-2.5-pro"
+    model = settings.gemini_model or settings.llm_model_contextual
 
     b64_data = base64.b64encode(file_bytes).decode("utf-8")
 
@@ -625,7 +625,7 @@ def _save_analysis_and_diagnoses(
             (
                 analysis_id,
                 document_id,
-                settings.gemini_model or "gemini-2.5-pro",
+                settings.gemini_model or settings.llm_model_contextual,
                 usage.get("prompt_tokens"),
                 usage.get("output_tokens"),
                 usage.get("total_tokens"),

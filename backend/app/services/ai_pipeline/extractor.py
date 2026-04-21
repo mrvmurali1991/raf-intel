@@ -17,6 +17,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from app.config import settings
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -194,8 +196,11 @@ def _generate_json(
 # ---------------------------------------------------------------------------
 # Pass 1: blind extraction
 # ---------------------------------------------------------------------------
-BLIND_MODEL = "gemini-2.0-flash"
-CONTEXTUAL_MODEL = "gemini-2.5-pro"
+# Model names are read from settings so they can be overridden via env vars
+# LLM_MODEL_BLIND / LLM_MODEL_CONTEXTUAL without code changes.
+# Module-level aliases kept for backwards-compat (tests import these).
+BLIND_MODEL: str = settings.llm_model_blind
+CONTEXTUAL_MODEL: str = settings.llm_model_contextual
 
 
 def extract_blind(

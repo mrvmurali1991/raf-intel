@@ -14,6 +14,7 @@ import logging
 from collections.abc import Iterable
 from pathlib import Path
 
+from app.config import settings
 from app.services.llm import llm_generate
 
 from .rules import ALL_RULES
@@ -60,7 +61,7 @@ def _bundle_for_llm(bundle: dict) -> dict:
     return {k: bundle.get(k) for k in keep if k in bundle}
 
 
-def run_llm(bundle: dict, model: str = "gemini-2.0-flash") -> list[SuspectCandidate]:
+def run_llm(bundle: dict, model: str = settings.llm_model_suspect) -> list[SuspectCandidate]:
     template = _load_prompt_template()
     prompt = template.replace("{{BUNDLE_JSON}}", json.dumps(_bundle_for_llm(bundle), default=str))
     try:
@@ -142,7 +143,7 @@ def detect_suspects(
     bundle: dict,
     *,
     use_llm: bool = True,
-    model: str = "gemini-2.0-flash",
+    model: str = settings.llm_model_suspect,
 ) -> list[SuspectCandidate]:
     """Run the full rule + LLM pipeline and return merged suspect list."""
     rule_hits = run_rules(bundle)

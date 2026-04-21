@@ -930,7 +930,7 @@ def run_pipeline(
     total_start = time.time()
     from app.services.llm import llm_generate_content
 
-    model = settings.gemini_model or "gemini-2.5-pro"
+    model = settings.gemini_model or settings.llm_model_contextual
 
     # Build the user prompt
     context_parts = []
