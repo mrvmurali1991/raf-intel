@@ -25,6 +25,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import openemr_cursor, raf_cursor
@@ -52,6 +53,66 @@ from app.services.icd_validator import get_hcc_mapping
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class _DocBase(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class DocumentListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    documents: list[dict[str, Any]]
+
+
+class DocumentStatsResponse(_DocBase):
+    total_documents: int
+    total_diagnoses: int
+
+
+class BatchListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    batches: list[dict[str, Any]]
+
+
+class DeleteDocumentResponse(BaseModel):
+    deleted: bool
+    document_id: str
+
+
+class DiagnosisListResponse(BaseModel):
+    document_id: str
+    count: int
+    diagnoses: list[dict[str, Any]]
+
+
+class DiagnosisReviewResponse(BaseModel):
+    diagnosis_id: str
+    review_status: str
+    reviewed_by: str
+
+
+class ApproveAndScoreResponse(BaseModel):
+    approved: int
+    patient_id: int
+    new_hccs_added: list[dict[str, Any]]
+    new_raf_score: float | None = None
+    message: str
+
+
+class OpenEMRDocumentListResponse(BaseModel):
+    total: int
+    documents: list[dict[str, Any]]
+    warning: str | None = None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -352,6 +413,7 @@ async def upload_batch_documents(
     "",
     summary="List documents",
     description="List uploaded documents with optional filters. Results are paginated.",
+    response_model=DocumentListResponse,
 )
 def list_documents_endpoint(
     patient_id: str | None = Query(None, description="Filter by patient ID"),
@@ -515,6 +577,8 @@ def list_documents_endpoint(
     "/stats",
     summary="Document statistics",
     description="Aggregate counts for documents, diagnoses, and batches for a tenant.",
+    response_model=DocumentStatsResponse,
+    response_model_exclude_none=True,
 )
 def document_stats(
     current_user: dict = Depends(get_current_user),
@@ -528,6 +592,7 @@ def document_stats(
     "/batches",
     summary="List batches",
     description="List all document batches for a tenant.",
+    response_model=BatchListResponse,
 )
 def list_batches_endpoint(
     limit: int = Query(50, ge=1, le=200),
@@ -674,16 +739,17 @@ def view_document_file(
     "/{document_id}",
     summary="Delete document",
     description="Delete the document record, all analysis results, and the file on disk.",
+    response_model=DeleteDocumentResponse,
 )
 def delete_document_endpoint(
     document_id: str,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("documents", "delete")),
-) -> dict[str, Any]:
+) -> DeleteDocumentResponse:
     deleted = delete_document(document_id)
     if not deleted:
         raise _doc_not_found(document_id)
-    return {"deleted": True, "document_id": document_id}
+    return DeleteDocumentResponse(deleted=True, document_id=document_id)
 
 
 # ---------------------------------------------------------------------------
@@ -817,6 +883,7 @@ def get_analysis_endpoint(
         "HCC mappings, RAF weights, MEAT evidence, and review status. "
         "Results are ordered by RAF weight (highest first)."
     ),
+    response_model=DiagnosisListResponse,
 )
 def get_diagnoses_endpoint(
     document_id: str,
@@ -842,6 +909,7 @@ def get_diagnoses_endpoint(
         "Mark a Gemini-extracted diagnosis as clinically confirmed by a reviewer. "
         "The reviewer identity is derived from the authenticated JWT."
     ),
+    response_model=DiagnosisReviewResponse,
 )
 def confirm_diagnosis(
     document_id: str,
@@ -865,11 +933,11 @@ def confirm_diagnosis(
             status_code=404, detail=f"Diagnosis line {diag_id!r} not found"
         )
 
-    return {
-        "diagnosis_id": diag_id,
-        "review_status": "confirmed",
-        "reviewed_by": reviewed_by,
-    }
+    return DiagnosisReviewResponse(
+        diagnosis_id=diag_id,
+        review_status="confirmed",
+        reviewed_by=reviewed_by,
+    )
 
 
 @router.put(
@@ -879,6 +947,7 @@ def confirm_diagnosis(
         "Mark a Gemini-extracted diagnosis as rejected/incorrect. "
         "The reviewer identity is derived from the authenticated JWT."
     ),
+    response_model=DiagnosisReviewResponse,
 )
 def reject_diagnosis(
     document_id: str,
@@ -902,11 +971,11 @@ def reject_diagnosis(
             status_code=404, detail=f"Diagnosis line {diag_id!r} not found"
         )
 
-    return {
-        "diagnosis_id": diag_id,
-        "review_status": "rejected",
-        "reviewed_by": reviewed_by,
-    }
+    return DiagnosisReviewResponse(
+        diagnosis_id=diag_id,
+        review_status="rejected",
+        reviewed_by=reviewed_by,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1152,6 +1221,8 @@ def draft_raf_score(
 @router.get(
     "/openemr/list",
     summary="List documents stored in OpenEMR",
+    response_model=OpenEMRDocumentListResponse,
+    response_model_exclude_none=True,
 )
 @limiter.limit("30/minute")
 def list_openemr_documents(
@@ -1335,6 +1406,8 @@ def pull_openemr_document(
 @router.post(
     "/{document_id}/approve-and-score",
     summary="Approve diagnoses and update RAF scores",
+    response_model=ApproveAndScoreResponse,
+    response_model_exclude_none=True,
 )
 @limiter.limit("10/minute")
 def approve_and_update_raf(
@@ -1381,12 +1454,10 @@ def approve_and_update_raf(
         document_id, patient_id, diagnosis_ids, tenant_id=tenant_id
     )
 
-    return {
-        "approved": result["approved"],
-        "patient_id": patient_id,
-        "new_hccs_added": result.get("new_hccs", []),
-        "new_raf_score": round(float(result["new_raf"]), 4)
-        if result.get("new_raf")
-        else None,
-        "message": f"Approved {result['approved']} diagnoses, added {len(result.get('new_hccs', []))} new HCCs, RAF recalculated",
-    }
+    return ApproveAndScoreResponse(
+        approved=result["approved"],
+        patient_id=patient_id,
+        new_hccs_added=result.get("new_hccs", []),
+        new_raf_score=round(float(result["new_raf"]), 4) if result.get("new_raf") else None,
+        message=f"Approved {result['approved']} diagnoses, added {len(result.get('new_hccs', []))} new HCCs, RAF recalculated",
+    )

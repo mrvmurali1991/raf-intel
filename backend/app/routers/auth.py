@@ -195,6 +195,86 @@ class MFADisableRequest(BaseModel):
     password: str
 
 
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class UserProfileResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str | None = None
+    role: str
+    tenant_id: int | str | None = None
+    avatar_url: str | None = None
+    last_login_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class UserDetailResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str | None = None
+    role: str
+    tenant_id: int | str | None = None
+    avatar_url: str | None = None
+    is_active: bool | None = None
+    last_login_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    mfa_enabled: bool | None = None
+
+
+class UserListResponse(BaseModel):
+    count: int
+    users: list[dict[str, Any]]
+
+
+class UserPermissionsResponse(BaseModel):
+    user_id: int
+    role: str
+    permissions: list[dict[str, Any]]
+
+
+class AuditLogResponse(BaseModel):
+    count: int
+    entries: list[dict[str, Any]]
+
+
+class TenantItem(BaseModel):
+    tenant_id: str
+    name: str
+    patient_count: int
+    user_count: int
+
+
+class TenantListResponse(BaseModel):
+    tenants: list[TenantItem]
+    current_tenant_id: str
+
+
+class SwitchTenantResponse(BaseModel):
+    access_token: str
+    tenant_id: str
+    message: str
+
+
+class BreakGlassResponse(BaseModel):
+    status: str
+    break_glass_session: dict[str, Any]
+
+
+class EmbedMintResponse(BaseModel):
+    embed_token: str
+    expires_in: int
+    iframe_url: str
+
+
 def _get_client_ip(request: Request) -> str | None:
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
@@ -298,9 +378,13 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
     return resp
 
 
-@router.post("/forgot-password", summary="Request a password reset token")
+@router.post(
+    "/forgot-password",
+    summary="Request a password reset token",
+    response_model=MessageResponse,
+)
 @limiter.limit("3/minute")
-def forgot_password(request: Request, body: ForgotPasswordRequest) -> dict[str, Any]:
+def forgot_password(request: Request, body: ForgotPasswordRequest) -> MessageResponse:
     """
     Trigger a password reset flow.
 
@@ -309,15 +393,13 @@ def forgot_password(request: Request, body: ForgotPasswordRequest) -> dict[str, 
     The response is intentionally identical whether or not the email address
     exists so that account enumeration is not possible.
     """
-    _generic_response: dict[str, Any] = {
-        "message": "If an account with that email exists, a password reset link has been sent."
-    }
+    _msg = "If an account with that email exists, a password reset link has been sent."
     try:
         token = generate_password_reset_token(body.email)
     except ValueError as exc:
         # Email not found – log silently and return generic response.
         logger.info("forgot-password: no account for supplied address (%s)", exc)
-        return _generic_response
+        return MessageResponse(message=_msg)
 
     # Log the full reset link in development so devs can test without SMTP.
     if settings.app_env == "development":
@@ -329,21 +411,25 @@ def forgot_password(request: Request, body: ForgotPasswordRequest) -> dict[str, 
             reset_link,
         )
 
-    return _generic_response
+    return MessageResponse(message=_msg)
 
 
-@router.post("/reset-password", summary="Reset password using a token")
+@router.post(
+    "/reset-password",
+    summary="Reset password using a token",
+    response_model=MessageResponse,
+)
 @limiter.limit("5/minute")
 def reset_password_endpoint(
     request: Request, body: ResetPasswordRequest
-) -> dict[str, Any]:
+) -> MessageResponse:
     try:
         reset_password(body.token, body.new_password)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return {
-        "message": "Password reset successfully. Please log in with your new password."
-    }
+    return MessageResponse(
+        message="Password reset successfully. Please log in with your new password."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -477,11 +563,12 @@ def embed_exchange(request: Request, body: EmbedExchangeRequest) -> JSONResponse
 @router.post(
     "/embed/mint",
     summary="Mint an embed token (admin/demo only)",
+    response_model=EmbedMintResponse,
 )
 def embed_mint(
     body: EmbedMintRequest,
     current_user: dict = Depends(require_role("admin", "developer")),
-) -> dict[str, Any]:
+) -> EmbedMintResponse:
     """Issue an embed JWT for use by QA tooling or the demo PHP widget.
 
     This is NOT the production path — real embedders mint tokens with the
@@ -497,11 +584,11 @@ def embed_mint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return {
-        "embed_token": token,
-        "expires_in": body.ttl_seconds,
-        "iframe_url": f"{settings.frontend_url}/embed/raf-central/{body.pid}?t={token}",
-    }
+    return EmbedMintResponse(
+        embed_token=token,
+        expires_in=body.ttl_seconds,
+        iframe_url=f"{settings.frontend_url}/embed/raf-central/{body.pid}?t={token}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -559,11 +646,15 @@ def setup_mfa(current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
-@router.post("/mfa/activate", summary="Confirm TOTP code and activate MFA")
+@router.post(
+    "/mfa/activate",
+    summary="Confirm TOTP code and activate MFA",
+    response_model=MessageResponse,
+)
 def activate_mfa(
     body: MFAActivateRequest,
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> MessageResponse:
     """Verify the TOTP code from the authenticator app and enable MFA.
 
     Must be called after /mfa/setup before MFA takes effect at login.
@@ -581,14 +672,18 @@ def activate_mfa(
         request_path="/api/auth/mfa/activate",
         response_status=200,
     )
-    return {"message": "MFA has been activated successfully."}
+    return MessageResponse(message="MFA has been activated successfully.")
 
 
-@router.post("/mfa/disable", summary="Disable MFA (requires current password)")
+@router.post(
+    "/mfa/disable",
+    summary="Disable MFA (requires current password)",
+    response_model=MessageResponse,
+)
 def disable_mfa_endpoint(
     body: MFADisableRequest,
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> MessageResponse:
     """Disable MFA for the current user.
 
     Requires the user's current password as confirmation to prevent
@@ -617,7 +712,7 @@ def disable_mfa_endpoint(
         request_path="/api/auth/mfa/disable",
         response_status=200,
     )
-    return {"message": "MFA has been disabled."}
+    return MessageResponse(message="MFA has been disabled.")
 
 
 # ---------------------------------------------------------------------------
@@ -651,12 +746,17 @@ def logout(
     return JSONResponse(content={"message": "Logged out successfully."})
 
 
-@router.get("/me", summary="Get current user profile")
-def get_me(current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
+@router.get(
+    "/me",
+    summary="Get current user profile",
+    response_model=UserProfileResponse,
+    response_model_exclude_none=True,
+)
+def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileResponse:
     user = get_user(current_user["id"])
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-    return _serialize_row(
+    row = _serialize_row(
         {
             "id": user["id"],
             "email": user["email"],
@@ -668,13 +768,19 @@ def get_me(current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
             "created_at": user["created_at"],
         }
     )
+    return UserProfileResponse(**row)
 
 
-@router.put("/me", summary="Update own profile (name, avatar)")
+@router.put(
+    "/me",
+    summary="Update own profile (name, avatar)",
+    response_model=UserProfileResponse,
+    response_model_exclude_none=True,
+)
 def update_me(
     body: UpdateProfileRequest,
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> UserProfileResponse:
     updated = update_user(
         user_id=current_user["id"],
         full_name=body.full_name,
@@ -682,7 +788,7 @@ def update_me(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found.")
-    return _serialize_row(
+    row = _serialize_row(
         {
             "id": updated["id"],
             "email": updated["email"],
@@ -692,25 +798,32 @@ def update_me(
             "updated_at": updated["updated_at"],
         }
     )
+    return UserProfileResponse(**row)
 
 
 @router.put(
-    "/change-password", summary="Change own password (requires current password)"
+    "/change-password",
+    summary="Change own password (requires current password)",
+    response_model=MessageResponse,
 )
 def change_own_password(
     body: ChangePasswordRequest,
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> MessageResponse:
     try:
         change_password(current_user["id"], body.old_password, body.new_password)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return {
-        "message": "Password changed successfully. All other sessions have been revoked."
-    }
+    return MessageResponse(
+        message="Password changed successfully. All other sessions have been revoked."
+    )
 
 
-@router.get("/sessions", summary="List own active sessions")
+@router.get(
+    "/sessions",
+    summary="List own active sessions",
+    response_model=list[dict[str, Any]],
+)
 def get_sessions(
     current_user: dict = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
@@ -718,11 +831,15 @@ def get_sessions(
     return [_serialize_row(s) for s in sessions]
 
 
-@router.delete("/sessions/{session_id}", summary="Revoke a specific session")
+@router.delete(
+    "/sessions/{session_id}",
+    summary="Revoke a specific session",
+    response_model=MessageResponse,
+)
 def delete_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> MessageResponse:
     # Only allow revoking own sessions (admins could revoke others via user management)
     sessions = list_sessions(current_user["id"])
     own_ids = {s["session_id"] for s in sessions}
@@ -734,7 +851,7 @@ def delete_session(
             detail="Cannot revoke another user's session.",
         )
     revoke_session(session_id)
-    return {"message": "Session revoked."}
+    return MessageResponse(message="Session revoked.")
 
 
 # ---------------------------------------------------------------------------
@@ -742,7 +859,11 @@ def delete_session(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/users", summary="List all users (admin/manager only)")
+@router.get(
+    "/users",
+    summary="List all users (admin/manager only)",
+    response_model=UserListResponse,
+)
 def admin_list_users(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -750,17 +871,23 @@ def admin_list_users(
     is_active: bool | None = Query(None),
     current_user: dict = Depends(require_role("admin", "manager")),
     tenant_id: str = Depends(get_tenant_id),
-) -> dict[str, Any]:
+) -> UserListResponse:
     users = list_users(limit=limit, offset=offset, role=role, is_active=is_active, tenant_id=tenant_id)
     serialized = [_safe_user(u) for u in users]
-    return {"count": len(serialized), "users": serialized}
+    return UserListResponse(count=len(serialized), users=serialized)
 
 
-@router.post("/users", summary="Create a new user (admin only)", status_code=201)
+@router.post(
+    "/users",
+    summary="Create a new user (admin only)",
+    status_code=201,
+    response_model=UserDetailResponse,
+    response_model_exclude_none=True,
+)
 def admin_create_user(
     body: CreateUserRequest,
     current_user: dict = Depends(require_role("admin")),
-) -> dict[str, Any]:
+) -> UserDetailResponse:
     try:
         user = create_user(
             email=body.email,
@@ -778,26 +905,38 @@ def admin_create_user(
         resource_id=str(user["id"]),
         details={"email": body.email, "role": body.role},
     )
-    return _safe_user(user)
+    safe = _safe_user(user)
+    return UserDetailResponse(**safe)
 
 
-@router.get("/users/{user_id}", summary="Get user detail")
+@router.get(
+    "/users/{user_id}",
+    summary="Get user detail",
+    response_model=UserDetailResponse,
+    response_model_exclude_none=True,
+)
 def admin_get_user(
     user_id: int,
     current_user: dict = Depends(require_role("admin", "manager")),
-) -> dict[str, Any]:
+) -> UserDetailResponse:
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-    return _safe_user(user)
+    safe = _safe_user(user)
+    return UserDetailResponse(**safe)
 
 
-@router.put("/users/{user_id}", summary="Update a user (admin only)")
+@router.put(
+    "/users/{user_id}",
+    summary="Update a user (admin only)",
+    response_model=UserDetailResponse,
+    response_model_exclude_none=True,
+)
 def admin_update_user(
     user_id: int,
     body: UpdateUserRequest,
     current_user: dict = Depends(require_role("admin")),
-) -> dict[str, Any]:
+) -> UserDetailResponse:
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -815,14 +954,20 @@ def admin_update_user(
         resource_id=str(user_id),
         details=body.model_dump(exclude_none=True),
     )
-    return _safe_user(updated)
+    safe = _safe_user(updated)
+    return UserDetailResponse(**safe)
 
 
-@router.delete("/users/{user_id}", summary="Deactivate a user (admin only)")
+@router.delete(
+    "/users/{user_id}",
+    summary="Deactivate a user (admin only)",
+    response_model=UserDetailResponse,
+    response_model_exclude_none=True,
+)
 def admin_deactivate_user(
     user_id: int,
     current_user: dict = Depends(require_role("admin")),
-) -> dict[str, Any]:
+) -> UserDetailResponse:
     if user_id == current_user["id"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -838,31 +983,36 @@ def admin_deactivate_user(
         resource_type="user",
         resource_id=str(user_id),
     )
-    return _safe_user(deactivated)
+    safe = _safe_user(deactivated)
+    return UserDetailResponse(**safe)
 
 
 @router.get(
-    "/users/{user_id}/permissions", summary="Get effective permissions for a user"
+    "/users/{user_id}/permissions",
+    summary="Get effective permissions for a user",
+    response_model=UserPermissionsResponse,
 )
 def admin_get_permissions(
     user_id: int,
     current_user: dict = Depends(require_role("admin", "manager")),
-) -> dict[str, Any]:
+) -> UserPermissionsResponse:
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
     perms = get_user_permissions(user_id)
-    return {"user_id": user_id, "role": user["role"], "permissions": perms}
+    return UserPermissionsResponse(user_id=user_id, role=user["role"], permissions=perms)
 
 
 @router.put(
-    "/users/{user_id}/permissions", summary="Set user permission overrides (admin only)"
+    "/users/{user_id}/permissions",
+    summary="Set user permission overrides (admin only)",
+    response_model=UserPermissionsResponse,
 )
 def admin_set_permissions(
     user_id: int,
     body: SetPermissionsRequest,
     current_user: dict = Depends(require_role("admin")),
-) -> dict[str, Any]:
+) -> UserPermissionsResponse:
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -876,7 +1026,7 @@ def admin_set_permissions(
         details={"permission_count": len(perm_dicts)},
     )
     perms = get_user_permissions(user_id)
-    return {"user_id": user_id, "role": user["role"], "permissions": perms}
+    return UserPermissionsResponse(user_id=user_id, role=user["role"], permissions=perms)
 
 
 # ---------------------------------------------------------------------------
@@ -884,7 +1034,11 @@ def admin_set_permissions(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/audit-log", summary="Query the audit log (admin/auditor only)")
+@router.get(
+    "/audit-log",
+    summary="Query the audit log (admin/auditor only)",
+    response_model=AuditLogResponse,
+)
 def get_audit_log(
     user_id: int | None = Query(None, description="Filter by user ID"),
     action: str | None = Query(None, description="Filter by action"),
@@ -896,7 +1050,7 @@ def get_audit_log(
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(require_role("admin", "auditor")),
     tenant_id: str = Depends(get_tenant_id),
-) -> dict[str, Any]:
+) -> AuditLogResponse:
     try:
         start_dt = datetime.fromisoformat(start_date) if start_date else None
     except ValueError:
@@ -922,10 +1076,10 @@ def get_audit_log(
         offset=offset,
         tenant_id=tenant_id,
     )
-    return {
-        "count": len(rows),
-        "entries": [_serialize_row(r) for r in rows],
-    }
+    return AuditLogResponse(
+        count=len(rows),
+        entries=[_serialize_row(r) for r in rows],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -937,11 +1091,15 @@ class SwitchTenantRequest(BaseModel):
     tenant_id: str
 
 
-@router.get("/tenants", summary="List all tenants (admin only)")
+@router.get(
+    "/tenants",
+    summary="List all tenants (admin only)",
+    response_model=TenantListResponse,
+)
 def list_tenants(
     current_user: dict = Depends(require_role("admin")),
     tenant_id: str = Depends(get_tenant_id),
-) -> dict[str, Any]:
+) -> TenantListResponse:
     """Return tenant metadata for the caller's own tenant only."""
     with raf_cursor() as cur:
         cur.execute(
@@ -965,12 +1123,12 @@ def list_tenants(
     tenants = []
     for row in rows:
         tenants.append(
-            {
-                "tenant_id": str(row["tenant_id"]),
-                "name": row["name"],
-                "patient_count": row["patient_count"],
-                "user_count": row["user_count"],
-            }
+            TenantItem(
+                tenant_id=str(row["tenant_id"]),
+                name=row["name"],
+                patient_count=row["patient_count"],
+                user_count=row["user_count"],
+            )
         )
 
     # If no patients exist yet for this tenant, still return the tenant entry via users
@@ -982,25 +1140,29 @@ def list_tenants(
             )
             row = cur.fetchone()
             tenants.append(
-                {
-                    "tenant_id": str(tenant_id),
-                    "name": f"Tenant {tenant_id}",
-                    "patient_count": 0,
-                    "user_count": int((row or {}).get("user_count", 0)),
-                }
+                TenantItem(
+                    tenant_id=str(tenant_id),
+                    name=f"Tenant {tenant_id}",
+                    patient_count=0,
+                    user_count=int((row or {}).get("user_count", 0)),
+                )
             )
 
-    return {
-        "tenants": tenants,
-        "current_tenant_id": str(tenant_id),
-    }
+    return TenantListResponse(
+        tenants=tenants,
+        current_tenant_id=str(tenant_id),
+    )
 
 
-@router.post("/switch-tenant", summary="Switch active tenant (admin only)")
+@router.post(
+    "/switch-tenant",
+    summary="Switch active tenant (admin only)",
+    response_model=SwitchTenantResponse,
+)
 def switch_tenant(
     body: SwitchTenantRequest,
     current_user: dict = Depends(require_role("admin")),
-) -> dict[str, Any]:
+) -> SwitchTenantResponse:
     """
     Issue a new access token scoped to a different tenant.
     Only admins can switch tenants. The user record stays on their
@@ -1044,11 +1206,11 @@ def switch_tenant(
         details=f"Switched from tenant {current_user.get('tenant_id')} to {target_tid}",
     )
 
-    return {
-        "access_token": new_token,
-        "tenant_id": target_tid,
-        "message": f"Switched to tenant {target_tid}",
-    }
+    return SwitchTenantResponse(
+        access_token=new_token,
+        tenant_id=target_tid,
+        message=f"Switched to tenant {target_tid}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1060,12 +1222,15 @@ class BreakGlassRequest(BaseModel):
     reason: str = Field(..., min_length=10, description="Clinical justification for emergency access")
 
 
-@router.post("/break-glass")
+@router.post(
+    "/break-glass",
+    response_model=BreakGlassResponse,
+)
 def api_break_glass(
     body: BreakGlassRequest,
     request: Request,
     current_user: dict = Depends(require_role("admin", "physician", "provider", "medical_director")),
-):
+) -> BreakGlassResponse:
     """Activate break-glass emergency access (physicians/admins only).
 
     Creates a time-limited (30 min) emergency session with full audit trail.
@@ -1086,6 +1251,6 @@ def api_break_glass(
             role=current_user.get("role", ""),
             ip_address=ip,
         )
-        return {"status": "ok", "break_glass_session": session}
+        return BreakGlassResponse(status="ok", break_glass_session=session)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

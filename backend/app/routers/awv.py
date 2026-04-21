@@ -28,6 +28,7 @@ from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from pydantic import BaseModel, ConfigDict
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services import awv_service as svc
@@ -35,6 +36,62 @@ from app.services import awv_service as svc
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/awv", tags=["awv"])
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class _AWVBase(BaseModel):
+    """Base with extra='allow' for complex service-layer dicts."""
+    model_config = ConfigDict(extra="allow")
+
+
+class AWVScheduleResponse(_AWVBase):
+    id: int
+    patient_id: int
+    tenant_id: str | None = None
+    schedule_year: int
+    status: str
+
+
+class AWVListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    schedules: list[dict[str, Any]]
+
+
+class AWVEligibleResponse(BaseModel):
+    total_eligible: int
+    total_already_completed: int
+    estimated_awv_revenue: float
+    patients: list[dict[str, Any]]
+
+
+class AWVDashboardResponse(_AWVBase):
+    total_schedules: int
+    completion_rate_pct: float
+
+
+class AWVBulkOutreachResponse(BaseModel):
+    created: int
+    awv_ids: list[int]
+    campaign_date: str
+
+
+class AWVChecklistResponse(_AWVBase):
+    awv_id: int
+    completion_pct: float
+
+
+class AWVChecklistItemResponse(_AWVBase):
+    id: int
+    awv_id: int
+    phase: str
+    item_key: str
+    completed: bool
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +117,8 @@ def _get_or_404(awv_id: int) -> dict[str, Any]:
 @router.get(
     "/eligible",
     summary="List patients eligible for an Annual Wellness Visit",
+    response_model=AWVEligibleResponse,
+    response_model_exclude_none=True,
 )
 def get_eligible_patients(
     year: int = Query(default=None, description="Benefit year (defaults to current year)"),
@@ -96,6 +155,8 @@ def get_eligible_patients(
 @router.get(
     "/dashboard",
     summary="AWV programme completion rates and revenue impact",
+    response_model=AWVDashboardResponse,
+    response_model_exclude_none=True,
 )
 def get_dashboard(
     year: int = Query(default=None, description="Measurement year (defaults to current year)"),
@@ -131,6 +192,7 @@ def get_dashboard(
     "/bulk-outreach",
     summary="Generate a bulk outreach campaign for eligible/pending AWV patients",
     status_code=201,
+    response_model=AWVBulkOutreachResponse,
 )
 def bulk_outreach(
     year: int = Query(default=None, description="Benefit year (defaults to current year)"),
@@ -178,6 +240,7 @@ def bulk_outreach(
 @router.get(
     "",
     summary="List AWV schedules with optional filters",
+    response_model=AWVListResponse,
 )
 def list_schedules(
     year: int | None = Query(default=None, description="Filter by schedule year"),
@@ -293,6 +356,8 @@ def create_schedule(
 @router.get(
     "/{awv_id}",
     summary="Get AWV schedule detail",
+    response_model=AWVScheduleResponse,
+    response_model_exclude_none=True,
 )
 def get_schedule(
     awv_id: int = Path(..., description="AWV schedule ID"),
@@ -310,6 +375,8 @@ def get_schedule(
 @router.put(
     "/{awv_id}",
     summary="Partial update of an AWV schedule",
+    response_model=AWVScheduleResponse,
+    response_model_exclude_none=True,
 )
 def update_schedule(
     awv_id: int = Path(..., description="AWV schedule ID"),
@@ -517,6 +584,8 @@ def log_outreach(
 @router.get(
     "/{awv_id}/checklist",
     summary="Get the full visit checklist grouped by phase",
+    response_model=AWVChecklistResponse,
+    response_model_exclude_none=True,
 )
 def get_checklist(
     awv_id: int = Path(..., description="AWV schedule ID"),
@@ -550,6 +619,8 @@ def get_checklist(
 @router.put(
     "/{awv_id}/checklist/{item_id}",
     summary="Mark a checklist item complete or incomplete",
+    response_model=AWVChecklistItemResponse,
+    response_model_exclude_none=True,
 )
 def mark_checklist_item(
     awv_id: int = Path(..., description="AWV schedule ID"),

@@ -95,6 +95,29 @@ class NoteAnalysisRequest(BaseModel):
     save_results: bool = False
 
 
+class BatchJobQueueResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str | None
+    progress: int
+    total: int
+    started_at: Any | None = None
+    finished_at: Any | None = None
+    created_at: Any | None = None
+    error_message: str | None = None
+    result_count: int | None = None
+
+
+class JobResultsResponse(BaseModel):
+    job_id: str
+    results: list[dict[str, Any]]
+
+
 # ---------------------------------------------------------------------------
 # Core pipeline
 # ---------------------------------------------------------------------------
@@ -850,6 +873,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
 @router.post(
     "/batch/{pid}",
     summary="Queue batch analysis for all encounters of a patient",
+    response_model=BatchJobQueueResponse,
 )
 def batch_analysis(
     pid: int,
@@ -858,7 +882,7 @@ def batch_analysis(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("encounters", "write")),
-) -> dict[str, Any]:
+) -> BatchJobQueueResponse:
     """
     Queue a background job to analyze all clinical notes for *pid*.
     Poll ``GET /api/analysis/jobs/{job_id}`` for status.
@@ -887,11 +911,11 @@ def batch_analysis(
         details=f"job_id={job_id}",
         tenant_id=tenant_id,
     )
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"Batch analysis queued for patient {pid}",
-    }
+    return BatchJobQueueResponse(
+        job_id=job_id,
+        status="queued",
+        message=f"Batch analysis queued for patient {pid}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -899,39 +923,40 @@ def batch_analysis(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/jobs/{job_id}", summary="Check analysis job status")
+@router.get("/jobs/{job_id}", summary="Check analysis job status", response_model=JobStatusResponse, response_model_exclude_none=True)
 def get_job_status_endpoint(
     job_id: str,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("encounters", "read")),
-) -> dict[str, Any]:
+) -> JobStatusResponse:
     """Poll the status of a background analysis job."""
     job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    response = {
-        "job_id": job_id,
-        "status": job.get("status"),
-        "progress": job.get("progress", 0),
-        "total": job.get("total", 0),
-        "started_at": job.get("started_at"),
-        "finished_at": job.get("finished_at"),
-        "created_at": job.get("created_at"),
-        "error_message": job.get("error_message"),
-    }
+    result_count: int | None = None
     if job.get("status") == "SUCCESS":
         result_json = job.get("result_json")
         if isinstance(result_json, dict):
-            response["result_count"] = len(result_json.get("results", []))
-    return response
+            result_count = len(result_json.get("results", []))
+    return JobStatusResponse(
+        job_id=job_id,
+        status=job.get("status"),
+        progress=job.get("progress", 0),
+        total=job.get("total", 0),
+        started_at=job.get("started_at"),
+        finished_at=job.get("finished_at"),
+        created_at=job.get("created_at"),
+        error_message=job.get("error_message"),
+        result_count=result_count,
+    )
 
 
-@router.get("/jobs/{job_id}/results", summary="Retrieve completed job results")
+@router.get("/jobs/{job_id}/results", summary="Retrieve completed job results", response_model=JobResultsResponse)
 def get_job_results_endpoint(
     job_id: str,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("encounters", "read")),
-) -> dict[str, Any]:
+) -> JobResultsResponse:
     """Return the full results of a completed analysis job."""
     job = _get_job(job_id)
     if not job:
@@ -943,7 +968,4 @@ def get_job_results_endpoint(
         )
     result_json = job.get("result_json")
     results = result_json.get("results", []) if isinstance(result_json, dict) else []
-    return {
-        "job_id": job_id,
-        "results": results,
-    }
+    return JobResultsResponse(job_id=job_id, results=results)
