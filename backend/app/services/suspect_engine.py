@@ -33,6 +33,10 @@ from app.db import raf_cursor
 from app.services import openemr_connector as emr
 from app.services.hcc_hierarchy import apply_hierarchy
 from app.services.nlp.context_detector import detect_context
+from app.services.raf.dos_rules import (
+    get_payment_year_window,
+    is_eligible_encounter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -547,10 +551,23 @@ def scan_historical_hccs(
     recaptured in the current year.
 
     CMS requires chronic conditions to be re-documented every year; a missing
-    recapture is a direct RAF revenue gap.
+    recapture is a direct RAF revenue gap.  The "prior year" is derived from
+    the CMS DOS window registered in :mod:`app.services.raf.dos_rules` so
+    suspect detection and scoring stay in lock-step — never hard-code the
+    year-1 offset here.
     """
     current_year = current_year or date.today().year
-    prior_year = current_year - 1
+    try:
+        prior_year = get_payment_year_window(current_year).dos_start.year
+    except KeyError:
+        # Unsupported PY — fall back to the simple offset.  Logged so ops can
+        # add the window to dos_rules.PAYMENT_YEARS when a new PY goes live.
+        prior_year = current_year - 1
+        logger.warning(
+            "scan_historical_hccs: PY%s not in dos_rules.PAYMENT_YEARS; "
+            "using fallback prior_year=%s",
+            current_year, prior_year,
+        )
     current_hccs = _coded_hcc_set(patient_id, year=current_year)
     suspects: list[dict[str, Any]] = []
 

@@ -213,6 +213,7 @@ class RAFBreakdownResponse(BaseModel):
     hcc_details: list[dict[str, Any]]
     engine_input: dict[str, Any] | None = None
     engine_output: dict[str, Any] | None = None
+    dos_window: dict[str, Any] | None = None
 
 
 class RAFHistoryResponse(BaseModel):
@@ -695,6 +696,36 @@ async def get_breakdown(
 
     v24_w, v28_w = _BLEND_WEIGHTS.get(calc_year, (0.0, 1.0))
 
+    # Surface the CMS DOS window + V24/V28 blend + any excluded encounters so
+    # the frontend can explain payment-year filtering to users.  Falls back to
+    # a freshly computed window when the stored breakdown predates this field.
+    from app.services.raf.dos_rules import (
+        get_blend_weights as _dos_blend,
+    )
+    from app.services.raf.dos_rules import (
+        get_payment_year_window as _dos_window_for,
+    )
+
+    dos_window = breakdown.get("dos_window")
+    if not dos_window:
+        try:
+            _win = _dos_window_for(calc_year)
+            dos_window = {
+                "payment_year":   calc_year,
+                "dos_start":      _win.dos_start.isoformat(),
+                "dos_end":        _win.dos_end.isoformat(),
+                "model_blend":    dict(_dos_blend(calc_year)),
+                "excluded_codes": [],
+            }
+        except KeyError:
+            dos_window = {
+                "payment_year":   calc_year,
+                "dos_start":      None,
+                "dos_end":        None,
+                "model_blend":    None,
+                "excluded_codes": [],
+            }
+
     log_phi_access(
         action="view_raf_breakdown",
         resource="raf_scores",
@@ -719,6 +750,7 @@ async def get_breakdown(
         hcc_details=annotated_hccs,
         engine_input=breakdown.get("engine_input") or None,
         engine_output=breakdown.get("engine_output") or None,
+        dos_window=dos_window,
     )
 
 
