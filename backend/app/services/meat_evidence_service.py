@@ -761,6 +761,12 @@ def update_hcc_meat_status(
         1–3 present   → "partial"
         none          → "missing"
 
+    **Clinical-rule billing gate** (added 2026-04): before promoting an HCC
+    to "complete" (billed), the per-HCC clinical sanity rules in
+    app.services.raf.clinical_rules are evaluated. If a rule FAILs, the
+    target status is demoted from "complete" to "partial" so the HCC is
+    NOT billed. WARNings are logged but allow promotion.
+
     This function is idempotent — safe to call multiple times.
 
     Parameters
@@ -810,6 +816,46 @@ def update_hcc_meat_status(
     _status_rank = {"missing": 0, "partial": 1, "complete": 2}
     cap_rank = _status_rank[max_status]
 
+    # -------------------------------------------------------------------
+    # Clinical-rule billing gate
+    # -------------------------------------------------------------------
+    # Collect HCCs that *would* be promoted to "complete" and run the gate
+    # across all of them in one pass. Fail-open: if the gate raises or is
+    # unavailable we log and proceed with the legacy ceiling-only behavior.
+    candidate_hccs: list[int] = []
+    for hcc_entry in report["per_hcc"]:
+        if hcc_entry["status"] == "complete":
+            try:
+                candidate_hccs.append(int(str(hcc_entry["hcc_code"]).lstrip("HCChcc ")))
+            except (ValueError, TypeError):
+                continue
+
+    blocked: set[int] = set()
+    try:
+        from datetime import date as _date_cls
+
+        from app.services.raf.clinical_rules.billing_gate import gate_billed_promotion
+
+        gate_out = gate_billed_promotion(
+            patient_id=patient_id,
+            candidate_hccs=candidate_hccs,
+            dos=_date_cls(year, 12, 31),
+        )
+        blocked = set(gate_out.get("blocked_hccs") or [])
+        if blocked:
+            logger.warning(
+                "update_hcc_meat_status: clinical-rule gate BLOCKED HCCs %s "
+                "for pid=%d year=%d — will remain 'partial' rather than 'complete'",
+                sorted(blocked), patient_id, year,
+            )
+    except Exception as exc:
+        # Fail-open: never let the gate break the legacy code path.
+        logger.error(
+            "update_hcc_meat_status: clinical-rule gate unavailable "
+            "(pid=%d year=%d): %s. Proceeding without gating.",
+            patient_id, year, exc,
+        )
+
     updated = 0
     with raf_cursor() as cur:
         for hcc_entry in report["per_hcc"]:
@@ -825,6 +871,14 @@ def update_hcc_meat_status(
                     "(require_llm_meat_for_billing gate)",
                     phcc_id, raw_status, effective_status,
                 )
+
+            # Apply gate: if this HCC was blocked, refuse to mark "complete".
+            try:
+                hcc_num = int(str(hcc_entry["hcc_code"]).lstrip("HCChcc "))
+            except (ValueError, TypeError):
+                hcc_num = -1
+            if effective_status == "complete" and hcc_num in blocked:
+                effective_status = "partial"
 
             cur.execute(
                 """
@@ -842,6 +896,7 @@ def update_hcc_meat_status(
                 )
 
     logger.info(
-        "update_hcc_meat_status: patient_id=%d year=%d max_status=%s — %d/%d rows updated",
-        patient_id, year, max_status, updated, report["total_hccs"],
+        "update_hcc_meat_status: patient_id=%d year=%d max_status=%s — "
+        "%d/%d rows updated (blocked_by_gate=%d)",
+        patient_id, year, max_status, updated, report["total_hccs"], len(blocked),
     )
