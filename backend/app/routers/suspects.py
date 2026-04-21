@@ -83,12 +83,59 @@ class BulkUpdateResult(BaseModel):
     errors: list[dict[str, Any]]
 
 
+class SuspectListResponse(BaseModel):
+    status_filter: str
+    count: int
+    limit: int
+    offset: int
+    suspects: list[dict[str, Any]]
+
+
+class SuspectPatientResponse(BaseModel):
+    pid: int
+    patient_name: str
+    status_filter: str
+    year_filter: int | None
+    count: int
+    suspects: list[dict[str, Any]]
+
+
+class ScanPatientResponse(BaseModel):
+    pid: int
+    patient_name: str
+    new_suspects_found: int
+    suspects: list[dict[str, Any]]
+
+
+class ScanAllResponse(BaseModel):
+    patients_scanned: int
+    patients_with_errors: int
+    total_new_suspects: int
+    per_patient: list[dict[str, Any]]
+    errors: list[dict[str, Any]]
+
+
+class AcceptActionResponse(BaseModel):
+    suspect_id: int
+    action: str
+    reviewed_by: str
+    record: dict[str, Any]
+
+
+class DismissActionResponse(BaseModel):
+    suspect_id: int
+    action: str
+    reviewed_by: str
+    reason: str
+    record: dict[str, Any]
+
+
 # ---------------------------------------------------------------------------
 # GET /api/suspects  –  all open suspects across all patients
 # ---------------------------------------------------------------------------
 
 
-@router.get("", summary="List all open suspect conditions across all patients")
+@router.get("", summary="List all open suspect conditions across all patients", response_model=SuspectListResponse)
 def list_suspects(
     status: str = Query(
         default="open",
@@ -102,7 +149,7 @@ def list_suspects(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "read")),
-) -> dict[str, Any]:
+) -> SuspectListResponse:
     """
     Return suspect conditions across every patient.
 
@@ -130,13 +177,13 @@ def list_suspects(
     # Sort by confidence_score descending (DB already ordered, but defensive)
     suspects.sort(key=lambda s: float(s.get("confidence_score", 0)), reverse=True)
 
-    return {
-        "status_filter": status,
-        "count": len(suspects),
-        "limit": limit,
-        "offset": offset,
-        "suspects": suspects,
-    }
+    return SuspectListResponse(
+        status_filter=status,
+        count=len(suspects),
+        limit=limit,
+        offset=offset,
+        suspects=suspects,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,14 +191,14 @@ def list_suspects(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/scan-all", summary="Run suspect scan for all patients")
+@router.post("/scan-all", summary="Run suspect scan for all patients", response_model=ScanAllResponse)
 @limiter.limit("2/minute")
 def scan_all_patients(
     request: Request,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
-) -> dict[str, Any]:
+) -> ScanAllResponse:
     """
     Iterate over every patient returned by ``get_all_patients`` and run a
     full suspect scan for each one.  Returns a summary of totals and any
@@ -198,13 +245,13 @@ def scan_all_patients(
             logger.warning("scan_all: pid=%s failed: %s", pid, exc)
             errors.append({"pid": pid, "error": str(exc)})
 
-    return {
-        "patients_scanned": len(patients),
-        "patients_with_errors": len(errors),
-        "total_new_suspects": total_new,
-        "per_patient": per_patient,
-        "errors": errors,
-    }
+    return ScanAllResponse(
+        patients_scanned=len(patients),
+        patients_with_errors=len(errors),
+        total_new_suspects=total_new,
+        per_patient=per_patient,
+        errors=errors,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +308,6 @@ def bulk_update(
         failed=failed,
         errors=errors,
     )
-
 
 
 # ---------------------------------------------------------------------------

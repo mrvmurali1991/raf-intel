@@ -22,6 +22,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
@@ -35,6 +36,147 @@ router = APIRouter(prefix="/api/patients", tags=["patients"])
 
 # Maximum upload size: 10 MB
 _MAX_CSV_BYTES = 10 * 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class PatientListResponse(BaseModel):
+    patients: list[dict[str, Any]]
+    total: int
+    limit: int
+    offset: int
+
+
+class ImportSummaryResponse(BaseModel):
+    total_rows: int
+    imported: int
+    duplicates_skipped: int
+    errors: int
+    error_details: list[Any] = []
+
+
+class EncounterListResponse(BaseModel):
+    pid: int
+    count: int
+    encounters: list[dict[str, Any]]
+
+
+class MedicationListResponse(BaseModel):
+    pid: int
+    count: int
+    medications: list[dict[str, Any]]
+
+
+class MedicationGapsResponse(BaseModel):
+    gaps: list[dict[str, Any]]
+    year: int
+    gap_count: int
+
+
+class DiagnosisListResponse(BaseModel):
+    pid: int
+    count: int
+    diagnoses: list[dict[str, Any]]
+
+
+class ProcedureListResponse(BaseModel):
+    pid: int
+    count: int
+    procedures: list[dict[str, Any]]
+    source: str | None = None
+
+
+class ClinicalNotesResponse(BaseModel):
+    pid: int
+    encounter_id: int
+    count: int
+    notes: list[dict[str, Any]]
+
+
+class ProblemListResponse(BaseModel):
+    pid: int
+    count: int
+    problems: list[dict[str, Any]]
+
+
+class RecaptureGapsResponse(BaseModel):
+    pid: int
+    year: int
+    gap_count: int
+    recapture_gaps: list[dict[str, Any]]
+    prior_year: int | None = None
+    source: str | None = None
+    note: str | None = None
+
+
+class VitalsSuspectsResponse(BaseModel):
+    pid: int
+    count: int
+    suspects: list[dict[str, Any]]
+    note: str | None = None
+
+
+class LabSuspectsResponse(BaseModel):
+    pid: int
+    count: int
+    suspects: list[dict[str, Any]]
+    labs: dict[str, Any] | None = None
+    note: str | None = None
+
+
+class AllergyListResponse(BaseModel):
+    pid: int
+    count: int
+    allergies: list[dict[str, Any]]
+
+
+class ReferralListResponse(BaseModel):
+    pid: int
+    count: int
+    referrals: list[dict[str, Any]]
+
+
+class ImmunizationListResponse(BaseModel):
+    pid: int
+    count: int
+    immunizations: list[dict[str, Any]]
+    source: str | None = None
+    note: str | None = None
+
+
+class FamilyHistoryResponse(BaseModel):
+    pid: int
+    family_history: dict[str, Any]
+    source: str | None = None
+    note: str | None = None
+
+
+class SdohResponse(BaseModel):
+    pid: int
+    sdoh_form: dict[str, Any]
+    billed_z_codes: list[Any]
+    billable_highlights: dict[str, Any]
+
+
+class HedisResponse(BaseModel):
+    pid: int
+    year: int
+    summary: dict[str, Any]
+    measures: dict[str, Any]
+    source: str | None = None
+
+
+class EnrollmentResponse(BaseModel):
+    pid: int
+    enrollment: dict[str, Any]
+
+
+class PatientsWithEncountersResponse(BaseModel):
+    patients: list[dict[str, Any]]
+    total: int
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +257,7 @@ def _require_emr_patient(pid: int, tenant_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@router.get("", summary="List all patients")
+@router.get("", summary="List all patients", response_model=PatientListResponse)
 @limiter.limit("60/minute")
 def list_patients(
     request: Request,
@@ -128,7 +270,7 @@ def list_patients(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> PatientListResponse:
     """
     Return a paginated list of patients from the raf_intelligence.patients table.
     Falls back to FHIR patient matches for fhir_r4/rest_api connections.
@@ -151,7 +293,7 @@ def list_patients(
         user=str(current_user.get("id") or current_user.get("sub") or "system"),
         details=f"limit={limit} offset={offset} search={search!r} returned={len(result['patients'])}",
     )
-    return result
+    return PatientListResponse(**result)
 
 
 # ---------------------------------------------------------------------------
@@ -159,16 +301,17 @@ def list_patients(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/with-encounters", summary="Patients that have encounter data")
+@router.get("/with-encounters", summary="Patients that have encounter data", response_model=PatientsWithEncountersResponse)
 def patients_with_encounters(
     limit: int = Query(200, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
     tenant_id: str = Depends(get_tenant_id),
-) -> dict[str, Any]:
+) -> PatientsWithEncountersResponse:
     """Return only patients that have at least one encounter."""
     try:
-        return svc.svc_patients_with_encounters(limit=limit, tenant_id=tenant_id)
+        result = svc.svc_patients_with_encounters(limit=limit, tenant_id=tenant_id)
+        return PatientsWithEncountersResponse(**result)
     except Exception as exc:
         logger.error("patients_with_encounters error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -234,7 +377,7 @@ def get_import_template_excel(
     )
 
 
-@router.post("/import", summary="Bulk import patients from a CSV or Excel file")
+@router.post("/import", summary="Bulk import patients from a CSV or Excel file", response_model=ImportSummaryResponse)
 @limiter.limit("5/minute")
 async def import_patients_csv(
     request: Request,
@@ -248,7 +391,7 @@ async def import_patients_csv(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "write")),
-) -> dict[str, Any]:
+) -> ImportSummaryResponse:
     """
     Parse *file* as a patient CSV or Excel spreadsheet, validate each row,
     deduplicate against existing OpenEMR patients, and insert new patients.
@@ -346,7 +489,7 @@ async def import_patients_csv(
         ),
     )
 
-    return summary
+    return ImportSummaryResponse(**summary)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +524,7 @@ def get_fhir_import_template(
     )
 
 
-@router.post("/import/fhir", summary="Bulk import patients from a FHIR JSON file")
+@router.post("/import/fhir", summary="Bulk import patients from a FHIR JSON file", response_model=ImportSummaryResponse)
 @limiter.limit("5/minute")
 async def import_patients_fhir(
     request: Request,
@@ -395,7 +538,7 @@ async def import_patients_fhir(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "write")),
-) -> dict[str, Any]:
+) -> ImportSummaryResponse:
     """
     Parse *file* as a FHIR R4 Patient Bundle, validate each entry, deduplicate
     against existing OpenEMR patients, and insert new patients.
@@ -467,7 +610,7 @@ async def import_patients_fhir(
         ),
     )
 
-    return summary
+    return ImportSummaryResponse(**summary)
 
 
 # ---------------------------------------------------------------------------
@@ -502,14 +645,16 @@ def get_patient(
 
 
 @router.get(
-    "/{pid}/clinical-notes/{encounter_id}", summary="Get clinical notes for encounter"
+    "/{pid}/clinical-notes/{encounter_id}",
+    summary="Get clinical notes for encounter",
+    response_model=ClinicalNotesResponse,
 )
 def get_clinical_notes_for_encounter(
     pid: int,
     encounter_id: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> ClinicalNotesResponse:
     """Return clinical notes text for a specific encounter."""
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
@@ -528,12 +673,12 @@ def get_clinical_notes_for_encounter(
         encounter_id=encounter_id,
         details=f"notes_returned={len(notes)}",
     )
-    return {
-        "pid": pid,
-        "encounter_id": encounter_id,
-        "count": len(notes),
-        "notes": notes,
-    }
+    return ClinicalNotesResponse(
+        pid=pid,
+        encounter_id=encounter_id,
+        count=len(notes),
+        notes=notes,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -541,7 +686,7 @@ def get_clinical_notes_for_encounter(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/encounters", summary="Get patient encounters")
+@router.get("/{pid}/encounters", summary="Get patient encounters", response_model=EncounterListResponse)
 def get_encounters(
     pid: int,
     year: int | None = Query(
@@ -549,7 +694,7 @@ def get_encounters(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> EncounterListResponse:
     """
     Return all encounters for *pid* from form_encounter.
 
@@ -568,7 +713,7 @@ def get_encounters(
         patient_id=pid,
         details=f"encounters_returned={result['count']}",
     )
-    return result
+    return EncounterListResponse(**result)
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +721,7 @@ def get_encounters(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/medications", summary="Get patient medications")
+@router.get("/{pid}/medications", summary="Get patient medications", response_model=MedicationListResponse)
 def get_medications(
     pid: int,
     year: int | None = Query(
@@ -589,7 +734,7 @@ def get_medications(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> MedicationListResponse:
     """
     Return all prescriptions for *pid* from the prescriptions table.
 
@@ -602,7 +747,7 @@ def get_medications(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    return svc.svc_get_medications(pid=pid, year=year, tenant_id=_tid)
+    return MedicationListResponse(**svc.svc_get_medications(pid=pid, year=year, tenant_id=_tid))
 
 
 # ---------------------------------------------------------------------------
@@ -611,7 +756,9 @@ def get_medications(
 
 
 @router.get(
-    "/{pid}/medication-gaps", summary="Medication-linked diagnoses not billed this year"
+    "/{pid}/medication-gaps",
+    summary="Medication-linked diagnoses not billed this year",
+    response_model=MedicationGapsResponse,
 )
 def get_medication_gaps(
     pid: int,
@@ -620,7 +767,7 @@ def get_medication_gaps(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> MedicationGapsResponse:
     """
     Return active medications whose linked ICD-10 diagnosis has not been
     billed in *year* (defaults to the current calendar year).
@@ -640,7 +787,7 @@ def get_medication_gaps(
     _require_patient_access(pid, _tid)
 
     try:
-        return svc.svc_get_medication_gaps(pid=pid, year=year, tenant_id=_tid)
+        return MedicationGapsResponse(**svc.svc_get_medication_gaps(pid=pid, year=year, tenant_id=_tid))
     except Exception as exc:
         logger.error("get_medication_gaps error pid=%s year=%s: %s", pid, year, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -651,12 +798,12 @@ def get_medication_gaps(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/diagnoses", summary="Get patient billing ICD-10 codes")
+@router.get("/{pid}/diagnoses", summary="Get patient billing ICD-10 codes", response_model=DiagnosisListResponse)
 def get_diagnoses(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> DiagnosisListResponse:
     """
     Return all ICD-10 billing codes for *pid* from the billing table,
     enriched with code descriptions via the ICD-10-CM index.
@@ -672,7 +819,7 @@ def get_diagnoses(
         patient_id=pid,
         details=f"codes_returned={result['count']}",
     )
-    return result
+    return DiagnosisListResponse(**result)
 
 
 # ---------------------------------------------------------------------------
@@ -681,13 +828,15 @@ def get_diagnoses(
 
 
 @router.get(
-    "/{pid}/procedures", summary="Get patient CPT procedure codes with condition hints"
+    "/{pid}/procedures",
+    summary="Get patient CPT procedure codes with condition hints",
+    response_model=ProcedureListResponse,
 )
 def get_procedures(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> ProcedureListResponse:
     """
     Return all active CPT4 procedure codes for *pid* from the billing table.
 
@@ -727,13 +876,13 @@ def get_procedures(
                             }
                             for r in rows
                         ]
-                        return {"pid": pid, "count": len(procs), "procedures": procs, "source": "fhir"}
+                        return ProcedureListResponse(pid=pid, count=len(procs), procedures=procs, source="fhir")
         except Exception as exc:
             logger.debug("procedures FHIR fallback failed pid=%s: %s", pid, exc)
-        return {"pid": pid, "count": 0, "procedures": []}
+        return ProcedureListResponse(pid=pid, count=0, procedures=[])
 
     try:
-        return svc.svc_get_procedures(pid=pid, tenant_id=_tid)
+        return ProcedureListResponse(**svc.svc_get_procedures(pid=pid, tenant_id=_tid))
     except Exception as exc:
         logger.error("get_procedures error pid=%s: %s", pid, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -744,7 +893,7 @@ def get_procedures(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/problem-list", summary="Get patient active problem list")
+@router.get("/{pid}/problem-list", summary="Get patient active problem list", response_model=ProblemListResponse)
 def get_problem_list(
     pid: int,
     year: int | None = Query(
@@ -752,7 +901,7 @@ def get_problem_list(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> ProblemListResponse:
     """
     Return all active medical problems for *pid* from OpenEMR's lists table.
 
@@ -767,7 +916,7 @@ def get_problem_list(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    return svc.svc_get_problem_list(pid=pid, year=year, tenant_id=_tid)
+    return ProblemListResponse(**svc.svc_get_problem_list(pid=pid, year=year, tenant_id=_tid))
 
 
 # ---------------------------------------------------------------------------
@@ -775,7 +924,12 @@ def get_problem_list(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/recapture-gaps", summary="Active problems not billed this year")
+@router.get(
+    "/{pid}/recapture-gaps",
+    summary="Active problems not billed this year",
+    response_model=RecaptureGapsResponse,
+    response_model_exclude_none=True,
+)
 def get_recapture_gaps(
     pid: int,
     year: int | None = Query(
@@ -786,7 +940,7 @@ def get_recapture_gaps(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> RecaptureGapsResponse:
     """
     Return active medical problems from the problem list that have NOT been
     substantiated by an ICD-10 billing claim in *year*.
@@ -815,7 +969,7 @@ def get_recapture_gaps(
                 _gc.execute("SELECT deceased_date FROM patients WHERE id = %s LIMIT 1", (pid,))
                 p_row = _gc.fetchone()
                 if p_row and p_row.get("deceased_date"):
-                    return {"pid": pid, "year": _year, "gap_count": 0, "recapture_gaps": [], "note": "deceased"}
+                    return RecaptureGapsResponse(pid=pid, year=_year, gap_count=0, recapture_gaps=[], note="deceased")
 
                 # Step 1: get HCCs captured in the prior measurement year
                 # updated_at is used to compute days since last documentation per CMS 365-day rule
@@ -890,13 +1044,13 @@ def get_recapture_gaps(
                 # Sort most-overdue first so callers can surface the highest-risk gaps immediately
                 gaps.sort(key=lambda g: g["days_since_documented"] if g["days_since_documented"] is not None else -1, reverse=True)
 
-                return {"pid": pid, "year": _year, "prior_year": _prior_year, "gap_count": len(gaps), "recapture_gaps": gaps, "source": "fhir"}
+                return RecaptureGapsResponse(pid=pid, year=_year, prior_year=_prior_year, gap_count=len(gaps), recapture_gaps=gaps, source="fhir")
         except Exception as exc:
             logger.debug("recapture-gaps FHIR fallback failed pid=%s: %s", pid, exc)
-        return {"pid": pid, "recapture_gaps": [], "year": _year, "gap_count": 0}
+        return RecaptureGapsResponse(pid=pid, recapture_gaps=[], year=_year, gap_count=0)
 
     try:
-        return svc.svc_get_recapture_gaps(pid=pid, year=year, tenant_id=_tid)
+        return RecaptureGapsResponse(**svc.svc_get_recapture_gaps(pid=pid, year=year, tenant_id=_tid))
     except Exception as exc:
         logger.error("get_recapture_gaps error pid=%s year=%s: %s", pid, year, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -907,7 +1061,12 @@ def get_recapture_gaps(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/vitals-suspects", summary="Vitals-based suspect conditions")
+@router.get(
+    "/{pid}/vitals-suspects",
+    summary="Vitals-based suspect conditions",
+    response_model=VitalsSuspectsResponse,
+    response_model_exclude_none=True,
+)
 def get_vitals_suspects(
     pid: int,
     year: int | None = Query(
@@ -921,7 +1080,7 @@ def get_vitals_suspects(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> VitalsSuspectsResponse:
     """
     Evaluate the most recent vitals recorded in form_vitals for *pid* against
     a set of clinical threshold rules and return conditions that appear suspect
@@ -942,10 +1101,10 @@ def get_vitals_suspects(
     if not patient:
         if not svc.patient_is_fhir(pid, _tid):
             raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
-        return {"pid": pid, "suspects": [], "count": 0, "note": "Vitals data not yet synced for FHIR patients"}
+        return VitalsSuspectsResponse(pid=pid, suspects=[], count=0, note="Vitals data not yet synced for FHIR patients")
 
     try:
-        return svc.svc_get_vitals_suspects(pid=pid, year=year, tenant_id=_tid, patient=patient)
+        return VitalsSuspectsResponse(**svc.svc_get_vitals_suspects(pid=pid, year=year, tenant_id=_tid, patient=patient))
     except Exception as exc:
         logger.error("get_vitals_suspects error pid=%s: %s", pid, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -956,7 +1115,12 @@ def get_vitals_suspects(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/lab-suspects", summary="Rule-based lab/vitals suspect conditions")
+@router.get(
+    "/{pid}/lab-suspects",
+    summary="Rule-based lab/vitals suspect conditions",
+    response_model=LabSuspectsResponse,
+    response_model_exclude_none=True,
+)
 def get_lab_suspects(
     pid: int,
     year: int | None = Query(
@@ -965,7 +1129,7 @@ def get_lab_suspects(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> LabSuspectsResponse:
     """
     Return suspect HCC conditions derived purely from lab values and vitals
     embedded in clinical notes and structured form_vitals rows.
@@ -1004,16 +1168,13 @@ def get_lab_suspects(
                             }
                             for r in rows
                         ]
-                        return {
-                            "pid": pid, "suspects": [], "count": 0,
-                            "labs": {"results": lab_results, "source": "fhir"},
-                        }
+                        return LabSuspectsResponse(pid=pid, suspects=[], count=0, labs={"results": lab_results, "source": "fhir"})
         except Exception:
             pass
-        return {"pid": pid, "suspects": [], "count": 0, "note": "Lab data not yet synced for FHIR patients"}
+        return LabSuspectsResponse(pid=pid, suspects=[], count=0, note="Lab data not yet synced for FHIR patients")
 
     try:
-        return svc.svc_get_lab_suspects(pid=pid, year=year, tenant_id=_tid, patient=patient)
+        return LabSuspectsResponse(**svc.svc_get_lab_suspects(pid=pid, year=year, tenant_id=_tid, patient=patient))
     except Exception as exc:
         logger.error("get_lab_suspects error pid=%s: %s", pid, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1069,12 +1230,12 @@ def get_comprehensive_profile(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/family-history", summary="Get patient family history")
+@router.get("/{pid}/family-history", summary="Get patient family history", response_model=FamilyHistoryResponse, response_model_exclude_none=True)
 def get_family_history(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> FamilyHistoryResponse:
     """
     Return the most recent family-history record for *pid* from
     OpenEMR's history_data table.
@@ -1101,12 +1262,12 @@ def get_family_history(
                     for r in rows:
                         rel = r.get("relation", "unknown").lower().replace(" ", "_")
                         fh[f"history_{rel}"] = r.get("condition_name", "")
-                    return {"pid": pid, "family_history": fh, "source": "raf_db"}
+                    return FamilyHistoryResponse(pid=pid, family_history=fh, source="raf_db")
         except Exception:
             pass
-        return {"pid": pid, "family_history": {}, "note": "Family history not yet synced for FHIR patients"}
+        return FamilyHistoryResponse(pid=pid, family_history={}, note="Family history not yet synced for FHIR patients")
 
-    return svc.svc_get_family_history(pid=pid, tenant_id=_tid)
+    return FamilyHistoryResponse(**svc.svc_get_family_history(pid=pid, tenant_id=_tid))
 
 
 # ---------------------------------------------------------------------------
@@ -1114,12 +1275,12 @@ def get_family_history(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/sdoh", summary="Get Social Determinants of Health data")
+@router.get("/{pid}/sdoh", summary="Get Social Determinants of Health data", response_model=SdohResponse)
 def get_sdoh(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> SdohResponse:
     """
     Return Social Determinants of Health (SDOH) data for *pid*.
 
@@ -1132,9 +1293,9 @@ def get_sdoh(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "sdoh_form": {}, "billed_z_codes": [], "billable_highlights": {}}
+        return SdohResponse(pid=pid, sdoh_form={}, billed_z_codes=[], billable_highlights={})
 
-    return svc.svc_get_sdoh(pid=pid, tenant_id=_tid)
+    return SdohResponse(**svc.svc_get_sdoh(pid=pid, tenant_id=_tid))
 
 
 # ---------------------------------------------------------------------------
@@ -1142,12 +1303,12 @@ def get_sdoh(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/allergies", summary="Get patient active allergies")
+@router.get("/{pid}/allergies", summary="Get patient active allergies", response_model=AllergyListResponse)
 def get_allergies(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> AllergyListResponse:
     """
     Return all active allergy records for *pid* from OpenEMR's lists table.
 
@@ -1157,7 +1318,7 @@ def get_allergies(
     _tid = svc._tenant_of(current_user)
     _require_patient_access(pid, _tid)
 
-    return svc.svc_get_allergies(pid=pid, tenant_id=_tid)
+    return AllergyListResponse(**svc.svc_get_allergies(pid=pid, tenant_id=_tid))
 
 
 # ---------------------------------------------------------------------------
@@ -1165,12 +1326,12 @@ def get_allergies(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/referrals", summary="Get patient referral transactions")
+@router.get("/{pid}/referrals", summary="Get patient referral transactions", response_model=ReferralListResponse)
 def get_referrals(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> ReferralListResponse:
     """
     Return all referral transactions for *pid* from OpenEMR's transactions
     table (rows with title='Referral'), ordered newest first.
@@ -1182,9 +1343,9 @@ def get_referrals(
     _require_patient_access(pid, _tid)
 
     if not _require_emr_patient(pid, _tid):
-        return {"pid": pid, "count": 0, "referrals": []}
+        return ReferralListResponse(pid=pid, count=0, referrals=[])
 
-    return svc.svc_get_referrals(pid=pid, tenant_id=_tid)
+    return ReferralListResponse(**svc.svc_get_referrals(pid=pid, tenant_id=_tid))
 
 
 # ---------------------------------------------------------------------------
@@ -1192,12 +1353,12 @@ def get_referrals(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/immunizations", summary="Get patient immunization history")
+@router.get("/{pid}/immunizations", summary="Get patient immunization history", response_model=ImmunizationListResponse, response_model_exclude_none=True)
 def get_immunizations(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> ImmunizationListResponse:
     """
     Return the complete immunization history for *pid* from the OpenEMR
     immunizations table.
@@ -1229,13 +1390,13 @@ def get_immunizations(
                         }
                         for r in rows
                     ]
-                    return {"pid": pid, "count": len(imms), "immunizations": imms, "source": "raf_db"}
+                    return ImmunizationListResponse(pid=pid, count=len(imms), immunizations=imms, source="raf_db")
         except Exception:
             pass
-        return {"pid": pid, "count": 0, "immunizations": [], "note": "Immunization data not yet synced for FHIR patients"}
+        return ImmunizationListResponse(pid=pid, count=0, immunizations=[], note="Immunization data not yet synced for FHIR patients")
 
     try:
-        return svc.svc_get_immunizations(pid=pid, tenant_id=_tid)
+        return ImmunizationListResponse(**svc.svc_get_immunizations(pid=pid, tenant_id=_tid))
     except Exception as exc:
         logger.error("get_immunizations error pid=%s: %s", pid, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1246,7 +1407,12 @@ def get_immunizations(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{pid}/hedis", summary="HEDIS/Stars quality measure compliance")
+@router.get(
+    "/{pid}/hedis",
+    summary="HEDIS/Stars quality measure compliance",
+    response_model=HedisResponse,
+    response_model_exclude_none=True,
+)
 def get_hedis_compliance(
     pid: int,
     year: int = Query(
@@ -1257,7 +1423,7 @@ def get_hedis_compliance(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> HedisResponse:
     """
     Return HEDIS/Stars quality measure compliance for *pid*.
 
@@ -1318,18 +1484,18 @@ def get_hedis_compliance(
 
                 due_count = sum(1 for m in measures.values() if m.get("due"))
                 compliant_count = sum(1 for m in measures.values() if m.get("due") and m.get("compliant"))
-                return {
-                    "pid": pid, "year": _hyear,
-                    "summary": {"measures_due": due_count, "measures_compliant": compliant_count,
-                                "compliance_rate": round(compliant_count / due_count, 2) if due_count else None},
-                    "measures": measures, "source": "fhir",
-                }
+                return HedisResponse(
+                    pid=pid, year=_hyear,
+                    summary={"measures_due": due_count, "measures_compliant": compliant_count,
+                             "compliance_rate": round(compliant_count / due_count, 2) if due_count else None},
+                    measures=measures, source="fhir",
+                )
         except Exception as exc:
             logger.debug("HEDIS FHIR fallback failed pid=%s: %s", pid, exc)
-        return {"pid": pid, "year": _hyear, "summary": {"measures_due": 0, "measures_compliant": 0, "compliance_rate": None}, "measures": {}}
+        return HedisResponse(pid=pid, year=_hyear, summary={"measures_due": 0, "measures_compliant": 0, "compliance_rate": None}, measures={})
 
     try:
-        return svc.svc_get_hedis_compliance(pid=pid, year=year, tenant_id=_tid)
+        return HedisResponse(**svc.svc_get_hedis_compliance(pid=pid, year=year, tenant_id=_tid))
     except Exception as exc:
         logger.error("get_hedis_compliance error pid=%s year=%s: %s", pid, year, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1341,13 +1507,15 @@ def get_hedis_compliance(
 
 
 @router.get(
-    "/{pid}/enrollment", summary="Get patient enrollment and insurance/dual status"
+    "/{pid}/enrollment",
+    summary="Get patient enrollment and insurance/dual status",
+    response_model=EnrollmentResponse,
 )
 def get_patient_enrollment(
     pid: int,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "read")),
-) -> dict[str, Any]:
+) -> EnrollmentResponse:
     """
     Return enrollment and insurance metadata for *pid* derived from OpenEMR
     insurance_data, insurance_companies, and form_encounter tables.
@@ -1377,12 +1545,12 @@ def get_patient_enrollment(
                 orec = "aged" if age >= 65 else "disabled"
         except Exception as _exc:
             logger.debug("enrollment: DOB lookup failed for pid=%s: %s", pid, _exc)
-        return {"pid": pid, "enrollment": {
+        return EnrollmentResponse(pid=pid, enrollment={
             "dual_status": "non_dual",
             "orec": orec,
             "institutional": False,
             "source": "estimated",
             "enrollment_unverified": True,
-        }}
+        })
 
-    return svc.svc_get_patient_enrollment(pid=pid, tenant_id=_tid)
+    return EnrollmentResponse(**svc.svc_get_patient_enrollment(pid=pid, tenant_id=_tid))
