@@ -574,6 +574,66 @@ def _invalidate_panel_cache(pid: int, tenant_id: str) -> None:
         pass
 
 
+# Action response models (must be defined before the route decorators that reference them)
+
+class ActionOkResponse(BaseModel):
+    ok: bool
+
+
+class AcceptSuspectResponse(BaseModel):
+    ok: bool
+    suspect: dict[str, Any]
+    pushed_to_emr: bool
+
+
+class DismissSuspectResponse(BaseModel):
+    ok: bool
+    suspect: dict[str, Any]
+
+
+class MarkMEATReviewedResponse(BaseModel):
+    ok: bool
+    meat_status: str
+    reviewed_by: str
+
+
+class AddAssessmentNoteResponse(BaseModel):
+    ok: bool
+    encounter_id: int | None
+    author: str
+
+
+class UpgradeCodeResponse(BaseModel):
+    ok: bool
+    rows_updated: int
+
+
+class RecalculateResponse(BaseModel):
+    ok: bool
+    raf_score: float
+    hcc_count: int
+    model_segment: str | None
+    measurement_year: int
+
+
+class StartTreatmentResponse(BaseModel):
+    status: str
+    prescription_id: int
+    drug: str
+
+
+class OrderLabResponse(BaseModel):
+    status: str
+    procedure_order_id: int | None = None
+    suggested_lab_code: str
+    reason: str | None = None
+
+
+class RefreshMEATResponse(BaseModel):
+    status: str
+    job_id: str
+
+
 @router.post("/{pid}/actions/accept-suspect", response_model=AcceptSuspectResponse)
 def action_accept_suspect(
     pid: int,
@@ -835,69 +895,6 @@ _DEFAULT_TREATMENT_BY_HCC: dict[str, dict[str, str]] = {
     "136": {"drug": "Losartan 50mg", "rxnorm": "52175", "dosage": "50mg daily"},
     "137": {"drug": "Losartan 50mg", "rxnorm": "52175", "dosage": "50mg daily"},
 }
-
-
-# ---------------------------------------------------------------------------
-# Action response models
-# ---------------------------------------------------------------------------
-
-
-class ActionOkResponse(BaseModel):
-    ok: bool
-
-
-class AcceptSuspectResponse(BaseModel):
-    ok: bool
-    suspect: dict[str, Any]
-    pushed_to_emr: bool
-
-
-class DismissSuspectResponse(BaseModel):
-    ok: bool
-    suspect: dict[str, Any]
-
-
-class MarkMEATReviewedResponse(BaseModel):
-    ok: bool
-    meat_status: str
-    reviewed_by: str
-
-
-class AddAssessmentNoteResponse(BaseModel):
-    ok: bool
-    encounter_id: int | None
-    author: str
-
-
-class UpgradeCodeResponse(BaseModel):
-    ok: bool
-    rows_updated: int
-
-
-class RecalculateResponse(BaseModel):
-    ok: bool
-    raf_score: float
-    hcc_count: int
-    model_segment: str | None
-    measurement_year: int
-
-
-class StartTreatmentResponse(BaseModel):
-    status: str
-    prescription_id: int
-    drug: str
-
-
-class OrderLabResponse(BaseModel):
-    status: str
-    procedure_order_id: int | None = None
-    suggested_lab_code: str
-    reason: str | None = None
-
-
-class RefreshMEATResponse(BaseModel):
-    status: str
-    job_id: str
 
 
 class StartTreatmentRequest(BaseModel):

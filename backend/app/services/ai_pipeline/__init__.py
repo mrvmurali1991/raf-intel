@@ -41,7 +41,7 @@ from .provider_query import (
     generate_query,
     lint,
 )
-from .suspect_engine import SuspectCandidate, detect_suspects
+from .ai_suspect_pipeline import SuspectCandidate, detect_suspects
 from .suspect_schema import SupportingEvidence, SuspectRule
 
 # Back-compat alias: some callers may expect `extract_meat`.

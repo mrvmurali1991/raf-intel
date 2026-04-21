@@ -1,5 +1,5 @@
 """
-Suspect Condition Detection Engine.
+Suspect Condition Detection Engine — ``SuspectScanner`` (DB layer).
 
 Identifies conditions that are likely present but not yet coded in the
 patient's billing record.  Four scanning strategies:
@@ -11,6 +11,13 @@ patient's billing record.  Four scanning strategies:
 
 Suspects are deduplicated by fingerprint, stored in raf_suspect_conditions,
 and support accept / dismiss review workflows.
+
+**Module boundary**
+This is the DB-scanning persistence layer (``SuspectScanner``).
+It is called by routers, job_service, celery_tasks, and pipeline_chain.
+The AI-layer orchestrator (rule + LLM detection on a PatientContextBundle)
+lives in ``app.services.ai_pipeline.ai_suspect_pipeline``
+(``AISuspectPipeline``).
 """
 from __future__ import annotations
 

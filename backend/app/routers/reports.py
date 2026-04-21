@@ -19,6 +19,7 @@ from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.cache import cache_get, cache_set
@@ -32,6 +33,62 @@ from app.services.emr_manager import active_patients_subquery
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class _ReportBase(BaseModel):
+    """Base for report response models — allows extra fields so complex reports
+    don't get silently stripped by FastAPI's response serialization."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class RevenueOpportunityResponse(_ReportBase):
+    measurement_year: int
+    total_patients_analyzed: int
+    total_billing_raf: float
+    total_ai_raf: float
+    total_gap: float
+    estimated_annual_revenue: float
+    average_raf_score: float
+
+
+class PatientScorecardResponse(_ReportBase):
+    year: int
+    patients: list[dict[str, Any]]
+
+
+class HccDistributionResponse(_ReportBase):
+    year: int
+    distribution: list[dict[str, Any]]
+
+
+class SuspectsSummaryResponse(_ReportBase):
+    year: int
+    total: int
+    suspects: list[dict[str, Any]]
+
+
+class RecaptureGapsReportResponse(_ReportBase):
+    year: int
+    total: int
+    gaps: list[dict[str, Any]]
+
+
+class DataCompletenessResponse(_ReportBase):
+    total_patients: int
+    completeness_score: float
+
+
+class WorkflowSummaryResponse(_ReportBase):
+    open_suspects: int
+    open_recapture_gaps: int = 0
+    patients_unanalyzed: int = 0
+    patients_total: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -58,11 +115,11 @@ def _calculate_age(dob: Any, as_of_year: int | None = None) -> int:
 # GET /revenue-opportunity
 # ---------------------------------------------------------------------------
 
-@router.get("/revenue-opportunity", summary="Population-level RAF gap and revenue opportunity")
+@router.get("/revenue-opportunity", summary="Population-level RAF gap and revenue opportunity", response_model=RevenueOpportunityResponse)
 def revenue_opportunity(year: int = Query(default=None),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
-    _perm: None = Depends(require_permission("reports", "read"))) -> dict[str, Any]:
+    _perm: None = Depends(require_permission("reports", "read"))) -> RevenueOpportunityResponse:
     """
     Aggregate comparison of billing RAF scores vs AI-detected RAF scores.
 
@@ -217,14 +274,14 @@ def revenue_opportunity(year: int = Query(default=None),
         "average_raf_score": average_raf_score,
     }
     cache_set(_cache_key, result, ttl=300)
-    return result
+    return RevenueOpportunityResponse(**result)
 
 
 # ---------------------------------------------------------------------------
 # GET /patient-scorecard
 # ---------------------------------------------------------------------------
 
-@router.get("/patient-scorecard", summary="Per-patient billing vs AI RAF scorecard")
+@router.get("/patient-scorecard", summary="Per-patient billing vs AI RAF scorecard", response_model=list[dict[str, Any]])
 def patient_scorecard(year: int = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -375,7 +432,7 @@ def patient_scorecard(year: int = Query(default=None),
 # GET /hcc-distribution
 # ---------------------------------------------------------------------------
 
-@router.get("/hcc-distribution", summary="HCC code frequency across the population")
+@router.get("/hcc-distribution", summary="HCC code frequency across the population", response_model=list[dict[str, Any]])
 def hcc_distribution(year: int = Query(default=None),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
@@ -431,7 +488,7 @@ def hcc_distribution(year: int = Query(default=None),
 # GET /suspects-summary
 # ---------------------------------------------------------------------------
 
-@router.get("/suspects-summary", summary="All open suspect conditions across all patients")
+@router.get("/suspects-summary", summary="All open suspect conditions across all patients", response_model=list[dict[str, Any]])
 def suspects_summary(
     status: str = Query(default="open", description="Filter by status: open, accepted, rejected, or all"),
     limit: int = Query(200, ge=1, le=1000),
@@ -506,7 +563,7 @@ def suspects_summary(
 # GET /recapture-gaps
 # ---------------------------------------------------------------------------
 
-@router.get("/recapture-gaps", summary="Recapture gap analysis across all patients")
+@router.get("/recapture-gaps", summary="Recapture gap analysis across all patients", response_model_exclude_none=True)
 def recapture_gaps_report(year: int = Query(default=None),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
@@ -672,11 +729,11 @@ def recapture_gaps_report(year: int = Query(default=None),
 # GET /data-completeness
 # ---------------------------------------------------------------------------
 
-@router.get("/data-completeness", summary="Data quality metrics across the patient population")
+@router.get("/data-completeness", summary="Data quality metrics across the patient population", response_model=DataCompletenessResponse)
 def data_completeness(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
-    _perm: None = Depends(require_permission("reports", "read"))) -> dict[str, Any]:
+    _perm: None = Depends(require_permission("reports", "read"))) -> DataCompletenessResponse:
     """
     Report the presence of key clinical data categories across the patient
     population to surface data quality gaps.
@@ -826,19 +883,19 @@ def data_completeness(
         "completeness_score": completeness_score,
     }
     cache_set(_cache_key, result, ttl=300)
-    return result
+    return DataCompletenessResponse(**result)
 
 
 # ---------------------------------------------------------------------------
 # GET /workflow-summary
 # ---------------------------------------------------------------------------
 
-@router.get("/workflow-summary", summary="Dashboard workflow queue counts")
+@router.get("/workflow-summary", summary="Dashboard workflow queue counts", response_model=WorkflowSummaryResponse)
 def workflow_summary(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
-) -> dict[str, Any]:
+) -> WorkflowSummaryResponse:
     """
     Return real-time workflow queue counts for the dashboard.
 
@@ -1017,14 +1074,14 @@ def workflow_summary(
     except Exception as exc:
         logger.warning("workflow_summary: last_analysis_at query failed: %s", exc)
 
-    return {
-        "open_suspects": open_suspects,
-        "high_confidence_suspects": high_confidence_suspects,
-        "patients_unanalyzed": patients_unanalyzed,
-        "patients_total": patients_total,
-        "recent_analyses_7d": recent_analyses,
-        "providers_active": providers_active,
-        "avg_confidence": avg_confidence,
-        "last_sync_at": last_sync_at,
-        "last_analysis_at": last_analysis_at,
-    }
+    return WorkflowSummaryResponse(
+        open_suspects=open_suspects,
+        high_confidence_suspects=high_confidence_suspects,
+        patients_unanalyzed=patients_unanalyzed,
+        patients_total=patients_total,
+        recent_analyses_7d=recent_analyses,
+        providers_active=providers_active,
+        avg_confidence=avg_confidence,
+        last_sync_at=last_sync_at,
+        last_analysis_at=last_analysis_at,
+    )
