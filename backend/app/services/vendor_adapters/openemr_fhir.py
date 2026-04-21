@@ -15,11 +15,41 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 import httpx
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 _BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# ---------------------------------------------------------------------------
+# Tenacity retry policy for FHIR HTTP calls
+# ---------------------------------------------------------------------------
+_FHIR_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_retryable_fhir_error(exc: BaseException) -> bool:
+    """Return True for transient network/server errors from httpx."""
+    if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _FHIR_RETRYABLE_STATUS
+    return False
+
+
+_fhir_retry = retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential_jitter(initial=0.5, max=8),
+    retry=retry_if_exception(_is_retryable_fhir_error),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 
 class OpenEMRFhirAdapter:
@@ -319,23 +349,31 @@ class OpenEMRFhirAdapter:
 
     def _fhir_get(self, resource_path: str, params: dict | None = None) -> dict:
         url = f"{self.base_url}/{resource_path}"
-        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
-            resp = client.get(url, headers=self._auth_headers(), params=params)
-            if resp.status_code == 401:
-                logger.warning(
-                    "FHIR GET %s -> 401, forcing token refresh", resource_path
-                )
-                self._force_refresh()
-                resp = client.get(url, headers=self._auth_headers(), params=params)
-            if resp.status_code != 200:
-                logger.warning(
-                    "FHIR GET %s -> %s: %s",
-                    resource_path,
-                    resp.status_code,
-                    resp.text[:200],
-                )
-                return {}
-            return resp.json()
+
+        @_fhir_retry
+        def _do_get(headers: dict) -> httpx.Response:
+            with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
+                resp = client.get(url, headers=headers, params=params)
+                if resp.status_code in _FHIR_RETRYABLE_STATUS:
+                    resp.raise_for_status()
+                return resp
+
+        resp = _do_get(self._auth_headers())
+        if resp.status_code == 401:
+            logger.warning(
+                "FHIR GET %s -> 401, forcing token refresh", resource_path
+            )
+            self._force_refresh()
+            resp = _do_get(self._auth_headers())
+        if resp.status_code != 200:
+            logger.warning(
+                "FHIR GET %s -> %s: %s",
+                resource_path,
+                resp.status_code,
+                resp.text[:200],
+            )
+            return {}
+        return resp.json()
 
     def _fhir_get_all(
         self, resource_type: str, params: dict | None = None, max_pages: int = 50
@@ -346,46 +384,47 @@ class OpenEMRFhirAdapter:
         p = params or {}
         p.setdefault("_count", "100")
 
-        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
-            for page in range(max_pages):
-                resp = client.get(
-                    url, headers=self._auth_headers(), params=p if page == 0 else None
+        @_fhir_retry
+        def _do_page(page_url: str, page_params: dict | None, headers: dict) -> httpx.Response:
+            with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
+                resp = client.get(page_url, headers=headers, params=page_params)
+                if resp.status_code in _FHIR_RETRYABLE_STATUS:
+                    resp.raise_for_status()
+                return resp
+
+        for page in range(max_pages):
+            page_params = p if page == 0 else None
+            resp = _do_page(url, page_params, self._auth_headers())
+            if resp.status_code == 401:
+                logger.warning(
+                    "FHIR %s page %d -> 401 body: %s",
+                    resource_type,
+                    page,
+                    resp.text[:300],
                 )
-                if resp.status_code == 401:
-                    logger.warning(
-                        "FHIR %s page %d -> 401 body: %s",
-                        resource_type,
-                        page,
-                        resp.text[:300],
-                    )
-                    self._force_refresh()
-                    resp = client.get(
-                        url,
-                        headers=self._auth_headers(),
-                        params=p if page == 0 else None,
-                    )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "FHIR %s page %d -> %s body: %s",
-                        resource_type,
-                        page,
-                        resp.status_code,
-                        resp.text[:300],
-                    )
+                self._force_refresh()
+                resp = _do_page(url, page_params, self._auth_headers())
+            if resp.status_code != 200:
+                logger.warning(
+                    "FHIR %s page %d -> %s body: %s",
+                    resource_type,
+                    page,
+                    resp.status_code,
+                    resp.text[:300],
+                )
+                break
+            bundle = resp.json()
+            entries = bundle.get("entry", [])
+            all_entries.extend(entries)
+            # Follow next link
+            next_url = None
+            for link in bundle.get("link", []):
+                if link.get("relation") == "next":
+                    next_url = link.get("url")
                     break
-                bundle = resp.json()
-                entries = bundle.get("entry", [])
-                all_entries.extend(entries)
-                # Follow next link
-                next_url = None
-                for link in bundle.get("link", []):
-                    if link.get("relation") == "next":
-                        next_url = link.get("url")
-                        break
-                if not next_url or not entries:
-                    break
-                url = next_url
-                p = None  # params already in the next URL
+            if not next_url or not entries:
+                break
+            url = next_url
 
         return all_entries
 

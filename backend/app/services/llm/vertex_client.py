@@ -42,6 +42,13 @@ from contextvars import ContextVar
 from typing import Any
 
 import requests
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 # Module-level contextvar for tenant propagation. Callers (e.g. request
 # middleware) can set this so audit events are correctly attributed without
@@ -62,6 +69,34 @@ def _guardrails():
     return importlib.import_module("app.services.ai_pipeline.guardrails")
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Tenacity retry policy for Vertex AI HTTP calls
+# ---------------------------------------------------------------------------
+_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_retryable_requests_error(exc: BaseException) -> bool:
+    """Return True for transient network/server errors from the requests library."""
+    import requests as _req
+    if isinstance(exc, _req.exceptions.ConnectionError):
+        return True
+    if isinstance(exc, _req.exceptions.ReadTimeout):
+        return True
+    if isinstance(exc, _req.exceptions.HTTPError):
+        resp = getattr(exc, "response", None)
+        if resp is not None and resp.status_code in _RETRYABLE_STATUS:
+            return True
+    return False
+
+
+_vertex_retry = retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential_jitter(initial=0.5, max=8),
+    retry=retry_if_exception(_is_retryable_requests_error),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +260,7 @@ def _vertex_url(model: str) -> str:
     )
 
 
+@_vertex_retry
 def _call_vertex(
     prompt: str,
     model: str,
@@ -272,6 +308,7 @@ def _vertex_apikey_url(model: str, method: str = "generateContent") -> str:
     return f"{_VERTEX_APIKEY_BASE}/{model}:{method}?key={api_key}"
 
 
+@_vertex_retry
 def _call_vertex_apikey(
     prompt: str,
     model: str,
@@ -350,8 +387,8 @@ def llm_generate_content(
         after=None,
         tenant_id=tenant_id,
     )
-    start = time.monotonic()
-    try:
+    @_vertex_retry
+    def _post_with_retry() -> dict:
         if _use_vertex_api_key():
             url = _vertex_apikey_url(model)
             resp = requests.post(
@@ -363,13 +400,13 @@ def llm_generate_content(
         else:
             creds = _load_credentials()
             url = _vertex_url(model)
-            headers = {
+            hdrs = {
                 "Authorization": f"Bearer {creds.token}",
                 "Content-Type": "application/json",
             }
             resp = requests.post(
                 url,
-                headers=headers,
+                headers=hdrs,
                 data=json.dumps(payload),
                 timeout=timeout,
             )
@@ -380,7 +417,11 @@ def llm_generate_content(
                 resp.text[:500],
             )
             resp.raise_for_status()
-        body = resp.json()
+        return resp.json()
+
+    start = time.monotonic()
+    try:
+        body = _post_with_retry()
     except Exception as e:
         _audit(
             "llm.error",

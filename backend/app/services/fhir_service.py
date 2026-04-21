@@ -21,6 +21,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from app.db import openemr_cursor, raf_cursor
 from app.security.ssrf import _assert_safe_outbound_url
@@ -28,6 +35,29 @@ from app.services.circuit_breaker import fhir_breaker
 from app.services.encryption_service import decrypt, encrypt
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Tenacity retry policy for external FHIR/OAuth2 HTTP calls
+# ---------------------------------------------------------------------------
+_FHIR_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_retryable_fhir_error(exc: BaseException) -> bool:
+    """Return True for transient network/server errors from httpx."""
+    if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _FHIR_RETRYABLE_STATUS
+    return False
+
+
+_fhir_http_retry = retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential_jitter(initial=0.5, max=8),
+    retry=retry_if_exception(_is_retryable_fhir_error),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -90,10 +120,12 @@ def _safe_date(val: Any) -> str | None:
 # OAuth2 token acquisition
 # ---------------------------------------------------------------------------
 
+@_fhir_http_retry
 async def _fetch_token_async(connection: dict[str, Any]) -> str:
     """
     Fetch an OAuth2 access token and cache it.
     Supports client_credentials (default) and password grant (OpenEMR).
+    Retried up to 4 times on transient 429/5xx/connect errors.
     """
     conn_id: int = connection["id"]
     token_url: str = connection.get("token_url", "") or ""
@@ -189,6 +221,7 @@ async def _get_token_async(connection: dict[str, Any]) -> str:
 # Low-level FHIR HTTP client
 # ---------------------------------------------------------------------------
 
+@_fhir_http_retry
 async def _fhir_get(
     connection: dict[str, Any],
     path: str,
@@ -197,6 +230,7 @@ async def _fhir_get(
     """
     GET {base_url}/{path} with optional query params.
     Automatically attaches Authorization header when auth_type is oauth2 or api_key.
+    Retried up to 4 times on transient 429/5xx/connect errors.
     """
     base_url: str = connection["base_url"].rstrip("/")
     _assert_safe_outbound_url(base_url)
