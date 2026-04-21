@@ -184,7 +184,7 @@ class CalculateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/calculate/{pid}", summary="Calculate RAF score for a patient")
+@router.post("/calculate/{pid}", summary="Calculate RAF score for a patient", response_model_exclude_none=True)
 @limiter.limit("10/minute")
 async def calculate_raf(
     request: Request,
@@ -269,7 +269,7 @@ async def calculate_raf(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/recompute/{pid}", summary="Enqueue async RAF recompute for a patient")
+@router.post("/recompute/{pid}", summary="Enqueue async RAF recompute for a patient", response_model=RecomputeResponse)
 @limiter.limit("30/minute")
 async def recompute_raf(
     request: Request,
@@ -277,7 +277,7 @@ async def recompute_raf(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "write")),
-) -> dict[str, bool]:
+) -> RecomputeResponse:
     """
     Enqueue an async RAF recompute for *pid* via the inbox pipeline.
 
@@ -309,7 +309,7 @@ async def recompute_raf(
         current_user.get("id"),
         enqueued,
     )
-    return {"enqueued": enqueued}
+    return RecomputeResponse(enqueued=enqueued)
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ async def recompute_raf(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/calculate-all", summary="Batch calculate RAF for all patients")
+@router.post("/calculate-all", summary="Batch calculate RAF for all patients", response_model=CalculateAllResponse)
 @limiter.limit("2/minute")
 def calculate_all(
     request: Request,
@@ -325,7 +325,7 @@ def calculate_all(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "write")),
-) -> dict[str, Any]:
+) -> CalculateAllResponse:
     """
     Dispatch an async background job to calculate RAF for every patient in
     OpenEMR.  Returns immediately with a job_id for polling via
@@ -416,14 +416,14 @@ def calculate_all(
         current_user.get("id"),
     )
 
-    return {
-        "status": "dispatched",
-        "job_id": job_id,
-        "message": f"RAF calculation queued for {len(patient_ids)} patients (year {calc_year})",
-        "patient_count": len(patient_ids),
-        "measurement_year": calc_year,
-        "poll_url": f"/api/jobs/{job_id}",
-    }
+    return CalculateAllResponse(
+        status="dispatched",
+        job_id=job_id,
+        message=f"RAF calculation queued for {len(patient_ids)} patients (year {calc_year})",
+        patient_count=len(patient_ids),
+        measurement_year=calc_year,
+        poll_url=f"/api/jobs/{job_id}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -431,14 +431,14 @@ def calculate_all(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/scores/{pid}", summary="Get stored RAF score for a patient")
+@router.get("/scores/{pid}", summary="Get stored RAF score for a patient", response_model=RAFScoreResponse)
 async def get_scores(
     pid: int,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "read")),
-) -> dict[str, Any]:
+) -> RAFScoreResponse:
     """
     Return the most recent stored RAF score for *pid*.
 
@@ -499,20 +499,20 @@ async def get_scores(
         details=f"year={calc_year}",
         tenant_id=tenant_id,
     )
-    return {
-        "patient_id": pid,
-        "patient_name": f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
-        "measurement_year": row["measurement_year"],
-        "model_segment": row.get("model_segment", "CNA"),
-        "score_type": row.get("score_type", "v28"),
-        "raf_score": float(row["final_raf"]),
-        "demographic_score": float(row.get("demographic_score") or 0),
-        "disease_score": float(row.get("disease_score") or 0),
-        "interaction_score": float(row.get("interaction_score") or 0),
-        "hcc_count": row.get("hcc_count", 0),
-        "blend_weights": {"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
-        "calculated_at": str(row.get("calculated_at", "")),
-    }
+    return RAFScoreResponse(
+        patient_id=pid,
+        patient_name=f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
+        measurement_year=row["measurement_year"],
+        model_segment=row.get("model_segment", "CNA"),
+        score_type=row.get("score_type", "v28"),
+        raf_score=float(row["final_raf"]),
+        demographic_score=float(row.get("demographic_score") or 0),
+        disease_score=float(row.get("disease_score") or 0),
+        interaction_score=float(row.get("interaction_score") or 0),
+        hcc_count=row.get("hcc_count", 0),
+        blend_weights={"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
+        calculated_at=str(row.get("calculated_at", "")),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +521,10 @@ async def get_scores(
 
 
 @router.get(
-    "/scores/{pid}/breakdown", summary="Detailed HCC breakdown with MEAT status"
+    "/scores/{pid}/breakdown",
+    summary="Detailed HCC breakdown with MEAT status",
+    response_model=RAFBreakdownResponse,
+    response_model_exclude_none=True,
 )
 async def get_breakdown(
     pid: int,
@@ -529,7 +532,7 @@ async def get_breakdown(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "read")),
-) -> dict[str, Any]:
+) -> RAFBreakdownResponse:
     """
     Return the full stored RAF breakdown for *pid* / *year* including:
       - Score components (demographic, disease, interaction)
@@ -609,28 +612,6 @@ async def get_breakdown(
 
     v24_w, v28_w = _BLEND_WEIGHTS.get(calc_year, (0.0, 1.0))
 
-    result = {
-        "patient_id": pid,
-        "patient_name": f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
-        "measurement_year": calc_year,
-        "raf_score": breakdown.get("raf_score", 0.0),
-        "final_raf": breakdown.get("final_raf", breakdown.get("raf_score", 0.0)),
-        "demographic_score": breakdown.get("demographic_score", 0.0),
-        "disease_score": breakdown.get("disease_score", 0.0),
-        "interaction_score": breakdown.get("interaction_score", 0.0),
-        "hcc_count": breakdown.get("hcc_count", 0),
-        "model_segment": breakdown.get("model_segment", "CNA"),
-        "score_type": breakdown.get("score_type", "v28"),
-        "blend_weights": {"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
-        "calculated_at": breakdown.get("calculated_at", ""),
-        "hcc_details": annotated_hccs,
-    }
-    # Pass through engine_input/engine_output for the Calculation Pipeline UI
-    if breakdown.get("engine_input"):
-        result["engine_input"] = breakdown["engine_input"]
-    if breakdown.get("engine_output"):
-        result["engine_output"] = breakdown["engine_output"]
-
     log_phi_access(
         action="view_raf_breakdown",
         resource="raf_scores",
@@ -638,7 +619,24 @@ async def get_breakdown(
         details=f"year={calc_year} hcc_count={len(annotated_hccs)}",
         tenant_id=tenant_id,
     )
-    return result
+    return RAFBreakdownResponse(
+        patient_id=pid,
+        patient_name=f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
+        measurement_year=calc_year,
+        raf_score=breakdown.get("raf_score", 0.0),
+        final_raf=breakdown.get("final_raf", breakdown.get("raf_score", 0.0)),
+        demographic_score=breakdown.get("demographic_score", 0.0),
+        disease_score=breakdown.get("disease_score", 0.0),
+        interaction_score=breakdown.get("interaction_score", 0.0),
+        hcc_count=breakdown.get("hcc_count", 0),
+        model_segment=breakdown.get("model_segment", "CNA"),
+        score_type=breakdown.get("score_type", "v28"),
+        blend_weights={"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
+        calculated_at=breakdown.get("calculated_at", ""),
+        hcc_details=annotated_hccs,
+        engine_input=breakdown.get("engine_input") or None,
+        engine_output=breakdown.get("engine_output") or None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -761,13 +759,13 @@ _RAF_RANGES = [
 ]
 
 
-@router.get("/population-summary", summary="Population-level RAF statistics")
+@router.get("/population-summary", summary="Population-level RAF statistics", response_model=PopulationSummaryResponse)
 def population_summary(
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "read")),
-) -> dict[str, Any]:
+) -> PopulationSummaryResponse:
     """
     Return aggregate RAF statistics for the current patient population.
 
@@ -941,20 +939,20 @@ def population_summary(
     except Exception:
         pass
 
-    return {
-        "year": calc_year,
-        "total_patients": total_patients,
-        "patients_with_scores": patients_with_scores,
-        "average_raf_score": average_raf,
-        "median_raf_score": median_raf,
-        "patients_with_gaps": patients_with_gaps,
-        "hcc_capture_rate": hcc_capture_rate,
-        "total_revenue_opportunity": round(sum(scores) * 12614, 2) if scores else 0,
-        "raf_distribution": raf_distribution,
-        "top_hccs": top_hccs,
-        "blend_weights": {"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
-        "score_type_breakdown": dict(score_type_counts),
-    }
+    return PopulationSummaryResponse(
+        year=calc_year,
+        total_patients=total_patients,
+        patients_with_scores=patients_with_scores,
+        average_raf_score=average_raf,
+        median_raf_score=median_raf,
+        patients_with_gaps=patients_with_gaps,
+        hcc_capture_rate=hcc_capture_rate,
+        total_revenue_opportunity=round(sum(scores) * 12614, 2) if scores else 0,
+        raf_distribution=raf_distribution,
+        top_hccs=top_hccs,
+        blend_weights={"v24": round(v24_w, 4), "v28": round(v28_w, 4)},
+        score_type_breakdown=dict(score_type_counts),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -963,14 +961,16 @@ def population_summary(
 
 
 @router.get(
-    "/scores/{pid}/history", summary="RAF score history for a patient (all years)"
+    "/scores/{pid}/history",
+    summary="RAF score history for a patient (all years)",
+    response_model=RAFHistoryResponse,
 )
 def get_score_history(
     pid: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "read")),
-) -> dict[str, Any]:
+) -> RAFHistoryResponse:
     """
     Return all RAF scores ever calculated for *pid*, one entry per year,
     ordered newest-first. Includes `score_type` and `blend_weights` per year.
@@ -1040,12 +1040,12 @@ def get_score_history(
         details=f"years_returned={len(history)}",
         tenant_id=tenant_id,
     )
-    return {
-        "patient_id": pid,
-        "patient_name": f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
-        "years_calculated": len(history),
-        "history": history,
-    }
+    return RAFHistoryResponse(
+        patient_id=pid,
+        patient_name=f"{patient.get('fname', '')} {patient.get('lname', '')}".strip(),
+        years_calculated=len(history),
+        history=history,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1053,10 +1053,10 @@ def get_score_history(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/models", summary="List all available RAF models with descriptions")
+@router.get("/models", summary="List all available RAF models with descriptions", response_model=ModelListResponse)
 def list_models(
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> ModelListResponse:
     """
     Return metadata for every RAF model supported by this system.
 
@@ -1069,10 +1069,10 @@ def list_models(
     Key model differences are highlighted to guide which model to apply
     for a given population and program type.
     """
-    return {
-        "total_models": len(AVAILABLE_MODELS),
-        "models": AVAILABLE_MODELS,
-        "quick_reference": {
+    return ModelListResponse(
+        total_models=len(AVAILABLE_MODELS),
+        models=AVAILABLE_MODELS,
+        quick_reference={
             "medicare_advantage_ma": {
                 "models": ["cms_hcc_v28", "cms_hcc_v24"],
                 "note": "Use CMS-HCC V28 for MA plans. V24/V28 blend applies through PY2025.",
@@ -1086,17 +1086,98 @@ def list_models(
                 "note": "Use HHS-HCC for ACA/Exchange risk transfer calculations.",
             },
         },
-        "cms_blend_schedule": {
+        cms_blend_schedule={
             "PY2024": "67% V24 + 33% V28",
             "PY2025": "33% V24 + 67% V28",
             "PY2026+": "100% V28",
         },
-    }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Request model for multi-model calculation
 # ---------------------------------------------------------------------------
+
+
+class RAFScoreResponse(BaseModel):
+    patient_id: int
+    patient_name: str
+    measurement_year: int
+    model_segment: str
+    score_type: str
+    raf_score: float
+    demographic_score: float
+    disease_score: float
+    interaction_score: float
+    hcc_count: int
+    blend_weights: dict[str, Any]
+    calculated_at: str
+
+
+class RAFBreakdownResponse(BaseModel):
+    patient_id: int
+    patient_name: str
+    measurement_year: int
+    raf_score: float
+    final_raf: float
+    demographic_score: float
+    disease_score: float
+    interaction_score: float
+    hcc_count: int
+    model_segment: str
+    score_type: str
+    blend_weights: dict[str, Any]
+    calculated_at: str
+    hcc_details: list[dict[str, Any]]
+    engine_input: dict[str, Any] | None = None
+    engine_output: dict[str, Any] | None = None
+
+
+class RAFHistoryResponse(BaseModel):
+    patient_id: int
+    patient_name: str
+    years_calculated: int
+    history: list[dict[str, Any]]
+
+
+class PopulationSummaryResponse(BaseModel):
+    year: int
+    total_patients: int
+    patients_with_scores: int
+    average_raf_score: float
+    median_raf_score: float
+    patients_with_gaps: int
+    hcc_capture_rate: float
+    total_revenue_opportunity: float
+    raf_distribution: list[dict[str, Any]]
+    top_hccs: list[dict[str, Any]]
+    blend_weights: dict[str, Any]
+    score_type_breakdown: dict[str, Any]
+
+
+class CalculateAllResponse(BaseModel):
+    status: str
+    job_id: str
+    message: str
+    patient_count: int
+    measurement_year: int
+    poll_url: str
+
+
+class CrosswalkResponse(BaseModel):
+    results: list[dict[str, Any]]
+    summary: dict[str, Any]
+
+
+class ModelListResponse(BaseModel):
+    total_models: int
+    models: dict[str, Any]
+    quick_reference: dict[str, Any]
+    cms_blend_schedule: dict[str, Any]
+
+
+class RecomputeResponse(BaseModel):
+    enqueued: bool
 
 
 class MultiModelRequest(BaseModel):
@@ -1703,15 +1784,15 @@ def calculate_raf_full(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/crosswalk", summary="ICD-10 to HCC crosswalk lookup")
+@router.post("/crosswalk", summary="ICD-10 to HCC crosswalk lookup", response_model=CrosswalkResponse)
 def icd10_to_hcc_crosswalk(
     body: dict = Body(...),
     current_user: dict = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> CrosswalkResponse:
     """Look up HCC mappings for a list of ICD-10 codes using hccinfhir library and DB crosswalk."""
     codes = body.get("codes", [])
     if not codes:
-        return {"results": []}
+        return CrosswalkResponse(results=[], summary={})
 
     # Clean codes - strip dots, uppercase
     clean_codes = []
@@ -1721,7 +1802,7 @@ def icd10_to_hcc_crosswalk(
             clean_codes.append(c)
 
     if not clean_codes:
-        return {"results": []}
+        return CrosswalkResponse(results=[], summary={})
 
     results = []
 
@@ -1870,9 +1951,9 @@ def icd10_to_hcc_crosswalk(
     total_rx = round(sum((r["rxhcc_coefficient"] or 0) for r in results), 4)
     mapped_count = sum(1 for r in results if r["risk_adjusting"])
 
-    return {
-        "results": results,
-        "summary": {
+    return CrosswalkResponse(
+        results=results,
+        summary={
             "total_codes": len(results),
             "risk_adjusting_count": mapped_count,
             "not_risk_adjusting_count": len(results) - mapped_count,
@@ -1881,7 +1962,7 @@ def icd10_to_hcc_crosswalk(
             "total_rxhcc_coefficient": total_rx,
             "delta_v28_v24": round(total_v28 - total_v24, 4),
         },
-    }
+    )
 
 
 # ---------------------------------------------------------------------------
