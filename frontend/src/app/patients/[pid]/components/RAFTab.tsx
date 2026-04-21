@@ -160,7 +160,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
         )}
         {hccDetails.map((hcc: HCCDetail, i: number) => {
           const code = hcc.hcc_code;
-          const icdCodes: string[] = (hcc.icd10_codes || []).map((c: any) => typeof c === "string" ? c : c.code || "");
+          const icdCodes: string[] = (hcc.icd10_codes || []).map((c) => typeof c === "string" ? c : c.code || "");
           const primaryIcd = icdCodes[0] || "";
           const icdDesc = primaryIcd ? (ICD10_DESCRIPTIONS[primaryIcd] || hcc.hcc_label || "") : (hcc.hcc_label || "");
           const coeff = Number(hcc.coefficient || 0);
@@ -229,7 +229,32 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
   );
 }
 
-function LLMInputPanel({ llmInput }: { llmInput: any }) {
+interface LLMInput {
+  patient_age?: number | null;
+  patient_sex?: string | null;
+  clinical_note_chars?: number;
+  temperature?: number;
+  medications: string[];
+  existing_hccs: string[];
+  problem_list: Array<{ title?: string; diagnosis?: string }>;
+  recapture_gaps: Array<{ title?: string; diagnosis?: string }>;
+  latest_vitals?: Record<string, unknown>;
+  med_diagnoses: Array<{ drug?: string; note?: string }>;
+  clinical_note_preview?: string | null;
+  extracted_icd_codes: string[];
+  tool_calls_summary?: {
+    total?: number;
+    turns?: number;
+    total_time?: number;
+    icd_validated?: number;
+    hcc_lookups?: number;
+    med_checks?: number;
+    raf_calculated?: number;
+  };
+  _reconstructed?: boolean;
+}
+
+function LLMInputPanel({ llmInput }: { llmInput: LLMInput }) {
   const [open, setOpen] = useState(false);
   const pill = (text: string, bg: string, fg: string, border: string) => (
     <span style={{ padding: "3px 8px", borderRadius: 5, fontSize: 11, fontFamily: "monospace", fontWeight: 600, background: bg, color: fg, border: `1px solid ${border}` }}>{text}</span>
@@ -288,7 +313,7 @@ function LLMInputPanel({ llmInput }: { llmInput: any }) {
             <div style={{ marginBottom: 10 }}>
               <div style={{ color: C.slate500, fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Problem List ({llmInput.problem_list.length})</div>
               <div style={{ fontSize: 11, color: C.slate600, lineHeight: 1.6 }}>
-                {llmInput.problem_list.map((p: any, i: number) => (
+                {llmInput.problem_list.map((p: { title?: string; diagnosis?: string }, i: number) => (
                   <div key={p.diagnosis || p.title || i}>{"\u2022"} {p.title} <span style={{ fontFamily: "monospace", color: C.blue600 }}>({p.diagnosis || "no code"})</span></div>
                 ))}
               </div>
@@ -300,7 +325,7 @@ function LLMInputPanel({ llmInput }: { llmInput: any }) {
             <div style={{ marginBottom: 10 }}>
               <div style={{ color: C.slate500, fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Recapture Gaps ({llmInput.recapture_gaps.length})</div>
               <div style={{ fontSize: 11, color: C.slate600, lineHeight: 1.6 }}>
-                {llmInput.recapture_gaps.map((g: any, i: number) => (
+                {llmInput.recapture_gaps.map((g: { title?: string; diagnosis?: string }, i: number) => (
                   <div key={g.diagnosis || g.title || i}>{"\u2022"} {g.title} <span style={{ fontFamily: "monospace", color: C.orange500 }}>({g.diagnosis})</span></div>
                 ))}
               </div>
@@ -312,7 +337,7 @@ function LLMInputPanel({ llmInput }: { llmInput: any }) {
             <div style={{ marginBottom: 10 }}>
               <div style={{ color: C.slate500, fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Vitals Sent</div>
               <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "2px 8px", fontSize: 11, fontFamily: "monospace", color: C.slate600 }}>
-                {Object.entries(llmInput.latest_vitals).map(([k, v]: [string, any]) => (
+                {Object.entries(llmInput.latest_vitals).map(([k, v]) => (
                   <React.Fragment key={k}>
                     <span style={{ color: C.slate400 }}>{k}</span>
                     <span>{String(v)}</span>
@@ -327,7 +352,7 @@ function LLMInputPanel({ llmInput }: { llmInput: any }) {
             <div style={{ marginBottom: 10 }}>
               <div style={{ color: C.slate500, fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Medication Indications ({llmInput.med_diagnoses.length})</div>
               <div style={{ fontSize: 11, color: C.slate600, lineHeight: 1.6 }}>
-                {llmInput.med_diagnoses.map((m: any, i: number) => (
+                {llmInput.med_diagnoses.map((m: { drug?: string; note?: string }, i: number) => (
                   <div key={m.drug || i}>{"\u2022"} <strong>{m.drug}</strong>: {m.note}</div>
                 ))}
               </div>
@@ -390,12 +415,27 @@ export { LLMInputPanel };
 
 function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { breakdown: ExtendedRafBreakdown; componentSum: number; grandTotal: number; lastCalcResult?: { raf_score: number } | null }) {
   const [open, setOpen] = useState(false);
-  const data = lastCalcResult || breakdown as any;
-  const engineInput = data.engine_input || (breakdown as any)?.engine_input;
-  const engineOutput = data.engine_output || (breakdown as any)?.engine_output;
+  // ExtendedRafBreakdown may carry engine_input/engine_output as undocumented
+  // fields returned by the full pipeline but not in the narrow RafBreakdown type.
+  type ExtendedCalcData = ExtendedRafBreakdown & {
+    engine_input?: Record<string, unknown>;
+    engine_output?: {
+      hcc_details?: Array<{ hcc?: string; label?: string; coefficient?: number }>;
+      hcc_list?: string[];
+      all_coefficients?: Record<string, number>;
+      risk_score_raw?: number;
+      risk_score_payment?: number;
+      risk_score_demographics?: number;
+      [key: string]: unknown;
+    };
+    hcc_contributions?: HCCDetail[];
+  };
+  const data = (lastCalcResult || breakdown) as ExtendedCalcData;
+  const engineInput = data.engine_input;
+  const engineOutput = data.engine_output;
   const hasEngineData = !!engineInput;
 
-  const hccContribs: any[] = data.hcc_contributions || data.hcc_details || [];
+  const hccContribs: HCCDetail[] = data.hcc_contributions ?? data.hcc_details ?? [];
 
   const stepHeader = (num: number, label: string, color: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -439,20 +479,21 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
               <div style={{ marginLeft: 30, marginBottom: 20, padding: "14px 16px", borderRadius: 8, background: C.slate100, border: `1px solid ${C.slate200}` }}>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "6px 12px", fontSize: 12 }}>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Age</span>
-                  <span style={{ color: C.slate700, fontWeight: 600 }}>{engineInput.age}</span>
+                  <span style={{ color: C.slate700, fontWeight: 600 }}>{String(engineInput.age ?? "")}</span>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Sex</span>
-                  <span style={{ color: C.slate700, fontWeight: 600 }}>{engineInput.sex}</span>
+                  <span style={{ color: C.slate700, fontWeight: 600 }}>{String(engineInput.sex ?? "")}</span>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Model Segment</span>
-                  <span style={{ color: C.slate700, fontWeight: 600 }}>{engineInput.model_segment} ({engineInput.prefix_override})</span>
+                  <span style={{ color: C.slate700, fontWeight: 600 }}>{String(engineInput.model_segment ?? "")} ({String(engineInput.prefix_override ?? "")})</span>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>MACI Factor</span>
-                  <span style={{ fontFamily: "monospace", color: C.slate700 }}>{engineInput.maci}</span>
+                  <span style={{ fontFamily: "monospace", color: C.slate700 }}>{String(engineInput.maci ?? "")}</span>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Norm Factor</span>
-                  <span style={{ fontFamily: "monospace", color: C.slate700 }}>{engineInput.norm_factor}</span>
+                  <span style={{ fontFamily: "monospace", color: C.slate700 }}>{String(engineInput.norm_factor ?? "")}</span>
                 </div>
                 <div style={{ marginTop: 10, borderTop: `1px solid ${C.slate200}`, paddingTop: 10 }}>
-                  <div style={{ color: C.slate400, fontWeight: 600, marginBottom: 6 }}>ICD-10 Codes Sent ({engineInput.icd_codes?.length || 0})</div>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <div style={{ color: C.slate400, fontWeight: 600, marginBottom: 6 }}>ICD-10 Codes Sent ({(engineInput.icd_codes as any[])?.length || 0})</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {(engineInput.icd_codes || []).map((c: string, i: number) => <React.Fragment key={c || i}>{pill(c, C.blue50, C.blue600, C.blue100)}</React.Fragment>)}
+                    {((engineInput.icd_codes as string[]) || []).map((c: string, i: number) => <React.Fragment key={c || i}>{pill(c, C.blue50, C.blue600, C.blue100)}</React.Fragment>)}
                   </div>
                   <div style={{ fontSize: 10, color: C.slate400, marginTop: 6 }}>
                     Collected from: OpenEMR billing codes + AI encounter analysis + document analysis + manual entries
@@ -465,18 +506,18 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
               <div style={{ marginLeft: 30, marginBottom: 20, padding: "14px 16px", borderRadius: 8, background: C.emerald50, border: `1px solid ${C.emerald100}` }}>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "6px 12px", fontSize: 12 }}>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Raw Score</span>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.slate700 }}>{engineOutput.risk_score_raw}</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.slate700 }}>{String(engineOutput?.risk_score_raw ?? "")}</span>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Payment Score</span>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.blue600 }}>{engineOutput.risk_score_payment?.toFixed(3)}</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.blue600 }}>{(engineOutput?.risk_score_payment as number | undefined)?.toFixed(3)}</span>
                   <span style={{ color: C.slate400, fontWeight: 600 }}>Demographics</span>
-                  <span style={{ fontFamily: "monospace", color: C.slate700 }}>{engineOutput.risk_score_demographics}</span>
+                  <span style={{ fontFamily: "monospace", color: C.slate700 }}>{String(engineOutput?.risk_score_demographics ?? "")}</span>
                 </div>
                 <div style={{ marginTop: 10, borderTop: `1px solid ${C.emerald100}`, paddingTop: 10 }}>
-                  <div style={{ color: C.slate400, fontWeight: 600, marginBottom: 6 }}>HCCs Mapped ({engineOutput.hcc_list?.length || 0})</div>
+                  <div style={{ color: C.slate400, fontWeight: 600, marginBottom: 6 }}>HCCs Mapped ({engineOutput?.hcc_list?.length || 0})</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
-                    {(engineOutput.hcc_list || []).map((h: string, i: number) => <React.Fragment key={h || i}>{pill(`HCC ${h}`, C.emerald50, C.emerald600, C.emerald100)}</React.Fragment>)}
+                    {(engineOutput?.hcc_list || []).map((h: string, i: number) => <React.Fragment key={h || i}>{pill(`HCC ${h}`, C.emerald50, C.emerald600, C.emerald100)}</React.Fragment>)}
                   </div>
-                  {(engineOutput.hcc_details || []).map((h: any, i: number) => (
+                  {(engineOutput?.hcc_details || []).map((h: { hcc?: string; label?: string; coefficient?: number }, i: number) => (
                     <div key={h.hcc || `hcc-detail-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 11, borderBottom: `1px solid ${C.emerald100}` }}>
                       <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.emerald600, minWidth: 55 }}>HCC {h.hcc}</span>
                       <span style={{ flex: 1, color: C.slate600 }}>{h.label}</span>
@@ -484,11 +525,11 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
                     </div>
                   ))}
                 </div>
-                {engineOutput.all_coefficients && Object.keys(engineOutput.all_coefficients).length > 0 && (
+                {engineOutput?.all_coefficients && Object.keys(engineOutput.all_coefficients).length > 0 && (
                   <div style={{ marginTop: 10, borderTop: `1px solid ${C.emerald100}`, paddingTop: 10 }}>
                     <div style={{ color: C.slate400, fontWeight: 600, marginBottom: 6 }}>All Coefficients</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: "2px 8px", fontSize: 11, fontFamily: "monospace" }}>
-                      {Object.entries(engineOutput?.all_coefficients || {}).sort((a: any, b: any) => b[1] - a[1]).map(([k, v]: [string, any]) => (
+                      {Object.entries(engineOutput?.all_coefficients ?? {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
                         <React.Fragment key={k}>
                           <span style={{ color: C.slate600 }}>{k}</span>
                           <span style={{ textAlign: "right", fontWeight: 600, color: C.slate700 }}>{v.toFixed(3)}</span>
@@ -506,9 +547,9 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
             <>
               {stepHeader(1, `ICD-10 to HCC Mapping (${hccContribs.length} HCCs)`, C.emerald600)}
               <div style={{ marginLeft: 30, marginBottom: 16, borderRadius: 8, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
-                {hccContribs.map((h: any, i: number) => {
+                {hccContribs.map((h: HCCDetail, i: number) => {
                   const hccCode = h.hcc_code || h.code;
-                  const icds: string[] = (h.icd10_codes || []).map((c: any) => typeof c === "string" ? c : c.code || "");
+                  const icds: string[] = (h.icd10_codes || []).map((c) => typeof c === "string" ? c : c.code || "");
                   return (
                     <div key={h.hcc_code || h.code || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", borderBottom: i < hccContribs.length - 1 ? `1px solid ${C.slate100}` : "none", fontSize: 11 }}>
                       <span style={{ fontFamily: "monospace", color: C.emerald600, fontWeight: 700, minWidth: 55 }}>HCC {hccCode}</span>
@@ -904,12 +945,12 @@ export function RAFTab({
 }) {
   const recaptureItems: RecaptureGapItem[] = (() => {
     if (Array.isArray(recapture)) return recapture;
-    const r = recapture as any;
+    const r = recapture as Partial<{ gaps: RecaptureGapItem[]; recapture_gaps: RecaptureGapItem[] }>;
     const raw = r?.gaps ?? r?.recapture_gaps ?? [];
-    return raw.map((g: any) => ({
+    return raw.map((g: RecaptureGapItem) => ({
       ...g,
-      description: g.description || g.title || "",
-      icd10_code: g.icd10_code || (g.diagnosis?.includes(":") ? g.diagnosis.split(":").pop()?.trim() : g.diagnosis) || "",
+      description: g.description || g.label || "",
+      icd10_code: g.icd10_code || "",
     }));
   })();
   return (

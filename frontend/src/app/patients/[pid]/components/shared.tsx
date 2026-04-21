@@ -406,16 +406,17 @@ export function Card({
 // ---------------------------------------------------------------------------
 // MEAT Dots (local for encounters/raf detail)
 // ---------------------------------------------------------------------------
-export function MeatDots({ evidence }: { evidence?: MEATEvidence | Record<string, any> | null }) {
+type MeatEvidence = MEATEvidence | Record<string, string | boolean | null | undefined>;
+export function MeatDots({ evidence }: { evidence?: MeatEvidence | null }) {
   const letters = [
     { key: "monitor" as const, alt: ["M", "m"], label: "M", full: "Monitor",  color: C.blue600 },
     { key: "evaluate" as const, alt: ["E", "e"], label: "E", full: "Evaluate", color: C.purple600 },
     { key: "assess" as const,   alt: ["A", "a"], label: "A", full: "Addressed", color: C.amber600 },
     { key: "treat" as const,    alt: ["T", "t"], label: "T", full: "Treat",    color: C.emerald600 },
   ];
-  const e = evidence as any;
+  const e = evidence as Record<string, string | boolean | null | undefined> | undefined | null;
   const rawExcerpt: string | undefined =
-    e && (e.raw_note_excerpt || e.rawNoteExcerpt || e.excerpt);
+    e ? (e.raw_note_excerpt as string | undefined) || (e.rawNoteExcerpt as string | undefined) || (e.excerpt as string | undefined) : undefined;
   return (
     <div style={{ display: "inline-flex", gap: 4 }}>
       {letters.map(({ key, alt, label, full, color }) => {

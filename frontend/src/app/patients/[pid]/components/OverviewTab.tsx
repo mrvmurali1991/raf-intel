@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { Patient, MEATEvidence } from "@/types";
+import type { Patient, MEATEvidence, AIDiagnosis } from "@/types";
 import type {
   PatientProfile,
   PatientEncountersResponse,
@@ -36,19 +36,19 @@ import type {
 
 function DataCompletenessChecklist({ profile, encounters, problems, meds, labSuspects, vitalsSuspects, selectedYear }: {
   profile: PatientProfile | undefined;
-  encounters?: any;
-  problems?: any;
-  meds?: any;
-  labSuspects?: any;
-  vitalsSuspects?: any;
+  encounters?: PatientEncountersResponse | EncounterItem[];
+  problems?: ProblemListResponse | ProblemItem[];
+  meds?: MedicationsResponse | Array<{ drug?: string }>;
+  labSuspects?: ClinicalFindingsResponse | Array<unknown>;
+  vitalsSuspects?: ClinicalFindingsResponse | Array<unknown>;
   selectedYear: number;
 }) {
   // Build completeness from year-filtered query data instead of all-time profile
-  const encList = encounters?.encounters ?? (Array.isArray(encounters) ? encounters : []);
-  const probList = Array.isArray(problems) ? problems : (problems?.problems ?? []);
-  const medList = Array.isArray(meds) ? meds : (meds?.medications ?? []);
+  const encList: EncounterItem[] = Array.isArray(encounters) ? encounters : ((encounters as PatientEncountersResponse | undefined)?.encounters ?? []);
+  const probList: ProblemItem[] = Array.isArray(problems) ? problems : ((problems as ProblemListResponse | undefined)?.problems ?? []);
+  const medList = Array.isArray(meds) ? meds : ((meds as MedicationsResponse | undefined)?.medications ?? []);
   const hasEncounters = encList.length > 0;
-  const hasNotes = encList.some((e: any) => e.notes || e.has_notes);
+  const hasNotes = encList.some((e: EncounterItem) => e.notes || e.has_notes);
   const hasProblems = probList.length > 0;
   const hasMeds = medList.length > 0;
   const hasVitals = !!(profile?.vitals?.latest) || (Array.isArray(vitalsSuspects) ? vitalsSuspects.length > 0 : !!(vitalsSuspects?.suspects?.length));
@@ -211,11 +211,19 @@ export function OverviewTab({
   rafScore: number | null;
   analyzeMutation: { mutate: (encId: number) => void; isPending: boolean; variables?: number };
   setActiveTab: (tab: string) => void;
-  aiAnalysis: { totalDx: number; hccDx: number; analyzedEncounters: number; totalEncounters: number; diagnoses: any[]; aiOnlyCodes: any[]; aiOnlyCount: number } | null;
+  aiAnalysis: {
+    totalDx: number;
+    hccDx: number;
+    analyzedEncounters: number;
+    totalEncounters: number;
+    diagnoses: AIDiagnosis[];
+    aiOnlyCodes: AIDiagnosis[];
+    aiOnlyCount: number;
+  } | null;
   selectedYear: number;
-  meds?: any;
-  labSuspects?: any;
-  vitalsSuspects?: any;
+  meds?: MedicationsResponse | Array<{ drug?: string }>;
+  labSuspects?: ClinicalFindingsResponse | Array<unknown>;
+  vitalsSuspects?: ClinicalFindingsResponse | Array<unknown>;
 }) {
   const encountersWithNotes = (encounters?.encounters || []).filter(
     (e: EncounterItem) => !!e.notes || !!e.has_notes
@@ -230,10 +238,10 @@ export function OverviewTab({
     if (Array.isArray(recapture)) return recapture;
     const r = recapture as Partial<{ gaps: RecaptureGapItem[]; recapture_gaps: RecaptureGapItem[] }>;
     const raw = r?.gaps ?? r?.recapture_gaps ?? [];
-    return raw.map((g: any) => ({
+    return raw.map((g: RecaptureGapItem) => ({
       ...g,
-      description: g.description || g.title || "",
-      icd10_code: g.icd10_code || (g.diagnosis?.includes(":") ? g.diagnosis.split(":").pop()?.trim() : g.diagnosis) || "",
+      description: g.description || g.label || "",
+      icd10_code: g.icd10_code || "",
     }));
   })();
 
@@ -402,7 +410,7 @@ export function OverviewTab({
                 AI-Identified Codes Not Yet in Billing
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {aiAnalysis.aiOnlyCodes.map((dx: any, i: number) => (
+                {aiAnalysis.aiOnlyCodes.map((dx: AIDiagnosis, i: number) => (
                   <span key={dx.code || dx.icd10_code || i} style={{
                     display: "inline-flex", alignItems: "center", gap: 6,
                     padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 500,

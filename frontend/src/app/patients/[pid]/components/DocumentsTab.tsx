@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import type { MEATEvidence } from "@/types";
 import api from "@/lib/api";
-import type { DocumentsResponse } from "@/lib/api";
+import type { DocumentsResponse, DocumentItem } from "@/lib/api";
 import {
   uploadPatientDocument,
   getDocumentAnalysis,
@@ -172,8 +172,8 @@ export function DocumentsTab({
 
   const docList = useMemo(() => {
     const all = documents?.documents ?? [];
-    return all.filter((d: any) => {
-      const dateStr = d.upload_date || d.created_at || d.encounter_date;
+    return all.filter((d: DocumentItem) => {
+      const dateStr = d.upload_date || d.created_at || (d as DocumentItem & { encounter_date?: string }).encounter_date;
       if (!dateStr) return true;
       return new Date(dateStr).getFullYear() === selectedYear;
     });
@@ -319,7 +319,7 @@ export function DocumentsTab({
           </Card>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {docList.map((doc: any, idx: number) => {
+            {docList.map((doc: DocumentItem, idx: number) => {
               const status = DOC_STATUS_STYLES[doc.status] ?? DOC_STATUS_STYLES.pending;
               const docId = doc.id ?? doc.document_id;
               const isAnalysisOpen = expandedAnalysis === docId;

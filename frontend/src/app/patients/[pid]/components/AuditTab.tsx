@@ -125,9 +125,10 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
                   <button
                     type="button"
                     onClick={() =>
-                      downloadAuditPackage(pkg.id).catch((err: any) =>
-                        alert(err?.response?.data?.detail || err?.message || "Download failed"),
-                      )
+                      downloadAuditPackage(pkg.id).catch((err: unknown) => {
+                        const e = err as { response?: { data?: { detail?: string } }; message?: string };
+                        alert(e?.response?.data?.detail || e?.message || "Download failed");
+                      })
                     }
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 4,

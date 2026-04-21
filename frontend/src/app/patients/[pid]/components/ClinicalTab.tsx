@@ -11,6 +11,7 @@ import type {
   FamilyHistoryResponse,
   SdohResponse,
   MedicationGapsResponse,
+  VitalsLatest,
 } from "@/lib/api";
 import {
   EmptyState,
@@ -154,7 +155,7 @@ export function ClinicalTab({
     if (Array.isArray(medGaps)) return medGaps;
     const mg = medGaps as Partial<{ gaps: Array<{ description?: string; condition?: string; gap?: string; drug?: string; medication?: string; icd_code?: string; icd10_code?: string; evidence?: string; rationale?: string }> }>;
     if (mg?.gaps && Array.isArray(mg.gaps)) {
-      return mg.gaps.map((g: any) => ({
+      return mg.gaps.map((g: { description?: string; condition?: string; gap?: string; drug?: string; medication?: string; icd_code?: string; icd10_code?: string; evidence?: string; rationale?: string }) => ({
         condition: g.description || g.condition || g.gap || "",
         medication: g.drug || g.medication || "",
         drug: g.drug || "",
@@ -240,7 +241,7 @@ export function ClinicalTab({
                 const language = (profile?.demographics?.language as string) || patient?.language || "\u2014";
                 const address = [patient?.street, patient?.city, patient?.state, patient?.postal_code].filter(Boolean).join(", ") || (profile?.demographics?.address as string) || "\u2014";
                 const phone = patient?.phone_home || patient?.phone_cell || (profile?.demographics?.phone as string) || "\u2014";
-                const email = (patient as any)?.email || "\u2014";
+                const email = (patient as Patient & { email?: string })?.email || "\u2014";
                 const enrollment = profile?.enrollment as Record<string, string> | undefined;
                 const fmtLabel = (s: string) => s ? s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "\u2014";
                 const race = fmtLabel(rawRace);
@@ -341,15 +342,17 @@ export function ClinicalTab({
         {activeSection === "vitals" && (
           <ClinicalSection title="Vitals" loading={vitalsLoading}>
             {(() => {
-              const v = (vitalsSuspects as any)?.latest_vitals || (profile as any)?.vitals?.latest;
+              const v = (vitalsSuspects as ClinicalFindingsResponse)?.latest_vitals || (profile?.vitals?.latest as VitalsLatest | undefined);
               if (!v) return <EmptyState title="No vitals recorded" />;
-              const bmi = v.weight && v.height ? (v.weight / ((v.height / 100) ** 2)).toFixed(1) : null;
+              const wt = v.weight != null ? Number(v.weight) : null;
+              const ht = v.height != null ? Number(v.height) : null;
+              const bmi = wt && ht ? (wt / ((ht / 100) ** 2)).toFixed(1) : null;
               return (
                 <div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 32px", padding: "16px 20px" }}>
                     <div>
-                      <DataRow label="Weight" value={v.weight ? `${v.weight} kg (${(v.weight * 2.205).toFixed(1)} lbs)` : "\u2014"} />
-                      <DataRow label="Height" value={v.height ? `${v.height} cm (${(v.height / 2.54).toFixed(0)}\u2033)` : "\u2014"} />
+                      <DataRow label="Weight" value={wt ? `${wt} kg (${(wt * 2.205).toFixed(1)} lbs)` : "\u2014"} />
+                      <DataRow label="Height" value={ht ? `${ht} cm (${(ht / 2.54).toFixed(0)}\u2033)` : "\u2014"} />
                       <DataRow label="BMI" value={bmi ? `${bmi} kg/m\u00B2` : "\u2014"} />
                     </div>
                     <div>
@@ -384,7 +387,8 @@ export function ClinicalTab({
         {activeSection === "labs" && (
           <ClinicalSection title="Lab Results" loading={labsLoading}>
             {(() => {
-              const labResults = ((labSuspects as any)?.labs?.results || []) as Array<{ id?: number; result_text?: string; date?: string; encounter?: number }>;
+              // labSuspects may carry a labs.results field not in the typed interface (extended backend response)
+              const labResults = ((labSuspects as ClinicalFindingsResponse & { labs?: { results?: Array<{ id?: number; result_text?: string; date?: string; encounter?: number }> } })?.labs?.results ?? []);
               if (!labResults.length && !labItems.length) return <EmptyState title="No lab results" />;
               const parsed = labResults.map((l) => {
                 const rt = l.result_text || "";

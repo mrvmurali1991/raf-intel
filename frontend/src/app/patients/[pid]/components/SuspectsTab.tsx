@@ -58,15 +58,15 @@ export function SuspectsTab({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>
-                    {s.suspected_condition || (s as any).description || s.evidence_type || "\u2014"}
+                    {s.suspected_condition || s.condition || s.evidence_type || "\u2014"}
                   </span>
-                  {(s.suspect_icd10 || (s as any).icd10_code) && (
+                  {(s.suspect_icd10 || s.icd10_code) && (
                     <span style={{
                       display: "inline-block", padding: "2px 8px", borderRadius: 4,
                       fontSize: 11, fontWeight: 600, fontFamily: "monospace",
                       background: C.slate100, color: C.slate700, border: `1px solid ${C.slate200}`,
                     }}>
-                      {s.suspect_icd10 || (s as any).icd10_code}
+                      {s.suspect_icd10 || s.icd10_code}
                     </span>
                   )}
                   {(s.suspect_hcc != null) && (
@@ -82,19 +82,19 @@ export function SuspectsTab({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                   <ConfidencePill value={confidence} />
                 </div>
-                {(s.evidence_detail || (s as any).evidence || (s as any).rationale) && (
+                {(s.evidence_detail || s.evidence || s.rationale) && (
                   <div style={{
                     fontSize: 13, color: C.slate500, marginTop: 8, lineHeight: 1.5,
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                   }}>
                     {typeof s.evidence_detail === "object" && s.evidence_detail
-                      ? `Prior ${(s.evidence_detail as any).prior_icd || ""} (${(s.evidence_detail as any).prior_year || ""})`
-                      : s.evidence_detail || (s as any).evidence || (s as any).rationale}
+                      ? `Prior ${(s.evidence_detail as { prior_icd?: string; prior_year?: string | number }).prior_icd || ""} (${(s.evidence_detail as { prior_icd?: string; prior_year?: string | number }).prior_year || ""})`
+                      : (typeof s.evidence_detail === "string" ? s.evidence_detail : null) || s.evidence || s.rationale}
                   </div>
                 )}
                 {s.meat_evidence && (
                   <div style={{ marginTop: 8 }}>
-                    <MeatDots evidence={s.meat_evidence || (s as any).meat} />
+                    <MeatDots evidence={s.meat_evidence} />
                   </div>
                 )}
                 {s.source && (

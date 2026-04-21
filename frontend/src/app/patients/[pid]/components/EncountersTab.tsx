@@ -274,24 +274,25 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                         const meta = analysis?._meta || {};
                         const pipeline = analysis?.pipeline || {};
                         const toolCalls = pipeline?.tool_calls || [];
-                        const icdCodes = diagnoses.map((d: any) => d.icd10).filter(Boolean);
-                        const hccLookups = toolCalls.filter((t: any) => t.function === "lookup_hcc");
-                        const medChecks = toolCalls.filter((t: any) => t.function === "check_medication_gaps");
+                        type PipelineToolCall = { function: string; args?: { medication?: string } };
+                        const icdCodes = diagnoses.map((d) => d.icd10).filter(Boolean) as string[];
+                        const hccLookups = (toolCalls as PipelineToolCall[]).filter((t) => t.function === "lookup_hcc");
+                        const medChecks = (toolCalls as PipelineToolCall[]).filter((t) => t.function === "check_medication_gaps");
                         return {
-                          model: meta.pipeline_version === "skill_v1" ? "ai-engine-v1" : "unknown",
+                          model: (meta as { pipeline_version?: string }).pipeline_version === "skill_v1" ? "ai-engine-v1" : "unknown",
                           patient_age: null, patient_sex: null,
-                          clinical_note_chars: pipeline.note_chars_submitted || pipeline.note_chars_original || 0,
+                          clinical_note_chars: (pipeline as { note_chars_submitted?: number; note_chars_original?: number }).note_chars_submitted || (pipeline as { note_chars_submitted?: number; note_chars_original?: number }).note_chars_original || 0,
                           temperature: 0.0,
-                          medications: medChecks.map((t: any) => t.args?.medication).filter(Boolean),
+                          medications: medChecks.map((t) => t.args?.medication).filter(Boolean) as string[],
                           existing_hccs: [], problem_list: [], recapture_gaps: [],
                           latest_vitals: {}, med_diagnoses: [], clinical_note_preview: null,
                           _reconstructed: true,
                           tool_calls_summary: {
-                            total: toolCalls.length, turns: meta.turns || 0,
-                            total_time: meta.total_time_seconds || 0,
-                            icd_validated: toolCalls.filter((t: any) => t.function === "validate_icd10").length,
+                            total: toolCalls.length, turns: (meta as { turns?: number }).turns || 0,
+                            total_time: (meta as { total_time_seconds?: number }).total_time_seconds || 0,
+                            icd_validated: (toolCalls as PipelineToolCall[]).filter((t) => t.function === "validate_icd10").length,
                             hcc_lookups: hccLookups.length, med_checks: medChecks.length,
-                            raf_calculated: toolCalls.filter((t: any) => t.function === "calculate_raf_score").length,
+                            raf_calculated: (toolCalls as PipelineToolCall[]).filter((t) => t.function === "calculate_raf_score").length,
                           },
                           extracted_icd_codes: icdCodes,
                         };
