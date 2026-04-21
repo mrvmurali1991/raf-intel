@@ -32,6 +32,7 @@ from typing import Any
 from app.db import raf_cursor
 from app.services import openemr_connector as emr
 from app.services.hcc_hierarchy import apply_hierarchy
+from app.services.nlp.context_detector import detect_context
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,66 @@ def _get_all_patient_ids(tenant_id: str) -> list[int]:
                 tenant_id,
             )
         return [r["patient_id"] for r in cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Context-aware filter shared by the rule-based scans.
+#
+# A candidate suspect is REJECTED if the note snippet negates / hypothesises
+# the concept or attributes it to a family member.  Historical mentions are
+# NOT rejected — they represent recapture opportunities — but their
+# confidence is damped so the reviewer sees them below active findings.
+# ---------------------------------------------------------------------------
+
+def _apply_context_filter(
+    snippet: str,
+    target_text: str,
+    base_confidence: float,
+) -> tuple[bool, float, dict[str, bool | str]]:
+    """
+    Run the clinical context detector on *target_text* inside *snippet*.
+
+    Returns
+    -------
+    accept : bool
+        False when the context detector says the concept is negated,
+        hypothetical or attributed to a family member — the suspect
+        must be dropped.
+    adjusted_confidence : float
+        base_confidence, optionally dampened for historical / uncertain
+        mentions that are still admissible.
+    context_meta : dict
+        Raw detector output for inclusion in the suspect's evidence blob
+        so reviewers can see why the confidence was adjusted.
+    """
+    if not snippet or not target_text:
+        return True, base_confidence, {}
+
+    lower_snippet = snippet.lower()
+    needle = target_text.lower().strip()
+    if not needle:
+        return True, base_confidence, {}
+
+    pos = lower_snippet.find(needle)
+    if pos < 0:
+        # Target is not verbatim in the snippet — we cannot safely classify
+        # context, so default to accepting with the base confidence rather
+        # than silently dropping a real finding.
+        return True, base_confidence, {}
+
+    ctx = detect_context(snippet, pos, pos + len(needle))
+
+    if ctx["negated"] or ctx["hypothetical"] or ctx["family"]:
+        return False, 0.0, dict(ctx)
+
+    adjusted = base_confidence
+    if ctx["historical"]:
+        # Recapture-relevant but not active; dampen.
+        adjusted = round(adjusted * 0.75, 4)
+    if ctx["uncertain"]:
+        adjusted = round(adjusted * 0.85, 4)
+
+    return True, adjusted, dict(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -654,6 +715,21 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
                 else str(created_raw or "")
             )
 
+            description = dx.get("description") or f"Found in clinical note – {icd}"
+            note_snippet = dx.get("note_snippet") or ""
+            base_conf = float(dx.get("confidence") or 0.6)
+
+            accept, adjusted_conf, ctx_meta = _apply_context_filter(
+                note_snippet, description, base_conf,
+            )
+            if not accept:
+                logger.info(
+                    "scan_note_vs_billing pid=%s dropped negated/family/hypothetical suspect "
+                    "icd=%s description=%s context=%s",
+                    patient_id, icd, description, ctx_meta,
+                )
+                continue
+
             fp = _suspect_fingerprint(patient_id, "nlp", icd)
             suspects.append({
                 "patient_id": patient_id,
@@ -661,14 +737,15 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
                 "source": "nlp",
                 "suspected_icd": icd,
                 "suspected_hcc": hcc,
-                "description": dx.get("description") or f"Found in clinical note – {icd}",
-                "confidence": float(dx.get("confidence") or 0.6),
+                "description": description,
+                "confidence": adjusted_conf,
                 "measurement_year": year,
                 "evidence": {
                     "nlp_job_id": job.get("id"),
                     "encounter_id": job.get("encounter_id"),
                     "analysis_date": analysis_date,
-                    "note_snippet": dx.get("note_snippet") or "",
+                    "note_snippet": note_snippet,
+                    "context": ctx_meta,
                 },
             })
 
@@ -801,15 +878,32 @@ def save_suspects_from_analysis(
         description = sc.get("condition") or sc.get("description") or ""
         confidence = float(sc.get("confidence") or 0.6)
         source = sc.get("evidence_type") or sc.get("source") or "nlp"
+        evidence_text = sc.get("evidence") or ""
 
         if not icd and not description:
             continue
 
+        # Context guard — only for non-LLM sources.  The LLM pipeline
+        # already handles negation/uncertainty via prompt.
+        ctx_meta: dict[str, bool | str] = {}
+        if source not in ("llm", "gemini") and isinstance(evidence_text, str):
+            accept, confidence, ctx_meta = _apply_context_filter(
+                evidence_text, description, confidence,
+            )
+            if not accept:
+                logger.info(
+                    "save_suspects_from_analysis pid=%s dropped negated/family/hypothetical "
+                    "suspect source=%s description=%s context=%s",
+                    patient_id, source, description, ctx_meta,
+                )
+                continue
+
         fp = _suspect_fingerprint(patient_id, source, icd or description)
         evidence = {
             "encounter_id": encounter_id,
-            "evidence_text": sc.get("evidence") or "",
+            "evidence_text": evidence_text,
             "source": source,
+            "context": ctx_meta,
         }
         row_id = _store_suspect(
             {

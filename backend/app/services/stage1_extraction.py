@@ -63,6 +63,14 @@ except ImportError:  # pragma: no cover
     coefficients_default = {}
     _HCC_AVAILABLE = False
 
+# NOTE: For span-level negation / uncertainty / family / hypothetical /
+# historical classification (used by suspect_engine and MEAT upgrades),
+# see ``app.services.nlp.context_detector``.  This module's
+# ``extract_negations`` only returns a flat list of negation *phrases*
+# for downstream LLM prompting; it deliberately uses its own narrower
+# capture regexes and does not share trigger constants with the context
+# detector to avoid a regex-structure coupling.
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
