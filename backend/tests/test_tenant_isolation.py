@@ -15,7 +15,7 @@ Markers: security
 from __future__ import annotations
 
 from contextlib import contextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -25,7 +25,6 @@ from tests.conftest import (
     MockCursor,
     _make_access_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -345,10 +344,11 @@ class TestJWTTenantClaimOverride:
     """
 
     def test_crafted_token_with_elevated_tenant_id_uses_db_value(self, client):
-        import jwt as pyjwt
         from datetime import datetime, timedelta, timezone
 
-        from tests.conftest import TEST_JWT_SECRET, TEST_JWT_ALGORITHM
+        import jwt as pyjwt
+
+        from tests.conftest import TEST_JWT_ALGORITHM, TEST_JWT_SECRET
 
         # Attacker has tenant_id=1 in DB but crafts a token claiming tenant_id=2
         real_user = dict(MOCK_ADMIN_USER)  # tenant_id=1 in DB

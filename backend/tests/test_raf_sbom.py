@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-
 from app.services.raf.provenance import (
     _manifest_pin,
     build_score_sbom,
@@ -30,7 +29,6 @@ from app.services.raf.provenance import (
     coefficient_manifest_hash,
     coefficient_source,
 )
-
 
 _MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]

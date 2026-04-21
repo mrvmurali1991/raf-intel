@@ -31,7 +31,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "provider_query.md"
 
@@ -51,12 +51,12 @@ class SupportingCitation:
 
 @dataclass
 class ProviderQuery:
-    to_provider_id: Optional[str]
+    to_provider_id: str | None
     patient_id: str
     subject: str
     body: str
-    supporting_citations: List[SupportingCitation] = field(default_factory=list)
-    compliance_flags: List[str] = field(default_factory=list)
+    supporting_citations: list[SupportingCitation] = field(default_factory=list)
+    compliance_flags: list[str] = field(default_factory=list)
 
     @property
     def requires_human_review(self) -> bool:
@@ -118,7 +118,7 @@ _OPTION_MARKER = re.compile(r"^\s*(?:[a-eA-E]\)|[-*•]|\d+[.)])\s+", re.M)
 _QUESTION_MARK = re.compile(r"\?")
 
 
-def lint(query: "ProviderQuery") -> List[str]:
+def lint(query: ProviderQuery) -> list[str]:
     """Run all compliance checks. Returns list of flag codes (possibly empty)."""
     flags: list[str] = []
     text = f"{query.subject}\n{query.body}"
@@ -206,7 +206,7 @@ def generate_query(
     candidate: Any,
     bundle: Any,
     *,
-    meat_gaps: Optional[list[str]] = None,
+    meat_gaps: list[str] | None = None,
     llm_fn=None,
 ) -> ProviderQuery:
     """Draft a compliant provider query for a failed-MEAT candidate.

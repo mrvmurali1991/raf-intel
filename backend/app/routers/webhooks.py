@@ -25,8 +25,8 @@ from pydantic import BaseModel, Field, HttpUrl
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
 from app.services.webhook_service import (
-    WEBHOOK_EVENTS,
     WEBHOOK_EVENT_DESCRIPTIONS,
+    WEBHOOK_EVENTS,
     delete_webhook,
     get_webhook,
     get_webhook_deliveries,

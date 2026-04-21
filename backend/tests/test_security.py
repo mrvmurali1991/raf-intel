@@ -18,7 +18,6 @@ Markers: security
 
 from __future__ import annotations
 
-import io
 import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -29,14 +28,13 @@ import pytest
 
 from tests.conftest import (
     MOCK_ADMIN_USER,
-    MOCK_VIEWER_USER,
     MOCK_TENANT_B_USER,
-    TEST_JWT_SECRET,
+    MOCK_VIEWER_USER,
     TEST_JWT_ALGORITHM,
-    _make_access_token,
+    TEST_JWT_SECRET,
     MockCursor,
+    _make_access_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -324,7 +322,6 @@ class TestRateLimiting:
 
     def test_rate_limiter_configured_on_login(self):
         """Verify the login route has rate limit decorator in source."""
-        from app.routers.auth import login
         # The @limiter.limit("5/minute") decorator patches the function
         # Check that the app uses slowapi limiter
         from app.rate_limit import limiter
@@ -336,7 +333,7 @@ class TestRateLimiting:
         # may have been exhausted by earlier test runs.  We reset the limiter state
         # and use a test-unique X-Forwarded-For header to avoid cross-test pollution.
         import time
-        from app.rate_limit import limiter
+
 
         # Reset limiter storage between tests using a unique forwarded IP
         unique_ip = f"10.99.{int(time.time()) % 256}.1"
@@ -361,11 +358,9 @@ class TestRateLimiting:
         Simulate what happens when rate limit fires by testing the error handler.
         We mock the rate limiter to raise RateLimitExceeded directly.
         """
-        from slowapi.errors import RateLimitExceeded
-        from slowapi.util import get_remote_address
-
         # Just verify the 429 handler is registered by checking it exists in app
         from app.main import app as _app
+        from slowapi.errors import RateLimitExceeded
         # The app registers _rate_limit_exceeded_handler
         # Verify the handler is in the app's exception handlers
         exception_handlers = getattr(_app, "exception_handlers", {})
@@ -395,6 +390,7 @@ class TestTenantIsolation:
 
         # Craft a token that claims tenant_id=2
         from datetime import datetime, timedelta, timezone
+
         import jwt as _jwt
 
         payload = {
@@ -480,8 +476,9 @@ class TestJWTTypeClaim:
 
     def test_refresh_token_cannot_be_used_as_access_token(self, client):
         """A refresh-type JWT must be rejected by the access-token validation path."""
-        from app.config import settings
         import uuid
+
+        from app.config import settings
 
         session_id = str(uuid.uuid4())
         refresh_payload = {

@@ -91,7 +91,6 @@ def sanitize_note_for_llm(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 try:
-    import jsonschema
     from jsonschema import Draft202012Validator  # type: ignore
     _HAS_JSONSCHEMA = True
 except Exception:  # pragma: no cover

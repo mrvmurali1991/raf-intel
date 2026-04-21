@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.services.ai_pipeline.extractor import (
     BLIND_MODEL,
     CONTEXTUAL_MODEL,

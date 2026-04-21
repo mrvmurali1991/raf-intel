@@ -18,8 +18,9 @@ Falls back to standalone REDIS_URL mode if Sentinel is not configured.
 import json
 import logging
 import os
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

@@ -27,7 +27,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -572,10 +572,9 @@ def parse_claims_file(filename: str, content: bytes) -> tuple[str, list[dict[str
 
     if fmt == FORMAT_CSV:
         return fmt, parse_csv_claims(content)
-    elif fmt == FORMAT_837I:
+    if fmt == FORMAT_837I:
         return fmt, parse_837i_claims(content)
-    else:
-        return fmt, parse_837p_claims(content)
+    return fmt, parse_837p_claims(content)
 
 
 # ---------------------------------------------------------------------------

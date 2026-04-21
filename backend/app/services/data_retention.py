@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -50,7 +50,7 @@ class RetentionPolicy:
     date_column: str
     description: str
 
-    def with_override(self, retention_days: int) -> "RetentionPolicy":
+    def with_override(self, retention_days: int) -> RetentionPolicy:
         """Return a copy of this policy with an overridden retention period."""
         return RetentionPolicy(
             table_name=self.table_name,

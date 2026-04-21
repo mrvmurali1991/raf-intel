@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, get_tenant_id, require_permission
+from app.auth import get_current_user, require_permission
 from app.services import raf_inbox
 
 logger = logging.getLogger(__name__)

@@ -20,8 +20,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from unittest.mock import patch
 
-import pytest
-
 from tests.conftest import (
     MOCK_ADMIN_USER,
     MOCK_VIEWER_USER,
@@ -29,7 +27,6 @@ from tests.conftest import (
     _make_access_token,
     _make_refresh_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers

@@ -12,9 +12,10 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -141,13 +142,13 @@ def _parse_json_lenient(raw: str) -> Any:
     s = raw.strip()
     try:
         return json.loads(s)
-    except Exception:
+    except json.JSONDecodeError:
         pass
     m = _JSON_FENCE_RE.search(s)
     if m:
         try:
             return json.loads(m.group(1))
-        except Exception:
+        except json.JSONDecodeError:
             pass
     # Fall back: slice between first '{' and last '}'.
     start = s.find("{")
@@ -155,7 +156,7 @@ def _parse_json_lenient(raw: str) -> Any:
     if start != -1 and end != -1 and end > start:
         try:
             return json.loads(s[start : end + 1])
-        except Exception:
+        except json.JSONDecodeError:
             pass
     raise ValueError(f"Could not parse JSON from LLM output: {raw[:240]!r}")
 
@@ -166,11 +167,11 @@ def _generate_json(
     model: str,
     temperature: float = 0.1,
     max_retries: int = 2,
-    _llm: Optional[Callable[..., str]] = None,
+    _llm: Callable[..., str] | None = None,
 ) -> Any:
     """Call the LLM and parse JSON, retrying once with a repair nudge."""
     fn = _llm or llm_generate
-    last_err: Optional[Exception] = None
+    last_err: Exception | None = None
     raw: str = ""
     for attempt in range(max_retries + 1):
         current_prompt = prompt
@@ -200,7 +201,7 @@ CONTEXTUAL_MODEL = "gemini-2.5-pro"
 def extract_blind(
     note_text: str,
     *,
-    _llm: Optional[Callable[..., str]] = None,
+    _llm: Callable[..., str] | None = None,
 ) -> list[BlindCandidate]:
     """Pass 1: extract candidate conditions from the note with no context."""
     if not note_text or not note_text.strip():
@@ -246,11 +247,11 @@ def _bundle_to_jsonable(bundle: Any) -> Any:
         if callable(fn):
             try:
                 return fn()
-            except Exception:
+            except (TypeError, ValueError, AttributeError):  # noqa: BLE001
                 continue
     try:
         return asdict(bundle)  # dataclass
-    except Exception:
+    except TypeError:  # noqa: BLE001 — not a dataclass; fall through
         pass
     # Last resort: shallow __dict__.
     return getattr(bundle, "__dict__", {}) or {}
@@ -261,7 +262,7 @@ def extract_contextual(
     bundle: Any,
     blind_candidates: list[BlindCandidate],
     *,
-    _llm: Optional[Callable[..., str]] = None,
+    _llm: Callable[..., str] | None = None,
 ) -> list[HCCCandidate]:
     """Pass 2: using note + PatientContextBundle + blind candidates, decide
     MEAT compliance and recapture-vs-new for each candidate."""

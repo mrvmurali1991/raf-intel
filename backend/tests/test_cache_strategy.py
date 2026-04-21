@@ -18,10 +18,9 @@ Test coverage:
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # In-process fake Redis backed by a plain dict
@@ -212,7 +211,6 @@ class TestTenantCachedDecorator:
         def fn(*, tenant_id: str):
             nonlocal call_count
             call_count += 1
-            return None
 
         fn(tenant_id="t1")
         fn(tenant_id="t1")
@@ -249,7 +247,6 @@ class TestCacheInvalidation:
 
     def test_invalidate_raf_scores_removes_raf_keys(self, fake_redis):
         """invalidate_raf_scores() must remove raf_breakdown keys for the target tenant."""
-        import app.cache as cache_mod
         from app.services.cache_strategy import invalidate_raf_scores
 
         # Manually seed cache keys to simulate a warm cache

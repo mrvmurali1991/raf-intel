@@ -47,11 +47,15 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 try:
-    from hccinfhir.defaults import dx_to_cc_default, labels_default, coefficients_default
+    from hccinfhir.defaults import (
+        coefficients_default,
+        dx_to_cc_default,
+        labels_default,
+    )
     _HCC_AVAILABLE = True
 except ImportError:  # pragma: no cover
     dx_to_cc_default = {}

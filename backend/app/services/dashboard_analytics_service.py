@@ -17,7 +17,7 @@ belong to the tenant and are marked is_active = 1.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from app.config import settings

@@ -21,15 +21,14 @@ POST   /api/fhir/conditions/{connection_id}/process - Process conditions → HCC
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
 import logging
-import threading
 from typing import Any, Literal
 
-from fastapi import Depends, APIRouter, HTTPException, Query, BackgroundTasks
-from app.auth import get_current_user, get_tenant_id, require_permission
-from app.services.audit_logger import log_phi_access
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
 
 import app.services.fhir_service as fhir_svc
+from app.auth import get_current_user, get_tenant_id, require_permission
+from app.services.audit_logger import log_phi_access
 from app.services.circuit_breaker import CircuitBreakerError
 
 logger = logging.getLogger(__name__)

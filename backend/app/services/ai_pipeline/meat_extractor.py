@@ -23,9 +23,10 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any
 
 from app.services.llm import llm_generate
 
@@ -76,7 +77,7 @@ _F2F_TOKENS: tuple[str, ...] = (
 )
 
 
-def is_face_to_face_encounter(encounter_type: Optional[str]) -> bool:
+def is_face_to_face_encounter(encounter_type: str | None) -> bool:
     """Return True iff ``encounter_type`` denotes a face-to-face visit."""
     if not encounter_type:
         return False
@@ -104,7 +105,7 @@ def _normalise_ws(s: str) -> str:
     return _WS_RE.sub(" ", s).strip()
 
 
-def validate_quote_in_source(quote: Optional[str], note: str) -> bool:
+def validate_quote_in_source(quote: str | None, note: str) -> bool:
     """Return True iff ``quote`` is a verbatim substring of ``note``.
 
     An exact match is preferred.  Because LLMs often normalise internal
@@ -132,14 +133,14 @@ def validate_quote_in_source(quote: Optional[str], note: str) -> bool:
 class MEATEvidence:
     """Structured MEAT-evidence record for a single HCC candidate."""
 
-    m_quote: Optional[str] = None
-    e_quote: Optional[str] = None
-    a_quote: Optional[str] = None
-    t_quote: Optional[str] = None
-    encounter_date: Optional[str] = None
+    m_quote: str | None = None
+    e_quote: str | None = None
+    a_quote: str | None = None
+    t_quote: str | None = None
+    encounter_date: str | None = None
     is_face_to_face: bool = False
     overall_valid: bool = False
-    reason_if_invalid: Optional[str] = None
+    reason_if_invalid: str | None = None
     dropped_quotes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -162,9 +163,9 @@ def _load_prompt_template() -> str:
 def _render_prompt(
     candidate: Any,
     note: str,
-    encounter_type: Optional[str],
-    encounter_date: Optional[str],
-    extra_reminder: Optional[str] = None,
+    encounter_type: str | None,
+    encounter_date: str | None,
+    extra_reminder: str | None = None,
 ) -> str:
     tmpl = _load_prompt_template()
     icd10 = getattr(candidate, "icd10", None) or getattr(candidate, "code", "")
@@ -212,7 +213,7 @@ def _parse_json(text: str) -> dict[str, Any]:
 def extract_meat_evidence(
     candidate: Any,
     note: str,
-    context: Optional[Mapping[str, Any]] = None,
+    context: Mapping[str, Any] | None = None,
     *,
     model: str = _MODEL,
     llm: Any = None,
@@ -261,7 +262,7 @@ def extract_meat_evidence(
 
     prompt = _render_prompt(candidate, note, encounter_type, encounter_date)
     parsed: dict[str, Any] = {}
-    last_err: Optional[str] = None
+    last_err: str | None = None
     for attempt in range(2):
         try:
             raw = llm_call(prompt, model=model, temperature=0.0)
@@ -291,7 +292,7 @@ def extract_meat_evidence(
     # Validate every quote against the note.  Any non-verbatim quote is
     # dropped and recorded in dropped_quotes.
     dropped: list[str] = []
-    clean: dict[str, Optional[str]] = {}
+    clean: dict[str, str | None] = {}
     for key in ("m_quote", "e_quote", "a_quote", "t_quote"):
         val = parsed.get(key)
         if val in (None, "", "null"):
@@ -333,7 +334,7 @@ def extract_meat_evidence(
 
     any_meat = any(clean.values())
     overall_valid = bool(any_meat and f2f)
-    reason: Optional[str] = None
+    reason: str | None = None
     if not overall_valid:
         if not any_meat:
             reason = "no verbatim MEAT evidence found in note"

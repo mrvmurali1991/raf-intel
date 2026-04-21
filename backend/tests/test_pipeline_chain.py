@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,16 +32,13 @@ import pytest
 os.environ["RAF_AUTO_CHAIN"] = "true"
 
 from app.services.pipeline_chain import (
+    _auto_chain_enabled,
+    _fetch_active_patient_ids,
     _handle_emr_sync_completed,
     _handle_normalization_completed,
     _handle_raf_calculation_completed,
-    _fetch_active_patient_ids,
     setup_pipeline_chain,
-    _auto_chain_enabled,
-    PIPELINE_AUTO_CHAIN_ENABLED,
 )
-from app.services import event_emitter as _ev
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,11 +93,10 @@ class TestAutoChainEnabled:
 
 class TestSetupPipelineChain:
     def test_registers_three_handlers(self):
-        with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "true"}):
-            with patch(
-                "app.services.event_emitter.register_handler"
-            ) as mock_reg:
-                setup_pipeline_chain()
+        with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "true"}), patch(
+            "app.services.event_emitter.register_handler"
+        ) as mock_reg:
+            setup_pipeline_chain()
         assert mock_reg.call_count == 3
         event_names = [c.args[0] for c in mock_reg.call_args_list]
         assert "emr_sync_completed" in event_names
@@ -108,11 +104,10 @@ class TestSetupPipelineChain:
         assert "raf_calculation_completed" in event_names
 
     def test_no_registration_when_disabled(self):
-        with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "false"}):
-            with patch(
-                "app.services.event_emitter.register_handler"
-            ) as mock_reg:
-                setup_pipeline_chain()
+        with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "false"}), patch(
+            "app.services.event_emitter.register_handler"
+        ) as mock_reg:
+            setup_pipeline_chain()
         mock_reg.assert_not_called()
 
 

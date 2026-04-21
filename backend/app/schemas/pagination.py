@@ -23,10 +23,10 @@ Usage in a router:
 # Note: do NOT use 'from __future__ import annotations' here —
 # it breaks FastAPI/Pydantic schema generation (ForwardRef errors in /openapi.json).
 
-from typing import Any, Generic, Optional, TypeVar
-from pydantic import BaseModel, Field
-from fastapi import Query
+from typing import Any, TypeVar
 
+from fastapi import Query
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Query parameter schema
@@ -48,8 +48,8 @@ class PaginationParams:
         self,
         page: int = Query(default=1, ge=1, description="Page number (1-based)."),
         limit: int = Query(default=20, ge=1, le=500, description="Items per page (max 500)."),
-        sort_by: Optional[str] = Query(default=None, description="Field name to sort by."),
-        sort_dir: Optional[str] = Query(
+        sort_by: str | None = Query(default=None, description="Field name to sort by."),
+        sort_dir: str | None = Query(
             default="asc",
             pattern="^(asc|desc)$",
             description="Sort direction: 'asc' or 'desc'.",
@@ -124,8 +124,8 @@ class PaginatedResponse(BaseModel):
         items: list[Any],
         total: int,
         params: PaginationParams,
-        request_id: Optional[str] = None,
-        extra_meta: Optional[dict[str, Any]] = None,
+        request_id: str | None = None,
+        extra_meta: dict[str, Any] | None = None,
     ) -> dict:
         """
         Build a paginated response dict ready for FastAPI to serialize.
@@ -172,7 +172,7 @@ def cursor_meta(
     items: list[Any],
     limit: int,
     cursor_field: str = "id",
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Build metadata for cursor-based (keyset) pagination.
@@ -191,7 +191,7 @@ def cursor_meta(
         dict with has_next, next_cursor, and optional request_id.
     """
     has_next = len(items) == limit
-    next_cursor: Optional[Any] = None
+    next_cursor: Any | None = None
     if has_next and items:
         last = items[-1]
         next_cursor = (

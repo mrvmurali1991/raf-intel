@@ -19,7 +19,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Recording cursor
 # ---------------------------------------------------------------------------
@@ -202,12 +201,11 @@ def test_pipeline_end_to_end_smoke(fake_bundle):
                                     source="csv")
 
     # Patch llm_generate* at the package level for any downstream imports.
-    import app.services.llm.vertex_client as vertex_client
-
     # Wrap the real eligibility functions so the INSERT INTO ai_analysis_runs
     # and UPDATE ai_analysis_runs SQL hits our recording cursor — this is
     # required to satisfy the "writes to ai_analysis_runs" assertion.
     from app.services.ai_pipeline import eligibility as _elig
+    from app.services.llm import vertex_client
 
     _real_record_start = _elig.record_run_start
     _real_record_finish = _elig.record_run_finish

@@ -20,24 +20,21 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.services.recapture_gap_service import (
     _REVENUE_IMPACT_PER_GAP,
+    _hcc_description,
+    close_gap,
     detect_and_persist_gaps,
     detect_gaps,
-    resolve_gap,
-    list_gaps,
     get_gap_stats,
     get_patient_gaps,
-    close_gap,
-    get_gap_summary,
     get_recapture_bundle,
-    _hcc_description,
+    list_gaps,
+    resolve_gap,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -147,7 +144,7 @@ class TestDetectAndPersistGaps:
 
     def test_revenue_impact_assigned_per_gap(self):
         """Each gap should receive the standard revenue impact."""
-        assert _REVENUE_IMPACT_PER_GAP == pytest.approx(3000.00)
+        assert pytest.approx(3000.00) == _REVENUE_IMPACT_PER_GAP
 
     def test_empty_prior_year_returns_zeros(self):
         """When there are no prior-year HCCs, no gaps are inserted and total_open=0."""

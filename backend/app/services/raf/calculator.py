@@ -26,43 +26,42 @@ import logging
 from datetime import date, datetime
 from typing import Any, Literal
 
-from hccinfhir import HCCInFHIR, Demographics  # noqa: F401 (Demographics re-exported for compat)
+from hccinfhir import (  # noqa: F401 (Demographics re-exported for compat)
+    Demographics,
+    HCCInFHIR,
+)
 
-from app.db import raf_cursor, openemr_cursor
-from app.cache import cache_get, cache_set, cache_delete_pattern
+from app.cache import cache_delete_pattern, cache_get, cache_set
+from app.db import openemr_cursor, raf_cursor
 from app.services.cache_strategy import get_active_connection_id
-
-from app.services.raf.icd_formatter import _format_icd10
-from app.services.raf.blend_weights import (
-    _BLEND_WEIGHTS,
-    _PACE_BLEND_WEIGHTS,
-    _NORM_FACTORS_V28,
-    _NORM_FACTORS_V24,
-    _NORM_FACTORS_V22,
-    _NORM_FACTORS,
-    _MACI_FACTORS_V28,
-    _MACI_FACTORS_V24,
-    _MACI_FACTORS,
-    _get_norm_factor,
-    _get_maci_factor,
-)
-from app.services.raf.enrollment_resolver import (
-    _SEGMENT_TO_PREFIX,
-    determine_model_segment,
-    _is_new_enrollee,
-    _is_esrd,
-    _get_enrollment_from_raf_db,
-    _resolve_enrollment,
-)
 from app.services.hcc_hierarchy import (
     V24_HIERARCHY_CHAINS,
     V28_HIERARCHY_CHAINS,
 )
+from app.services.raf.blend_weights import (
+    _BLEND_WEIGHTS,
+    _MACI_FACTORS_V24,
+    _MACI_FACTORS_V28,
+    _NORM_FACTORS_V22,
+    _NORM_FACTORS_V24,
+    _NORM_FACTORS_V28,
+    _PACE_BLEND_WEIGHTS,
+    _get_maci_factor,
+    _get_norm_factor,
+)
+from app.services.raf.enrollment_resolver import (
+    _SEGMENT_TO_PREFIX,
+    _is_esrd,
+    _is_new_enrollee,
+    _resolve_enrollment,
+    determine_model_segment,
+)
+from app.services.raf.icd_formatter import _format_icd10
 from app.services.raf.score_persistence import (
     _get_age_band_from_age,
     _store_patient_hccs,
-    _upsert_raf_score,
     _upsert_patient_demographics,
+    _upsert_raf_score,
 )
 
 logger = logging.getLogger(__name__)
@@ -1145,7 +1144,8 @@ def calculate_raf_score(
         logger.debug("Could not query deceased_date for patient %s: %s", patient_id, _de)
 
     if _deceased_date is not None:
-        from datetime import date as _date, datetime as _datetime
+        from datetime import date as _date
+        from datetime import datetime as _datetime
         # Normalise to a date object
         if isinstance(_deceased_date, str):
             try:
@@ -1194,7 +1194,7 @@ def calculate_raf_score(
     # 2. Get ICD-10 codes (with optional date-of-service filtering for sweep periods)
     sweep_info: dict[str, Any] = {}
     if sweep_period or dos_start or dos_end:
-        from app.services.sweep_periods import get_sweep_dates, filter_icd_codes_by_dos
+        from app.services.sweep_periods import filter_icd_codes_by_dos, get_sweep_dates
 
         if sweep_period and not (dos_start and dos_end):
             dos_start, dos_end = get_sweep_dates(measurement_year, sweep_period)
@@ -1530,7 +1530,7 @@ def calculate_raf_score(
                 "v28_calc": eval_v28,
                 "model": "blended",
             }
-        elif use_v28:
+        if use_v28:
             return {
                 "payment_raf": round(eval_v28["payment_raf"], 4),
                 "blended_raw": eval_v28["raw_raf"],  # type: ignore[index]
@@ -1541,17 +1541,16 @@ def calculate_raf_score(
                 "v28_calc": eval_v28,
                 "model": "v28",
             }
-        else:
-            return {
-                "payment_raf": round(eval_v24["payment_raf"], 4),
-                "blended_raw": eval_v24["raw_raf"],  # type: ignore[index]
-                "v24_raw": eval_v24["raw_raf"],
-                "v28_raw": 0.0,
-                "primary": eval_v24,  # type: ignore[index]
-                "v24_calc": eval_v24,
-                "v28_calc": None,
-                "model": "v24",
-            }
+        return {
+            "payment_raf": round(eval_v24["payment_raf"], 4),
+            "blended_raw": eval_v24["raw_raf"],  # type: ignore[index]
+            "v24_raw": eval_v24["raw_raf"],
+            "v28_raw": 0.0,
+            "primary": eval_v24,  # type: ignore[index]
+            "v24_calc": eval_v24,
+            "v28_calc": None,
+            "model": "v24",
+        }
 
     strict_res = _evaluate_track(icd_codes)
     prosp_res = _evaluate_track(prospective_icd_codes)

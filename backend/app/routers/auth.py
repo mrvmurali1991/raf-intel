@@ -31,7 +31,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -58,12 +58,10 @@ from app.services.auth_service import (
     query_audit_log,
     refresh_access_token,
     reset_password,
-    revoke_all_sessions,
     revoke_session,
     set_user_permissions,
     update_user,
     verify_and_activate_mfa,
-    validate_password_strength,
 )
 
 logger = logging.getLogger(__name__)

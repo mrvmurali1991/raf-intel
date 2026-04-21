@@ -20,12 +20,9 @@ All DB and service calls are mocked — no database or file I/O required.
 from __future__ import annotations
 
 import io
-import json
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -35,7 +32,6 @@ from tests.conftest import (
     _make_access_token,
     make_cursor_cm,
 )
-
 
 # ---------------------------------------------------------------------------
 # Mock document/analysis data

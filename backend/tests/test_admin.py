@@ -15,20 +15,15 @@ Markers: security (role tests)
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tests.conftest import (
     MOCK_ADMIN_USER,
-    MOCK_VIEWER_USER,
     MOCK_MANAGER_USER,
+    MOCK_VIEWER_USER,
     _make_access_token,
-    make_cursor_cm,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper: patch auth to resolve to a specific user

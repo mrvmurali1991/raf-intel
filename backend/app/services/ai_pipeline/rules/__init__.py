@@ -1,11 +1,11 @@
 """Suspect rule registry — one module per disease family."""
-from .diabetes import RULES as _DIABETES
-from .renal import RULES as _RENAL
 from .cardiac import RULES as _CARDIAC
-from .lipid import RULES as _LIPID
-from .respiratory import RULES as _RESPIRATORY
-from .hepatic import RULES as _HEPATIC
+from .diabetes import RULES as _DIABETES
 from .hematology import RULES as _HEMATOLOGY
+from .hepatic import RULES as _HEPATIC
+from .lipid import RULES as _LIPID
+from .renal import RULES as _RENAL
+from .respiratory import RULES as _RESPIRATORY
 
 ALL_RULES = [
     *_DIABETES,

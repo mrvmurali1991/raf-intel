@@ -9,9 +9,8 @@ Run with:
 """
 from __future__ import annotations
 
-import sys
 import os
-from datetime import date, timedelta
+import sys
 
 import pytest
 
@@ -84,7 +83,8 @@ class TestNewEnrolleeModel:
         We patch _get_patient and _get_icd_codes to avoid DB calls.
         """
         from app.services.raf_calculator import (
-            _NE_DEMO_SCORES, _calculate_age, determine_model_segment,
+            _NE_DEMO_SCORES,
+            determine_model_segment,
         )
         # Determine segment
         seg = determine_model_segment(
@@ -295,7 +295,7 @@ class TestCoefficientTableCompleteness:
 
     def test_icd_maps_no_zero_hcc(self):
         """No ICD should map to HCC 0."""
-        from app.services.multi_model_calculator import _RXHCC_ICD_MAP, _HHSHCC_ICD_MAP
+        from app.services.multi_model_calculator import _HHSHCC_ICD_MAP, _RXHCC_ICD_MAP
         for icd, hcc in _RXHCC_ICD_MAP.items():
             assert hcc != 0, f"ICD '{icd}' maps to RxHCC 0 (invalid)"
         for icd, hcc in _HHSHCC_ICD_MAP.items():
@@ -318,8 +318,8 @@ class TestAPIRequestModel:
         assert req.adl_data is None
 
     def test_enrollment_months_bounds(self):
-        from app.routers.raf import CalculateRequest
         import pydantic
+        from app.routers.raf import CalculateRequest
         with pytest.raises((pydantic.ValidationError, ValueError)):
             CalculateRequest(enrollment_months=0)
         with pytest.raises((pydantic.ValidationError, ValueError)):

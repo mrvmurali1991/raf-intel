@@ -327,12 +327,12 @@ def trigger_pipeline(
     The pipeline executes asynchronously; poll ``GET /api/pipeline/status`` to
     track progress.
     """
+    from app.services.event_emitter import emit_internal
     from app.services.pipeline_chain import (
         _create_run,
         _get_pipeline_settings,
         get_pipeline_run,
     )
-    from app.services.event_emitter import emit_internal
 
     # Validate requested phase names.
     if body.phases is not None:

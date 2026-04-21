@@ -22,11 +22,10 @@ from unittest.mock import patch
 
 import jwt
 import pytest
-
 from app.config import settings
 from app.services import auth_service
-from tests.conftest import MOCK_ADMIN_USER, MOCK_VIEWER_USER
 
+from tests.conftest import MOCK_ADMIN_USER, MOCK_VIEWER_USER
 
 # ---------------------------------------------------------------------------
 # Helpers

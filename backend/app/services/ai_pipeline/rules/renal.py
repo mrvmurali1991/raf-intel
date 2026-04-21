@@ -2,7 +2,12 @@
 from __future__ import annotations
 
 from ..suspect_schema import SuspectCandidate, SuspectRule
-from ._helpers import evidence_from_labs, has_icd_prefix, lab_values_below, lab_values_above
+from ._helpers import (
+    evidence_from_labs,
+    has_icd_prefix,
+    lab_values_above,
+    lab_values_below,
+)
 
 
 def _low_egfr(bundle: dict) -> SuspectCandidate | None:

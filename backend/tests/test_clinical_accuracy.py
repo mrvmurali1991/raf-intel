@@ -19,6 +19,7 @@ NOTE: All tests require a live backend AND a live Gemini API key.
 from __future__ import annotations
 
 import re
+
 import pytest
 import requests
 from fastapi.testclient import TestClient
@@ -246,7 +247,7 @@ class TestHCCMappingAccuracy:
             )
 
         assert not crosswalk_mismatches, (
-            f"HCC crosswalk mismatches detected:\n"
+            "HCC crosswalk mismatches detected:\n"
             + "\n".join(f"  - {m}" for m in crosswalk_mismatches)
         )
 

@@ -2,6 +2,17 @@
 MEAT evidence, suspect detection, HCC mapping, provider queries,
 guardrails, eligibility, and orchestration."""
 
+from .context_bundle import (
+    PatientContextBundle,
+    assemble_bundle,
+    to_llm_payload,
+)
+from .eligibility import (
+    can_run_analysis,
+    get_eligible_patients,
+    record_run_finish,
+    record_run_start,
+)
 from .extractor import (
     BlindCandidate,
     HCCCandidate,
@@ -10,20 +21,19 @@ from .extractor import (
     extract_contextual,
     sanitize_note,
 )
+from .guardrails import (
+    sanitize_note_for_llm,
+    scrub_pii_from_logs,
+    validate_llm_output,
+)
+from .hcc_mapper import HCCMapping, map_icd_to_hcc
 from .meat_extractor import (
     MEATEvidence,
     extract_meat_evidence,
     is_face_to_face_encounter,
     validate_quote_in_source,
 )
-from .context_bundle import (
-    PatientContextBundle,
-    assemble_bundle,
-    to_llm_payload,
-)
-from .suspect_engine import SuspectCandidate, detect_suspects
-from .suspect_schema import SupportingEvidence, SuspectRule
-from .hcc_mapper import HCCMapping, map_icd_to_hcc
+from .orchestrator import run_for_patient, schedule_daily
 from .provider_query import (
     LEADING_PATTERNS,
     ProviderQuery,
@@ -31,18 +41,8 @@ from .provider_query import (
     generate_query,
     lint,
 )
-from .orchestrator import run_for_patient, schedule_daily
-from .guardrails import (
-    sanitize_note_for_llm,
-    scrub_pii_from_logs,
-    validate_llm_output,
-)
-from .eligibility import (
-    can_run_analysis,
-    get_eligible_patients,
-    record_run_finish,
-    record_run_start,
-)
+from .suspect_engine import SuspectCandidate, detect_suspects
+from .suspect_schema import SupportingEvidence, SuspectRule
 
 # Back-compat alias: some callers may expect `extract_meat`.
 extract_meat = extract_meat_evidence

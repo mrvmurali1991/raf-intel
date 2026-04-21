@@ -27,13 +27,16 @@ import logging
 import time as _time
 from datetime import date as _date
 from datetime import datetime as _datetime
-from typing import Any, Optional
+from typing import Any
 
 from app.db import raf_cursor
 from app.services import openemr_connector as emr
-from app.services.raf_calculator import get_raf_breakdown
+from app.services.cache_strategy import (
+    TTL_PATIENT_LIST,
+    tenant_cached,
+)
 from app.services.emr_manager import active_patients_subquery
-from app.services.cache_strategy import tenant_cached, TTL_PATIENT_LIST, invalidate_patient_list
+from app.services.raf_calculator import get_raf_breakdown
 
 logger = logging.getLogger(__name__)
 
@@ -585,7 +588,7 @@ def svc_list_patients(
     limit: int,
     offset: int,
     search: str,
-    year: Optional[int],
+    year: int | None,
     tenant_id: str,
 ) -> dict[str, Any]:
     """Fetch paginated patient list and enrich with RAF scores.
@@ -767,7 +770,7 @@ def svc_get_clinical_notes(pid: int, encounter_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+def svc_get_encounters(pid: int, year: int | None, tenant_id: str) -> dict[str, Any]:
     """Return all encounters for *pid*, with enrichment from cached analysis."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
 
@@ -921,7 +924,7 @@ def svc_get_encounters(pid: int, year: Optional[int], tenant_id: str) -> dict[st
 # ---------------------------------------------------------------------------
 
 
-def svc_get_medications(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+def svc_get_medications(pid: int, year: int | None, tenant_id: str) -> dict[str, Any]:
     """Return all prescriptions for *pid*, with RAF DB fallback."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
     is_fhir = _patient_in_fhir_matches(pid, tenant_id=tenant_id)
@@ -1253,7 +1256,7 @@ def svc_get_procedures(pid: int, tenant_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def svc_get_problem_list(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+def svc_get_problem_list(pid: int, year: int | None, tenant_id: str) -> dict[str, Any]:
     """Return active medical problems for *pid*, with RAF DB fallback."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
 
@@ -1335,7 +1338,7 @@ def svc_get_problem_list(pid: int, year: Optional[int], tenant_id: str) -> dict[
 # ---------------------------------------------------------------------------
 
 
-def svc_get_recapture_gaps(pid: int, year: Optional[int], tenant_id: str) -> dict[str, Any]:
+def svc_get_recapture_gaps(pid: int, year: int | None, tenant_id: str) -> dict[str, Any]:
     """Return active problems not billed in *year*."""
     if year is None:
         year = _date.today().year
@@ -1358,7 +1361,7 @@ def svc_get_recapture_gaps(pid: int, year: Optional[int], tenant_id: str) -> dic
 
 
 def svc_get_vitals_suspects(
-    pid: int, year: Optional[int], tenant_id: str, patient: dict
+    pid: int, year: int | None, tenant_id: str, patient: dict
 ) -> dict[str, Any]:
     """Return vitals-based suspect conditions for *pid*."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
@@ -1430,7 +1433,7 @@ def svc_get_vitals_suspects(
 
 
 def svc_get_lab_suspects(
-    pid: int, year: Optional[int], tenant_id: str, patient: dict
+    pid: int, year: int | None, tenant_id: str, patient: dict
 ) -> dict[str, Any]:
     """Return rule-based lab/vitals suspect conditions for *pid*."""
     from app.services.lab_suspect_engine import run_lab_suspect_scan

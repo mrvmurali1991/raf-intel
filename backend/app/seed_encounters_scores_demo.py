@@ -9,7 +9,6 @@ It also cleans up orphaned data for non-existent patients (16-30) on every run.
 from __future__ import annotations
 
 import logging
-import random
 
 logger = logging.getLogger(__name__)
 

@@ -243,9 +243,8 @@ def get_patient_display_list(tenant_id: str) -> list[dict]:
                         "patient_id_for_raf": row["raf_patient_id"],
                     })
                 return result
-            else:
-                cur.execute(
-                    """
+            cur.execute(
+                """
                     SELECT id,
                            first_name,
                            last_name,
@@ -258,28 +257,28 @@ def get_patient_display_list(tenant_id: str) -> list[dict]:
                       AND tenant_id = %s
                     ORDER BY last_name, first_name
                     """,
-                    (tenant_id,),
-                )
-                rows = cur.fetchall()
-                result = []
-                for row in rows:
-                    dob = row["date_of_birth"]
-                    result.append({
-                        "id": row["id"],
-                        "first_name": row["first_name"] or "",
-                        "last_name": row["last_name"] or "",
-                        "date_of_birth": (
-                            dob.isoformat()
-                            if hasattr(dob, "isoformat")
-                            else (str(dob) if dob else None)
-                        ),
-                        "sex": row["sex"] or "",
-                        "mrn": row["mrn"] or "",
-                        "external_id": None,
-                        "source": "direct_db",
-                        "patient_id_for_raf": row["id"],
-                    })
-                return result
+                (tenant_id,),
+            )
+            rows = cur.fetchall()
+            result = []
+            for row in rows:
+                dob = row["date_of_birth"]
+                result.append({
+                    "id": row["id"],
+                    "first_name": row["first_name"] or "",
+                    "last_name": row["last_name"] or "",
+                    "date_of_birth": (
+                        dob.isoformat()
+                        if hasattr(dob, "isoformat")
+                        else (str(dob) if dob else None)
+                    ),
+                    "sex": row["sex"] or "",
+                    "mrn": row["mrn"] or "",
+                    "external_id": None,
+                    "source": "direct_db",
+                    "patient_id_for_raf": row["id"],
+                })
+            return result
     except Exception:
         logger.exception("get_patient_display_list failed for tenant=%s", tenant_id)
         return []

@@ -32,15 +32,12 @@ import pytest
 from tests.conftest import (
     MOCK_ADMIN_USER,
     MOCK_MFA_USER,
-    MOCK_TENANT_B_USER,
     MOCK_VIEWER_USER,
     TEST_JWT_ALGORITHM,
-    TEST_JWT_SECRET,
     MockCursor,
     _make_access_token,
     _make_refresh_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -305,7 +302,6 @@ class TestRateLimitingInfrastructure:
         assert limiter is not None
 
     def test_rate_limit_exceeded_handler_registered(self):
-        from slowapi.errors import RateLimitExceeded
         from app.main import app as _app
         handlers = getattr(_app, "exception_handlers", {})
         # Either as a direct handler or via middleware — just check it doesn't crash
@@ -313,8 +309,8 @@ class TestRateLimitingInfrastructure:
 
     def test_login_route_has_rate_limit_applied(self):
         """The login endpoint function should be decorated by the limiter."""
-        from app.routers.auth import login
         from app.rate_limit import limiter
+        from app.routers.auth import login
         # Limiter is properly configured — this is a configuration assertion
         assert limiter is not None
         # The function exists and is importable

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import random
-import re
 from copy import deepcopy
 from datetime import date, datetime, timedelta
 from typing import Any

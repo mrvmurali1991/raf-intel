@@ -40,11 +40,11 @@ class APIResponse(BaseModel, Generic[T]):
     errors: list[ErrorDetail] | None = Field(None, description="Error details on failure")
 
     @classmethod
-    def ok(cls, data: Any = None, message: str | None = None) -> "APIResponse":
+    def ok(cls, data: Any = None, message: str | None = None) -> APIResponse:
         return cls(success=True, data=data, message=message)
 
     @classmethod
-    def err(cls, message: str, errors: list[ErrorDetail] | None = None) -> "APIResponse":
+    def err(cls, message: str, errors: list[ErrorDetail] | None = None) -> APIResponse:
         return cls(success=False, data=None, message=message, errors=errors)
 
 

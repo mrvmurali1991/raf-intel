@@ -12,8 +12,8 @@ Domain responsibilities:
 - Suspect condition engine
 """
 from app.services.encounter_normalization_service import (  # noqa: F401
-    sync_encounters,
     sync_diagnoses,
+    sync_encounters,
 )
 from app.services.meat_validator import validate_meat  # noqa: F401
 

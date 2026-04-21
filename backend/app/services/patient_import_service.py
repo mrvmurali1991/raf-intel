@@ -33,9 +33,9 @@ import logging
 import re
 import threading
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
-from app.db import openemr_cursor, raf_cursor
+from app.db import raf_cursor
 
 try:
     import openpyxl
@@ -181,7 +181,7 @@ def get_import_template_xlsx() -> bytes:
         ) from _openpyxl_import_error
 
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
     wb = Workbook()
     ws = wb.active
@@ -460,9 +460,7 @@ def parse_patient_xlsx(file_bytes: bytes) -> tuple[list[dict[str, str]], list[st
 
                 # Excel stores dates as datetime / date objects when the cell
                 # has a date format applied.  Convert to canonical YYYY-MM-DD.
-                if isinstance(cell_val, datetime):
-                    cell_str = cell_val.strftime("%Y-%m-%d")
-                elif isinstance(cell_val, date):
+                if isinstance(cell_val, datetime) or isinstance(cell_val, date):
                     cell_str = cell_val.strftime("%Y-%m-%d")
                 else:
                     cell_str = str(cell_val).strip() if cell_val is not None else ""
@@ -1000,7 +998,7 @@ def import_patients(
     uploaded_by: str,
     on_duplicate: str = "skip",
     source: str = "csv",
-    tenant_id: Optional[int] = None,  # Will raise below if None
+    tenant_id: int | None = None,  # Will raise below if None
 ) -> dict[str, Any]:
     """
     Validate, deduplicate, and insert patients from parsed rows.
@@ -1205,7 +1203,7 @@ def import_patients(
                     )
                     continue
 
-                cols_sql = ", ".join(f"`{c}`" for c in values.keys())
+                cols_sql = ", ".join(f"`{c}`" for c in values)
                 placeholders = ", ".join(["%s"] * len(values))
                 sql = f"INSERT INTO patients ({cols_sql}) VALUES ({placeholders})"
                 cur.execute(sql, tuple(values.values()))

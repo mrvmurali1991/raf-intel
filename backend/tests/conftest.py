@@ -33,15 +33,12 @@ try:
         bcrypt.__about__ = _About()
 except ImportError:
     pass
-import uuid
-import warnings
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import jwt
-from unittest.mock import patch
 import pytest
 
 

@@ -19,10 +19,10 @@ The defaults (10 RPS / burst 20) are conservative for paid usage and safe
 for free-tier when a single worker runs sequentially.
 """
 
+import logging
 import os
 import threading
 import time
-import logging
 
 logger = logging.getLogger(__name__)
 

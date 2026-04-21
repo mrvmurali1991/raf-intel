@@ -20,11 +20,11 @@ Read-only join sources:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from app.db import raf_cursor
-from app.services.cache_strategy import tenant_cached, TTL_DASHBOARD
+from app.services.cache_strategy import TTL_DASHBOARD, tenant_cached
 
 logger = logging.getLogger(__name__)
 

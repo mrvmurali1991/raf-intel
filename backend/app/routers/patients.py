@@ -18,16 +18,16 @@ GET  /api/patients/{pid}/comprehensive-profile  - aggregated full patient pictur
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import Depends, APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 
-from app.services import openemr_connector as emr
-from app.services.audit_logger import log_phi_access
-from app.services import patient_service as svc
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
+from app.services import openemr_connector as emr
+from app.services import patient_service as svc
+from app.services.audit_logger import log_phi_access
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def _assert_encounter_belongs(encounter_id: int, patient_id: int, tenant_id: str
     cannot probe data belonging to patient B by supplying patient B's
     encounter_id in the URL path.
     """
-    from app.db import raf_cursor, openemr_cursor
+    from app.db import openemr_cursor, raf_cursor
 
     # Check raf_intelligence.encounters first (covers FHIR / uploaded patients).
     try:
@@ -122,7 +122,7 @@ def list_patients(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     search: str = Query("", description="Search by name or PID"),
-    year: Optional[int] = Query(
+    year: int | None = Query(
         default=None,
         description="Measurement year for RAF score enrichment (defaults to current year)",
     ),
@@ -274,7 +274,11 @@ async def import_patients_csv(
     """
     from app.services.patient_import_service import (
         import_patients as _import,
+    )
+    from app.services.patient_import_service import (
         parse_patient_csv as _parse_csv,
+    )
+    from app.services.patient_import_service import (
         parse_patient_xlsx as _parse_xlsx,
     )
 
@@ -403,6 +407,8 @@ async def import_patients_fhir(
     """
     from app.services.patient_import_service import (
         import_patients as _import,
+    )
+    from app.services.patient_import_service import (
         parse_fhir_patients as _parse_fhir,
     )
 
@@ -538,7 +544,7 @@ def get_clinical_notes_for_encounter(
 @router.get("/{pid}/encounters", summary="Get patient encounters")
 def get_encounters(
     pid: int,
-    year: Optional[int] = Query(
+    year: int | None = Query(
         default=None, description="Filter encounters by year (e.g. 2024)"
     ),
     current_user: dict = Depends(get_current_user),
@@ -573,7 +579,7 @@ def get_encounters(
 @router.get("/{pid}/medications", summary="Get patient medications")
 def get_medications(
     pid: int,
-    year: Optional[int] = Query(
+    year: int | None = Query(
         default=None,
         description=(
             "Filter to medications active during this calendar year. "
@@ -741,7 +747,7 @@ def get_procedures(
 @router.get("/{pid}/problem-list", summary="Get patient active problem list")
 def get_problem_list(
     pid: int,
-    year: Optional[int] = Query(
+    year: int | None = Query(
         default=None, description="Filter problems by begdate year, e.g. 2024"
     ),
     current_user: dict = Depends(get_current_user),
@@ -772,7 +778,7 @@ def get_problem_list(
 @router.get("/{pid}/recapture-gaps", summary="Active problems not billed this year")
 def get_recapture_gaps(
     pid: int,
-    year: Optional[int] = Query(
+    year: int | None = Query(
         default=None,
         ge=2000,
         le=2100,
@@ -796,11 +802,13 @@ def get_recapture_gaps(
 
     if not _require_emr_patient(pid, _tid):
         # FHIR fallback: CMS recapture logic — HCCs captured in PRIOR year not yet billed THIS year
-        from datetime import date as _date, datetime as _datetime
+        from datetime import date as _date
+        from datetime import datetime as _datetime
         _year = year or _date.today().year
         _prior_year = _year - 1
         try:
             import json as _json
+
             from app.db import raf_cursor
             with raf_cursor() as _gc:
                 # Check if patient is deceased — no recapture needed
@@ -902,7 +910,7 @@ def get_recapture_gaps(
 @router.get("/{pid}/vitals-suspects", summary="Vitals-based suspect conditions")
 def get_vitals_suspects(
     pid: int,
-    year: Optional[int] = Query(
+    year: int | None = Query(
         None,
         ge=2000,
         le=2100,
@@ -951,7 +959,7 @@ def get_vitals_suspects(
 @router.get("/{pid}/lab-suspects", summary="Rule-based lab/vitals suspect conditions")
 def get_lab_suspects(
     pid: int,
-    year: Optional[int] = Query(
+    year: int | None = Query(
         default=None,
         description="Filter notes and vitals by calendar year (e.g. 2025). Omit to include all available records.",
     ),
@@ -1353,6 +1361,7 @@ def get_patient_enrollment(
     if not _require_emr_patient(pid, _tid):
         # Estimate OREC from DOB for FHIR-only patients (no CMS enrollment data available)
         from datetime import date as _date
+
         from app.db import raf_cursor
         orec = "aged"  # safe fallback if DOB lookup fails
         try:

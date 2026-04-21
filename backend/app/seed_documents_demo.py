@@ -38,7 +38,7 @@ def seed_documents_demo() -> None:
     try:
         result = subprocess.run(
             [sys.executable, str(script)],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=60,
             cwd=str(script.parent),

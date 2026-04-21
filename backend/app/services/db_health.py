@@ -47,7 +47,7 @@ def _pool_utilisation() -> dict[str, Any]:
     ``PoolError`` the pool is fully utilised.  The absolute count returned is
     therefore either 0 (got a connection) or pool_size (all connections busy).
     """
-    from app.db import get_raf_pool, _POOL_SIZE
+    from app.db import _POOL_SIZE, get_raf_pool
 
     result: dict[str, Any] = {
         "pool_size": _POOL_SIZE,
@@ -114,7 +114,7 @@ def _replication_lag() -> dict[str, Any] | None:
     Returns None when no read replica is configured (DB_READ_HOST not set).
     Returns a dict with ``lag_seconds`` and ``status`` otherwise.
     """
-    from app.db import _DB_READ_HOST, get_raf_read_pool, get_raf_pool
+    from app.db import _DB_READ_HOST, get_raf_read_pool
 
     if not _DB_READ_HOST:
         return None

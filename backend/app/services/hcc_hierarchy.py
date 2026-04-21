@@ -45,7 +45,6 @@ is present, all less-severe members in the same chain are suppressed.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from app.db import raf_cursor
 
@@ -288,7 +287,7 @@ def apply_hierarchy_to_patient(
     patient_id: int,
     measurement_year: int,
     tenant_id: str,
-    model_version: Optional[str] = None,
+    model_version: str | None = None,
 ) -> dict:
     """Read raf_patient_hcc, apply hierarchy, write is_trumped / trumped_by_hcc.
 
@@ -421,7 +420,7 @@ def apply_hierarchy_to_patient(
 def apply_hierarchy_to_all_patients(
     measurement_year: int,
     tenant_id: str,
-    model_version: Optional[str] = None,
+    model_version: str | None = None,
 ) -> dict:
     """Apply hierarchy stamping to every patient for a measurement year.
 
@@ -499,7 +498,7 @@ def apply_hierarchy_to_all_patients(
 
 def seed_hierarchy_rules_from_chains(
     model_year: int = 2024,
-    chains: Optional[list[tuple[int, ...]]] = None,
+    chains: list[tuple[int, ...]] | None = None,
 ) -> dict:
     """Upsert hcc_hierarchy_rules from the embedded chain definitions.
 

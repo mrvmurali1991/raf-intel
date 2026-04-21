@@ -373,7 +373,9 @@ def get_patient_gaps(patient_id: int, tenant_id: str) -> list[dict[str, Any]]:
 
     # Attach HCC description from model_constants (best-effort; empty string on miss)
     try:
-        from app.model_constants import RXHCC_COEFFICIENTS  # noqa: F401 — avoid circular
+        from app.model_constants import (
+            RXHCC_COEFFICIENTS,  # noqa: F401 — avoid circular
+        )
     except ImportError:
         pass
 

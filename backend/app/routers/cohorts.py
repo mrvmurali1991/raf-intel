@@ -26,7 +26,7 @@ Read operations require the "cohorts" read permission.
 import logging
 from typing import Any, Literal
 
-from fastapi import Depends, APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 

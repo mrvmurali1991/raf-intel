@@ -17,7 +17,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from app.services.raf.precision import (
     CMS_PUBLISHED_PRECISION,
     RAF_PRECISION,

@@ -14,10 +14,10 @@ from __future__ import annotations
 import logging
 import statistics
 from datetime import date, datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from app.config import settings
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +259,7 @@ def get_panel_patients(
     provider_id: int,
     limit: int = 100,
     offset: int = 0,
-    tenant_id: Optional[int] = None,
+    tenant_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return all patients attributed to a provider's panel."""
 
@@ -439,7 +439,7 @@ def auto_attribute_patients(provider_id: int | None = None) -> dict[str, Any]:
 def calculate_provider_scorecard(
     provider_id: int,
     year: int,
-    tenant_id: Optional[int] = None,
+    tenant_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Compute a full provider scorecard for the given measurement year and
@@ -827,7 +827,7 @@ def _calculate_percentile_rank(
 def calculate_hcc_performance(
     provider_id: int,
     year: int,
-    tenant_id: Optional[int] = None,
+    tenant_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """
     For each HCC present in the provider's panel, compute:
@@ -942,7 +942,7 @@ def calculate_hcc_performance(
 
 def generate_provider_alerts(
     provider_id: int,
-    tenant_id: Optional[int] = None,
+    tenant_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """
     Generate (and persist) alerts for a provider:

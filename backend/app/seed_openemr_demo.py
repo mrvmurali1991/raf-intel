@@ -8,14 +8,13 @@ repeatedly without duplicating data.
 from __future__ import annotations
 
 import logging
-from contextlib import suppress
 
 logger = logging.getLogger(__name__)
 
 
 def seed_openemr_demo() -> None:
     """Populate the OpenEMR database with rich clinical demo data."""
-    from app.db import openemr_cursor, NoActiveEMRConnection
+    from app.db import NoActiveEMRConnection, openemr_cursor
 
     try:
         with openemr_cursor() as cur:
@@ -1130,9 +1129,7 @@ def seed_openemr_demo() -> None:
                         father = p
                     elif p.startswith('Mother'):
                         mother = p
-                    elif p.startswith('Brother') or p.startswith('Sister'):
-                        siblings = (siblings + '. ' + p).strip('. ')
-                    elif p.startswith('No '):
+                    elif p.startswith('Brother') or p.startswith('Sister') or p.startswith('No '):
                         siblings = (siblings + '. ' + p).strip('. ')
 
                 try:

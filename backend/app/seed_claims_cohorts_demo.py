@@ -9,9 +9,9 @@ Usage:
 """
 
 import json
-import pymysql
 import os
-import sys
+
+import pymysql
 
 DB_CONFIG = {
     # Prefer RAF_DB_* (used by the FastAPI pool and docker-compose .env) and

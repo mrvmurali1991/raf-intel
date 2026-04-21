@@ -66,25 +66,24 @@ from celery.utils.log import get_task_logger
 # Single Celery application — imported from job_service, NOT re-created here.
 # ---------------------------------------------------------------------------
 from app.services import raf_inbox
-from app.services.raf.calculator import calculate_raf_score
-
 from app.services.job_service import (  # noqa: F401  (re-export for Beat)
-    celery_app,
-    _mark_started,
-    _mark_progress,
-    _mark_success,
-    _mark_failure,
-    _upsert_job,
     _audit,
+    _mark_failure,
+    _mark_progress,
+    _mark_started,
+    _mark_success,
+    _upsert_job,
+    celery_app,
+    task_analyze_document,
+    task_calculate_provider_scorecards,
     # Re-export existing tasks so callers can import from one place.
     task_calculate_raf_batch,
     task_generate_submission,
-    task_analyze_document,
     task_process_claims_batch,
-    task_sync_fhir,
     task_scan_suspects_all,
-    task_calculate_provider_scorecards,
+    task_sync_fhir,
 )
+from app.services.raf.calculator import calculate_raf_score
 
 logger = logging.getLogger(__name__)
 task_logger = get_task_logger(__name__)
@@ -155,6 +154,7 @@ celery_app.conf.accept_content = ["json"]
 # ---------------------------------------------------------------------------
 
 from celery.signals import worker_ready
+
 
 @worker_ready.connect
 def _setup_pipeline_on_worker_ready(**kwargs):
@@ -654,16 +654,26 @@ def task_analyze_encounters_batch(
     task_logger.info("analyze_encounters_batch starting: tenant=%s max=%d", tenant_id, max_encounters)
 
     try:
-        from app.db import raf_cursor
-        from app.services.pipeline_orchestrator import run_verified_pipeline
-        from app.services.openemr_connector import (
-            get_clinical_notes, get_medications, get_problem_list,
-            get_recapture_gaps, get_latest_vitals, get_medication_diagnoses,
-        )
-        from app.services.meat_evidence_service import store_analysis_meat, update_hcc_meat_status
-        from app.services.suspect_engine import save_suspects_from_analysis
-        from app.services.analysis_service import save_encounter_analysis as _save_encounter_analysis
         from datetime import date
+
+        from app.db import raf_cursor
+        from app.services.analysis_service import (
+            save_encounter_analysis as _save_encounter_analysis,
+        )
+        from app.services.meat_evidence_service import (
+            store_analysis_meat,
+            update_hcc_meat_status,
+        )
+        from app.services.openemr_connector import (
+            get_clinical_notes,
+            get_latest_vitals,
+            get_medication_diagnoses,
+            get_medications,
+            get_problem_list,
+            get_recapture_gaps,
+        )
+        from app.services.pipeline_orchestrator import run_verified_pipeline
+        from app.services.suspect_engine import save_suspects_from_analysis
 
         # Get unanalyzed encounters
         with raf_cursor() as cur:
@@ -1271,8 +1281,8 @@ def fhir_sync_task(
     )
 
     try:
-        from app.db import raf_cursor
         import app.services.fhir_service as fhir_svc
+        from app.db import raf_cursor
 
         # Re-validate tenant ownership inside the worker process.
         with raf_cursor() as cur:
@@ -1400,8 +1410,8 @@ def task_refresh_meat_for_patient(
     )
 
     try:
-        from app.services.auto_meat_extractor import run_auto_meat_for_patient
         from app.cache import cache_delete_pattern
+        from app.services.auto_meat_extractor import run_auto_meat_for_patient
 
         _mark_progress(self, 0, 1, f"Running MEAT extraction for patient {patient_id}")
         summary = run_auto_meat_for_patient(
@@ -1495,8 +1505,8 @@ def task_emr_activate_pipeline(
 
     # Step 3: HCC hierarchy
     try:
-        from app.services.hcc_hierarchy import apply_hierarchy_to_patient
         from app.db import raf_cursor
+        from app.services.hcc_hierarchy import apply_hierarchy_to_patient
         with raf_cursor() as cur:
             cur.execute(
                 "SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s",

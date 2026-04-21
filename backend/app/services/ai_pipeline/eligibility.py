@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from typing import Iterable, Optional
 
 from app.db import openemr_cursor, raf_cursor
 
@@ -43,7 +42,7 @@ _CFG_KEY_CUTOFF = "ai_analysis_cutoff_date"
 _CFG_KEY_MAX_RUNS = "max_analyses_per_patient_per_day"
 
 
-def _get_config(key: str, tenant_id: Optional[str] = None) -> Optional[str]:
+def _get_config(key: str, tenant_id: str | None = None) -> str | None:
     """Best-effort read from config_service; returns None on any failure.
 
     Import is deferred so this module works even while Agent 2 is still
@@ -71,7 +70,7 @@ def _get_config(key: str, tenant_id: Optional[str] = None) -> Optional[str]:
     return None
 
 
-def _resolve_cutoff(tenant_id: Optional[str], override: Optional[date]) -> date:
+def _resolve_cutoff(tenant_id: str | None, override: date | None) -> date:
     if override is not None:
         return override
     raw = _get_config(_CFG_KEY_CUTOFF, tenant_id)
@@ -83,7 +82,7 @@ def _resolve_cutoff(tenant_id: Optional[str], override: Optional[date]) -> date:
     return _DEFAULT_CUTOFF_DATE
 
 
-def _resolve_max_runs(tenant_id: Optional[str]) -> int:
+def _resolve_max_runs(tenant_id: str | None) -> int:
     raw = _get_config(_CFG_KEY_MAX_RUNS, tenant_id)
     if raw:
         try:
@@ -112,7 +111,7 @@ _FHIR_CHILD_TABLES = (
 
 def get_eligible_patients(
     tenant_id: str,
-    cutoff_date: Optional[date] = None,
+    cutoff_date: date | None = None,
 ) -> list[str]:
     """Return patient IDs (as strings) eligible for AI analysis.
 
@@ -238,7 +237,7 @@ def can_run_analysis(patient_id: str, tenant_id: str) -> bool:
 def record_run_start(
     patient_id: str,
     tenant_id: str,
-    trigger_reason: Optional[str] = None,
+    trigger_reason: str | None = None,
 ) -> int:
     """Insert a new ai_analysis_runs row with status='running'.
 

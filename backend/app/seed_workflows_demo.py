@@ -7,7 +7,6 @@ Called at startup from main.py lifespan.
 """
 from __future__ import annotations
 
-import json
 import logging
 
 logger = logging.getLogger(__name__)

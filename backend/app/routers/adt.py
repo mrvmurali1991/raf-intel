@@ -22,7 +22,7 @@ Authentication: all endpoints require a valid Bearer JWT.
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, HttpUrl
@@ -84,12 +84,12 @@ class ConnectionCreateRequest(BaseModel):
 
 
 class ConnectionUpdateRequest(BaseModel):
-    name: Optional[str] = Field(default=None, max_length=255)
-    host: Optional[str] = Field(default=None, max_length=255)
-    port: Optional[int] = Field(default=None, ge=1, le=65535)
-    direction: Optional[str] = Field(default=None, pattern="^(inbound|outbound)$")
-    protocol: Optional[str] = Field(default=None, pattern="^(mllp|tcp)$")
-    auto_process: Optional[bool] = Field(default=None)
+    name: str | None = Field(default=None, max_length=255)
+    host: str | None = Field(default=None, max_length=255)
+    port: int | None = Field(default=None, ge=1, le=65535)
+    direction: str | None = Field(default=None, pattern="^(inbound|outbound)$")
+    protocol: str | None = Field(default=None, pattern="^(mllp|tcp)$")
+    auto_process: bool | None = Field(default=None)
 
 
 class ConnectionResponse(BaseModel):
@@ -138,12 +138,12 @@ class MessageSummaryResponse(BaseModel):
     connection_id: int
     message_type: str
     control_id: str
-    patient_id: Optional[int]
+    patient_id: int | None
     patient_mrn: str
     patient_name: str
     event_datetime: Any
     status: str
-    error_message: Optional[str]
+    error_message: str | None
     created_at: Any
 
     model_config = {"from_attributes": True}
@@ -159,7 +159,7 @@ class MessageDetailResponse(MessageSummaryResponse):
 class ReplayResponse(BaseModel):
     message_id: int
     status: str
-    error_message: Optional[str]
+    error_message: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -359,9 +359,9 @@ def connection_status(
     response_model=list[MessageSummaryResponse],
 )
 def read_messages(
-    connection_id: Optional[int] = Query(default=None, description="Filter by connection"),
-    message_type: Optional[str] = Query(default=None, description="Filter by type e.g. ADT_A01"),
-    msg_status: Optional[str] = Query(
+    connection_id: int | None = Query(default=None, description="Filter by connection"),
+    message_type: str | None = Query(default=None, description="Filter by type e.g. ADT_A01"),
+    msg_status: str | None = Query(
         default=None,
         alias="status",
         description="Filter by status: received|processed|error|ignored",

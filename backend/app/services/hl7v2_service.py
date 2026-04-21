@@ -26,8 +26,9 @@ from __future__ import annotations
 import logging
 import socket
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -683,7 +684,7 @@ class MLLPListener:
         while self._running:
             try:
                 client_sock, address = self._server_socket.accept()  # type: ignore[union-attr]
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 # Socket closed by stop() — exit cleanly
@@ -708,7 +709,7 @@ class MLLPListener:
                 while self._running:
                     try:
                         chunk = client_socket.recv(_CHUNK)
-                    except socket.timeout:
+                    except TimeoutError:
                         logger.debug(
                             "hl7v2: read timeout from %s:%s — closing connection",
                             *address,

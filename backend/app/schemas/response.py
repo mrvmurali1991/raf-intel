@@ -23,9 +23,9 @@ Usage in a router:
 # Note: do NOT use 'from __future__ import annotations' here —
 # it breaks FastAPI/Pydantic schema generation (ForwardRef errors in /openapi.json).
 
-from typing import Any, Optional
-from pydantic import BaseModel, Field
+from typing import Any
 
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Sub-models
@@ -45,7 +45,7 @@ class ErrorDetail(BaseModel):
         description="Human-readable error summary suitable for display.",
         examples=["Patient not found", "Validation failed"],
     )
-    details: Optional[list[dict[str, Any]]] = Field(
+    details: list[dict[str, Any]] | None = Field(
         default=None,
         description=(
             "Optional list of field-level or item-level error details. "
@@ -66,15 +66,15 @@ class ErrorDetail(BaseModel):
 class MetaInfo(BaseModel):
     """Metadata attached to successful responses — pagination, timing, tracing."""
 
-    page: Optional[int] = Field(default=None, description="Current page number (1-based).", ge=1)
-    limit: Optional[int] = Field(default=None, description="Maximum items per page.", ge=1)
-    total: Optional[int] = Field(default=None, description="Total matching records across all pages.", ge=0)
-    has_next: Optional[bool] = Field(default=None, description="Whether a next page exists.")
-    request_id: Optional[str] = Field(
+    page: int | None = Field(default=None, description="Current page number (1-based).", ge=1)
+    limit: int | None = Field(default=None, description="Maximum items per page.", ge=1)
+    total: int | None = Field(default=None, description="Total matching records across all pages.", ge=0)
+    has_next: bool | None = Field(default=None, description="Whether a next page exists.")
+    request_id: str | None = Field(
         default=None,
         description="Echo of the X-Request-ID header for end-to-end tracing.",
     )
-    duration_ms: Optional[float] = Field(
+    duration_ms: float | None = Field(
         default=None,
         description="Server-side processing time in milliseconds.",
     )
@@ -103,11 +103,11 @@ class APIResponse(BaseModel):
         default=None,
         description="Response payload. Null on error responses.",
     )
-    error: Optional[ErrorDetail] = Field(
+    error: ErrorDetail | None = Field(
         default=None,
         description="Structured error detail. Null on success responses.",
     )
-    meta: Optional[MetaInfo] = Field(
+    meta: MetaInfo | None = Field(
         default=None,
         description="Pagination, timing, and tracing metadata.",
     )
@@ -139,8 +139,8 @@ class APIResponse(BaseModel):
 
 def ok(
     data: Any = None,
-    meta: Optional[MetaInfo] = None,
-    request_id: Optional[str] = None,
+    meta: MetaInfo | None = None,
+    request_id: str | None = None,
 ) -> dict:
     """
     Build a success envelope dict (use dict to avoid double-serialisation with
@@ -171,8 +171,8 @@ def ok(
 def err(
     code: str,
     message: str,
-    details: Optional[list[dict[str, Any]]] = None,
-    request_id: Optional[str] = None,
+    details: list[dict[str, Any]] | None = None,
+    request_id: str | None = None,
 ) -> dict:
     """
     Build an error envelope dict.

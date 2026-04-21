@@ -25,14 +25,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -884,7 +883,7 @@ def validate_submission(batch_id: str) -> dict[str, Any]:
         else:
             # Attempt validation via icd_validator if available
             try:
-                from app.services.icd_validator import validate_code, normalize_code
+                from app.services.icd_validator import normalize_code, validate_code
 
                 if not validate_code(normalize_code(icd)):
                     warnings.append(

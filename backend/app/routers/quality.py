@@ -22,12 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.quality_service import (
     HEDIS_MEASURES,
-    evaluate_measure,
+    estimate_stars_rating,
     get_care_gaps,
     get_patient_measures,
     get_quality_summary,
     get_raf_hedis_overlap,
-    estimate_stars_rating,
 )
 
 logger = logging.getLogger(__name__)

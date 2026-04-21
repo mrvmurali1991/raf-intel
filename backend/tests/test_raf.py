@@ -17,9 +17,10 @@ Validates:
 from __future__ import annotations
 
 import re
+from datetime import date
+
 import pytest
 import requests
-from datetime import date
 
 # CMS-HCC V28 practical ceiling — real patients rarely exceed 5.0 in OpenEMR demos
 RAF_SCORE_MAX = 5.0

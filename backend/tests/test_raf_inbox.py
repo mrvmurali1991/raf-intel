@@ -47,9 +47,8 @@ pytestmark = pytest.mark.skipif(
 # that don't have DB access.
 # ---------------------------------------------------------------------------
 
-from app.services import raf_inbox  # noqa: E402
 from app.db import raf_cursor  # noqa: E402
-
+from app.services import raf_inbox  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

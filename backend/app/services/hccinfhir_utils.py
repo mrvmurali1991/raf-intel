@@ -23,19 +23,18 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 from hccinfhir import HCCInFHIR
+from hccinfhir.datamodels import ModelName
+from hccinfhir.defaults import (
+    coefficients_default,
+    dx_to_cc_default,
+    is_chronic_default,
+    labels_default,
+)
 from hccinfhir.model_calculate import calculate_raf
 from hccinfhir.model_coefficients import get_coefficent_prefix
 from hccinfhir.model_demographics import categorize_demographics
-from hccinfhir.defaults import (
-    dx_to_cc_default,
-    coefficients_default,
-    labels_default,
-    is_chronic_default,
-)
-from hccinfhir.datamodels import ModelName
 
 logger = logging.getLogger(__name__)
 
@@ -408,7 +407,7 @@ def calculate_raf_from_fhir_eob(
     age: int,
     sex: str,
     model: ModelName = DEFAULT_MODEL,
-    prefix_override: Optional[str] = "CNA_",
+    prefix_override: str | None = "CNA_",
     maci: float = 0.059,
     norm_factor: float = 1.050,
 ) -> dict:

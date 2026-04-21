@@ -17,16 +17,16 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor
 from app.services import openemr_connector as emr
-from app.services.raf_calculator import get_raf_breakdown, calculate_raf_score
-from app.services.suspect_engine import get_suspects_for_patient
-from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.audit_logger import log_phi_access
+from app.services.raf_calculator import calculate_raf_score, get_raf_breakdown
+from app.services.suspect_engine import get_suspects_for_patient
 
 logger = logging.getLogger(__name__)
 
@@ -373,13 +373,12 @@ def _build_audit_pdf(
 ) -> bytes:
     """Assemble the full RADV audit PDF and return its bytes."""
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
     from reportlab.platypus import (
         HRFlowable,
-        NextPageTemplate,
         PageBreak,
         Paragraph,
         SimpleDocTemplate,

@@ -30,10 +30,10 @@ from __future__ import annotations
 
 import csv
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +49,16 @@ class HCCMapping:
     label: str
     model: str
     source: str  # "csv" | "hccinfhir"
-    age_min: Optional[int] = None
-    age_max: Optional[int] = None
-    sex: Optional[str] = None  # "M" | "F" | None
+    age_min: int | None = None
+    age_max: int | None = None
+    sex: str | None = None  # "M" | "F" | None
     esrd_only: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-def _parse_int(v: str) -> Optional[int]:
+def _parse_int(v: str) -> int | None:
     v = (v or "").strip()
     if not v:
         return None
@@ -93,7 +93,7 @@ def _load_csv(model: ModelVersion) -> dict[str, dict]:
             continue
         with path.open(newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(
-                (line for line in fh if not line.lstrip().startswith("#"))
+                line for line in fh if not line.lstrip().startswith("#")
             )
             for row in reader:
                 icd = (row.get("icd10") or "").strip().upper().replace(".", "")
@@ -114,8 +114,8 @@ def _load_csv(model: ModelVersion) -> dict[str, dict]:
 
 def _gates_pass(
     row: dict,
-    age: Optional[int],
-    sex: Optional[str],
+    age: int | None,
+    sex: str | None,
     has_esrd: bool,
 ) -> tuple[bool, str]:
     sex_norm = (sex or "").strip().upper() or None
@@ -132,12 +132,12 @@ def _gates_pass(
 
 def map_icd_to_hcc(
     icd10: str,
-    age: Optional[int],
-    sex: Optional[str],
+    age: int | None,
+    sex: str | None,
     model: ModelVersion = "V28",
     *,
     has_esrd: bool = False,
-) -> Optional[HCCMapping]:
+) -> HCCMapping | None:
     """Map an ICD-10 code to a CMS-HCC category, applying demographic gates.
 
     Returns None if the code does not map or if a gate rejects the candidate.

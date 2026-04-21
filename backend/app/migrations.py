@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 import warnings
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

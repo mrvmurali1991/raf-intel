@@ -19,7 +19,7 @@ import pytest
 
 pytest.importorskip("hccinfhir")
 
-from hccinfhir import HCCInFHIR, Demographics  # noqa: E402
+from hccinfhir import Demographics, HCCInFHIR  # noqa: E402
 
 _FIXTURE = (
     Path(__file__).resolve().parent

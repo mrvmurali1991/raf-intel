@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
-from typing import Any
 import logging
 import time
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -10,10 +10,10 @@ from app.auth import get_current_user, get_tenant_id
 
 logger = logging.getLogger(__name__)
 from app.config import settings
-from app.db import check_connections, get_raf_pool, get_openemr_pool
+from app.db import check_connections, get_openemr_pool, get_raf_pool
 from app.monitoring import get_error_stats
-from app.services.sync_scheduler import get_scheduler_status
 from app.services.pipeline_chain import get_latest_pipeline_status
+from app.services.sync_scheduler import get_scheduler_status
 
 router = APIRouter(tags=["health"])
 
@@ -191,8 +191,9 @@ def dashboard_stats(
     ),
 ) -> dict[str, Any]:
     """Quick population stats for the dashboard."""
-    from app.db import raf_cursor
     from datetime import date as _date
+
+    from app.db import raf_cursor
 
     measurement_year = year if year is not None else _date.today().year
 
@@ -424,8 +425,9 @@ def dashboard_trends(
     Compute real period-over-period trend data for the dashboard KPI cards.
     """
     try:
-        from app.db import raf_cursor
         from datetime import date as _date
+
+        from app.db import raf_cursor
 
         measurement_year = year if year is not None else _date.today().year
 
@@ -631,7 +633,7 @@ async def metrics(
     uptime_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
     # Use Prometheus atomic counter if available, else fall back to app.state
     try:
-        from app.metrics import HTTP_REQUESTS_TOTAL, REGISTRY, _PROMETHEUS_AVAILABLE
+        from app.metrics import _PROMETHEUS_AVAILABLE, REGISTRY
         if _PROMETHEUS_AVAILABLE:
             request_count = int(sum(
                 s.value for m in REGISTRY.collect()

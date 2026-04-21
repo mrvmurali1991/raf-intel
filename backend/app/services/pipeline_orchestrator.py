@@ -14,10 +14,10 @@ Coordinates the multi-stage verification pipeline:
 Design reference: docs/MULTI_STAGE_PIPELINE_DESIGN.md
 """
 
+import logging
 import os
 import threading
 import time
-import logging
 from dataclasses import asdict
 from typing import Any
 

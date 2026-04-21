@@ -27,32 +27,29 @@ from collections import Counter
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import Body, Depends, APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.auth import get_current_user, get_tenant_id, require_permission
+from app.config import settings
+from app.db import raf_cursor, run_in_db_executor
+from app.rate_limit import limiter
+from app.services.audit_logger import log_phi_access
+from app.services.emr_manager import active_patients_subquery
+from app.services.multi_model_calculator import (
+    AVAILABLE_MODELS,
+    calculate_multi_model,
+)
 from app.services.raf_calculator import (
+    _BLEND_WEIGHTS,
+    _calculate_age,
+    _get_icd_codes,
+    _get_patient,
+    _sex_code,
     calculate_raf_score,
     calculate_raf_score_multi_model,
     get_raf_breakdown,
-    _BLEND_WEIGHTS,
-    _get_patient,
-    _get_icd_codes,
-    _calculate_age,
-    _sex_code,
 )
-from app.services.multi_model_calculator import (
-    calculate_multi_model,
-    AVAILABLE_MODELS,
-)
-from app.services.openemr_connector import (
-    get_patient_count,
-)
-from app.db import raf_cursor, run_in_db_executor
-from app.auth import get_current_user, get_tenant_id, require_permission
-from app.rate_limit import limiter
-from app.services.emr_manager import active_patients_subquery
-from app.services.audit_logger import log_phi_access
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -1578,8 +1575,8 @@ def calculate_raf_full(
     codes = [c.strip().upper().replace(".", "") for c in codes_raw if c and str(c).strip()]
 
     try:
-        from hccinfhir.hccinfhir import HCCInFHIR
         from hccinfhir.datamodels import Demographics
+        from hccinfhir.hccinfhir import HCCInFHIR
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"hccinfhir not available: {exc}")
 
@@ -1737,10 +1734,10 @@ def icd10_to_hcc_crosswalk(
     chronic: dict = {}
     try:
         from hccinfhir.defaults import (
-            dx_to_cc_default,
-            labels_default,
             coefficients_default,
+            dx_to_cc_default,
             is_chronic_default,
+            labels_default,
         )
         from hccinfhir.model_dx_to_cc import apply_mapping
 

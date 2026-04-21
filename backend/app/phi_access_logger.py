@@ -27,17 +27,15 @@ from __future__ import annotations
 import json
 import logging
 import logging.handlers
-import os
 import re
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import Depends, Request
 from starlette.types import ASGIApp, Receive, Scope, Send
-
-from app.audit_middleware import request_context
 
 # ---------------------------------------------------------------------------
 # Structured file logger — dedicated handler for PHI access records
@@ -320,7 +318,6 @@ def log_phi_access(resource_type: str, action: str = "READ") -> Callable:
         }
 
         _fire_and_forget(record)
-        return None
 
     return _dependency
 

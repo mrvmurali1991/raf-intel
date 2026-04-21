@@ -5,7 +5,6 @@ import json
 from contextlib import contextmanager
 
 import pytest
-
 from app.services import audit as audit_mod
 
 

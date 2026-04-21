@@ -15,7 +15,6 @@ middleware logs a CRITICAL security alert.
 from __future__ import annotations
 
 import logging
-import time
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware

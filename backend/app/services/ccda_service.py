@@ -38,9 +38,10 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, date, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+
 import defusedxml.ElementTree as ET
 
 from app.db import raf_cursor

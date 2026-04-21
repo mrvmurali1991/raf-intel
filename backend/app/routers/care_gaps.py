@@ -23,7 +23,7 @@ import logging
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import Depends, APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission

@@ -29,8 +29,9 @@ rendered in the admin dashboard with severity-based filtering.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import date
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

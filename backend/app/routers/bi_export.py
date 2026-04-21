@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field
 from app.auth import get_current_user, get_tenant_id
 from app.services.bi_export_service import (
     PREBUILT_DATASETS,
+    _get_connection_api_key,
     build_odata_metadata,
     build_odata_response,
     build_tableau_wdc_html,
@@ -54,7 +55,6 @@ from app.services.bi_export_service import (
     render_export,
     seed_prebuilt_datasets,
     update_dataset,
-    _get_connection_api_key,
 )
 
 logger = logging.getLogger(__name__)

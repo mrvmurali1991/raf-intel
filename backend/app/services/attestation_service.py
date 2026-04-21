@@ -21,7 +21,7 @@ import hmac
 import json
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 
 from app.config import settings
 from app.db import raf_cursor

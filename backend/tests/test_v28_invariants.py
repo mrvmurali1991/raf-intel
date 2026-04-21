@@ -24,11 +24,12 @@ Invariants covered
 from __future__ import annotations
 
 import pytest
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 pytest.importorskip("hccinfhir")
 
-from hccinfhir import HCCInFHIR, Demographics  # noqa: E402
+from hccinfhir import Demographics, HCCInFHIR  # noqa: E402
 
 _proc = HCCInFHIR(model_name="CMS-HCC Model V28")
 

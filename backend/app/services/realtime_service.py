@@ -32,14 +32,13 @@ to live connections and are not persisted.
 import asyncio
 import json
 import logging
-import os
-import threading
 from datetime import datetime, timezone
 from typing import Any
 
 import redis.asyncio as aioredis
-from app.db import raf_cursor
+
 from app.config import settings
+from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +172,7 @@ class ConnectionManager:
         if self._loop is None:
             self._loop = asyncio.get_running_loop()
             await self._setup_redis()
-            
+
         logger.info(
             "realtime: connection registered [%s] user=%s tenant=%s",
             connection_id, user_id, tenant_id,
@@ -208,7 +207,7 @@ class ConnectionManager:
                 return
             except Exception as exc:
                 logger.error("realtime: Redis publish failed: %s", exc)
-                
+
         # Fallback to local broadcast if Redis is unavailable
         await self._local_broadcast(event, tenant_id, user_id)
 
@@ -868,6 +867,7 @@ def publish_raf_updated_sync(
     Never raises — errors are logged and swallowed.
     """
     import json as _json
+
     import redis as _redis
 
     event = _build_raf_updated_event(pid, tenant_id, raf_score)

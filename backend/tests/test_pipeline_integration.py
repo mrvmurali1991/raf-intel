@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Ensure feature flag on before import
 os.environ["RAF_AUTO_CHAIN"] = "true"
 
+from app.services import event_emitter as _ev
 from app.services.pipeline_chain import (
     _auto_chain_enabled,
     _fetch_active_patient_ids,
@@ -34,9 +35,8 @@ from app.services.pipeline_chain import (
     _handle_raf_calculation_completed,
     setup_pipeline_chain,
 )
-from app.services import event_emitter as _ev
-from tests.conftest import MockCursor
 
+from tests.conftest import MockCursor
 
 # ---------------------------------------------------------------------------
 # Helpers

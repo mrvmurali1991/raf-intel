@@ -19,10 +19,10 @@ import os
 import ssl
 import threading
 import time
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import wraps
-from typing import Generator
 
 import mysql.connector
 from mysql.connector.pooling import MySQLConnectionPool
@@ -392,7 +392,7 @@ class _InstrumentedCursor:
         _query_counter.count = count + 1
         queries = getattr(_query_counter, "queries", [])
         if len(queries) < 50:  # cap log size
-            queries.append((query[:120] if isinstance(query, str) else str(query)[:120]))
+            queries.append(query[:120] if isinstance(query, str) else str(query)[:120])
             _query_counter.queries = queries
 
         start = time.monotonic()

@@ -148,7 +148,7 @@ def verify_audit_chain(path: str | Path | None = None) -> tuple[bool, list[str]]
     expected_prev = _GENESIS_HASH
     line_num = 0
 
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         for raw_line in f:
             line_num += 1
             raw_line = raw_line.strip()

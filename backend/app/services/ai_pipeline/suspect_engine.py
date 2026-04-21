@@ -11,15 +11,13 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from app.services.llm import llm_generate
 
 from .rules import ALL_RULES
 from .suspect_schema import (
-    EvidenceType,
-    Source,
     SupportingEvidence,
     SuspectCandidate,
     SuspectRule,

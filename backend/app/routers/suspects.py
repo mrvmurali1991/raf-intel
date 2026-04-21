@@ -23,21 +23,19 @@ POST /api/suspects/bulk-update       – bulk accept or dismiss
 import logging
 from typing import Any, Literal
 
-from fastapi import Depends, APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.services.suspect_engine import (
-    run_full_suspect_scan,
-    get_suspects_for_patient,
-    get_all_open_suspects,
-    accept_suspect,
-    dismiss_suspect,
-    scan_medications,
-    scan_labs,
-)
-from app.services.openemr_connector import get_patient, get_all_patients
 from app.auth import get_current_user, require_permission
 from app.rate_limit import limiter
+from app.services.openemr_connector import get_all_patients, get_patient
+from app.services.suspect_engine import (
+    accept_suspect,
+    dismiss_suspect,
+    get_all_open_suspects,
+    get_suspects_for_patient,
+    run_full_suspect_scan,
+)
 
 logger = logging.getLogger(__name__)
 

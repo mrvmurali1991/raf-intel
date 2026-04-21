@@ -759,7 +759,7 @@ def _candidate_presence_score(
         if cand_code == icd_code:
             if rank == 1:
                 return 1.0
-            elif rank <= 3:
+            if rank <= 3:
                 best = max(best, 0.85)
             else:
                 best = max(best, 0.70)
@@ -973,12 +973,11 @@ def _derive_routing(
                 f"{agreement_score:.2f} >= {AUTO_ACCEPT_AGREEMENT:.2f}."
             )
             return RoutingDecision.AUTO_ACCEPT, reasons
-        else:
-            reasons.append(
-                f"Soft flag(s) present ({', '.join(sorted(triggered_soft))}) "
-                f"– downgrading from auto-accept to human-review."
-            )
-            return RoutingDecision.HUMAN_REVIEW, reasons
+        reasons.append(
+            f"Soft flag(s) present ({', '.join(sorted(triggered_soft))}) "
+            f"– downgrading from auto-accept to human-review."
+        )
+        return RoutingDecision.HUMAN_REVIEW, reasons
 
     # Mixed: some auto-accepted, some require review
     if auto_accept_count > 0 and review_count > 0:

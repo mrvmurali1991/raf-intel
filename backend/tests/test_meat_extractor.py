@@ -5,7 +5,6 @@ import json
 from dataclasses import dataclass
 
 import pytest
-
 from app.services.ai_pipeline.meat_extractor import (
     MEATEvidence,
     extract_meat_evidence,

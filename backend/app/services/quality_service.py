@@ -15,7 +15,7 @@ No PHI is logged — patient identifiers are kept inside caller scope only.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 from app.db import openemr_cursor, raf_cursor
@@ -579,16 +579,16 @@ def _is_in_denominator(pid: int, measure_code: str, age: int, sex: str, year: in
 
     if measure_code == "CDC":
         return 18 <= age <= 75 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
-    elif measure_code == "CBP":
+    if measure_code == "CBP":
         return 18 <= age <= 85 and any(_has_icd_prefix(c, ["I10", "I11", "I12", "I13"]) for c in codes)
-    elif measure_code == "COA":
+    if measure_code == "COA":
         return age >= 66
-    elif measure_code == "OMW":
+    if measure_code == "OMW":
         fracture_prefixes = ["M80", "S12", "S22", "S32", "S42", "S52", "S62", "S72", "S82", "S92"]
         return sex in ("female", "f") and 67 <= age <= 85 and any(_has_icd_prefix(c, fracture_prefixes) for c in codes)
-    elif measure_code == "SPD":
+    if measure_code == "SPD":
         return 40 <= age <= 75 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
-    elif measure_code == "KED":
+    if measure_code == "KED":
         return 18 <= age <= 85 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
     return False
 
@@ -809,17 +809,17 @@ def _is_in_denominator_fast(
     """
     if measure_code == "CDC":
         return 18 <= age <= 75 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
-    elif measure_code == "SPD":
+    if measure_code == "SPD":
         # SPD denominator age is 40–75, not 18–75
         return 40 <= age <= 75 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
-    elif measure_code == "CBP":
+    if measure_code == "CBP":
         return 18 <= age <= 85 and any(_has_icd_prefix(c, ["I10", "I11", "I12", "I13"]) for c in codes)
-    elif measure_code == "COA":
+    if measure_code == "COA":
         return age >= 66
-    elif measure_code == "OMW":
+    if measure_code == "OMW":
         fracture_prefixes = ["M80", "S12", "S22", "S32", "S42", "S52", "S62", "S72", "S82", "S92"]
         return sex in ("female", "f") and 67 <= age <= 85 and any(_has_icd_prefix(c, fracture_prefixes) for c in codes)
-    elif measure_code == "KED":
+    if measure_code == "KED":
         return 18 <= age <= 85 and any(_has_icd_prefix(c, ["E10", "E11", "E13"]) for c in codes)
     return False
 
@@ -925,11 +925,11 @@ def _rate_to_stars(rate: float | None, thresholds: list[float]) -> float:
         return 1.0
     if rate >= thresholds[3]:
         return 5.0
-    elif rate >= thresholds[2]:
+    if rate >= thresholds[2]:
         return 4.0
-    elif rate >= thresholds[1]:
+    if rate >= thresholds[1]:
         return 3.0
-    elif rate >= thresholds[0]:
+    if rate >= thresholds[0]:
         return 2.0
     return 1.0
 

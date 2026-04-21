@@ -17,9 +17,12 @@ from hccinfhir.defaults import is_chronic_default
 
 from app.db import raf_cursor
 from app.services.audit_logger import log_phi_access
-from app.services.icd_validator import validate_code
 from app.services.hccinfhir_utils import lookup_hcc
-from app.services.meat_evidence_service import store_analysis_meat, update_hcc_meat_status
+from app.services.icd_validator import validate_code
+from app.services.meat_evidence_service import (
+    store_analysis_meat,
+    update_hcc_meat_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +75,9 @@ def save_encounter_analysis(
 
     def _default_ser(obj):
         """Handle Decimal, datetime, date for JSON serialisation."""
+        from datetime import date as _d
+        from datetime import datetime as _dt
         from decimal import Decimal
-        from datetime import datetime as _dt, date as _d
 
         if isinstance(obj, Decimal):
             return float(obj)

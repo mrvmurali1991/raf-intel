@@ -10,16 +10,16 @@ Domain responsibilities:
 - Active patient subquery helpers
 - EMR sync orchestration
 """
+from app.services import vendor_adapters  # noqa: F401
 from app.services.emr_manager import (  # noqa: F401
-    list_connections,
+    active_patients_subquery,
+    create_connection,
+    get_active_direct_db_credentials,
     get_connection,
     get_connection_with_credentials,
-    get_active_direct_db_credentials,
-    create_connection,
+    list_connections,
     update_connection,
-    active_patients_subquery,
 )
-from app.services import vendor_adapters  # noqa: F401
 
 __all__ = [
     "list_connections",

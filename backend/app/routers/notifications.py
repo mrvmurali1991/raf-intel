@@ -16,8 +16,9 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -28,9 +29,9 @@ from app.auth import get_current_user
 from app.config import settings
 from app.services.auth_service import get_user, validate_session
 from app.services.email_service import (
+    _render_html,
     get_email_config,
     send_email,
-    _render_html,
 )
 from app.services.realtime_service import connection_manager
 

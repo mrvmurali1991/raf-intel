@@ -10,7 +10,7 @@ tenant-scoped so one tenant cannot affect another. ``pipeline:write`` is
 required to modify settings.
 """
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request

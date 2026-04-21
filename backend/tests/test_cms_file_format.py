@@ -40,12 +40,11 @@ CMS RAPS layout reference (record-type Z — trailer):
 
 from __future__ import annotations
 
+import os
 import re
 import sys
-import os
 from contextlib import contextmanager
 from datetime import date
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest

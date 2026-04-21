@@ -41,16 +41,13 @@ Required tables
 """
 from __future__ import annotations
 
-import io
 import logging
 import os
 import time
-from datetime import datetime, timezone
-from typing import Any
 
 from app.db import raf_cursor
-from app.services.encryption_service import decrypt, encrypt
 from app.services.circuit_breaker import sftp_breaker
+from app.services.encryption_service import decrypt, encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +83,7 @@ def _assert_paramiko() -> None:
         )
 
 
-def _build_transport(config: dict) -> "paramiko.Transport":
+def _build_transport(config: dict) -> paramiko.Transport:
     """Open a paramiko Transport and authenticate using the stored config."""
     _assert_paramiko()
 
@@ -328,7 +325,7 @@ def test_sftp_connection(tenant_id: str) -> dict:
         }
 
     start = time.monotonic()
-    transport: "paramiko.Transport | None" = None
+    transport: paramiko.Transport | None = None
     try:
         transport = _build_transport(config)
         sftp = paramiko.SFTPClient.from_transport(transport)
@@ -467,7 +464,7 @@ def transmit_submission(submission_id: int, tenant_id: str) -> dict:
     # ------------------------------------------------------------------
     # 3. Upload
     # ------------------------------------------------------------------
-    transport: "paramiko.Transport | None" = None
+    transport: paramiko.Transport | None = None
     try:
         transport = _build_transport(config)
         sftp = paramiko.SFTPClient.from_transport(transport)
@@ -613,7 +610,7 @@ def check_for_responses(tenant_id: str) -> list[dict]:
     os.makedirs(tenant_download_dir, exist_ok=True)
 
     downloaded: list[dict] = []
-    transport: "paramiko.Transport | None" = None
+    transport: paramiko.Transport | None = None
 
     try:
         transport = _build_transport(config)

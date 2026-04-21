@@ -15,8 +15,7 @@ discrepancy.
 from __future__ import annotations
 
 import pytest
-from hccinfhir.defaults import dx_to_cc_default, labels_default, coefficients_default
-
+from hccinfhir.defaults import coefficients_default, dx_to_cc_default, labels_default
 
 # ---------------------------------------------------------------------------
 # Ground truth: ICD-10 to HCC crosswalk (verified from hccinfhir V28 data)

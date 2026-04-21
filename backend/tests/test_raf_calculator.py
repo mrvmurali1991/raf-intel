@@ -22,15 +22,11 @@ Markers:
 
 from __future__ import annotations
 
-import math
 from datetime import date
-from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.services.raf_calculator import (
     _BLEND_WEIGHTS,
-    _PACE_BLEND_WEIGHTS,
     _ESRD_DLY_DEMO_SCORES,
     _ESRD_FG_DEMO_SCORES,
     _MACI_FACTORS_V24,
@@ -39,6 +35,7 @@ from app.services.raf_calculator import (
     _NORM_FACTORS_V22,
     _NORM_FACTORS_V24,
     _NORM_FACTORS_V28,
+    _PACE_BLEND_WEIGHTS,
     _SEGMENT_TO_PREFIX,
     _apply_hcc_hierarchy,
     _calculate_age,
@@ -49,15 +46,14 @@ from app.services.raf_calculator import (
     _get_norm_factor,
     _is_esrd,
     _is_new_enrollee,
-    _run_single_model,
-    _sex_code,
-    determine_model_segment,
+    _processor_esrd_v24,
     _processor_v22,
     _processor_v24,
     _processor_v28,
-    _processor_esrd_v24,
+    _run_single_model,
+    _sex_code,
+    determine_model_segment,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

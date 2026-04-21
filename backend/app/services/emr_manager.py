@@ -35,19 +35,19 @@ from __future__ import annotations
 import json
 import logging
 import os
-import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
 from app.db import raf_cursor
 from app.security.ssrf import _assert_safe_outbound_url
 from app.services.encryption_service import decrypt, encrypt
+from app.services.hcc_mapping_service import get_hcc_coefficient as _hcc_coefficient
+from app.services.hcc_mapping_service import map_icd10_batch
 from app.services.vendor_adapters.registry import get_adapter, get_fhir_adapter
-from app.services.hcc_mapping_service import map_icd10_batch, get_hcc_coefficient as _hcc_coefficient
 
 # ---------------------------------------------------------------------------
 # Pipeline event helpers
@@ -899,7 +899,7 @@ def _test_hl7v2(connection: dict) -> dict:
             "message": f"TCP connection to {host}:{port} succeeded (MLLP port reachable)",
             "latency_ms": latency_ms,
         }
-    except _socket.timeout:
+    except TimeoutError:
         latency_ms = round((time.monotonic() - start) * 1000, 1)
         logger.warning(
             "emr_manager: HL7v2 TCP test timed out %s:%s (connection_id=%s)",

@@ -19,18 +19,22 @@ Routers are registered in logical / dependency order:
 from fastapi import FastAPI
 
 from app.routers import (
-    adt,
     admin,
+    adt,
     analysis,
     attestations,
     audit,
     awv,
     benchmarks,
+    bi_export,
+    bundles,
     care_gaps,
     ccda,
     chart_chase,
     claims,
     clearinghouse,
+    cms_transmission,
+    coder_worklist,
     cohorts,
     direct_messaging,
     documents,
@@ -51,27 +55,24 @@ from app.routers import (
     webhooks,
 )
 from app.routers import auth as auth_router
-from app.routers import bi_export
-from app.routers import coder_worklist
-from app.routers import provider_worklist as provider_worklist_router
-from app.routers import insights as insights_router
-from app.routers import realtime as realtime_router
-from app.routers import smart_fhir as smart_fhir_router
-from app.routers import meat as meat_router
-from app.routers import review as review_router
-from app.routers import radv_audit as radv_audit_router
+from app.routers import config as config_router
+from app.routers import consent as consent_router
+from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import data_quality as data_quality_router
 from app.routers import health as health_router
 from app.routers import icd10 as icd10_router
-from app.routers import bundles, cms_transmission
+from app.routers import insights as insights_router
+from app.routers import meat as meat_router
 from app.routers import pipeline as pipeline_router
-from app.routers import consent as consent_router
 from app.routers import pipeline_settings as pipeline_settings_router
-from app.routers import config as config_router
-from app.routers import recapture_gaps as recapture_gaps_router
-from app.routers import dashboard_analytics as dashboard_analytics_router
-from app.routers import raf_inbox_admin as raf_inbox_admin_router
+from app.routers import provider_worklist as provider_worklist_router
+from app.routers import radv_audit as radv_audit_router
 from app.routers import raf_central as raf_central_router
+from app.routers import raf_inbox_admin as raf_inbox_admin_router
+from app.routers import realtime as realtime_router
+from app.routers import recapture_gaps as recapture_gaps_router
+from app.routers import review as review_router
+from app.routers import smart_fhir as smart_fhir_router
 
 
 def register_routers(app: FastAPI) -> None:

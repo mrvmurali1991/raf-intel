@@ -25,11 +25,11 @@ import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, get_tenant_id
-
 from app.services.direct_messaging_service import (
+    count_messages,
     create_direct_address,
     create_trust_anchor,
     delete_message,
@@ -41,9 +41,7 @@ from app.services.direct_messaging_service import (
     get_trust_anchor,
     list_direct_addresses,
     list_messages,
-    count_messages,
     list_trust_anchors,
-    lookup_direct_address,
     mark_message_read,
     search_address_book,
     send_direct_message,

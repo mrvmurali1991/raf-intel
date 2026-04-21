@@ -8,7 +8,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
 from app.services.ai_pipeline.provider_query import (
     ProviderQuery,
     SupportingCitation,

@@ -14,15 +14,14 @@ import json
 from pathlib import Path
 
 import pytest
-
 from app.services.raf.blend_weights import (
     _BLEND_WEIGHTS,
-    _PACE_BLEND_WEIGHTS,
-    _NORM_FACTORS_V28,
-    _NORM_FACTORS_V24,
-    _NORM_FACTORS_V22,
-    _MACI_FACTORS_V28,
     _MACI_FACTORS_V24,
+    _MACI_FACTORS_V28,
+    _NORM_FACTORS_V22,
+    _NORM_FACTORS_V24,
+    _NORM_FACTORS_V28,
+    _PACE_BLEND_WEIGHTS,
 )
 
 MANIFEST_PATH = (

@@ -14,13 +14,11 @@ All tests run in-process against the TestClient — no live server needed.
 """
 from __future__ import annotations
 
-import sys
 import importlib
-from typing import Any
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
-
 
 # ===========================================================================
 # 1. Import / circular-dependency guard
@@ -97,8 +95,8 @@ class TestImports:
         The same module must not appear twice under different paths in sys.modules.
         This catches certain classes of import cycle / reload bugs.
         """
-        import app.main  # noqa: F401
         import app.config  # noqa: F401
+        import app.main  # noqa: F401
         # If 'app.config' is imported twice under two different names the
         # settings singleton would be duplicated.  Verify they are the same object.
         mod_a = sys.modules.get("app.config")

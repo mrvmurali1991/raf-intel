@@ -6,6 +6,7 @@ Falls back to structured JSON logging when Sentry is not available.
 import logging
 import traceback
 from datetime import datetime, timezone
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)

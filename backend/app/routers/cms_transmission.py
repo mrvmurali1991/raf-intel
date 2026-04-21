@@ -19,7 +19,7 @@ Authentication: all endpoints require a valid Bearer JWT.
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, get_tenant_id

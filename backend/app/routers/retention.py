@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_role
+from app.auth import require_role
 from app.services.data_retention import (
     DEFAULT_POLICIES,
     get_retention_status,

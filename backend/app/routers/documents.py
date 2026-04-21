@@ -14,9 +14,9 @@ import logging
 from typing import Any
 
 from fastapi import (
-    Depends,
     APIRouter,
     BackgroundTasks,
+    Depends,
     File,
     Form,
     HTTPException,
@@ -27,10 +27,8 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 
 from app.auth import get_current_user, get_tenant_id, require_permission
-from app.db import raf_cursor, openemr_cursor
-from app.services.emr_manager import active_patients_subquery
+from app.db import openemr_cursor, raf_cursor
 from app.rate_limit import limiter
-from app.services.icd_validator import get_hcc_mapping
 from app.services.document_service import (
     analyze_document,
     create_batch,
@@ -48,6 +46,8 @@ from app.services.document_service import (
     set_diagnosis_review_status,
     store_upload,
 )
+from app.services.emr_manager import active_patients_subquery
+from app.services.icd_validator import get_hcc_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +107,9 @@ def _do_approve_and_score(
     tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Approve all HCC-relevant diagnoses and recalculate RAF score."""
-    from app.services.raf_calculator import calculate_raf_score
     from datetime import date as _d
+
+    from app.services.raf_calculator import calculate_raf_score
 
     year = _d.today().year
 
@@ -624,6 +625,7 @@ def view_document_file(
     _perm: None = Depends(require_permission("documents", "read")),
 ):
     from pathlib import Path
+
     from fastapi.responses import FileResponse
 
     doc = get_document(document_id)

@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
-
 from app.services.ai_pipeline.context_bundle import (
     DEFAULT_HCC_MODEL_VERSION,
     assemble_bundle,

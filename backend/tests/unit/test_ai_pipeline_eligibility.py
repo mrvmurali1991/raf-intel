@@ -9,12 +9,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 from app.services.ai_pipeline import eligibility as E
-
 
 # ---------------------------------------------------------------------------
 # Helpers: a scripted cursor that returns different rows per SELECT.
@@ -234,9 +232,8 @@ def test_rate_limit_is_per_patient():
 
 def test_record_run_finish_rejects_bad_status():
     cur = CountingRafCursor()
-    with patch.object(E, "raf_cursor", _cursor_cm(cur)):
-        with pytest.raises(ValueError):
-            E.record_run_finish(1, status="bogus")
+    with patch.object(E, "raf_cursor", _cursor_cm(cur)), pytest.raises(ValueError):
+        E.record_run_finish(1, status="bogus")
 
 
 def test_cutoff_resolves_from_config():

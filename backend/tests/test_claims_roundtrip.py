@@ -26,7 +26,6 @@ from app.services.raf.claims_ingest import (  # noqa: E402
     score_beneficiary_claims,
 )
 
-
 _CLAIMS = Path(__file__).resolve().parent / "fixtures" / "claims"
 
 

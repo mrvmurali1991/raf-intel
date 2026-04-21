@@ -20,23 +20,19 @@ Blending arithmetic is verified directly against _BLEND_WEIGHTS.
 from __future__ import annotations
 
 import math
-from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.services.raf_calculator import (
     _BLEND_WEIGHTS,
     _MACI_FACTORS_V24,
     _MACI_FACTORS_V28,
     _NORM_FACTORS_V24,
     _NORM_FACTORS_V28,
-    _calculate_age,
-    _run_single_model,
     _processor_v24,
     _processor_v28,
+    _run_single_model,
     determine_model_segment,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -310,7 +306,6 @@ class TestTrumpedHccsExcludedFromScore:
         Explicitly verify: compute scores with and without hierarchy filtering.
         Scoring only non-trumped HCCs should yield a score <= scoring all HCCs.
         """
-        from app.services.hcc_hierarchy import apply_hierarchy
 
         all_hcc_result = _run_v28(icd_codes=["E11.0", "E11.9"])
         severe_only_result = _run_v28(icd_codes=["E11.0"])

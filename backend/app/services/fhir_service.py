@@ -17,16 +17,15 @@ import json
 import logging
 import os
 import time
-import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 from app.security.ssrf import _assert_safe_outbound_url
-from app.services.encryption_service import decrypt, encrypt
 from app.services.circuit_breaker import fhir_breaker
+from app.services.encryption_service import decrypt, encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -939,23 +938,22 @@ def _upsert_fhir_patient(connection_id: int, parsed: dict[str, Any]) -> int:
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_patients
                     (connection_id, fhir_resource_id, mrn, family_name, given_name,
                      birth_date, gender, phone, email, raw_json, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"],
-                    parsed["mrn"], parsed["family_name"], parsed["given_name"],
-                    parsed["birth_date"], parsed["gender"], parsed["phone"],
-                    parsed["email"], parsed["raw_json"], now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"],
+                parsed["mrn"], parsed["family_name"], parsed["given_name"],
+                parsed["birth_date"], parsed["gender"], parsed["phone"],
+                parsed["email"], parsed["raw_json"], now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 def list_fhir_patients(
@@ -1031,31 +1029,30 @@ def _upsert_fhir_condition(connection_id: int, parsed: dict[str, Any]) -> int:
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_conditions
                     (connection_id, fhir_resource_id, fhir_patient_id, fhir_encounter_id,
                      icd10_codes, display, clinical_status, verification_status,
                      onset_date, recorded_date, raw_json, hcc_mapped, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"],
-                    parsed["fhir_patient_id"],
-                    parsed["fhir_encounter_id"],
-                    parsed["icd10_codes"],
-                    parsed["display"],
-                    parsed["clinical_status"],
-                    parsed["verification_status"],
-                    parsed["onset_date"],
-                    parsed["recorded_date"],
-                    parsed["raw_json"],
-                    now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"],
+                parsed["fhir_patient_id"],
+                parsed["fhir_encounter_id"],
+                parsed["icd10_codes"],
+                parsed["display"],
+                parsed["clinical_status"],
+                parsed["verification_status"],
+                parsed["onset_date"],
+                parsed["recorded_date"],
+                parsed["raw_json"],
+                now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 def list_fhir_conditions(
@@ -1135,9 +1132,8 @@ def _upsert_fhir_encounter(connection_id: int, parsed: dict[str, Any]) -> int:
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_encounters
                     (connection_id, fhir_resource_id, fhir_patient_id,
                      status, encounter_class, encounter_class_display,
@@ -1146,25 +1142,25 @@ def _upsert_fhir_encounter(connection_id: int, parsed: dict[str, Any]) -> int:
                      service_provider, raw_json, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"],
-                    parsed["fhir_patient_id"],
-                    parsed["status"],
-                    parsed["encounter_class"],
-                    parsed["encounter_class_display"],
-                    parsed["type_display"],
-                    parsed["period_start"],
-                    parsed["period_end"],
-                    parsed["provider_name"],
-                    parsed["provider_ref"],
-                    parsed["reason_codes"],
-                    parsed["service_provider"],
-                    parsed["raw_json"],
-                    now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"],
+                parsed["fhir_patient_id"],
+                parsed["status"],
+                parsed["encounter_class"],
+                parsed["encounter_class_display"],
+                parsed["type_display"],
+                parsed["period_start"],
+                parsed["period_end"],
+                parsed["provider_name"],
+                parsed["provider_ref"],
+                parsed["reason_codes"],
+                parsed["service_provider"],
+                parsed["raw_json"],
+                now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 # ---------------------------------------------------------------------------
@@ -1197,29 +1193,28 @@ def _upsert_fhir_diagnostic_report(connection_id: int, parsed: dict[str, Any]) -
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_diagnostic_reports
                     (connection_id, fhir_report_id, fhir_patient_id,
                      status, category, report_type, effective_date,
                      conclusion, fhir_resource, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"],
-                    parsed["fhir_patient_id"],
-                    parsed["status"],
-                    parsed.get("category_display", ""),
-                    parsed.get("code_display", ""),
-                    parsed["effective_date"],
-                    parsed["conclusion"],
-                    parsed["raw_json"],
-                    now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"],
+                parsed["fhir_patient_id"],
+                parsed["status"],
+                parsed.get("category_display", ""),
+                parsed.get("code_display", ""),
+                parsed["effective_date"],
+                parsed["conclusion"],
+                parsed["raw_json"],
+                now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 # ---------------------------------------------------------------------------
@@ -1276,30 +1271,29 @@ def _upsert_fhir_medication(connection_id: int, parsed: dict[str, Any]) -> int:
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_medications
                     (connection_id, fhir_resource_id, fhir_patient_id,
                      medication_code, medication_display, status, intent,
                      authored_on, dosage_text, raw_json, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"],
-                    parsed["fhir_patient_id"],
-                    parsed["medication_code"],
-                    parsed["medication_display"],
-                    parsed["status"],
-                    parsed["intent"],
-                    parsed["authored_on"],
-                    parsed["dosage_text"],
-                    parsed["raw_json"],
-                    now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"],
+                parsed["fhir_patient_id"],
+                parsed["medication_code"],
+                parsed["medication_display"],
+                parsed["status"],
+                parsed["intent"],
+                parsed["authored_on"],
+                parsed["dosage_text"],
+                parsed["raw_json"],
+                now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 # ---------------------------------------------------------------------------
@@ -1359,9 +1353,8 @@ def _upsert_fhir_observation(connection_id: int, parsed: dict[str, Any]) -> int:
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_observations
                     (connection_id, fhir_resource_id, fhir_patient_id,
                      category, code, code_display,
@@ -1369,23 +1362,23 @@ def _upsert_fhir_observation(connection_id: int, parsed: dict[str, Any]) -> int:
                      effective_date, status, raw_json, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"],
-                    parsed["fhir_patient_id"],
-                    parsed["category"],
-                    parsed["code"],
-                    parsed["code_display"],
-                    parsed["value_numeric"],
-                    parsed["value_string"],
-                    parsed["unit"],
-                    parsed["effective_date"],
-                    parsed["status"],
-                    parsed["raw_json"],
-                    now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"],
+                parsed["fhir_patient_id"],
+                parsed["category"],
+                parsed["code"],
+                parsed["code_display"],
+                parsed["value_numeric"],
+                parsed["value_string"],
+                parsed["unit"],
+                parsed["effective_date"],
+                parsed["status"],
+                parsed["raw_json"],
+                now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 # ---------------------------------------------------------------------------
@@ -1497,9 +1490,8 @@ def _upsert_fhir_allergy(connection_id: int, parsed: dict[str, Any]) -> int:
                 ),
             )
             return existing["id"]
-        else:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 INSERT INTO fhir_allergies
                     (connection_id, fhir_resource_id, fhir_patient_id,
                      allergy_code, allergy_display, clinical_status, verification_status,
@@ -1507,18 +1499,18 @@ def _upsert_fhir_allergy(connection_id: int, parsed: dict[str, Any]) -> int:
                      onset_date, recorded_date, raw_json, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    connection_id,
-                    parsed["fhir_resource_id"], parsed["fhir_patient_id"],
-                    parsed["allergy_code"], parsed["allergy_display"],
-                    parsed["clinical_status"], parsed["verification_status"],
-                    parsed["category"], parsed["criticality"],
-                    parsed["allergy_type"], parsed["onset_date"],
-                    parsed["recorded_date"], parsed["raw_json"],
-                    now, now,
-                ),
-            )
-            return cur.lastrowid
+            (
+                connection_id,
+                parsed["fhir_resource_id"], parsed["fhir_patient_id"],
+                parsed["allergy_code"], parsed["allergy_display"],
+                parsed["clinical_status"], parsed["verification_status"],
+                parsed["category"], parsed["criticality"],
+                parsed["allergy_type"], parsed["onset_date"],
+                parsed["recorded_date"], parsed["raw_json"],
+                now, now,
+            ),
+        )
+        return cur.lastrowid
 
 
 async def _sync_allergies_async(
@@ -2067,8 +2059,8 @@ def process_conditions_for_raf(
 
     When openemr_pid is provided, only processes conditions for that patient.
     """
-    from app.services.raf_calculator import calculate_raf_score
     from app.services.hccinfhir_utils import lookup_hcc
+    from app.services.raf_calculator import calculate_raf_score
 
     with raf_cursor() as cur:
         if openemr_pid:

@@ -1,8 +1,9 @@
 """Shared dataclasses for the suspect engine (avoids circular imports)."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal
 
 Source = Literal["rule", "llm", "both"]
 EvidenceType = Literal["lab", "med", "vital", "history"]
@@ -37,4 +38,4 @@ class SuspectCandidate:
 class SuspectRule:
     rule_id: str
     description: str
-    evaluate: Callable[[dict], Optional[SuspectCandidate]]
+    evaluate: Callable[[dict], SuspectCandidate | None]

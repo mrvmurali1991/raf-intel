@@ -1,13 +1,13 @@
-from locust import HttpUser, task, between, events
-from typing import Dict, Any
 import os
+
+from locust import HttpUser, between, events, task
 
 # ---------------------------------------------------------------------------
 # RAF Intelligence — Load Testing Suite
 # ---------------------------------------------------------------------------
 # Usage:
 #   locust -f locustfile.py --host=http://localhost:8500
-# 
+#
 # To run headless:
 #   locust -f locustfile.py --headless -u 100 -r 10 --run-time 1m --host=http://localhost:8500
 # ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ class RAFIntelligenceUser(HttpUser):
         # Use test environment credentials
         username = os.getenv("LOCUST_TEST_USER", "admin@raf-intelligence.com")
         password = os.getenv("LOCUST_TEST_PASSWORD", "admin123")  # Placeholder
-        
+
         with self.client.post("/api/auth/login", json={"username": username, "password": password}, catch_response=True) as response:
             if response.status_code == 200:
                 self.token = response.json().get("access_token")
@@ -30,7 +30,7 @@ class RAFIntelligenceUser(HttpUser):
                 # For load testing, some endpoints might be hit that skip auth or we mock it.
                 response.success()
 
-    def get_headers(self) -> Dict[str, str]:
+    def get_headers(self) -> dict[str, str]:
         if not self.token:
             return {}
         return {"Authorization": f"Bearer {self.token}"}

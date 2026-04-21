@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -27,16 +27,14 @@ import pytest
 os.environ["RAF_AUTO_CHAIN"] = "true"
 
 from app.services.pipeline_chain import (
+    _get_pipeline_settings,
+    _handle_analysis_completed,
     _handle_emr_sync_completed,
     _handle_normalization_completed,
-    _handle_analysis_completed,
+    _handle_pipeline_completed,
     _handle_raf_calculation_completed,
     _handle_suspect_scan_completed,
-    _handle_pipeline_completed,
-    _get_pipeline_settings,
-    _fetch_active_patient_ids,
     setup_pipeline_chain,
-    _auto_chain_enabled,
 )
 
 # ---------------------------------------------------------------------------

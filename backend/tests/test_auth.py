@@ -21,16 +21,15 @@ Markers: (none — all run by default)
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import jwt
 import pytest
-
+from app.config import settings
 from app.services.auth_service import (
     create_access_token,
     create_refresh_token,
@@ -39,19 +38,16 @@ from app.services.auth_service import (
     validate_password_strength,
     verify_password,
 )
-from app.config import settings
+
 from tests.conftest import (
     MOCK_ADMIN_USER,
     MOCK_MFA_USER,
-    TEST_JWT_SECRET,
-    TEST_JWT_REFRESH_SECRET,
     TEST_JWT_ALGORITHM,
+    TEST_JWT_SECRET,
     _make_access_token,
-    _make_refresh_token,
     _make_mfa_pending_token,
     make_cursor_cm,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -427,15 +423,14 @@ class TestAuthenticateUser:
             patch("app.services.auth_service.raf_cursor", noop_cm),
             patch("app.db.raf_cursor", noop_cm),
             patch("app.services.auth_service._ensure_tables"),
-            patch("app.services.auth_service.log_audit"),
+            patch("app.services.auth_service.log_audit"),pytest.raises(ValueError)
         ):
-            with pytest.raises(ValueError):
-                authenticate_user(
-                    email="nobody@example.com",
-                    password="AnyPass1!",
-                    ip_address="127.0.0.1",
-                    user_agent="pytest",
-                )
+            authenticate_user(
+                email="nobody@example.com",
+                password="AnyPass1!",
+                ip_address="127.0.0.1",
+                user_agent="pytest",
+            )
 
     def test_inactive_user_raises(self):
         from app.services.auth_service import authenticate_user
@@ -668,15 +663,14 @@ class TestMFAFlow:
             patch("app.services.auth_service.get_user", return_value=mfa_user),
             patch("app.services.auth_service.log_audit"),
             patch("app.services.auth_service.raf_cursor", noop_cm2),
-            patch("app.db.raf_cursor", noop_cm2),
+            patch("app.db.raf_cursor", noop_cm2),pytest.raises((ValueError, Exception))
         ):
-            with pytest.raises((ValueError, Exception)):
-                complete_mfa_login(
-                    mfa_token=pending_token,
-                    totp_code="000000",
-                    ip_address="127.0.0.1",
-                    user_agent="pytest",
-                )
+            complete_mfa_login(
+                mfa_token=pending_token,
+                totp_code="000000",
+                ip_address="127.0.0.1",
+                user_agent="pytest",
+            )
 
 
 # ---------------------------------------------------------------------------

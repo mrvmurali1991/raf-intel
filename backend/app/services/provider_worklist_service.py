@@ -34,7 +34,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from app.db import raf_cursor
-from app.services.cache_strategy import tenant_cached, TTL_WORKLIST
+from app.services.cache_strategy import TTL_WORKLIST, tenant_cached
 
 logger = logging.getLogger(__name__)
 

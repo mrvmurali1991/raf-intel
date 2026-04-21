@@ -28,7 +28,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 
 logger = logging.getLogger(__name__)
 

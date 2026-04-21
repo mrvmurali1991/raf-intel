@@ -18,8 +18,10 @@ NOTE: Analysis calls Gemini and may take 10–30 seconds per encounter.
 from __future__ import annotations
 
 from unittest.mock import patch
+
 import pytest
 import requests
+
 
 class MockCursor:
     """Minimal dict-based cursor mock."""
@@ -133,7 +135,7 @@ class TestAnalysisEncounterPost:
 
     def test_suspect_conditions_is_list(self, analysis_result: dict):
         assert isinstance(analysis_result["suspect_conditions"], list), (
-            f"'suspect_conditions' must be a list"
+            "'suspect_conditions' must be a list"
         )
 
     def test_pipeline_is_dict(self, analysis_result: dict):
@@ -197,7 +199,7 @@ class TestAnalysisEncounterPost:
         pipeline = analysis_result["pipeline"]
         if "tool_calls" in pipeline:
             assert isinstance(pipeline["tool_calls"], list), (
-                f"'pipeline.tool_calls' must be a list"
+                "'pipeline.tool_calls' must be a list"
             )
 
     def test_pipeline_tool_calls_contain_expected_functions(self, analysis_result: dict):
@@ -358,7 +360,7 @@ class TestAnalysisNoteInline:
         first_pid: int,
     ) -> dict:
         r = authed_client.post(
-            f"/api/analysis/note",
+            "/api/analysis/note",
             json={
                 "patient_id": first_pid,
                 "note_text": SAMPLE_SOAP_NOTE,
@@ -377,7 +379,7 @@ class TestAnalysisNoteInline:
         self, authed_client: TestClient, first_pid: int
     ):
         r = authed_client.post(
-            f"/api/analysis/note",
+            "/api/analysis/note",
             json={
                 "patient_id": first_pid,
                 "note_text": SAMPLE_SOAP_NOTE,

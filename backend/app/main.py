@@ -16,19 +16,19 @@ Environment:
 import logging
 import os
 import subprocess
-from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import check_connections, shutdown_db_executor
-from app.monitoring import init_monitoring
-from app.logging_config import configure_logging
 from app.exception_handlers import register_exception_handlers
+from app.logging_config import configure_logging
 from app.middleware import setup_middleware
+from app.monitoring import init_monitoring
 from app.router_registry import register_routers
 from app.telemetry import init_telemetry
 
@@ -120,8 +120,8 @@ async def lifespan(app: FastAPI):
     logger.info("RAF Intelligence backend ready on port %s", settings.app_port)
     logger.info("NER mode: Gemini API (no local models needed)")
 
-    from app.services.sync_scheduler import start_scheduler, stop_scheduler
     from app.services.pipeline_chain import setup_pipeline_chain
+    from app.services.sync_scheduler import start_scheduler, stop_scheduler
 
     setup_pipeline_chain()
     start_scheduler()
@@ -159,7 +159,7 @@ def _check_alembic_migrations() -> None:
         try:
             proc = subprocess.run(
                 ["alembic", subcmd],
-                cwd=str(backend_dir),
+                check=False, cwd=str(backend_dir),
                 capture_output=True,
                 text=True,
                 timeout=30,

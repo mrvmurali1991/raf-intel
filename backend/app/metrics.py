@@ -15,24 +15,21 @@ Usage
 """
 
 import logging
-import os
 import time
-from typing import Callable
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import (
+        CONTENT_TYPE_LATEST,
         CollectorRegistry,
         Counter,
         Gauge,
         Histogram,
         generate_latest,
-        CONTENT_TYPE_LATEST,
     )
 
     REGISTRY = CollectorRegistry(auto_describe=True)

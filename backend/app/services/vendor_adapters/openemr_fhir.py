@@ -203,8 +203,9 @@ class OpenEMRFhirAdapter:
         if not self._jwks_private_key_pem or not self.token_url:
             return None
         try:
-            import jwt as _pyjwt
             import uuid
+
+            import jwt as _pyjwt
 
             payload = {
                 "iss": self.client_id,
@@ -1446,8 +1447,9 @@ class OpenEMRFhirAdapter:
         raf_patient_hcc.  Silently skips if the ICD-10 code has no HCC mapping
         or the patient cannot be resolved.
         """
-        from app.db import raf_cursor
         import json as _json
+
+        from app.db import raf_cursor
 
         icd10 = (condition.get("icd10_code") or "").strip().upper()
         if not icd10:
@@ -1814,7 +1816,7 @@ class OpenEMRFhirAdapter:
         administered_date = occurrence[:10] if occurrence else None
 
         status = resource.get("status", "completed")
-        lot_number = resource.get("lotNumber", None)
+        lot_number = resource.get("lotNumber")
 
         # Site and route display text (optional)
         site_obj = resource.get("site", {})
@@ -1997,8 +1999,10 @@ class OpenEMRFhirAdapter:
         """
         import re
         import uuid as _uuid
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
         from pathlib import Path
-        from datetime import datetime as _dt, timezone as _tz
+
         from app.db import raf_cursor
 
         ALLOWED_MIME = {"application/pdf", "image/jpeg", "image/png", "text/plain"}
@@ -2172,6 +2176,7 @@ class OpenEMRFhirAdapter:
         """
         import base64
         import re
+
         from app.db import raf_cursor
 
         fhir_doc_id: str = resource.get("id", "")
@@ -2694,8 +2699,9 @@ class OpenEMRFhirAdapter:
 
         Returns the count of patient scores written.
         """
-        from app.db import raf_cursor
         import json as _json
+
+        from app.db import raf_cursor
 
         measurement_year = date.today().year
         scores_written = 0

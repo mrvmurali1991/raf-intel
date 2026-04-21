@@ -22,11 +22,9 @@ from __future__ import annotations
 import functools
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
-import mysql.connector
-
-from app.db import openemr_cursor, raf_cursor, NoActiveEMRConnection
+from app.db import NoActiveEMRConnection, openemr_cursor, raf_cursor
 from app.services.circuit_breaker import openemr_breaker
 
 logger = logging.getLogger(__name__)
@@ -358,8 +356,8 @@ def get_encounters(pid: int) -> list[dict[str, Any]]:
                         txt = r.get("note_text")
                         if txt:
                             notes_by_enc.setdefault(int(r["encounter"]), []).append(txt)
-                except Exception:
-                    logger.debug("form_clinical_notes table not present or empty")
+                except Exception as _fcn_exc:  # noqa: BLE001
+                    logger.debug("form_clinical_notes table not present or empty: %s", _fcn_exc)
         except Exception as exc:
             logger.warning("get_encounters batch notes fetch failed: %s", exc)
 
@@ -625,7 +623,7 @@ def get_vitals(pid: int, tenant_id: str = "") -> list[dict[str, Any]]:
 
 
 @_empty_on_no_emr()
-def get_vitals_history(pid: int, year: Optional[int] = None) -> list[dict[str, Any]]:
+def get_vitals_history(pid: int, year: int | None = None) -> list[dict[str, Any]]:
     """
     Return the 10 most recent vitals rows for *pid*, joining through the
     forms table to confirm each row belongs to an active vitals form.
@@ -671,7 +669,7 @@ def get_vitals_history(pid: int, year: Optional[int] = None) -> list[dict[str, A
     return [_serialize(r) for r in rows]
 
 
-def _parse_vital(value: Any) -> Optional[float]:
+def _parse_vital(value: Any) -> float | None:
     """
     Safely coerce a vital value (string, int, float, Decimal, or None) to
     float.  Returns None when the value is missing, empty, or non-numeric.
@@ -688,7 +686,7 @@ def _parse_vital(value: Any) -> Optional[float]:
 
 
 @_empty_on_no_emr(default=None)
-def get_vitals_trends(pid: int, year: Optional[int] = None) -> dict[str, Any]:
+def get_vitals_trends(pid: int, year: int | None = None) -> dict[str, Any]:
     """
     Derive simple directional trends for weight, blood pressure, and BMI
     from the most recent vitals rows (newest-first order).
@@ -753,7 +751,7 @@ def get_vitals_trends(pid: int, year: Optional[int] = None) -> dict[str, Any]:
     weight_t = _trend(weights)
     w_first = weight_t.get("first")
     w_latest = weight_t.get("latest")
-    weight_loss_pct: Optional[float] = None
+    weight_loss_pct: float | None = None
     if w_first and w_latest and w_first > 0:
         # Positive value = weight was lost over the observed window
         weight_loss_pct = round((w_first - w_latest) / w_first * 100, 2)
@@ -832,13 +830,7 @@ def _rule_matches(value: float, rule: dict[str, Any]) -> bool:
     threshold = rule["threshold"]
     max_val = rule.get("max")
 
-    if op == ">=" and value >= threshold:
-        passed = True
-    elif op == ">" and value > threshold:
-        passed = True
-    elif op == "<" and value < threshold:
-        passed = True
-    elif op == "<=" and value <= threshold:
+    if op == ">=" and value >= threshold or op == ">" and value > threshold or op == "<" and value < threshold or op == "<=" and value <= threshold:
         passed = True
     else:
         passed = False
@@ -851,8 +843,8 @@ def _rule_matches(value: float, rule: dict[str, Any]) -> bool:
 @_empty_on_no_emr()
 def detect_vitals_suspects(
     pid: int,
-    existing_diagnoses: Optional[list[str]] = None,
-    year: Optional[int] = None,
+    existing_diagnoses: list[str] | None = None,
+    year: int | None = None,
 ) -> list[dict[str, Any]]:
     """
     Evaluate the latest vitals for *pid* against ``VITALS_SUSPECT_RULES``
@@ -888,7 +880,7 @@ def detect_vitals_suspects(
     latest = trends.get("latest_vitals") or {}
     vitals_date = latest.get("date") or ""
 
-    field_values: dict[str, Optional[float]] = {
+    field_values: dict[str, float | None] = {
         "BMI": _parse_vital(latest.get("BMI")),
         "oxygen_saturation": _parse_vital(latest.get("oxygen_saturation")),
         "bps": _parse_vital(latest.get("bps")),
@@ -1037,9 +1029,9 @@ def get_clinical_notes(encounter_id: int, tenant_id: str = "") -> list[dict[str,
         try:
             cur.execute(sql_cn, (encounter_id,))
             notes.extend([_serialize(r) for r in cur.fetchall()])
-        except Exception:
+        except Exception as _fcn_exc:  # noqa: BLE001
             # form_clinical_notes may not exist in all OpenEMR versions
-            logger.debug("form_clinical_notes table not present or empty")
+            logger.debug("form_clinical_notes table not present or empty: %s", _fcn_exc)
 
     return notes
 
@@ -1248,8 +1240,11 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
                     row = cur.fetchone()
                     if row:
                         patient = {"DOB": str(row["DOB"]) if row.get("DOB") else None}
-            except Exception:
-                pass
+            except Exception as _dob_exc:  # noqa: BLE001
+                logger.debug(
+                    "get_patient_enrollment_info: patient_data DOB fallback failed pid=%s: %s",
+                    pid, _dob_exc,
+                )
         if not patient:
             patient = {}
 
@@ -1427,8 +1422,11 @@ def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
                             plan_type = "Medicare Advantage" if "medicare" in ins_name.lower() else ins_name
                         if enrolled_since is None and p_row.get("enrolled_date"):
                             enrolled_since = str(p_row["enrolled_date"])[:10]
-        except Exception:
-            pass
+        except Exception as _ins_exc:  # noqa: BLE001
+            logger.debug(
+                "get_patient_enrollment_info: raf patients insurance fallback failed pid=%s: %s",
+                pid, _ins_exc,
+            )
 
     # ------------------------------------------------------------------
     # Step 3 -- OREC from age

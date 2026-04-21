@@ -7,10 +7,7 @@ consistent field naming across all patient-related endpoints.
 """
 from __future__ import annotations
 
-from datetime import date
-from typing import Any
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class PatientResponse(BaseModel):

@@ -17,16 +17,14 @@ import os
 import platform
 import shutil
 import subprocess
-import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_role
+from app.auth import require_role
 from app.rate_limit import limiter
 from app.services.backup_service import (
     _backup_dir,
@@ -244,7 +242,7 @@ def system_info(
     - Platform / Python version
     """
     from app.config import settings
-    from app.db import raf_cursor, openemr_cursor
+    from app.db import openemr_cursor, raf_cursor
 
     result: dict[str, Any] = {
         "collected_at": datetime.now(timezone.utc).isoformat(),
@@ -263,7 +261,7 @@ def system_info(
         disk["used_pct"] = (
             round(usage.used / usage.total * 100, 1) if usage.total else 0
         )
-    except Exception as exc:
+    except Exception:
         disk["error"] = "Unable to retrieve disk information"
 
     if backup_dir.exists():
@@ -273,7 +271,7 @@ def system_info(
             )
             disk["backup_dir"] = str(backup_dir)
             disk["backup_dir_used_bytes"] = backup_used
-        except Exception as exc:
+        except Exception:
             disk["backup_dir_error"] = "Unable to retrieve backup directory information"
 
     result["disk"] = disk
@@ -323,7 +321,7 @@ def system_info(
     try:
         proc_result = subprocess.run(
             ["ps", "-o", "etime=", "-p", str(os.getpid())],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
             timeout=5,
         )

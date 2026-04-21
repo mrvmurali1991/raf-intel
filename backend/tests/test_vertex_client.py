@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Mock google.auth / google.auth.transport.requests before module import so
 # environments without google-auth installed can still run these tests.
@@ -213,11 +212,10 @@ def test_llm_generate_schema_validation_retries_once_on_bad_json():
     fake_mod = types.ModuleType("app.services.audit")
     fake_mod.log_event = fake_log_event  # type: ignore[attr-defined]
 
-    with patch.dict(sys.modules, {"app.services.audit": fake_mod}):
-        with patch.object(
-            vertex_client.requests, "post", side_effect=[bad, good]
-        ) as post:
-            out = vertex_client.llm_generate("give me json", output_schema=schema)
+    with patch.dict(sys.modules, {"app.services.audit": fake_mod}), patch.object(
+        vertex_client.requests, "post", side_effect=[bad, good]
+    ) as post:
+        out = vertex_client.llm_generate("give me json", output_schema=schema)
 
     assert out == '{"foo": "bar"}'
     assert post.call_count == 2
@@ -233,9 +231,8 @@ def test_llm_generate_schema_validation_raises_after_second_failure():
     schema = {"type": "object", "required": ["foo"]}
     with patch.object(
         vertex_client.requests, "post", side_effect=[bad1, bad2]
-    ):
-        with pytest.raises(ValueError, match="schema validation"):
-            vertex_client.llm_generate("x", output_schema=schema)
+    ), pytest.raises(ValueError, match="schema validation"):
+        vertex_client.llm_generate("x", output_schema=schema)
 
 
 # ---------------------------------------------------------------------------

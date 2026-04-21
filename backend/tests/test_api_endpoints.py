@@ -18,11 +18,7 @@ Covers:
 
 from __future__ import annotations
 
-import io
-import os
 from contextlib import contextmanager
-from datetime import datetime, timezone
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -113,7 +109,7 @@ class TestUnauthenticatedRequests:
         assert resp.status_code == 401
 
     def test_expired_token_returns_401(self, client):
-        from tests.conftest import _make_access_token, MOCK_ADMIN_USER
+        from tests.conftest import MOCK_ADMIN_USER, _make_access_token
         expired_token = _make_access_token(MOCK_ADMIN_USER, expired=True)
         headers = {"Authorization": f"Bearer {expired_token}"}
         resp = client.get("/api/auth/me", headers=headers)
@@ -139,8 +135,9 @@ class TestLoginEndpoint:
         return _cm
 
     def test_login_with_valid_credentials_returns_200(self, client):
-        from tests.conftest import MOCK_ADMIN_USER, _make_access_token
         import uuid
+
+        from tests.conftest import MOCK_ADMIN_USER, _make_access_token
 
         session_id = str(uuid.uuid4())
         # Patch authenticate_user at the router level to avoid DB/bcrypt entirely
@@ -387,8 +384,7 @@ class TestDocumentUploadEndpoint:
         assert resp.status_code == 401
 
     def test_document_upload_accepted_with_auth(self, client, admin_headers):
-        from tests.conftest import MOCK_ADMIN_USER
-        from tests.conftest import MockCursor
+        from tests.conftest import MOCK_ADMIN_USER, MockCursor
 
         user = dict(MOCK_ADMIN_USER)
 

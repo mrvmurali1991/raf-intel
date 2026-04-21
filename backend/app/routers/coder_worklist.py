@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.coder_worklist_service import (
+    _fetch_item,
     assign_item,
     auto_queue_from_claims,
     auto_queue_from_nlp,
@@ -40,7 +41,6 @@ from app.services.coder_worklist_service import (
     get_worklist,
     return_item,
     start_review,
-    _fetch_item,
 )
 
 logger = logging.getLogger(__name__)

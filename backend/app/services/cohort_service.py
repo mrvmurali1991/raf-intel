@@ -43,7 +43,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 from app.services.emr_manager import active_patients_subquery  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # FHIR connection detection helper
 # ---------------------------------------------------------------------------

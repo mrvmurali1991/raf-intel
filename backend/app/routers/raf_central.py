@@ -26,7 +26,7 @@ POST /api/raf-central/{pid}/actions/order-lab
 """
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from typing import Any, Literal
 
@@ -34,17 +34,17 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_permission
-from app.cache import cache_get, cache_set, cache_delete_pattern
+from app.cache import cache_delete_pattern, cache_get, cache_set
 from app.config import settings
 from app.db import openemr_cursor, raf_cursor
 from app.services.cache_strategy import get_active_connection_id
+from app.services.celery_tasks import task_refresh_meat_for_patient
 from app.services.openemr_connector import (
     get_patient,
     push_medical_problem,
     push_prescription,
     push_procedure_order,
 )
-from app.services.celery_tasks import task_refresh_meat_for_patient
 from app.services.raf.calculator import calculate_raf_score, get_raf_breakdown
 from app.services.recapture_gap_service import get_patient_gaps
 from app.services.suspect_engine import (
@@ -391,9 +391,7 @@ def _build_audit(raf_bar: LiveRAFBar, meat_gaps: list[MEATGap]) -> AuditReadines
     total = len(meat_gaps)
     compliant = sum(1 for g in meat_gaps if g.status == "COMPLETE")
     pct = round(100.0 * compliant / total, 1) if total else 0.0
-    if total == 0:
-        risk = "LOW"
-    elif pct >= 80:
+    if total == 0 or pct >= 80:
         risk = "LOW"
     elif pct >= 40:
         risk = "MEDIUM"
@@ -576,13 +574,13 @@ def _invalidate_panel_cache(pid: int, tenant_id: str) -> None:
         pass
 
 
-@router.post("/{pid}/actions/accept-suspect")
+@router.post("/{pid}/actions/accept-suspect", response_model=AcceptSuspectResponse)
 def action_accept_suspect(
     pid: int,
     body: AcceptSuspectRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
-) -> dict[str, Any]:
+) -> AcceptSuspectResponse:
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
@@ -599,16 +597,16 @@ def action_accept_suspect(
             pushed = push_medical_problem(pid, suspect_label, suspect_icd)
 
     _invalidate_panel_cache(pid, tenant_id)
-    return {"ok": True, "suspect": result, "pushed_to_emr": pushed}
+    return AcceptSuspectResponse(ok=True, suspect=result, pushed_to_emr=pushed)
 
 
-@router.post("/{pid}/actions/dismiss-suspect")
+@router.post("/{pid}/actions/dismiss-suspect", response_model=DismissSuspectResponse)
 def action_dismiss_suspect(
     pid: int,
     body: DismissSuspectRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
-) -> dict[str, Any]:
+) -> DismissSuspectResponse:
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
@@ -621,16 +619,16 @@ def action_dismiss_suspect(
         tenant_id=tenant_id,
     )
     _invalidate_panel_cache(pid, tenant_id)
-    return {"ok": True, "suspect": result}
+    return DismissSuspectResponse(ok=True, suspect=result)
 
 
-@router.post("/{pid}/actions/mark-meat-reviewed")
+@router.post("/{pid}/actions/mark-meat-reviewed", response_model=MarkMEATReviewedResponse)
 def action_mark_meat_reviewed(
     pid: int,
     body: MarkMEATReviewedRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> MarkMEATReviewedResponse:
     """Insert a raf_meat_evidence row and bump patient_hcc.meat_status.
 
     This is the endpoint backing the "Mark Reviewed" button in the MEAT
@@ -698,16 +696,16 @@ def action_mark_meat_reviewed(
         raise HTTPException(status_code=500, detail=f"MEAT write failed: {exc}")
 
     _invalidate_panel_cache(pid, tenant_id)
-    return {"ok": True, "meat_status": status, "reviewed_by": reviewer}
+    return MarkMEATReviewedResponse(ok=True, meat_status=status, reviewed_by=reviewer)
 
 
-@router.post("/{pid}/actions/add-assessment-note")
+@router.post("/{pid}/actions/add-assessment-note", response_model=AddAssessmentNoteResponse)
 def action_add_assessment_note(
     pid: int,
     body: AddAssessmentNoteRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> AddAssessmentNoteResponse:
     """Append clinician-authored assessment text to the current encounter's
     SOAP note. Falls back to inserting a new `form_soap` row when no
     encounter_id is provided.
@@ -746,16 +744,16 @@ def action_add_assessment_note(
         raise HTTPException(status_code=500, detail=f"EMR note write failed: {exc}")
 
     _invalidate_panel_cache(pid, tenant_id)
-    return {"ok": True, "encounter_id": body.encounter_id, "author": reviewer}
+    return AddAssessmentNoteResponse(ok=True, encounter_id=body.encounter_id, author=reviewer)
 
 
-@router.post("/{pid}/actions/upgrade-code")
+@router.post("/{pid}/actions/upgrade-code", response_model=UpgradeCodeResponse)
 def action_upgrade_code(
     pid: int,
     body: UpgradeCodeRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> UpgradeCodeResponse:
     """Replace a less-specific ICD on an encounter's billing row with a
     more-specific one. Updates OpenEMR `billing.code` + `code_text`.
     """
@@ -785,16 +783,16 @@ def action_upgrade_code(
         )
 
     _invalidate_panel_cache(pid, tenant_id)
-    return {"ok": True, "rows_updated": affected}
+    return UpgradeCodeResponse(ok=True, rows_updated=affected)
 
 
-@router.post("/{pid}/actions/recalculate")
+@router.post("/{pid}/actions/recalculate", response_model=RecalculateResponse)
 def action_recalculate(
     pid: int,
     year: int | None = None,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> RecalculateResponse:
     """Force a full RAF recalc for this patient (drops caches, re-runs the
     engine, persists the new score). Use after a writeback action to
     surface the new RAF value in the panel.
@@ -811,13 +809,13 @@ def action_recalculate(
         measurement_year=measurement_year,
         tenant_id=tenant_id,
     )
-    return {
-        "ok": True,
-        "raf_score": float(result.get("raf_score") or 0.0),
-        "hcc_count": int(result.get("hcc_count") or 0),
-        "model_segment": result.get("model_segment"),
-        "measurement_year": measurement_year,
-    }
+    return RecalculateResponse(
+        ok=True,
+        raf_score=float(result.get("raf_score") or 0.0),
+        hcc_count=int(result.get("hcc_count") or 0),
+        model_segment=result.get("model_segment"),
+        measurement_year=measurement_year,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -839,6 +837,69 @@ _DEFAULT_TREATMENT_BY_HCC: dict[str, dict[str, str]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Action response models
+# ---------------------------------------------------------------------------
+
+
+class ActionOkResponse(BaseModel):
+    ok: bool
+
+
+class AcceptSuspectResponse(BaseModel):
+    ok: bool
+    suspect: dict[str, Any]
+    pushed_to_emr: bool
+
+
+class DismissSuspectResponse(BaseModel):
+    ok: bool
+    suspect: dict[str, Any]
+
+
+class MarkMEATReviewedResponse(BaseModel):
+    ok: bool
+    meat_status: str
+    reviewed_by: str
+
+
+class AddAssessmentNoteResponse(BaseModel):
+    ok: bool
+    encounter_id: int | None
+    author: str
+
+
+class UpgradeCodeResponse(BaseModel):
+    ok: bool
+    rows_updated: int
+
+
+class RecalculateResponse(BaseModel):
+    ok: bool
+    raf_score: float
+    hcc_count: int
+    model_segment: str | None
+    measurement_year: int
+
+
+class StartTreatmentResponse(BaseModel):
+    status: str
+    prescription_id: int
+    drug: str
+
+
+class OrderLabResponse(BaseModel):
+    status: str
+    procedure_order_id: int | None = None
+    suggested_lab_code: str
+    reason: str | None = None
+
+
+class RefreshMEATResponse(BaseModel):
+    status: str
+    job_id: str
+
+
 class StartTreatmentRequest(BaseModel):
     hcc_code: str
     icd10: str
@@ -847,13 +908,13 @@ class StartTreatmentRequest(BaseModel):
     dosage: str | None = None
 
 
-@router.post("/{pid}/actions/start-treatment")
+@router.post("/{pid}/actions/start-treatment", response_model=StartTreatmentResponse)
 def action_start_treatment(
     pid: int,
     body: StartTreatmentRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> StartTreatmentResponse:
     """Write a new prescription into OpenEMR to satisfy a MEAT-Treatment gap."""
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
@@ -895,7 +956,7 @@ def action_start_treatment(
 
     _invalidate_panel_cache(pid, tenant_id)
 
-    return {"status": "ok", "prescription_id": int(rx_id), "drug": drug}
+    return StartTreatmentResponse(status="ok", prescription_id=int(rx_id), drug=drug)
 
 
 # ---------------------------------------------------------------------------
@@ -979,13 +1040,13 @@ def _log_raf_action(
         logger.debug("raf_action_log insert skipped (pid=%s action=%s): %s", pid, action, exc)
 
 
-@router.post("/{pid}/actions/order-lab")
+@router.post("/{pid}/actions/order-lab", response_model=OrderLabResponse)
 def action_order_lab(
     pid: int,
     body: OrderLabRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> OrderLabResponse:
     """Place a lab order in OpenEMR to close a MEAT 'Monitoring' gap."""
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
@@ -1025,11 +1086,11 @@ def action_order_lab(
             with openemr_cursor() as _cur:
                 pass
         except NoActiveEMRConnection:
-            return {
-                "status": "skipped",
-                "reason": "no emr configured",
-                "suggested_lab_code": lab_code,
-            }
+            return OrderLabResponse(
+                status="skipped",
+                reason="no emr configured",
+                suggested_lab_code=lab_code,
+            )
         except Exception:
             pass
         raise HTTPException(
@@ -1052,11 +1113,11 @@ def action_order_lab(
     )
 
     _invalidate_panel_cache(pid, tenant_id)
-    return {
-        "status": "ok",
-        "procedure_order_id": int(order_id),
-        "suggested_lab_code": lab_code,
-    }
+    return OrderLabResponse(
+        status="ok",
+        procedure_order_id=int(order_id),
+        suggested_lab_code=lab_code,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1253,13 +1314,13 @@ class RefreshMEATRequest(BaseModel):
     year: int | None = None
 
 
-@router.post("/{pid}/actions/refresh-meat", status_code=202)
+@router.post("/{pid}/actions/refresh-meat", status_code=202, response_model=RefreshMEATResponse)
 def action_refresh_meat(
     pid: int,
     body: RefreshMEATRequest | None = None,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "write")),
-) -> dict[str, Any]:
+) -> RefreshMEATResponse:
     """Enqueue MEAT extraction for this patient as a background Celery task.
 
     Returns HTTP 202 immediately with ``{status: "queued", job_id: <task_id>}``
@@ -1299,4 +1360,4 @@ def action_refresh_meat(
         "refresh-meat: enqueued task_id=%s pid=%s tenant=%s year=%s",
         task.id, pid, tenant_id, req.year,
     )
-    return {"status": "queued", "job_id": task.id}
+    return RefreshMEATResponse(status="queued", job_id=task.id)

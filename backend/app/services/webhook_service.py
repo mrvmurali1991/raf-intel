@@ -18,7 +18,6 @@ import json
 import logging
 import secrets
 import socket
-import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -405,14 +404,13 @@ def _deliver_to_webhook(
                     attempt,
                 )
                 break
-            else:
-                logger.warning(
-                    "Webhook %d non-2xx response event=%s status=%d attempt=%d",
-                    webhook_id,
-                    event_type,
-                    resp.status_code,
-                    attempt,
-                )
+            logger.warning(
+                "Webhook %d non-2xx response event=%s status=%d attempt=%d",
+                webhook_id,
+                event_type,
+                resp.status_code,
+                attempt,
+            )
         except httpx.TimeoutException:
             logger.warning(
                 "Webhook %d timeout event=%s attempt=%d",

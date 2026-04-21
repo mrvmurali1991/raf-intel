@@ -7,7 +7,6 @@ socket.getaddrinfo is monkeypatched to control address resolution.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch
 
 
 def _make_getaddrinfo(ip: str):
@@ -105,8 +104,8 @@ class TestAssertSafeOutboundUrl:
 
     def test_http_rejected_in_production(self, monkeypatch):
         """http:// must be rejected when app_env != 'development'."""
-        from app.security import ssrf
         from app.config import settings
+        from app.security import ssrf
         monkeypatch.setattr(
             "app.security.ssrf.socket.getaddrinfo",
             _make_getaddrinfo("93.184.216.34"),
@@ -117,8 +116,8 @@ class TestAssertSafeOutboundUrl:
 
     def test_http_allowed_in_development(self, monkeypatch):
         """http:// must be accepted when app_env == 'development'."""
-        from app.security import ssrf
         from app.config import settings
+        from app.security import ssrf
         monkeypatch.setattr(
             "app.security.ssrf.socket.getaddrinfo",
             _make_getaddrinfo("93.184.216.34"),

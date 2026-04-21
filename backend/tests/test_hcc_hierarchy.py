@@ -15,23 +15,18 @@ All tests run entirely in-process.  No database required.
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
 from contextlib import contextmanager
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from app.services.hcc_hierarchy import (
-    V24_HIERARCHY_CHAINS,
-    V28_HIERARCHY_CHAINS,
+    _ALL_TRUMPED_BY,
     _V24_TRUMPED_BY,
     _V28_TRUMPED_BY,
-    _ALL_TRUMPED_BY,
     _build_lookup,
     apply_hierarchy,
-    apply_hierarchy_to_patient,
     apply_hierarchy_to_all_patients,
+    apply_hierarchy_to_patient,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

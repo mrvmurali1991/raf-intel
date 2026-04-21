@@ -27,13 +27,14 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from celery.schedules import crontab
 
-from app.services.job_service import celery_app
+from app.db import raf_cursor
 from app.services.ai_pipeline import (
     context_bundle,
     eligibility,
@@ -43,7 +44,7 @@ from app.services.ai_pipeline import (
     suspect_engine,
 )
 from app.services.ai_pipeline.hcc_mapper import map_icd_to_hcc
-from app.db import raf_cursor
+from app.services.job_service import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _log_run_error(run_id: Optional[int], stage: str, exc: BaseException) -> None:
+def _log_run_error(run_id: int | None, stage: str, exc: BaseException) -> None:
     logger.exception("ai_pipeline stage %s failed (run=%s)", stage, run_id)
     if run_id is None:
         return
@@ -120,7 +121,7 @@ def run_for_patient(
     trigger_reason: str = "scheduled",
 ) -> dict[str, Any]:
     """Run the full AI pipeline for a single patient within a tenant."""
-    run_id: Optional[int] = None
+    run_id: int | None = None
     summary: dict[str, Any] = {
         "patient_id": patient_id,
         "tenant_id": tenant_id,
@@ -192,7 +193,7 @@ def run_for_patient(
         if _edate and _edate not in enc_by_date:
             enc_by_date[_edate] = _enc
 
-    def _resolve_encounter_for_note(note) -> tuple[Optional[str], Optional[str]]:
+    def _resolve_encounter_for_note(note) -> tuple[str | None, str | None]:
         eid = getattr(note, "encounter_id", None)
         ndate = getattr(note, "date", None)
         enc = None
@@ -405,10 +406,10 @@ def _persist_results(
 
 
 def _persist_provider_query(
-    run_id: Optional[int],
+    run_id: int | None,
     patient_id: int,
-    candidate_id: Optional[int],
-    suspect_candidate_id: Optional[int],
+    candidate_id: int | None,
+    suspect_candidate_id: int | None,
     pq: Any,
 ) -> None:
     """Persist a ProviderQuery. Table ``ai_provider_queries`` is optional

@@ -28,10 +28,9 @@ import os
 import time
 from typing import Any
 
+from app.config import settings
 from app.services.api_rate_limiter import gemini_limiter
 from app.services.circuit_breaker import gemini_breaker
-
-from app.config import settings
 from app.services.icd_validator import validate_code_set
 
 logger = logging.getLogger(__name__)
@@ -155,10 +154,10 @@ def _handle_lookup_hcc(icd10_code: str) -> dict:
     ``found`` before consuming ``hcc_code`` / ``raf_weight``.
     """
     from hccinfhir.defaults import (
-        dx_to_cc_default,
-        labels_default,
         coefficients_default,
+        dx_to_cc_default,
         is_chronic_default,
+        labels_default,
     )
 
     MODEL = "CMS-HCC Model V28"
@@ -597,7 +596,8 @@ def _handle_calculate_raf(
                      continue to work without change (backward compatible).
     """
     try:
-        from hccinfhir import HCCInFHIR, Demographics
+        from hccinfhir import Demographics, HCCInFHIR
+
         from app.services.raf_calculator import determine_model_segment
 
         sex_code = "F" if sex.lower().startswith("f") else "M"
@@ -1135,7 +1135,7 @@ Analyze this note completely. Use ALL context provided above (problem list, reca
                 pipeline_meta["timings"][f"turn_{turn}"] = round(t_elapsed, 2)
                 continue
 
-            elif text_parts:
+            if text_parts:
                 # Gemini returned final text answer
                 raw_text = text_parts[0].get("text", "")
                 pipeline_meta["timings"][f"turn_{turn}"] = round(t_elapsed, 2)
@@ -1260,9 +1260,8 @@ Analyze this note completely. Use ALL context provided above (problem list, reca
                 )
                 return result
 
-            else:
-                logger.warning("[Skill Pipeline] No text or function calls on turn %d", turn)
-                break
+            logger.warning("[Skill Pipeline] No text or function calls on turn %d", turn)
+            break
 
     except Exception as exc:
         logger.error("[Skill Pipeline] Failed: %s", exc)

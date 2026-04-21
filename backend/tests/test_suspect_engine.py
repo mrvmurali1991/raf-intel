@@ -4,7 +4,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-
 from app.services.ai_pipeline import suspect_engine as se
 from app.services.ai_pipeline.rules import (
     cardiac,

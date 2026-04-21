@@ -18,11 +18,11 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from datetime import date, datetime
+from typing import Any
 
 from app.config import settings
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,6 @@ def _active_patient_ids(tenant_id: str = "") -> set[int]:
             cur.execute("SELECT connection_type FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1", (tenant_id,))
             ct_row = cur.fetchone()
             if ct_row and ct_row["connection_type"] == "direct_db":
-                from app.db import openemr_cursor
                 cur.execute("SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s LIMIT 10000", (tenant_id,))
                 return {int(r["id"]) for r in cur.fetchall()}
             if ct_row:
@@ -1001,7 +1000,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
         # Recapture gaps — only active patients
         with raf_cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT COUNT(DISTINCT patient_id) AS pts,
                        COUNT(*)                   AS gaps
                 FROM raf_patient_hcc h

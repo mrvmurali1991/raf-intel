@@ -46,16 +46,16 @@ reconcile_crosswalk(tenant_id) -> list[dict]
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
+from app.db import raf_cursor
 from app.services.hccinfhir_utils import (
+    get_hcc_coefficient as _get_hcc_coefficient_raw,
+)
+from app.services.hccinfhir_utils import (
+    get_hcc_label,
     lookup_hcc,
     lookup_hcc_batch,
-    get_hcc_label,
-    get_hcc_coefficient as _get_hcc_coefficient_raw,
-    DEFAULT_MODEL,
 )
-from app.db import get_raf_db, raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def _resolve_model(model_version: str) -> str:
 def map_icd10_to_hcc(
     icd10_code: str,
     model_version: str = "V28",
-) -> Optional[dict]:
+) -> dict | None:
     """Map a single ICD-10 code to its HCC condition category using hccinfhir.
 
     This is the authoritative lookup for the entire application.  Do NOT use

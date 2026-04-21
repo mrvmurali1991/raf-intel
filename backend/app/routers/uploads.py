@@ -993,7 +993,11 @@ async def upload_patients(
     # ---- Legacy single-sheet / CSV path ----------------------------------
     from app.services.patient_import_service import (
         import_patients as _import,
+    )
+    from app.services.patient_import_service import (
         parse_patient_csv as _parse_csv,
+    )
+    from app.services.patient_import_service import (
         parse_patient_xlsx as _parse_xlsx,
     )
 

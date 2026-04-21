@@ -13,21 +13,21 @@ GET /api/reports/workflow-summary      – Dashboard workflow queue counts from 
 """
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
-import json
 import logging
+from collections import Counter
 from datetime import date, datetime
 from typing import Any
 
-from fastapi import Depends, APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from collections import Counter
-
-from app.db import raf_cursor, openemr_cursor, NoActiveEMRConnection
 from app.auth import get_current_user, get_tenant_id, require_permission
-from app.config import settings
-from app.services.emr_manager import active_patients_subquery
 from app.cache import cache_get, cache_set
-from app.services.cache_strategy import get_active_connection_id as _active_connection_id
+from app.config import settings
+from app.db import NoActiveEMRConnection, openemr_cursor, raf_cursor
+from app.services.cache_strategy import (
+    get_active_connection_id as _active_connection_id,
+)
+from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +254,7 @@ def patient_scorecard(year: int = Query(default=None),
         # baseline if any score has been computed.
         with raf_cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT rs.patient_id, rs.final_raf, rs.hcc_count
                 FROM raf_scores rs
                 INNER JOIN (

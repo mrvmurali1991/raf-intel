@@ -1,0 +1,58 @@
+# pyproject.toml — RAF Intelligence backend tool configuration
+# Ruff linter/formatter settings only; pytest uses pytest.ini, mypy uses mypy.ini.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# Rule groups enabled for gradual hardening.
+# Baseline: 7886 errors post auto-fix (2026-04-20).
+# CI fails if count increases beyond .github/ruff-baseline.txt.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "B",    # flake8-bugbear
+    "I",    # isort
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "PTH",  # flake8-use-pathlib
+    "RET",  # flake8-return
+    "PL",   # pylint
+    "BLE",  # flake8-blind-except
+]
+
+# Rules that are too noisy or break intentional patterns — revisit per-sprint.
+ignore = [
+    "E501",     # line too long — handled by formatter
+    "B008",     # do not perform function calls in default arguments (FastAPI Depends)
+    "B904",     # raise from within except (many legacy raise patterns)
+    "PLR0913",  # too many arguments — common in service constructors
+    "PLR2004",  # magic value comparison — noisy in medical coefficient code
+    "PLR0912",  # too many branches
+    "PLR0915",  # too many statements
+    "SIM102",   # nested if — often clearer than collapsed
+    "SIM108",   # ternary rewrite — readability judgment call
+    "RET504",   # unnecessary assignment before return
+    "UP007",    # use X | Y for unions — keep Optional[] for Pydantic v1 compat
+]
+
+# Auto-fix is safe for these rules.
+fixable = ["E", "F401", "I", "UP", "W"]
+unfixable = ["B", "PL", "BLE", "SIM", "PTH", "RET"]
+
+# Exclude generated / vendored directories.
+exclude = [
+    "__pycache__",
+    ".git",
+    "alembic/versions",
+    "migrations",
+    "scratch",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files: allow assert statements, magic numbers, top-level imports inside functions.
+"tests/**" = ["PLC0415", "PLR2004", "S101"]
+# Seed scripts: allow print statements and broad exception handling.
+"seed_*.py" = ["BLE001", "T201"]

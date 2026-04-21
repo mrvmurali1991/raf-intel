@@ -9,10 +9,8 @@ Tags: compliance
 """
 
 import logging
-from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id
@@ -33,7 +31,7 @@ class RecordConsentRequest(BaseModel):
     patient_id: int
     consent_type: str = Field(..., description=f"One of: {', '.join(sorted(CONSENT_TYPES))}")
     granted: bool = True
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
     details: str = ""
 
 

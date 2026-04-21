@@ -17,13 +17,8 @@ All DB calls and service layer are mocked — no database connection required.
 
 from __future__ import annotations
 
-import json
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
-from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tests.conftest import (
     MOCK_ADMIN_USER,
@@ -31,7 +26,6 @@ from tests.conftest import (
     _make_access_token,
     make_cursor_cm,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared patient/clinical mock data

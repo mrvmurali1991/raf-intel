@@ -754,19 +754,18 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
     After completion (or partial failure), always emits ``"analysis_completed"``
     so the pipeline continues to RAF calculation.
     """
-    from app.services.pipeline_orchestrator import run_verified_pipeline
+    from app.db import raf_cursor
     from app.services.openemr_connector import (
         get_clinical_notes,
+        get_latest_vitals,
+        get_medication_diagnoses,
         get_medications,
         get_problem_list,
         get_recapture_gaps,
-        get_latest_vitals,
-        get_medication_diagnoses,
     )
-    from app.services.suspect_engine import save_suspects_from_analysis
-
+    from app.services.pipeline_orchestrator import run_verified_pipeline
     from app.services.raf_calculator import _calculate_age
-    from app.db import raf_cursor
+    from app.services.suspect_engine import save_suspects_from_analysis
 
     tenant_id: str = payload.get("tenant_id") or ""
     if not tenant_id:
@@ -933,8 +932,7 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
 
                 # Route the analysis result to auto-accept / human-review / full-audit
                 try:
-                    from app.services import confidence_router
-                    from app.services import coder_worklist_service
+                    from app.services import coder_worklist_service, confidence_router
 
                     routing = confidence_router.route_analysis_result(
                         medcat_entities=[],
@@ -1116,7 +1114,7 @@ def _handle_analysis_completed(payload: dict[str, Any]) -> None:
 
     # Pre-warm RAF score cache after calculation
     try:
-        from app.services.cache_strategy import warm_raf_scores, invalidate_raf_scores
+        from app.services.cache_strategy import invalidate_raf_scores, warm_raf_scores
         invalidate_raf_scores(tenant_id)
         warm_raf_scores(tenant_id)
     except Exception as exc:
@@ -1284,7 +1282,11 @@ def _handle_pipeline_completed(payload: dict[str, Any]) -> None:
 
     # Pre-warm dashboard caches after full pipeline completion
     try:
-        from app.services.cache_strategy import warm_dashboard, invalidate_dashboard, invalidate_worklist
+        from app.services.cache_strategy import (
+            invalidate_dashboard,
+            invalidate_worklist,
+            warm_dashboard,
+        )
         invalidate_dashboard(tenant_id)
         invalidate_worklist(tenant_id)
         warm_dashboard(tenant_id)

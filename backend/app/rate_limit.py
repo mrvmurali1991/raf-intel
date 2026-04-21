@@ -11,6 +11,7 @@ limit violations and return a 429 response automatically.
 """
 
 import os
+
 from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address

@@ -23,20 +23,19 @@ import base64
 import hashlib
 import json
 import logging
-import os
 import re
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from app.config import settings
 from app.db import raf_cursor
 from app.services.icd_validator import (
+    get_hcc_mapping,
     normalize_code,
     validate_code,
-    get_hcc_mapping,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,7 +265,7 @@ def _resolve_upload_path(tenant_id: str) -> Path:
     # Verify resolved path is within UPLOADS_BASE
     resolved = month_dir.resolve()
     if not resolved.is_relative_to(UPLOADS_BASE.resolve()):
-        raise ValueError(f"Invalid upload path: path escapes base directory")
+        raise ValueError("Invalid upload path: path escapes base directory")
     month_dir.mkdir(parents=True, exist_ok=True)
     return month_dir
 
@@ -493,7 +492,6 @@ def _call_gemini_vision(file_bytes: bytes, mime_type: str) -> dict[str, Any]:
     (Vertex AI with SA auth when LLM_USE_VERTEX=true; legacy API key
     fallback otherwise) and return parsed JSON extraction.
     """
-    import base64
 
     from app.services.llm import llm_generate_content
 

@@ -25,16 +25,14 @@ Session and context:
 # Note: do NOT use 'from __future__ import annotations' — breaks Pydantic schema generation.
 
 import logging
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import RedirectResponse, JSONResponse
-from pydantic import BaseModel, Field, HttpUrl, field_validator
-
-from app.auth import get_current_user, get_tenant_id, require_role
-from app.config import settings
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field, field_validator
 
 import app.services.smart_fhir_service as smart_svc
+from app.auth import get_current_user, get_tenant_id, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +51,7 @@ class RegistrationCreate(BaseModel):
         "generic", description="EHR vendor"
     )
     client_id: str = Field(..., min_length=1, max_length=255, description="OAuth2 client_id from the EHR")
-    client_secret: Optional[str] = Field(
+    client_secret: str | None = Field(
         None,
         description="OAuth2 client_secret — omit for public clients. Stored encrypted.",
     )
@@ -62,7 +60,7 @@ class RegistrationCreate(BaseModel):
         "launch patient/*.read openid fhirUser",
         description="Space-separated SMART/OAuth2 scopes",
     )
-    launch_url: Optional[str] = Field(
+    launch_url: str | None = Field(
         None, description="App gallery launch URL registered in the EHR (EHR-launch only)"
     )
     fhir_base_url: str = Field(..., description="FHIR R4 base URL, e.g. https://fhir.epic.example.com/api/FHIR/R4")
@@ -79,17 +77,17 @@ class RegistrationCreate(BaseModel):
 class RegistrationUpdate(BaseModel):
     """Fields that may be updated on an existing registration.  All optional."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
-    ehr_vendor: Optional[Literal["epic", "cerner", "athenahealth", "generic"]] = None
-    client_id: Optional[str] = Field(None, min_length=1, max_length=255)
-    client_secret: Optional[str] = Field(None, description="New client_secret; stored encrypted.")
-    redirect_uri: Optional[str] = None
-    scopes: Optional[str] = None
-    launch_url: Optional[str] = None
-    fhir_base_url: Optional[str] = None
-    token_endpoint: Optional[str] = None
-    authorize_endpoint: Optional[str] = None
-    status: Optional[Literal["active", "inactive"]] = None
+    name: str | None = Field(None, min_length=1, max_length=200)
+    ehr_vendor: Literal["epic", "cerner", "athenahealth", "generic"] | None = None
+    client_id: str | None = Field(None, min_length=1, max_length=255)
+    client_secret: str | None = Field(None, description="New client_secret; stored encrypted.")
+    redirect_uri: str | None = None
+    scopes: str | None = None
+    launch_url: str | None = None
+    fhir_base_url: str | None = None
+    token_endpoint: str | None = None
+    authorize_endpoint: str | None = None
+    status: Literal["active", "inactive"] | None = None
 
 
 class RegistrationResponse(BaseModel):
@@ -101,7 +99,7 @@ class RegistrationResponse(BaseModel):
     client_id: str
     redirect_uri: str
     scopes: str
-    launch_url: Optional[str]
+    launch_url: str | None
     fhir_base_url: str
     token_endpoint: str
     authorize_endpoint: str
@@ -176,11 +174,11 @@ def smart_configuration(request: Request) -> dict[str, Any]:
 )
 def smart_launch(
     registration_id: int = Query(..., description="ID of the SMART app registration to use"),
-    iss: Optional[str] = Query(
+    iss: str | None = Query(
         None,
         description="FHIR base URL supplied by the EHR on EHR-launch (the `iss` parameter)",
     ),
-    launch: Optional[str] = Query(
+    launch: str | None = Query(
         None,
         description="Opaque launch token supplied by the EHR on EHR-launch",
     ),
@@ -225,8 +223,8 @@ def smart_launch(
 def smart_callback(
     code: str = Query(..., description="Authorization code returned by the EHR"),
     state: str = Query(..., description="CSRF state parameter echoed from the launch"),
-    error: Optional[str] = Query(None, description="OAuth2 error code if authorization failed"),
-    error_description: Optional[str] = Query(None),
+    error: str | None = Query(None, description="OAuth2 error code if authorization failed"),
+    error_description: str | None = Query(None),
     tenant_id: str = Depends(get_tenant_id),
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -328,7 +326,7 @@ def get_patient(
     summary="List SMART launch sessions",
 )
 def list_sessions(
-    session_status: Optional[str] = Query(
+    session_status: str | None = Query(
         None,
         alias="status",
         description="Filter by session status: initiated | authorized | active | expired | error",

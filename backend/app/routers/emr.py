@@ -30,12 +30,11 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 
+import app.services.emr_manager as emr_mgr
 from app.auth import get_current_user, get_tenant_id, require_role
 from app.rate_limit import limiter
+from app.services import patient_matcher
 from app.services.audit_logger import log_phi_access
-
-import app.services.emr_manager as emr_mgr
-import app.services.patient_matcher as patient_matcher
 
 logger = logging.getLogger(__name__)
 
@@ -686,8 +685,8 @@ def update_connection(
                 exc,
             )
         # Invalidate ALL caches so stale data from previous connection isn't served
-        from app.services.cache_strategy import invalidate_all_for_tenant
         from app.cache import cache_delete_pattern
+        from app.services.cache_strategy import invalidate_all_for_tenant
         try:
             invalidate_all_for_tenant(tenant_id)
             cache_delete_pattern("report:*")
@@ -804,8 +803,8 @@ def reactivate_connection(
         raise HTTPException(status_code=500, detail="Failed to restore patient cohort")
 
     # Invalidate ALL caches so stale data from previous connection isn't served
-    from app.services.cache_strategy import invalidate_all_for_tenant
     from app.cache import cache_delete_pattern
+    from app.services.cache_strategy import invalidate_all_for_tenant
     try:
         invalidate_all_for_tenant(tenant_id)
         cache_delete_pattern("report:*")
@@ -878,8 +877,8 @@ def test_connection(
 # OAuth2 Authorization Code + PKCE
 # ---------------------------------------------------------------------------
 
-import hashlib
 import base64
+import hashlib
 import secrets as _secrets
 from urllib.parse import urlencode as _urlencode
 
@@ -893,8 +892,9 @@ def _build_client_assertion_jwt(
     client_id: str, token_url: str, private_key_pem: str
 ) -> str:
     """Build a signed JWT for private_key_jwt client authentication (RFC 7523)."""
-    import jwt as _pyjwt
     import time as _time
+
+    import jwt as _pyjwt
 
     now = int(_time.time())
     payload = {
@@ -1494,16 +1494,16 @@ def get_match_stats(
 # ---------------------------------------------------------------------------
 
 from app.services.hl7v2_service import (  # noqa: E402 — placed here to avoid circular imports at module level
-    MLLPListener,
     HL7Message,
     HL7ParseError,
+    MLLPListener,
+    extract_diagnoses,
+    extract_observations,
+    extract_patient,
     get_listener,
     parse_hl7_message,
     register_listener,
     unregister_listener,
-    extract_diagnoses,
-    extract_observations,
-    extract_patient,
 )
 
 

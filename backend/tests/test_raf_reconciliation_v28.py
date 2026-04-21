@@ -27,7 +27,7 @@ import pytest
 
 pytest.importorskip("hccinfhir", reason="hccinfhir not installed")
 
-from hccinfhir import HCCInFHIR, Demographics  # noqa: E402
+from hccinfhir import Demographics, HCCInFHIR  # noqa: E402
 
 _FIXTURE_PATH = (
     Path(__file__).resolve().parent

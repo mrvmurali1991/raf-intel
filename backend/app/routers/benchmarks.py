@@ -19,9 +19,9 @@ the "admin" role to prevent accidental high-cost pipeline runs.
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, require_role
@@ -129,8 +129,8 @@ def run_benchmark(
     global _last_run_result
 
     from app.services.benchmark_service import (
-        run_accuracy_benchmark,
         GOLD_STANDARD_TEST_CASES,
+        run_accuracy_benchmark,
     )
 
     # Build the test case list

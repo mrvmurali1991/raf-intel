@@ -24,9 +24,9 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
-from app.db import raf_cursor, openemr_cursor
+from app.db import openemr_cursor, raf_cursor
 from app.services.emr_manager import active_patients_subquery
 
 logger = logging.getLogger(__name__)
@@ -882,7 +882,7 @@ def create_bulk_outreach(
         target_statuses = ["eligible", "outreach_pending"]
 
     status_placeholders = ",".join(["%s"] * len(target_statuses))
-    conditions = [f"tenant_id = %s", "schedule_year = %s", f"status IN ({status_placeholders})"]
+    conditions = ["tenant_id = %s", "schedule_year = %s", f"status IN ({status_placeholders})"]
     params: list[Any] = [tenant_id, year] + target_statuses
 
     if provider_npi:

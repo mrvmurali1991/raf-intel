@@ -32,7 +32,6 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any
 
-import openpyxl
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
@@ -380,7 +379,7 @@ _SUSPECTS_COLS = [
     "revenue_impact",
 ]
 
-_SUSPECTS_SQL = """
+_SUSPECTS_SQL = f"""
     SELECT
         patient_id,
         suspect_icd10,
@@ -388,11 +387,11 @@ _SUSPECTS_SQL = """
         confidence_score,
         evidence_type,
         status,
-        ROUND(confidence_score * {benchmark}, 2)    AS revenue_impact
+        ROUND(confidence_score * {_CMS_BENCHMARK}, 2)    AS revenue_impact
     FROM raf_suspect_conditions
     WHERE tenant_id = %s
     ORDER BY patient_id, confidence_score DESC
-""".format(benchmark=_CMS_BENCHMARK)
+"""
 
 
 def export_suspects(tenant_id: str) -> Workbook:
@@ -496,14 +495,14 @@ _PROVIDER_PRIMARY_SQL = """
 """
 
 # Fallback: compute on the fly from panel + raf_scores
-_PROVIDER_FALLBACK_SQL = """
+_PROVIDER_FALLBACK_SQL = f"""
     SELECT
         pr.npi                                      AS provider_npi,
         COUNT(DISTINCT ppp.patient_id)              AS total_patients,
         ROUND(AVG(rs.final_raf), 4)                 AS average_raf,
         NULL                                        AS hcc_capture_rate,
         ROUND(
-            SUM(COALESCE(rs.final_raf, 0)) * {benchmark}, 2
+            SUM(COALESCE(rs.final_raf, 0)) * {_CMS_BENCHMARK}, 2
         )                                           AS revenue_opportunity
     FROM providers pr
     JOIN provider_patient_panel ppp ON ppp.provider_id = pr.id
@@ -519,7 +518,7 @@ _PROVIDER_FALLBACK_SQL = """
     ) rs ON rs.patient_id = ppp.patient_id
     GROUP BY pr.id, pr.npi
     ORDER BY pr.npi
-""".format(benchmark=_CMS_BENCHMARK)
+"""
 
 
 def export_provider_performance(tenant_id: str) -> Workbook:
@@ -648,17 +647,17 @@ _HIST_RAF_COLS = [
     "revenue",
 ]
 
-_HIST_RAF_SQL = """
+_HIST_RAF_SQL = f"""
     SELECT
         patient_id,
         measurement_year,
         score_type,
         final_raf,
-        ROUND(final_raf * {benchmark}, 2)           AS revenue
+        ROUND(final_raf * {_CMS_BENCHMARK}, 2)           AS revenue
     FROM raf_scores
     WHERE tenant_id = %s
     ORDER BY patient_id, measurement_year ASC, score_type
-""".format(benchmark=_CMS_BENCHMARK)
+"""
 
 
 def export_historical_raf(tenant_id: str) -> Workbook:
@@ -691,13 +690,13 @@ _REVENUE_OPP_COLS = [
 # Billed RAF = latest final_raf from raf_scores.
 # AI RAF = billed RAF + weighted sum of open suspect confidence scores
 # (each suspect confidence is treated as a fractional HCC coefficient).
-_REVENUE_OPP_SQL = """
+_REVENUE_OPP_SQL = f"""
     SELECT
         base.patient_id,
         base.billed_raf,
         ROUND(base.billed_raf + COALESCE(susp.ai_lift, 0), 4)          AS ai_raf,
         ROUND(COALESCE(susp.ai_lift, 0), 4)                            AS raf_gap,
-        ROUND(COALESCE(susp.ai_lift, 0) * {benchmark}, 2)              AS revenue_opportunity
+        ROUND(COALESCE(susp.ai_lift, 0) * {_CMS_BENCHMARK}, 2)              AS revenue_opportunity
     FROM (
         SELECT patient_id, final_raf AS billed_raf
         FROM raf_scores
@@ -720,7 +719,7 @@ _REVENUE_OPP_SQL = """
         GROUP BY patient_id
     ) susp ON susp.patient_id = base.patient_id
     ORDER BY revenue_opportunity DESC
-""".format(benchmark=_CMS_BENCHMARK)
+"""
 
 
 def export_revenue_opportunity(tenant_id: str) -> Workbook:

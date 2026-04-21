@@ -15,7 +15,7 @@ All helpers are defensive — missing keys return empty iterables.
 """
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def labs(bundle: dict, *names: str, loincs: tuple[str, ...] = ()) -> list[dict]:
@@ -24,9 +24,7 @@ def labs(bundle: dict, *names: str, loincs: tuple[str, ...] = ()) -> list[dict]:
     for lab in bundle.get("labs") or []:
         name = str(lab.get("name", "")).lower()
         loinc = str(lab.get("loinc", ""))
-        if names_l and any(n in name for n in names_l):
-            out.append(lab)
-        elif loincs and loinc in loincs:
+        if names_l and any(n in name for n in names_l) or loincs and loinc in loincs:
             out.append(lab)
     return out
 

@@ -2,7 +2,12 @@
 from __future__ import annotations
 
 from ..suspect_schema import SuspectCandidate, SuspectRule
-from ._helpers import evidence_from_labs, has_icd_prefix, lab_values_above, lab_values_below
+from ._helpers import (
+    evidence_from_labs,
+    has_icd_prefix,
+    lab_values_above,
+    lab_values_below,
+)
 
 
 def _cirrhosis_signals(bundle: dict) -> SuspectCandidate | None:

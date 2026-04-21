@@ -11,10 +11,19 @@ Domain responsibilities:
 - Encryption services
 """
 from app.services.audit_logger import log_phi_access  # noqa: F401
-from app.services.data_retention import run_retention_sweep, RetentionPolicy  # noqa: F401
-from app.services.phi_detector import detect_phi_in_dict, get_phi_field_names  # noqa: F401
-from app.services.phi_deidentifier import deidentify_patient, deidentify_dataset  # noqa: F401
-from app.services.encryption_service import encrypt, decrypt  # noqa: F401
+from app.services.data_retention import (  # noqa: F401
+    RetentionPolicy,
+    run_retention_sweep,
+)
+from app.services.encryption_service import decrypt, encrypt  # noqa: F401
+from app.services.phi_deidentifier import (  # noqa: F401
+    deidentify_dataset,
+    deidentify_patient,
+)
+from app.services.phi_detector import (  # noqa: F401
+    detect_phi_in_dict,
+    get_phi_field_names,
+)
 
 __all__ = [
     "log_phi_access",

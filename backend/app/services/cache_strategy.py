@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import json
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from app.cache import cache_get, cache_set, cache_delete_pattern, _get_redis
+from app.cache import _get_redis, cache_delete_pattern, cache_get, cache_set
 from app.metrics import CACHE_HITS, CACHE_MISSES
 
 logger = logging.getLogger(__name__)
@@ -246,9 +246,10 @@ def warm_raf_scores(tenant_id: str) -> int:
     Returns the number of patients warmed.
     """
     try:
+        from datetime import date
+
         from app.db import raf_cursor
         from app.services.raf_calculator import get_raf_breakdown
-        from datetime import date
 
         year = date.today().year
         with raf_cursor() as cur:
@@ -278,7 +279,9 @@ def warm_raf_scores(tenant_id: str) -> int:
 def warm_dashboard(tenant_id: str) -> None:
     """Pre-warm dashboard stats caches after pipeline completion."""
     try:
-        from app.services.care_gap_service import get_dashboard_stats as care_gap_dashboard
+        from app.services.care_gap_service import (
+            get_dashboard_stats as care_gap_dashboard,
+        )
 
         care_gap_dashboard(tenant_id)
         logger.info("cache warm: dashboard stats [tenant=%s]", tenant_id)

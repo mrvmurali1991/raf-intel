@@ -1,6 +1,8 @@
 from contextvars import ContextVar
 from typing import TypedDict
+
 from starlette.types import ASGIApp, Receive, Scope, Send
+
 
 class RequestContextDict(TypedDict):
     ip_address: str | None
@@ -25,11 +27,11 @@ class AuditRequestContextMiddleware:
         if scope["type"] == "http":
             client = scope.get("client")
             client_ip = client[0] if client else None
-            
+
             # headers in ASGI are list of tuples [(b'name', b'value'), ...]
             headers = dict(scope.get("headers", []))
             user_agent = headers.get(b"user-agent", b"").decode("utf-8", errors="ignore")
-            
+
             # Store in context var
             token = request_context.set({
                 "ip_address": client_ip,

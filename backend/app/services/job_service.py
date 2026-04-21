@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import json
 import logging
-import traceback
 from datetime import datetime, timezone
 from typing import Any
 
@@ -462,8 +461,8 @@ def task_process_claims_batch(self, batch_id: int) -> dict[str, Any]:
         _mark_progress(self, 0, 3, "Loading batch")
         from app.services.claims_service import (
             get_batch,
-            match_patients_to_openemr,
             map_hcc_codes_for_batch,
+            match_patients_to_openemr,
             process_batch,
         )
 
@@ -772,8 +771,8 @@ def task_calculate_provider_scorecards(
 
     try:
         from app.services.provider_service import (
-            list_providers,
             calculate_provider_scorecard,
+            list_providers,
         )
 
         providers = list_providers(tenant_id=tenant_id)

@@ -54,12 +54,10 @@ import email.mime.multipart
 import email.mime.text
 import hashlib
 import imaplib
-import json
 import logging
 import os
 import secrets
 import smtplib
-import textwrap
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -82,10 +80,13 @@ try:
     from cryptography import x509
     from cryptography.hazmat.primitives import (
         hashes,
-        hmac as crypto_hmac,
         serialization,
     )
-    from cryptography.hazmat.primitives.asymmetric import padding as asym_padding, rsa
+    from cryptography.hazmat.primitives import (
+        hmac as crypto_hmac,
+    )
+    from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+    from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     from cryptography.x509.oid import NameOID
 
@@ -165,11 +166,13 @@ def generate_self_signed_certificate(
     if not _CRYPTO_AVAILABLE:
         raise RuntimeError("cryptography package required for certificate generation")
 
-    from cryptography import x509 as cx509
-    from cryptography.x509.oid import NameOID
-    from cryptography.hazmat.primitives import hashes as ch, serialization as cs
-    from cryptography.hazmat.primitives.asymmetric import rsa as crsa
     import datetime as _dt
+
+    from cryptography import x509 as cx509
+    from cryptography.hazmat.primitives import hashes as ch
+    from cryptography.hazmat.primitives import serialization as cs
+    from cryptography.hazmat.primitives.asymmetric import rsa as crsa
+    from cryptography.x509.oid import NameOID
 
     key = crsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -245,8 +248,8 @@ def _sign_message(
         return payload
 
     try:
-        from cryptography.hazmat.primitives.serialization import pkcs7
         from cryptography.hazmat.primitives import serialization as cs
+        from cryptography.hazmat.primitives.serialization import pkcs7
 
         key_pem = _decrypt_private_key(encrypted_private_key)
         private_key = cs.load_pem_private_key(key_pem, password=None)
@@ -311,8 +314,8 @@ def _decrypt_message(
         return encrypted_payload
 
     try:
-        from cryptography.hazmat.primitives.serialization import pkcs7
         from cryptography.hazmat.primitives import serialization as cs
+        from cryptography.hazmat.primitives.serialization import pkcs7
 
         key_pem = _decrypt_private_key(encrypted_private_key)
         private_key = cs.load_pem_private_key(key_pem, password=None)

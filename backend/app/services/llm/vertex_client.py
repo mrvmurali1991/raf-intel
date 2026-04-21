@@ -39,7 +39,7 @@ import os
 import threading
 import time
 from contextvars import ContextVar
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -180,7 +180,7 @@ def _reset_credentials_cache() -> None:
 
 def _build_payload(
     prompt: str,
-    system: Optional[str],
+    system: str | None,
     temperature: float,
 ) -> dict:
     payload: dict[str, Any] = {
@@ -228,7 +228,7 @@ def _vertex_url(model: str) -> str:
 def _call_vertex(
     prompt: str,
     model: str,
-    system: Optional[str],
+    system: str | None,
     temperature: float,
 ) -> str:
     creds = _load_credentials()
@@ -275,7 +275,7 @@ def _vertex_apikey_url(model: str, method: str = "generateContent") -> str:
 def _call_vertex_apikey(
     prompt: str,
     model: str,
-    system: Optional[str],
+    system: str | None,
     temperature: float,
 ) -> str:
     url = _vertex_apikey_url(model)
@@ -414,7 +414,7 @@ _STRICT_JSON_REMINDER = (
 def llm_generate(
     prompt: str,
     model: str = _DEFAULT_MODEL,
-    system: Optional[str] = None,
+    system: str | None = None,
     temperature: float = 0.1,
     output_schema: dict | None = None,
     tenant_id: str | None = None,
@@ -476,7 +476,7 @@ def llm_generate(
             tenant_id=tenant_id,
         )
 
-    def _do_call(p: str, s: Optional[str]) -> str:
+    def _do_call(p: str, s: str | None) -> str:
         if _use_vertex_api_key():
             return _call_vertex_apikey(p, model, s, temperature)
         return _call_vertex(p, model, s, temperature)

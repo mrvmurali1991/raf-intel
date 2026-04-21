@@ -23,20 +23,18 @@ Covered scenarios
 
 from __future__ import annotations
 
-import uuid
-from typing import Any
-from unittest.mock import patch
-
-import pytest
-from fastapi.testclient import TestClient
-
 # ---------------------------------------------------------------------------
 # Shared mock — authenticate_user returns a valid token response
 # ---------------------------------------------------------------------------
-
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
+from unittest.mock import patch
+
 import jwt as pyjwt
+import pytest
+from fastapi.testclient import TestClient
 
 _JWT_SECRET = os.environ.get("JWT_SECRET", "test-jwt-secret-for-pytest-do-not-use-in-prod")
 _JWT_REFRESH_SECRET = os.environ.get("JWT_REFRESH_SECRET", "test-refresh-secret-for-pytest")

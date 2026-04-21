@@ -5,7 +5,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 import pytest
-
 from app.services import job_service
 
 

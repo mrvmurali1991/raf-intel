@@ -10,9 +10,13 @@ Domain responsibilities:
 - Stage-by-stage event emission
 - Skill-based pipeline routing
 """
+from app.services.event_emitter import (  # noqa: F401
+    emit,
+    emit_internal,
+    register_handler,
+)
 from app.services.pipeline_chain import setup_pipeline_chain  # noqa: F401
 from app.services.pipeline_orchestrator import run_verified_pipeline  # noqa: F401
-from app.services.event_emitter import emit, emit_internal, register_handler  # noqa: F401
 from app.services.skill_pipeline import run_pipeline  # noqa: F401
 
 __all__ = [

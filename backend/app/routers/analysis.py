@@ -37,38 +37,31 @@ from datetime import date as _date
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import Depends, APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor
-from app.services.openemr_connector import (
-    get_patient,
-    get_encounters,
-    get_soap_notes,
-    get_medications,
-    get_billing_codes,
-    get_all_clinical_text,
-    get_encounter,
-    get_clinical_notes,
-    get_labs,
-    get_all_clinical_notes_for_patient,
-    get_problem_list,
-    get_recapture_gaps,
-    get_latest_vitals,
-    get_medication_diagnoses,
+from app.rate_limit import limiter
+from app.services.analysis_service import (
+    save_encounter_analysis as _svc_save_encounter_analysis,
 )
 from app.services.audit_logger import log_phi_access
-from app.services.raf_calculator import calculate_raf_score, _calculate_age
-from app.services.meat_evidence_service import (
-    store_analysis_meat,
-    update_hcc_meat_status,
-)
-from app.auth import get_current_user, get_tenant_id, require_permission
-from app.rate_limit import limiter
 from app.services.circuit_breaker import CircuitBreakerError
-
-from app.services.confidence_router import route_analysis_result
-from app.services.analysis_service import save_encounter_analysis as _svc_save_encounter_analysis
+from app.services.openemr_connector import (
+    get_all_clinical_notes_for_patient,
+    get_billing_codes,
+    get_clinical_notes,
+    get_encounter,
+    get_labs,
+    get_latest_vitals,
+    get_medication_diagnoses,
+    get_medications,
+    get_patient,
+    get_problem_list,
+    get_recapture_gaps,
+)
+from app.services.raf_calculator import _calculate_age
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +73,7 @@ router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 # multiple workers.  The job_service module provides the persistence layer.
 # ---------------------------------------------------------------------------
 
-from app.services.job_service import _upsert_job, _get_job
+from app.services.job_service import _get_job, _upsert_job
 
 # Tables are created by the centralized migration runner (app/migrations.py)
 # at application startup. No per-module DDL calls are needed.

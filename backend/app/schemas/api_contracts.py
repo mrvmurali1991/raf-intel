@@ -16,9 +16,7 @@ Naming conventions:
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-from typing import Optional
-
+from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Dashboard Stats  —  GET /api/dashboard/stats
@@ -45,16 +43,16 @@ class PipelinePhase(BaseModel):
 class PipelineLastRun(BaseModel):
     id: int
     status: str
-    current_step: Optional[str] = None
-    started_at: Optional[str] = None
-    finished_at: Optional[str] = None
-    error_message: Optional[str] = None
+    current_step: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    error_message: str | None = None
 
 
 class PipelineBlock(BaseModel):
     mode: str  # auto_ai | auto_basic | manual
     ai_analysis_enabled: bool = False
-    last_run: Optional[PipelineLastRun] = None
+    last_run: PipelineLastRun | None = None
     phases: list[PipelinePhase] = []
 
 
@@ -68,7 +66,7 @@ class DashboardStatsResponse(BaseModel):
     meat_compliance_pct: float = 0.0
     raf_distribution: list[RAFDistributionBucket] = []
     top_undercoded: list[PatientSummary] = []
-    pipeline: Optional[dict] = None
+    pipeline: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -84,8 +82,8 @@ class TrendMetric(BaseModel):
 class DashboardTrendsResponse(BaseModel):
     """GET /api/dashboard/trends"""
     period: str = "30d"
-    patients_analyzed: Optional[TrendMetric] = None
-    average_raf_score: Optional[TrendMetric] = None
+    patients_analyzed: TrendMetric | None = None
+    average_raf_score: TrendMetric | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +108,8 @@ class PopulationSummaryResponse(BaseModel):
     total_revenue_opportunity: float = 0.0
     raf_distribution: list[RAFDistributionBucket] = []
     top_hccs: list[HCCSummary] = []
-    blend_weights: Optional[dict] = None
-    score_type_breakdown: Optional[dict] = None
+    blend_weights: dict | None = None
+    score_type_breakdown: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -140,24 +138,24 @@ class PatientResponse(BaseModel):
     last_name: str = ""
     dob: str = ""
     sex: str = ""
-    age: Optional[int] = None
-    race: Optional[str] = None
-    ethnicity: Optional[str] = None
-    language: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postal_code: Optional[str] = None
-    phone_cell: Optional[str] = None
-    email: Optional[str] = None
-    mrn: Optional[str] = None
-    insurance_type: Optional[str] = None
-    raf_score: Optional[float] = None
+    age: int | None = None
+    race: str | None = None
+    ethnicity: str | None = None
+    language: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
+    phone_cell: str | None = None
+    email: str | None = None
+    mrn: str | None = None
+    insurance_type: str | None = None
+    raf_score: float | None = None
     hcc_count: int = 0
-    demographic_score: Optional[float] = None
-    disease_score: Optional[float] = None
-    interaction_score: Optional[float] = None
-    provider_name: Optional[str] = None
-    data_source: Optional[str] = None
+    demographic_score: float | None = None
+    disease_score: float | None = None
+    interaction_score: float | None = None
+    provider_name: str | None = None
+    data_source: str | None = None
 
 
 class PaginatedPatientsResponse(BaseModel):
@@ -176,10 +174,10 @@ class PaginatedPatientsResponse(BaseModel):
 class EmrStatusResponse(BaseModel):
     """GET /api/emr/status"""
     connected: bool = False
-    vendor: Optional[str] = None
+    vendor: str | None = None
     is_demo: bool = False
     connection_count: int = 0
-    display_name: Optional[str] = None
+    display_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -204,15 +202,15 @@ class ProviderSummaryResponse(BaseModel):
 
 class SuspectResponse(BaseModel):
     """Single suspect condition."""
-    suspect_id: Optional[int] = None
+    suspect_id: int | None = None
     patient_id: int
-    patient_name: Optional[str] = None
+    patient_name: str | None = None
     icd10_code: str = ""
-    hcc_code: Optional[str] = None
-    description: Optional[str] = None
+    hcc_code: str | None = None
+    description: str | None = None
     confidence: float = 0.0
-    evidence: Optional[str] = None
-    evidence_type: Optional[str] = None
+    evidence: str | None = None
+    evidence_type: str | None = None
     status: str = "open"
 
 
@@ -266,5 +264,5 @@ class WorkflowSummaryResponse(BaseModel):
     recent_analyses_7d: int = 0
     providers_active: int = 0
     avg_confidence: float = 0.0
-    last_sync_at: Optional[str] = None
-    last_analysis_at: Optional[str] = None
+    last_sync_at: str | None = None
+    last_analysis_at: str | None = None

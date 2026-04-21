@@ -14,7 +14,6 @@ impairment counts. This module locks:
 from __future__ import annotations
 
 import pytest
-
 from app.services.frailty_adjuster import (
     _FRAILTY_COEFFICIENTS,
     _FRAILTY_ELIGIBLE_PLAN_TYPES,
@@ -22,7 +21,6 @@ from app.services.frailty_adjuster import (
     count_adl_impairments,
     get_frailty_score,
 )
-
 
 # ---------------------------------------------------------------------------
 # CMS coefficient table lock

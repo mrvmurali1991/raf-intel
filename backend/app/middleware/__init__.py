@@ -24,20 +24,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.audit_middleware import AuditRequestContextMiddleware
-from app.phi_access_logger import PHIAccessLoggingMiddleware
-from app.middleware.security import SecurityHeadersMiddleware
+from app.config import settings
 from app.middleware.request_logging import (
-    RequestIDMiddleware,
     AuditLoggingMiddleware,
+    RequestIDMiddleware,
     StructuredLoggingMiddleware,
 )
-from app.middleware.timing import (
-    add_process_time_header,
-    add_api_version_header,
-    APIVersionRewriteMiddleware,
-)
+from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.tenant_guard import TenantGuardMiddleware
-from app.config import settings
+from app.middleware.timing import (
+    APIVersionRewriteMiddleware,
+    add_api_version_header,
+    add_process_time_header,
+)
+from app.phi_access_logger import PHIAccessLoggingMiddleware
 
 logger = logging.getLogger(__name__)
 

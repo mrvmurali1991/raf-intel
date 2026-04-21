@@ -20,7 +20,6 @@ import json
 import logging
 import os
 import secrets
-import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -978,13 +977,12 @@ def authenticate_user(
             raise ValueError(
                 f"Invalid email or password. Account locked for {settings.lockout_duration_minutes} minutes."
             )
-        else:
-            with raf_cursor() as cur:
-                cur.execute(
-                    "UPDATE users SET failed_login_attempts = %s WHERE id = %s",
-                    (attempts, user["id"]),
-                )
-            raise ValueError("Invalid email or password.")
+        with raf_cursor() as cur:
+            cur.execute(
+                "UPDATE users SET failed_login_attempts = %s WHERE id = %s",
+                (attempts, user["id"]),
+            )
+        raise ValueError("Invalid email or password.")
 
     # Success – reset counters, update last_login_at
     with raf_cursor() as cur:

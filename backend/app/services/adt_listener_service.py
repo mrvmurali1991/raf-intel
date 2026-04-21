@@ -40,14 +40,13 @@ races.
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
+import socket
 import threading
 from datetime import datetime, timezone
 from typing import Any
-
-import ipaddress
-import socket
 from urllib.parse import urlparse
 
 import requests
@@ -55,7 +54,6 @@ import requests
 from app.db import raf_cursor
 from app.services.hl7v2_service import (
     HL7Message,
-    HL7ParseError,
     MLLPListener,
     extract_diagnoses,
     extract_patient,

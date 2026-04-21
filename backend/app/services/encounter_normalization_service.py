@@ -25,7 +25,6 @@ throughout so repeated runs are safe.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.db import dynamic_db_cursor, raf_cursor
 from app.services.encryption_service import decrypt

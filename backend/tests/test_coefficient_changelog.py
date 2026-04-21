@@ -99,7 +99,7 @@ class TestGateScript:
         """On a clean tree, the gate must exit 0."""
         result = subprocess.run(
             [sys.executable, str(_GATE)],
-            capture_output=True, text=True, timeout=10,
+            check=False, capture_output=True, text=True, timeout=10,
         )
         assert result.returncode == 0, (
             f"gate failed on clean tree: stdout={result.stdout!r}, "
@@ -136,7 +136,7 @@ class TestGateScript:
         )
         result = subprocess.run(
             [sys.executable, str(fake_scripts / "verify_coefficient_changelog.py")],
-            capture_output=True, text=True, timeout=10,
+            check=False, capture_output=True, text=True, timeout=10,
         )
         assert result.returncode == 1, (
             f"gate should fail when hashes don't match; stdout={result.stdout!r}, "

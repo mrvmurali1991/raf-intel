@@ -18,20 +18,17 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.services.coder_worklist_service import (
-    get_worklist,
+    auto_queue_from_nlp,
     claim_next,
-    start_review,
     complete_review,
     escalate_item,
-    return_item,
-    auto_queue_from_nlp,
+    get_worklist,
+    start_review,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

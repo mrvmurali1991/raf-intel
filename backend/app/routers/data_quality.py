@@ -32,13 +32,13 @@ TODO
 # Do not use `from __future__ import annotations` — breaks FastAPI schemas.
 
 import logging
-from contextlib import contextmanager
-from typing import Any, Callable, Generator
+from collections.abc import Callable, Generator
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_role
+from app.auth import require_role
 from app.db import raf_cursor
 from app.services.data_quality_monitor import (
     CHECK_NAMES,

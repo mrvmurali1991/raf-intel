@@ -21,20 +21,20 @@ import logging
 from typing import Any
 
 from fastapi import (
-    Depends,
     APIRouter,
     BackgroundTasks,
+    Depends,
+    File,
     HTTPException,
     Query,
     Request,
     UploadFile,
-    File,
 )
 
-from app.services import claims_service as svc
-from app.services.audit_logger import log_phi_access
 from app.auth import get_current_user, require_permission
 from app.rate_limit import limiter
+from app.services import claims_service as svc
+from app.services.audit_logger import log_phi_access
 
 logger = logging.getLogger(__name__)
 

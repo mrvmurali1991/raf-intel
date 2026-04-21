@@ -24,12 +24,11 @@ import pytest
 
 pytest.importorskip("hccinfhir")
 
-from hccinfhir.defaults import hierarchies_default  # noqa: E402
-
 from app.services.hcc_hierarchy import (  # noqa: E402
-    V28_HIERARCHY_CHAINS,
     _V28_TRUMPED_BY,
+    V28_HIERARCHY_CHAINS,
 )
+from hccinfhir.defaults import hierarchies_default  # noqa: E402
 
 
 def _cms_v28_trump_pairs() -> set[tuple[int, int]]:

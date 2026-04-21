@@ -11,10 +11,8 @@ MySQL connection is needed. Verifies:
 from __future__ import annotations
 
 from contextlib import contextmanager
-from unittest.mock import patch
 
 import pytest
-
 from app.services import config_service
 
 

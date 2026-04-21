@@ -39,9 +39,9 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Literal
 
 try:
     from pydantic import BaseModel, Field
@@ -70,45 +70,45 @@ Mode = Literal["full", "abnormal_only"]
 if _HAS_PYDANTIC:
 
     class Demographics(BaseModel):
-        age: Optional[int] = None
-        sex: Optional[str] = None
-        dob: Optional[str] = None          # ISO date
-        mrn: Optional[str] = None
-        first_name: Optional[str] = None
-        last_name: Optional[str] = None
+        age: int | None = None
+        sex: str | None = None
+        dob: str | None = None          # ISO date
+        mrn: str | None = None
+        first_name: str | None = None
+        last_name: str | None = None
 
     class ProblemEntry(BaseModel):
-        icd10: Optional[str] = None
-        description: Optional[str] = None
-        onset_date: Optional[str] = None
-        clinical_status: Optional[str] = None
+        icd10: str | None = None
+        description: str | None = None
+        onset_date: str | None = None
+        clinical_status: str | None = None
 
     class EncounterEntry(BaseModel):
-        encounter_id: Optional[str] = None
-        date: Optional[str] = None
-        type: Optional[str] = None
-        provider: Optional[str] = None
-        status: Optional[str] = None
+        encounter_id: str | None = None
+        date: str | None = None
+        type: str | None = None
+        provider: str | None = None
+        status: str | None = None
 
     class LabEntry(BaseModel):
-        code: Optional[str] = None
-        name: Optional[str] = None
-        value: Optional[str] = None        # str to carry numeric or categorical
-        unit: Optional[str] = None
-        date: Optional[str] = None
+        code: str | None = None
+        name: str | None = None
+        value: str | None = None        # str to carry numeric or categorical
+        unit: str | None = None
+        date: str | None = None
         abnormal_flag: bool = False
 
     class MedicationEntry(BaseModel):
-        name: Optional[str] = None
-        rxnorm: Optional[str] = None
-        start_date: Optional[str] = None
-        status: Optional[str] = None
+        name: str | None = None
+        rxnorm: str | None = None
+        start_date: str | None = None
+        status: str | None = None
 
     class NoteEntry(BaseModel):
-        id: Optional[str] = None
-        encounter_id: Optional[str] = None
-        date: Optional[str] = None
-        type: Optional[str] = None
+        id: str | None = None
+        encounter_id: str | None = None
+        date: str | None = None
+        type: str | None = None
         text: str = ""
 
     class BundleMeta(BaseModel):
@@ -121,7 +121,7 @@ if _HAS_PYDANTIC:
         patient_id: str
         measurement_year: int
         hcc_model_version: str = DEFAULT_HCC_MODEL_VERSION
-        cutoff_date: Optional[str] = None
+        cutoff_date: str | None = None
         mode: Mode = "full"
         demographics: Demographics = Field(default_factory=Demographics)
         active_problem_list: list[ProblemEntry] = Field(default_factory=list)
@@ -135,50 +135,50 @@ else:  # pragma: no cover - dataclass fallback
 
     @dataclass
     class Demographics:
-        age: Optional[int] = None
-        sex: Optional[str] = None
-        dob: Optional[str] = None
-        mrn: Optional[str] = None
-        first_name: Optional[str] = None
-        last_name: Optional[str] = None
+        age: int | None = None
+        sex: str | None = None
+        dob: str | None = None
+        mrn: str | None = None
+        first_name: str | None = None
+        last_name: str | None = None
 
     @dataclass
     class ProblemEntry:
-        icd10: Optional[str] = None
-        description: Optional[str] = None
-        onset_date: Optional[str] = None
-        clinical_status: Optional[str] = None
+        icd10: str | None = None
+        description: str | None = None
+        onset_date: str | None = None
+        clinical_status: str | None = None
 
     @dataclass
     class EncounterEntry:
-        encounter_id: Optional[str] = None
-        date: Optional[str] = None
-        type: Optional[str] = None
-        provider: Optional[str] = None
-        status: Optional[str] = None
+        encounter_id: str | None = None
+        date: str | None = None
+        type: str | None = None
+        provider: str | None = None
+        status: str | None = None
 
     @dataclass
     class LabEntry:
-        code: Optional[str] = None
-        name: Optional[str] = None
-        value: Optional[str] = None
-        unit: Optional[str] = None
-        date: Optional[str] = None
+        code: str | None = None
+        name: str | None = None
+        value: str | None = None
+        unit: str | None = None
+        date: str | None = None
         abnormal_flag: bool = False
 
     @dataclass
     class MedicationEntry:
-        name: Optional[str] = None
-        rxnorm: Optional[str] = None
-        start_date: Optional[str] = None
-        status: Optional[str] = None
+        name: str | None = None
+        rxnorm: str | None = None
+        start_date: str | None = None
+        status: str | None = None
 
     @dataclass
     class NoteEntry:
-        id: Optional[str] = None
-        encounter_id: Optional[str] = None
-        date: Optional[str] = None
-        type: Optional[str] = None
+        id: str | None = None
+        encounter_id: str | None = None
+        date: str | None = None
+        type: str | None = None
         text: str = ""
 
     @dataclass
@@ -193,7 +193,7 @@ else:  # pragma: no cover - dataclass fallback
         patient_id: str
         measurement_year: int
         hcc_model_version: str = DEFAULT_HCC_MODEL_VERSION
-        cutoff_date: Optional[str] = None
+        cutoff_date: str | None = None
         mode: Mode = "full"
         demographics: Demographics = field(default_factory=Demographics)
         active_problem_list: list = field(default_factory=list)
@@ -208,7 +208,7 @@ else:  # pragma: no cover - dataclass fallback
 # DB loaders — each takes a cursor so tests can inject fakes
 # ---------------------------------------------------------------------------
 
-def _iso(d: Any) -> Optional[str]:
+def _iso(d: Any) -> str | None:
     if d is None:
         return None
     if isinstance(d, (date, datetime)):
@@ -216,7 +216,7 @@ def _iso(d: Any) -> Optional[str]:
     return str(d)[:10]
 
 
-def _load_demographics(cur, patient_id) -> tuple[Demographics, Optional[str]]:
+def _load_demographics(cur, patient_id) -> tuple[Demographics, str | None]:
     """Returns (demographics, fhir_patient_uuid_or_none)."""
     cur.execute(
         "SELECT id, first_name, last_name, dob, sex, mrn, emr_pid, data_source "
@@ -447,11 +447,11 @@ def _trim_to_budget(bundle: PatientContextBundle, budget: int) -> None:
 
 def assemble_bundle(
     patient_id: Any,
-    cutoff_date: Optional[date] = None,
+    cutoff_date: date | None = None,
     mode: Mode = "full",
     *,
     hcc_model_version: str = DEFAULT_HCC_MODEL_VERSION,
-    measurement_year: Optional[int] = None,
+    measurement_year: int | None = None,
     cursor=None,
     token_budget_chars: int = TOKEN_BUDGET_CHARS,
 ) -> PatientContextBundle:

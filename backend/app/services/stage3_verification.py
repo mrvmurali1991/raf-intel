@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 import simple_icd_10_cm as cm
 from hccinfhir.defaults import (
@@ -1205,9 +1204,7 @@ def compute_quality_score(
         sev = w.get("severity", "")
         if sev == SEV_CRITICAL:
             score -= 0.15
-        elif sev == SEV_HIGH:
-            score -= 0.05
-        elif sev == SEV_MEDIUM:
+        elif sev == SEV_HIGH or sev == SEV_MEDIUM:
             score -= 0.05
         elif sev == SEV_INFO:
             score -= 0.02

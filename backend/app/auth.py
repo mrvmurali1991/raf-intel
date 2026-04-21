@@ -22,8 +22,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request, status
 import jwt
+from fastapi import Depends, HTTPException, Request, status
 
 from app.db import run_in_db_executor
 from app.services.auth_service import (

@@ -41,16 +41,27 @@ Key model differences:
 from __future__ import annotations
 
 import logging
-from datetime import date
 from typing import Any
 
 from app.model_constants import (
     HHSHCC_COEFFICIENTS as _HHSHCC_COEFFICIENTS,
+)
+from app.model_constants import (
     HHSHCC_DEMO_SCORES as _HHSHCC_DEMO_SCORES,
+)
+from app.model_constants import (
     HHSHCC_ICD_MAP as _HHSHCC_ICD_MAP,
+)
+from app.model_constants import (
     RXHCC_COEFFICIENTS as _RXHCC_COEFFICIENTS,
+)
+from app.model_constants import (
     RXHCC_DEMO_SCORES as _RXHCC_DEMO_SCORES,
+)
+from app.model_constants import (
     RXHCC_ICD_MAP as _RXHCC_ICD_MAP,
+)
+from app.model_constants import (
     get_age_band,
 )
 
@@ -452,8 +463,8 @@ def _analyze_hcc_overlap(
     Analyze which ICD-10 codes map to HCCs across models and identify overlaps.
     """
     cms_hcc_set = set(str(h).replace("HCC", "").strip() for h in cms_hcc_list)
-    rxhcc_set = set(str(h) for h in rxhcc_map.keys())
-    hhshcc_set = set(str(h) for h in hhshcc_map.keys())
+    rxhcc_set = set(str(h) for h in rxhcc_map)
+    hhshcc_set = set(str(h) for h in hhshcc_map)
 
     # Per-code model coverage
     code_coverage: list[dict[str, Any]] = []

@@ -25,13 +25,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import random
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
-from app.db import raf_cursor
 from app.config import settings
+from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
 

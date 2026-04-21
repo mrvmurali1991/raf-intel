@@ -215,7 +215,7 @@ def trigger_backup(backup_type: str = "full") -> dict[str, Any]:
         try:
             result = subprocess.run(
                 [str(_BACKUP_SCRIPT), flag_map[backup_type]],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True,
                 env=env,
                 timeout=1800,  # 30-minute hard timeout
