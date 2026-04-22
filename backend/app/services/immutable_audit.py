@@ -1,23 +1,32 @@
 """
 Immutable Audit Log — cryptographic hash-chain audit trail.
 
-Writes append-only JSON Lines to ``logs/immutable_audit.jsonl``.  Each entry
-includes a SHA-256 hash that chains to the previous entry, making any
+Dual-writes to:
+  1. ``logs/immutable_audit.jsonl`` — append-only JSON Lines file (primary)
+  2. ``immutable_audit_log`` MySQL table — created by migration 021
+
+Each entry includes a SHA-256 hash chaining to the previous entry, making any
 tampering or deletion detectable via ``verify_audit_chain()``.
 
 This satisfies HIPAA §164.312(b) audit-controls by providing a durable,
 tamper-evident log independent of the MySQL audit_log table.
 
-Usage:
-    from app.services.immutable_audit import append_audit_entry, verify_audit_chain
+Public API:
+    emit_audit_event(event_type, *, tenant_id, actor_user_id, subject_type,
+                     subject_id, payload) -> None   # canonical name
+    append_audit_entry(...)                          # legacy alias
+    verify_audit_chain() -> (bool, list[str])
 
-    append_audit_entry(
-        event_type="phi_access",
-        user_id=42,
+Usage:
+    from app.services.immutable_audit import emit_audit_event, verify_audit_chain
+
+    emit_audit_event(
+        "phi_access",
         tenant_id="1",
-        resource_type="patient",
-        resource_id="123",
-        action="view",
+        actor_user_id=42,
+        subject_type="patient",
+        subject_id="123",
+        payload={"action": "view"},
     )
 
     ok, errors = verify_audit_chain()
@@ -82,6 +91,46 @@ def _load_last_hash() -> str:
         return _GENESIS_HASH
 
 
+def _db_insert(entry: dict) -> None:
+    """Insert an audit entry into the ``immutable_audit_log`` MySQL table.
+
+    Maps the JSONL entry fields to the columns defined by migration 021:
+    ``(id, event_ts, event_type, actor_user_id, actor_email, tenant_id,
+      patient_id, resource, action, payload_json, hash_prev, hash_self)``
+
+    Caller must NOT hold ``_write_lock`` — this function acquires no locks.
+    Any exception is caught by the caller which logs ERROR and continues.
+    """
+    from app.db import raf_cursor  # local import to avoid circular deps at module load
+
+    details = entry.get("details") or {}
+    payload_json = json.dumps(details, default=str) if details else None
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO immutable_audit_log
+                (event_ts, event_type, actor_user_id, actor_email,
+                 tenant_id, patient_id, resource, action,
+                 payload_json, hash_prev, hash_self)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                entry.get("timestamp"),
+                entry.get("event_type"),
+                entry.get("user_id"),
+                details.get("actor_email") if details else None,
+                entry.get("tenant_id"),
+                details.get("patient_id") if details else None,
+                entry.get("resource_type") or None,
+                entry.get("action") or None,
+                payload_json,
+                entry.get("previous_hash"),
+                entry.get("current_hash"),
+            ),
+        )
+
+
 def append_audit_entry(
     *,
     event_type: str,
@@ -92,9 +141,14 @@ def append_audit_entry(
     action: str = "",
     details: dict[str, Any] | None = None,
 ) -> dict:
-    """Append a tamper-evident entry to the immutable audit log.
+    """Append a tamper-evident entry to the immutable audit log (JSONL + DB).
 
     Returns the written entry dict (including hashes).
+
+    DB insert failures are non-fatal: the JSONL write is always attempted
+    first and serves as the durable record.  If the DB is down the event is
+    not lost — it is preserved in the JSONL file and will be detected by the
+    nightly ``verify_audit_chain`` task.
     """
     global _last_hash, _last_hash_loaded
 
@@ -127,11 +181,68 @@ def append_audit_entry(
                 f.flush()
                 os.fsync(f.fileno())
         except Exception:
-            logger.error("Failed to write immutable audit entry", exc_info=True)
+            logger.error("Failed to write immutable audit entry to JSONL", exc_info=True)
             raise
 
         _last_hash = current_hash
-        return entry
+
+    # DB write is outside the _write_lock to minimise lock hold time.
+    # JSONL is already committed at this point — DB failure is non-fatal.
+    try:
+        _db_insert(entry)
+    except Exception:
+        logger.error(
+            "immutable_audit: DB insert failed for event_type=%s — "
+            "event preserved in JSONL, DB out-of-sync until next verify run",
+            event_type,
+            exc_info=True,
+        )
+
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# Public canonical API
+# ---------------------------------------------------------------------------
+
+
+def emit_audit_event(
+    event_type: str,
+    *,
+    tenant_id: int | str | None = None,
+    actor_user_id: int | str | None = None,
+    subject_type: str | None = None,
+    subject_id: str | int | None = None,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    """Emit a tamper-evident audit event to both JSONL and DB.
+
+    This is the canonical public function.  All new callers should use this
+    rather than ``append_audit_entry`` directly.
+
+    Args:
+        event_type:    Uppercase snake_case event name, e.g. ``"PHI_ACCESS"``.
+        tenant_id:     Tenant identifier (string or int).
+        actor_user_id: ID of the user performing the action.
+        subject_type:  Type of the affected resource, e.g. ``"patient"``.
+        subject_id:    ID of the affected resource.
+        payload:       Arbitrary additional metadata (must be JSON-serialisable).
+    """
+    details: dict[str, Any] = {}
+    if payload:
+        details.update(payload)
+    if subject_id is not None:
+        details.setdefault("subject_id", str(subject_id))
+
+    append_audit_entry(
+        event_type=event_type,
+        user_id=actor_user_id,
+        tenant_id=tenant_id,
+        resource_type=subject_type or "",
+        resource_id=str(subject_id) if subject_id is not None else None,
+        action=event_type,
+        details=details or None,
+    )
 
 
 def verify_audit_chain(path: str | Path | None = None) -> tuple[bool, list[str]]:

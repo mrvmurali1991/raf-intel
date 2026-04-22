@@ -58,6 +58,26 @@ interface ContributingSignal {
   timestamp?: string | null;
 }
 
+// Expected backend fields (not yet sent — added in a future batch).
+// Backend shape: clinical_rule_adjustments?: ClinicalRuleAdjustment[]
+//                context_classification?: ContextClassification
+//                evidence_date?: string   (ISO-8601 date of the source note)
+interface ClinicalRuleAdjustment {
+  rule_id: string;
+  rule_name: string;
+  explanation: string;
+  confidence_delta: number; // e.g. -0.40
+  failed: boolean;
+}
+
+type ContextClassification =
+  | "positive"
+  | "negated"
+  | "hypothetical"
+  | "historical"
+  | "family"
+  | "resolved";
+
 interface ExplainResponse {
   suspect_id: number;
   patient_id: number;
@@ -67,6 +87,10 @@ interface ExplainResponse {
   evidence_type: string;
   contributing_signals: ContributingSignal[];
   summary: string;
+  // Optional — backend will populate in a future release
+  clinical_rule_adjustments?: ClinicalRuleAdjustment[];
+  context_classification?: ContextClassification;
+  evidence_date?: string; // ISO-8601; used for stale-evidence banner
 }
 
 type SourceKey = ContributingSignal["source"];
@@ -387,6 +411,50 @@ export function ExplainPanel({
 
               {!loading && !error && data && (
                 <>
+                  {/* ── Stale-evidence banner ──────────────────────────── */}
+                  {(() => {
+                    if (!data.evidence_date) return null;
+                    const ageMs =
+                      Date.now() - new Date(data.evidence_date).getTime();
+                    const ageMonths = ageMs / (1000 * 60 * 60 * 24 * 30.44);
+                    if (ageMonths <= 6) return null;
+                    const ageRounded = Math.round(ageMonths);
+                    return (
+                      <div
+                        role="alert"
+                        className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300"
+                      >
+                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
+                        <span>
+                          Evidence is{" "}
+                          <span className="font-semibold">
+                            {ageRounded} month{ageRounded !== 1 ? "s" : ""} old
+                          </span>{" "}
+                          — consider refreshing before attestation.
+                        </span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Context-classification warning banner ──────────── */}
+                  {data.context_classification &&
+                    data.context_classification !== "positive" && (
+                      <div
+                        role="alert"
+                        className="flex items-start gap-2 rounded-lg border border-pink-300 bg-pink-50 px-3 py-2.5 text-sm text-pink-800 dark:border-pink-800/60 dark:bg-pink-950/50 dark:text-pink-300"
+                      >
+                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
+                        <span>
+                          This evidence was classified as{" "}
+                          <span className="font-semibold capitalize">
+                            {data.context_classification}
+                          </span>{" "}
+                          in the source note. Accepting may expose the practice
+                          to RADV risk.
+                        </span>
+                      </div>
+                    )}
+
                   {confPct !== null && <ConfidenceHero pct={confPct} />}
 
                   {data.summary && (
@@ -432,6 +500,41 @@ export function ExplainPanel({
                       </ul>
                     )}
                   </div>
+
+                  {/* ── Clinical-rule adjustments ──────────────────────── */}
+                  {data.clinical_rule_adjustments &&
+                    data.clinical_rule_adjustments.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Clinical-rule adjustments
+                        </p>
+                        <ul className="space-y-2">
+                          {data.clinical_rule_adjustments.map((adj) => {
+                            const deltaPct = Math.round(
+                              Math.abs(adj.confidence_delta) * 100,
+                            );
+                            const sign = adj.confidence_delta < 0 ? "−" : "+";
+                            return (
+                              <li
+                                key={adj.rule_id}
+                                className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-800/50 dark:bg-amber-950/30"
+                              >
+                                <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">
+                                  {adj.rule_name}
+                                </p>
+                                <p className="mt-0.5 text-sm leading-snug text-foreground">
+                                  {adj.explanation}
+                                </p>
+                                <p className="mt-1 text-[11px] font-medium tabular-nums text-amber-700 dark:text-amber-400">
+                                  {sign}
+                                  {deltaPct}% confidence
+                                </p>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
                 </>
               )}
             </div>

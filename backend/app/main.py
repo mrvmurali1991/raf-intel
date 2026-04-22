@@ -28,6 +28,7 @@ from app.db import check_connections, shutdown_db_executor
 from app.exception_handlers import register_exception_handlers
 from app.logging_config import configure_logging
 from app.middleware import setup_middleware
+from app.metrics import init_metrics
 from app.monitoring import init_monitoring
 from app.router_registry import register_routers
 from app.telemetry import init_telemetry
@@ -91,6 +92,7 @@ async def lifespan(app: FastAPI):
     """Verify DB connectivity on startup and log a summary."""
     logger.info("RAF Intelligence backend starting...")
     init_monitoring()
+    init_metrics(app)
     init_telemetry(app)
 
     app.state.start_time = datetime.now(timezone.utc)
@@ -322,12 +324,13 @@ _EMR_GATE_ALLOWED_PREFIXES = (
     "/api/pipeline",
     "/api/uploads",
     "/health",
+    "/metrics",
     "/docs",
     "/redoc",
     "/openapi.json",
     "/",
 )
-_EMR_GATE_ALLOWED_EXACT = {"/", "/health"}
+_EMR_GATE_ALLOWED_EXACT = {"/", "/health", "/metrics"}
 
 
 def _path_is_emr_gate_exempt(path: str) -> bool:

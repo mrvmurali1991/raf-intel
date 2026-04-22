@@ -10,10 +10,54 @@ import {
   useDismissSuspectCentral,
 } from "@/hooks/mutations/useRAFCentralMutations";
 import ExplainPanel from "@/components/ExplainPanel";
-import { confidenceTier } from "@/lib/confidence";
-import type { SuspectCard } from "../_shared";
+import { cn } from "@/lib/utils";
+import { confidenceTier, needsAcceptGate } from "@/lib/confidence";
+import type { SuspectCard, SuspectMeat } from "../_shared";
+import {
+  AcceptConfirmDialog,
+  type AcceptOverridePayload,
+} from "@/components/AcceptConfirmDialog";
 import { SemiGauge } from "./SemiGauge";
 import { DismissReasonDialog } from "./DismissReasonDialog";
+
+// ---------------------------------------------------------------------------
+// Compact MEAT chip — 4 coloured squares, no external MEATBadge dependency
+// ---------------------------------------------------------------------------
+const MEAT_LETTERS: { key: keyof SuspectMeat; label: string; bg: string }[] = [
+  { key: "monitor",  label: "M", bg: "bg-teal-500 dark:bg-teal-600"   },
+  { key: "evaluate", label: "E", bg: "bg-purple-500 dark:bg-purple-600" },
+  { key: "assess",   label: "A", bg: "bg-amber-500 dark:bg-amber-600"  },
+  { key: "treat",    label: "T", bg: "bg-green-500 dark:bg-green-600"  },
+];
+
+function CompactMeatChip({ meat }: { meat?: SuspectMeat | null }) {
+  if (meat === undefined || meat === null) {
+    return (
+      <span
+        title="MEAT evidence not yet generated"
+        className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300 cursor-default select-none"
+      >
+        MEAT: unknown
+      </span>
+    );
+  }
+  return (
+    <div className="inline-flex items-center gap-0.5" aria-label="MEAT completeness">
+      {MEAT_LETTERS.map(({ key, label, bg }) => (
+        <span
+          key={key}
+          title={`${label} (${key}) ${meat[key] ? "present" : "missing"}`}
+          className={cn(
+            "inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white",
+            meat[key] ? bg : "bg-muted text-muted-foreground"
+          )}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /**
  * SuspectCardView — individual suspect condition card with Accept/Dismiss/Why actions.
@@ -31,6 +75,7 @@ export function SuspectCardView({
 }) {
   const [showExplain, setShowExplain] = useState(false);
   const [showDismissDialog, setShowDismissDialog] = useState(false);
+  const [showAcceptGate, setShowAcceptGate] = useState(false);
   const toast = useToast();
 
   // Mutations — invalidate raf-central query key on success
@@ -44,9 +89,28 @@ export function SuspectCardView({
     ? "dismiss"
     : null;
 
-  const acceptSuspect = async () => {
-    await acceptMut.mutateAsync({ suspect_id: suspect.id, push_to_emr: true });
+  // Called after gate is passed (or bypassed for safe suspects).
+  const acceptSuspect = async (override?: AcceptOverridePayload) => {
+    await acceptMut.mutateAsync({
+      suspect_id: suspect.id,
+      push_to_emr: true,
+      ...(override ?? {}),
+    } as Parameters<typeof acceptMut.mutateAsync>[0]);
     onChange();
+  };
+
+  // Entry-point for the Accept button — gate is shown only when risks are present.
+  const handleAcceptClick = () => {
+    if (needsAcceptGate(suspect.confidence, suspect.meat_status, suspect.clinical_rule_violation)) {
+      setShowAcceptGate(true);
+    } else {
+      acceptSuspect();
+    }
+  };
+
+  const handleAcceptConfirmed = async (payload: AcceptOverridePayload) => {
+    setShowAcceptGate(false);
+    await acceptSuspect(payload);
   };
 
   const dismissSuspect = async (reason: string) => {
@@ -88,7 +152,8 @@ export function SuspectCardView({
 
           {/* Button hierarchy: Accept primary, Dismiss outline, Why? ghost */}
           <div className="mt-2.5 flex gap-2 items-center flex-wrap">
-            <Button size="sm" onClick={acceptSuspect} disabled={busy !== null}>
+            <CompactMeatChip meat={suspect.meat} />
+            <Button size="sm" onClick={handleAcceptClick} disabled={busy !== null}>
               {busy === "accept" ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
@@ -128,8 +193,13 @@ export function SuspectCardView({
         onClose={() => setShowExplain(false)}
         busy={busy}
         onAccept={async () => {
-          await acceptSuspect();
           setShowExplain(false);
+          // Route through the gate — gate will call acceptSuspect on confirm.
+          if (needsAcceptGate(suspect.confidence, suspect.meat_status, suspect.clinical_rule_violation)) {
+            setShowAcceptGate(true);
+          } else {
+            await acceptSuspect();
+          }
         }}
         onRequestDismiss={() => {
           setShowExplain(false);
@@ -141,6 +211,20 @@ export function SuspectCardView({
         suspectLabel={suspect.label}
         onCancel={() => setShowDismissDialog(false)}
         onSubmit={dismissSuspect}
+      />
+      <AcceptConfirmDialog
+        open={showAcceptGate}
+        onClose={() => setShowAcceptGate(false)}
+        onConfirm={handleAcceptConfirmed}
+        suspect={{
+          hcc_code: suspect.hcc,
+          icd10_code: suspect.icd10,
+          confidence: suspect.confidence,
+          meat_status: suspect.meat_status,
+          meat_count: suspect.meat_count,
+          clinical_rule_violation: suspect.clinical_rule_violation,
+          expected_dollar_impact: suspect.expected_dollar_impact,
+        }}
       />
     </Card>
   );

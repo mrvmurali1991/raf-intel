@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { TenantPYChip } from "@/components/TenantPYChip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/Toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -131,6 +132,20 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
     <TooltipProvider>
       <ToastProvider>
         <Sidebar />
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Top bar — tenant + PY chip lives here, right-aligned             */}
+        {/* Fixed at top-0, offset by sidebar width on lg screens.           */}
+        {/* Height matches the pt-16 / pt-8 top-padding of <main>.           */}
+        {/* ---------------------------------------------------------------- */}
+        <div
+          className="fixed top-0 right-0 z-20 flex items-center justify-end px-4 lg:left-64"
+          style={{ height: "3.5rem" /* 56 px = pt-14 — sits under mobile hamburger row */ }}
+          aria-label="App top bar"
+        >
+          <TenantPYChip />
+        </div>
+
         <main
           id="main-content"
           className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-5 pt-16 lg:p-10 lg:pt-8"

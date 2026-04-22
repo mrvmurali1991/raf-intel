@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
+import { PaymentYearProvider } from "@/contexts/payment-year-context";
 import { AuthLayout } from "@/components/auth-layout";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { QueryProvider } from "@/providers/query-provider";
@@ -43,11 +44,13 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>
-              <AuthLayout>
-                <ErrorBoundary>
-                  {children}
-                </ErrorBoundary>
-              </AuthLayout>
+              <PaymentYearProvider>
+                <AuthLayout>
+                  <ErrorBoundary>
+                    {children}
+                  </ErrorBoundary>
+                </AuthLayout>
+              </PaymentYearProvider>
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>

@@ -678,8 +678,10 @@ def _import_multi_sheet(
                         (patient_hcc_id, encounter_id, encounter_date,
                          meat_m, meat_e, meat_a, meat_t,
                          meat_m_present, meat_e_present, meat_a_present, meat_t_present,
-                         completeness_score, raw_note_excerpt)
-                    VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         completeness_score, raw_note_excerpt,
+                         document_upload_id, document_hash, context_classification)
+                    VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, 'upload')
                     """,
                     (
                         phcc_id,
@@ -694,6 +696,8 @@ def _import_multi_sheet(
                         t_p,
                         completeness,
                         excerpt,
+                        upload_id,    # document_upload_id: already in scope from step 1
+                        content_hash, # document_hash: SHA-256 of the uploaded file
                     ),
                 )
                 meat_inserted += 1

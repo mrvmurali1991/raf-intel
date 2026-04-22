@@ -572,6 +572,15 @@ export default function PatientDetailPage({
                 }}>
                   PID {pid}
                 </span>
+                {patient?.mrn && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", padding: "3px 10px",
+                    borderRadius: 999, fontSize: 11, fontWeight: 600, fontFamily: "monospace",
+                    background: C.slate100, color: C.slate600,
+                  }}>
+                    MRN {patient.mrn}
+                  </span>
+                )}
               </div>
             </div>
           </div>

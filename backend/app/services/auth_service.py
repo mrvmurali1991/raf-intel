@@ -21,7 +21,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1768,45 +1768,112 @@ def query_audit_log(
     limit: int = 100,
     offset: int = 0,
     tenant_id: str | None = None,
+    # Extended filter params (migration 023 adds reviewed_by_user_id columns)
+    actor_user_id: int | None = None,
+    action_type: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[dict[str, Any]]:
+    """Query the audit_log table with optional filters.
+
+    ``actor_user_id`` is a clearer alias for ``user_id`` (who performed the
+    action).  ``action_type`` is an alias for ``action``.  ``date_from`` /
+    ``date_to`` accept ``datetime.date`` objects and are inclusive.
+
+    The response rows include ``reviewer_email`` (joined from ``users``) so the
+    frontend can display "accepted by Dr. Jones" without a second round-trip.
+
+    If the ``reviewed_by_user_id`` column has not yet been added (migration 023
+    not applied), the query degrades gracefully: a WARNING is logged and results
+    are returned without that filter applied.
+    """
     _ensure_tables()
-    conditions = []
+
+    # Resolve aliases — explicit params win over legacy names
+    effective_user_id: int | None = actor_user_id if actor_user_id is not None else user_id
+    effective_action: str | None = action_type if action_type else action
+
+    # Convert date_from / date_to to datetime strings if supplied
+    if date_from is not None and start_date is None:
+        start_date = datetime(date_from.year, date_from.month, date_from.day, 0, 0, 0)
+    if date_to is not None and end_date is None:
+        end_date = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
+
+    conditions: list[str] = []
     params: list[Any] = []
+
     # Restrict to users in the caller's tenant (audit_log has no tenant_id column)
     if tenant_id is not None:
         conditions.append(
-            "user_id IN (SELECT id FROM users WHERE tenant_id = %s)"
+            "al.user_id IN (SELECT id FROM users WHERE tenant_id = %s)"
         )
         params.append(tenant_id)
-    if user_id is not None:
-        conditions.append("user_id = %s")
-        params.append(user_id)
-    if action:
-        conditions.append("action = %s")
-        params.append(action)
+    if effective_user_id is not None:
+        conditions.append("al.user_id = %s")
+        params.append(effective_user_id)
+    if effective_action:
+        conditions.append("al.action = %s")
+        params.append(effective_action)
     if resource_type:
-        conditions.append("resource_type = %s")
+        conditions.append("al.resource_type = %s")
         params.append(resource_type)
     if patient_id is not None:
-        conditions.append("patient_id = %s")
+        conditions.append("al.patient_id = %s")
         params.append(patient_id)
     if start_date:
-        conditions.append("created_at >= %s")
+        conditions.append("al.created_at >= %s")
         params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
     if end_date:
-        conditions.append("created_at <= %s")
+        conditions.append("al.created_at <= %s")
         params.append(end_date.strftime("%Y-%m-%d %H:%M:%S"))
+
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     params.extend([limit, offset])
-    with raf_cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT id, user_id, action, resource_type, resource_id, patient_id,
-                   ip_address, request_method, request_path, response_status, details, created_at
-            FROM audit_log {where}
-            ORDER BY created_at DESC
-            LIMIT %s OFFSET %s
-            """,
-            params,
-        )
-        return cur.fetchall()
+
+    # Primary query — includes reviewer_email / reviewer_name via users JOIN.
+    # If migration 023 hasn't run yet and a schema mismatch causes an
+    # "Unknown column" error (MySQL errno 1054), fall back to the bare
+    # audit_log query so the endpoint keeps working.
+    _primary_sql = f"""
+        SELECT al.id, al.user_id, al.action, al.resource_type, al.resource_id,
+               al.patient_id, al.ip_address, al.request_method, al.request_path,
+               al.response_status, al.details, al.created_at,
+               u.email AS reviewer_email,
+               CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS reviewer_name
+        FROM audit_log al
+        LEFT JOIN users u ON u.id = al.user_id
+        {where}
+        ORDER BY al.created_at DESC
+        LIMIT %s OFFSET %s
+    """
+    _fallback_sql = f"""
+        SELECT id, user_id, action, resource_type, resource_id, patient_id,
+               ip_address, request_method, request_path, response_status,
+               details, created_at
+        FROM audit_log
+        {where.replace('al.', '')}
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(_primary_sql, params)
+            return cur.fetchall()
+    except Exception as exc:
+        # MySQL errno 1054 = ER_BAD_FIELD_ERROR (Unknown column).
+        # Any column-schema mismatch from a pending migration falls here.
+        _msg = str(exc)
+        if "1054" in _msg or "Unknown column" in _msg:
+            logger.warning(
+                "query_audit_log: schema mismatch (migration 023 not applied?), "
+                "falling back to bare audit_log query. Error: %s",
+                exc,
+            )
+            # Strip the al. table alias since the fallback hits audit_log directly
+            fallback_params: list[Any] = [
+                p for p in params
+            ]
+            with raf_cursor() as cur:
+                cur.execute(_fallback_sql, fallback_params)
+                return cur.fetchall()
+        raise

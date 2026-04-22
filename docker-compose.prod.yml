@@ -220,9 +220,9 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.services.celery_tasks inspect ping --destination default@$$HOSTNAME --timeout 10"]
+      test: ["CMD-SHELL", "python -m app.worker_healthcheck || exit 1"]
       interval: 30s
-      timeout: 15s
+      timeout: 10s
       retries: 5
       start_period: 45s
     stop_grace_period: 30s
@@ -285,9 +285,9 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.services.celery_tasks inspect ping --destination heavy@$$HOSTNAME --timeout 10"]
+      test: ["CMD-SHELL", "python -m app.worker_healthcheck || exit 1"]
       interval: 60s
-      timeout: 20s
+      timeout: 10s
       retries: 3
       start_period: 30s
     stop_grace_period: 60s

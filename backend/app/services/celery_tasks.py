@@ -104,6 +104,7 @@ task_logger = get_task_logger(__name__)
 # a lower priority so manual user-triggered jobs are not starved.
 # ---------------------------------------------------------------------------
 
+from celery.schedules import crontab
 from kombu import Queue
 
 celery_app.conf.task_queues = [
@@ -173,6 +174,12 @@ def _setup_pipeline_on_worker_ready(**kwargs):
 # ---------------------------------------------------------------------------
 
 celery_app.conf.beat_schedule = {
+    # Nightly audit-chain integrity verification (03:00 UTC).
+    "verify-audit-chain": {
+        "task": "raf.verify_audit_chain",
+        "schedule": crontab(hour=3, minute=0),
+        "options": {"queue": "default"},
+    },
     # Check every 60 s which EMR connections are due for a sync and fan out
     # individual raf.sync_emr_connection tasks for each one.
     "check-due-emr-syncs-every-60s": {
@@ -1525,4 +1532,70 @@ def task_emr_activate_pipeline(
         result["hierarchy"] = {"status": "failed", "error": str(exc)}
 
     logger.info("emr_activate_pipeline: complete — %s", result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Task: nightly audit-chain integrity verification
+# ---------------------------------------------------------------------------
+
+
+celery_app.conf.task_routes["raf.verify_audit_chain"] = {"queue": "default", "priority": 2}
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.verify_audit_chain",
+    queue="default",
+    max_retries=1,
+    default_retry_delay=300,
+)
+def verify_audit_chain_task(self) -> dict[str, Any]:
+    """Nightly Beat task: verify the JSONL immutable audit chain integrity.
+
+    Calls ``verify_audit_chain()`` from immutable_audit, logs the result, and
+    emits an ``AUDIT_CHAIN_VERIFIED`` audit event with the outcome so the
+    verification itself is in the immutable record.
+
+    Scheduled at 03:00 UTC via the ``"verify-audit-chain"`` beat entry.
+    Task name: ``raf.verify_audit_chain``
+    """
+    from app.services.immutable_audit import emit_audit_event, verify_audit_chain
+
+    task_logger.info("verify_audit_chain_task: starting nightly chain verification")
+    try:
+        ok, errors = verify_audit_chain()
+    except Exception as exc:
+        task_logger.error("verify_audit_chain_task: verification raised: %s", exc, exc_info=True)
+        raise self.retry(exc=exc)
+
+    result: dict[str, Any] = {
+        "ok": ok,
+        "error_count": len(errors),
+        "errors": errors[:20],  # cap payload; full set is in JSONL
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if ok:
+        task_logger.info("verify_audit_chain_task: chain intact")
+    else:
+        task_logger.error(
+            "verify_audit_chain_task: chain BROKEN — %d error(s): %s",
+            len(errors),
+            "; ".join(errors[:5]),
+        )
+
+    # Emit the verification result into the audit trail itself.
+    try:
+        emit_audit_event(
+            "AUDIT_CHAIN_VERIFIED",
+            payload={
+                "ok": ok,
+                "error_count": len(errors),
+                "first_errors": errors[:5],
+            },
+        )
+    except Exception as emit_exc:
+        task_logger.warning("verify_audit_chain_task: failed to emit audit event: %s", emit_exc)
+
     return result

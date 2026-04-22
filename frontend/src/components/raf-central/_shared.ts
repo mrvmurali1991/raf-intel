@@ -28,6 +28,13 @@ export interface MEATGap {
   gaps: { monitor: boolean; evaluate: boolean; assess: boolean; treat: boolean };
 }
 
+export interface SuspectMeat {
+  monitor: boolean;
+  evaluate: boolean;
+  assess: boolean;
+  treat: boolean;
+}
+
 export interface SuspectCard {
   id: number;
   hcc: number;
@@ -37,6 +44,16 @@ export interface SuspectCard {
   evidence_type: string;
   trigger: string;
   status: string;
+  /** Per-letter MEAT coverage. Absent until backend adds it to SuspectCard. */
+  meat?: SuspectMeat | null;
+  /** MEAT completeness status string — added by Agent-G. */
+  meat_status?: string | null;
+  /** Number of present MEAT elements (0-4) — added by Agent-G. */
+  meat_count?: number | null;
+  /** Truthy when a clinical sanity rule is violated — added by Agent-N. */
+  clinical_rule_violation?: boolean | string | null;
+  /** Expected revenue impact of accepting this suspect — added by Agent-N. */
+  expected_dollar_impact?: number | null;
 }
 
 export interface RecaptureCard {

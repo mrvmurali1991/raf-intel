@@ -30,7 +30,7 @@ Admin / manager endpoints:
 import ipaddress
 import logging
 import os
-from datetime import datetime
+from datetime import date, datetime
 from functools import lru_cache
 from typing import Any
 
@@ -1159,34 +1159,79 @@ def admin_set_permissions(
     response_model=AuditLogResponse,
 )
 def get_audit_log(
-    user_id: int | None = Query(None, description="Filter by user ID"),
-    action: str | None = Query(None, description="Filter by action"),
-    resource_type: str | None = Query(None, description="Filter by resource type"),
+    # Legacy param — kept for backwards compat
+    user_id: int | None = Query(None, description="Filter by actor user ID"),
+    # Explicit alias; takes precedence over user_id when both supplied
+    actor_user_id: int | None = Query(
+        None,
+        description="Filter by the user who performed the action (e.g. Dr. Jones' user ID)",
+    ),
+    # Legacy action param
+    action: str | None = Query(None, description="Filter by action string"),
+    # Explicit alias; takes precedence over action when both supplied
+    action_type: str | None = Query(
+        None,
+        description=(
+            "Filter by action type, e.g. 'suspect_accepted', 'hcc_withdrawn', "
+            "'attest_submitted'"
+        ),
+    ),
+    resource_type: str | None = Query(
+        None,
+        description=(
+            "Filter by resource type, e.g. 'suspect', 'patient_hcc', "
+            "'attestation', 'user'"
+        ),
+    ),
     patient_id: int | None = Query(None, description="Filter by patient ID"),
-    start_date: str | None = Query(None, description="ISO date start, e.g. 2025-01-01"),
-    end_date: str | None = Query(None, description="ISO date end, e.g. 2025-12-31"),
+    # Primary date params (accept both datetime and bare date strings)
+    start_date: str | None = Query(None, description="ISO date/datetime start, e.g. 2025-01-01"),
+    end_date: str | None = Query(None, description="ISO date/datetime end, e.g. 2025-12-31"),
+    # Preferred aliases for quarterly range queries
+    date_from: date | None = Query(
+        None, description="Range start (inclusive) — date only, e.g. 2025-01-01"
+    ),
+    date_to: date | None = Query(
+        None, description="Range end (inclusive) — date only, e.g. 2025-03-31"
+    ),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(require_role("admin", "auditor")),
     tenant_id: str = Depends(get_tenant_id),
 ) -> AuditLogResponse:
-    try:
-        start_dt = datetime.fromisoformat(start_date) if start_date else None
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid start_date format: {start_date!r}. Use ISO 8601, e.g. 2025-01-01.",
-        )
-    try:
-        end_dt = datetime.fromisoformat(end_date) if end_date else None
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid end_date format: {end_date!r}. Use ISO 8601, e.g. 2025-12-31.",
-        )
+    # Merge string-style date params; explicit start_date/end_date take precedence
+    # over date_from/date_to when both families are provided.
+    start_dt: datetime | None = None
+    end_dt: datetime | None = None
+    _start_raw = start_date
+    _end_raw = end_date
+    if _start_raw:
+        try:
+            start_dt = datetime.fromisoformat(_start_raw)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid start_date format: {_start_raw!r}. Use ISO 8601, e.g. 2025-01-01.",
+            )
+    if _end_raw:
+        try:
+            end_dt = datetime.fromisoformat(_end_raw)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid end_date format: {_end_raw!r}. Use ISO 8601, e.g. 2025-12-31.",
+            )
+    # date_from/date_to fill in only if the string params were not given
+    if start_dt is None and date_from is not None:
+        start_dt = datetime(date_from.year, date_from.month, date_from.day, 0, 0, 0)
+    if end_dt is None and date_to is not None:
+        end_dt = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
+
     rows = query_audit_log(
         user_id=user_id,
+        actor_user_id=actor_user_id,
         action=action,
+        action_type=action_type,
         resource_type=resource_type,
         patient_id=patient_id,
         start_date=start_dt,

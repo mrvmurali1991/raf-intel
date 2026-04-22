@@ -31,6 +31,8 @@ export interface Patient {
   disease_score?: number | null;
   interaction_score?: number | null;
   data_source?: string;
+  /** Medical Record Number — present when the patient was imported from an EMR. */
+  mrn?: string;
   raf_score_history?: RAFScoreEntry[];
   hcc_codes?: HCCCode[];
   suspects?: SuspectCondition[];

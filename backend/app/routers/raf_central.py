@@ -685,8 +685,11 @@ def action_accept_suspect(
     tenant_id = current_user.get("tenant_id")
     _require_patient_access(pid, tenant_id, current_user=current_user)
 
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
-    result = accept_suspect(body.suspect_id, reviewed_by=reviewer, tenant_id=tenant_id)
+    result = accept_suspect(body.suspect_id, reviewed_by=reviewer, tenant_id=tenant_id,
+                            reviewed_by_user_id=reviewer_user_id)
 
     # EMR write-back: push the accepted ICD to OpenEMR lists as a medical problem
     pushed = False
@@ -710,12 +713,15 @@ def action_dismiss_suspect(
     tenant_id = current_user.get("tenant_id")
     _require_patient_access(pid, tenant_id, current_user=current_user)
 
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
     result = dismiss_suspect(
         body.suspect_id,
         reason=body.reason,
         reviewed_by=reviewer,
         tenant_id=tenant_id,
+        reviewed_by_user_id=reviewer_user_id,
     )
     _invalidate_panel_cache(pid, tenant_id)
     return DismissSuspectResponse(ok=True, suspect=result)

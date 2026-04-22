@@ -55,6 +55,40 @@ export function confidenceTier(pct: number): ConfidenceTier {
   };
 }
 
+// ---------------------------------------------------------------------------
+// RADV-safety accept gate
+// ---------------------------------------------------------------------------
+
+/**
+ * MEAT statuses that are considered incomplete for RADV purposes.
+ * When a suspect carries one of these, the accept gate must be shown.
+ */
+export const MEAT_RISKY_STATUSES = new Set([
+  "partial",
+  "incomplete",
+  "unknown",
+  "pending_rule_review",
+]);
+
+/**
+ * Returns true when at least one RADV risk condition is present for a suspect.
+ * All arguments are nullable / optional so callers need not guard individually.
+ *
+ * @param confidence  0-1 float (or null)
+ * @param meat_status backend meat_status string (or undefined/null)
+ * @param clinical_rule_violation truthy when the engine flagged a rule violation
+ */
+export function needsAcceptGate(
+  confidence: number | null | undefined,
+  meat_status: string | null | undefined,
+  clinical_rule_violation: boolean | string | null | undefined
+): boolean {
+  if (confidence != null && confidence * 100 < CONFIDENCE_MODERATE_MIN) return true;
+  if (meat_status != null && MEAT_RISKY_STATUSES.has(meat_status)) return true;
+  if (clinical_rule_violation) return true;
+  return false;
+}
+
 /**
  * Plain-language explanation of what the confidence number means. Rendered in
  * the ExplainPanel tooltip so clinicians know what they're affirming when they

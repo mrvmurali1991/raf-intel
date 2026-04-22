@@ -22,6 +22,11 @@ import {
 import api from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
+import { needsAcceptGate } from "@/lib/confidence";
+import {
+  AcceptConfirmDialog,
+  type AcceptOverridePayload,
+} from "@/components/AcceptConfirmDialog";
 
 type ItemKind = "hcc_candidate" | "suspect" | "provider_query";
 
@@ -42,6 +47,12 @@ interface ReviewItem {
   created_at?: string | null;
   days_to_cutoff?: number | null;
   expected_dollar_impact?: number | null;
+  /** Added by Agent-G — MEAT completeness status string. */
+  meat_status?: string | null;
+  /** Added by Agent-G — number of present MEAT elements (0-4). */
+  meat_count?: number | null;
+  /** Added by Agent-N — truthy when a clinical sanity rule is violated. */
+  clinical_rule_violation?: boolean | string | null;
 }
 
 interface CandidatesResponse { items: ReviewItem[]; total: number; }
@@ -73,9 +84,22 @@ async function postDecision(args: {
   decision: "accept" | "reject" | "edit";
   notes?: string;
   edited_icd10?: string;
+  override_reason?: string;
+  defense_basis?: string;
 }): Promise<{ ok: boolean; audit_id: number | null }> {
-  const { data } = await api.post("/api/review/decision", args);
-  return data;
+  try {
+    const { data } = await api.post("/api/review/decision", args);
+    return data;
+  } catch (err: unknown) {
+    // Backend may not yet accept override fields — strip and retry once.
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 400 && (args.override_reason !== undefined || args.defense_basis !== undefined)) {
+      const { override_reason: _or, defense_basis: _db, ...safeArgs } = args;
+      const { data } = await api.post("/api/review/decision", safeArgs);
+      return data;
+    }
+    throw err;
+  }
 }
 
 /* ====================================================================== */
@@ -176,6 +200,8 @@ export default function ReviewQueuePage() {
   const [tab, setTab] = useState<ItemKind>("hcc_candidate");
   const [editing, setEditing] = useState<{ id: string; icd10: string } | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>("deadline");
+  // Accept gate — holds the ReviewItem awaiting confirmation when risks present.
+  const [pendingAccept, setPendingAccept] = useState<ReviewItem | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["review-queue", tab, sortBy],
@@ -199,6 +225,26 @@ export default function ReviewQueuePage() {
     onError: () => toast.error("Error", "Could not save decision."),
   });
 
+  // Gate-aware accept handler for each row.
+  const handleAcceptClick = (it: ReviewItem) => {
+    if (needsAcceptGate(it.confidence, it.meat_status, it.clinical_rule_violation)) {
+      setPendingAccept(it);
+    } else {
+      decideMut.mutate({ candidate_id: it.id, decision: "accept" });
+    }
+  };
+
+  const handleAcceptConfirmed = (payload: AcceptOverridePayload) => {
+    if (!pendingAccept) return;
+    decideMut.mutate({
+      candidate_id: pendingAccept.id,
+      decision: "accept",
+      override_reason: payload.override_reason,
+      defense_basis: payload.defense_basis,
+    });
+    setPendingAccept(null);
+  };
+
   const openEvidence = (it: ReviewItem) => {
     const q = new URLSearchParams();
     if (it.evidence_source_id != null) q.set("doc", String(it.evidence_source_id));
@@ -213,6 +259,7 @@ export default function ReviewQueuePage() {
   const hasDollars = items.some((it) => it.expected_dollar_impact != null);
 
   return (
+    <>
     <div style={{
       background: C.bgPage, minHeight: "100vh", padding: "32px 40px 48px",
       fontFamily: FONT_SYS, color: C.text,
@@ -450,7 +497,7 @@ export default function ReviewQueuePage() {
               </div>
 
               {/* MEAT */}
-              <div><MeatPills m={it.meat} /></div>
+              <div>{it.meat ? <MeatPills m={it.meat} /> : <span style={{ color: C.textSubtle }}>—</span>}</div>
 
               {/* Days to cutoff */}
               {hasCutoff && (
@@ -478,7 +525,7 @@ export default function ReviewQueuePage() {
               }}>
                 <button
                   title="Accept"
-                  onClick={() => decideMut.mutate({ candidate_id: it.id, decision: "accept" })}
+                  onClick={() => handleAcceptClick(it)}
                   disabled={decideMut.isPending}
                   style={{
                     width: 34, height: 34, borderRadius: 8,
@@ -512,5 +559,23 @@ export default function ReviewQueuePage() {
         })}
       </div>
     </div>
+
+    {/* RADV accept gate — rendered outside the table so portal stacking is clean */}
+    <AcceptConfirmDialog
+      open={pendingAccept !== null}
+      onClose={() => setPendingAccept(null)}
+      onConfirm={handleAcceptConfirmed}
+      suspect={pendingAccept ? {
+        hcc_code: pendingAccept.hcc,
+        icd10_code: pendingAccept.icd10,
+        confidence: pendingAccept.confidence,
+        meat_status: pendingAccept.meat_status,
+        meat_count: pendingAccept.meat_count,
+        clinical_rule_violation: pendingAccept.clinical_rule_violation,
+        expected_dollar_impact: pendingAccept.expected_dollar_impact,
+        patient_name: pendingAccept.patient_name,
+      } : {}}
+    />
+    </>
   );
 }

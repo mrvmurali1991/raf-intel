@@ -118,6 +118,14 @@ def store_meat_evidence(
     raw_note_excerpt: str,
     nlp_model: str = settings.llm_model_meat,
     confidence: float = 0.0,
+    # --- Document provenance (migration 022) ---
+    document_upload_id: int | None = None,
+    document_hash: str | None = None,
+    document_page: int | None = None,
+    document_offset_start: int | None = None,
+    document_offset_end: int | None = None,
+    context_classification: str | None = None,
+    measurement_year: int | None = None,
 ) -> int:
     """Store MEAT evidence for a specific HCC + encounter.
 
@@ -146,6 +154,20 @@ def store_meat_evidence(
         Name of the AI model that produced this evidence (logged only).
     confidence:
         Model confidence 0.0–1.0 (logged only).
+    document_upload_id:
+        FK hint to raf_data_uploads.id — the file this excerpt came from.
+    document_hash:
+        SHA-256 hex digest of the source uploaded file for RADV traceability.
+    document_page:
+        1-based page number within the source document (PDFs).
+    document_offset_start:
+        Character/byte start offset of the excerpt within the source document.
+    document_offset_end:
+        Character/byte end offset of the excerpt within the source document.
+    context_classification:
+        Document context type (e.g. 'progress_note', 'discharge', 'lab').
+    measurement_year:
+        Explicit measurement year tag, useful for cross-year evidence joins.
 
     Returns
     -------
@@ -194,21 +216,30 @@ def store_meat_evidence(
             existing = cur.fetchone()
 
             if existing:
-                # Update the existing row; keep created_at unchanged (updated_at auto-refreshes)
+                # Update the existing row; keep created_at unchanged (updated_at auto-refreshes).
+                # Provenance columns use COALESCE so a NULL kwarg leaves the stored value intact
+                # (schema-safe if migration 022 has not yet applied).
                 cur.execute(
                     """
                     UPDATE raf_meat_evidence
-                    SET encounter_date     = %s,
-                        meat_m             = %s,
-                        meat_e             = %s,
-                        meat_a             = %s,
-                        meat_t             = %s,
-                        meat_m_present     = %s,
-                        meat_e_present     = %s,
-                        meat_a_present     = %s,
-                        meat_t_present     = %s,
-                        completeness_score = %s,
-                        raw_note_excerpt   = %s
+                    SET encounter_date          = %s,
+                        meat_m                 = %s,
+                        meat_e                 = %s,
+                        meat_a                 = %s,
+                        meat_t                 = %s,
+                        meat_m_present         = %s,
+                        meat_e_present         = %s,
+                        meat_a_present         = %s,
+                        meat_t_present         = %s,
+                        completeness_score     = %s,
+                        raw_note_excerpt       = %s,
+                        document_upload_id     = COALESCE(%s, document_upload_id),
+                        document_hash          = COALESCE(%s, document_hash),
+                        document_page          = COALESCE(%s, document_page),
+                        document_offset_start  = COALESCE(%s, document_offset_start),
+                        document_offset_end    = COALESCE(%s, document_offset_end),
+                        context_classification = COALESCE(%s, context_classification),
+                        measurement_year       = COALESCE(%s, measurement_year)
                     WHERE id = %s
                     """,
                     (
@@ -223,6 +254,13 @@ def store_meat_evidence(
                         int(t_present),
                         score,
                         raw_note_excerpt or None,
+                        document_upload_id,
+                        document_hash or None,
+                        document_page,
+                        document_offset_start,
+                        document_offset_end,
+                        context_classification or None,
+                        measurement_year,
                         existing["id"],
                     ),
                 )
@@ -232,15 +270,19 @@ def store_meat_evidence(
                     evidence_id, patient_hcc_id, encounter_id,
                 )
             else:
-                # Insert a new row
+                # Insert a new row including provenance columns.
                 cur.execute(
                     """
                     INSERT INTO raf_meat_evidence
                         (patient_hcc_id, encounter_id, encounter_date,
                          meat_m, meat_e, meat_a, meat_t,
                          meat_m_present, meat_e_present, meat_a_present, meat_t_present,
-                         completeness_score, raw_note_excerpt)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         completeness_score, raw_note_excerpt,
+                         document_upload_id, document_hash, document_page,
+                         document_offset_start, document_offset_end,
+                         context_classification, measurement_year)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         patient_hcc_id,
@@ -256,6 +298,13 @@ def store_meat_evidence(
                         int(t_present),
                         score,
                         raw_note_excerpt or None,
+                        document_upload_id,
+                        document_hash or None,
+                        document_page,
+                        document_offset_start,
+                        document_offset_end,
+                        context_classification or None,
+                        measurement_year,
                     ),
                 )
                 evidence_id = cur.lastrowid  # type: ignore[assignment]
@@ -578,6 +627,14 @@ def store_analysis_meat(
     patient_id: int,
     year: int,
     gemini_result: dict[str, Any],
+    # --- Document provenance (migration 022) ---
+    document_upload_id: int | None = None,
+    document_hash: str | None = None,
+    document_page: int | None = None,
+    document_offset_start: int | None = None,
+    document_offset_end: int | None = None,
+    context_classification: str | None = None,
+    measurement_year: int | None = None,
 ) -> None:
     """Persist MEAT evidence from a Gemini analyze_clinical_note result.
 
@@ -599,6 +656,21 @@ def store_analysis_meat(
     gemini_result:
         Dict returned by gemini_service.analyze_clinical_note().
         Expected keys: "diagnoses", "_meta" (optional).
+    document_upload_id:
+        FK hint to raf_data_uploads.id — the file this analysis was run on.
+    document_hash:
+        SHA-256 hex digest of the source uploaded file for RADV traceability.
+    document_page:
+        1-based page number within the source document (PDFs).
+    document_offset_start:
+        Character/byte start offset of the excerpt within the source document.
+    document_offset_end:
+        Character/byte end offset of the excerpt within the source document.
+    context_classification:
+        Document context type (e.g. 'progress_note', 'discharge', 'lab').
+    measurement_year:
+        Explicit measurement year tag; defaults to the ``year`` parameter when
+        not supplied so evidence rows are always linkable by year.
 
     Notes
     -----
@@ -727,6 +799,13 @@ def store_analysis_meat(
                 raw_note_excerpt=raw_excerpt,
                 nlp_model=nlp_model,
                 confidence=confidence,
+                document_upload_id=document_upload_id,
+                document_hash=document_hash,
+                document_page=document_page,
+                document_offset_start=document_offset_start,
+                document_offset_end=document_offset_end,
+                context_classification=context_classification,
+                measurement_year=measurement_year if measurement_year is not None else year,
             )
             stored += 1
         except ValueError as exc:
@@ -841,6 +920,45 @@ def update_hcc_meat_status(
     except Exception:
         pass
 
+    # ---------------------------------------------------------------------------
+    # Lazy import of immutable_audit — if unavailable we degrade gracefully but
+    # do NOT silently skip gate failures (fail-closed).
+    # ---------------------------------------------------------------------------
+    try:
+        from app.services.immutable_audit import append_audit_entry as _append_audit_entry
+    except Exception as _audit_import_err:
+        logger.warning(
+            "update_hcc_meat_status: immutable_audit unavailable — audit events "
+            "will NOT be written (pid=%d year=%d): %s",
+            patient_id, year, _audit_import_err,
+        )
+        _append_audit_entry = None  # type: ignore[assignment]
+
+    def _emit_audit(event_type: str, details: dict) -> None:
+        """Best-effort audit emission — never raises."""
+        if _append_audit_entry is None:
+            return
+        try:
+            _append_audit_entry(
+                event_type=event_type,
+                resource_type="patient_hcc",
+                resource_id=str(patient_id),
+                action="meat_status_gate",
+                details=details,
+            )
+        except Exception as _ae:
+            logger.warning(
+                "update_hcc_meat_status: failed to write audit entry "
+                "event_type=%s (pid=%d): %s",
+                event_type, patient_id, _ae,
+            )
+
+    # SEV-1 fix: gate errors are FAIL-CLOSED.  Any exception from
+    # gate_billed_promotion blocks promotion for the affected HCCs and emits
+    # a CLINICAL_RULE_GATE_ERROR audit entry.  Only a clean truthy return
+    # allows promotion.
+    _gate_error: bool = False  # True  → gate threw; all candidates blocked
+
     if _gate_enabled:
         try:
             from datetime import date as _date_cls
@@ -859,13 +977,51 @@ def update_hcc_meat_status(
                     "for pid=%d year=%d — will remain 'partial' rather than 'complete'",
                     sorted(blocked), patient_id, year,
                 )
+                for _hcc in sorted(blocked):
+                    _emit_audit(
+                        "CLINICAL_RULE_GATE_DENIED",
+                        {
+                            "tenant_id": None,
+                            "patient_id": patient_id,
+                            "hcc_code": _hcc,
+                            "denial_reason": gate_out.get("reason") or "clinical rule failed",
+                            "year": year,
+                        },
+                    )
+            # Emit PROMOTED for each candidate HCC that was NOT blocked.
+            for _hcc in candidate_hccs:
+                if _hcc not in blocked:
+                    _emit_audit(
+                        "CLINICAL_RULE_GATE_PROMOTED",
+                        {
+                            "tenant_id": None,
+                            "patient_id": patient_id,
+                            "hcc_code": _hcc,
+                            "year": year,
+                        },
+                    )
         except Exception as exc:
-            # Fail-open: never let the gate break the legacy code path.
+            # FAIL-CLOSED: gate threw → block ALL candidate HCCs.
+            _gate_error = True
+            blocked = set(candidate_hccs)
             logger.error(
-                "update_hcc_meat_status: clinical-rule gate unavailable "
-                "(pid=%d year=%d): %s. Proceeding without gating.",
-                patient_id, year, exc,
+                "update_hcc_meat_status: clinical-rule gate EXCEPTION (pid=%d year=%d) "
+                "— ALL %d candidate HCCs blocked (fail-closed): %s",
+                patient_id, year, len(blocked), exc,
+                exc_info=True,
             )
+            for _hcc in sorted(blocked):
+                _emit_audit(
+                    "CLINICAL_RULE_GATE_ERROR",
+                    {
+                        "tenant_id": None,
+                        "patient_id": patient_id,
+                        "hcc_code": _hcc,
+                        "exception_class": type(exc).__name__,
+                        "exception_message": str(exc),
+                        "year": year,
+                    },
+                )
     else:
         logger.info(
             "update_hcc_meat_status: clinical billing gate DISABLED by feature flag "
@@ -893,12 +1049,17 @@ def update_hcc_meat_status(
                 )
 
             # Apply gate: if this HCC was blocked, refuse to mark "complete".
+            # When blocked due to a gate *exception* (_gate_error=True) the
+            # status is set to "pending_rule_review" to make the failure
+            # visible in the UI / downstream queries.  A normal rule-denial
+            # (gate returned blocked list without raising) keeps "partial" so
+            # the existing denial path is unchanged.
             try:
                 hcc_num = int(str(hcc_entry["hcc_code"]).lstrip("HCChcc "))
             except (ValueError, TypeError):
                 hcc_num = -1
             if effective_status == "complete" and hcc_num in blocked:
-                effective_status = "partial"
+                effective_status = "pending_rule_review" if _gate_error else "partial"
 
             # Read the current status so we can log genuine transitions and
             # always write the freshly-computed value (demotion-safe).

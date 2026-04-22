@@ -22,39 +22,67 @@ def init_telemetry(app=None) -> None:
     """
     Bootstrap OpenTelemetry tracing.
 
-    Skips silently when:
-    - OTEL_EXPORTER_OTLP_ENDPOINT env var is not set
-    - opentelemetry packages are not installed
+    When ``settings.otel_exporter_otlp_endpoint`` is set, spans are exported
+    via OTLP/gRPC (insecure, short timeout so a missing collector never stalls
+    startup).  When the endpoint is absent but APP_ENV is "development", a
+    ConsoleSpanExporter is used instead.  Otherwise tracing is a no-op.
+
+    The function is idempotent — safe to call multiple times.
     """
     global _OTEL_INITIALIZED
     if _OTEL_INITIALIZED:
         return
 
-    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-    if not endpoint:
-        logger.info("OpenTelemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set")
-        return
+    # Prefer the typed settings value; fall back to raw env so the function
+    # works even if called before the app config is fully initialised.
+    try:
+        from app.config import settings as _settings
+        endpoint: str = _settings.otel_exporter_otlp_endpoint or ""
+        app_env: str = _settings.app_env
+    except Exception:
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+        app_env = os.getenv("APP_ENV", "production")
 
     try:
         from opentelemetry import trace
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-            OTLPSpanExporter,
-        )
         from opentelemetry.sdk.resources import SERVICE_NAME, Resource
         from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
     except ImportError:
-        logger.info("OpenTelemetry disabled: opentelemetry packages not installed")
+        logger.info("OpenTelemetry disabled: opentelemetry-sdk not installed")
         return
 
-    # --- Resource ---
     service_name = os.getenv("OTEL_SERVICE_NAME", "raf-intelligence-backend")
     resource = Resource.create({SERVICE_NAME: service_name})
-
-    # --- TracerProvider ---
     provider = TracerProvider(resource=resource)
-    exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
-    provider.add_span_processor(BatchSpanProcessor(exporter))
+
+    if endpoint:
+        try:
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+                OTLPSpanExporter,
+            )
+            # insecure=True and a short timeout so a missing collector never
+            # blocks startup beyond a single gRPC connection attempt.
+            exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True, timeout=2)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
+            logger.info("OpenTelemetry: OTLP exporter -> %s", endpoint)
+        except ImportError:
+            logger.warning(
+                "opentelemetry-exporter-otlp-proto-grpc not installed; "
+                "OTEL_EXPORTER_OTLP_ENDPOINT ignored"
+            )
+    elif app_env == "development":
+        try:
+            from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+            provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+            logger.info("OpenTelemetry: ConsoleSpanExporter active (development)")
+        except ImportError:
+            pass
+    else:
+        logger.info("OpenTelemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set")
+        return
+
+    trace.set_tracer_provider(provider)
     trace.set_tracer_provider(provider)
 
     # --- Instrument FastAPI ---

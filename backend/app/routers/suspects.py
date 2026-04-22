@@ -20,6 +20,7 @@ POST /api/suspects/bulk-update       – bulk accept or dismiss
 """
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
+import json
 import logging
 from typing import Any, Literal
 
@@ -27,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_permission
+from app.db import raf_cursor
 from app.rate_limit import limiter
 from app.services.openemr_connector import get_all_patients, get_patient
 from app.services.suspect_engine import (
@@ -39,6 +41,98 @@ from app.services.suspect_engine import (
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Override-gate helpers
+# ---------------------------------------------------------------------------
+
+# MEAT statuses that make an accept "risky" and require an override reason.
+_RISKY_MEAT_STATUSES: frozenset[str] = frozenset(
+    {"partial", "incomplete", "unknown", "pending_rule_review"}
+)
+
+_MIN_OVERRIDE_REASON_LEN = 20
+
+
+def _compute_risk_factors(suspect_id: int, tenant_id: str) -> list[str]:
+    """Return a list of human-readable risk-factor strings for a suspect.
+
+    Queries raf_suspect_conditions for confidence + the joined raf_patient_hcc
+    row for meat_status, and the immutable_audit_log for any recent
+    CLINICAL_RULE_GATE_DENIED event for this suspect's HCC + patient.
+
+    If data is missing or the query fails, returns an empty list so callers
+    treat the accept as NOT risky (graceful degradation per spec).
+    """
+    factors: list[str] = []
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT sc.confidence_score,
+                       sc.suspect_hcc,
+                       sc.patient_id,
+                       ph.meat_status
+                FROM   raf_suspect_conditions sc
+                LEFT JOIN raf_patient_hcc ph
+                       ON ph.patient_id  = sc.patient_id
+                      AND ph.hcc_code    = sc.suspect_hcc
+                      AND ph.tenant_id   = sc.tenant_id
+                WHERE  sc.id        = %s
+                  AND  sc.tenant_id = %s
+                LIMIT 1
+                """,
+                (suspect_id, tenant_id),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.warning(
+            "_compute_risk_factors: DB query failed for suspect=%s — treating as not risky: %s",
+            suspect_id, exc,
+        )
+        return []
+
+    if not row:
+        return []
+
+    confidence = float(row.get("confidence_score") or 1.0)
+    meat_status: str | None = (row.get("meat_status") or "").lower() or None
+    suspect_hcc: int | None = row.get("suspect_hcc")
+    patient_id: int | None = row.get("patient_id")
+
+    if confidence < 0.70:
+        factors.append(f"low_confidence:{confidence:.2f}")
+
+    if meat_status and meat_status in _RISKY_MEAT_STATUSES:
+        factors.append(f"meat_status:{meat_status}")
+
+    # Check immutable_audit_log for a recent CLINICAL_RULE_GATE_DENIED event
+    # for this patient+HCC combination (within current measurement year).
+    if suspect_hcc and patient_id:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM   immutable_audit_log
+                    WHERE  event_type  = 'CLINICAL_RULE_GATE_DENIED'
+                      AND  patient_id  = %s
+                      AND  JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.hcc_code')) = %s
+                    ORDER BY event_ts DESC
+                    LIMIT 1
+                    """,
+                    (str(patient_id), str(suspect_hcc)),
+                )
+                denied_row = cur.fetchone()
+            if denied_row:
+                factors.append(f"clinical_rule_denied:hcc{suspect_hcc}")
+        except Exception as exc:
+            logger.warning(
+                "_compute_risk_factors: audit_log query failed for suspect=%s hcc=%s — skipping rule check: %s",
+                suspect_id, suspect_hcc, exc,
+            )
+
+    return factors
+
 router = APIRouter(prefix="/api/suspects", tags=["suspects"])
 
 
@@ -48,7 +142,18 @@ router = APIRouter(prefix="/api/suspects", tags=["suspects"])
 
 
 class AcceptRequest(BaseModel):
-    pass
+    override_reason: str | None = Field(
+        default=None,
+        min_length=None,
+        description=(
+            "Required (min 20 chars) when accepting a low-confidence / "
+            "incomplete-MEAT / clinically-denied suspect. Omit for clean accepts."
+        ),
+    )
+    defense_basis: str | None = Field(
+        default=None,
+        description="Short category tag, e.g. 'clinical_judgement', 'documentation_pending'.",
+    )
 
 
 class DismissRequest(BaseModel):
@@ -290,7 +395,9 @@ def bulk_update(
     The reviewer identity is derived from the authenticated JWT — the client
     cannot spoof the ``reviewed_by`` field.
     """
-    reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
+    reviewed_by = f"user:{_uid or 'unknown'} ({current_user.get('email', 'unknown')})"
     tenant_id: str | None = current_user.get("tenant_id") or None
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
@@ -301,9 +408,11 @@ def bulk_update(
     for sid in body.ids:
         try:
             if body.action == "accept":
-                accept_suspect(sid, reviewed_by=reviewed_by, tenant_id=tenant_id)
+                accept_suspect(sid, reviewed_by=reviewed_by, tenant_id=tenant_id,
+                               reviewed_by_user_id=reviewer_user_id)
             else:
-                dismiss_suspect(sid, reason=body.reason, reviewed_by=reviewed_by, tenant_id=tenant_id)
+                dismiss_suspect(sid, reason=body.reason, reviewed_by=reviewed_by, tenant_id=tenant_id,
+                                reviewed_by_user_id=reviewer_user_id)
             succeeded += 1
         except Exception as exc:
             failed += 1
@@ -491,21 +600,124 @@ def accept_suspect_endpoint(
     be coded for this encounter).
 
     The reviewer identity is derived from the authenticated JWT.
+
+    **Override gate** — before writing the acceptance the endpoint computes
+    whether this is a *risky accept*:
+
+    * ``confidence_score < 0.70``
+    * ``meat_status`` in ``{partial, incomplete, unknown, pending_rule_review}``
+    * A ``CLINICAL_RULE_GATE_DENIED`` audit event exists for this HCC/patient
+
+    If any risk factor is present and ``override_reason`` is absent or shorter
+    than 20 characters, HTTP 422 is returned with the exact risk factors so the
+    frontend can surface the confirmation dialog.  Agent-H's dialog already
+    sends ``override_reason`` in these cases, so the happy path is unaffected.
+
+    When an override is accepted, the reason is persisted to the new
+    ``accept_override_reason`` / ``accept_defense_basis`` /
+    ``accept_risk_factors_json`` columns and a ``SUSPECT_ACCEPTED_OVERRIDE``
+    immutable-audit event is emitted.  If migration 024 has not yet applied
+    (column-unknown DB error) the persistence is skipped with a WARNING and
+    the accept still succeeds — callers are never blocked by missing schema.
     """
-    reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
+    reviewed_by = f"user:{_uid or 'unknown'} ({current_user.get('email', 'unknown')})"
     tenant_id: str | None = current_user.get("tenant_id") or None
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    # ------------------------------------------------------------------
+    # Override gate
+    # ------------------------------------------------------------------
+    risk_factors = _compute_risk_factors(suspect_id, tenant_id)
+    is_risky = len(risk_factors) > 0
+
+    if is_risky:
+        reason = (body.override_reason or "").strip()
+        if len(reason) < _MIN_OVERRIDE_REASON_LEN:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": (
+                        "Override reason required for low-confidence / "
+                        "incomplete-MEAT acceptance"
+                    ),
+                    "risk_factors": risk_factors,
+                },
+            )
+
+    # ------------------------------------------------------------------
+    # Perform the accept
+    # ------------------------------------------------------------------
     try:
-        updated = accept_suspect(suspect_id, reviewed_by=reviewed_by, tenant_id=tenant_id)
+        updated = accept_suspect(
+            suspect_id,
+            reviewed_by=reviewed_by,
+            tenant_id=tenant_id,
+            reviewed_by_user_id=reviewer_user_id,
+        )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
         logger.error("accept_suspect_endpoint id=%s: %s", suspect_id, exc)
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    # ------------------------------------------------------------------
+    # Persist override metadata (gracefully degrade if 024 not applied)
+    # ------------------------------------------------------------------
+    if is_risky:
+        risk_json = json.dumps(risk_factors)
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE raf_suspect_conditions
+                    SET accept_override_reason   = %s,
+                        accept_defense_basis     = %s,
+                        accept_risk_factors_json = %s
+                    WHERE id        = %s
+                      AND tenant_id = %s
+                    """,
+                    (
+                        (body.override_reason or "").strip()[:500],
+                        (body.defense_basis or "")[:100] or None,
+                        risk_json,
+                        suspect_id,
+                        tenant_id,
+                    ),
+                )
+        except Exception as exc:
+            logger.warning(
+                "accept_suspect_endpoint: could not persist override columns "
+                "(migration 024 may not be applied) — skipping, suspect_id=%s: %s",
+                suspect_id, exc,
+            )
+
+        # Emit immutable audit event — non-fatal if it fails.
+        try:
+            from app.services.immutable_audit import emit_audit_event
+
+            emit_audit_event(
+                "SUSPECT_ACCEPTED_OVERRIDE",
+                tenant_id=tenant_id,
+                actor_user_id=reviewer_user_id,
+                subject_type="suspect",
+                subject_id=str(suspect_id),
+                payload={
+                    "override_reason": (body.override_reason or "").strip(),
+                    "defense_basis": body.defense_basis or None,
+                    "risk_factors": risk_factors,
+                    "actor_email": current_user.get("email") or "unknown",
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "accept_suspect_endpoint: immutable audit emit failed for "
+                "SUSPECT_ACCEPTED_OVERRIDE suspect_id=%s: %s",
+                suspect_id, exc,
+            )
 
     return AcceptActionResponse(
         suspect_id=suspect_id,
@@ -533,7 +745,9 @@ def dismiss_suspect_endpoint(
 
     The reviewer identity is derived from the authenticated JWT.
     """
-    reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
+    reviewed_by = f"user:{_uid or 'unknown'} ({current_user.get('email', 'unknown')})"
     tenant_id: str | None = current_user.get("tenant_id") or None
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
@@ -543,6 +757,7 @@ def dismiss_suspect_endpoint(
             reason=body.reason,
             reviewed_by=reviewed_by,
             tenant_id=tenant_id,
+            reviewed_by_user_id=reviewer_user_id,
         )
     except ValueError as exc:
         logger.error("Unexpected error: %s", exc)

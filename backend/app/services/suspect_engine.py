@@ -1199,11 +1199,21 @@ def get_all_open_suspects(
 # Accept / dismiss workflows
 # ---------------------------------------------------------------------------
 
-def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = None) -> dict[str, Any]:
+def accept_suspect(
+    suspect_id: int,
+    reviewed_by: str,
+    tenant_id: str | None = None,
+    reviewed_by_user_id: int | None = None,
+) -> dict[str, Any]:
     """
     Mark a suspect as accepted (provider agrees the condition should be coded).
     Also inserts the accepted HCC into raf_patient_hcc and recalculates RAF score.
     Returns the updated record.
+
+    Parameters
+    ----------
+    reviewed_by:         Free-text identity string kept for backward compat.
+    reviewed_by_user_id: Structured numeric user.id for RBAC audit filtering.
     """
     if not tenant_id:
         raise ValueError("accept_suspect requires tenant_id to prevent cross-tenant mutation")
@@ -1212,13 +1222,14 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
             cur.execute(
                 """
                 UPDATE raf_suspect_conditions
-                SET status      = 'accepted',
-                    reviewed_by = %s,
-                    updated_at  = NOW()
+                SET status               = 'accepted',
+                    reviewed_by          = %s,
+                    reviewed_by_user_id  = COALESCE(%s, reviewed_by_user_id),
+                    updated_at           = NOW()
                 WHERE id = %s
                   AND tenant_id = %s
                 """,
-                (reviewed_by, suspect_id, tenant_id),
+                (reviewed_by, reviewed_by_user_id, suspect_id, tenant_id),
             )
             cur.execute(
                 "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
@@ -1365,10 +1376,16 @@ def dismiss_suspect(
     reason: str,
     reviewed_by: str,
     tenant_id: str | None = None,
+    reviewed_by_user_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Mark a suspect as dismissed with a documented reason.
     Returns the updated record.
+
+    Parameters
+    ----------
+    reviewed_by:         Free-text identity string kept for backward compat.
+    reviewed_by_user_id: Structured numeric user.id for RBAC audit filtering.
     """
     if not tenant_id:
         raise ValueError("dismiss_suspect requires tenant_id to prevent cross-tenant mutation")
@@ -1377,14 +1394,15 @@ def dismiss_suspect(
             cur.execute(
                 """
                 UPDATE raf_suspect_conditions
-                SET status           = 'dismissed',
-                    dismissed_reason = %s,
-                    reviewed_by      = %s,
-                    updated_at       = NOW()
+                SET status               = 'dismissed',
+                    dismissed_reason     = %s,
+                    reviewed_by          = %s,
+                    reviewed_by_user_id  = COALESCE(%s, reviewed_by_user_id),
+                    updated_at           = NOW()
                 WHERE id = %s
                   AND tenant_id = %s
                 """,
-                (reason, reviewed_by, suspect_id, tenant_id),
+                (reason, reviewed_by, reviewed_by_user_id, suspect_id, tenant_id),
             )
             cur.execute(
                 "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",

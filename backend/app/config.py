@@ -295,6 +295,12 @@ class Settings:
         "ALLOW_DEV_ADMIN_SEED", "false"
     ).lower() in ("1", "true", "yes")
 
+    # OpenTelemetry OTLP collector endpoint.
+    # When None, telemetry.py falls back to ConsoleSpanExporter in dev or
+    # no-ops entirely so startup is unaffected by a missing collector.
+    # Example: "http://otel-collector:4317"
+    otel_exporter_otlp_endpoint: str = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+
 
 def _validate_settings(s: Settings) -> None:
     """Run post-instantiation checks and emit the mandatory APP_ENV banner.

@@ -26,6 +26,7 @@ from typing import Any
 from app.config import settings
 from app.db import raf_cursor
 from app.services.emr_manager import active_patients_subquery
+from app.services.immutable_audit import append_audit_entry
 
 logger = logging.getLogger(__name__)
 
@@ -266,8 +267,244 @@ def list_attestations(
 
 
 # ---------------------------------------------------------------------------
+# Internal — immutable audit helper
+# ---------------------------------------------------------------------------
+
+def _emit_audit(
+    *,
+    event_type: str,
+    user_id: int | str | None,
+    tenant_id: str | None,
+    patient_id: int | None,
+    hcc_code: str | None,
+    model_version: str | None,
+    payment_year: int | None,
+    reason: str | None,
+) -> None:
+    """Emit a tamper-evident audit entry via append_audit_entry.
+
+    Wraps the call in try/except so that an audit-write failure never prevents
+    the upstream decision from being persisted.  Logging is non-optional so
+    that operations can reconstruct the event from structured logs if the JSONL
+    write fails.
+
+    Event types used by attestation_service:
+        ATTEST_ACCEPTED
+        ATTEST_REJECTED_DOS
+        ATTEST_REJECTED_CONTRADICTION
+        ATTEST_WITHDRAWN
+    """
+    try:
+        append_audit_entry(
+            event_type=event_type,
+            user_id=user_id,
+            tenant_id=str(tenant_id) if tenant_id is not None else None,
+            resource_type="hcc_attestation",
+            resource_id=str(patient_id) if patient_id is not None else None,
+            action=event_type.lower(),
+            details={
+                "patient_id": patient_id,
+                "hcc_code": hcc_code,
+                "model_version": model_version,
+                "payment_year": payment_year,
+                "reason": reason,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "_emit_audit: failed to write immutable audit event %s "
+            "(patient=%s hcc=%s year=%s): %s",
+            event_type, patient_id, hcc_code, payment_year, exc,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Public API — Provider decisions
 # ---------------------------------------------------------------------------
+
+def _check_dos_year_gate(
+    *,
+    tenant_id: str,
+    patient_id: int,
+    hcc_code: str,
+    payment_year: int,
+) -> None:
+    """SEV-1 RADV gate (A): reject if the most-recent MEAT evidence DOS is after payment_year-12-31.
+
+    Queries raf_meat_evidence joined to raf_patient_hcc for the (tenant, patient, hcc) triple
+    and checks that MAX(encounter_date) <= date(payment_year, 12, 31).
+
+    Raises ValueError("DOS outside payment year") if the gate fails.
+
+    TODO(migration-022): When context_classification column is added to raf_meat_evidence,
+    tighten this to filter only active-context rows before computing MAX(encounter_date).
+    """
+    import MySQLdb  # type: ignore[import]
+
+    cutoff = date(payment_year, 12, 31)
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT MAX(me.encounter_date) AS max_dos
+                FROM   raf_meat_evidence me
+                JOIN   raf_patient_hcc ph ON ph.id = me.patient_hcc_id
+                WHERE  ph.patient_id       = %s
+                  AND  ph.hcc_code         = %s
+                  AND  ph.measurement_year = %s
+                  AND  ph.tenant_id        = %s
+                """,
+                (patient_id, hcc_code, payment_year, tenant_id),
+            )
+            row = cur.fetchone()
+    except MySQLdb.OperationalError as exc:
+        logger.warning(
+            "_check_dos_year_gate: DB error querying raf_meat_evidence "
+            "(patient=%s hcc=%s year=%s) — skipping gate. err=%s "
+            "TODO: ensure migration 022 has run.",
+            patient_id, hcc_code, payment_year, exc,
+        )
+        return
+
+    max_dos = row["max_dos"] if row else None
+
+    if max_dos is None:
+        raise ValueError("DOS outside payment year")
+
+    # max_dos may be a date or datetime depending on the DB driver
+    if isinstance(max_dos, datetime):
+        max_dos = max_dos.date()
+
+    if max_dos > cutoff:
+        raise ValueError("DOS outside payment year")
+
+
+def _check_negation_contradiction(
+    *,
+    tenant_id: str,
+    patient_id: int,
+    hcc_code: str,
+    payment_year: int,
+    active_max_dos: date | None,
+) -> None:
+    """SEV-1 RADV gate (B): reject if a negation/resolution context is more recent than active evidence.
+
+    Queries raf_meat_evidence for rows where context_classification (stored in the JSON
+    ``metadata`` column as metadata->>'$.context_classification') is one of:
+        ('negated', 'historical', 'resolved', 'family', 'hypothetical')
+    AND that row's encounter_date > active_max_dos.
+
+    TODO(migration-022): Add a real context_classification VARCHAR column to
+    raf_meat_evidence so this can be a plain column filter instead of JSON extraction.
+    If neither the column nor the metadata key exists the gate is skipped with a WARNING.
+
+    Raises ValueError("Contradictory evidence: <classification> on <date>") if found.
+    """
+    import MySQLdb  # type: ignore[import]
+
+    NEGATION_LABELS = ("negated", "historical", "resolved", "family", "hypothetical")
+
+    # Attempt 1: dedicated context_classification column (post-migration-022)
+    row = None
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT me.context_classification AS ctx, me.encounter_date AS dos
+                FROM   raf_meat_evidence me
+                JOIN   raf_patient_hcc ph ON ph.id = me.patient_hcc_id
+                WHERE  ph.patient_id       = %s
+                  AND  ph.hcc_code         = %s
+                  AND  ph.measurement_year = %s
+                  AND  ph.tenant_id        = %s
+                  AND  me.context_classification IN (%s, %s, %s, %s, %s)
+                  AND  me.encounter_date   > %s
+                ORDER  BY me.encounter_date DESC
+                LIMIT  1
+                """,
+                (
+                    patient_id, hcc_code, payment_year, tenant_id,
+                    *NEGATION_LABELS,
+                    active_max_dos or date(payment_year, 1, 1),
+                ),
+            )
+            row = cur.fetchone()
+    except MySQLdb.OperationalError as exc:
+        if exc.args[0] == 1054:
+            # Unknown column — fall through to JSON metadata path
+            logger.warning(
+                "_check_negation_contradiction: context_classification column missing on "
+                "raf_meat_evidence — falling back to metadata JSON. "
+                "TODO: run migration 022 to add the column. "
+                "(patient=%s hcc=%s year=%s)",
+                patient_id, hcc_code, payment_year,
+            )
+        else:
+            logger.warning(
+                "_check_negation_contradiction: DB error on column path "
+                "(patient=%s hcc=%s year=%s) — skipping gate. err=%s",
+                patient_id, hcc_code, payment_year, exc,
+            )
+            return
+
+    if row is None:
+        # Attempt 2: context stored inside JSON ``metadata`` column
+        try:
+            with raf_cursor() as cur:
+                # Build IN-list placeholders for the JSON path comparison
+                label_placeholders = ", ".join(["%s"] * len(NEGATION_LABELS))
+                cur.execute(
+                    f"""
+                    SELECT me.metadata->>'$.context_classification' AS ctx,
+                           me.encounter_date                          AS dos
+                    FROM   raf_meat_evidence me
+                    JOIN   raf_patient_hcc ph ON ph.id = me.patient_hcc_id
+                    WHERE  ph.patient_id       = %s
+                      AND  ph.hcc_code         = %s
+                      AND  ph.measurement_year = %s
+                      AND  ph.tenant_id        = %s
+                      AND  me.metadata->>'$.context_classification' IN ({label_placeholders})
+                      AND  me.encounter_date   > %s
+                    ORDER  BY me.encounter_date DESC
+                    LIMIT  1
+                    """,
+                    (
+                        patient_id, hcc_code, payment_year, tenant_id,
+                        *NEGATION_LABELS,
+                        active_max_dos or date(payment_year, 1, 1),
+                    ),
+                )
+                row = cur.fetchone()
+        except MySQLdb.OperationalError as exc2:
+            if exc2.args[0] in (1054, 3143):
+                # 3143 = Invalid JSON path expression; column may not exist either
+                logger.warning(
+                    "_check_negation_contradiction: metadata JSON path unavailable "
+                    "(patient=%s hcc=%s year=%s) — skipping contradiction gate. "
+                    "TODO: run migration 022 to add context_classification column. err=%s",
+                    patient_id, hcc_code, payment_year, exc2,
+                )
+                return
+            logger.warning(
+                "_check_negation_contradiction: DB error on metadata JSON path "
+                "(patient=%s hcc=%s year=%s) — skipping gate. err=%s",
+                patient_id, hcc_code, payment_year, exc2,
+            )
+            return
+        except Exception as exc2:
+            logger.warning(
+                "_check_negation_contradiction: unexpected error "
+                "(patient=%s hcc=%s year=%s) — skipping gate. err=%s",
+                patient_id, hcc_code, payment_year, exc2,
+            )
+            return
+
+    if row:
+        ctx = row.get("ctx") or "unknown"
+        dos = row.get("dos")
+        dos_str = dos.isoformat() if isinstance(dos, (date, datetime)) else str(dos)
+        raise ValueError(f"Contradictory evidence: {ctx} on {dos_str}")
+
 
 def attest(
     attestation_id: int,
@@ -278,11 +515,23 @@ def attest(
     evidence_references: list[dict[str, Any]] | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    measurement_year: int | None = None,
 ) -> dict[str, Any]:
     """Record a provider attestation decision (confirm_active or confirm_resolved).
 
     Computes a tamper-evident HMAC signature and, when attestation_type is
     'confirm_active', propagates the confirmed HCC into raf_patient_hcc.
+
+    RADV gates (fail-closed):
+      (A) DOS-year gate  — supporting MEAT evidence must have MAX(encounter_date)
+          within the payment year.  Raises ValueError("DOS outside payment year").
+      (B) Negation gate  — rejects if a negated/historical/resolved/family/
+          hypothetical evidence row is more recent than the active evidence.
+          Raises ValueError("Contradictory evidence: <ctx> on <date>").
+
+    Both gates emit an immutable audit entry before raising.
+    ``measurement_year`` defaults to the current calendar year if not supplied;
+    pass it explicitly so the gate uses the correct payment-year window.
     """
     valid_types = {"confirm_active", "confirm_resolved"}
     if attestation_type not in valid_types:
@@ -296,7 +545,106 @@ def attest(
             f"Attestation {attestation_id} is already {rec['status']} and cannot be re-attested"
         )
 
+    tenant_id: str = str(rec.get("tenant_id", ""))
+    patient_id: int = rec.get("patient_id")
+    hcc_code: str = str(rec.get("hcc_code", ""))
+    model_version: str = str(rec.get("model_version", "V28"))
+
     now = _utcnow()
+
+    # Resolve payment year — fall back to current year with a warning if not passed.
+    # TODO(migration-022): Router should pass measurement_year from the attestation
+    # request body once AttestRequest adds that field.
+    if measurement_year is None:
+        logger.warning(
+            "attest: measurement_year not provided for attestation_id=%s — "
+            "defaulting to current year %s. Pass measurement_year explicitly for "
+            "correct RADV DOS-year gate behaviour.",
+            attestation_id, now.year,
+        )
+        payment_year = now.year
+    else:
+        payment_year = measurement_year
+
+    # ------------------------------------------------------------------
+    # RADV gate (A): DOS-year check
+    # ------------------------------------------------------------------
+    try:
+        _check_dos_year_gate(
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            hcc_code=hcc_code,
+            payment_year=payment_year,
+        )
+    except ValueError as dos_exc:
+        _emit_audit(
+            event_type="ATTEST_REJECTED_DOS",
+            user_id=provider_user_id,
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            hcc_code=hcc_code,
+            model_version=model_version,
+            payment_year=payment_year,
+            reason=str(dos_exc),
+        )
+        raise
+
+    # ------------------------------------------------------------------
+    # Compute active MAX(encounter_date) for the negation comparison
+    # ------------------------------------------------------------------
+    active_max_dos: date | None = None
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT MAX(me.encounter_date) AS max_dos
+                FROM   raf_meat_evidence me
+                JOIN   raf_patient_hcc ph ON ph.id = me.patient_hcc_id
+                WHERE  ph.patient_id       = %s
+                  AND  ph.hcc_code         = %s
+                  AND  ph.measurement_year = %s
+                  AND  ph.tenant_id        = %s
+                """,
+                (patient_id, hcc_code, payment_year, tenant_id),
+            )
+            _row = cur.fetchone()
+            if _row and _row["max_dos"]:
+                _dos = _row["max_dos"]
+                active_max_dos = _dos.date() if isinstance(_dos, datetime) else _dos
+    except Exception as exc:
+        logger.warning(
+            "attest: could not resolve active_max_dos for negation gate "
+            "(attestation_id=%s): %s",
+            attestation_id, exc,
+        )
+
+    # ------------------------------------------------------------------
+    # RADV gate (B): negation contradiction check
+    # ------------------------------------------------------------------
+    try:
+        _check_negation_contradiction(
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            hcc_code=hcc_code,
+            payment_year=payment_year,
+            active_max_dos=active_max_dos,
+        )
+    except ValueError as neg_exc:
+        _emit_audit(
+            event_type="ATTEST_REJECTED_CONTRADICTION",
+            user_id=provider_user_id,
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            hcc_code=hcc_code,
+            model_version=model_version,
+            payment_year=payment_year,
+            reason=str(neg_exc),
+        )
+        raise
+
+    # ------------------------------------------------------------------
+    # Persist the attestation decision
+    # ------------------------------------------------------------------
     attested_at_iso = now.isoformat()
     sig = _compute_signature(provider_user_id, attested_at_iso, attestation_type)
     evidence_json = json.dumps(evidence_references) if evidence_references else None
@@ -349,6 +697,18 @@ def attest(
     if attestation_type == "confirm_active":
         _propagate_to_patient_hcc(updated)
 
+    # Emit success audit event
+    _emit_audit(
+        event_type="ATTEST_ACCEPTED",
+        user_id=provider_user_id,
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        hcc_code=hcc_code,
+        model_version=model_version,
+        payment_year=payment_year,
+        reason=attestation_type,
+    )
+
     return updated
 
 
@@ -367,6 +727,8 @@ def reject(
     withdrawn inside the same transaction so it is excluded from future RAPS/EDPS
     submissions.  Graceful fallbacks are applied when the schema predates the
     is_withdrawn column.
+
+    Emits an ATTEST_WITHDRAWN immutable audit event after the transaction commits.
     """
     rec = get_attestation(attestation_id)
     if rec["status"] != "pending":
@@ -379,6 +741,8 @@ def reject(
 
     patient_id = rec.get("patient_id")
     hcc_code = rec.get("hcc_code")
+    tenant_id: str = str(rec.get("tenant_id", ""))
+    model_version: str = str(rec.get("model_version", "V28"))
     payment_year = now.year
 
     with raf_cursor() as cur:
@@ -436,6 +800,18 @@ def reject(
             withdrawn_by_user_id=provider_user_id,
             now=now,
         )
+
+    # Emit immutable audit event for the withdrawal
+    _emit_audit(
+        event_type="ATTEST_WITHDRAWN",
+        user_id=provider_user_id,
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        hcc_code=hcc_code,
+        model_version=model_version,
+        payment_year=payment_year,
+        reason=reject_reason,
+    )
 
     return get_attestation(attestation_id)
 

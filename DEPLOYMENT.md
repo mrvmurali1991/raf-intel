@@ -1,5 +1,54 @@
 # RAF Intelligence — Deployment Guide
 
+## Pre-deploy checklist
+
+> **Why this exists:** The production server frequently carries uncommitted edits
+> and unpushed commits (WIP drift). A blind `git pull` can silently overwrite
+> in-progress work or leave the running containers out of sync with the new code.
+> Run every item below before touching Docker on `10.1.0.204`.
+
+- [ ] **1. Check server git state** — SSH in and confirm there are no uncommitted
+  edits or unpushed commits before pulling:
+  ```bash
+  cd /home/ubuntu/raf-intelligence
+  git status
+  git log origin/local..HEAD --oneline   # commits not yet on remote
+  ```
+  Stash or commit any WIP before proceeding; never `git pull` over untracked
+  changes.
+
+- [ ] **2. Run smoke_test.sh** — execute on the server and confirm every check
+  passes before deploying:
+  ```bash
+  bash /home/ubuntu/raf-intelligence/scripts/smoke_test.sh
+  ```
+
+- [ ] **3. Verify binlog expiry is still set** — host MySQL resets runtime vars on
+  restart. Confirm the persisted config is in place (see `ops/pending-server-fixes.md` §2):
+  ```bash
+  mysql -u root -p -e "SHOW VARIABLES LIKE 'binlog_expire_logs_seconds';"
+  # Expected value: 7200
+  ```
+
+- [ ] **4. Check TLS cert expiry** — confirm both domains are not within 30 days of
+  expiry (see `ops/pending-server-fixes.md` §6):
+  ```bash
+  bash /home/ubuntu/raf-intelligence/scripts/check_cert_expiry.sh
+  ```
+
+- [ ] **5. Verify .env has not drifted** — confirm `DB_SSL_ENABLED=false` is still
+  present (production MySQL has no TLS; removing this flag causes connection
+  failures):
+  ```bash
+  grep DB_SSL_ENABLED /home/ubuntu/raf-intelligence/.env
+  # Expected: DB_SSL_ENABLED=false
+  ```
+
+- [ ] **6. Confirm no live demo is in progress** — restarts cause a ~10–30 s outage
+  per service and will disrupt any active demo session. Check with the team first.
+
+---
+
 ## Server Details
 
 | Item | Value |
@@ -57,6 +106,22 @@ ssh -i ~/Downloads/openvpn-key-v2.pem ubuntu@10.1.0.204
 cd /home/ubuntu/raf-intelligence
 git pull origin local
 ```
+
+### 2.5. Smoke test (run after build, before up)
+
+```bash
+bash scripts/smoke_test.sh
+```
+
+Run this after every `docker compose build` and before `docker compose up -d`.
+The script boots a throwaway backend container (never joined to the live
+compose network), verifies that all critical Python modules import cleanly
+— including `app.main`, `attestation_service`, `meat_evidence_service`,
+`immutable_audit`, `suspect_engine`, and `raf.calculator` — and then probes
+the `/health` endpoint with up to 30 seconds of polling.  A non-zero exit
+means a dependency is missing or broken (e.g. the tenacity import failure
+that previously reached production); fix the issue before proceeding.
+The container is killed and removed automatically regardless of outcome.
 
 ### 3. Deploy Backend Only (fast — no build needed)
 

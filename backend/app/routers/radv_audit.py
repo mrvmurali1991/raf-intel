@@ -27,11 +27,11 @@ established in routers/audit.py and routers/meat.py.  No SQLAlchemy Session.
 # Do NOT add 'from __future__ import annotations' — breaks FastAPI schema gen.
 
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_role
 from app.services.radv_audit_service import (
     check_meat_compliance,
     generate_radv_report,
@@ -178,3 +178,69 @@ def get_meat_compliance(
             status_code=500,
             detail="Failed to check MEAT compliance",
         )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/radv/audit-integrity
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/audit-integrity",
+    summary="On-demand immutable audit-chain integrity check (admin/auditor only)",
+    response_model=None,
+)
+def get_audit_integrity(
+    current_user: dict = Depends(require_role("admin", "auditor")),
+) -> dict:
+    """Run ``verify_audit_chain()`` on demand and return the result.
+
+    Requires ``admin`` or ``auditor`` role.
+
+    Response schema::
+
+        {
+            "ok": bool,
+            "last_verified_at": "ISO-8601",
+            "chain_length": int,
+            "first_broken_id": int | null,   # line number of first broken entry
+            "error_count": int,
+            "errors": ["..."]   # up to 20 representative errors
+        }
+    """
+    from app.services.immutable_audit import _AUDIT_FILE, verify_audit_chain
+
+    try:
+        ok, errors = verify_audit_chain()
+    except Exception as exc:
+        logger.error("audit-integrity check failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Audit chain verification failed")
+
+    # Count chain length (number of non-empty lines in JSONL)
+    chain_length = 0
+    try:
+        if _AUDIT_FILE.exists():
+            with open(_AUDIT_FILE, encoding="utf-8") as f:
+                chain_length = sum(1 for line in f if line.strip())
+    except Exception:
+        pass
+
+    # Extract first broken line number from error messages ("Line N: ...")
+    first_broken_id: int | None = None
+    for err in errors:
+        parts = err.split(":")
+        if parts and parts[0].startswith("Line "):
+            try:
+                first_broken_id = int(parts[0].replace("Line", "").strip())
+                break
+            except ValueError:
+                pass
+
+    return {
+        "ok": ok,
+        "last_verified_at": datetime.now(tz=timezone.utc).isoformat(),
+        "chain_length": chain_length,
+        "first_broken_id": first_broken_id,
+        "error_count": len(errors),
+        "errors": errors[:20],
+    }

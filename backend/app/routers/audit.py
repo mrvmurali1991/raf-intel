@@ -6,6 +6,7 @@ Routes
 POST /api/audit/generate/{pid}   Generate a PDF audit package for a patient
 GET  /api/audit/packages         List previously generated packages
 GET  /api/audit/download/{fname} Download a PDF by filename
+GET  /api/audit/summary          Action counts grouped by type + top-10 users (admin/auditor)
 """
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
@@ -21,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.auth import get_current_user, get_tenant_id, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission, require_role
 from app.db import raf_cursor
 from app.services import openemr_connector as emr
 from app.services.audit_logger import log_phi_access
@@ -1295,3 +1296,109 @@ def _serialize(row: dict[str, Any] | None) -> dict[str, Any]:
     for k, v in row.items():
         result[k] = v.isoformat() if hasattr(v, "isoformat") else v
     return result
+
+
+# ---------------------------------------------------------------------------
+# Audit summary — admin / auditor only
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/summary",
+    summary="Audit action counts grouped by type and top-10 actors (admin/auditor only)",
+)
+def get_audit_summary(
+    date_from: date | None = Query(
+        None, description="Range start (inclusive), e.g. 2025-01-01"
+    ),
+    date_to: date | None = Query(
+        None, description="Range end (inclusive), e.g. 2025-03-31"
+    ),
+    resource_type: str | None = Query(
+        None,
+        description=(
+            "Narrow to one resource type, e.g. 'suspect', 'patient_hcc', "
+            "'attestation', 'user'"
+        ),
+    ),
+    current_user: dict = Depends(require_role("admin", "auditor")),
+    tenant_id: str = Depends(get_tenant_id),
+) -> dict[str, Any]:
+    """Return two summary tables for the requested date window:
+
+    - ``by_action``: total event count per ``action`` value, descending.
+    - ``top_actors``: top-10 users ranked by event count, with email and
+      display name so the frontend can show "Dr. Jones — 47 actions".
+
+    Both queries are scoped to the caller's tenant via ``users.tenant_id``.
+
+    If no date range is supplied the last 90 days are used.
+    """
+    from datetime import timedelta
+
+    if date_to is None:
+        date_to = date.today()
+    if date_from is None:
+        date_from = date_to - timedelta(days=90)
+
+    # Convert to MySQL-safe datetime strings
+    dt_start = f"{date_from.isoformat()} 00:00:00"
+    dt_end = f"{date_to.isoformat()} 23:59:59"
+
+    # Base WHERE fragment shared by both sub-queries
+    # Scoping: restrict to rows whose acting user belongs to this tenant.
+    # resource_type filter is optional.
+    resource_clause = "AND al.resource_type = %s" if resource_type else ""
+
+    # Build param tuples (we execute two separate queries)
+    base_params: list[Any] = [tenant_id, dt_start, dt_end]
+    if resource_type:
+        base_params.append(resource_type)
+
+    by_action_sql = f"""
+        SELECT al.action,
+               COUNT(*) AS event_count
+        FROM audit_log al
+        WHERE al.user_id IN (SELECT id FROM users WHERE tenant_id = %s)
+          AND al.created_at BETWEEN %s AND %s
+          {resource_clause}
+        GROUP BY al.action
+        ORDER BY event_count DESC
+    """
+
+    top_actors_sql = f"""
+        SELECT al.user_id,
+               u.email,
+               CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS display_name,
+               COUNT(*) AS event_count
+        FROM audit_log al
+        LEFT JOIN users u ON u.id = al.user_id
+        WHERE al.user_id IN (SELECT id FROM users WHERE tenant_id = %s)
+          AND al.created_at BETWEEN %s AND %s
+          {resource_clause}
+        GROUP BY al.user_id, u.email, u.first_name, u.last_name
+        ORDER BY event_count DESC
+        LIMIT 10
+    """
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(by_action_sql, base_params)
+            by_action_rows = cur.fetchall()
+
+            cur.execute(top_actors_sql, base_params)
+            top_actor_rows = cur.fetchall()
+    except Exception as exc:
+        logger.warning("get_audit_summary DB error tenant=%s: %s", tenant_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+    def _norm(row: dict[str, Any]) -> dict[str, Any]:
+        return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items()}
+
+    return {
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "resource_type": resource_type,
+        "by_action": [_norm(r) for r in by_action_rows],
+        "top_actors": [_norm(r) for r in top_actor_rows],
+    }
