@@ -10,6 +10,7 @@ import {
   useDismissSuspectCentral,
 } from "@/hooks/mutations/useRAFCentralMutations";
 import ExplainPanel from "@/components/ExplainPanel";
+import { confidenceTier } from "@/lib/confidence";
 import type { SuspectCard } from "../_shared";
 import { SemiGauge } from "./SemiGauge";
 import { DismissReasonDialog } from "./DismissReasonDialog";
@@ -71,8 +72,7 @@ export function SuspectCardView({
   };
 
   const confPct = Math.round(suspect.confidence * 100);
-  const gaugeColor: "emerald" | "amber" | "red" =
-    confPct >= 85 ? "emerald" : confPct >= 70 ? "amber" : "red";
+  const gaugeColor = confidenceTier(confPct).color;
 
   return (
     <Card className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
@@ -126,6 +126,15 @@ export function SuspectCardView({
         suspectLabel={suspect.label}
         open={showExplain}
         onClose={() => setShowExplain(false)}
+        busy={busy}
+        onAccept={async () => {
+          await acceptSuspect();
+          setShowExplain(false);
+        }}
+        onRequestDismiss={() => {
+          setShowExplain(false);
+          setShowDismissDialog(true);
+        }}
       />
       <DismissReasonDialog
         open={showDismissDialog}
