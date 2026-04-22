@@ -92,8 +92,6 @@ async def lifespan(app: FastAPI):
     """Verify DB connectivity on startup and log a summary."""
     logger.info("RAF Intelligence backend starting...")
     init_monitoring()
-    init_metrics(app)
-    init_telemetry(app)
 
     app.state.start_time = datetime.now(timezone.utc)
     app.state.request_count = 0
@@ -298,6 +296,11 @@ Most endpoints require a valid JWT access token.
     redoc_url="/redoc" if settings.app_env != "production" else None,
     openapi_url="/openapi.json" if settings.app_env != "production" else None,
 )
+
+# Register observability (must happen BEFORE the app receives its first request —
+# Starlette refuses add_middleware after startup, so keep these at module scope).
+init_metrics(app)
+init_telemetry(app)
 
 # Register exception handlers and rate limiter
 register_exception_handlers(app)
