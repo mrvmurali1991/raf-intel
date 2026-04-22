@@ -134,7 +134,10 @@ def upgrade() -> None:
     #    REGEXP_SUBSTR is MySQL 8.0+.  Guarded so a re-run skips already-
     #    populated rows and skips entirely if the column wasn't just added.
     # ------------------------------------------------------------------
-    if _column_exists("raf_suspect_conditions", "reviewed_by_user_id"):
+    if (
+        _column_exists("raf_suspect_conditions", "reviewed_by_user_id")
+        and _column_exists("raf_suspect_conditions", "reviewed_by")
+    ):
         _x(
             "UPDATE `raf_suspect_conditions` "
             "SET reviewed_by_user_id = CAST(REGEXP_SUBSTR(reviewed_by, '[0-9]+') AS UNSIGNED) "
@@ -142,7 +145,10 @@ def upgrade() -> None:
             "  AND reviewed_by_user_id IS NULL"
         )
 
-    if _column_exists("raf_patient_hcc", "reviewed_by_user_id"):
+    if (
+        _column_exists("raf_patient_hcc", "reviewed_by_user_id")
+        and _column_exists("raf_patient_hcc", "reviewed_by")
+    ):
         _x(
             "UPDATE `raf_patient_hcc` "
             "SET reviewed_by_user_id = CAST(REGEXP_SUBSTR(reviewed_by, '[0-9]+') AS UNSIGNED) "
@@ -152,7 +158,10 @@ def upgrade() -> None:
 
     # provider_attestations uses provider_user_id for the numeric id already;
     # copy it into attested_by_user_id for rows that pre-date this migration.
-    if _column_exists("provider_attestations", "attested_by_user_id"):
+    if (
+        _column_exists("provider_attestations", "attested_by_user_id")
+        and _column_exists("provider_attestations", "provider_user_id")
+    ):
         _x(
             "UPDATE `provider_attestations` "
             "SET attested_by_user_id = provider_user_id "
