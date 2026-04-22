@@ -526,6 +526,12 @@ services:
     networks:
       - raf-internal
       - raf-external
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:

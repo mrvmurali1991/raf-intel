@@ -40,6 +40,8 @@ interface ReviewItem {
   meat?: { monitor: boolean; evaluate: boolean; assess: boolean; treat: boolean } | null;
   status: string;
   created_at?: string | null;
+  days_to_cutoff?: number | null;
+  expected_dollar_impact?: number | null;
 }
 
 interface CandidatesResponse { items: ReviewItem[]; total: number; }
@@ -57,9 +59,11 @@ function confColor(c: number | null): string {
   return C.textSubtle;
 }
 
-async function fetchCandidates(kind: ItemKind): Promise<CandidatesResponse> {
+type SortBy = "deadline" | "dollars" | "priority";
+
+async function fetchCandidates(kind: ItemKind, sortBy: SortBy): Promise<CandidatesResponse> {
   const { data } = await api.get<CandidatesResponse>("/api/review/candidates", {
-    params: { kind, status: "open", limit: 500 },
+    params: { kind, status: "open", limit: 500, sort_by: sortBy },
   });
   return data;
 }
@@ -99,6 +103,69 @@ function MeatPills({ m }: { m: ReviewItem["meat"] }) {
 }
 
 /* ====================================================================== */
+/* Evidence snippet with optional span highlight                           */
+/* ====================================================================== */
+function EvidenceSnippet({
+  it, onOpen,
+}: {
+  it: ReviewItem;
+  onOpen: (it: ReviewItem) => void;
+}) {
+  const snip = it.evidence_snippet;
+  if (!snip) return null;
+
+  const span = it.evidence_span;
+  const hasOffsets = span != null && span[0] >= 0 && span[1] > span[0] && span[1] <= snip.length;
+
+  if (hasOffsets) {
+    const [s, e] = span as [number, number];
+    const CTX = 20;
+    const leadEllipsis = s > CTX;
+    const trailEllipsis = (e + CTX) < snip.length;
+    const pre  = snip.slice(Math.max(0, s - CTX), s);
+    const mid  = snip.slice(s, e);
+    const post = snip.slice(e, Math.min(snip.length, e + CTX));
+    return (
+      <div style={{ marginTop: 4 }}>
+        <span style={{ fontSize: 12, color: "#64748B", fontStyle: "italic" }}>
+          {leadEllipsis ? "…" : ""}{pre}
+          <mark style={{
+            backgroundColor: "#FEF08A", borderRadius: 3,
+            padding: "0 2px", fontStyle: "normal",
+          }}>{mid}</mark>
+          {post}{trailEllipsis ? "…" : ""}
+        </span>
+        {it.evidence_source_id != null && (
+          <button
+            onClick={() => onOpen(it)}
+            title="Open full note"
+            style={{
+              marginLeft: 8, padding: "1px 6px", border: "1px solid #E2E8F0",
+              borderRadius: 5, background: "#fff", fontSize: 11,
+              fontWeight: 600, color: "#64748B", cursor: "pointer",
+            }}
+          >Open full note</button>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback: offsets absent — bold-wrap the whole snippet
+  return (
+    <button
+      onClick={() => onOpen(it)}
+      title="Open source note"
+      style={{
+        marginTop: 4, padding: 0, border: "none", background: "none",
+        cursor: "pointer", textAlign: "left",
+        fontSize: 12, color: "#64748B", fontStyle: "italic",
+        textDecoration: "underline dotted", textUnderlineOffset: 2,
+      }}
+    ><strong>&ldquo;{snip}&rdquo;</strong></button>
+  );
+}
+
+/* ====================================================================== */
 /* Page                                                                    */
 /* ====================================================================== */
 
@@ -108,10 +175,11 @@ export default function ReviewQueuePage() {
   const toast = useToast();
   const [tab, setTab] = useState<ItemKind>("hcc_candidate");
   const [editing, setEditing] = useState<{ id: string; icd10: string } | null>(null);
+  const [sortBy, setSortBy] = useState<SortBy>("deadline");
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["review-queue", tab],
-    queryFn: () => fetchCandidates(tab),
+    queryKey: ["review-queue", tab, sortBy],
+    queryFn: () => fetchCandidates(tab, sortBy),
   });
 
   const counts = useMemo(() => ({
@@ -141,6 +209,8 @@ export default function ReviewQueuePage() {
   };
 
   const items = data?.items ?? [];
+  const hasCutoff = items.some((it) => it.days_to_cutoff != null);
+  const hasDollars = items.some((it) => it.expected_dollar_impact != null);
 
   return (
     <div style={{
@@ -157,7 +227,7 @@ export default function ReviewQueuePage() {
         }}>
           <Sparkles size={22} color="#fff" strokeWidth={2.25} />
         </div>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
             Review Queue
           </h1>
@@ -165,6 +235,26 @@ export default function ReviewQueuePage() {
             AI-generated work items pending coder review.
             Every decision is written to the audit log.
           </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label htmlFor="rq-sort" style={{ fontSize: 12, fontWeight: 600, color: C.label }}>
+            Sort by
+          </label>
+          <select
+            id="rq-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            style={{
+              height: 32, padding: "0 10px", borderRadius: 8,
+              border: `1px solid ${C.border}`, backgroundColor: "#fff",
+              fontSize: 12, fontWeight: 600, color: C.text,
+              fontFamily: FONT_SYS, cursor: "pointer",
+            }}
+          >
+            <option value="deadline">Deadline</option>
+            <option value="dollars">Dollar Impact</option>
+            <option value="priority">Priority</option>
+          </select>
         </div>
       </div>
 
@@ -216,7 +306,16 @@ export default function ReviewQueuePage() {
       }}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "minmax(200px,1.4fr) minmax(240px,2fr) 110px 140px 120px 200px",
+          gridTemplateColumns: [
+            "minmax(200px,1.4fr)",
+            "minmax(240px,2fr)",
+            "110px",
+            "140px",
+            "120px",
+            hasCutoff ? "90px" : null,
+            hasDollars ? "110px" : null,
+            "200px",
+          ].filter(Boolean).join(" "),
           gap: 14, padding: "12px 22px", backgroundColor: C.bgBand,
           borderBottom: `1px solid ${C.border}`,
           fontSize: 11, fontWeight: 600, textTransform: "uppercase",
@@ -227,6 +326,8 @@ export default function ReviewQueuePage() {
           <div>HCC</div>
           <div>Confidence</div>
           <div>MEAT</div>
+          {hasCutoff && <div>Days Left</div>}
+          {hasDollars && <div>$ Impact</div>}
           <div style={{ justifySelf: "end" }}>Actions</div>
         </div>
 
@@ -254,7 +355,16 @@ export default function ReviewQueuePage() {
           return (
             <div key={it.id} style={{
               display: "grid",
-              gridTemplateColumns: "minmax(200px,1.4fr) minmax(240px,2fr) 110px 140px 120px 200px",
+              gridTemplateColumns: [
+                "minmax(200px,1.4fr)",
+                "minmax(240px,2fr)",
+                "110px",
+                "140px",
+                "120px",
+                hasCutoff ? "90px" : null,
+                hasDollars ? "110px" : null,
+                "200px",
+              ].filter(Boolean).join(" "),
               gap: 14, padding: "14px 22px", alignItems: "center",
               borderBottom: idx < items.length - 1 ? `1px solid ${C.rowDivider}` : "none",
               borderLeft: `3px solid ${confColor(c)}`,
@@ -280,18 +390,7 @@ export default function ReviewQueuePage() {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {it.condition ?? (it.hcc ? `HCC ${it.hcc}` : "—")}
                 </div>
-                {it.evidence_snippet && (
-                  <button
-                    onClick={() => openEvidence(it)}
-                    title="Open source note with span highlighted"
-                    style={{
-                      marginTop: 4, padding: 0, border: "none", background: "none",
-                      cursor: "pointer", textAlign: "left",
-                      fontSize: 12, color: C.textSubtle, fontStyle: "italic",
-                      textDecoration: "underline dotted", textUnderlineOffset: 2,
-                    }}
-                  >“{it.evidence_snippet}”</button>
-                )}
+                <EvidenceSnippet it={it} onOpen={openEvidence} />
                 {isEditing && (
                   <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
                     <input
@@ -352,6 +451,26 @@ export default function ReviewQueuePage() {
 
               {/* MEAT */}
               <div><MeatPills m={it.meat} /></div>
+
+              {/* Days to cutoff */}
+              {hasCutoff && (
+                <div style={{
+                  fontSize: 12, fontWeight: 700,
+                  color: it.days_to_cutoff != null && it.days_to_cutoff <= 7 ? C.high : C.text,
+                  fontFamily: FONT_MONO,
+                }}>
+                  {it.days_to_cutoff != null ? `${it.days_to_cutoff}d` : "—"}
+                </div>
+              )}
+
+              {/* Expected dollar impact */}
+              {hasDollars && (
+                <div style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT_MONO, color: C.text }}>
+                  {it.expected_dollar_impact != null
+                    ? `$${it.expected_dollar_impact.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+                    : "—"}
+                </div>
+              )}
 
               {/* Actions */}
               <div style={{

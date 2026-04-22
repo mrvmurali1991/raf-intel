@@ -30,13 +30,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_permission
 from app.cache import cache_delete_pattern, cache_get, cache_set
 from app.config import settings
 from app.db import openemr_cursor, raf_cursor
+from app.rate_limit import limiter
 from app.services.cache_strategy import get_active_connection_id
 from app.services.celery_tasks import task_refresh_meat_for_patient
 from app.services.openemr_connector import (
@@ -45,6 +46,7 @@ from app.services.openemr_connector import (
     push_prescription,
     push_procedure_order,
 )
+from app.services.patient_service import patient_is_accessible
 from app.services.raf.calculator import calculate_raf_score, get_raf_breakdown
 from app.services.recapture_gap_service import get_patient_gaps
 from app.services.suspect_engine import (
@@ -54,6 +56,44 @@ from app.services.suspect_engine import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _require_patient_access(
+    pid: int,
+    tenant_id: str,
+    *,
+    current_user: dict | None = None,
+    action: str = "view",
+    resource: str = "raf_central",
+) -> None:
+    """Raise 404 if *pid* is not accessible to *tenant_id*; emit PHI audit log.
+
+    Guards action endpoints that take `pid` from the URL so a caller in
+    tenant A cannot drive side-effects (EMR writes, cache invalidation,
+    MEAT inserts) against tenant B's patient by supplying the pid in the
+    path and one of their own suspect_ids in the body.  Also emits a
+    :func:`log_phi_access` record so every raf-central patient touch
+    leaves a HIPAA §164.312(b) audit trail.
+    """
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    if not patient_is_accessible(pid, tenant_id):
+        raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+    try:
+        from app.services.audit_logger import log_phi_access
+        user = "unknown"
+        if current_user:
+            user = current_user.get("email") or current_user.get("sub") or "unknown"
+        log_phi_access(
+            action=action,
+            resource=resource,
+            patient_id=pid,
+            user=user,
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:  # never let audit logging break the request path
+        logger.debug("raf_central audit log failed for pid=%s: %s", pid, exc)
+
 
 router = APIRouter(prefix="/api/raf-central", tags=["raf-central"])
 
@@ -446,15 +486,16 @@ def _build_financial(raf_bar: LiveRAFBar, suspects: list[SuspectCard], recapture
     response_model=RAFCentralPayload,
     summary="Unified RAF Central panel payload for a single patient",
 )
+@limiter.limit("60/minute")
 def get_raf_central(
+    request: Request,
     pid: int = Path(..., description="OpenEMR patient PID"),
     year: int | None = None,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "read")),
 ) -> RAFCentralPayload:
     tenant_id: str | None = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id or "", current_user=current_user)
 
     measurement_year = year or date.today().year
 
@@ -642,8 +683,7 @@ def action_accept_suspect(
     _perm: None = Depends(require_permission("suspects", "write")),
 ) -> AcceptSuspectResponse:
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
     result = accept_suspect(body.suspect_id, reviewed_by=reviewer, tenant_id=tenant_id)
@@ -668,8 +708,7 @@ def action_dismiss_suspect(
     _perm: None = Depends(require_permission("suspects", "write")),
 ) -> DismissSuspectResponse:
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
     result = dismiss_suspect(
@@ -696,8 +735,7 @@ def action_mark_meat_reviewed(
     documentation, not EMR content.
     """
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
     today = date.today()
@@ -753,7 +791,7 @@ def action_mark_meat_reviewed(
         raise
     except Exception as exc:
         logger.error("raf-central mark-meat-reviewed failed pid=%s: %s", pid, exc)
-        raise HTTPException(status_code=500, detail=f"MEAT write failed: {exc}")
+        raise HTTPException(status_code=500, detail="MEAT write failed")
 
     _invalidate_panel_cache(pid, tenant_id)
     return MarkMEATReviewedResponse(ok=True, meat_status=status, reviewed_by=reviewer)
@@ -771,8 +809,7 @@ def action_add_assessment_note(
     encounter_id is provided.
     """
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
@@ -801,7 +838,7 @@ def action_add_assessment_note(
                 )
     except Exception as exc:
         logger.error("raf-central add-assessment-note failed pid=%s: %s", pid, exc)
-        raise HTTPException(status_code=500, detail=f"EMR note write failed: {exc}")
+        raise HTTPException(status_code=500, detail="EMR note write failed")
 
     _invalidate_panel_cache(pid, tenant_id)
     return AddAssessmentNoteResponse(ok=True, encounter_id=body.encounter_id, author=reviewer)
@@ -818,8 +855,7 @@ def action_upgrade_code(
     more-specific one. Updates OpenEMR `billing.code` + `code_text`.
     """
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     try:
         with openemr_cursor() as cur:
@@ -834,7 +870,7 @@ def action_upgrade_code(
             affected = cur.rowcount or 0
     except Exception as exc:
         logger.error("raf-central upgrade-code failed pid=%s: %s", pid, exc)
-        raise HTTPException(status_code=500, detail=f"code upgrade failed: {exc}")
+        raise HTTPException(status_code=500, detail="code upgrade failed")
 
     if affected == 0:
         raise HTTPException(
@@ -858,8 +894,7 @@ def action_recalculate(
     surface the new RAF value in the panel.
     """
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     measurement_year = year or date.today().year
     _invalidate_panel_cache(pid, tenant_id)
@@ -914,8 +949,7 @@ def action_start_treatment(
 ) -> StartTreatmentResponse:
     """Write a new prescription into OpenEMR to satisfy a MEAT-Treatment gap."""
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     hcc_key = str(body.hcc_code).replace("HCC", "").strip()
     fallback = _DEFAULT_TREATMENT_BY_HCC.get(hcc_key, {})
@@ -1046,8 +1080,7 @@ def action_order_lab(
 ) -> OrderLabResponse:
     """Place a lab order in OpenEMR to close a MEAT 'Monitoring' gap."""
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
 
@@ -1075,7 +1108,7 @@ def action_order_lab(
         )
     except Exception as exc:
         logger.error("order-lab push failed pid=%s hcc=%s: %s", pid, body.hcc_code, exc)
-        raise HTTPException(status_code=500, detail=f"order-lab write failed: {exc}")
+        raise HTTPException(status_code=500, detail="order-lab write failed")
 
     if order_id is None:
         from app.db import NoActiveEMRConnection  # local import — avoid cycle
@@ -1257,8 +1290,7 @@ def explain_suspect(
     into a typed list so the UI can render icons/grouped rows per source.
     """
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     with raf_cursor() as cur:
         cur.execute(
@@ -1335,8 +1367,7 @@ def action_refresh_meat(
     notes and HCCs, blocking a FastAPI threadpool worker for the full duration.
     """
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant context for this user")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
 
     req = body or RefreshMEATRequest()
     try:
@@ -1351,7 +1382,7 @@ def action_refresh_meat(
         )
     except Exception as exc:
         logger.exception("refresh-meat enqueue failed pid=%s", pid)
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue MEAT refresh: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to enqueue MEAT refresh")
 
     logger.info(
         "refresh-meat: enqueued task_id=%s pid=%s tenant=%s year=%s",

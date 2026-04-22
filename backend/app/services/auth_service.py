@@ -411,8 +411,20 @@ def _seed_default_permissions() -> None:
 
 
 def _seed_dev_admin_user() -> None:
-    """Seed a local admin account for development environments only."""
-    if settings.app_env != "development":
+    """Seed a local admin account for development environments only.
+
+    Both gates must pass:
+    1. app_env == "development"
+    2. allow_dev_admin_seed == True (explicit opt-in, defaults False)
+    Production instances therefore never seed a dev admin even if APP_ENV is
+    accidentally omitted and falls through to the "production" default.
+    """
+    if settings.app_env != "development" or not settings.allow_dev_admin_seed:
+        logger.info(
+            "dev admin seed skipped (APP_ENV=%s, allow_dev_admin_seed=%s)",
+            settings.app_env,
+            settings.allow_dev_admin_seed,
+        )
         return
 
     email = os.getenv("DEV_ADMIN_EMAIL", "admin@raf.health")

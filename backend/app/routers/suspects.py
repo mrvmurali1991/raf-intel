@@ -143,7 +143,9 @@ class DismissActionResponse(BaseModel):
 
 
 @router.get("", summary="List all open suspect conditions across all patients", response_model=SuspectListResponse)
+@limiter.limit("60/minute")
 def list_suspects(
+    request: Request,
     status: str = Query(
         default="open",
         description="Filter by status: open | accepted | dismissed | coded | all",
@@ -267,7 +269,9 @@ def scan_all_patients(
 
 
 @router.post("/bulk-update", summary="Bulk accept or dismiss multiple suspects")
+@limiter.limit("20/minute")
 def bulk_update(
+    request: Request,
     body: BulkUpdateRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
@@ -323,7 +327,9 @@ def bulk_update(
 
 
 @router.get("/{pid}", summary="Get suspect conditions for a specific patient", response_model=SuspectPatientResponse)
+@limiter.limit("60/minute")
 def get_patient_suspects(
+    request: Request,
     pid: int,
     status: str = Query(
         default="open",
@@ -344,19 +350,38 @@ def get_patient_suspects(
     Pass ``?year=2025`` to restrict results to a specific ``measurement_year``.
     When omitted, suspects for all years are returned.
     """
+    tenant_id: str = current_user.get("tenant_id") or ""
+    from app.services.audit_logger import log_phi_access
+    from app.services.patient_service import patient_is_accessible
+    if not patient_is_accessible(pid, tenant_id):
+        raise HTTPException(
+            status_code=404, detail=f"Patient {pid} not found"
+        )
+
     patient = get_patient(pid)
     if not patient:
         raise HTTPException(
             status_code=404, detail=f"Patient {pid} not found in OpenEMR"
         )
 
-    tenant_id: str = current_user.get("tenant_id") or ""
+    log_phi_access(
+        action="view",
+        resource="suspect",
+        patient_id=pid,
+        user=current_user.get("email") or current_user.get("sub") or "unknown",
+        details=f"status={status} year={year}",
+        tenant_id=tenant_id or "unknown",
+    )
+
     try:
         suspects: list[dict[str, Any]] = get_suspects_for_patient(
             pid, year=year, tenant_id=tenant_id or None
         )
     except Exception as exc:
-        logger.error("get_patient_suspects pid=%s: %s", pid, exc)
+        logger.error(
+            "get_patient_suspects pid=%s tenant=%s user=%s: %s",
+            pid, tenant_id, current_user.get("email") or current_user.get("id"), exc,
+        )
         raise HTTPException(
             status_code=500,
             detail="Internal server error",
@@ -423,7 +448,10 @@ def scan_patient(
             pid, year=year, tenant_id=tenant_id or None
         )
     except Exception as exc:
-        logger.error("scan_patient pid=%s: %s", pid, exc)
+        logger.error(
+            "scan_patient pid=%s tenant=%s user=%s: %s",
+            pid, tenant_id, current_user.get("email") or current_user.get("id"), exc,
+        )
         raise HTTPException(
             status_code=500, detail="Internal server error"
         )
@@ -433,7 +461,10 @@ def scan_patient(
         or f"Patient {pid}"
     )
 
-    logger.info("scan_patient: pid=%s found %s new suspects", pid, len(new_suspects))
+    logger.info(
+        "scan_patient: pid=%s tenant=%s user=%s found %s new suspects",
+        pid, tenant_id, current_user.get("email") or current_user.get("id"), len(new_suspects),
+    )
 
     return ScanPatientResponse(
         pid=pid,

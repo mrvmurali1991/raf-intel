@@ -259,12 +259,86 @@ class ModelListResponse(BaseModel):
     cms_blend_schedule: dict[str, Any]
 
 
+# Envelope response models for the RAF calculate / multi-model / dashboard
+# endpoints.  These lock the top-level field contract so the frontend can
+# rely on field names; nested dicts remain flexible to avoid schema churn
+# while the underlying calculator output evolves.
+
+
+class CalculateRAFResponse(BaseModel):
+    """Envelope for POST /api/raf/calculate/{pid}."""
+    model_config = {"extra": "allow"}
+
+    patient_id: int
+    patient_name: str | None = None
+    measurement_year: int
+    raf_score: float | None = None
+    final_raf: float | None = None
+    demographic_score: float | None = None
+    disease_score: float | None = None
+    interaction_score: float | None = None
+    hcc_count: int | None = None
+    model_segment: str | None = None
+    score_type: str | None = None
+    blend_weights: dict[str, Any] | None = None
+    calculated_at: str | None = None
+    hcc_details: list[dict[str, Any]] | None = None
+    dos_window: dict[str, Any] | None = None
+
+
+class CalculateMultiResponse(BaseModel):
+    """Envelope for POST /api/raf/calculate-multi/{pid}."""
+    model_config = {"extra": "allow"}
+
+    patient_id: int
+    patient_name: str | None = None
+    patient_age: int | None = None
+    patient_sex: str | None = None
+    payment_year: int | None = None
+    models_requested: list[str] | None = None
+    scores: dict[str, Any] | None = None
+    score_summary: list[dict[str, Any]] | None = None
+    hcc_overlap: dict[str, Any] | None = None
+    revenue_comparison: dict[str, Any] | None = None
+    recommended_actions: list[dict[str, Any]] | None = None
+    model_descriptions: dict[str, Any] | None = None
+
+
+class MultiModelScoresResponse(BaseModel):
+    """Envelope for GET /api/raf/scores/{pid}/multi-model."""
+    model_config = {"extra": "allow"}
+
+    patient_id: int
+    patient_name: str | None = None
+    measurement_year: int | None = None
+    scores: dict[str, Any] | None = None
+    score_summary: list[dict[str, Any]] | None = None
+    stored_cms_hcc: dict[str, Any] | None = None
+
+
+class RAFDashboardResponse(BaseModel):
+    """Envelope for GET /api/raf/dashboard."""
+    model_config = {"extra": "allow"}
+
+    measurement_year: int
+    population: dict[str, Any] | None = None
+    top_hccs: list[dict[str, Any]] | None = None
+    recent_calculations: list[dict[str, Any]] | None = None
+    blend_weights: dict[str, Any] | None = None
+    active_emr: dict[str, Any] | None = None
+
+
 # ---------------------------------------------------------------------------
 # POST /calculate/{pid}
 # ---------------------------------------------------------------------------
 
 
-@router.post("/calculate/{pid}", summary="Calculate RAF score for a patient", response_model_exclude_none=True)
+@router.post(
+    "/calculate/{pid}",
+    summary="Calculate RAF score for a patient",
+    response_model=CalculateRAFResponse,
+    response_model_exclude_none=True,
+)
 @limiter.limit("10/minute")
 async def calculate_raf(
     request: Request,
@@ -306,7 +380,21 @@ async def calculate_raf(
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
 
-    logger.debug("calculate_raf pid=%s tenant=%s user=%s", pid, tenant_id, current_user.get("id"))
+    logger.info(
+        "calculate_raf start pid=%s tenant=%s user=%s year=%s",
+        pid, tenant_id, current_user.get("email") or current_user.get("id"), body.year,
+    )
+    try:
+        from app.services.audit_logger import log_phi_access
+        log_phi_access(
+            action="analyze",
+            resource="raf_score",
+            patient_id=pid,
+            user=current_user.get("email") or current_user.get("sub") or "unknown",
+            tenant_id=tenant_id or "unknown",
+        )
+    except Exception as exc:
+        logger.debug("calculate_raf audit log failed pid=%s: %s", pid, exc)
     calc_year = body.year or date.today().year
     enrollment_override = (
         body.enrollment_info.model_dump() if body.enrollment_info else None
@@ -516,7 +604,9 @@ def calculate_all(
 
 
 @router.get("/scores/{pid}", summary="Get stored RAF score for a patient", response_model=RAFScoreResponse)
+@limiter.limit("60/minute")
 async def get_scores(
+    request: Request,
     pid: int,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
@@ -610,7 +700,9 @@ async def get_scores(
     response_model=RAFBreakdownResponse,
     response_model_exclude_none=True,
 )
+@limiter.limit("60/minute")
 async def get_breakdown(
+    request: Request,
     pid: int,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
@@ -1257,8 +1349,12 @@ class MultiModelRequest(BaseModel):
 @router.post(
     "/calculate-multi/{pid}",
     summary="Calculate RAF across multiple models simultaneously",
+    response_model=CalculateMultiResponse,
+    response_model_exclude_none=True,
 )
+@limiter.limit("10/minute")
 def calculate_multi(
+    request: Request,
     pid: int,
     body: MultiModelRequest = MultiModelRequest(),
     current_user: dict = Depends(get_current_user),
@@ -1296,6 +1392,18 @@ def calculate_multi(
     emr_patient = _get_patient(pid, tenant_id=tenant_id)
     if not emr_patient:
         raise HTTPException(status_code=404, detail=f"Patient {pid} not found")
+
+    try:
+        from app.services.audit_logger import log_phi_access
+        log_phi_access(
+            action="analyze",
+            resource="raf_multi_model",
+            patient_id=pid,
+            user=current_user.get("email") or current_user.get("sub") or "unknown",
+            tenant_id=tenant_id or "unknown",
+        )
+    except Exception as exc:
+        logger.debug("calculate_multi audit log failed pid=%s: %s", pid, exc)
 
     calc_year = body.year or date.today().year
 
@@ -1367,7 +1475,7 @@ def calculate_multi(
         logger.error("calculate_multi error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    patient_name = f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
+    patient_name = f"{emr_patient.get('fname', '')} {emr_patient.get('lname', '')}".strip()
     multi_result["patient_name"] = patient_name
     multi_result["patient_age"] = age
     multi_result["patient_sex"] = sex
@@ -1383,8 +1491,12 @@ def calculate_multi(
 @router.get(
     "/scores/{pid}/multi-model",
     summary="Compare stored CMS-HCC scores alongside RxHCC and HHS-HCC",
+    response_model=MultiModelScoresResponse,
+    response_model_exclude_none=True,
 )
+@limiter.limit("30/minute")
 def get_multi_model_scores(
+    request: Request,
     pid: int,
     year: int | None = Query(default=None),
     models: list[str] = Query(
@@ -1521,7 +1633,7 @@ def get_multi_model_scores(
         logger.error("multi_model calc error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    patient_name = f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
+    patient_name = f"{emr_patient.get('fname', '')} {emr_patient.get('lname', '')}".strip()
     v24_w, v28_w = _BLEND_WEIGHTS.get(calc_year, (0.0, 1.0))
 
     multi_result["patient_name"] = patient_name
@@ -1693,7 +1805,8 @@ def calculate_raf_full(
         from hccinfhir.datamodels import Demographics
         from hccinfhir.hccinfhir import HCCInFHIR
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"hccinfhir not available: {exc}")
+        logger.error("hccinfhir import failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="RAF engine unavailable")
 
     sex = "M" if gender.lower().startswith("m") else "F"
 
@@ -1717,7 +1830,8 @@ def calculate_raf_full(
             lti=institutional,
         )
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid demographics: {exc}")
+        logger.warning("Invalid demographics submitted: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid demographics")
 
     try:
         h = HCCInFHIR(model_name=model_name, coefficients_filename=coef_file)
@@ -1736,7 +1850,8 @@ def calculate_raf_full(
         )
         r = result.model_dump()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"RAF calculation failed: {exc}")
+        logger.error("RAF calculation failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="RAF calculation failed")
 
     # Separate HCC coefficients from disease interaction coefficients
     all_coefs: dict = r.get("coefficients") or {}
@@ -2004,8 +2119,15 @@ def icd10_to_hcc_crosswalk(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/dashboard", summary="RAF dashboard — population-level summary for the current year")
+@router.get(
+    "/dashboard",
+    summary="RAF dashboard — population-level summary for the current year",
+    response_model=RAFDashboardResponse,
+    response_model_exclude_none=True,
+)
+@limiter.limit("30/minute")
 def get_raf_dashboard(
+    request: Request,
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),

@@ -1,0 +1,73 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:raf-006-diabetes-no-complication",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "raf-006-diabetes-no-complication",
+        "birthDate": "1952-04-01",
+        "gender": "female"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-006-diabetes-no-complication-enc-1",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "raf-006-diabetes-no-complication-enc-1",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/raf-006-diabetes-no-complication"
+        },
+        "period": {
+          "start": "2024-06-15T10:00:00Z",
+          "end": "2024-06-15T10:30:00Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-006-diabetes-no-complication-cond-1",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "raf-006-diabetes-no-complication-cond-1",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "E119"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/raf-006-diabetes-no-complication"
+        },
+        "encounter": {
+          "reference": "Encounter/raf-006-diabetes-no-complication-enc-1"
+        },
+        "recordedDate": "2024-06-15"
+      }
+    }
+  ]
+}

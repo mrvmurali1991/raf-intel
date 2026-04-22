@@ -1,0 +1,73 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:raf-009-breast-cancer",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "raf-009-breast-cancer",
+        "birthDate": "1947-08-21",
+        "gender": "female"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-009-breast-cancer-enc-1",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "raf-009-breast-cancer-enc-1",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/raf-009-breast-cancer"
+        },
+        "period": {
+          "start": "2024-06-15T10:00:00Z",
+          "end": "2024-06-15T10:30:00Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-009-breast-cancer-cond-1",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "raf-009-breast-cancer-cond-1",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "C50911"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/raf-009-breast-cancer"
+        },
+        "encounter": {
+          "reference": "Encounter/raf-009-breast-cancer-enc-1"
+        },
+        "recordedDate": "2024-06-15"
+      }
+    }
+  ]
+}

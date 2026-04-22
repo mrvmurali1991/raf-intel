@@ -17,7 +17,9 @@ Endpoints:
 # Note: do NOT use 'from __future__ import annotations' here —
 # it breaks FastAPI's UploadFile parameter resolution.
 
+import hashlib
 import logging
+import os
 from typing import Any
 
 from fastapi import (
@@ -32,6 +34,7 @@ from fastapi import (
 )
 
 from app.auth import get_current_user, require_permission
+from app.db import raf_cursor
 from app.rate_limit import limiter
 from app.services import claims_service as svc
 from app.services.audit_logger import log_phi_access
@@ -42,6 +45,57 @@ router = APIRouter(prefix="/api/claims", tags=["claims"])
 
 # Maximum upload size: 100 MB
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
+# ---------------------------------------------------------------------------
+# Dedup feature flag — set CLAIMS_DEDUP=1 to enable content-hash idempotency
+# ---------------------------------------------------------------------------
+
+_CLAIMS_DEDUP_ENABLED = os.environ.get("CLAIMS_DEDUP", "0").strip() == "1"
+
+
+def _sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _check_claims_batch_duplicate(
+    tenant_id: str,
+    filename: str,
+    content_hash: str,
+) -> dict[str, Any] | None:
+    """Return an existing batch row if (tenant_id, filename, content_hash) already succeeded.
+
+    Falls back to filename + row_count + first_claim_id heuristic when the
+    content_hash column is absent.  Returns None when no duplicate is found or
+    the prior attempt failed (allow retry).
+    """
+    # Primary check: exact content hash match.
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, status, filename
+                  FROM claims_batches
+                 WHERE tenant_id = %s AND filename = %s AND content_hash = %s
+                 ORDER BY id DESC
+                 LIMIT 1
+                """,
+                (tenant_id or None, filename, content_hash),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                if str(row.get("status") or "") != svc.STATUS_FAILED:
+                    return dict(row)
+                return None  # prior attempt failed — allow retry
+    except Exception as exc:
+        exc_str = str(exc).lower()
+        if "content_hash" in exc_str or "unknown column" in exc_str:
+            logger.warning(
+                "claims: add `content_hash` column to claims_batches to enable dedup"
+            )
+        else:
+            logger.warning("claims: dedup hash check failed (non-fatal): %s", exc)
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +131,32 @@ async def upload_claims_file(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    tenant_id = str(current_user.get("tenant_id") or "")
+
+    # ---- Content-hash dedup (only when CLAIMS_DEDUP=1) -------------------
+    content_hash = _sha256_hex(content)
+    if _CLAIMS_DEDUP_ENABLED:
+        existing = _check_claims_batch_duplicate(tenant_id, filename, content_hash)
+        if existing is not None:
+            logger.info(
+                "claims: duplicate upload detected tenant=%s hash=%s batch_id=%s",
+                tenant_id,
+                content_hash[:16],
+                existing.get("id"),
+            )
+            return {
+                "batch_id": int(existing["id"]),
+                "filename": filename,
+                "file_format": None,
+                "file_size_bytes": len(content),
+                "claims_parsed": 0,
+                "claims_stored": 0,
+                "duplicate": True,
+                "warning": "duplicate_upload",
+                "status": str(existing.get("status") or svc.STATUS_PARSED),
+                "message": "Duplicate upload — this file has already been processed.",
+            }
+
     try:
         file_format, claims = svc.parse_claims_file(filename, content)
     except Exception as exc:
@@ -90,7 +170,6 @@ async def upload_claims_file(
         )
 
     try:
-        tenant_id = str(current_user.get("tenant_id") or "")
         batch_id = svc.create_batch(filename, file_format, len(content), uploaded_by, tenant_id=tenant_id)
         stored_count = svc.store_parsed_claims(batch_id, claims)
         svc.update_batch_status(batch_id, svc.STATUS_PARSED)
@@ -111,6 +190,7 @@ async def upload_claims_file(
         "file_size_bytes": len(content),
         "claims_parsed": len(claims),
         "claims_stored": stored_count,
+        "duplicate": False,
         "status": svc.STATUS_PARSED,
         "message": (
             f"Successfully parsed {stored_count} claims. "

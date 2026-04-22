@@ -831,30 +831,50 @@ def update_hcc_meat_status(
                 continue
 
     blocked: set[int] = set()
+    # Feature-flag gate — allows emergency rollback of clinical billing gate
+    # without redeploying. When disabled, candidate HCCs are promoted with
+    # only the legacy ceiling check (pre-billing-gate behaviour).
+    _gate_enabled = True
     try:
-        from datetime import date as _date_cls
+        from app.config import settings as _settings
+        _gate_enabled = bool(getattr(_settings, "use_clinical_billing_gate", True))
+    except Exception:
+        pass
 
-        from app.services.raf.clinical_rules.billing_gate import gate_billed_promotion
+    if _gate_enabled:
+        try:
+            from datetime import date as _date_cls
 
-        gate_out = gate_billed_promotion(
-            patient_id=patient_id,
-            candidate_hccs=candidate_hccs,
-            dos=_date_cls(year, 12, 31),
-        )
-        blocked = set(gate_out.get("blocked_hccs") or [])
-        if blocked:
-            logger.warning(
-                "update_hcc_meat_status: clinical-rule gate BLOCKED HCCs %s "
-                "for pid=%d year=%d — will remain 'partial' rather than 'complete'",
-                sorted(blocked), patient_id, year,
+            from app.services.raf.clinical_rules.billing_gate import gate_billed_promotion
+
+            gate_out = gate_billed_promotion(
+                patient_id=patient_id,
+                candidate_hccs=candidate_hccs,
+                dos=_date_cls(year, 12, 31),
             )
-    except Exception as exc:
-        # Fail-open: never let the gate break the legacy code path.
-        logger.error(
-            "update_hcc_meat_status: clinical-rule gate unavailable "
-            "(pid=%d year=%d): %s. Proceeding without gating.",
-            patient_id, year, exc,
+            blocked = set(gate_out.get("blocked_hccs") or [])
+            if blocked:
+                logger.warning(
+                    "update_hcc_meat_status: clinical-rule gate BLOCKED HCCs %s "
+                    "for pid=%d year=%d — will remain 'partial' rather than 'complete'",
+                    sorted(blocked), patient_id, year,
+                )
+        except Exception as exc:
+            # Fail-open: never let the gate break the legacy code path.
+            logger.error(
+                "update_hcc_meat_status: clinical-rule gate unavailable "
+                "(pid=%d year=%d): %s. Proceeding without gating.",
+                patient_id, year, exc,
+            )
+    else:
+        logger.info(
+            "update_hcc_meat_status: clinical billing gate DISABLED by feature flag "
+            "(pid=%d year=%d)",
+            patient_id, year,
         )
+
+    # One-time sentinel to avoid log spam when last_recomputed_at is absent.
+    _recomputed_col_warned: bool = False
 
     updated = 0
     with raf_cursor() as cur:
@@ -880,19 +900,65 @@ def update_hcc_meat_status(
             if effective_status == "complete" and hcc_num in blocked:
                 effective_status = "partial"
 
+            # Read the current status so we can log genuine transitions and
+            # always write the freshly-computed value (demotion-safe).
             cur.execute(
-                """
-                UPDATE raf_patient_hcc
-                SET meat_status = %s
-                WHERE id = %s
-                  AND meat_status != %s
-                """,
-                (effective_status, phcc_id, effective_status),
+                "SELECT meat_status FROM raf_patient_hcc WHERE id = %s",
+                (phcc_id,),
             )
-            if cur.rowcount:
-                updated += 1
+            existing_row = cur.fetchone()
+            old_status: str | None = (existing_row or {}).get("meat_status")
+
+            # Always write the new status + score — no WHERE guard.
+            # This ensures demotion (e.g. complete → partial) is applied.
+            try:
+                cur.execute(
+                    """
+                    UPDATE raf_patient_hcc
+                    SET meat_status        = %s,
+                        completeness_score = %s,
+                        updated_at         = NOW(),
+                        last_recomputed_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (effective_status, hcc_entry["meat_score"] / 4.0, phcc_id),
+                )
+            except Exception as _col_exc:
+                # MySQL error 1054 = unknown column (last_recomputed_at absent).
+                _errno = getattr(_col_exc, "args", [None])[0]
+                if _errno == 1054 and not _recomputed_col_warned:
+                    _recomputed_col_warned = True
+                    logger.warning(
+                        "update_hcc_meat_status: column last_recomputed_at does not exist "
+                        "in raf_patient_hcc — retrying without it. "
+                        "Run: ALTER TABLE raf_patient_hcc ADD COLUMN "
+                        "last_recomputed_at DATETIME NULL AFTER updated_at;"
+                    )
+                    cur.execute(
+                        """
+                        UPDATE raf_patient_hcc
+                        SET meat_status        = %s,
+                            completeness_score = %s,
+                            updated_at         = NOW()
+                        WHERE id = %s
+                        """,
+                        (effective_status, hcc_entry["meat_score"] / 4.0, phcc_id),
+                    )
+                else:
+                    raise
+
+            updated += 1
+
+            # Audit trail: log every genuine status transition (including demotion).
+            if old_status != effective_status:
+                logger.info(
+                    "meat_status changed hcc=%s patient=%s old=%s new=%s reason=recompute",
+                    hcc_entry["hcc_code"], patient_id, old_status, effective_status,
+                )
+            else:
                 logger.debug(
-                    "update_hcc_meat_status: hcc_id=%d → %s", phcc_id, effective_status
+                    "update_hcc_meat_status: hcc_id=%d status unchanged → %s",
+                    phcc_id, effective_status,
                 )
 
     logger.info(
@@ -900,3 +966,75 @@ def update_hcc_meat_status(
         "%d/%d rows updated (blocked_by_gate=%d)",
         patient_id, year, max_status, updated, report["total_hccs"], len(blocked),
     )
+
+
+# ---------------------------------------------------------------------------
+# 7. recompute_meat_status_for_patient
+# ---------------------------------------------------------------------------
+
+def recompute_meat_status_for_patient(
+    patient_id: int,
+    payment_year: int | None = None,
+) -> dict[str, Any]:
+    """Recompute MEAT completeness and persist meat_status for every HCC.
+
+    This is the canonical entry-point for batch jobs that need to refresh the
+    stored meat_status after evidence has changed.  It calls
+    ``calculate_meat_completeness`` and then ``update_hcc_meat_status`` so
+    every HCC — including those that were previously "complete" — gets the
+    status that matches the current evidence set.
+
+    Demotion (e.g. complete → partial when evidence is removed) is fully
+    supported because ``update_hcc_meat_status`` no longer uses a
+    ``WHERE meat_status != …`` guard.
+
+    Parameters
+    ----------
+    patient_id:
+        RAF Intelligence patient ID.
+    payment_year:
+        Measurement / payment year.  Defaults to the current calendar year.
+
+    Returns
+    -------
+    dict with keys:
+        patient_id      int
+        year            int
+        total_hccs      int
+        complete_hccs   int
+        partial_hccs    int
+        missing_hccs    int
+        overall_score   float
+    """
+    year: int = payment_year or date.today().year
+
+    logger.info(
+        "recompute_meat_status_for_patient: starting patient_id=%d year=%d",
+        patient_id, year,
+    )
+
+    update_hcc_meat_status(patient_id, year)
+
+    # Return a summary computed after the writes so callers get fresh counts.
+    report = calculate_meat_completeness(patient_id, year)
+
+    result: dict[str, Any] = {
+        "patient_id": patient_id,
+        "year": year,
+        "total_hccs": report["total_hccs"],
+        "complete_hccs": report["complete_hccs"],
+        "partial_hccs": report["partial_hccs"],
+        "missing_hccs": report["missing_hccs"],
+        "overall_score": report["overall_score"],
+    }
+
+    logger.info(
+        "recompute_meat_status_for_patient: done patient_id=%d year=%d — "
+        "total=%d complete=%d partial=%d missing=%d score=%.4f",
+        patient_id, year,
+        result["total_hccs"], result["complete_hccs"],
+        result["partial_hccs"], result["missing_hccs"],
+        result["overall_score"],
+    )
+
+    return result

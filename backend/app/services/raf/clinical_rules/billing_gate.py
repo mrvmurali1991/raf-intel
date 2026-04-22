@@ -30,7 +30,7 @@ when that happens.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from .rules import (
@@ -45,6 +45,34 @@ from .validator import BilledHCC, ValidationReport, validate_billed_hccs
 
 
 logger = logging.getLogger(__name__)
+
+# Per-call context cache: keyed on (patient_id, dos) so that batch callers
+# processing many HCCs for the same patient within one request share a single
+# DB round-trip.  The dict is intentionally module-level but small — it holds
+# at most one PatientContext per unique (patient_id, dos) seen in a single
+# Python process lifetime.  Production callers that want a fresh fetch should
+# pass a pre-built ``context`` argument to gate_billed_promotion directly.
+_context_cache: dict[tuple[int, date], PatientContext] = {}
+
+
+def _get_or_build_context(patient_id: int, dos: date) -> PatientContext:
+    """Return a cached PatientContext or build and cache one."""
+    key = (patient_id, dos)
+    if key not in _context_cache:
+        _context_cache[key] = build_patient_context_from_db(patient_id, dos)
+    return _context_cache[key]
+
+
+def _parse_date(val: Any) -> date | None:
+    """Coerce a DB date/datetime/str to a date, or return None."""
+    if val is None:
+        return None
+    if isinstance(val, date):
+        return val if not isinstance(val, datetime) else val.date()
+    try:
+        return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +89,11 @@ def build_patient_context_from_db(patient_id: int, dos: date) -> PatientContext:
     context we can.  The caller should treat a partial context as a "rules
     best-effort" situation — rules that rely on the missing evidence may
     WARN or FAIL; that's a feature, not a bug.
+
+    Evidence is constrained to the CMS payment-year DOS window derived from
+    ``dos``.  The payment year is ``dos.year`` if the DOS falls within that
+    year's window; we fall back to a simple 12-month lookback if the year is
+    not in the payment-year registry.
     """
     dx_codes: list[str] = []
     meds: list[Medication] = []
@@ -70,7 +103,34 @@ def build_patient_context_from_db(patient_id: int, dos: date) -> PatientContext:
     age: int = 0
     sex: str = "U"
 
-    # --- OpenEMR: demographics + ICD-10 + medications ---------------------
+    # Determine the DOS window for the evidence lookback.
+    # get_payment_year_window uses payment_year = dos.year + 1 because the
+    # window is year-1; we try dos.year+1 first (most common case: querying
+    # during a payment year for data collected in the prior year), then
+    # dos.year as fallback, then a plain 12-month lookback.
+    try:
+        from app.services.raf.dos_rules import get_payment_year_window
+        try:
+            _win = get_payment_year_window(dos.year + 1)
+        except KeyError:
+            try:
+                _win = get_payment_year_window(dos.year)
+            except KeyError:
+                _win = None
+        if _win is not None:
+            win_start: date = _win.dos_start
+            win_end: date = _win.dos_end
+        else:
+            from datetime import timedelta
+            win_start = dos - timedelta(days=365)
+            win_end = dos
+    except Exception as exc:
+        logger.debug("gate: dos_rules import failed, using 12-month window: %s", exc)
+        from datetime import timedelta
+        win_start = dos - timedelta(days=365)
+        win_end = dos
+
+    # --- OpenEMR: demographics + ICD-10 + medications + CPT procedures ----
     try:
         from app.db import openemr_cursor
 
@@ -84,14 +144,11 @@ def build_patient_context_from_db(patient_id: int, dos: date) -> PatientContext:
                 dob = row.get("DOB") or row.get("dob")
                 if dob:
                     try:
-                        from datetime import datetime
-                        if isinstance(dob, str):
-                            dob_d = datetime.strptime(dob[:10], "%Y-%m-%d").date()
-                        else:
-                            dob_d = dob if isinstance(dob, date) else dob.date()
-                        age = max(0, dos.year - dob_d.year - (
-                            (dos.month, dos.day) < (dob_d.month, dob_d.day)
-                        ))
+                        dob_d = _parse_date(dob)
+                        if dob_d:
+                            age = max(0, dos.year - dob_d.year - (
+                                (dos.month, dos.day) < (dob_d.month, dob_d.day)
+                            ))
                     except Exception as exc:
                         logger.debug("gate: dob parse failed pid=%s: %s", patient_id, exc)
                 sex = (row.get("sex") or "U")[:1].upper() or "U"
@@ -103,25 +160,141 @@ def build_patient_context_from_db(patient_id: int, dos: date) -> PatientContext:
             )
             dx_codes = [r["code"] for r in cur.fetchall() if r.get("code")]
 
-            # Active medications — OpenEMR stores these in 'prescriptions'
-            # or 'lists' table depending on install. We try prescriptions first.
+            # Active medications — OpenEMR stores these in 'prescriptions'.
             try:
                 cur.execute(
-                    "SELECT drug, rxnorm_drugcode, active "
+                    "SELECT drug, rxnorm_drugcode, start_date, end_date, active "
                     "FROM prescriptions WHERE patient_id = %s AND active = 1",
                     (patient_id,),
                 )
                 for r in cur.fetchall():
                     meds.append(Medication(
-                        rx_class="",       # unknown from OpenEMR alone
+                        rx_class="",
                         name=(r.get("drug") or ""),
                         active=bool(r.get("active", 1)),
+                        started_at=_parse_date(r.get("start_date")),
+                        stopped_at=_parse_date(r.get("end_date")),
                     ))
-            except Exception:
-                pass  # table may differ by OpenEMR version; meds are advisory
+            except Exception as exc:
+                logger.warning(
+                    "gate: openemr prescriptions unavailable pid=%s: %s", patient_id, exc
+                )
+
+            # CPT4 procedures billed in the DOS window.
+            try:
+                cur.execute(
+                    "SELECT DISTINCT b.code, fe.date AS performed_date "
+                    "FROM billing b "
+                    "LEFT JOIN form_encounter fe ON fe.encounter = b.encounter AND fe.pid = b.pid "
+                    "WHERE b.pid = %s AND b.code_type = 'CPT4' AND b.activity = 1 "
+                    "  AND (fe.date IS NULL OR (fe.date >= %s AND fe.date <= %s))",
+                    (patient_id, win_start.isoformat(), win_end.isoformat()),
+                )
+                for r in cur.fetchall():
+                    cpt = r.get("code") or ""
+                    if cpt:
+                        procs.append(ProcedureRecord(
+                            cpt=cpt,
+                            performed_at=_parse_date(r.get("performed_date")),
+                        ))
+            except Exception as exc:
+                logger.warning(
+                    "gate: openemr CPT4 query unavailable pid=%s: %s", patient_id, exc
+                )
 
     except Exception as exc:
         logger.warning("gate: openemr fetch failed pid=%s: %s", patient_id, exc)
+
+    # --- RAF DB: patient_medications, fhir_observations, normalized_encounters
+    try:
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            # patient_medications — FHIR-synced medication records.
+            try:
+                cur.execute(
+                    "SELECT medication_name, start_date, status "
+                    "FROM patient_medications "
+                    "WHERE patient_id = %s AND (status = 'active' OR is_active = 1)",
+                    (patient_id,),
+                )
+                for r in cur.fetchall():
+                    meds.append(Medication(
+                        rx_class="",
+                        name=(r.get("medication_name") or ""),
+                        active=True,
+                        started_at=_parse_date(r.get("start_date")),
+                    ))
+            except Exception as exc:
+                logger.warning(
+                    "gate: patient_medications unavailable pid=%s: %s", patient_id, exc
+                )
+
+            # fhir_observations — LOINC-coded lab results within the DOS window.
+            # fhir_patient_id is the FHIR UUID; we need to look it up via
+            # emr_patient_matches.  We query by the RAF internal patient_id
+            # cross-referenced through patients table.
+            try:
+                cur.execute(
+                    "SELECT fo.code AS loinc, fo.value_numeric, fo.unit, fo.effective_date "
+                    "FROM fhir_observations fo "
+                    "JOIN emr_patient_matches epm ON epm.external_id = fo.fhir_patient_id "
+                    "JOIN patients p ON p.id = epm.patient_id "
+                    "WHERE p.id = %s "
+                    "  AND fo.effective_date >= %s AND fo.effective_date <= %s "
+                    "  AND fo.category = 'laboratory' "
+                    "ORDER BY fo.effective_date DESC "
+                    "LIMIT 500",
+                    (patient_id, win_start.isoformat(), win_end.isoformat()),
+                )
+                for r in cur.fetchall():
+                    loinc = r.get("loinc") or ""
+                    if loinc:
+                        labs.append(LabResult(
+                            loinc=loinc,
+                            value=r.get("value_numeric"),
+                            unit=r.get("unit"),
+                            observed_at=_parse_date(r.get("effective_date")),
+                        ))
+            except Exception as exc:
+                logger.warning(
+                    "gate: fhir_observations unavailable pid=%s: %s", patient_id, exc
+                )
+
+            # normalized_encounters — visit records within the DOS window.
+            # provider_specialty is not stored; we leave it as empty string.
+            try:
+                cur.execute(
+                    "SELECT encounter_id, encounter_date, encounter_type "
+                    "FROM normalized_encounters "
+                    "WHERE patient_id = %s "
+                    "  AND encounter_date >= %s AND encounter_date <= %s "
+                    "ORDER BY encounter_date DESC "
+                    "LIMIT 500",
+                    (patient_id, win_start.isoformat(), win_end.isoformat()),
+                )
+                for r in cur.fetchall():
+                    enc_id = r.get("encounter_id")
+                    enc_date = _parse_date(r.get("encounter_date"))
+                    if enc_id is not None and enc_date is not None:
+                        encounters.append(Encounter(
+                            encounter_id=int(enc_id),
+                            encounter_date=enc_date,
+                            encounter_type=(r.get("encounter_type") or ""),
+                            provider_specialty="",  # not stored in normalized_encounters
+                        ))
+            except Exception as exc:
+                logger.warning(
+                    "gate: normalized_encounters unavailable pid=%s: %s", patient_id, exc
+                )
+
+    except Exception as exc:
+        logger.warning("gate: raf_db fetch failed pid=%s: %s", patient_id, exc)
+
+    logger.debug(
+        "gate: context built pid=%s meds=%d labs=%d procs=%d encounters=%d dx=%d",
+        patient_id, len(meds), len(labs), len(procs), len(encounters), len(dx_codes),
+    )
 
     return PatientContext(
         patient_id=patient_id,
@@ -166,7 +339,7 @@ def gate_billed_promotion(
     gate_unavailable = False
 
     try:
-        ctx = context or build_patient_context_from_db(patient_id, dos)
+        ctx = context or _get_or_build_context(patient_id, dos)
     except Exception as exc:
         logger.error(
             "gate: context build raised unexpectedly pid=%s: %s. "

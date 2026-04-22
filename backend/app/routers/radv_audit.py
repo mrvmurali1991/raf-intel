@@ -88,7 +88,7 @@ def get_audit_trail(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate RADV audit trail: {exc}",
+            detail="Failed to generate RADV audit trail",
         )
 
 
@@ -129,7 +129,7 @@ def get_radv_report(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate RADV report: {exc}",
+            detail="Failed to generate RADV report",
         )
 
 
@@ -176,5 +176,5 @@ def get_meat_compliance(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to check MEAT compliance: {exc}",
+            detail="Failed to check MEAT compliance",
         )

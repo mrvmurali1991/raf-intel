@@ -20,15 +20,27 @@ IMPORTANT — ADVISORY-ONLY STATUS
 ----------------------------------
 This module is a **triage / pre-filter signal only**.  Its output MUST NOT be
 used to set ``meat_status = 'complete'`` in ``raf_patient_hcc`` for billing
-purposes.  Specifically:
+purposes.
 
-  * Keyword spotting cannot detect negation ("no worsening" matches "worsening").
-  * It cannot distinguish historical context ("mother had diabetes") from
-    current encounter documentation.
-  * It has no temporal reasoning to confirm the evidence belongs to THIS
-    encounter's note and not a copied/pasted HPI from a prior visit.
-  * It cannot validate that MEAT quotes are verbatim substrings of the source
-    note (the LLM path uses ``validate_quote_in_source`` for this).
+NEGATION / CONTEXT DETECTION (added 2026-04)
+---------------------------------------------
+Simple regex-based context classifiers are now applied to every MEAT keyword
+match.  Each match is tested for negation, hypothetical framing, historical
+context, and family-history phrasing within a 60-character backward window.
+Matches that fail these checks are silently dropped and do not count as MEAT
+evidence.
+
+This detection is intentionally conservative:
+
+  * It operates on a fixed character window, not sentence-parse trees, so
+    negation separated by a sentence boundary may still be missed.
+  * It does NOT replace medspaCy / NegEx for billing-grade validation.
+  * Family-history suppression is applied only when a family-history trigger
+    immediately precedes the match inside the same window; standalone
+    occurrences of "mother" or "father" that do not precede a match are not
+    penalised.
+  * Multi-sentence scope, coreference, and conjunction negation
+    ("neither X nor Y") are out of scope for this layer.
 
 For CMS RADV-defensible billing, only the LLM-validated path
 (``app.services.ai_pipeline.meat_extractor.extract_meat_evidence``) may
@@ -37,9 +49,8 @@ promote an HCC to ``meat_status = 'complete'``.  This validator drives the
 by ``settings.require_llm_meat_for_billing``.
 
 Limitations (rule-based keyword match)
---------------------------------------
-* Pure keyword spotting — cannot distinguish negation ("no worsening"),
-  history ("mother had diabetes"), or hypothetical ("if worsens, start…").
+---------------------------------------
+* Regex context detection reduces false positives but is not perfect.
 * Condition matching is naive word-overlap against the HCC label; multi-
   word labels and abbreviations (HTN, CHF) are not normalized.
 * Sentence windowing is character-based, not sentence-parsed.
@@ -51,7 +62,7 @@ TODO: Upgrade to an ML / LLM approach:
     * negation detection (NegEx / medspaCy)
     * a small fine-tuned classifier on RADV-audited notes to score
       MEAT elements per (condition, note) pair with calibrated
-      confidence. Keep this rule engine as a cheap fallback / sanity
+      confidence.  Keep this rule engine as a cheap fallback / sanity
       check layer.
 """
 from __future__ import annotations
@@ -59,6 +70,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Iterable
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +113,155 @@ _STOPWORDS = {
 
 _WORD_RE = re.compile(r"[A-Za-z0-9&/\-]+")
 
+# ---------------------------------------------------------------------------
+# Context-classification constants
+# ---------------------------------------------------------------------------
+
+# Sentence-ending punctuation that blocks a trigger from spanning into the
+# current clause.
+_SENTENCE_END_RE = re.compile(r"[.;!?]")
+
+# Negation triggers — if any of these appear in the backward window before a
+# MEAT keyword (without an intervening sentence boundary) the match is dropped.
+NEGATION_TRIGGERS: list[str] = [
+    "no evidence of",
+    "negative for",
+    "absence of",
+    "rules out",
+    "rule out",
+    "free of",
+    "never",
+    "refused",
+    "denies",
+    "denied",
+    "without",
+    "r/o",
+    "not",
+    "no",
+]
+
+# Hypothetical / uncertainty triggers — match is dropped.
+HYPOTHETICAL_TRIGGERS: list[str] = [
+    "consideration",
+    "suspected",
+    "could be",
+    "probable",
+    "possibly",
+    "possible",
+    "consider",
+    "suspect",
+    "likely",
+    "unless",
+    "rule out",
+    "r/o",
+    "if",
+]
+
+# Historical / resolved triggers — match is dropped.
+HISTORICAL_TRIGGERS: list[str] = [
+    "status post",
+    "previously",
+    "in remission",
+    "history of",
+    "resolved",
+    "hx of",
+    "prior",
+    "past",
+    "h/o",
+    "s/p",
+]
+
+# Family-history triggers — match is dropped only when one of these appears
+# immediately before the keyword in the backward window.
+FAMILY_TRIGGERS: list[str] = [
+    "family history",
+    "sibling",
+    "parent",
+    "father",
+    "mother",
+    "fhx",
+]
+
+# Pre-compile trigger lists into single alternation patterns, longest-first so
+# greedier matches take priority (e.g. "no evidence of" before "no").
+def _compile_triggers(triggers: list[str]) -> re.Pattern[str]:
+    sorted_triggers = sorted(triggers, key=len, reverse=True)
+    alts = "|".join(re.escape(t) for t in sorted_triggers)
+    return re.compile(alts, re.IGNORECASE)
+
+_NEGATION_RE = _compile_triggers(NEGATION_TRIGGERS)
+_HYPOTHETICAL_RE = _compile_triggers(HYPOTHETICAL_TRIGGERS)
+_HISTORICAL_RE = _compile_triggers(HISTORICAL_TRIGGERS)
+_FAMILY_RE = _compile_triggers(FAMILY_TRIGGERS)
+
+# How far back (in characters) to look for a trigger before a match.
+_TRIGGER_WINDOW = 60
+
+
+def _backward_window(text: str, match_start: int, window: int = _TRIGGER_WINDOW) -> str:
+    """
+    Return the substring ending just before match_start, up to `window` chars
+    back, but truncated at the last sentence-ending punctuation so that
+    triggers from a prior sentence are ignored.
+    """
+    lo = max(0, match_start - window)
+    prefix = text[lo:match_start]
+    # Find the rightmost sentence-ending character; keep only what follows it.
+    sent_end = _SENTENCE_END_RE.search(prefix)
+    if sent_end:
+        # There may be multiple — find the last one.
+        for m in _SENTENCE_END_RE.finditer(prefix):
+            last_end = m.end()
+        prefix = prefix[last_end:]
+    return prefix
+
+
+def _context_is_negated(text: str, match_start: int, window: int = _TRIGGER_WINDOW) -> bool:
+    """Return True if a negation trigger precedes the match within `window` chars."""
+    return bool(_NEGATION_RE.search(_backward_window(text, match_start, window)))
+
+
+def _context_is_hypothetical(text: str, match_start: int, window: int = _TRIGGER_WINDOW) -> bool:
+    """Return True if a hypothetical trigger precedes the match within `window` chars."""
+    return bool(_HYPOTHETICAL_RE.search(_backward_window(text, match_start, window)))
+
+
+def _context_is_historical(text: str, match_start: int, window: int = _TRIGGER_WINDOW) -> bool:
+    """Return True if a historical/resolved trigger precedes the match within `window` chars."""
+    return bool(_HISTORICAL_RE.search(_backward_window(text, match_start, window)))
+
+
+def _context_is_family(text: str, match_start: int, window: int = _TRIGGER_WINDOW) -> bool:
+    """Return True if a family-history trigger precedes the match within `window` chars."""
+    return bool(_FAMILY_RE.search(_backward_window(text, match_start, window)))
+
+
+ContextLabel = Literal["positive", "negated", "hypothetical", "historical", "family"]
+
+
+def _classify_context(text: str, match_start: int, window: int = _TRIGGER_WINDOW) -> ContextLabel:
+    """
+    Classify the context of a match at `match_start` in `text`.
+
+    Returns one of: "positive" | "negated" | "hypothetical" | "historical" | "family"
+
+    Priority order: negated > hypothetical > historical > family > positive.
+    Intended for diagnostic logging; not persisted to DB.
+    """
+    if _context_is_negated(text, match_start, window):
+        return "negated"
+    if _context_is_hypothetical(text, match_start, window):
+        return "hypothetical"
+    if _context_is_historical(text, match_start, window):
+        return "historical"
+    if _context_is_family(text, match_start, window):
+        return "family"
+    return "positive"
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 def _tokenize_label(label: str) -> list[str]:
     """Return meaningful lowercase tokens from an HCC label."""
@@ -163,9 +324,42 @@ def _merge_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return merged
 
 
+def _match_keyword_with_context(
+    text: str,
+    keyword: str,
+) -> bool:
+    """
+    Return True if `keyword` appears in `text` AND its context is "positive"
+    (not negated, hypothetical, historical, or family-history).
+
+    Uses whole-string search rather than span-relative positions so the
+    backward window can reach into full note context when the snippet is
+    already a narrow window extracted by `_find_condition_spans`.
+    """
+    kw_lower = keyword.lower()
+    text_lower = text.lower()
+    idx = text_lower.find(kw_lower)
+    while idx != -1:
+        ctx = _classify_context(text, idx)
+        if ctx == "positive":
+            return True
+        idx = text_lower.find(kw_lower, idx + 1)
+    return False
+
+
+def _any_keyword_positive(text: str, keywords: Iterable[str]) -> bool:
+    """Return True if any keyword in `keywords` matches with positive context."""
+    return any(_match_keyword_with_context(text, kw) for kw in keywords)
+
+
+# Keep the old helper for internal use where context checks are not needed.
 def _any_keyword(text_lower: str, keywords: Iterable[str]) -> bool:
     return any(kw in text_lower for kw in keywords)
 
+
+# ---------------------------------------------------------------------------
+# Public API — MEATValidator class and standalone validate_meat functions
+# ---------------------------------------------------------------------------
 
 def validate_meat(
     note_text: str,
@@ -214,15 +408,14 @@ def validate_meat(
     snippets: list[str] = []
     for start, end in spans:
         snippet = note_text[start:end].strip()
-        snippet_lower = snippet.lower()
 
-        if not result["monitor"] and _any_keyword(snippet_lower, MONITOR_KEYWORDS):
+        if not result["monitor"] and _any_keyword_positive(snippet, MONITOR_KEYWORDS):
             result["monitor"] = True
-        if not result["evaluate"] and _any_keyword(snippet_lower, EVALUATE_KEYWORDS):
+        if not result["evaluate"] and _any_keyword_positive(snippet, EVALUATE_KEYWORDS):
             result["evaluate"] = True
-        if not result["assess"] and _any_keyword(snippet_lower, ASSESS_KEYWORDS):
+        if not result["assess"] and _any_keyword_positive(snippet, ASSESS_KEYWORDS):
             result["assess"] = True
-        if not result["treat"] and _any_keyword(snippet_lower, TREAT_KEYWORDS):
+        if not result["treat"] and _any_keyword_positive(snippet, TREAT_KEYWORDS):
             result["treat"] = True
 
         if len(snippets) < MAX_EVIDENCE_SNIPPETS:
@@ -256,11 +449,120 @@ def validate_meat_batch(
     return [validate_meat(note_text, code) for code in icd_codes]
 
 
+class MEATValidator:
+    """
+    Stateless wrapper around the module-level validate_meat functions.
+
+    Exists so callers can instantiate a validator object and swap it out
+    in dependency injection / testing without changing call sites.
+    """
+
+    def validate(
+        self,
+        note_text: str,
+        icd_code: str,
+        hcc_label: str | None = None,
+    ) -> dict:
+        return validate_meat(note_text, icd_code, hcc_label)
+
+    def validate_batch(
+        self,
+        note_text: str,
+        icd_codes: list[str],
+    ) -> list[dict]:
+        return validate_meat_batch(note_text, icd_codes)
+
+
 # ---------------------------------------------------------------------------
-# Sanity tests
+# Self-tests
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    import sys
+
+    logging.basicConfig(level=logging.WARNING)
+
+    PASS = "\033[32mPASS\033[0m"
+    FAIL = "\033[31mFAIL\033[0m"
+    failures = 0
+
+    def check(label: str, condition: bool) -> None:
+        global failures
+        status = PASS if condition else FAIL
+        print(f"  [{status}] {label}")
+        if not condition:
+            failures += 1
+
+    # --- Positive examples: must be detected as MEAT evidence ---------------
+    print("\n=== Positive examples (should be detected) ===")
+
+    note_pos1 = "A&P: Diabetes E11.9 is stable on current therapy."
+    r = validate_meat(note_pos1, "E11.9", "Diabetes")
+    check("stable -> assess=True", r["assess"] is True)
+
+    note_pos2 = "Patient with CHF I50.9. Labs ordered and f/u scheduled in 3 months."
+    r = validate_meat(note_pos2, "I50.9", "heart failure")
+    check("f/u -> monitor=True", r["monitor"] is True)
+
+    note_pos3 = "COPD patient (J44.9) reviewed. Physical exam performed."
+    r = validate_meat(note_pos3, "J44.9", "COPD")
+    check("physical exam -> evaluate=True", r["evaluate"] is True)
+
+    note_pos4 = "Hypertension I10. Continue metformin and referred to cardiologist."
+    r = validate_meat(note_pos4, "I10", "Hypertension")
+    check("referred -> treat=True", r["treat"] is True)
+
+    note_pos5 = "Patient has worsened hypertension I10 since last visit."
+    r = validate_meat(note_pos5, "I10", "Hypertension")
+    check("worsened (no negation) -> assess=True", r["assess"] is True)
+
+    # --- Negated examples: must NOT be detected as MEAT evidence ------------
+    print("\n=== Negated examples (should NOT be detected) ===")
+
+    note_neg1 = "Patient denies worsening of diabetes E11.9."
+    r = validate_meat(note_neg1, "E11.9", "Diabetes")
+    check("denies worsening -> assess=False", r["assess"] is False)
+
+    note_neg2 = "No evidence of exacerbation in CHF patient I50.9."
+    r = validate_meat(note_neg2, "I50.9", "heart failure")
+    check("no evidence of exacerbation -> assess=False", r["assess"] is False)
+
+    note_neg3 = "If worsens, consider increasing dose. COPD J44.9 otherwise stable."
+    r = validate_meat(note_neg3, "J44.9", "COPD")
+    # "consider increasing dose" — hypothetical, should not count as treat
+    check("consider increasing dose -> treat=False", r["treat"] is False)
+    # "otherwise stable" is positive
+    check("otherwise stable -> assess=True", r["assess"] is True)
+
+    note_neg4 = "Family history of hypertension. Patient with I10."
+    r = validate_meat(note_neg4, "I10", "Hypertension")
+    # "family history" precedes "hypertension" — that label match is in context
+    # but no MEAT keyword follows it; verify no false positive on assess
+    # The note has no assess keyword at all, so assess must be False
+    check("family history only -> assess=False", r["assess"] is False)
+
+    note_neg5 = "History of well-controlled diabetes E11.9, now resolved."
+    r = validate_meat(note_neg5, "E11.9", "Diabetes")
+    check("history of well-controlled -> assess=False", r["assess"] is False)
+
+    # --- _classify_context diagnostic helper --------------------------------
+    print("\n=== _classify_context helper ===")
+    ctx1 = _classify_context("denies worsening here", len("denies "))
+    check("_classify_context negated", ctx1 == "negated")
+
+    ctx2 = _classify_context("if worsens consider", len("if worsens "))
+    check("_classify_context hypothetical", ctx2 == "hypothetical")
+
+    ctx3 = _classify_context("history of stable disease", len("history of "))
+    check("_classify_context historical", ctx3 == "historical")
+
+    ctx4 = _classify_context("mother had stable diabetes", len("mother had "))
+    check("_classify_context family", ctx4 == "family")
+
+    ctx5 = _classify_context("patient is stable", len("patient is "))
+    check("_classify_context positive", ctx5 == "positive")
+
+    # --- Legacy sanity cases (original tests) --------------------------------
+    print("\n=== Legacy regression cases ===")
 
     note_complete = """
     CC: Diabetes follow-up.
@@ -269,30 +571,23 @@ if __name__ == "__main__":
     Physical exam unremarkable. A&P: Diabetes well-controlled on current
     therapy. Continue metformin 1000 mg BID. Referred to diabetic educator.
     """
+    r = validate_meat(note_complete, "E11.9", "Diabetes mellitus without complications")
+    check("complete note -> COMPLETE or PARTIAL", r["status"] in ("COMPLETE", "PARTIAL"))
 
     note_partial = """
     CHF patient seen today. Heart failure appears stable on exam.
     No medication changes at this time.
     """
+    r = validate_meat(note_partial, "I50.9", "Congestive heart failure")
+    check("partial note -> elements >= 1", r["elements_found"] >= 1)
 
     note_missing = """
     Patient came in for a wellness visit. No acute complaints. Reviewed
     family history of cancer. Routine vaccinations up to date.
     """
+    r = validate_meat(note_missing, "E11.9", "Diabetes mellitus")
+    check("missing note -> MISSING", r["status"] == "MISSING")
 
-    cases = [
-        ("COMPLETE-ish", note_complete, "E11.9", "Diabetes mellitus without complications"),
-        ("PARTIAL", note_partial, "I50.9", "Congestive heart failure"),
-        ("MISSING", note_missing, "E11.9", "Diabetes mellitus"),
-    ]
-
-    for name, note, code, label in cases:
-        r = validate_meat(note, code, label)
-        print(f"\n=== {name} | {code} ===")
-        print(f"  status={r['status']} elements={r['elements_found']}/4")
-        print(f"  M={r['monitor']} E={r['evaluate']} A={r['assess']} T={r['treat']}")
-        for s in r["evidence_snippets"]:
-            print(f"  >>> {s[:120]}...")
-
-    batch = validate_meat_batch(note_complete, ["E11.9", "I50.9"])
-    print("\nbatch:", [(b["icd_code"], b["status"]) for b in batch])
+    # --- Summary -------------------------------------------------------------
+    print(f"\n{'All tests passed.' if failures == 0 else f'{failures} test(s) FAILED.'}")
+    sys.exit(0 if failures == 0 else 1)

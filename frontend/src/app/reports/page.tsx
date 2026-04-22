@@ -534,13 +534,21 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
                 <th style={{ ...thStyle, textAlign: "center" }}>Gap</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Revenue</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>HCCs (Billing / Analyzed)</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Evidence</th>
               </tr>
             </thead>
             <tbody>
               {top25.map((p, i) => (
                 <tr
                   key={p.pid}
-                  onClick={() => router.push(`/patients/${p.pid}`)}
+                  // TODO: backend /api/reports/patient-scorecard does not return hcc_code or
+                  // encounter_id per row; currently falls back to /patients/{id}?tab=raf.
+                  // When the backend adds those fields, replace the navigation below with:
+                  //   p.encounter_id
+                  //     ? `/patients/${p.pid}?tab=raf&focus=hcc:${p.hcc_code}&encounter=${p.encounter_id}`
+                  //     : `/patients/${p.pid}?tab=raf&focus=hcc:${p.hcc_code}`
+                  onClick={() => router.push(`/patients/${p.pid}?tab=raf`)}
+                  title="Click to view supporting evidence in patient chart"
                   {...rowProps(i)}
                 >
                   <td style={{ ...tdStyle, textAlign: "center", fontWeight: 600, color: C.textMuted }}>{i + 1}</td>
@@ -566,11 +574,22 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
                   <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace", fontSize: 12 }}>
                     {p.hcc_count_billing} / {p.hcc_count_ai}
                   </td>
+                  <td style={{ ...tdStyle, textAlign: "center" }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "3px 8px", borderRadius: 6,
+                      background: "rgba(37,99,235,0.08)", color: "#2563eb",
+                      fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+                      whiteSpace: "nowrap",
+                    }}>
+                      Evidence →
+                    </span>
+                  </td>
                 </tr>
               ))}
               {top25.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
+                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
                     No revenue gaps found for this year
                   </td>
                 </tr>

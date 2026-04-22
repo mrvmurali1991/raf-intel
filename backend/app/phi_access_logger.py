@@ -1,33 +1,47 @@
 """
 HIPAA 164.312(b) — PHI Access Logger
+======================================
 
-Provides two complementary mechanisms for logging access to Protected Health
-Information:
+IMMUTABILITY NOTICE
+-------------------
+The ``phi_access_log`` table is an append-only audit log required by HIPAA
+§164.312(b).  DELETE and UPDATE statements against this table are FORBIDDEN.
+No application code should ever modify rows after insertion.  Enforcement is
+by policy; a DDL trigger is out of scope for this sprint.
 
-1. **PHIAccessLoggingMiddleware** — ASGI middleware that automatically logs
-   every request whose path contains a patient identifier (``patient_id``,
-   ``pid``, or ``{pid}``).  Runs after the response is sent so it never
-   blocks request processing.
+Architecture — durable queue writer
+-------------------------------------
+Records are placed on an in-process ``queue.Queue`` (bounded at 10 000 items).
+A single non-daemon background thread drains the queue in micro-batches of up
+to 100 rows every 500 ms and writes them to MySQL.
 
-2. **log_phi_access(resource_type, action)** — A FastAPI dependency factory
-   for granular, per-endpoint PHI access logging.  Add it to individual
-   routes for explicit control over the logged ``resource_type`` and
-   ``action``.
+Durability guarantees
+~~~~~~~~~~~~~~~~~~~~~
+* **atexit handler** — registered once at module import; calls ``_flush_pending``
+  so rows queued before a normal interpreter shutdown are written.
+* **SIGTERM / SIGINT handlers** — registered once; flush then re-raise so the
+  process exits cleanly under Docker / Kubernetes.
+* **MySQL-unavailable fallback** — if the INSERT fails, rows are appended to
+  ``/tmp/phi_access_overflow.jsonl`` (append-only, one JSON object per line).
+  A WARN is emitted so ops can detect the fallback via log scraping.
 
-All PHI access records are written to:
-- The ``phi_access_log`` database table (durable, queryable for audits).
-- A structured file logger at ``logs/phi_access.log`` (backup / SIEM ingest).
-
-Both writes are fire-and-forget via a background thread so the request is
-never delayed by logging I/O.
+Metrics (in-memory gauges, exported via ``phi_metrics()``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* ``phi_access_log_pending``  — items currently in the queue
+* ``phi_access_log_dropped``  — items lost because the queue was full
 """
 
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import logging.handlers
+import os
+import queue
 import re
+import signal
+import sys
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -38,7 +52,7 @@ from fastapi import Depends, Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 # ---------------------------------------------------------------------------
-# Structured file logger — dedicated handler for PHI access records
+# Structured file logger — dedicated rotating handler for PHI access records
 # ---------------------------------------------------------------------------
 
 _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -59,6 +73,193 @@ if not _phi_file_logger.handlers:
     _phi_file_logger.addHandler(_handler)
 
 _app_logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Overflow fallback file — written when MySQL is unreachable
+# ---------------------------------------------------------------------------
+
+_OVERFLOW_PATH = Path(os.getenv("PHI_OVERFLOW_PATH", "/tmp/phi_access_overflow.jsonl"))
+
+# ---------------------------------------------------------------------------
+# In-memory metrics gauges
+# ---------------------------------------------------------------------------
+
+_metrics: dict[str, int] = {
+    "phi_access_log_pending": 0,
+    "phi_access_log_dropped": 0,
+}
+
+
+def phi_metrics() -> dict[str, int]:
+    """Return a snapshot of PHI logger metrics for ops / health-check endpoints."""
+    return dict(_metrics)
+
+
+# ---------------------------------------------------------------------------
+# Bounded in-process queue
+# ---------------------------------------------------------------------------
+
+_QUEUE_MAX = 10_000
+_BATCH_SIZE = 100
+_DRAIN_INTERVAL_S = 0.5
+
+_record_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=_QUEUE_MAX)
+
+# ---------------------------------------------------------------------------
+# Low-level write helpers
+# ---------------------------------------------------------------------------
+
+_INSERT_SQL = (
+    "INSERT INTO phi_access_log "
+    "(tenant_id, user_id, user_email, action, resource_type, "
+    " resource_id, ip_address, user_agent, request_path, "
+    " request_method, status_code, accessed_at) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+
+
+def _record_to_row(r: dict[str, Any]) -> tuple:
+    return (
+        r.get("tenant_id", "unknown"),
+        r.get("user_id", "unknown"),
+        r.get("user_email"),
+        r.get("action", "READ"),
+        r.get("resource_type", "unknown"),
+        r.get("resource_id"),
+        r.get("ip_address"),
+        r.get("user_agent"),
+        r.get("request_path"),
+        r.get("request_method"),
+        r.get("status_code"),
+        r.get("timestamp"),
+    )
+
+
+def _write_to_file_log(records: list[dict[str, Any]]) -> None:
+    """Always-on write to the rotating file log (SIEM / backup)."""
+    for rec in records:
+        try:
+            _phi_file_logger.info(json.dumps(rec, default=str))
+        except Exception:
+            _app_logger.error("PHI file logger write failed", exc_info=True)
+
+
+def _write_to_db(records: list[dict[str, Any]]) -> bool:
+    """Attempt a batch INSERT.  Returns True on success, False on failure."""
+    try:
+        from app.db import raf_cursor  # local import — avoids circular dep at module load
+
+        rows = [_record_to_row(r) for r in records]
+        with raf_cursor() as cur:
+            cur.executemany(_INSERT_SQL, rows)
+        return True
+    except Exception:
+        _app_logger.error(
+            "PHI DB write failed (%d rows), falling back to overflow file", len(records),
+            exc_info=True,
+        )
+        return False
+
+
+def _write_overflow(records: list[dict[str, Any]]) -> None:
+    """Append records to the overflow JSONL file when MySQL is unreachable."""
+    _app_logger.warning(
+        "PHI access logger: MySQL unavailable — writing %d record(s) to overflow file %s",
+        len(records),
+        _OVERFLOW_PATH,
+    )
+    try:
+        with _OVERFLOW_PATH.open("a", encoding="utf-8") as fh:
+            for rec in records:
+                fh.write(json.dumps(rec, default=str) + "\n")
+    except Exception:
+        _app_logger.error("PHI overflow file write failed — records may be lost!", exc_info=True)
+
+
+def _write_batch(records: list[dict[str, Any]]) -> None:
+    """Write one micro-batch: file log always, DB with overflow fallback."""
+    _write_to_file_log(records)
+    if not _write_to_db(records):
+        _write_overflow(records)
+
+
+# ---------------------------------------------------------------------------
+# Background drain worker (persistent, non-daemon thread)
+# ---------------------------------------------------------------------------
+
+def _drain_worker() -> None:
+    """Drain the queue in micro-batches until _shutdown_event is set."""
+    while not _shutdown_event.is_set():
+        _drain_once()
+        _shutdown_event.wait(timeout=_DRAIN_INTERVAL_S)
+    # Final drain after shutdown signal
+    _drain_once(drain_all=True)
+
+
+def _drain_once(*, drain_all: bool = False) -> None:
+    """Pull up to _BATCH_SIZE items (or all remaining if drain_all) and write them."""
+    limit = _record_queue.qsize() if drain_all else _BATCH_SIZE
+    batch: list[dict[str, Any]] = []
+    for _ in range(max(limit, _BATCH_SIZE) if drain_all else _BATCH_SIZE):
+        try:
+            batch.append(_record_queue.get_nowait())
+        except queue.Empty:
+            break
+    if batch:
+        _metrics["phi_access_log_pending"] = max(0, _metrics["phi_access_log_pending"] - len(batch))
+        _write_batch(batch)
+
+
+# ---------------------------------------------------------------------------
+# Flush helper — public API for tests and atexit/signal handlers
+# ---------------------------------------------------------------------------
+
+def _flush_pending() -> None:
+    """Block until the queue is empty and all records are written.
+
+    Safe to call from atexit handlers, signal handlers, and unit tests.
+    """
+    _drain_once(drain_all=True)
+
+
+# ---------------------------------------------------------------------------
+# Shutdown coordination
+# ---------------------------------------------------------------------------
+
+_shutdown_event = threading.Event()
+
+_worker_thread = threading.Thread(
+    target=_drain_worker,
+    name="phi-access-logger",
+    daemon=False,  # NOT a daemon — survives SIGTERM long enough to flush
+)
+_worker_thread.start()
+
+
+def _shutdown(*, reraised_signal: int | None = None) -> None:
+    """Signal the worker to stop, flush remaining rows, then optionally re-raise."""
+    _shutdown_event.set()
+    _worker_thread.join(timeout=10)
+    if reraised_signal is not None:
+        # Re-raise as default signal behaviour so the process actually exits
+        signal.signal(reraised_signal, signal.SIG_DFL)
+        os.kill(os.getpid(), reraised_signal)
+
+
+atexit.register(_shutdown)
+
+
+def _sigterm_handler(signum: int, frame: Any) -> None:  # noqa: ARG001
+    _shutdown(reraised_signal=signum)
+
+
+# Register SIGTERM/SIGINT only from the main thread to avoid ValueError in workers
+if threading.current_thread() is threading.main_thread():
+    for _sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(_sig, _sigterm_handler)
+        except (OSError, ValueError):
+            pass  # Can't override in some test harnesses — safe to skip
 
 # ---------------------------------------------------------------------------
 # Path patterns that indicate PHI access
@@ -98,55 +299,22 @@ _RESOURCE_ID_RE = re.compile(r"/api/patients/(\d+)")
 
 
 # ---------------------------------------------------------------------------
-# Core logging function — runs in a background thread
+# Core enqueue function — replaces _fire_and_forget
 # ---------------------------------------------------------------------------
 
-def _persist_phi_access(record: dict[str, Any]) -> None:
-    """Write a PHI access record to both the database and the file logger.
-
-    This function is designed to be called from a daemon thread so it never
-    blocks the ASGI request/response cycle.
-    """
-    # 1. Structured file log (always succeeds if disk is available)
+def _enqueue(record: dict[str, Any]) -> None:
+    """Place a record on the bounded queue.  Drops and counts if full."""
     try:
-        _phi_file_logger.info(json.dumps(record, default=str))
-    except Exception:
-        _app_logger.error("Failed to write PHI access to file log", exc_info=True)
-
-    # 2. Database insert
-    try:
-        from app.db import raf_cursor  # local import to avoid circular deps
-
-        with raf_cursor() as cur:
-            cur.execute(
-                "INSERT INTO phi_access_log "
-                "(tenant_id, user_id, user_email, action, resource_type, "
-                " resource_id, ip_address, user_agent, request_path, "
-                " request_method, status_code, accessed_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (
-                    record.get("tenant_id", "unknown"),
-                    record.get("user_id", "unknown"),
-                    record.get("user_email"),
-                    record.get("action", "READ"),
-                    record.get("resource_type", "unknown"),
-                    record.get("resource_id"),
-                    record.get("ip_address"),
-                    record.get("user_agent"),
-                    record.get("request_path"),
-                    record.get("request_method"),
-                    record.get("status_code"),
-                    record.get("timestamp"),
-                ),
-            )
-    except Exception:
-        _app_logger.error("Failed to persist PHI access log to database", exc_info=True)
-
-
-def _fire_and_forget(record: dict[str, Any]) -> None:
-    """Schedule persistence on a daemon thread so it never blocks the request."""
-    t = threading.Thread(target=_persist_phi_access, args=(record,), daemon=True)
-    t.start()
+        _record_queue.put_nowait(record)
+        _metrics["phi_access_log_pending"] += 1
+    except queue.Full:
+        _metrics["phi_access_log_dropped"] += 1
+        _app_logger.warning(
+            "PHI access queue full (%d capacity) — record dropped for user=%s path=%s",
+            _QUEUE_MAX,
+            record.get("user_id"),
+            record.get("request_path"),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -156,11 +324,10 @@ def _fire_and_forget(record: dict[str, Any]) -> None:
 class PHIAccessLoggingMiddleware:
     """
     ASGI middleware that intercepts responses to PHI-related endpoints and
-    logs the access asynchronously.
+    logs the access via the durable queue writer.
 
     It inspects the request path against ``_PHI_PATH_RE`` and, if matched,
-    extracts user identity from the JWT (best-effort, same approach as the
-    existing ``AuditLoggingMiddleware``) and fires a background log write.
+    extracts user identity from the JWT (best-effort) and enqueues a log record.
     """
 
     _SKIP_PREFIXES = ("/health", "/docs", "/redoc", "/openapi.json", "/favicon")
@@ -196,21 +363,20 @@ class PHIAccessLoggingMiddleware:
 
         await self.app(scope, receive, send_wrapper)
 
-        # --- After response is sent, log the access ---
+        # --- After response is sent, enqueue the access record ---
         try:
-            # Extract user identity from JWT (best-effort)
             headers = dict(scope.get("headers", []))
             auth_header = headers.get(b"authorization", b"").decode("utf-8", errors="ignore")
             user_agent = headers.get(b"user-agent", b"").decode("utf-8", errors="ignore")
 
             user_id: str = "anonymous"
             user_email: str | None = None
-            # Use tenant_id already resolved by TenantGuardMiddleware via request.state.
-            # The ASGI scope carries state as a dict; TenantGuardMiddleware stores it there.
             _scope_state = scope.get("state") or {}
-            tenant_id: str = str(getattr(_scope_state, "tenant_id", None) or
-                                  (_scope_state.get("tenant_id") if isinstance(_scope_state, dict) else None) or
-                                  "unknown")
+            tenant_id: str = str(
+                getattr(_scope_state, "tenant_id", None)
+                or (_scope_state.get("tenant_id") if isinstance(_scope_state, dict) else None)
+                or "unknown"
+            )
 
             if auth_header.startswith("Bearer "):
                 try:
@@ -218,15 +384,13 @@ class PHIAccessLoggingMiddleware:
                     payload = decode_token(auth_header[len("Bearer "):])
                     user_id = str(payload.get("sub", "anonymous"))
                     user_email = payload.get("email")
-                    # Do NOT read tenant_id from JWT payload; rely on TenantGuardMiddleware state.
                 except Exception:
                     pass
 
             client = scope.get("client")
             ip_address = client[0] if client else None
 
-            # Derive resource_type from path
-            resource_type = "patient"  # default for PHI endpoints
+            resource_type = "patient"
             for segment in ("encounter", "diagnos", "raf", "submission",
                             "suspect", "attestation", "care.gap", "document",
                             "ccda", "chart.chase", "awv", "cohort", "analysis"):
@@ -234,7 +398,6 @@ class PHIAccessLoggingMiddleware:
                     resource_type = segment.replace(".", "_").rstrip("s")
                     break
 
-            # Extract resource_id if present
             resource_id: str | None = None
             m = _RESOURCE_ID_RE.search(path)
             if m:
@@ -257,7 +420,7 @@ class PHIAccessLoggingMiddleware:
                 "status_code": status_code,
             }
 
-            _fire_and_forget(record)
+            _enqueue(record)
 
         except Exception:
             _app_logger.error("PHI access middleware logging failed", exc_info=True)
@@ -267,11 +430,19 @@ class PHIAccessLoggingMiddleware:
 # 2. FastAPI Dependency — granular per-endpoint PHI access logging
 # ---------------------------------------------------------------------------
 
-def log_phi_access(resource_type: str, action: str = "READ") -> Callable:
+def log_phi_access(
+    user_id: int | str | None = None,
+    patient_id: int | str | None = None,
+    action: str = "READ",
+    resource: str = "unknown",
+    tenant_id: int | str | None = None,
+    resource_type: str | None = None,
+) -> Callable:
     """
-    Return a FastAPI dependency that logs PHI access for the decorated endpoint.
+    Return a FastAPI dependency that logs PHI access for the decorated endpoint,
+    **or** be called directly with explicit kwargs for programmatic logging.
 
-    Usage::
+    FastAPI dependency usage::
 
         @router.get("/{pid}")
         def get_patient(
@@ -281,13 +452,39 @@ def log_phi_access(resource_type: str, action: str = "READ") -> Callable:
         ):
             ...
 
-    The dependency extracts user identity from ``current_user`` (injected by
-    ``get_current_user``) and request metadata from the ``Request`` object.
-    Logging is fire-and-forget on a daemon thread.
+    Direct call usage (e.g. from services or tests)::
+
+        log_phi_access(user_id=1, patient_id=42, action="READ",
+                       resource="patient", tenant_id=3)
+
+    When called with keyword arguments instead of positional ``resource_type``
+    /``action`` strings, the function enqueues the record immediately and
+    returns ``None`` (not a dependency callable).
     """
+    # --- Direct programmatic call path (all kwargs provided) ---
+    if user_id is not None or patient_id is not None or tenant_id is not None:
+        record = {
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "user_id": str(user_id) if user_id is not None else "unknown",
+            "user_email": None,
+            "tenant_id": str(tenant_id) if tenant_id is not None else "unknown",
+            "action": action.upper(),
+            "resource_type": resource_type or resource,
+            "resource_id": str(patient_id) if patient_id is not None else None,
+            "ip_address": None,
+            "user_agent": None,
+            "request_path": None,
+            "request_method": None,
+            "status_code": None,
+        }
+        _enqueue(record)
+        return None  # type: ignore[return-value]
+
+    # --- FastAPI dependency factory path (positional resource_type / action) ---
+    _resource_type: str = resource_type or resource or "unknown"
+    _action: str = action
 
     def _dependency(request: Request, current_user: dict = Depends(_get_current_user_safe)):
-        # Extract resource_id from path params
         resource_id: str | None = None
         path_params = request.path_params
         for key in ("pid", "patient_id", "id"):
@@ -302,40 +499,32 @@ def log_phi_access(resource_type: str, action: str = "READ") -> Callable:
             else (request.client.host if request.client else None)
         )
 
-        record = {
+        rec = {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "user_id": str(current_user.get("id", "unknown")) if current_user else "anonymous",
             "user_email": current_user.get("email") if current_user else None,
             "tenant_id": str(current_user.get("tenant_id", "unknown")) if current_user else "unknown",
-            "action": action,
-            "resource_type": resource_type,
+            "action": _action,
+            "resource_type": _resource_type,
             "resource_id": resource_id,
             "ip_address": ip,
             "user_agent": (request.headers.get("User-Agent") or "")[:500] or None,
             "request_path": request.url.path,
             "request_method": request.method,
-            "status_code": None,  # not yet known at dependency resolution time
+            "status_code": None,
         }
 
-        _fire_and_forget(record)
+        _enqueue(rec)
 
     return _dependency
 
 
 async def _get_current_user_safe(request: Request) -> dict[str, Any] | None:
-    """Best-effort user resolution — returns None instead of raising 401.
-
-    This avoids duplicating the ``get_current_user`` dependency (which would
-    decode the JWT twice) by reusing the already-resolved user if present
-    on ``request.state``, or falling back to a lightweight decode.
-    """
-    # If get_current_user already ran, the user dict is on request.state
+    """Best-effort user resolution — returns None instead of raising 401."""
     user = getattr(request.state, "_current_user", None)
     if user is not None:
         return user
 
-    # Fallback: lightweight JWT decode (no DB round-trip) for user identity only.
-    # Do NOT read tenant_id from JWT; use request.state.tenant_id set by TenantGuardMiddleware.
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None

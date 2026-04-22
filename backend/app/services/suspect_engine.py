@@ -34,6 +34,7 @@ from app.services import openemr_connector as emr
 from app.services.hcc_hierarchy import apply_hierarchy
 from app.services.nlp.context_detector import detect_context
 from app.services.raf.dos_rules import (
+    get_blend_weights,
     get_payment_year_window,
     is_eligible_encounter,
 )
@@ -154,6 +155,16 @@ def _apply_context_filter(
     """
     if not snippet or not target_text:
         return True, base_confidence, {}
+
+    # Feature-flag gate — allows emergency rollback of NLP context filtering
+    # without redeploying code. When disabled, every mention is accepted at
+    # base confidence (pre-context-detector behaviour).
+    try:
+        from app.config import settings as _settings
+        if not getattr(_settings, "use_context_detector", True):
+            return True, base_confidence, {"context_detector": "disabled"}
+    except Exception:
+        pass
 
     lower_snippet = snippet.lower()
     needle = target_text.lower().strip()
@@ -278,6 +289,61 @@ def _map_evidence_type(source: str) -> str:
     return _EVIDENCE_TYPE_MAP.get(source, "medication")
 
 
+_dos_window_warn_logged: set[str] = set()
+
+
+def _is_within_eligible_dos_window(
+    dos_date: object,
+    payment_year: int | None,
+    source_label: str = "",
+) -> bool:
+    """Return True when *dos_date* falls within the CMS DOS window for *payment_year*.
+
+    If *payment_year* is None or the window is not in PAYMENT_YEARS the check is
+    skipped (returns True) so callers remain backward-compatible.  If *dos_date*
+    is absent or unparseable a one-time WARN is emitted and the row is NOT
+    filtered (return True) to avoid silently dropping signals from tables that
+    store no date column.
+    """
+    if payment_year is None:
+        return True
+
+    try:
+        window = get_payment_year_window(payment_year)
+    except KeyError:
+        return True  # Unknown PY; skip filter, let scanner handle it.
+
+    if dos_date is None or dos_date == "":
+        warn_key = f"no_date:{source_label}:{payment_year}"
+        if warn_key not in _dos_window_warn_logged:
+            _dos_window_warn_logged.add(warn_key)
+            logger.warning(
+                "_is_within_eligible_dos_window: %s row has no date column — "
+                "DOS eligibility filter skipped for PY%s",
+                source_label,
+                payment_year,
+            )
+        return True  # Cannot filter without a date; accept row.
+
+    # Reuse the private _coerce_date helper exported by dos_rules at module scope.
+    from app.services.raf.dos_rules import _coerce_date
+    parsed = _coerce_date(dos_date)
+    if parsed is None:
+        warn_key = f"unparseable:{source_label}:{payment_year}"
+        if warn_key not in _dos_window_warn_logged:
+            _dos_window_warn_logged.add(warn_key)
+            logger.warning(
+                "_is_within_eligible_dos_window: %s row has unparseable date %r — "
+                "DOS eligibility filter skipped for PY%s",
+                source_label,
+                dos_date,
+                payment_year,
+            )
+        return True
+
+    return window.dos_start <= parsed <= window.dos_end
+
+
 def _store_suspect(
     suspect: dict[str, Any],
     measurement_year: int | None = None,
@@ -395,6 +461,13 @@ def scan_medications(patient_id: int, year: int | None = None) -> list[dict[str,
         if not drug_name:
             continue
 
+        # DOS eligibility: skip medications whose start_date falls outside the
+        # CMS payment-year window.  Rows with no start_date pass through with a
+        # one-time warning (handled inside the helper).
+        med_dos = med.get("start_date") or med.get("date_added") or med.get("date")
+        if not _is_within_eligible_dos_window(med_dos, year, source_label="patient_medications"):
+            continue
+
         for sig in signals:
             pattern = (sig.get("drug_name_pattern") or "").lower()
             # Convert SQL LIKE wildcards to a simple substring check
@@ -489,6 +562,13 @@ def scan_labs(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
         except (ValueError, TypeError):
             continue  # Non-numeric result
 
+        # DOS eligibility: skip labs whose collection date falls outside the
+        # CMS payment-year window.  Rows with no date pass through with a
+        # one-time warning (handled inside the helper).
+        lab_dos = lab.get("date") or lab.get("lab_date") or lab.get("result_date")
+        if not _is_within_eligible_dos_window(lab_dos, year, source_label="lab_results"):
+            continue
+
         for sig in signals:
             sig_code = (sig.get("result_code") or "").strip().upper()
             sig_name = (sig.get("result_name") or "").lower()
@@ -557,6 +637,12 @@ def scan_historical_hccs(
     year-1 offset here.
     """
     current_year = current_year or date.today().year
+
+    # Maximum lookback: 3 payment years.  HCCs older than this window carry no
+    # actionable recapture signal under CMS risk-adjustment rules.
+    _MAX_LOOKBACK_YEARS = 3
+    oldest_allowed_year = current_year - _MAX_LOOKBACK_YEARS
+
     try:
         prior_year = get_payment_year_window(current_year).dos_start.year
     except KeyError:
@@ -601,6 +687,22 @@ def scan_historical_hccs(
             continue
 
         encounter_date_raw = row.get("encounter_date")
+
+        # Enforce MAX_LOOKBACK: if the historical HCC has no DOS evidence
+        # within the last 3 payment years it is no longer clinically relevant
+        # as a gap signal and must be skipped.
+        if encounter_date_raw is not None:
+            from app.services.raf.dos_rules import _coerce_date
+            enc_date = _coerce_date(encounter_date_raw)
+            if enc_date is not None and enc_date.year <= oldest_allowed_year:
+                logger.debug(
+                    "scan_historical_hccs pid=%s hcc=%s skipped: "
+                    "encounter_date %s is older than %d-year lookback cutoff (PY%s)",
+                    patient_id, hcc, enc_date.isoformat(),
+                    _MAX_LOOKBACK_YEARS, current_year,
+                )
+                continue
+
         enc_date_str = (
             encounter_date_raw.isoformat()
             if hasattr(encounter_date_raw, "isoformat")
@@ -1139,6 +1241,23 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
                         "cannot safely promote HCC without tenant scope."
                     )
 
+                # Derive model_version from the CMS blend weights for this payment year.
+                # The dominant model is whichever has the highest fractional weight.
+                # PY2024 → BLEND (67% V24 / 33% V28), PY2025 → V28 (67%), PY2026+ → V28 (100%).
+                # For blend years we write the dominant version so the scorer can apply the
+                # correct coefficient; the blend math is handled by the RAF scorer, not here.
+                try:
+                    _blend = get_blend_weights(_year)
+                    _model_version = max(_blend, key=_blend.get)  # type: ignore[arg-type]
+                except KeyError:
+                    # PY not in PAYMENT_YEARS yet — safe fallback mirrors pre-existing behavior.
+                    _model_version = "V28"
+                    logger.warning(
+                        "accept_suspect: PY%s not in dos_rules.PAYMENT_YEARS; "
+                        "defaulting model_version=V28",
+                        _year,
+                    )
+
                 # HCC coefficient lookup from database
                 # Determine model_segment from patient's most recent RAF score if available
                 cur.execute(
@@ -1175,10 +1294,13 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
                              icd10_codes, icd10_code, icd_code, raf_coefficient, raf_weight,
                              meat_status, is_trumped, source, source_encounter_ids, model_version,
                              created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'missing', 0, 'suspect_accepted', '[]', 'V28', NOW(), NOW())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'missing', 0, 'suspect_accepted', '[]', %s, NOW(), NOW())
                     """, (_pid, _year, _tenant, _hcc, _desc,
-                          json.dumps([_icd]), _icd, _icd, _coeff, _coeff))
-                    logger.info("Inserted HCC %s into raf_patient_hcc for patient %s", _hcc, _pid)
+                          json.dumps([_icd]), _icd, _icd, _coeff, _coeff, _model_version))
+                    logger.info(
+                        "Inserted HCC %s into raf_patient_hcc for patient %s (model_version=%s)",
+                        _hcc, _pid, _model_version,
+                    )
 
                 # Apply HCC hierarchy so subordinate HCCs are correctly trumped
                 cur.execute(
@@ -1187,7 +1309,7 @@ def accept_suspect(suspect_id: int, reviewed_by: str, tenant_id: str | None = No
                     (_pid, _year, _tenant),
                 )
                 all_hcc_rows = cur.fetchall()
-                apply_hierarchy(all_hcc_rows, model_version="V28")
+                apply_hierarchy(all_hcc_rows, model_version=_model_version)
                 for h in all_hcc_rows:
                     cur.execute(
                         "UPDATE raf_patient_hcc SET is_trumped = %s, trumped_by_hcc = %s WHERE id = %s",

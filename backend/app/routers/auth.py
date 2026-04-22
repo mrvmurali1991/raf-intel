@@ -27,8 +27,11 @@ Admin / manager endpoints:
 """
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
+import ipaddress
 import logging
+import os
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -38,7 +41,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.auth import get_current_user, get_tenant_id, require_role
 from app.config import settings
 from app.db import raf_cursor
-from app.rate_limit import limiter
+from app.rate_limit import limiter, login_rate_key
 from app.services.auth_service import (
     authenticate_embed_token,
     authenticate_user,
@@ -190,9 +193,11 @@ class MFAActivateRequest(BaseModel):
 
 
 class MFADisableRequest(BaseModel):
-    """Body for POST /mfa/disable — requires current password as confirmation."""
+    """Body for POST /mfa/disable — requires password AND a fresh TOTP or recovery code."""
 
     password: str
+    totp_code: str | None = None
+    recovery_code: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -275,13 +280,58 @@ class EmbedMintResponse(BaseModel):
     iframe_url: str
 
 
+# Default trusted-proxy ranges: localhost + private/docker-bridge CIDRs.
+# This prod deploys behind Cloudflare -> nginx -> container, so the immediate
+# TCP peer is always an internal address. Unauthenticated public callers hitting
+# the backend directly will NOT be in these ranges, so their X-Forwarded-For
+# header is ignored — preventing per-request IP spoofing of rate-limit buckets.
+_DEFAULT_TRUSTED_PROXIES = "127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+
+@lru_cache(maxsize=1)
+def _trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """Parse TRUSTED_PROXIES env var into a tuple of ip_network objects.
+
+    Cached so we only parse once per process. Invalid entries are skipped with
+    a warning rather than crashing the app (defence-in-depth: a misconfigured
+    env var must not take down auth entirely)."""
+    raw = os.getenv("TRUSTED_PROXIES", _DEFAULT_TRUSTED_PROXIES)
+    nets: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(token, strict=False))
+        except ValueError:
+            logger.warning("Ignoring invalid TRUSTED_PROXIES entry: %r", token)
+    return tuple(nets)
+
+
+def _peer_is_trusted(peer: str | None) -> bool:
+    if not peer:
+        return False
+    try:
+        addr = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(addr in net for net in _trusted_proxy_networks())
+
+
 def _get_client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return None
+    """Return the client IP, honouring X-Forwarded-For ONLY when the TCP peer
+    is a trusted proxy. This prevents unauthenticated callers from spoofing
+    arbitrary IPs per-request (which would defeat login rate limits)."""
+    peer = request.client.host if request.client else None
+    if _peer_is_trusted(peer):
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            # Take the left-most entry (the original client as seen by the
+            # first trusted hop). Downstream proxies append to the right.
+            first = forwarded.split(",")[0].strip()
+            if first:
+                return first
+    return peer or ""
 
 
 _COOKIE_MAX_AGE = 86400 * 7  # 7 days
@@ -320,8 +370,48 @@ def _safe_user(row: dict[str, Any] | None) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/login", summary="Login with email and password")
-@limiter.limit("5/minute")
+async def _stash_login_email(request: Request) -> None:
+    """Pre-flight dependency: peek at the JSON body, stash the email onto
+    request.state BEFORE slowapi's rate-limit key_func runs.
+
+    slowapi evaluates its key_func at the start of the endpoint wrapper, at
+    which point `request.state._login_email` must already be set. FastAPI
+    resolves dependencies before the wrapper is entered, so this runs first.
+
+    Starlette caches the raw body on first read via ``request.body()`` so the
+    subsequent pydantic parse inside ``login(body: LoginRequest)`` is a no-op
+    for the network layer."""
+    try:
+        raw = await request.body()
+        if raw:
+            import json as _json
+
+            data = _json.loads(raw)
+            email = data.get("email") if isinstance(data, dict) else None
+            if isinstance(email, str):
+                request.state._login_email = email.strip().lower()
+                return
+    except Exception:
+        # Malformed body — let pydantic raise 422. Use empty string so the
+        # IP-only bucket still applies.
+        pass
+    request.state._login_email = ""
+
+
+@router.post(
+    "/login",
+    summary="Login with email and password",
+    dependencies=[Depends(_stash_login_email)],
+)
+@limiter.limit(
+    "5/minute",
+    # Key on IP+submitted-email so credential-stuffing from rotating IPs is
+    # still bucketed per target account. _stash_login_email (above) populates
+    # request.state._login_email during dependency resolution.
+    key_func=lambda request: login_rate_key(
+        request, getattr(request.state, "_login_email", "")
+    ),
+)
 def login(request: Request, body: LoginRequest) -> dict[str, Any]:
     """
     Authenticate with email + password.
@@ -677,23 +767,32 @@ def activate_mfa(
 
 @router.post(
     "/mfa/disable",
-    summary="Disable MFA (requires current password)",
+    summary="Disable MFA (requires password AND a fresh TOTP or recovery code)",
     response_model=MessageResponse,
 )
+@limiter.limit("5/hour")
 def disable_mfa_endpoint(
+    request: Request,
     body: MFADisableRequest,
     current_user: dict = Depends(get_current_user),
 ) -> MessageResponse:
     """Disable MFA for the current user.
 
-    Requires the user's current password as confirmation to prevent
-    an attacker with a stolen access token from disabling MFA.
+    Security model (SEV-1 fix): password alone is insufficient. If the user
+    currently has MFA enabled, we require a fresh second factor (TOTP from
+    the authenticator app, or a one-time recovery code) in addition to the
+    password. This prevents an attacker with a stolen access token plus a
+    leaked/phished password from silently turning MFA off.
+
+    If the user does not have MFA enabled, the endpoint is a 200 no-op so
+    idempotent client retries do not fail.
     """
-    from app.services.auth_service import verify_password
+    from app.services.auth_service import verify_mfa_code, verify_password
 
     with raf_cursor() as cur:
         cur.execute(
-            "SELECT password_hash FROM users WHERE id = %s", (current_user["id"],)
+            "SELECT password_hash, mfa_enabled FROM users WHERE id = %s",
+            (current_user["id"],),
         )
         row = cur.fetchone()
 
@@ -703,11 +802,31 @@ def disable_mfa_endpoint(
             detail="Incorrect password.",
         )
 
+    # If MFA is already disabled, treat as a no-op so clients can retry safely.
+    if not row.get("mfa_enabled"):
+        return MessageResponse(message="MFA is already disabled.")
+
+    # MFA is enabled → require second factor. Accept either TOTP or a
+    # recovery code; verify_mfa_code() handles both paths (and consumes the
+    # recovery code on use). Password alone is NOT sufficient.
+    second_factor = body.totp_code or body.recovery_code
+    if not second_factor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A TOTP code or recovery code is required to disable MFA.",
+        )
+    if not verify_mfa_code(current_user["id"], second_factor.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid second-factor code.",
+        )
+
     disable_mfa(current_user["id"])
     log_audit(
         action="mfa_disabled",
         user_id=current_user["id"],
         resource_type="auth",
+        ip_address=_get_client_ip(request),
         request_method="POST",
         request_path="/api/auth/mfa/disable",
         response_status=200,

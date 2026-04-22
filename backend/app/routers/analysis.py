@@ -382,7 +382,7 @@ def analyze_encounter(
         logger.warning("Gemini circuit breaker open for encounter %s: %s", encounter_id, exc)
         raise HTTPException(
             status_code=503,
-            detail=f"AI analysis service temporarily unavailable. {exc}",
+            detail="AI analysis service temporarily unavailable",
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except Exception as exc:
@@ -667,7 +667,7 @@ def analyze_note(
         logger.warning("Gemini circuit breaker open for patient %s: %s", pid, exc)
         raise HTTPException(
             status_code=503,
-            detail=f"AI analysis service temporarily unavailable. {exc}",
+            detail="AI analysis service temporarily unavailable",
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except Exception as exc:

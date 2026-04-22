@@ -50,6 +50,12 @@ def _patch_emr_gate_for_all_tests():
     is mocked, this check will always fail. This patch makes the check
     always succeed.
     """
+    import importlib
+    try:
+        importlib.import_module("app.services.emr_manager")
+    except Exception:
+        yield
+        return
     with patch(
         "app.services.emr_manager.list_connections", return_value=[{"is_active": 1}]
     ):
@@ -455,13 +461,19 @@ def _patch_auth_resolution():
     """
     Globally patch get_user and validate_session so that any JWT token
     created by _make_access_token resolves to the corresponding mock user.
+
+    Each patch target is import-guarded: unit tests that never exercise
+    HTTP auth (e.g. pure scoring/reconcile tests) don't need the full
+    service layer importable, so we silently skip targets whose parent
+    module fails to import.
     """
+    import importlib
+    from contextlib import ExitStack
 
     def _fake_get_user(user_id: int) -> dict | None:
         return dict(_USERS_BY_ID[user_id]) if user_id in _USERS_BY_ID else None
 
     def _fake_validate_session(session_id: str) -> dict | None:
-        # All mock users' session_ids are accepted as valid
         return {"session_id": session_id, "is_revoked": 0}
 
     def _fake_get_user_by_email(email: str) -> dict | None:
@@ -470,27 +482,32 @@ def _patch_auth_resolution():
                 return dict(u)
         return None
 
-    with (
-        patch("app.rate_limit.limiter.enabled", False),
-        patch("app.services.auth_service.get_user", side_effect=_fake_get_user),
-        patch(
-            "app.services.auth_service.get_user_by_email",
-            side_effect=_fake_get_user_by_email,
-        ),
-        patch(
-            "app.services.auth_service.validate_session",
-            side_effect=_fake_validate_session,
-        ),
-        patch("app.auth.get_user", side_effect=_fake_get_user),
-        patch("app.auth.validate_session", side_effect=_fake_validate_session),
-        patch("app.routers.auth.get_user", side_effect=_fake_get_user),
-        patch("app.routers.auth.get_user_permissions", return_value=[]),
-        patch("app.routers.auth.set_user_permissions", return_value=None),
-        patch("app.routers.realtime.get_user", side_effect=_fake_get_user),
-        patch(
-            "app.routers.realtime.validate_session", side_effect=_fake_validate_session
-        ),
-    ):
+    # (target, kwargs-for-patch)
+    _targets: list[tuple[str, dict]] = [
+        ("app.rate_limit.limiter.enabled", {"new": False}),
+        ("app.services.auth_service.get_user", {"side_effect": _fake_get_user}),
+        ("app.services.auth_service.get_user_by_email", {"side_effect": _fake_get_user_by_email}),
+        ("app.services.auth_service.validate_session", {"side_effect": _fake_validate_session}),
+        ("app.auth.get_user", {"side_effect": _fake_get_user}),
+        ("app.auth.validate_session", {"side_effect": _fake_validate_session}),
+        ("app.routers.auth.get_user", {"side_effect": _fake_get_user}),
+        ("app.routers.auth.get_user_permissions", {"return_value": []}),
+        ("app.routers.auth.set_user_permissions", {"return_value": None}),
+        ("app.routers.realtime.get_user", {"side_effect": _fake_get_user}),
+        ("app.routers.realtime.validate_session", {"side_effect": _fake_validate_session}),
+    ]
+
+    with ExitStack() as stack:
+        for target, kwargs in _targets:
+            parent = target.rsplit(".", 1)[0]
+            try:
+                importlib.import_module(parent)
+            except Exception:
+                continue
+            try:
+                stack.enter_context(patch(target, **kwargs))
+            except (AttributeError, ModuleNotFoundError):
+                continue
         yield
 
 

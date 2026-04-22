@@ -24,6 +24,7 @@ GET    /api/uploads/{upload_id}    Details of a single upload
 DELETE /api/uploads/{upload_id}    Soft-delete (is_active=0) patients from an upload
 """
 
+import hashlib
 import io
 import json
 import logging
@@ -296,6 +297,60 @@ def _age_band(age: int | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Content-hash dedup helpers
+# ---------------------------------------------------------------------------
+
+
+def _sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _check_upload_duplicate(
+    tenant_id: str, content_hash: str
+) -> dict[str, Any] | None:
+    """Return the existing upload row if (tenant_id, content_hash) already succeeded.
+
+    Returns None when:
+    - The content_hash column does not exist (logs WARN, graceful fallback).
+    - No prior upload exists for this hash.
+    - The prior upload failed (allow retry).
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, status, filename
+                  FROM raf_data_uploads
+                 WHERE tenant_id = %s AND content_hash = %s
+                 ORDER BY id DESC
+                 LIMIT 1
+                """,
+                (tenant_id, content_hash),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        # Catch unknown-column or any DB error — dedup is best-effort.
+        exc_str = str(exc).lower()
+        if "content_hash" in exc_str or "unknown column" in exc_str:
+            logger.warning(
+                "uploads: add `content_hash` column to raf_data_uploads to enable dedup"
+            )
+        else:
+            logger.warning("uploads: dedup check failed (non-fatal): %s", exc)
+        return None
+
+    if row is None:
+        return None
+
+    status = str(row.get("status") or "")
+    if status == "failed":
+        # Prior attempt failed — allow re-upload as a retry.
+        return None
+
+    return dict(row)
+
+
+# ---------------------------------------------------------------------------
 # Multi-sheet importer
 # ---------------------------------------------------------------------------
 
@@ -312,6 +367,7 @@ def _import_multi_sheet(
     user_id: int,
     filename: str,
     file_size: int,
+    content_hash: str | None = None,
 ) -> dict[str, Any]:
     """Import the multi-sheet RAF template.
 
@@ -345,14 +401,31 @@ def _import_multi_sheet(
 
     with raf_cursor() as cur:
         # 1) Create upload session row -------------------------------------
-        cur.execute(
-            """
-            INSERT INTO raf_data_uploads
-                (tenant_id, uploaded_by, filename, file_size_bytes, file_type, status)
-            VALUES (%s, %s, %s, %s, 'xlsx', 'processing')
-            """,
-            (tenant_id, user_id, filename[:512], file_size),
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO raf_data_uploads
+                    (tenant_id, uploaded_by, filename, file_size_bytes, file_type,
+                     status, content_hash)
+                VALUES (%s, %s, %s, %s, 'xlsx', 'processing', %s)
+                """,
+                (tenant_id, user_id, filename[:512], file_size, content_hash),
+            )
+        except Exception as col_exc:
+            if "content_hash" in str(col_exc).lower() or "unknown column" in str(col_exc).lower():
+                logger.warning(
+                    "uploads: add `content_hash` column to raf_data_uploads to enable dedup"
+                )
+                cur.execute(
+                    """
+                    INSERT INTO raf_data_uploads
+                        (tenant_id, uploaded_by, filename, file_size_bytes, file_type, status)
+                    VALUES (%s, %s, %s, %s, 'xlsx', 'processing')
+                    """,
+                    (tenant_id, user_id, filename[:512], file_size),
+                )
+            else:
+                raise
         upload_id = int(cur.lastrowid)
 
         # 2) Patients: upsert on (tenant_id, mrn) --------------------------
@@ -782,16 +855,34 @@ def _create_upload_session(
     filename: str,
     file_size: int,
     file_type: str,
+    content_hash: str | None = None,
 ) -> int:
     with raf_cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO raf_data_uploads
-                (tenant_id, uploaded_by, filename, file_size_bytes, file_type, status)
-            VALUES (%s, %s, %s, %s, %s, 'processing')
-            """,
-            (tenant_id, user_id, filename[:512], file_size, file_type),
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO raf_data_uploads
+                    (tenant_id, uploaded_by, filename, file_size_bytes, file_type,
+                     status, content_hash)
+                VALUES (%s, %s, %s, %s, %s, 'processing', %s)
+                """,
+                (tenant_id, user_id, filename[:512], file_size, file_type, content_hash),
+            )
+        except Exception as col_exc:
+            if "content_hash" in str(col_exc).lower() or "unknown column" in str(col_exc).lower():
+                logger.warning(
+                    "uploads: add `content_hash` column to raf_data_uploads to enable dedup"
+                )
+                cur.execute(
+                    """
+                    INSERT INTO raf_data_uploads
+                        (tenant_id, uploaded_by, filename, file_size_bytes, file_type, status)
+                    VALUES (%s, %s, %s, %s, %s, 'processing')
+                    """,
+                    (tenant_id, user_id, filename[:512], file_size, file_type),
+                )
+            else:
+                raise
         return int(cur.lastrowid)
 
 
@@ -937,6 +1028,37 @@ async def upload_patients(
     tenant_id = get_tenant_id(current_user)
     user_id = int(current_user.get("id") or 0)
 
+    # ---- Compute content hash BEFORE any parsing -------------------------
+    content_hash = _sha256_hex(content)
+
+    # ---- Dedup check: same (tenant, hash) already successfully processed? -
+    existing = _check_upload_duplicate(str(tenant_id), content_hash)
+    if existing is not None:
+        logger.info(
+            "uploads: duplicate detected for tenant=%s hash=%s upload_id=%s",
+            tenant_id,
+            content_hash[:16],
+            existing.get("id"),
+        )
+        return {
+            "upload_id": int(existing["id"]),
+            "filename": fname,
+            "file_type": file_type,
+            "duplicate": True,
+            "warning": "duplicate_upload",
+            "status": str(existing.get("status") or "completed"),
+            "patients_inserted": 0,
+            "patients_updated": 0,
+            "hcc_inserted": 0,
+            "meat_inserted": 0,
+            "suspects_inserted": 0,
+            "scores_computed": 0,
+            "row_count_total": 0,
+            "row_count_imported": 0,
+            "row_count_failed": 0,
+            "errors": [],
+        }
+
     # ---- Multi-sheet XLSX path -------------------------------------------
     if file_type == "xlsx":
         import openpyxl  # lazy import — only needed for XLSX uploads
@@ -946,9 +1068,10 @@ async def upload_patients(
                 io.BytesIO(content), data_only=True, read_only=True
             )
         except Exception as exc:
+            logger.warning("uploads: could not open xlsx: %s", exc, exc_info=True)
             raise HTTPException(
                 status_code=422,
-                detail=f"Could not open Excel file: {exc}",
+                detail="Could not open Excel file (corrupted or unsupported format)",
             ) from exc
 
         if _is_multi_sheet_template(wb):
@@ -959,6 +1082,7 @@ async def upload_patients(
                     user_id=user_id,
                     filename=fname,
                     file_size=len(content),
+                    content_hash=content_hash,
                 )
             except HTTPException:
                 raise
@@ -982,6 +1106,7 @@ async def upload_patients(
             )
             result["filename"] = fname
             result["file_type"] = "xlsx"
+            result["duplicate"] = False
             return result
 
         # Otherwise fall through to the legacy single-sheet XLSX path.
@@ -1021,6 +1146,7 @@ async def upload_patients(
         filename=fname,
         file_size=len(content),
         file_type=file_type,
+        content_hash=content_hash,
     )
 
     try:
@@ -1103,6 +1229,7 @@ async def upload_patients(
         "upload_id": upload_id,
         "filename": fname,
         "file_type": file_type,
+        "duplicate": False,
         "patients_inserted": imported,
         "patients_updated": updated,
         "hcc_inserted": 0,

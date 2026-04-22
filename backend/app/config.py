@@ -14,7 +14,8 @@ _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path)
 
 # Resolve APP_ENV once at import time so _get_jwt_secret() can use it.
-_APP_ENV = os.getenv("APP_ENV", "development").lower()
+# Default is "production" so a missing env var never silently enables dev mode.
+_APP_ENV = os.getenv("APP_ENV", "production").lower()
 
 
 def _get_required_credential(env_var: str) -> str:
@@ -253,6 +254,24 @@ class Settings:
         "false" if _APP_ENV == "development" else "true",
     ).lower() in ("1", "true", "yes")
 
+    # NLP context detector gate. When True (default), suspect generation
+    # routes candidate mentions through app.services.nlp.context_detector to
+    # suppress negated / hypothetical / historical / family-history findings.
+    # Toggle OFF only for emergency rollback if context detection produces
+    # regressions; disabling will increase false-positive suspect rate.
+    use_context_detector: bool = os.getenv(
+        "USE_CONTEXT_DETECTOR", "true"
+    ).lower() in ("1", "true", "yes")
+
+    # Clinical billing gate for MEAT evidence promotion. When True (default),
+    # gate_billed_promotion blocks MEAT evidence from being promoted to
+    # billable HCC status unless the supporting documentation passes
+    # clinical validation rules. Toggle OFF only for emergency rollback;
+    # disabling may allow unsupported HCCs to be billed.
+    use_clinical_billing_gate: bool = os.getenv(
+        "USE_CLINICAL_BILLING_GATE", "true"
+    ).lower() in ("1", "true", "yes")
+
     # Shared HMAC secret used by OpenEMR (or any embedding host) to mint a
     # short-lived JWT that /api/auth/embed/exchange will accept in lieu of
     # username/password. Required in production — RAF Central refuses embed
@@ -269,5 +288,39 @@ class Settings:
         os.getenv("EMBED_ACCESS_TOKEN_EXPIRE_MINUTES", "30")
     )
 
+    # Dev admin seed gate. Both this flag AND app_env == "development" must be
+    # true for _seed_dev_admin_user() to run. Default is False so production
+    # instances never seed a dev admin even if APP_ENV is accidentally omitted.
+    allow_dev_admin_seed: bool = os.getenv(
+        "ALLOW_DEV_ADMIN_SEED", "false"
+    ).lower() in ("1", "true", "yes")
+
+
+def _validate_settings(s: Settings) -> None:
+    """Run post-instantiation checks and emit the mandatory APP_ENV banner.
+
+    Called once immediately after ``settings`` is constructed.  Raises
+    ``ValueError`` for configurations that must never reach production.
+    """
+    import logging as _logging
+
+    _log = _logging.getLogger(__name__)
+
+    # Always emit which mode is active so operators can confirm at a glance.
+    _log.warning("APP_ENV=%s", s.app_env)
+
+    # Known-weak JWT secrets that must never be used in production.
+    _WEAK_JWT_SECRETS: frozenset[str] = frozenset({"change-me", "dev-secret", ""})
+
+    if s.app_env == "production":
+        secret = s.jwt_secret
+        if secret in _WEAK_JWT_SECRETS or len(secret) < 32:
+            raise ValueError(
+                "FATAL: JWT_SECRET is a known dev default or shorter than 32 characters. "
+                "Set a cryptographically random JWT_SECRET (e.g. `openssl rand -hex 32`) "
+                "before starting the application in production."
+            )
+
 
 settings = Settings()
+_validate_settings(settings)

@@ -22,13 +22,14 @@ All endpoints require a valid JWT bearer token.
 # it breaks FastAPI/Pydantic schema generation.
 
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.config import settings
 from app.services.coder_worklist_service import (
     _fetch_item,
     assign_item,
@@ -42,6 +43,8 @@ from app.services.coder_worklist_service import (
     return_item,
     start_review,
 )
+from app.services.hcc_mapping_service import get_hcc_coefficient
+from app.services.raf.dos_rules import PAYMENT_YEARS, get_payment_year_window
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +132,109 @@ class AutoQueueRequest(BaseModel):
 # GET /api/worklist  —  coder's queue
 # ---------------------------------------------------------------------------
 
+def _active_payment_year() -> int:
+    """Return the current CMS payment year (the calendar year we are in)."""
+    return datetime.now(timezone.utc).year
+
+
+def _days_to_cutoff(payment_year: int) -> int | None:
+    """
+    Return days from today until the DOS window closes for *payment_year*.
+
+    The CMS data-collection window ends on ``dos_end`` (Dec 31 of year-1).
+    Returns ``None`` when the payment year is not in the registry.
+    A negative value means the window has already closed.
+    """
+    try:
+        window = get_payment_year_window(payment_year)
+    except KeyError:
+        return None
+    today = datetime.now(timezone.utc).date()
+    return (window.dos_end - today).days
+
+
+def _max_hcc_coefficient(hcc_codes: list[int]) -> float:
+    """
+    Return the highest V28 CNA coefficient across the HCC codes on this item.
+    Uses the maximum so items with a single high-impact HCC sort above
+    items with many low-impact ones.  Returns 0.0 for empty/missing codes.
+    """
+    if not hcc_codes:
+        return 0.0
+    return max(
+        get_hcc_coefficient(hcc, model_version="V28", segment="CNA")
+        for hcc in hcc_codes
+    )
+
+
+def _enrich_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Attach ``days_to_cutoff`` and ``expected_dollar_impact`` to each item
+    in-place.  Both values are also used for sorting.
+    """
+    revenue_per_raf: float = settings.cms_revenue_per_raf_point
+    py = _active_payment_year()
+
+    for item in items:
+        cutoff = _days_to_cutoff(py)
+        item["days_to_cutoff"] = cutoff
+
+        coeff = _max_hcc_coefficient(item.get("hcc_codes") or [])
+        item["expected_dollar_impact"] = round(coeff * revenue_per_raf, 2)
+
+    return items
+
+
+def _sort_items(
+    items: list[dict[str, Any]],
+    sort_by: Literal["deadline", "dollars", "priority"],
+) -> list[dict[str, Any]]:
+    """
+    Re-sort the enriched item list according to *sort_by*.
+
+    deadline (default):
+        days_to_cutoff ASC (soonest deadline first), expected_dollar_impact DESC,
+        priority ASC, due_date ASC
+    dollars:
+        expected_dollar_impact DESC, days_to_cutoff ASC, priority ASC, due_date ASC
+    priority:
+        Original service behaviour — priority ASC, due_date ASC (NULLs last)
+    """
+    if sort_by == "priority":
+        return sorted(
+            items,
+            key=lambda r: (
+                r.get("priority") or 99,
+                r.get("due_date") is None,
+                r.get("due_date") or date.max,
+            ),
+        )
+
+    if sort_by == "dollars":
+        return sorted(
+            items,
+            key=lambda r: (
+                -(r.get("expected_dollar_impact") or 0.0),
+                r.get("days_to_cutoff") if r.get("days_to_cutoff") is not None else 99999,
+                r.get("priority") or 99,
+                r.get("due_date") is None,
+                r.get("due_date") or date.max,
+            ),
+        )
+
+    # "deadline" — default
+    return sorted(
+        items,
+        key=lambda r: (
+            r.get("days_to_cutoff") if r.get("days_to_cutoff") is not None else 99999,
+            -(r.get("expected_dollar_impact") or 0.0),
+            r.get("priority") or 99,
+            r.get("due_date") is None,
+            r.get("due_date") or date.max,
+        ),
+    )
+
+
 @router.get("", summary="Get the current coder's review queue")
 def list_worklist(
     status: str | None = Query(
@@ -140,6 +246,15 @@ def list_worklist(
         default=None,
         description="Filter by review type: initial_coding | suspect_review | audit_response | recapture",
     ),
+    sort_by: Literal["deadline", "dollars", "priority"] = Query(
+        default="deadline",
+        description=(
+            "Sort order for the queue. "
+            "'deadline' (default) — soonest payment-year DOS cutoff first, then highest dollar impact; "
+            "'dollars' — highest expected dollar impact first; "
+            "'priority' — legacy behaviour (priority ASC, due_date ASC)."
+        ),
+    ),
     limit: int = Query(default=50, ge=1, le=200, description="Page size"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     current_user: dict = Depends(get_current_user),
@@ -147,14 +262,21 @@ def list_worklist(
     _perm: None = Depends(require_permission("worklist", "read")),
 ) -> dict[str, Any]:
     """
-    Returns the authenticated coder's work queue sorted by priority then due
-    date.  Coders only see their own items; managers call the reports endpoints
-    for cross-coder views.
+    Returns the authenticated coder's work queue.
+
+    Default sort (``sort_by=deadline``) surfaces items with the soonest
+    payment-year DOS cutoff first, breaking ties by highest expected dollar
+    impact.  Pass ``sort_by=priority`` to restore the old priority/due-date
+    ordering.  Each item in the response includes ``days_to_cutoff`` and
+    ``expected_dollar_impact`` so the UI can display urgency signals.
+
+    Coders only see their own items; managers use the reports endpoints for
+    cross-coder views.
     """
     coder_id: int = int(current_user["id"])
 
     try:
-        return get_worklist(
+        result = get_worklist(
             coder_user_id=coder_id,
             tenant_id=tenant_id,
             status=status,
@@ -165,6 +287,16 @@ def list_worklist(
     except Exception as exc:
         logger.error("list_worklist coder=%s: %s", coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+    try:
+        items = _enrich_items(list(result.get("items", [])))
+        result["items"] = _sort_items(items, sort_by)
+        result["sort_by"] = sort_by
+    except Exception as exc:  # noqa: BLE001
+        # Enrichment is best-effort; return un-enriched data rather than 500
+        logger.warning("list_worklist enrichment failed coder=%s: %s", coder_id, exc)
+
+    return result
 
 
 # ---------------------------------------------------------------------------

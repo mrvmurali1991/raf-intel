@@ -1,0 +1,73 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:raf-015-ckd3b-alone",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "raf-015-ckd3b-alone",
+        "birthDate": "1949-02-02",
+        "gender": "female"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-015-ckd3b-alone-enc-1",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "raf-015-ckd3b-alone-enc-1",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/raf-015-ckd3b-alone"
+        },
+        "period": {
+          "start": "2024-06-15T10:00:00Z",
+          "end": "2024-06-15T10:30:00Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-015-ckd3b-alone-cond-1",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "raf-015-ckd3b-alone-cond-1",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "N1832"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/raf-015-ckd3b-alone"
+        },
+        "encounter": {
+          "reference": "Encounter/raf-015-ckd3b-alone-enc-1"
+        },
+        "recordedDate": "2024-06-15"
+      }
+    }
+  ]
+}

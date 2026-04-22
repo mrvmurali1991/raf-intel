@@ -370,27 +370,53 @@ def _get_icd_codes(
     dos_end: date | None = None,
     include_suspected: bool = False,
     tenant_id: str = "",
+    mode: str = "submission",
 ) -> list[str]:
     """Get unique ICD-10 codes from OpenEMR billing + AI analysis results.
 
-    CMS compliance: diagnoses used for risk adjustment MUST come from the
-    CMS data collection period only (encounters dated within the applicable
-    sweep window). Mixing older diagnoses into a later payment year overstates
-    RAF and violates CMS risk-adjustment rules.
+    CMS compliance: diagnoses used for RAF *submission* MUST come from the
+    CMS data collection period only (diagnoses from face-to-face encounters
+    dated ``1/1/(year-1)`` through ``12/31/(year-1)`` per CMS Rate Announcements
+    for PY2024/PY2025/PY2026).  Mixing older diagnoses into a later payment
+    year overstates RAF and violates CMS risk-adjustment rules.
 
-    When *year* (measurement_year) is provided without an explicit DOS window,
-    a mandatory default window is derived: Jan 1 of (year-1) through
-    Dec 31 of year. Callers may override by passing *dos_start* / *dos_end*.
+    Two modes are supported when *year* is supplied without an explicit
+    DOS window:
+
+    * ``mode="submission"`` (default) — strict CMS window. Equivalent to
+      ``dos_rules.get_payment_year_window(year)``: Jan 1 of ``year-1``
+      through Dec 31 of ``year-1``. Use for RAF score calculation,
+      attestation packets, anything the plan will submit to CMS.
+    * ``mode="prospective"`` — 2-calendar-year window used for
+      gap-finding / suspect generation: Jan 1 of ``year-1`` through
+      Dec 31 of ``year``. Callers that need fresh-encounter suspects
+      opt in explicitly; the widened window MUST NOT feed the submission
+      path.
+
+    Callers may override either mode by passing *dos_start* / *dos_end*
+    directly.
 
     *patient_id* is the raf_intelligence patients.id; we resolve emr_pid for
     OpenEMR clinical queries.
     """
-    # CMS requires diagnoses from the data collection period only. If a
-    # measurement year is specified but no DOS window was passed, derive the
-    # default two-calendar-year window mandated by CMS.
+    # When no explicit window is provided, derive one from *year* + *mode*.
+    # Submission mode is the CMS-defensible default; prospective is opt-in.
     if year is not None and dos_start is None and dos_end is None:
-        dos_start = date(year - 1, 1, 1)
-        dos_end = date(year, 12, 31)
+        if mode == "prospective":
+            dos_start = date(year - 1, 1, 1)
+            dos_end = date(year, 12, 31)
+        else:
+            # Align with dos_rules.PAYMENT_YEARS — strict 1-year CMS collection window.
+            try:
+                from app.services.raf.dos_rules import get_payment_year_window
+                window = get_payment_year_window(year)
+                dos_start = window.dos_start
+                dos_end = window.dos_end
+            except (KeyError, ImportError):
+                # Fallback for years outside the registry — use the CMS rule
+                # (Y-1 calendar year) directly.
+                dos_start = date(year - 1, 1, 1)
+                dos_end = date(year - 1, 12, 31)
 
     codes: set[str] = set()
 
@@ -1295,7 +1321,11 @@ def calculate_raf_score(
                 if code and code not in icd_codes:
                     suspected_codes.add(code)
 
-            # Grab AI suspects
+            # Grab AI suspects — prospective mode intentionally widens the
+            # DOS window beyond the CMS submission period so we can surface
+            # current-year encounters as documentation gaps.  These codes
+            # go into `suspected_codes` (the prospective track) and NEVER
+            # feed the strict submission calculation above.
             ai_suspects = _get_icd_codes(
                 patient_id,
                 year=measurement_year,
@@ -1303,6 +1333,7 @@ def calculate_raf_score(
                 dos_end=dos_end if dos_end else None,
                 include_suspected=True,
                 tenant_id=tenant_id,
+                mode="prospective",
             )
             for code in ai_suspects:
                 if code not in icd_codes:
@@ -1858,7 +1889,10 @@ def calculate_raf_score_multi_model(
     blended_raw = (
         v24_weight * v24_result["raw_raf"] + v28_weight * v28_result["raw_raf"]
     )
-    blended_payment = round(blended_raw * (1 - maci_v28) / norm_v28, 4)
+    # CMS requires each model normalized with its own factors before blending (CMS-HCC blend spec)
+    payment_v24 = v24_result["raw_raf"] * (1 - maci_v24) / norm_v24
+    payment_v28 = v28_result["raw_raf"] * (1 - maci_v28) / norm_v28
+    blended_payment = round(v24_weight * payment_v24 + v28_weight * payment_v28, 4)
 
     # HCC comparison
     v24_set = set(v24_result["hcc_list"])

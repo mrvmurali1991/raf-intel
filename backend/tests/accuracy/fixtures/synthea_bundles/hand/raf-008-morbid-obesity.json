@@ -1,0 +1,73 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:raf-008-morbid-obesity",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "raf-008-morbid-obesity",
+        "birthDate": "1955-06-12",
+        "gender": "female"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-008-morbid-obesity-enc-1",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "raf-008-morbid-obesity-enc-1",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/raf-008-morbid-obesity"
+        },
+        "period": {
+          "start": "2024-06-15T10:00:00Z",
+          "end": "2024-06-15T10:30:00Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:raf-008-morbid-obesity-cond-1",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "raf-008-morbid-obesity-cond-1",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "E6601"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/raf-008-morbid-obesity"
+        },
+        "encounter": {
+          "reference": "Encounter/raf-008-morbid-obesity-enc-1"
+        },
+        "recordedDate": "2024-06-15"
+      }
+    }
+  ]
+}

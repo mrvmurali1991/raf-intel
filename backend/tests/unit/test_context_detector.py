@@ -290,8 +290,8 @@ class TestSuspectEngineIntegration:
 
         with (
             patch.object(se, "raf_cursor", lambda: _CM()),
-            patch.object(se, "_coded_icd_set", lambda _pid: set()),
-            patch.object(se, "_coded_hcc_set", lambda _pid: set()),
+            patch.object(se, "_coded_icd_set", lambda _pid, **_kw: set()),
+            patch.object(se, "_coded_hcc_set", lambda _pid, **_kw: set()),
         ):
             suspects = se.scan_note_vs_billing(patient_id=111)
 

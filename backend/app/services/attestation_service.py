@@ -361,7 +361,13 @@ def reject(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> dict[str, Any]:
-    """Record a provider rejection decision (reject_inaccurate)."""
+    """Record a provider rejection decision (reject_inaccurate).
+
+    After marking the attestation as rejected the linked raf_patient_hcc row is
+    withdrawn inside the same transaction so it is excluded from future RAPS/EDPS
+    submissions.  Graceful fallbacks are applied when the schema predates the
+    is_withdrawn column.
+    """
     rec = get_attestation(attestation_id)
     if rec["status"] != "pending":
         raise ValueError(
@@ -371,7 +377,12 @@ def reject(
     now = _utcnow()
     sig = _compute_signature(provider_user_id, now.isoformat(), "reject_inaccurate")
 
+    patient_id = rec.get("patient_id")
+    hcc_code = rec.get("hcc_code")
+    payment_year = now.year
+
     with raf_cursor() as cur:
+        # --- 1. Audit history -------------------------------------------------
         cur.execute(
             """
             INSERT INTO attestation_history
@@ -386,6 +397,8 @@ def reject(
                 json.dumps(rec),
             ),
         )
+
+        # --- 2. Mark attestation rejected -------------------------------------
         cur.execute(
             """
             UPDATE provider_attestations
@@ -411,7 +424,180 @@ def reject(
                 attestation_id,
             ),
         )
+
+        # --- 3. Withdraw linked raf_patient_hcc row ---------------------------
+        _withdraw_patient_hcc(
+            cur=cur,
+            attestation_id=attestation_id,
+            patient_id=patient_id,
+            hcc_code=hcc_code,
+            payment_year=payment_year,
+            reject_reason=reject_reason,
+            withdrawn_by_user_id=provider_user_id,
+            now=now,
+        )
+
     return get_attestation(attestation_id)
+
+
+# ---------------------------------------------------------------------------
+# Internal — withdraw raf_patient_hcc on rejection
+# ---------------------------------------------------------------------------
+
+_WITHDRAWAL_AUDIT_TABLE_WARNED: bool = False
+
+
+def _withdraw_patient_hcc(
+    *,
+    cur: Any,
+    attestation_id: int,
+    patient_id: int | None,
+    hcc_code: str | None,
+    payment_year: int,
+    reject_reason: str,
+    withdrawn_by_user_id: int,
+    now: datetime,
+) -> None:
+    """Withdraw the raf_patient_hcc row matching this rejection.
+
+    Strategy (in order):
+      1. Try UPDATE … SET is_withdrawn = 1 (preferred — excludes row from RAPS/EDPS).
+      2. On unknown-column MySQLError fall back to SET status = 'withdrawn'
+         (or meat_status = 'withdrawn' if status column is absent).
+      3. Attempt an INSERT into raf_hcc_withdrawals for a durable audit trail;
+         silently skip if the table does not yet exist.
+
+    All operations execute within the caller's already-open cursor so they
+    participate in the same transaction as the attestation update.
+    """
+    import MySQLdb  # type: ignore[import]
+
+    if patient_id is None or hcc_code is None:
+        logger.warning(
+            "_withdraw_patient_hcc: attestation_id=%s missing patient_id or hcc_code — "
+            "skipping HCC withdrawal",
+            attestation_id,
+        )
+        return
+
+    # -- Primary path: is_withdrawn column ------------------------------------
+    try:
+        cur.execute(
+            """
+            UPDATE raf_patient_hcc
+            SET    is_withdrawn         = 1,
+                   withdrawn_at         = %s,
+                   withdrawn_reason     = %s,
+                   withdrawn_by_user_id = %s
+            WHERE  patient_id = %s
+              AND  hcc_code   = %s
+              AND  measurement_year = %s
+            """,
+            (now, reject_reason, withdrawn_by_user_id, patient_id, hcc_code, payment_year),
+        )
+        logger.info(
+            "_withdraw_patient_hcc: patient=%s hcc=%s year=%s rows_affected=%s",
+            patient_id,
+            hcc_code,
+            payment_year,
+            cur.rowcount,
+        )
+    except MySQLdb.OperationalError as exc:
+        # Error 1054 = Unknown column
+        if exc.args[0] != 1054:
+            raise
+        logger.warning(
+            "raf_patient_hcc.is_withdrawn column missing — add column to enable "
+            "automatic withdrawal. Falling back to status flag. "
+            "(attestation_id=%s patient=%s hcc=%s)",
+            attestation_id,
+            patient_id,
+            hcc_code,
+        )
+        # -- Fallback: try status = 'withdrawn' --------------------------------
+        try:
+            cur.execute(
+                """
+                UPDATE raf_patient_hcc
+                SET    status     = 'withdrawn',
+                       updated_at = %s
+                WHERE  patient_id = %s
+                  AND  hcc_code   = %s
+                  AND  measurement_year = %s
+                """,
+                (now, patient_id, hcc_code, payment_year),
+            )
+        except MySQLdb.OperationalError as exc2:
+            if exc2.args[0] != 1054:
+                raise
+            # -- Last resort: meat_status = 'withdrawn' ------------------------
+            try:
+                cur.execute(
+                    """
+                    UPDATE raf_patient_hcc
+                    SET    meat_status = 'withdrawn',
+                           updated_at  = %s
+                    WHERE  patient_id = %s
+                      AND  hcc_code   = %s
+                      AND  measurement_year = %s
+                    """,
+                    (now, patient_id, hcc_code, payment_year),
+                )
+            except Exception as exc3:
+                logger.error(
+                    "_withdraw_patient_hcc: all fallback UPDATE strategies failed "
+                    "for patient=%s hcc=%s: %s",
+                    patient_id,
+                    hcc_code,
+                    exc3,
+                )
+
+    # -- Audit trail: raf_hcc_withdrawals (best-effort) ------------------------
+    global _WITHDRAWAL_AUDIT_TABLE_WARNED
+    try:
+        cur.execute(
+            """
+            INSERT INTO raf_hcc_withdrawals
+                (patient_hcc_id, rejected_attestation_id, reason, withdrawn_by, withdrawn_at)
+            SELECT id, %s, %s, %s, %s
+            FROM   raf_patient_hcc
+            WHERE  patient_id        = %s
+              AND  hcc_code          = %s
+              AND  measurement_year  = %s
+            LIMIT  1
+            """,
+            (
+                attestation_id,
+                reject_reason,
+                withdrawn_by_user_id,
+                now,
+                patient_id,
+                hcc_code,
+                payment_year,
+            ),
+        )
+    except MySQLdb.OperationalError as exc:
+        # Error 1146 = Table doesn't exist
+        if exc.args[0] == 1146 and not _WITHDRAWAL_AUDIT_TABLE_WARNED:
+            logger.warning(
+                "raf_hcc_withdrawals table does not exist — withdrawal audit row skipped. "
+                "Run the schema migration to create it."
+            )
+            _WITHDRAWAL_AUDIT_TABLE_WARNED = True
+        elif exc.args[0] != 1146:
+            logger.warning(
+                "_withdraw_patient_hcc: audit insert failed for patient=%s hcc=%s: %s",
+                patient_id,
+                hcc_code,
+                exc,
+            )
+    except Exception as exc:
+        logger.warning(
+            "_withdraw_patient_hcc: audit insert failed for patient=%s hcc=%s: %s",
+            patient_id,
+            hcc_code,
+            exc,
+        )
 
 
 def defer(
