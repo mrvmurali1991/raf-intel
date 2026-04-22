@@ -3,6 +3,14 @@
 #
 # Usage:
 #   ./scripts/backup.sh [--full|--raf-only|--openemr-only]
+
+# Source .env from the repo root so cron invocations get DB credentials
+# without requiring them to be baked into the crontab line.
+if [ -f "$(dirname "$0")/../.env" ]; then
+  set -a
+  . "$(dirname "$0")/../.env"
+  set +a
+fi
 #
 # Environment variables:
 #   RAF_DB_HOST            (default: 127.0.0.1)
