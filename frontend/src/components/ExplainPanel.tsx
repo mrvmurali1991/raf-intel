@@ -314,7 +314,7 @@ export function ExplainPanel({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 animate-in fade-in bg-black/50 backdrop-blur-sm duration-150"
+      className="fixed inset-0 z-50 animate-in fade-in bg-black/40 duration-150"
       onClick={onClose}
       aria-hidden="true"
     >
@@ -326,7 +326,7 @@ export function ExplainPanel({
           aria-modal="true"
           aria-label={`Evidence for ${suspectLabel}`}
         >
-          <header className="flex-shrink-0 border-b bg-gradient-to-b from-muted/40 to-background">
+          <header className="flex-shrink-0 border-b bg-background">
             <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex items-center gap-1.5 text-primary">
@@ -390,7 +390,7 @@ export function ExplainPanel({
                   {confPct !== null && <ConfidenceHero pct={confPct} />}
 
                   {data.summary && (
-                    <div className="rounded-lg border-l-2 border-primary/40 bg-muted/30 px-4 py-3">
+                    <div className="rounded-lg border-l-2 border-primary/40 bg-muted px-4 py-3">
                       <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Summary
                       </p>
@@ -438,7 +438,7 @@ export function ExplainPanel({
           </div>
 
           {showFooter && !error && (
-            <footer className="flex-shrink-0 border-t bg-muted/30 px-5 py-3">
+            <footer className="flex-shrink-0 border-t bg-muted px-5 py-3">
               <div className="flex items-center gap-2">
                 {onRequestDismiss && (
                   <Button
