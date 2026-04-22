@@ -138,9 +138,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* Fixed at top-0, offset by sidebar width on lg screens.           */}
         {/* Height matches the pt-16 / pt-8 top-padding of <main>.           */}
         {/* ---------------------------------------------------------------- */}
+        {/* Top bar — only visible on desktop (lg+). On mobile the hamburger row
+            already owns the top chrome and TenantPYChip would collide with it. */}
         <div
-          className="fixed top-0 right-0 z-20 flex items-center justify-end px-4 lg:left-64"
-          style={{ height: "3.5rem" /* 56 px = pt-14 — sits under mobile hamburger row */ }}
+          className="hidden lg:flex fixed top-0 right-0 left-64 z-20 h-14 items-center justify-end px-6 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80"
           aria-label="App top bar"
         >
           <TenantPYChip />
@@ -148,7 +149,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
         <main
           id="main-content"
-          className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-5 pt-16 lg:p-10 lg:pt-8"
+          className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-5 pt-16 lg:px-10 lg:pb-10 lg:pt-20"
           tabIndex={-1}
         >
           <EmrDeactivatedBanner />
