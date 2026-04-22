@@ -31,113 +31,156 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 revision: str = "023_reviewed_by_fk"
 down_revision: Union[str, None] = "022_meat_document_provenance"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers (inlined — do not import across migration files)
 # ---------------------------------------------------------------------------
 
-_ADD_COLUMNS: list[str] = [
-    # raf_suspect_conditions
-    (
-        "ALTER TABLE raf_suspect_conditions "
-        "ADD COLUMN IF NOT EXISTS reviewed_by_user_id BIGINT NULL "
-        "COMMENT 'Numeric user.id of the reviewer — structured FK for audit filters'"
-    ),
-    # raf_patient_hcc
-    (
-        "ALTER TABLE raf_patient_hcc "
-        "ADD COLUMN IF NOT EXISTS reviewed_by_user_id BIGINT NULL "
-        "COMMENT 'Numeric user.id of the reviewer — structured FK for audit filters'"
-    ),
-    # provider_attestations already has provider_user_id (the attestor).
-    # We add attested_by_user_id as the canonical reviewer-identity column
-    # to match the pattern on the other two tables.
-    (
-        "ALTER TABLE provider_attestations "
-        "ADD COLUMN IF NOT EXISTS attested_by_user_id BIGINT NULL "
-        "COMMENT 'Numeric user.id of the attestor — structured FK for audit filters'"
-    ),
-]
+def _inspector():
+    return sa.inspect(op.get_bind())
 
-_ADD_INDEXES: list[str] = [
-    "CREATE INDEX IF NOT EXISTS idx_rsc_reviewer ON raf_suspect_conditions (tenant_id, reviewed_by_user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_rph_reviewer ON raf_patient_hcc (tenant_id, reviewed_by_user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_pa_attester  ON provider_attestations (tenant_id, attested_by_user_id)",
-]
 
-# Backfill: parse "user:123 (...)" strings that have not yet been migrated.
-# REGEXP_SUBSTR is MySQL 8.0+.  The WHERE guard makes the statement safe to
-# replay: already-populated rows are untouched.
-_BACKFILL: list[str] = [
-    (
-        "UPDATE raf_suspect_conditions "
-        "SET reviewed_by_user_id = CAST(REGEXP_SUBSTR(reviewed_by, '[0-9]+') AS UNSIGNED) "
-        "WHERE reviewed_by REGEXP '^user:[0-9]+' "
-        "  AND reviewed_by_user_id IS NULL"
-    ),
-    (
-        "UPDATE raf_patient_hcc "
-        "SET reviewed_by_user_id = CAST(REGEXP_SUBSTR(reviewed_by, '[0-9]+') AS UNSIGNED) "
-        "WHERE reviewed_by REGEXP '^user:[0-9]+' "
-        "  AND reviewed_by_user_id IS NULL"
-    ),
-    # provider_attestations uses provider_user_id for the numeric id already;
-    # copy it into attested_by_user_id for rows that pre-date this migration.
-    (
-        "UPDATE provider_attestations "
-        "SET attested_by_user_id = provider_user_id "
-        "WHERE provider_user_id IS NOT NULL "
-        "  AND attested_by_user_id IS NULL"
-    ),
-]
+def _table_exists(name: str) -> bool:
+    return _inspector().has_table(name)
 
-_DROP_INDEXES: list[str] = [
-    "DROP INDEX IF EXISTS idx_rsc_reviewer ON raf_suspect_conditions",
-    "DROP INDEX IF EXISTS idx_rph_reviewer ON raf_patient_hcc",
-    "DROP INDEX IF EXISTS idx_pa_attester  ON provider_attestations",
-]
 
-_DROP_COLUMNS: list[str] = [
-    "ALTER TABLE raf_suspect_conditions  DROP COLUMN IF EXISTS reviewed_by_user_id",
-    "ALTER TABLE raf_patient_hcc         DROP COLUMN IF EXISTS reviewed_by_user_id",
-    "ALTER TABLE provider_attestations   DROP COLUMN IF EXISTS attested_by_user_id",
-]
+def _column_exists(table: str, column: str) -> bool:
+    if not _table_exists(table):
+        return False
+    return any(c["name"] == column for c in _inspector().get_columns(table))
+
+
+def _index_exists(table: str, index_name: str) -> bool:
+    if not _table_exists(table):
+        return False
+    return any(i["name"] == index_name for i in _inspector().get_indexes(table))
+
+
+def _x(sql: str) -> None:
+    op.execute(sa.text(sql))
 
 
 # ---------------------------------------------------------------------------
-# Upgrade
+# upgrade
 # ---------------------------------------------------------------------------
 
 def upgrade() -> None:
-    for stmt in _ADD_COLUMNS:
-        op.execute(stmt)
+    # ------------------------------------------------------------------
+    # A. Add reviewed_by_user_id / attested_by_user_id columns
+    # ------------------------------------------------------------------
+    if not _column_exists("raf_suspect_conditions", "reviewed_by_user_id"):
+        _x(
+            "ALTER TABLE `raf_suspect_conditions` "
+            "ADD COLUMN `reviewed_by_user_id` BIGINT NULL "
+            "COMMENT 'Numeric user.id of the reviewer — structured FK for audit filters'"
+        )
 
-    for stmt in _ADD_INDEXES:
-        try:
-            op.execute(stmt)
-        except Exception:
-            # Silently swallow duplicate-index errors on MySQL < 8.0
-            pass
+    if not _column_exists("raf_patient_hcc", "reviewed_by_user_id"):
+        _x(
+            "ALTER TABLE `raf_patient_hcc` "
+            "ADD COLUMN `reviewed_by_user_id` BIGINT NULL "
+            "COMMENT 'Numeric user.id of the reviewer — structured FK for audit filters'"
+        )
 
-    for stmt in _BACKFILL:
-        op.execute(stmt)
+    # provider_attestations already has provider_user_id (the attestor).
+    # We add attested_by_user_id as the canonical reviewer-identity column
+    # to match the pattern on the other two tables.
+    if not _column_exists("provider_attestations", "attested_by_user_id"):
+        _x(
+            "ALTER TABLE `provider_attestations` "
+            "ADD COLUMN `attested_by_user_id` BIGINT NULL "
+            "COMMENT 'Numeric user.id of the attestor — structured FK for audit filters'"
+        )
+
+    # ------------------------------------------------------------------
+    # B. Composite indexes
+    # ------------------------------------------------------------------
+    if (
+        not _index_exists("raf_suspect_conditions", "idx_rsc_reviewer")
+        and _column_exists("raf_suspect_conditions", "reviewed_by_user_id")
+    ):
+        _x(
+            "CREATE INDEX `idx_rsc_reviewer` "
+            "ON `raf_suspect_conditions` (`tenant_id`, `reviewed_by_user_id`)"
+        )
+
+    if (
+        not _index_exists("raf_patient_hcc", "idx_rph_reviewer")
+        and _column_exists("raf_patient_hcc", "reviewed_by_user_id")
+    ):
+        _x(
+            "CREATE INDEX `idx_rph_reviewer` "
+            "ON `raf_patient_hcc` (`tenant_id`, `reviewed_by_user_id`)"
+        )
+
+    if (
+        not _index_exists("provider_attestations", "idx_pa_attester")
+        and _column_exists("provider_attestations", "attested_by_user_id")
+    ):
+        _x(
+            "CREATE INDEX `idx_pa_attester` "
+            "ON `provider_attestations` (`tenant_id`, `attested_by_user_id`)"
+        )
+
+    # ------------------------------------------------------------------
+    # C. Backfill from free-text reviewed_by strings ("user:123 (...)").
+    #    REGEXP_SUBSTR is MySQL 8.0+.  Guarded so a re-run skips already-
+    #    populated rows and skips entirely if the column wasn't just added.
+    # ------------------------------------------------------------------
+    if _column_exists("raf_suspect_conditions", "reviewed_by_user_id"):
+        _x(
+            "UPDATE `raf_suspect_conditions` "
+            "SET reviewed_by_user_id = CAST(REGEXP_SUBSTR(reviewed_by, '[0-9]+') AS UNSIGNED) "
+            "WHERE reviewed_by REGEXP '^user:[0-9]+' "
+            "  AND reviewed_by_user_id IS NULL"
+        )
+
+    if _column_exists("raf_patient_hcc", "reviewed_by_user_id"):
+        _x(
+            "UPDATE `raf_patient_hcc` "
+            "SET reviewed_by_user_id = CAST(REGEXP_SUBSTR(reviewed_by, '[0-9]+') AS UNSIGNED) "
+            "WHERE reviewed_by REGEXP '^user:[0-9]+' "
+            "  AND reviewed_by_user_id IS NULL"
+        )
+
+    # provider_attestations uses provider_user_id for the numeric id already;
+    # copy it into attested_by_user_id for rows that pre-date this migration.
+    if _column_exists("provider_attestations", "attested_by_user_id"):
+        _x(
+            "UPDATE `provider_attestations` "
+            "SET attested_by_user_id = provider_user_id "
+            "WHERE provider_user_id IS NOT NULL "
+            "  AND attested_by_user_id IS NULL"
+        )
 
 
 # ---------------------------------------------------------------------------
-# Downgrade
+# downgrade
 # ---------------------------------------------------------------------------
 
 def downgrade() -> None:
-    for stmt in _DROP_INDEXES:
+    drop_idx = [
+        "DROP INDEX IF EXISTS idx_rsc_reviewer ON raf_suspect_conditions",
+        "DROP INDEX IF EXISTS idx_rph_reviewer ON raf_patient_hcc",
+        "DROP INDEX IF EXISTS idx_pa_attester  ON provider_attestations",
+    ]
+    for stmt in drop_idx:
         try:
-            op.execute(stmt)
+            op.execute(sa.text(stmt))
         except Exception:
             pass
 
-    for stmt in _DROP_COLUMNS:
-        op.execute(stmt)
+    drop_cols = [
+        "ALTER TABLE raf_suspect_conditions  DROP COLUMN IF EXISTS reviewed_by_user_id",
+        "ALTER TABLE raf_patient_hcc         DROP COLUMN IF EXISTS reviewed_by_user_id",
+        "ALTER TABLE provider_attestations   DROP COLUMN IF EXISTS attested_by_user_id",
+    ]
+    for stmt in drop_cols:
+        op.execute(sa.text(stmt))

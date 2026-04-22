@@ -25,50 +25,72 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 revision: str = "024_suspect_override_columns"
 down_revision: Union[str, None] = "023_reviewed_by_fk"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+
 # ---------------------------------------------------------------------------
-# DDL
+# Helpers (inlined — do not import across migration files)
 # ---------------------------------------------------------------------------
 
-_ADD_COLUMNS: list[str] = [
-    (
-        "ALTER TABLE raf_suspect_conditions "
-        "ADD COLUMN IF NOT EXISTS accept_override_reason VARCHAR(500) NULL "
-        "COMMENT 'Clinician rationale when accepting a low-confidence / incomplete-MEAT suspect'"
-    ),
-    (
-        "ALTER TABLE raf_suspect_conditions "
-        "ADD COLUMN IF NOT EXISTS accept_defense_basis VARCHAR(100) NULL "
-        "COMMENT 'Short category tag for the override (e.g. clinical_judgement, documentation_pending)'"
-    ),
-    (
-        "ALTER TABLE raf_suspect_conditions "
-        "ADD COLUMN IF NOT EXISTS accept_risk_factors_json TEXT NULL "
-        "COMMENT 'JSON array of risk-factor labels that triggered the override gate'"
-    ),
-]
+def _inspector():
+    return sa.inspect(op.get_bind())
 
-_DROP_COLUMNS: list[str] = [
-    "ALTER TABLE raf_suspect_conditions DROP COLUMN IF EXISTS accept_override_reason",
-    "ALTER TABLE raf_suspect_conditions DROP COLUMN IF EXISTS accept_defense_basis",
-    "ALTER TABLE raf_suspect_conditions DROP COLUMN IF EXISTS accept_risk_factors_json",
-]
+
+def _table_exists(name: str) -> bool:
+    return _inspector().has_table(name)
+
+
+def _column_exists(table: str, column: str) -> bool:
+    if not _table_exists(table):
+        return False
+    return any(c["name"] == column for c in _inspector().get_columns(table))
+
+
+def _x(sql: str) -> None:
+    op.execute(sa.text(sql))
 
 
 # ---------------------------------------------------------------------------
-# Upgrade / Downgrade
+# upgrade
 # ---------------------------------------------------------------------------
 
 def upgrade() -> None:
-    for stmt in _ADD_COLUMNS:
-        op.execute(stmt)
+    if not _column_exists("raf_suspect_conditions", "accept_override_reason"):
+        _x(
+            "ALTER TABLE `raf_suspect_conditions` "
+            "ADD COLUMN `accept_override_reason` VARCHAR(500) NULL "
+            "COMMENT 'Clinician rationale when accepting a low-confidence / incomplete-MEAT suspect'"
+        )
 
+    if not _column_exists("raf_suspect_conditions", "accept_defense_basis"):
+        _x(
+            "ALTER TABLE `raf_suspect_conditions` "
+            "ADD COLUMN `accept_defense_basis` VARCHAR(100) NULL "
+            "COMMENT 'Short category tag for the override (e.g. clinical_judgement, documentation_pending)'"
+        )
+
+    if not _column_exists("raf_suspect_conditions", "accept_risk_factors_json"):
+        _x(
+            "ALTER TABLE `raf_suspect_conditions` "
+            "ADD COLUMN `accept_risk_factors_json` TEXT NULL "
+            "COMMENT 'JSON array of risk-factor labels that triggered the override gate'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# downgrade
+# ---------------------------------------------------------------------------
 
 def downgrade() -> None:
-    for stmt in _DROP_COLUMNS:
-        op.execute(stmt)
+    drop_cols = [
+        "ALTER TABLE raf_suspect_conditions DROP COLUMN IF EXISTS accept_override_reason",
+        "ALTER TABLE raf_suspect_conditions DROP COLUMN IF EXISTS accept_defense_basis",
+        "ALTER TABLE raf_suspect_conditions DROP COLUMN IF EXISTS accept_risk_factors_json",
+    ]
+    for stmt in drop_cols:
+        op.execute(sa.text(stmt))
