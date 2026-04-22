@@ -1,7 +1,7 @@
 /**
  * Single source of truth for suspect-condition confidence tiers.
  *
- * The confidence score is a 0–1 probability emitted by the RAF suspect engine
+ * The confidence score is a 0-1 probability emitted by the RAF suspect engine
  * (see backend/app/services/suspect_engine.py). Thresholds live ONLY here so
  * UI surfaces cannot drift.
  */
