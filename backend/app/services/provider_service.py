@@ -43,8 +43,16 @@ _SCORECARD_STALE_HOURS = 24
 # ---------------------------------------------------------------------------
 
 
-def create_provider(data: dict[str, Any]) -> dict[str, Any]:
-    """Insert a new provider row and return the created record."""
+def create_provider(
+    data: dict[str, Any],
+    tenant_id: int | str | None = None,
+) -> dict[str, Any]:
+    """Insert a new provider row and return the created record.
+
+    tenant_id is accepted from the caller (typically the authenticated user's
+    tenant) and stored on the row. Without it the provider would be invisible
+    to any tenant-scoped query (leaderboard, scorecards, HCC performance).
+    """
     # Derive specialty_category if not provided: PCP-ish specialties map to 'pcp',
     # "Hospitalist" → 'hospitalist', everything else → 'specialist' (table enum
     # lower-cases these four values; frontend upper-cases for display).
@@ -62,16 +70,21 @@ def create_provider(data: dict[str, Any]) -> dict[str, Any]:
     else:
         sc = "other"
 
+    # Normalize tenant_id to the VARCHAR(50) column's expected shape. Callers
+    # may pass int or str (JWT tenant_id is sometimes numeric).
+    tid_str = str(tenant_id) if tenant_id is not None else None
+
     with raf_cursor() as cur:
         cur.execute(
             """
             INSERT INTO providers
-                (openemr_user_id, npi, first_name, last_name,
+                (tenant_id, openemr_user_id, npi, first_name, last_name,
                  credential, specialty, specialty_category, practice_name,
                  email, phone, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
+                tid_str,
                 data.get("openemr_user_id"),
                 data.get("npi"),
                 data["first_name"],
@@ -148,12 +161,19 @@ def update_provider(provider_id: int, data: dict[str, Any]) -> dict[str, Any] | 
         "npi",
         "first_name",
         "last_name",
+        "credential",
         "specialty",
+        "specialty_category",
+        "practice_name",
         "email",
         "phone",
         "status",
     }
     updates = {k: v for k, v in data.items() if k in allowed}
+    # Normalize the enum to the DB's lowercase vocabulary so PUT updates from
+    # a UI that sends "PCP" don't violate the ENUM constraint.
+    if "specialty_category" in updates and updates["specialty_category"]:
+        updates["specialty_category"] = str(updates["specialty_category"]).lower()
     if not updates:
         return get_provider(provider_id)
 
@@ -254,9 +274,13 @@ def discover_provider_candidates() -> dict[str, Any]:
     return {"discovered": discovered, "total": len(discovered)}
 
 
-def import_provider_by_emr_user(emr_user_id: int) -> dict[str, Any]:
+def import_provider_by_emr_user(
+    emr_user_id: int,
+    tenant_id: int | str | None = None,
+) -> dict[str, Any]:
     """Create a provider record from an OpenEMR user_id.
 
+    tenant_id is stamped on the new row so tenant-scoped queries see it.
     Raises ValueError if the user is not found in OpenEMR, or if a provider
     with the same openemr_user_id already exists.
     """
@@ -294,7 +318,8 @@ def import_provider_by_emr_user(emr_user_id: int) -> dict[str, Any]:
             "email": u.get("email") or None,
             "phone": u.get("phone") or None,
             "status": "active",
-        }
+        },
+        tenant_id=tenant_id,
     )
 
 

@@ -26,7 +26,7 @@ from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, require_permission
 from app.rate_limit import limiter
@@ -60,6 +60,19 @@ router = APIRouter(prefix="/api/providers", tags=["providers"])
 # Pydantic request / response models
 # ---------------------------------------------------------------------------
 
+def _normalize_specialty_category(v: str | None) -> str | None:
+    """The providers table enum is lowercase, but the UI renders
+    'PCP' / 'Specialist' / 'Hospitalist'. Accept either case from clients."""
+    if v is None:
+        return None
+    v_lower = str(v).strip().lower()
+    if v_lower not in {"pcp", "specialist", "hospitalist", "other"}:
+        raise ValueError(
+            "specialty_category must be one of pcp, specialist, hospitalist, other"
+        )
+    return v_lower
+
+
 class ProviderCreate(BaseModel):
     """Payload for creating a new provider record."""
 
@@ -68,14 +81,17 @@ class ProviderCreate(BaseModel):
     npi: str | None = Field(default=None, max_length=20)
     credential: str | None = Field(default=None, max_length=20)
     specialty: str | None = Field(default=None, max_length=200)
-    specialty_category: str | None = Field(
-        default=None, pattern="^(pcp|specialist|hospitalist|other)$"
-    )
+    specialty_category: str | None = Field(default=None)
     practice_name: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
     openemr_user_id: int | None = None
     status: str = Field(default="active", pattern="^(active|inactive)$")
+
+    @field_validator("specialty_category", mode="before")
+    @classmethod
+    def _sc_lower(cls, v):
+        return _normalize_specialty_category(v)
 
 
 class ProviderUpdate(BaseModel):
@@ -86,13 +102,16 @@ class ProviderUpdate(BaseModel):
     npi: str | None = Field(default=None, max_length=20)
     credential: str | None = Field(default=None, max_length=20)
     specialty: str | None = Field(default=None, max_length=200)
-    specialty_category: str | None = Field(
-        default=None, pattern="^(pcp|specialist|hospitalist|other)$"
-    )
+    specialty_category: str | None = Field(default=None)
     practice_name: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
+
+    @field_validator("specialty_category", mode="before")
+    @classmethod
+    def _sc_lower(cls, v):
+        return _normalize_specialty_category(v)
 
 
 class PatientAssignRequest(BaseModel):
@@ -190,7 +209,10 @@ def import_from_emr(
     id, because the provider does not yet exist.
     """
     try:
-        return import_provider_by_emr_user(emr_user_id)
+        return import_provider_by_emr_user(
+            emr_user_id,
+            tenant_id=current_user.get("tenant_id"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:
@@ -214,7 +236,10 @@ def create(
     ``openemr_user_id``; if provided the field must be unique across providers.
     """
     try:
-        return create_provider(body.model_dump(exclude_none=True))
+        return create_provider(
+            body.model_dump(exclude_none=True),
+            tenant_id=current_user.get("tenant_id"),
+        )
     except Exception as exc:
         logger.error("create_provider error: %s", exc, exc_info=True)
         if "Duplicate" in str(exc):

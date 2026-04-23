@@ -191,7 +191,10 @@ type DiscoveredProvider = {
   first_name: string;
   last_name: string;
   username: string;
-  specialty?: string;
+  specialty?: string | null;
+  npi?: string | null;
+  email?: string | null;
+  phone?: string | null;
 };
 
 type SortField =
