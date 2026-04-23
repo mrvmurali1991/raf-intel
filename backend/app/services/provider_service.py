@@ -74,6 +74,21 @@ def create_provider(
     # may pass int or str (JWT tenant_id is sometimes numeric).
     tid_str = str(tenant_id) if tenant_id is not None else None
 
+    # npi is NOT NULL and part of the UNIQUE (tenant_id, npi) key. If the
+    # caller omits it, synthesize a unique 10-char placeholder so Add Provider
+    # doesn't crash. The user can PUT a real NPI later; the placeholder is
+    # deterministic (tied to emr user id) so repeated imports stay idempotent.
+    npi = (data.get("npi") or "").strip()
+    if not npi:
+        emr_id = data.get("openemr_user_id")
+        if emr_id:
+            npi = f"EMR{int(emr_id):07d}"[:10]
+        else:
+            # Random 10-digit numeric placeholder, prefixed with 'P' so it's
+            # clearly distinguishable from a real CMS-issued NPI.
+            import secrets
+            npi = f"P{secrets.randbelow(10**9):09d}"[:10]
+
     with raf_cursor() as cur:
         cur.execute(
             """
@@ -86,7 +101,7 @@ def create_provider(
             (
                 tid_str,
                 data.get("openemr_user_id"),
-                data.get("npi"),
+                npi,
                 data["first_name"],
                 data["last_name"],
                 data.get("credential"),
