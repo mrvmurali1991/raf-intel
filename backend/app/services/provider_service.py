@@ -1287,17 +1287,22 @@ def acknowledge_alert(provider_id: int, alert_id: int) -> dict[str, Any] | None:
 
 
 def _serialize_alert(row: dict[str, Any]) -> dict[str, Any]:
+    # The schema column is `priority`, not `severity` — keep both keys in the
+    # output so any caller using either name keeps working.
+    severity = row.get("priority") or row.get("severity") or "medium"
     return {
         "id": row["id"],
         "provider_id": row["provider_id"],
         "patient_id": row.get("patient_id"),
         "alert_type": row["alert_type"],
-        "severity": row["severity"],
-        "title": row["title"],
+        "priority": severity,
+        "severity": severity,
+        "title": row.get("title") or "",
+        "message": row.get("message") or "",
         "description": row.get("description"),
         "hcc_code": row.get("hcc_code") or None,
         "icd10_code": row.get("icd10_code") or None,
-        "status": row["status"],
+        "status": row.get("status", "active"),
         "acknowledged_at": str(row.get("acknowledged_at") or ""),
         "created_at": str(row.get("created_at", "")),
     }
