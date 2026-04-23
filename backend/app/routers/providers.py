@@ -34,11 +34,11 @@ from app.services.provider_service import (
     acknowledge_alert,
     assign_patient_to_provider,
     auto_attribute_patients,
-    auto_discover_providers,
     calculate_hcc_performance,
     calculate_provider_scorecard,
     create_provider,
     deactivate_provider,
+    discover_provider_candidates,
     generate_provider_alerts,
     get_latest_scorecard,
     get_leaderboard,
@@ -46,6 +46,7 @@ from app.services.provider_service import (
     get_provider,
     get_provider_alerts,
     get_providers_summary,
+    import_provider_by_emr_user,
     list_providers,
     update_provider,
 )
@@ -65,7 +66,12 @@ class ProviderCreate(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     npi: str | None = Field(default=None, max_length=20)
+    credential: str | None = Field(default=None, max_length=20)
     specialty: str | None = Field(default=None, max_length=200)
+    specialty_category: str | None = Field(
+        default=None, pattern="^(pcp|specialist|hospitalist|other)$"
+    )
+    practice_name: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
     openemr_user_id: int | None = None
@@ -78,7 +84,12 @@ class ProviderUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
     npi: str | None = Field(default=None, max_length=20)
+    credential: str | None = Field(default=None, max_length=20)
     specialty: str | None = Field(default=None, max_length=200)
+    specialty_category: str | None = Field(
+        default=None, pattern="^(pcp|specialist|hospitalist|other)$"
+    )
+    practice_name: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
@@ -144,23 +155,46 @@ def providers_summary(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/auto-discover", summary="Auto-discover providers from OpenEMR users table")
+@router.post("/auto-discover", summary="List OpenEMR users eligible to be imported as providers")
 @limiter.limit("30/minute")
 def auto_discover(
     request: Request,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("providers", "write"))) -> dict[str, Any]:
     """
-    Query the OpenEMR users table and create provider records for any active
-    users not already in the providers table.  Existing providers (matched by
-    openemr_user_id) are skipped.
+    Return active OpenEMR users not yet present in the providers table.
 
-    Returns a summary with the number of providers created vs skipped.
+    This endpoint does NOT create records — it returns candidates so the UI
+    can let the user pick which ones to import. Use
+    ``POST /api/providers/{emr_user_id}/import`` to import a selected user.
     """
     try:
-        return auto_discover_providers()
+        return discover_provider_candidates()
     except Exception as exc:
         logger.error("auto_discover error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{emr_user_id}/import", summary="Import an OpenEMR user as a provider")
+@limiter.limit("30/minute")
+def import_from_emr(
+    request: Request,
+    emr_user_id: int,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("providers", "write"))) -> dict[str, Any]:
+    """
+    Create a provider record by copying profile fields from the given OpenEMR
+    user. Returns the new provider row.
+
+    The path parameter is the OpenEMR ``users.id`` — NOT an internal provider
+    id, because the provider does not yet exist.
+    """
+    try:
+        return import_provider_by_emr_user(emr_user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error("import_from_emr error emr_uid=%s: %s", emr_user_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -374,10 +408,23 @@ def get_scorecard(
             provider_id, calc_year, tenant_id=current_user.get("tenant_id")
         )
 
-        # Build ProviderDetail shape the frontend expects
+        # Derive a display-friendly specialty category from what's stored in
+        # the DB (or fall back to specialty-name heuristics for legacy rows).
         _PCP = {"Internal Medicine", "Family Medicine", "General Practice", "Geriatrics"}
         spec = provider.get("specialty") or ""
-        spec_cat = "PCP" if spec in _PCP else ("Hospitalist" if "Hospitalist" in spec else "Specialist")
+        raw_sc = (provider.get("specialty_category") or "").lower()
+        if raw_sc == "pcp":
+            spec_cat = "PCP"
+        elif raw_sc == "hospitalist":
+            spec_cat = "Hospitalist"
+        elif raw_sc == "specialist":
+            spec_cat = "Specialist"
+        elif spec in _PCP:
+            spec_cat = "PCP"
+        elif "Hospitalist" in spec:
+            spec_cat = "Hospitalist"
+        else:
+            spec_cat = "Specialist"
 
         capture_rate = scorecard_data.get("hcc_capture_rate") or 0
         recapture_rate = scorecard_data.get("recapture_rate") or 0
@@ -388,24 +435,30 @@ def get_scorecard(
         # Revenue capture: ratio of coded vs total possible revenue
         revenue_capture = round(capture_rate * 0.85 + 0.10, 4) if capture_rate else 0
 
-        # Get HCC performance and alerts
+        # Get HCC performance and alerts. `calculate_hcc_performance` requires
+        # a tenant_id — without it the service raises ValueError for HIPAA
+        # isolation, which previously silently returned [] and rendered a
+        # blank HCC table on every detail panel.
+        tenant_id = current_user.get("tenant_id")
         try:
-            hcc_perf = calculate_hcc_performance(provider_id, calc_year)
-        except Exception:
+            hcc_perf = calculate_hcc_performance(provider_id, calc_year, tenant_id=tenant_id)
+        except Exception as _hcc_exc:
+            logger.warning("calculate_hcc_performance pid=%s err=%s", provider_id, _hcc_exc)
             hcc_perf = []
         try:
             alerts = get_provider_alerts(provider_id, status="active")
-        except Exception:
+        except Exception as _alert_exc:
+            logger.warning("get_provider_alerts pid=%s err=%s", provider_id, _alert_exc)
             alerts = []
 
         return {
             "provider_id": provider_id,
             "first_name": provider.get("first_name", ""),
             "last_name": provider.get("last_name", ""),
-            "credential": "MD",
+            "credential": provider.get("credential") or "",
             "specialty": spec,
             "specialty_category": spec_cat,
-            "practice_name": "Sunrise Health Partners",
+            "practice_name": provider.get("practice_name"),
             "npi": provider.get("npi"),
             "email": provider.get("email"),
             "patient_count": scorecard_data.get("total_patients", 0),
@@ -416,14 +469,24 @@ def get_scorecard(
                 "documentation_quality": doc_quality,
                 "revenue_capture": revenue_capture,
             },
+            # Map service-layer field names to the shape the frontend renders.
+            # Frontend type HccPerformance uses (description, patients_at_risk,
+            # coded, uncoded, capture_pct, revenue_at_stake). Keep the richer
+            # backend names alongside so API consumers have both.
             "hcc_performance": [
                 {
                     "hcc_code": h.get("hcc_code", ""),
                     "hcc_label": h.get("hcc_label", ""),
+                    "description": h.get("hcc_label", ""),
                     "coded_patients": h.get("coded_patients", 0),
                     "open_suspects": h.get("open_suspects", 0),
+                    "coded": h.get("coded_patients", 0),
+                    "uncoded": h.get("open_suspects", 0),
+                    "patients_at_risk": h.get("possible_patients", 0),
                     "capture_rate": h.get("capture_rate"),
+                    "capture_pct": h.get("capture_rate") or 0,
                     "revenue_impact": h.get("revenue_impact", 0),
+                    "revenue_at_stake": h.get("revenue_impact", 0),
                 }
                 for h in hcc_perf[:10]
             ],

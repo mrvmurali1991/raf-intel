@@ -45,19 +45,41 @@ _SCORECARD_STALE_HOURS = 24
 
 def create_provider(data: dict[str, Any]) -> dict[str, Any]:
     """Insert a new provider row and return the created record."""
+    # Derive specialty_category if not provided: PCP-ish specialties map to 'pcp',
+    # "Hospitalist" → 'hospitalist', everything else → 'specialist' (table enum
+    # lower-cases these four values; frontend upper-cases for display).
+    _PCP = {"Internal Medicine", "Family Medicine", "General Practice", "Geriatrics"}
+    spec = (data.get("specialty") or "").strip()
+    sc = data.get("specialty_category")
+    if sc:
+        sc = str(sc).lower()
+    elif spec in _PCP:
+        sc = "pcp"
+    elif "Hospitalist" in spec:
+        sc = "hospitalist"
+    elif spec:
+        sc = "specialist"
+    else:
+        sc = "other"
+
     with raf_cursor() as cur:
         cur.execute(
             """
             INSERT INTO providers
-                (openemr_user_id, npi, first_name, last_name, specialty, email, phone, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (openemr_user_id, npi, first_name, last_name,
+                 credential, specialty, specialty_category, practice_name,
+                 email, phone, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 data.get("openemr_user_id"),
                 data.get("npi"),
                 data["first_name"],
                 data["last_name"],
+                data.get("credential"),
                 data.get("specialty"),
+                sc,
+                data.get("practice_name"),
                 data.get("email"),
                 data.get("phone"),
                 data.get("status", "active"),
@@ -165,7 +187,10 @@ def _serialize_provider(row: dict[str, Any]) -> dict[str, Any]:
         "first_name": row["first_name"],
         "last_name": row["last_name"],
         "full_name": f"{row['first_name']} {row['last_name']}".strip(),
+        "credential": row.get("credential"),
         "specialty": row.get("specialty"),
+        "specialty_category": row.get("specialty_category"),
+        "practice_name": row.get("practice_name"),
         "email": row.get("email"),
         "phone": row.get("phone"),
         "status": row.get("status", "active"),
@@ -177,6 +202,100 @@ def _serialize_provider(row: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Auto-discover providers from OpenEMR users table
 # ---------------------------------------------------------------------------
+
+
+def discover_provider_candidates() -> dict[str, Any]:
+    """Return OpenEMR users who could be imported as providers but aren't yet.
+
+    Unlike `auto_discover_providers`, this does NOT insert — it only returns
+    the candidate list so the UI can let the user pick which ones to import
+    via `import_provider_by_emr_user`.
+    """
+    try:
+        with openemr_cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, username, fname, lname, specialty, email, phone, npi
+                FROM users
+                WHERE active = 1
+                  AND lname IS NOT NULL AND lname != ''
+                  AND username != 'admin'
+                ORDER BY lname, fname
+                """
+            )
+            users = cur.fetchall()
+    except Exception as exc:
+        logger.error("discover_provider_candidates openemr query failed: %s", exc)
+        raise
+
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT openemr_user_id FROM providers WHERE openemr_user_id IS NOT NULL"
+        )
+        existing_ids: set[int] = {r["openemr_user_id"] for r in cur.fetchall()}
+
+    discovered: list[dict[str, Any]] = []
+    for u in users:
+        uid = int(u["id"])
+        if uid in existing_ids:
+            continue
+        discovered.append(
+            {
+                "user_id": uid,
+                "first_name": u.get("fname") or "",
+                "last_name": u.get("lname") or "",
+                "username": u.get("username") or "",
+                "specialty": u.get("specialty") or None,
+                "npi": u.get("npi") or None,
+                "email": u.get("email") or None,
+                "phone": u.get("phone") or None,
+            }
+        )
+    return {"discovered": discovered, "total": len(discovered)}
+
+
+def import_provider_by_emr_user(emr_user_id: int) -> dict[str, Any]:
+    """Create a provider record from an OpenEMR user_id.
+
+    Raises ValueError if the user is not found in OpenEMR, or if a provider
+    with the same openemr_user_id already exists.
+    """
+    try:
+        with openemr_cursor() as cur:
+            cur.execute(
+                "SELECT id, username, fname, lname, specialty, email, phone, npi "
+                "FROM users WHERE id = %s AND active = 1",
+                (int(emr_user_id),),
+            )
+            u = cur.fetchone()
+    except Exception as exc:
+        logger.error("import_provider_by_emr_user openemr lookup failed uid=%s: %s", emr_user_id, exc)
+        raise
+
+    if not u:
+        raise ValueError(f"OpenEMR user {emr_user_id} not found or inactive")
+
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT id FROM providers WHERE openemr_user_id = %s",
+            (int(emr_user_id),),
+        )
+        existing = cur.fetchone()
+    if existing:
+        raise ValueError(f"Provider already exists for OpenEMR user {emr_user_id}")
+
+    return create_provider(
+        {
+            "openemr_user_id": int(emr_user_id),
+            "npi": u.get("npi") or None,
+            "first_name": u.get("fname") or "",
+            "last_name": u.get("lname") or "",
+            "specialty": u.get("specialty") or None,
+            "email": u.get("email") or None,
+            "phone": u.get("phone") or None,
+            "status": "active",
+        }
+    )
 
 
 def auto_discover_providers() -> dict[str, Any]:
