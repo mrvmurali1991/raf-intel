@@ -502,7 +502,29 @@ def get_scorecard(
                 for a in alerts
             ],
             # Include raw scorecard data for backward compat
-            **{k: v for k, v in scorecard_data.items() if k not in ("provider_id",)},
+            # Spread extra scorecard fields for backward-compat but DON'T let
+            # them clobber identity fields we just set above (credential,
+            # practice_name, etc. may be NULL in the snapshot and would wipe
+            # out the real provider record values).
+            **{
+                k: v
+                for k, v in scorecard_data.items()
+                if k not in (
+                    "provider_id",
+                    "first_name",
+                    "last_name",
+                    "credential",
+                    "specialty",
+                    "specialty_category",
+                    "practice_name",
+                    "npi",
+                    "email",
+                    "patient_count",
+                    "scorecard",
+                    "hcc_performance",
+                    "alerts",
+                )
+            },
         }
     except Exception as exc:
         logger.error("get_scorecard error pid=%s: %s", provider_id, exc, exc_info=True)
