@@ -845,6 +845,10 @@ def get_latest_scorecard(provider_id: int, year: int) -> dict[str, Any] | None:
     if calculated_at:
         if isinstance(calculated_at, str):
             calculated_at = datetime.fromisoformat(calculated_at)
+        # MySQL returns naive datetimes but datetime.now(timezone.utc) is aware;
+        # normalize both to UTC-aware so the subtraction doesn't raise.
+        if calculated_at.tzinfo is None:
+            calculated_at = calculated_at.replace(tzinfo=timezone.utc)
         age_hours = (datetime.now(timezone.utc) - calculated_at).total_seconds() / 3600
         if age_hours > _SCORECARD_STALE_HOURS:
             return None
