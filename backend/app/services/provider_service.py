@@ -1325,7 +1325,10 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
                 pss.*,
                 p.first_name,
                 p.last_name,
+                p.credential,
                 p.specialty,
+                p.specialty_category AS provider_specialty_category,
+                p.practice_name,
                 p.npi,
                 pss.meat_completeness_avg
             FROM provider_scorecard_snapshots pss
@@ -1358,6 +1361,16 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
             return "Hospitalist"
         return "Specialist"
 
+    def _sc_from_row(row: dict[str, Any], spec: str) -> str:
+        raw = (row.get("provider_specialty_category") or "").lower()
+        if raw == "pcp":
+            return "PCP"
+        if raw == "hospitalist":
+            return "Hospitalist"
+        if raw == "specialist":
+            return "Specialist"
+        return _specialty_category(spec)
+
     result: list[dict[str, Any]] = []
     for rank, row in enumerate(rows, start=1):
         spec = row.get("specialty") or ""
@@ -1368,10 +1381,10 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
                 "first_name": row.get("first_name", ""),
                 "last_name": row.get("last_name", ""),
                 "provider_name": f"{row['first_name']} {row['last_name']}".strip(),
-                "credential": "MD",
+                "credential": row.get("credential") or "",
                 "specialty": spec,
-                "specialty_category": _specialty_category(spec),
-                "practice_name": "Sunrise Health Partners",
+                "specialty_category": _sc_from_row(row, spec),
+                "practice_name": row.get("practice_name"),
                 "npi": row.get("npi"),
                 "patient_count": row["total_patients"],
                 "average_raf_score": float(row["average_raf"])
