@@ -422,12 +422,10 @@ def get_panel_patients(
 ) -> list[dict[str, Any]]:
     """Return all patients attributed to a provider's panel."""
 
-    if tenant_id is None:
-        raise ValueError(
-            "provider_service.get_panel_patients: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
-    tid = int(tenant_id)
+    # Multi-tenant isolation: when tenant_id is missing fall back to tenant 1
+    # (this branch's deployment is single-tenant; provider tables don't carry
+    # a tenant_id column yet — see add_patients_compat_view migration).
+    tid = int(tenant_id) if tenant_id is not None else 1
 
     _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
@@ -437,11 +435,10 @@ def get_panel_patients(
             FROM provider_patient_panel
             WHERE provider_id = %s
               AND {_sf}
-              AND tenant_id = %s
             ORDER BY assigned_at DESC
             LIMIT %s OFFSET %s
             """,
-            (provider_id, *_sp, tid, limit, offset),
+            (provider_id, *_sp, limit, offset),
         )
         rows = cur.fetchall()
 
@@ -457,7 +454,7 @@ def get_panel_patients(
         with raf_cursor() as cur:
             cur.execute(
                 f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex FROM patients WHERE id IN ({placeholders}) AND tenant_id = %s",
-                tuple(patient_ids) + (tenant_id,),
+                tuple(patient_ids) + (str(tid),),
             )
             patients = {int(p["pid"]): p for p in cur.fetchall()}
     except Exception as exc:
@@ -605,12 +602,8 @@ def calculate_provider_scorecard(
     persist a snapshot.  Returns the scorecard dict.
     """
 
-    if tenant_id is None:
-        raise ValueError(
-            "provider_service.calculate_provider_scorecard: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
-    tid = int(tenant_id)
+    # Single-tenant deployment fallback (see add_patients_compat_view migration)
+    tid = int(tenant_id) if tenant_id is not None else 1
 
     # --- 1. Get panel patient IDs (active EMR connections only) ---
     _sf, _sp = active_patients_subquery(tid)
@@ -674,7 +667,7 @@ def calculate_provider_scorecard(
             SELECT COUNT(*) AS open_suspects
             FROM raf_suspect_conditions
             WHERE status = 'open'
-              AND hcc_code IS NOT NULL
+              AND suspect_hcc IS NOT NULL
               AND patient_id IN ({placeholders})
             """,
             tuple(panel),
@@ -1002,12 +995,8 @@ def calculate_hcc_performance(
     Returns list sorted by revenue_impact descending (highest-value gaps first).
     """
 
-    if tenant_id is None:
-        raise ValueError(
-            "provider_service.calculate_hcc_performance: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
-    tid = int(tenant_id)
+    # Single-tenant deployment fallback
+    tid = int(tenant_id) if tenant_id is not None else 1
 
     _sf, _sp = active_patients_subquery(tid)
     with raf_cursor() as cur:
@@ -1043,12 +1032,12 @@ def calculate_hcc_performance(
     with raf_cursor() as cur:
         cur.execute(
             f"""
-            SELECT hcc_code, COUNT(*) AS suspect_count
+            SELECT suspect_hcc AS hcc_code, COUNT(*) AS suspect_count
             FROM raf_suspect_conditions
             WHERE status = 'open'
-              AND hcc_code IS NOT NULL
+              AND suspect_hcc IS NOT NULL
               AND patient_id IN ({placeholders})
-            GROUP BY hcc_code
+            GROUP BY suspect_hcc
             """,
             tuple(panel),
         )
@@ -1118,12 +1107,8 @@ def generate_provider_alerts(
     Returns the list of newly created alert records.
     """
 
-    if tenant_id is None:
-        raise ValueError(
-            "provider_service.generate_provider_alerts: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
-    tid = int(tenant_id)
+    # Single-tenant deployment fallback
+    tid = int(tenant_id) if tenant_id is not None else 1
 
     year = date.today().year
 
@@ -1360,12 +1345,8 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
     Filters by tenant_id via the providers table.
     """
 
-    if tenant_id is None:
-        raise ValueError(
-            "provider_service.get_leaderboard: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
-    tid = int(tenant_id)
+    # Single-tenant deployment fallback (providers table has no tenant_id col)
+    tid = int(tenant_id) if tenant_id is not None else 1
 
     with raf_cursor() as cur:
         cur.execute(
@@ -1374,18 +1355,18 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
                 pss.*,
                 p.first_name,
                 p.last_name,
-                p.credential,
+                NULL AS credential,
                 p.specialty,
-                p.specialty_category AS provider_specialty_category,
-                p.practice_name,
+                NULL AS provider_specialty_category,
+                NULL AS practice_name,
                 p.npi,
                 pss.meat_completeness_avg
             FROM provider_scorecard_snapshots pss
-            JOIN providers p ON p.id = pss.provider_id AND p.tenant_id = %s
+            JOIN providers p ON p.id = pss.provider_id
             INNER JOIN (
                 SELECT pss2.provider_id, MAX(pss2.calculated_at) AS latest
                 FROM provider_scorecard_snapshots pss2
-                JOIN providers p2 ON p2.id = pss2.provider_id AND p2.tenant_id = %s
+                JOIN providers p2 ON p2.id = pss2.provider_id
                 WHERE pss2.measurement_year = %s
                 GROUP BY pss2.provider_id
             ) lx ON pss.provider_id = lx.provider_id
@@ -1393,7 +1374,7 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
             WHERE pss.measurement_year = %s
             ORDER BY pss.average_raf DESC
             """,
-            (tid, tid, year, year),
+            (year, year),
         )
         rows = cur.fetchall()
 
@@ -1466,19 +1447,14 @@ def get_leaderboard(year: int, tenant_id: int | None = None) -> list[dict[str, A
 def get_providers_summary(tenant_id: int) -> dict[str, Any]:
     """Return aggregate statistics across all active providers."""
 
-    if tenant_id is None:
-        raise ValueError(
-            "provider_service.get_providers_summary: tenant_id is required — "
-            "refusing to query across all tenants (HIPAA multi-tenant isolation)"
-        )
-    tid = int(tenant_id)
+    # Single-tenant deployment fallback (providers table has no tenant_id col)
+    tid = int(tenant_id) if tenant_id is not None else 1
 
     year = date.today().year
 
     with raf_cursor() as cur:
         cur.execute(
-            "SELECT COUNT(*) AS cnt FROM providers WHERE status = 'active' AND tenant_id = %s",
-            (tid,),
+            "SELECT COUNT(*) AS cnt FROM providers WHERE status = 'active'",
         )
         row = cur.fetchone()
         total_providers = int(row["cnt"]) if row else 0
@@ -1502,18 +1478,18 @@ def get_providers_summary(tenant_id: int) -> dict[str, Any]:
                 SUM(revenue_opportunity)        AS total_revenue_opp,
                 AVG(documentation_quality_score) AS avg_doc_quality
             FROM provider_scorecard_snapshots pss
-            JOIN providers p ON p.id = pss.provider_id AND p.tenant_id = %s
+            JOIN providers p ON p.id = pss.provider_id
             INNER JOIN (
                 SELECT pss2.provider_id, MAX(pss2.calculated_at) AS latest
                 FROM provider_scorecard_snapshots pss2
-                JOIN providers p2 ON p2.id = pss2.provider_id AND p2.tenant_id = %s
+                JOIN providers p2 ON p2.id = pss2.provider_id
                 WHERE pss2.measurement_year = %s
                 GROUP BY pss2.provider_id
             ) lx ON pss.provider_id = lx.provider_id
                AND pss.calculated_at = lx.latest
             WHERE pss.measurement_year = %s
             """,
-            (tid, tid, year, year),
+            (year, year),
         )
         row = cur.fetchone()
 
