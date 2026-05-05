@@ -68,6 +68,7 @@ from app.routers import insights as insights_router
 from app.routers import meat as meat_router
 from app.routers import pipeline as pipeline_router
 from app.routers import pipeline_settings as pipeline_settings_router
+from app.routers import provider_suspect_hotlist as provider_suspect_hotlist_router
 from app.routers import provider_worklist as provider_worklist_router
 from app.routers import radv as radv_router
 from app.routers import radv_audit as radv_audit_router
@@ -149,6 +150,9 @@ def register_routers(app: FastAPI) -> None:
 
     # Provider worklist — prioritized patient lists and action items
     app.include_router(provider_worklist_router.router)
+
+    # Real-time suspect hot-list (provider drawer "action this week")
+    app.include_router(provider_suspect_hotlist_router.router)
 
     # Real-time clinical intelligence insights
     app.include_router(insights_router.router)

@@ -34,6 +34,8 @@ import {
 import { downloadCSV } from "@/lib/csv-export";
 import { initialsColor } from "@/lib/ui-utils";
 import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import FeatureFlag from "@/components/FeatureFlag";
+import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";
 
 // ── API base ──────────────────────────────────────────────────────────────────
 
@@ -1492,6 +1494,13 @@ function ProviderDetailPanel({
               </table>
             </div>
           )}
+
+          {/* Real-time suspect hot-list (gated) */}
+          <FeatureFlag flagKey="provider_suspect_hotlist">
+            <div style={{ marginTop: 24 }}>
+              <ProviderSuspectHotlist providerId={providerId} />
+            </div>
+          </FeatureFlag>
         </div>
       </div>
     </div>

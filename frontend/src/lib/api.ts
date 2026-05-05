@@ -2169,6 +2169,58 @@ export async function getTenantForecast(
 }
 
 // ---------------------------------------------------------------------------
+// Real-Time Suspect Hot-List
+// ---------------------------------------------------------------------------
+
+export interface SuspectHotlistItem {
+  patient_id: number;
+  patient_name: string;
+  suspect_id: number;
+  hcc_code: string;
+  hcc_label: string;
+  icd10: string;
+  confidence: number;
+  evidence_type: string;
+  raf_coefficient: number;
+  expected_dollars: number;
+  days_open: number;
+  urgency_score: number;
+}
+
+export interface SuspectHotlistSummary {
+  total_open: number;
+  high_confidence_count: number;
+  total_expected_dollars: number;
+  avg_dollars_per_suspect: number;
+  max_panel_dollars: number;
+  high_confidence_threshold: number;
+}
+
+export interface ProviderSuspectHotlist {
+  provider_id: number;
+  measurement_year: number;
+  min_confidence: number;
+  limit: number;
+  items: SuspectHotlistItem[];
+  summary: SuspectHotlistSummary;
+}
+
+export async function getProviderSuspectHotlist(
+  providerId: number | string,
+  opts?: { year?: number; limit?: number; minConfidence?: number }
+): Promise<ProviderSuspectHotlist> {
+  const params: Record<string, number> = {};
+  if (opts?.year !== undefined) params.year = opts.year;
+  if (opts?.limit !== undefined) params.limit = opts.limit;
+  if (opts?.minConfidence !== undefined) params.min_confidence = opts.minConfidence;
+  const { data } = await api.get(
+    `/api/providers/${providerId}/suspect-hotlist`,
+    { params },
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Legacy aliases — maintained for backward compatibility
 // ---------------------------------------------------------------------------
 
