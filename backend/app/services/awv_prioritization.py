@@ -240,7 +240,7 @@ def _fetch_panel_signals(
                    pp.provider_id AS provider_id
             FROM patients p
             LEFT JOIN provider_patient_panel pp
-                   ON pp.patient_id = p.id AND pp.is_active = 1
+                   ON pp.patient_id = p.id
             WHERE p.is_active = 1
               AND p.tenant_id = %s
               AND p.id IN ({placeholders})
@@ -252,20 +252,20 @@ def _fetch_panel_signals(
                    pp.provider_id AS provider_id
             FROM patients p
             JOIN provider_patient_panel pp
-                   ON pp.patient_id = p.id AND pp.is_active = 1
+                   ON pp.patient_id = p.id
             WHERE p.is_active = 1
               AND p.tenant_id = %s
               AND pp.provider_id = %s
         """
         params = (str(tid), int(provider_id))
     else:
-        sub_filter, sub_params = active_patients_subquery(tid, patient_id_column="id")
+        sub_filter, sub_params = active_patients_subquery(tid, patient_id_column="p.id")
         sql = f"""
             SELECT p.id AS pid, p.first_name, p.last_name,
                    pp.provider_id AS provider_id
             FROM patients p
             LEFT JOIN provider_patient_panel pp
-                   ON pp.patient_id = p.id AND pp.is_active = 1
+                   ON pp.patient_id = p.id
             WHERE p.is_active = 1
               AND p.tenant_id = %s
               AND {sub_filter}
