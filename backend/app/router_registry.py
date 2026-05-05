@@ -56,6 +56,9 @@ from app.routers import (
 )
 from app.routers import auth as auth_router
 from app.routers import config as config_router
+from app.routers import disputes as disputes_router
+from app.routers import forecast as forecast_router
+from app.routers import hcc_removal as hcc_removal_router
 from app.routers import consent as consent_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import data_quality as data_quality_router
@@ -86,6 +89,9 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(patients.router)
     app.include_router(raf.router)
     app.include_router(raf_central_router.router)
+    app.include_router(forecast_router.router)
+    app.include_router(hcc_removal_router.router)
+    app.include_router(disputes_router.router)
     app.include_router(analysis.router)
     app.include_router(suspects.router)
     app.include_router(attestations.router)

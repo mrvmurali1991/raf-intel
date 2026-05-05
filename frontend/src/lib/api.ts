@@ -2104,8 +2104,232 @@ export async function calculateRAFFull(req: RAFCalcRequest): Promise<RAFCalcResp
 }
 
 // ---------------------------------------------------------------------------
+// RAF Financial Forecast
+// ---------------------------------------------------------------------------
+
+export interface ForecastBySuspect {
+  suspect_id: number;
+  hcc: string;
+  icd10: string;
+  evidence_type: string;
+  coefficient: number;
+  confidence: number;
+  lift_raf: number;
+  lift_revenue: number;
+}
+
+export interface PatientForecast {
+  patient_id: number;
+  patient_name?: string;
+  measurement_year: number;
+  model_segment: string;
+  base_rate: number;
+  persistence_assumption: number;
+  current_raf: number;
+  current_revenue: number;
+  suspect_lift_raf: number;
+  suspect_lift_revenue: number;
+  removal_risk_raf: number;
+  removal_risk_revenue: number;
+  net_projected_raf: number;
+  net_projected_revenue: number;
+  by_suspect: ForecastBySuspect[];
+  open_suspect_count: number;
+  removal_risk_hcc_count: number;
+}
+
+export async function getPatientForecast(
+  pid: string | number,
+  year?: number
+): Promise<PatientForecast> {
+  const { data } = await api.get(`/api/forecast/patient/${pid}`, {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+
+export async function getProviderForecast(
+  providerId: string | number,
+  year?: number
+): Promise<unknown> {
+  const { data } = await api.get(`/api/forecast/provider/${providerId}`, {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+
+export async function getTenantForecast(
+  year?: number,
+  tenantId?: string
+): Promise<unknown> {
+  const { data } = await api.get("/api/forecast/tenant", {
+    params: { ...(year ? { year } : {}), ...(tenantId ? { tenant_id: tenantId } : {}) },
+  });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Legacy aliases — maintained for backward compatibility
 // ---------------------------------------------------------------------------
 
 /** @deprecated Use acceptSuspect */
 export { acceptSuspect as updateSuspect };
+
+// ---------------------------------------------------------------------------
+// Disputes & Appeals
+// ---------------------------------------------------------------------------
+
+export type DisputeStatus =
+  | "open"
+  | "in_review"
+  | "appealing"
+  | "won"
+  | "lost"
+  | "abandoned";
+
+export interface Dispute {
+  id: number;
+  tenant_id?: number | null;
+  patient_id: number;
+  hcc_code: number;
+  icd10: string;
+  disputed_by: "cms" | "payer" | "internal_audit";
+  payer_name?: string | null;
+  denial_reason_code?: string | null;
+  denial_reason_text?: string | null;
+  denial_received_at: string;
+  financial_impact: number;
+  status: DisputeStatus;
+  assigned_to?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  closed_at?: string | null;
+  evidence?: DisputeEvidence[];
+  appeals?: Appeal[];
+}
+
+export interface DisputeEvidence {
+  id: number;
+  dispute_id: number;
+  evidence_type: string;
+  source_doc_id?: string | null;
+  encounter_date?: string | null;
+  snippet_text?: string | null;
+  meat_components?: string | null;
+  uploaded_at: string;
+}
+
+export interface Appeal {
+  id: number;
+  dispute_id: number;
+  appeal_round: number;
+  appeal_letter_text?: string | null;
+  evidence_attached_json?: unknown;
+  submitted_by?: string | null;
+  submitted_at?: string | null;
+  response_received_at?: string | null;
+  outcome: "pending" | "overturned" | "upheld" | "partial" | "withdrawn";
+  monetary_recovered: number;
+  outcome_notes?: string | null;
+}
+
+export interface DisputeMetrics {
+  tenant_id: number | null;
+  totals: Record<DisputeStatus | "total", number>;
+  win_rate: number;
+  money_at_risk: number;
+  money_recovered: number;
+  avg_cycle_time_days: number;
+}
+
+export async function listDisputes(params?: {
+  status?: DisputeStatus;
+  assigned_to?: string;
+  tenant_id?: number;
+  patient_id?: number;
+  limit?: number;
+}): Promise<{ count: number; disputes: Dispute[] }> {
+  const { data } = await api.get("/api/disputes", { params });
+  return data;
+}
+
+export async function getDispute(id: number): Promise<Dispute> {
+  const { data } = await api.get(`/api/disputes/${id}`);
+  return data;
+}
+
+export async function createDispute(
+  payload: Partial<Dispute> & {
+    patient_id: number;
+    hcc_code: number;
+    icd10: string;
+    disputed_by: Dispute["disputed_by"];
+    denial_received_at: string;
+  }
+): Promise<Dispute> {
+  const { data } = await api.post("/api/disputes", payload);
+  return data;
+}
+
+export async function assignDispute(id: number, userId: string): Promise<Dispute> {
+  const { data } = await api.put(`/api/disputes/${id}/assign`, { user_id: userId });
+  return data;
+}
+
+export async function gatherDisputeEvidence(
+  id: number
+): Promise<{ dispute_id: number; count: number; evidence: DisputeEvidence[] }> {
+  const { data } = await api.post(`/api/disputes/${id}/gather-evidence`);
+  return data;
+}
+
+export async function draftAppeal(
+  id: number,
+  appealRound: number = 1
+): Promise<{
+  dispute_id: number;
+  appeal_round: number;
+  draft_text: string;
+  evidence_cited: Array<{ tag: string; evidence_id: number }>;
+  model_used: string;
+}> {
+  const { data } = await api.post(`/api/disputes/${id}/draft-appeal`, {
+    appeal_round: appealRound,
+  });
+  return data;
+}
+
+export async function submitAppeal(
+  id: number,
+  payload: {
+    appeal_round: number;
+    appeal_letter_text: string;
+    appeal_letter_model?: string;
+    evidence_attached_json?: unknown;
+    submitted_by?: string;
+  }
+): Promise<Appeal> {
+  const { data } = await api.post(`/api/disputes/${id}/submit-appeal`, payload);
+  return data;
+}
+
+export async function recordAppealOutcome(
+  appealId: number,
+  payload: {
+    outcome: Appeal["outcome"];
+    recovered_amount?: number;
+    response_received_at?: string;
+    outcome_notes?: string;
+  }
+): Promise<Appeal> {
+  const { data } = await api.post(`/api/appeals/${appealId}/record-outcome`, payload);
+  return data;
+}
+
+export async function getDisputeMetrics(tenantId?: number): Promise<DisputeMetrics> {
+  const { data } = await api.get("/api/disputes/metrics", {
+    params: tenantId !== undefined ? { tenant_id: tenantId } : undefined,
+  });
+  return data;
+}

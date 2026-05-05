@@ -31,6 +31,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.services import awv_prioritization as prio
 from app.services import awv_service as svc
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,12 @@ def _get_or_404(awv_id: int) -> dict[str, Any]:
 )
 def get_eligible_patients(
     year: int = Query(default=None, description="Benefit year (defaults to current year)"),
+    sort: str = Query(
+        default="default",
+        description="Result ordering: 'default' (alphabetical) or 'priority' "
+                    "(ranked by expected RAF/$ lift via the prioritization engine)",
+    ),
+    limit: int = Query(default=500, ge=1, le=2000, description="Max patients returned when sort=priority"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("patients", "read")),
@@ -138,12 +145,129 @@ def get_eligible_patients(
     - total_already_completed: patients who have already had their AWV
     - estimated_awv_revenue: total revenue opportunity (eligible * $250)
     - patients[]: patient list
+
+    When ``sort=priority`` is supplied each patient row is enriched with a
+    ``priority_score``, ``expected_revenue_lift``, ``score_reasons`` array, and
+    the list is sorted highest-score-first (capped to ``limit``). The
+    underlying score blend is documented in
+    ``backend/app/services/awv_prioritization.py``.
     """
     calc_year = year or _current_year()
     try:
-        return svc.get_eligible_patients(tenant_id=tenant_id, year=calc_year)
+        result = svc.get_eligible_patients(tenant_id=tenant_id, year=calc_year)
     except Exception as exc:
         logger.error("get_eligible_patients error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    if sort != "priority":
+        return result
+
+    patients = result.get("patients") or []
+    if not patients:
+        return result
+
+    pids = [int(p["patient_id"]) for p in patients if p.get("patient_id") is not None]
+    try:
+        ranking = prio.rank_panel(
+            tenant_id=tenant_id,
+            patient_ids=pids,
+            limit=max(limit, len(pids)),
+        )
+    except Exception as exc:
+        logger.error("priority sort failed, returning unsorted list: %s", exc, exc_info=True)
+        return result
+
+    score_map = {row["patient_id"]: row for row in ranking.get("patients", [])}
+    enriched: list[dict[str, Any]] = []
+    for p in patients:
+        pid = int(p.get("patient_id") or 0)
+        score = score_map.get(pid)
+        if score:
+            p["priority_score"] = score["score"]
+            p["expected_revenue_lift"] = score["expected_revenue_lift"]
+            p["expected_raf_lift"] = score["expected_raf_lift"]
+            p["score_reasons"] = score["reasons"]
+            p["score_components"] = score["components"]
+            p["high_confidence_suspect_count"] = score["high_confidence_suspect_count"]
+        else:
+            p["priority_score"] = 0.0
+            p["expected_revenue_lift"] = 0.0
+            p["expected_raf_lift"] = 0.0
+            p["score_reasons"] = []
+            p["score_components"] = {}
+            p["high_confidence_suspect_count"] = 0
+        enriched.append(p)
+
+    enriched.sort(
+        key=lambda r: (
+            -float(r.get("priority_score") or 0),
+            -float(r.get("expected_revenue_lift") or 0),
+            int(r.get("patient_id") or 0),
+        )
+    )
+    result["patients"] = enriched[:limit]
+    result["sort"] = "priority"
+    result["weights"] = ranking.get("weights")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# GET /api/awv/priority-list
+# Must be declared BEFORE /{id}.
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/priority-list",
+    summary="Ranked AWV outreach list — highest expected RAF/$ lift first",
+)
+def get_priority_list(
+    provider_id: int | None = Query(default=None, description="Restrict to this provider's panel"),
+    limit: int = Query(default=50, ge=1, le=500, description="Max patients returned"),
+    weight_revenue: float | None = Query(default=None, ge=0, le=1, description="Override default revenue weight (0.45)"),
+    weight_high_conf: float | None = Query(default=None, ge=0, le=1, description="Override high-confidence-suspects weight (0.25)"),
+    weight_recency: float | None = Query(default=None, ge=0, le=1, description="Override recency weight (0.15)"),
+    weight_no_awv: float | None = Query(default=None, ge=0, le=1, description="Override no-AWV-in-year weight (0.15)"),
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("patients", "read")),
+) -> dict[str, Any]:
+    """
+    Return the panel ranked by composite priority score (0-100).
+
+    Each entry includes:
+      - score, expected_raf_lift, expected_revenue_lift
+      - suspect_count, high_confidence_suspect_count
+      - last_encounter_days_ago, last_awv_days_ago, open_care_gaps
+      - reasons[]: human-readable explanation list (for tooltip rendering)
+      - components: per-axis weighted contribution (sums to score / 100)
+
+    Optional weight_* query params override the default 0.45/0.25/0.15/0.15
+    blend and are renormalized to sum to 1.0.
+
+    The endpoint is read-only and does NOT mutate any AWV schedule or
+    outreach log row.
+    """
+    overrides: dict[str, float] = {}
+    if weight_revenue is not None:
+        overrides["revenue"] = weight_revenue
+    if weight_high_conf is not None:
+        overrides["high_conf_suspects"] = weight_high_conf
+    if weight_recency is not None:
+        overrides["recency"] = weight_recency
+    if weight_no_awv is not None:
+        overrides["no_awv"] = weight_no_awv
+
+    try:
+        return prio.rank_panel(
+            tenant_id=tenant_id,
+            provider_id=provider_id,
+            limit=limit,
+            weights=overrides or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.error("get_priority_list error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
