@@ -438,6 +438,10 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
       * dual_signed    — audit_status = 'approved' AND has both coder ids
       * audit_ready    — dual_signed (the strict definition)
     """
+    # primary_coder_label / secondary_coder_label were added in migration 029.
+    # We use COALESCE so this query still works on pre-migration instances where
+    # the columns may not yet exist — MySQL raises an error on unknown columns,
+    # so we fall back gracefully in the except block below.
     sql = """
         SELECT
             id,
@@ -448,14 +452,25 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
             audit_status,
             primary_coder_id,
             secondary_coder_id,
-            revenue_impact
+            revenue_impact,
+            primary_coder_label,
+            secondary_coder_label
         FROM recapture_gaps
         WHERE tenant_id = %s
           AND status IN ('open', 'recaptured')
     """
-    with raf_cursor() as cur:
-        cur.execute(sql, (tenant_id,))
-        rows = cur.fetchall() or []
+    try:
+        with raf_cursor() as cur:
+            cur.execute(sql, (tenant_id,))
+            rows = cur.fetchall() or []
+    except Exception:
+        # Fallback: query without the new IRR-label columns (pre-migration instances).
+        sql_compat = sql.replace(
+            ",\n            primary_coder_label,\n            secondary_coder_label", ""
+        )
+        with raf_cursor() as cur:
+            cur.execute(sql_compat, (tenant_id,))
+            rows = cur.fetchall() or []
 
     total = len(rows)
     with_evidence = 0
@@ -464,6 +479,12 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
     secondary_rejected = 0   # secondary coder disagreed with primary
     pending_review = 0       # has primary coder but no secondary action yet
     missing: list[dict[str, Any]] = []
+
+    # Pairs of (primary_label, secondary_label) for kappa computation.
+    # Only collected for rows where BOTH independent labels are present
+    # (migration 029).  Legacy rows where the columns are absent or NULL
+    # are excluded from the kappa set and counted under proportion agreement.
+    kappa_pairs: list[tuple[str, str]] = []
 
     for r in rows:
         has_phrase = bool((r.get("evidence_phrase") or "").strip()) and bool(r.get("meat_element"))
@@ -485,6 +506,12 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
             secondary_rejected += 1
         elif has_primary and not has_secondary and status in ("primary_coded", "review_pending"):
             pending_review += 1
+
+        # Collect independent labels for kappa (migration 029).
+        p_label = r.get("primary_coder_label")
+        s_label = r.get("secondary_coder_label")
+        if p_label and s_label:
+            kappa_pairs.append((str(p_label), str(s_label)))
 
         # Surface gaps that block audit-readiness — order by revenue desc later.
         if not has_phrase or r.get("audit_status") != "approved":
@@ -509,10 +536,16 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
 
     audit_ready_pct = round((dual_signed / total) * 100.0, 2) if total else 0.0
 
-    # Inter-rater reliability — % of secondary-reviewed gaps where the
-    # secondary coder agreed with the primary.  Pure proportion agreement
-    # (no chance correction): full Cohen's kappa would require independent
-    # labels from both coders, which the current schema does not capture.
+    # ---------------------------------------------------------------------------
+    # Inter-rater reliability
+    # ---------------------------------------------------------------------------
+    # When migration 029 labels are present (kappa_pairs non-empty) we compute
+    # full Cohen's kappa with chance correction.  κ = (p_o - p_e) / (1 - p_e)
+    # where p_o = observed agreement and p_e = expected agreement by chance
+    # (product of marginal frequencies).
+    #
+    # When no independent labels exist (pre-migration or no gaps reviewed yet)
+    # we fall back to the legacy proportion-agreement metric.
     irr_total = secondary_approved + secondary_rejected
     irr_pct = round((secondary_approved / irr_total) * 100.0, 2) if irr_total else None
     irr_band = (
@@ -521,6 +554,46 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
         else "acceptable" if irr_pct >= 80
         else "needs_review"
     )
+
+    kappa: float | None = None
+    kappa_n = len(kappa_pairs)
+    irr_method = "proportion_agreement"
+
+    if kappa_n >= 2:
+        # Binary labels: 'accept' or 'reject'
+        LABELS = ("accept", "reject")
+        # Observed agreement
+        agreed = sum(1 for p, s in kappa_pairs if p == s)
+        p_o = agreed / kappa_n
+
+        # Marginal frequencies
+        def _marginal(side: int, label: str) -> float:
+            return sum(1 for pair in kappa_pairs if pair[side] == label) / kappa_n
+
+        p_e = sum(_marginal(0, lbl) * _marginal(1, lbl) for lbl in LABELS)
+
+        if p_e < 1.0:
+            raw_kappa = (p_o - p_e) / (1.0 - p_e)
+            kappa = round(max(-1.0, min(1.0, raw_kappa)), 4)
+        else:
+            # Perfect agreement by chance (degenerate) — kappa undefined → None
+            kappa = None
+
+        # Kappa band thresholds follow Landis & Koch (1977)
+        if kappa is not None:
+            irr_band = (
+                "almost_perfect" if kappa >= 0.81
+                else "substantial" if kappa >= 0.61
+                else "moderate" if kappa >= 0.41
+                else "fair" if kappa >= 0.21
+                else "slight" if kappa >= 0.0
+                else "poor"
+            )
+        irr_method = "cohens_kappa"
+        # Publish kappa as agreement_pct-equivalent (×100) so the UI tile
+        # can reuse the same rendering path.
+        if kappa is not None:
+            irr_pct = round(kappa * 100.0, 2)
 
     return {
         "total_gaps":      total,
@@ -534,9 +607,15 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
             "pending_review":      pending_review,
             "agreement_pct":       irr_pct,
             "band":                irr_band,
-            "method":              "proportion_agreement",
+            "method":              irr_method,
+            "kappa":               kappa,
+            "kappa_n":             kappa_n,
             "note": (
-                "Proportion of secondary-reviewed gaps where the secondary "
+                "Cohen's kappa computed from independent primary/secondary coder "
+                "labels (migration 029).  Kappa >= 0.61 = substantial agreement. "
+                "Falls back to proportion_agreement when labels are absent."
+                if irr_method == "cohens_kappa"
+                else "Proportion of secondary-reviewed gaps where the secondary "
                 "coder approved (vs rejected) the primary's coding.  Lower "
                 "than 80%% suggests training/guideline drift."
             ),
