@@ -17,9 +17,11 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Sparkles, ClipboardList, Stethoscope, MessageSquare,
-  Check, X, Pencil, FileSearch, ChevronRight, AlertCircle,
+  Check, X, Pencil, FileSearch, ChevronRight, AlertCircle, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
+import { tokens } from "@/styles/tokens";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { useToast } from "@/components/Toast";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
 import { needsAcceptGate } from "@/lib/confidence";
@@ -117,7 +119,7 @@ function MeatPills({ m }: { m: ReviewItem["meat"] }) {
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 20, height: 20, borderRadius: 6, fontSize: 10, fontWeight: 700,
           fontFamily: FONT_MONO,
-          backgroundColor: v ? C.brandSoft : "#F1F5F9",
+          backgroundColor: v ? C.brandSoft : tokens.slate100,
           color: v ? C.brand : C.textSubtle,
           border: `1px solid ${v ? C.brandRing : C.border}`,
         }}>{k}</span>
@@ -151,10 +153,10 @@ function EvidenceSnippet({
     const post = snip.slice(e, Math.min(snip.length, e + CTX));
     return (
       <div style={{ marginTop: 4 }}>
-        <span style={{ fontSize: 12, color: "#64748B", fontStyle: "italic" }}>
+        <span style={{ fontSize: 12, color: tokens.slate500, fontStyle: "italic" }}>
           {leadEllipsis ? "…" : ""}{pre}
           <mark style={{
-            backgroundColor: "#FEF08A", borderRadius: 3,
+            backgroundColor: tokens.warningSoft, borderRadius: 3,
             padding: "0 2px", fontStyle: "normal",
           }}>{mid}</mark>
           {post}{trailEllipsis ? "…" : ""}
@@ -164,9 +166,9 @@ function EvidenceSnippet({
             onClick={() => onOpen(it)}
             title="Open full note"
             style={{
-              marginLeft: 8, padding: "1px 6px", border: "1px solid #E2E8F0",
-              borderRadius: 5, background: "#fff", fontSize: 11,
-              fontWeight: 600, color: "#64748B", cursor: "pointer",
+              marginLeft: 8, padding: "1px 6px", border: `1px solid ${tokens.slate200}`,
+              borderRadius: 5, background: tokens.white, fontSize: 11,
+              fontWeight: 600, color: tokens.slate500, cursor: "pointer",
             }}
           >Open full note</button>
         )}
@@ -182,7 +184,7 @@ function EvidenceSnippet({
       style={{
         marginTop: 4, padding: 0, border: "none", background: "none",
         cursor: "pointer", textAlign: "left",
-        fontSize: 12, color: "#64748B", fontStyle: "italic",
+        fontSize: 12, color: tokens.slate500, fontStyle: "italic",
         textDecoration: "underline dotted", textUnderlineOffset: 2,
       }}
     ><strong>&ldquo;{snip}&rdquo;</strong></button>
@@ -263,7 +265,15 @@ export default function ReviewQueuePage() {
     <div style={{
       background: C.bgPage, minHeight: "100vh", padding: "32px 40px 48px",
       fontFamily: FONT_SYS, color: C.text,
-    }}>
+    }} className="rci-page-pad-desktop">
+      <style>{`
+        @keyframes rq-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @media (max-width: 640px) { .rci-page-pad-desktop { padding: 20px 16px 32px !important; } }
+        button:focus-visible { outline: 2px solid ${tokens.primary}; outline-offset: 2px; border-radius: 4px; }
+      `}</style>
+      {/* Data quality banner */}
+      <DataQualityBanner />
+
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
         <div style={{
@@ -272,7 +282,7 @@ export default function ReviewQueuePage() {
           display: "flex", alignItems: "center", justifyContent: "center",
           boxShadow: "0 6px 16px rgba(15, 118, 110, 0.25)",
         }}>
-          <Sparkles size={22} color="#fff" strokeWidth={2.25} />
+          <Sparkles size={22} color={tokens.white} strokeWidth={2.25} />
         </div>
         <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -338,11 +348,32 @@ export default function ReviewQueuePage() {
 
       {isError && (
         <div role="alert" style={{
-          display: "flex", alignItems: "center", gap: 12, background: C.highSoft,
-          border: `1px solid #FCA5A5`, borderRadius: 12, padding: "12px 16px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 12, background: C.highSoft,
+          border: `1px solid ${tokens.dangerBorder}`, borderRadius: 12, padding: "12px 16px",
           marginBottom: 16, fontSize: 13, color: C.high, fontWeight: 600,
         }}>
-          <AlertCircle size={18} /> Failed to load review queue.
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertCircle size={18} aria-hidden="true" />
+            <div>
+              <div>Failed to load review queue.</div>
+              <div style={{ fontSize: 12, fontWeight: 400, marginTop: 2 }}>
+                Coder decisions cannot be recorded while data is unavailable — this is a compliance risk.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            aria-label="Retry loading review queue"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+              border: `1px solid ${tokens.dangerBorder}`, backgroundColor: tokens.white,
+              color: C.high, cursor: "pointer", flexShrink: 0,
+            }}
+          >
+            <RefreshCw size={13} /> Retry
+          </button>
         </div>
       )}
 
@@ -379,17 +410,45 @@ export default function ReviewQueuePage() {
         </div>
 
         {isLoading && (
-          <div style={{ padding: 48, textAlign: "center", color: C.textSubtle }}>
-            Loading…
+          <div aria-busy="true" aria-label="Loading review queue items">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                aria-hidden="true"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(200px,1.4fr) minmax(240px,2fr) 110px 140px 120px 200px",
+                  gap: 14,
+                  padding: "14px 22px",
+                  borderBottom: `1px solid ${C.rowDivider}`,
+                  alignItems: "center",
+                }}
+              >
+                {[160, 220, 80, 110, 80, 160].map((w, j) => (
+                  <div
+                    key={j}
+                    style={{
+                      height: 14,
+                      width: w,
+                      borderRadius: 6,
+                      background: `linear-gradient(90deg, ${tokens.slate100} 25%, ${tokens.slate200} 50%, ${tokens.slate100} 75%)`,
+                      backgroundSize: "200% 100%",
+                      animation: "rq-shimmer 1.4s infinite",
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
           </div>
         )}
 
-        {!isLoading && items.length === 0 && (
+        {!isLoading && !isError && items.length === 0 && (
           <div style={{ padding: 56, textAlign: "center" }}>
-            <FileSearch size={30} color={C.brand} />
+            <FileSearch size={30} color={C.brand} aria-hidden="true" />
             <div style={{ marginTop: 10, fontWeight: 700 }}>Queue is empty</div>
             <div style={{ fontSize: 13, color: C.textSubtle }}>
-              No open items for this tab.
+              No open items in this category. All candidates have been reviewed.
             </div>
           </div>
         )}
@@ -399,6 +458,18 @@ export default function ReviewQueuePage() {
           const aColor = initialsColor(it.patient_name || String(it.patient_id));
           const c = it.confidence ?? 0;
           const isEditing = editing?.id === it.id;
+          // Audit trail: derive relative time for inline display
+          const createdAgo = it.created_at
+            ? (() => {
+                const diff = Date.now() - new Date(it.created_at).getTime();
+                const mins = Math.floor(diff / 60000);
+                if (mins < 1) return "just now";
+                if (mins < 60) return `${mins}m ago`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 24) return `${hrs}h ago`;
+                return `${Math.floor(hrs / 24)}d ago`;
+              })()
+            : null;
           return (
             <div key={it.id} style={{
               display: "grid",
@@ -416,19 +487,25 @@ export default function ReviewQueuePage() {
               borderBottom: idx < items.length - 1 ? `1px solid ${C.rowDivider}` : "none",
               borderLeft: `3px solid ${confColor(c)}`,
             }}>
-              {/* Patient */}
+              {/* Patient + audit trail timestamp */}
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: 10, color: "#fff",
+                  width: 36, height: 36, borderRadius: 10, color: tokens.white,
                   background: `linear-gradient(135deg, ${aColor}, ${aColor}CC)`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 700,
-                }}>{initials}</div>
+                  fontSize: 12, fontWeight: 700, flexShrink: 0,
+                }} aria-hidden="true">{initials}</div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>
                     {it.patient_name ?? `Patient ${it.patient_id}`}
                   </div>
                   <div style={{ fontSize: 11, color: C.label }}>PID {it.patient_id}</div>
+                  {/* Inline audit trail — when item was created (required for RADV compliance) */}
+                  {createdAgo && (
+                    <div style={{ fontSize: 10, color: C.label, marginTop: 1 }}>
+                      Added {createdAgo}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -482,7 +559,7 @@ export default function ReviewQueuePage() {
               {/* Confidence */}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{
-                  flex: 1, height: 6, borderRadius: 4, backgroundColor: "#F1F5F9",
+                  flex: 1, height: 6, borderRadius: 4, backgroundColor: tokens.slate100,
                   overflow: "hidden",
                 }}>
                   <div style={{
@@ -524,7 +601,8 @@ export default function ReviewQueuePage() {
                 justifySelf: "end", display: "flex", alignItems: "center", gap: 6,
               }}>
                 <button
-                  title="Accept"
+                  title="Accept HCC candidate"
+                  aria-label={`Accept HCC candidate for ${it.patient_name ?? `Patient ${it.patient_id}`}`}
                   onClick={() => handleAcceptClick(it)}
                   disabled={decideMut.isPending}
                   style={{
@@ -534,7 +612,8 @@ export default function ReviewQueuePage() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}><Check size={15} strokeWidth={2.5} /></button>
                 <button
-                  title="Reject"
+                  title="Reject HCC candidate"
+                  aria-label={`Reject HCC candidate for ${it.patient_name ?? `Patient ${it.patient_id}`}`}
                   onClick={() => decideMut.mutate({ candidate_id: it.id, decision: "reject" })}
                   disabled={decideMut.isPending}
                   style={{
@@ -544,15 +623,16 @@ export default function ReviewQueuePage() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}><X size={15} strokeWidth={2.5} /></button>
                 <button
-                  title="Edit ICD-10"
+                  title="Edit ICD-10 code"
+                  aria-label={`Edit ICD-10 code for ${it.patient_name ?? `Patient ${it.patient_id}`}`}
                   onClick={() => setEditing({ id: it.id, icd10: it.icd10 ?? "" })}
                   style={{
                     width: 34, height: 34, borderRadius: 8,
-                    border: `1px solid ${C.border}`, background: "#fff",
+                    border: `1px solid ${C.border}`, background: tokens.white,
                     color: C.textMuted, cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}><Pencil size={14} /></button>
-                <ChevronRight size={14} color="#CBD5E1" />
+                <ChevronRight size={14} color={tokens.slate300} aria-hidden="true" />
               </div>
             </div>
           );
