@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { StatCard, PageHeader, SectionHeader, EmptyState } from "@/components/healthcare-ui";
 import { useAuth } from "@/contexts/auth-context";
+import { tokens } from "@/styles/tokens";
 
 // ── API ───────────────────────────────────────────────────────────────────────
 // Uses the shared authApi instance from auth-context, which automatically
@@ -157,32 +158,33 @@ interface AuditLogParams {
 }
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
+// All colors sourced from tokens.ts — no hardcoded hex.
 
 const C = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  borderLight: "#F1F5F9",
-  text: "#0F172A",
-  textMuted: "#64748B",
-  textSub: "#94A3B8",
-  primary: "#2563EB",
-  primaryLight: "#DBEAFE",
-  emerald: "#10B981",
-  emeraldLight: "#D1FAE5",
-  amber: "#F59E0B",
-  amberLight: "#FEF3C7",
-  red: "#EF4444",
-  redLight: "#FEE2E2",
-  violet: "#8B5CF6",
-  violetLight: "#EDE9FE",
-  teal: "#0D9488",
-  tealLight: "#CCFBF1",
-  gray100: "#F3F4F6",
-  gray200: "#E5E7EB",
-  gray400: "#9CA3AF",
-  gray600: "#4B5563",
-  white: "#FFFFFF",
+  bg:           tokens.slate50,
+  card:         tokens.white,
+  border:       tokens.slate200,
+  borderLight:  tokens.slate100,
+  text:         tokens.slate900,
+  textMuted:    tokens.slate500,
+  textSub:      tokens.slate400,
+  primary:      tokens.primary,
+  primaryLight: "rgba(37,99,235,0.10)",   // tokens.primarySoft equivalent
+  emerald:      tokens.success,
+  emeraldLight: tokens.successSoft,
+  amber:        tokens.warningStrong,
+  amberLight:   tokens.warningSoft,
+  red:          tokens.riskHigh,
+  redLight:     tokens.riskHighSoft,
+  violet:       tokens.accentPurple,
+  violetLight:  "rgba(139,92,246,0.12)",
+  teal:         tokens.riskLow,            // emerald-600 proxy
+  tealLight:    tokens.successSoft,
+  gray100:      tokens.slate100,
+  gray200:      tokens.slate200,
+  gray400:      tokens.slate400,
+  gray600:      tokens.slate600,
+  white:        tokens.white,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -347,7 +349,7 @@ function Btn({
     width: fullWidth ? "100%" : undefined,
   };
   const variants: Record<string, React.CSSProperties> = {
-    primary: { background: "linear-gradient(135deg, #2563EB, #1D4ED8)", color: C.white, boxShadow: "0 2px 8px rgba(37,99,235,0.25)" },
+    primary: { background: `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`, color: C.white, boxShadow: "0 2px 8px rgba(37,99,235,0.25)" },
     ghost:   { backgroundColor: "transparent", color: C.textMuted },
     danger:  { backgroundColor: C.redLight, color: C.red, border: `1px solid ${C.red}20` },
     outline: { backgroundColor: C.white, color: C.text, border: `1px solid ${C.border}` },
@@ -423,10 +425,14 @@ function Modal({
   width?: number;
   children: React.ReactNode;
 }) {
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
+    // Move focus into the dialog when it opens
+    setTimeout(() => closeBtnRef.current?.focus(), 50);
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
@@ -469,6 +475,7 @@ function Modal({
         >
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>{title}</h2>
           <button
+            ref={closeBtnRef}
             onClick={onClose}
             style={{
               background: "none", border: "none", cursor: "pointer",
@@ -623,6 +630,7 @@ function UserFormDialog({
                   type={showPw ? "text" : "password"}
                   {...field("password")}
                   placeholder="Min. 8 characters"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
@@ -664,6 +672,7 @@ function UserFormDialog({
                 type="password"
                 {...field("confirm_password")}
                 placeholder="Re-enter password"
+                autoComplete="new-password"
               />
             </FormField>
           </>
@@ -919,9 +928,9 @@ function AuditLogSection() {
       </div>
 
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <table aria-label="Audit log" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "linear-gradient(135deg, #F8FAFC, #F1F5F9)" }}>
+            <tr style={{ background: `linear-gradient(135deg, ${tokens.slate50}, ${tokens.slate100})` }}>
               {["Timestamp", "User", "Action", "Resource", "Patient ID", "IP Address", "Status"].map((h) => (
                 <th
                   key={h}
@@ -960,7 +969,7 @@ function AuditLogSection() {
                   className="hover:bg-blue-50/40 transition-colors duration-150"
                   style={{
                     borderBottom: `1px solid ${C.borderLight}`,
-                    backgroundColor: i % 2 === 0 ? C.white : "#F8FAFD",
+                    backgroundColor: i % 2 === 0 ? C.white : tokens.slate50,
                   }}
                 >
                   <td style={{ padding: "10px 16px", color: C.textMuted, whiteSpace: "nowrap" }}>
@@ -1207,7 +1216,7 @@ export default function UsersPage() {
   // ── Main render ───────────────────────────────────────────────────────────
 
   return (
-    <div className="animate-fade-in" style={{ minHeight: "100vh", backgroundColor: C.bg, padding: "24px 28px" }}>
+    <div className="animate-fade-in rci-page-pad-desktop" style={{ minHeight: "100vh", backgroundColor: C.bg, padding: "20px 16px" }}>
 
       {/* Toast */}
       {toast && (
@@ -1215,7 +1224,7 @@ export default function UsersPage() {
           className="animate-slide-up"
           style={{
             position: "fixed", top: 20, right: 20, zIndex: 2000,
-            background: toast.ok ? "linear-gradient(135deg, #10B981, #059669)" : "linear-gradient(135deg, #EF4444, #DC2626)",
+            background: toast.ok ? `linear-gradient(135deg, ${tokens.success}, ${tokens.successDark})` : `linear-gradient(135deg, ${tokens.riskHigh}, ${tokens.danger})`,
             color: C.white, padding: "12px 18px", borderRadius: 12,
             fontSize: 13, fontWeight: 600,
             boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
@@ -1365,9 +1374,9 @@ export default function UsersPage() {
 
         {/* Table */}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <table aria-label="User list" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ background: "linear-gradient(135deg, #F8FAFC, #F1F5F9)" }}>
+              <tr style={{ background: `linear-gradient(135deg, ${tokens.slate50}, ${tokens.slate100})` }}>
                 {["User", "Role", "Title", "Status", "Last Login", "Sessions", "Actions"].map((h) => (
                   <th
                     key={h}
@@ -1390,11 +1399,27 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 40, color: C.textMuted }}>
-                    Loading users...
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div className="skeleton" style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0 }} />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div className="skeleton" style={{ width: 120, height: 12, borderRadius: 4 }} />
+                          <div className="skeleton" style={{ width: 180, height: 10, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                    </td>
+                    {[80, 60, 60, 90, 50].map((w, j) => (
+                      <td key={j} style={{ padding: "12px 16px" }}>
+                        <div className="skeleton" style={{ width: w, height: 12, borderRadius: 4 }} />
+                      </td>
+                    ))}
+                    <td style={{ padding: "12px 16px" }}>
+                      <div className="skeleton" style={{ width: 140, height: 28, borderRadius: 6 }} />
+                    </td>
+                  </tr>
+                ))
               ) : isError ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: "center", padding: 32 }}>
@@ -1407,11 +1432,24 @@ export default function UsersPage() {
               ) : pageUsers.length === 0 ? (
                 <tr>
                   <td colSpan={7}>
-                    <EmptyState
-                      icon={<UsersRound size={24} />}
-                      title="No users found"
-                      description="Try adjusting your search or filters."
-                    />
+                    {search || filterRole !== "all" || filterStatus !== "all" ? (
+                      <EmptyState
+                        icon={<UsersRound size={24} />}
+                        title="No users match your filters"
+                        description="Try adjusting your search terms or clearing the filters."
+                      />
+                    ) : (
+                      <div style={{ textAlign: "center", padding: "40px 24px" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 16, backgroundColor: C.primaryLight, marginBottom: 14 }}>
+                          <UsersRound size={26} style={{ color: C.primary }} />
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No users yet</div>
+                        <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 18 }}>Add your first user to get your team started.</div>
+                        <Btn onClick={() => setAddOpen(true)} variant="primary">
+                          <Plus size={14} /> Add your first user
+                        </Btn>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -1421,7 +1459,7 @@ export default function UsersPage() {
                     className="hover:bg-blue-50/40 transition-colors duration-150"
                     style={{
                       borderBottom: `1px solid ${C.borderLight}`,
-                      backgroundColor: i % 2 === 0 ? C.white : "#F8FAFD",
+                      backgroundColor: i % 2 === 0 ? C.white : tokens.slate50,
                     }}
                   >
                     {/* User column */}

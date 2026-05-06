@@ -23,7 +23,14 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  ToggleLeft,
+  ToggleRight,
+  RotateCcw,
 } from "lucide-react";
+import {
+  useFeatureFlagsAll,
+} from "@/components/FeatureFlagContext";
+import { tokens } from "@/styles/tokens";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1051,6 +1058,132 @@ function AiAnalysisSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Feature flags section (admin only)
+// ---------------------------------------------------------------------------
+
+function FeatureFlagsSection() {
+  const { flags, orderedKeys, loading, error, setFlag, resetAll } = useFeatureFlagsAll();
+  const [resetting, setResetting] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Group flags by category
+  const categories = Array.from(
+    new Set(orderedKeys.map((k) => flags[k]?.category ?? "Misc"))
+  );
+
+  async function handleReset() {
+    setResetting(true);
+    setResetFeedback(null);
+    try {
+      await resetAll();
+      setResetFeedback({ type: "success", message: "All feature flags reset to defaults." });
+    } catch {
+      setResetFeedback({ type: "error", message: "Failed to reset feature flags." });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <Section
+      id="feature-flags"
+      icon={ToggleLeft}
+      title="Feature Flags"
+      description="Enable or disable product features for your account. Changes take effect immediately."
+      staggerIndex={6}
+    >
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton h-10 rounded-xl" />
+          ))}
+        </div>
+      ) : error ? (
+        <Feedback type="error" message={`Failed to load feature flags: ${error}`} />
+      ) : orderedKeys.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No feature flags configured.</p>
+      ) : (
+        <div className="space-y-5">
+          {categories.map((cat) => {
+            const catKeys = orderedKeys.filter((k) => (flags[k]?.category ?? "Misc") === cat);
+            return (
+              <div key={cat}>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{cat}</p>
+                <div className="rounded-xl border border-border/40 overflow-hidden divide-y divide-border/30">
+                  {catKeys.map((key) => {
+                    const flag = flags[key];
+                    if (!flag) return null;
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/20 transition-colors duration-150"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-foreground truncate">{flag.name || key}</span>
+                            {flag.enabled !== flag.default_enabled && (
+                              <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+                                override
+                              </span>
+                            )}
+                          </div>
+                          {flag.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{flag.description}</p>
+                          )}
+                          <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{key}</p>
+                        </div>
+                        <button
+                          onClick={() => setFlag(key, !flag.enabled)}
+                          aria-label={`${flag.enabled ? "Disable" : "Enable"} ${flag.name || key}`}
+                          aria-pressed={flag.enabled}
+                          className="shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 border btn-press"
+                          style={{
+                            background: flag.enabled ? `linear-gradient(135deg, ${tokens.success}, ${tokens.successDark})` : undefined,
+                            color: flag.enabled ? "#fff" : undefined,
+                          }}
+                        >
+                          {flag.enabled
+                            ? <><ToggleRight className="h-3.5 w-3.5" /> Enabled</>
+                            : <><ToggleLeft className="h-3.5 w-3.5" /> Disabled</>
+                          }
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {resetFeedback && (
+            <div className="mt-2">
+              <Feedback type={resetFeedback.type} message={resetFeedback.message} />
+            </div>
+          )}
+
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={resetting}
+              onClick={handleReset}
+              className="h-9 rounded-xl text-sm font-medium border-2 border-border/60 hover:bg-muted/50 transition-all duration-200 btn-press"
+            >
+              {resetting ? (
+                <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Resetting...</>
+              ) : (
+                <><RotateCcw className="mr-2 h-3.5 w-3.5" />Reset All to Defaults</>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page header
 // ---------------------------------------------------------------------------
 
@@ -1085,6 +1218,7 @@ export default function SettingsPage() {
     { id: "mfa", label: "Two-Factor Auth", icon: ShieldCheck },
     { id: "sessions", label: "Sessions", icon: MonitorSmartphone },
     ...(isAdmin ? [{ id: "ai-analysis", label: "AI Analysis", icon: Sparkles }] : []),
+    ...(isAdmin ? [{ id: "feature-flags", label: "Feature Flags", icon: ToggleLeft }] : []),
     ...(isAdmin ? [{ id: "users", label: "User Management", icon: Users }] : []),
   ];
 
@@ -1096,9 +1230,10 @@ export default function SettingsPage() {
         <ProfileSection />
         <ChangePasswordSection forceChange={forcePasswordChange} />
         <MfaSection />
-        {/* Active sessions — visible to ALL authenticated users (Fix 6) */}
+        {/* Active sessions — visible to ALL authenticated users */}
         <SessionsSection />
         {isAdmin && <AiAnalysisSection />}
+        {isAdmin && <FeatureFlagsSection />}
         {isAdmin && <UserManagementSection />}
       </div>
     </div>
