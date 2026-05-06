@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Provider Scorecard — {{ provider.full_name }} — {{ year }}</title>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="brand-mark">RAF</div>
+    <div class="brand-text">
+      <div class="brand-title">RAF Intelligence</div>
+      <div class="brand-sub">Provider Scorecard — {{ year }}</div>
+    </div>
+  </div>
+  <div class="hdr-meta">
+    <div class="hdr-meta-row"><span class="lbl">Generated</span><span class="val">{{ generated_date }}</span></div>
+    <div class="hdr-meta-row"><span class="lbl">Tenant</span><span class="val">RAF Health Network</span></div>
+  </div>
+</header>
+
+<section class="provider">
+  <div class="provider-name">
+    {{ provider.full_name }}{% if provider.credential %}, {{ provider.credential }}{% endif %}
+  </div>
+  <div class="provider-sub">
+    <span><strong>NPI</strong> {{ provider.npi }}</span>
+    <span class="sep">·</span>
+    <span><strong>Specialty</strong> {{ provider.specialty }}</span>
+    <span class="sep">·</span>
+    <span><strong>Panel</strong> {{ panel_size }} patients</span>
+    {% if provider.practice_name %}
+    <span class="sep">·</span>
+    <span>{{ provider.practice_name }}</span>
+    {% endif %}
+  </div>
+</section>
+
+<section class="kpi-row">
+  {% for kpi in kpis %}
+  <div class="kpi kpi-{{ kpi.tone }}">
+    <div class="kpi-label">{{ kpi.label }}</div>
+    <div class="kpi-value">{{ kpi.value }}</div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="rev-strip">
+  <div class="rev-left">
+    <div class="rev-label">Revenue Opportunity (open suspects)</div>
+    <div class="rev-value">{{ revenue_opportunity }}</div>
+  </div>
+  <div class="rev-right">
+    <div class="rev-mini">
+      <div class="rev-mini-label">Doc Quality</div>
+      <div class="rev-mini-value">{{ doc_quality_pct }}</div>
+    </div>
+    <div class="rev-mini">
+      <div class="rev-mini-label">Percentile</div>
+      <div class="rev-mini-value">{{ percentile_rank }}</div>
+    </div>
+    <div class="rev-mini">
+      <div class="rev-mini-label">Open Suspects</div>
+      <div class="rev-mini-value">{{ suspects_open }}</div>
+    </div>
+  </div>
+</section>
+
+<section class="hcc-section">
+  <h2 class="section-title">Top 5 HCC Opportunities</h2>
+  <table class="hcc-table">
+    <thead>
+      <tr>
+        <th class="col-code">HCC</th>
+        <th class="col-label">Description</th>
+        <th class="col-num">Coded</th>
+        <th class="col-num">Open</th>
+        <th class="col-num">Capture</th>
+        <th class="col-rev">Revenue at Stake</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in top_hcc %}
+      <tr>
+        <td class="col-code"><span class="hcc-chip">HCC {{ h.code }}</span></td>
+        <td class="col-label">{{ h.label or "—" }}</td>
+        <td class="col-num">{{ h.coded }}</td>
+        <td class="col-num">{{ h.open }}</td>
+        <td class="col-num">{{ h.capture }}</td>
+        <td class="col-rev">{{ h.revenue_impact }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">No HCC opportunities for this panel and year.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="risk-row">
+  <div class="risk-badge risk-{{ risk_tone }}">
+    <div class="risk-band">{{ risk_band }}</div>
+    <div class="risk-text">Audit Risk</div>
+  </div>
+  <div class="risk-explain">
+    Audit-risk band is derived from MEAT completeness, documentation quality,
+    and the number of unresolved suspect conditions in the provider's panel.
+    {% if risk_band == 'HIGH' %}
+    Recommend immediate review — chart audits, MEAT remediation, and suspect
+    queue triage.
+    {% elif risk_band == 'MEDIUM' %}
+    Targeted follow-up recommended on documentation gaps and open suspects.
+    {% else %}
+    Provider is operating within healthy compliance bands.
+    {% endif %}
+  </div>
+</section>
+
+<footer class="watermark">
+  {{ footer_watermark }}
+</footer>
+
+</body>
+</html>

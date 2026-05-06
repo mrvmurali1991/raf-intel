@@ -57,8 +57,17 @@ from app.routers import (
 from app.routers import auth as auth_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
+from app.routers import feature_flags as feature_flags_router
 from app.routers import forecast as forecast_router
+from app.routers import hcc_gap_drilldown as hcc_gap_drilldown_router
 from app.routers import hcc_removal as hcc_removal_router
+from app.routers import meat_audit_risk as meat_audit_risk_router
+from app.routers import peer_benchmarking as peer_benchmarking_router
+from app.routers import previsit_briefing as previsit_briefing_router
+from app.routers import provider_pdf_report as provider_pdf_report_router
+from app.routers import provider_revenue_breakdown as provider_revenue_breakdown_router
+from app.routers import provider_trends as provider_trends_router
+from app.routers import top_hcc_opportunities as top_hcc_opportunities_router
 from app.routers import consent as consent_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import data_quality as data_quality_router
@@ -118,7 +127,19 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(clearinghouse.router)
 
     # Provider and quality management
+    # NOTE: peer_benchmarking is registered BEFORE providers.router so that
+    # the literal /api/providers/specialty-benchmarks path matches before the
+    # /api/providers/{id} catch-all.
+    app.include_router(peer_benchmarking_router.router)
+    app.include_router(provider_trends_router.router)  # /api/providers/trend-aggregate before /{id}/trend
     app.include_router(providers.router)
+    app.include_router(top_hcc_opportunities_router.router)
+    app.include_router(provider_revenue_breakdown_router.router)
+    app.include_router(meat_audit_risk_router.router)
+    app.include_router(hcc_gap_drilldown_router.router)
+    app.include_router(previsit_briefing_router.router)
+    app.include_router(provider_pdf_report_router.router)
+    app.include_router(feature_flags_router.router)
     app.include_router(quality.router)
     app.include_router(prospective.router)
     app.include_router(benchmarks.router)

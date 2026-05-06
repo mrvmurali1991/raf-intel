@@ -1,0 +1,346 @@
+/* Provider scorecard PDF — print stylesheet for WeasyPrint.
+   Single-page Letter; slate/blue palette to match the React app.
+*/
+
+@page {
+  size: Letter;
+  margin: 0.5in 0.55in 0.55in;
+  @bottom-left {
+    content: "RAF Intelligence — Confidential";
+    font-size: 8pt;
+    color: #94a3b8;
+  }
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font-size: 8pt;
+    color: #94a3b8;
+  }
+}
+
+html {
+  font-family: "Helvetica", "Arial", sans-serif;
+  font-size: 10pt;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- Header ---------- */
+.hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid #1d4ed8;
+  padding-bottom: 8pt;
+  margin-bottom: 14pt;
+}
+
+.hdr-brand {
+  display: flex;
+  align-items: center;
+  gap: 10pt;
+}
+
+.brand-mark {
+  width: 32pt;
+  height: 32pt;
+  background: #1d4ed8;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6pt;
+  font-weight: 800;
+  font-size: 11pt;
+  letter-spacing: 0.04em;
+}
+
+.brand-title {
+  font-weight: 800;
+  font-size: 14pt;
+  color: #0f172a;
+}
+
+.brand-sub {
+  font-size: 9.5pt;
+  color: #475569;
+  margin-top: 1pt;
+}
+
+.hdr-meta {
+  text-align: right;
+  font-size: 9pt;
+  color: #475569;
+}
+
+.hdr-meta-row {
+  margin-top: 2pt;
+}
+
+.hdr-meta .lbl {
+  color: #94a3b8;
+  margin-right: 4pt;
+}
+
+.hdr-meta .val {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+/* ---------- Provider header ---------- */
+.provider {
+  margin-bottom: 14pt;
+}
+
+.provider-name {
+  font-size: 18pt;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.provider-sub {
+  font-size: 9.5pt;
+  color: #475569;
+  margin-top: 4pt;
+}
+
+.provider-sub strong {
+  color: #94a3b8;
+  font-weight: 600;
+  margin-right: 3pt;
+}
+
+.provider-sub .sep {
+  color: #cbd5e1;
+  margin: 0 6pt;
+}
+
+/* ---------- KPI row ---------- */
+.kpi-row {
+  display: flex;
+  gap: 10pt;
+  margin-bottom: 14pt;
+}
+
+.kpi {
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  border-radius: 8pt;
+  padding: 10pt 12pt;
+  background: #f8fafc;
+}
+
+.kpi-label {
+  font-size: 8.5pt;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.kpi-value {
+  font-size: 22pt;
+  font-weight: 800;
+  margin-top: 4pt;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.kpi-blue    { border-color: #bfdbfe; background: #eff6ff; }
+.kpi-blue    .kpi-value { color: #1d4ed8; }
+.kpi-emerald { border-color: #bbf7d0; background: #ecfdf5; }
+.kpi-emerald .kpi-value { color: #059669; }
+.kpi-violet  { border-color: #ddd6fe; background: #f5f3ff; }
+.kpi-violet  .kpi-value { color: #6d28d9; }
+.kpi-slate   { border-color: #cbd5e1; background: #f1f5f9; }
+.kpi-slate   .kpi-value { color: #334155; }
+
+/* ---------- Revenue strip ---------- */
+.rev-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14pt;
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+  color: #ffffff;
+  padding: 12pt 16pt;
+  border-radius: 8pt;
+  margin-bottom: 14pt;
+}
+
+.rev-left .rev-label {
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+.rev-left .rev-value {
+  font-size: 26pt;
+  font-weight: 800;
+  margin-top: 2pt;
+  letter-spacing: -0.02em;
+}
+
+.rev-right {
+  display: flex;
+  gap: 18pt;
+}
+
+.rev-mini {
+  text-align: right;
+}
+
+.rev-mini-label {
+  font-size: 8pt;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.rev-mini-value {
+  font-size: 14pt;
+  font-weight: 700;
+  margin-top: 2pt;
+}
+
+/* ---------- Section title ---------- */
+.section-title {
+  font-size: 11pt;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 6pt 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ---------- HCC table ---------- */
+.hcc-section {
+  margin-bottom: 14pt;
+}
+
+.hcc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+}
+
+.hcc-table thead th {
+  text-align: left;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 8pt;
+  letter-spacing: 0.05em;
+  padding: 6pt 8pt;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.hcc-table tbody td {
+  padding: 7pt 8pt;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.hcc-table .col-num,
+.hcc-table th.col-num {
+  text-align: right;
+  width: 12%;
+}
+
+.hcc-table .col-rev,
+.hcc-table th.col-rev {
+  text-align: right;
+  width: 18%;
+  font-weight: 700;
+  color: #047857;
+}
+
+.hcc-table .col-code,
+.hcc-table th.col-code {
+  width: 14%;
+}
+
+.hcc-chip {
+  display: inline-block;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 4pt;
+  padding: 1.5pt 6pt;
+  font-weight: 700;
+  font-size: 8.5pt;
+}
+
+.empty {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 12pt 8pt;
+}
+
+/* ---------- Risk row ---------- */
+.risk-row {
+  display: flex;
+  gap: 14pt;
+  align-items: stretch;
+  padding: 12pt;
+  border: 1px solid #e2e8f0;
+  border-radius: 8pt;
+  background: #f8fafc;
+  margin-bottom: 14pt;
+}
+
+.risk-badge {
+  flex: 0 0 auto;
+  min-width: 110pt;
+  text-align: center;
+  border-radius: 6pt;
+  padding: 12pt 10pt;
+  color: #ffffff;
+}
+
+.risk-band {
+  font-size: 18pt;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.risk-text {
+  font-size: 8.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 2pt;
+  opacity: 0.9;
+}
+
+.risk-high   { background: #b91c1c; }
+.risk-medium { background: #b45309; }
+.risk-low    { background: #047857; }
+
+.risk-explain {
+  flex: 1;
+  font-size: 9.5pt;
+  color: #334155;
+  line-height: 1.5;
+  align-self: center;
+}
+
+/* ---------- Footer watermark ---------- */
+.watermark {
+  position: fixed;
+  bottom: -0.3in;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 8.5pt;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
