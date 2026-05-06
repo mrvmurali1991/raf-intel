@@ -85,6 +85,13 @@ export function FeatureFlagProvider({ children }: { children: ReactNode }) {
       }
       setState({ flags, orderedKeys, loading: false, error: null });
     } catch (err) {
+      // 401/403 just mean "user not signed in yet" — fall back silently to
+      // registry defaults rather than surfacing a scary error in the UI.
+      const status = (err as { response?: { status?: number } } | undefined)?.response?.status;
+      if (status === 401 || status === 403) {
+        setState((s) => ({ ...s, loading: false, error: null }));
+        return;
+      }
       const message = err instanceof Error ? err.message : "Failed to load feature flags";
       setState((s) => ({ ...s, loading: false, error: message }));
     }

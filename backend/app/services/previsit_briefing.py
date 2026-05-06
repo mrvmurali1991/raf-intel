@@ -102,6 +102,22 @@ def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
     today = date.today()
     horizon = today + timedelta(days=days_ahead)
 
+    # form_encounter.provider_id is OpenEMR users.id, NOT raf_intelligence.providers.id.
+    # Translate via providers.openemr_user_id; fall back to provider_id directly.
+    emr_uid = provider_id
+    try:
+        from app.db import raf_cursor
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT openemr_user_id FROM providers WHERE id = %s",
+                (provider_id,),
+            )
+            row = cur.fetchone()
+            if row and row.get("openemr_user_id"):
+                emr_uid = int(row["openemr_user_id"])
+    except Exception:
+        pass
+
     try:
         with openemr_cursor() as cur:
             cur.execute(
@@ -116,7 +132,7 @@ def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
                   AND date <  %s
                 ORDER BY date ASC
                 """,
-                (provider_id, today, horizon + timedelta(days=1)),
+                (emr_uid, today, horizon + timedelta(days=1)),
             )
             enc_rows = list(cur.fetchall() or [])
     except Exception as exc:
