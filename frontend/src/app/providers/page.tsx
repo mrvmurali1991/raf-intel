@@ -610,7 +610,7 @@ function AddProviderDialog({
   return (
     <Modal open={open} onClose={onClose} title="Add Provider">
       <form onSubmit={handleSubmit}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
           <Field label="First Name" required>
             <input
               style={{ ...inputStyle, borderColor: errors.first_name ? C.red : C.border }}
@@ -1137,11 +1137,13 @@ function ProviderDetailPanel({
       <div
         style={{
           background: C.card,
-          padding: "20px 24px",
+          padding: "16px 20px",
           borderBottom: `1px solid ${C.border}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -1234,7 +1236,7 @@ function ProviderDetailPanel({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "240px 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: 0,
         }}
       >
@@ -1701,7 +1703,7 @@ export default function ProvidersPage() {
   const isLoading = sumLoading || lbLoading;
 
   return (
-    <div style={{ padding: "32px 40px", background: C.bg, minHeight: "100vh" }}>
+    <div className="providers-page-wrap" style={{ padding: "20px 16px", background: C.bg, minHeight: "100vh" }}>
       <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
@@ -1720,11 +1722,8 @@ export default function ProvidersPage() {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
         }
-        @media (max-width: 1024px) {
-          .providers-stats { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 640px) {
-          .providers-stats { grid-template-columns: 1fr !important; }
+        @media (min-width: 640px) {
+          .providers-page-wrap { padding: 32px 40px !important; }
         }
       `}</style>
 
@@ -1803,7 +1802,7 @@ export default function ProvidersPage() {
           className="providers-stats"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 16,
             marginBottom: 28,
           }}
@@ -1825,7 +1824,7 @@ export default function ProvidersPage() {
           className="providers-stats"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 16,
             marginBottom: 28,
           }}
