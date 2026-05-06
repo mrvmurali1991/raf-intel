@@ -401,11 +401,20 @@ class _InstrumentedCursor:
         finally:
             elapsed_ms = (time.monotonic() - start) * 1000
             if elapsed_ms >= _SLOW_QUERY_MS:
+                # Redact parameter values before logging to prevent PHI leaking
+                # into slow-query logs.  Only the parameter count is recorded so
+                # operators can correlate the query structure with latency without
+                # exposing patient names, dates of birth, or MRNs.
+                param_summary = (
+                    f"({len(params)} params redacted)"
+                    if params
+                    else "None"
+                )
                 _slow_query_logger.warning(
                     "SLOW QUERY (%.0fms): %s | params=%s",
                     elapsed_ms,
                     query[:500] if isinstance(query, str) else str(query)[:500],
-                    str(params)[:200] if params else "None",
+                    param_summary,
                 )
 
     def __getattr__(self, name):
