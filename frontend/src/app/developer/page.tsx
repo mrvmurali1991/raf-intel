@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type ComponentType, type FormEvent } from "react";
 import api from "@/lib/api";
 import {
   Code,
@@ -404,7 +404,7 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
 type Tab = "webhooks" | "docs" | "keys";
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const tabs: { id: Tab; label: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: "webhooks", label: "Webhooks", icon: Webhook },
     { id: "docs", label: "API Documentation", icon: BookOpen },
     { id: "keys", label: "API Keys", icon: KeyRound },
@@ -469,7 +469,7 @@ function AddWebhookDialog({
     });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!url.startsWith("https://")) {
       setUrlError("URL must start with https://");
@@ -484,6 +484,23 @@ function AddWebhookDialog({
     onClose();
   }
 
+  // Focus the close button when dialog opens
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) {
+      const t = setTimeout(() => closeRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  // ESC closes the dialog
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
@@ -493,7 +510,12 @@ function AddWebhookDialog({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
+      <div
+        className="relative z-10 w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl flex flex-col max-h-[90vh] animate-scale-in"
+        role="dialog"
+        aria-modal="true"
+        aria-label={editWebhook ? "Edit Webhook" : "Add Webhook"}
+      >
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20">
@@ -504,6 +526,7 @@ function AddWebhookDialog({
             </h2>
           </div>
           <button
+            ref={closeRef}
             onClick={onClose}
             className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             aria-label="Close dialog"
@@ -864,7 +887,8 @@ function WebhookRow({
 
 function WebhooksTab() {
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
-  const [, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [_loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<WebhookEndpoint | null>(null);
 
@@ -884,9 +908,11 @@ function WebhooksTab() {
         deliveries: wh.deliveries ?? [],
       }));
       setWebhooks(mapped);
+      setLoadError(false);
     } catch {
       // API not available — start with empty state
       setWebhooks([]);
+      setLoadError(false); // silently degrade, no error banner for missing webhook API
     } finally {
       setIsLoading(false);
     }
@@ -942,16 +968,16 @@ function WebhooksTab() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="animate-fade-in stagger-1 hover-lift">
-          <StatCard label="Active Webhooks" value={activeCount} icon={<Webhook size={18} />} />
+          <StatCard label="Active Webhooks" value={isLoading ? "..." : activeCount} icon={<Webhook size={18} />} loading={isLoading} />
         </div>
         <div className="animate-fade-in stagger-2 hover-lift">
-          <StatCard label="Events Delivered (24h)" value={totalDeliveries.toLocaleString()} icon={<Zap size={18} />} />
+          <StatCard label="Events Delivered (24h)" value={isLoading ? "..." : totalDeliveries.toLocaleString()} icon={<Zap size={18} />} loading={isLoading} />
         </div>
         <div className="animate-fade-in stagger-3 hover-lift">
-          <StatCard label="Failed Deliveries" value={failedDeliveries} icon={<AlertTriangle size={18} />} color="#DC2626" />
+          <StatCard label="Failed Deliveries" value={isLoading ? "..." : failedDeliveries} icon={<AlertTriangle size={18} />} loading={isLoading} />
         </div>
         <div className="animate-fade-in stagger-4 hover-lift">
-          <StatCard label="Avg Response Time" value={avgResponseTime} icon={<Clock size={18} />} />
+          <StatCard label="Avg Response Time" value={isLoading ? "..." : avgResponseTime} icon={<Clock size={18} />} loading={isLoading} />
         </div>
       </div>
 
@@ -978,7 +1004,13 @@ function WebhooksTab() {
           </Button>
         </div>
 
-        {webhooks.length === 0 ? (
+        {isLoading ? (
+          <div className="px-4 py-4 space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="skeleton h-12 rounded-xl" />
+            ))}
+          </div>
+        ) : webhooks.length === 0 ? (
           <div className="flex flex-col items-center py-16 gap-3 text-center px-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <Webhook className="h-6 w-6 text-muted-foreground" />
@@ -987,10 +1019,17 @@ function WebhooksTab() {
             <p className="text-xs text-muted-foreground max-w-xs">
               Add a webhook endpoint to receive real-time events when RAF scores change or new suspects are identified.
             </p>
+            <button
+              onClick={() => { setEditTarget(null); setDialogOpen(true); }}
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add your first webhook
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table aria-label="Webhook endpoints" className="w-full text-sm">
               <thead>
                 <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800/80">
                   {["URL", "Events", "Status", "Last Delivery", "Success Rate", "Actions"].map((h) => (

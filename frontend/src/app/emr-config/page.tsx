@@ -39,7 +39,7 @@ import { tokens } from "@/styles/tokens";
 // ---------------------------------------------------------------------------
 
 const C = {
-  primary:    "#2563EB",
+  primary:    tokens.primary,
   slate900:   tokens.slate900,
   slate800:   tokens.slate800,
   slate700:   tokens.slate700,
@@ -52,20 +52,20 @@ const C = {
   slate50:    tokens.slate50,
   white:      tokens.white,
   emerald600: tokens.riskLow,
-  emerald100: "#D1FAE5",
-  emerald500: "#10B981",
+  emerald100: tokens.emerald100,
+  emerald500: tokens.success,
   red600:     tokens.riskHigh,
-  red100:     "#FEE2E2",
-  red500:     "#EF4444",
+  red100:     tokens.dangerSoft,
+  red500:     tokens.danger,
   amber600:   tokens.riskMedium,
-  amber100:   "#FEF3C7",
-  amber500:   "#F59E0B",
-  blue600:    "#2563EB",
-  blue100:    "#DBEAFE",
-  blue500:    "#3B82F6",
-  gray100:    "#F3F4F6",
-  gray400:    "#9CA3AF",
-  gray600:    "#6B7280",
+  amber100:   tokens.warningSoft,
+  amber500:   tokens.warningStrong,
+  blue600:    tokens.primary,
+  blue100:    tokens.primarySoft,
+  blue500:    tokens.infoBlue,
+  gray100:    tokens.slate100,
+  gray400:    tokens.slate400,
+  gray600:    tokens.slate600,
 };
 
 // ---------------------------------------------------------------------------
@@ -313,9 +313,9 @@ const CONNECTION_TYPE_LABELS: Record<string, string> = {
 };
 
 const CONNECTION_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
-  direct_db: { bg: "#FEF3C7", color: "#D97706" },
-  fhir_r4:   { bg: "#DBEAFE", color: "#2563EB" },
-  rest_api:  { bg: "#F3E8FF", color: "#7C3AED" },
+  direct_db: { bg: tokens.warningSoft,             color: tokens.warningStrong },
+  fhir_r4:   { bg: `${tokens.primary}18`,          color: tokens.primary },
+  rest_api:  { bg: `${tokens.accentPurple}18`,     color: tokens.accentPurple },
 };
 
 const AUTH_TYPES: { value: AuthType; label: string }[] = [
@@ -340,11 +340,12 @@ const DEFAULT_FORM: ConnectionFormData = {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: ConnectionStatus }) {
+// Visual hierarchy: Connected (green) / Failing (red) / Never-Connected (grey) / Testing (amber)
+function StatusBadge({ status, neverSynced = false }: { status: ConnectionStatus; neverSynced?: boolean }) {
   const map: Record<ConnectionStatus, { color: string; bg: string; dot: string; label: string; glow: string }> = {
-    active:   { color: C.emerald600, bg: C.emerald100, dot: C.emerald500, label: "Active",   glow: "0 0 8px rgba(16,185,129,0.4)" },
-    inactive: { color: C.gray600,    bg: C.gray100,    dot: C.gray400,    label: "Inactive", glow: "none" },
-    error:    { color: C.red600,     bg: C.red100,     dot: C.red500,     label: "Error",    glow: "0 0 8px rgba(239,68,68,0.4)" },
+    active:   { color: C.emerald600, bg: C.emerald100, dot: C.emerald500, label: neverSynced ? "Configured" : "Connected", glow: "0 0 8px rgba(16,185,129,0.4)" },
+    inactive: { color: C.gray600,    bg: C.gray100,    dot: C.gray400,    label: neverSynced ? "Not Connected" : "Inactive", glow: "none" },
+    error:    { color: C.red600,     bg: C.red100,     dot: C.red500,     label: "Failing",  glow: "0 0 8px rgba(239,68,68,0.4)" },
     testing:  { color: C.amber600,   bg: C.amber100,   dot: C.amber500,   label: "Testing",  glow: "0 0 8px rgba(245,158,11,0.4)" },
   };
   const s = map[status] ?? map.inactive;
@@ -568,7 +569,7 @@ function Btn({
     padding: size === "sm" ? "5px 10px" : "8px 14px",
   };
   const styles: Record<string, React.CSSProperties> = {
-    primary:   { ...base, background: "linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)", color: C.white, boxShadow: "0 2px 8px rgba(37,99,235,0.3)" },
+    primary:   { ...base, background: `linear-gradient(135deg, ${tokens.primary} 0%, ${tokens.infoBlue} 100%)`, color: C.white, boxShadow: "0 2px 8px rgba(37,99,235,0.3)" },
     secondary: { ...base, backgroundColor: C.white,   color: C.slate700, border: `1px solid ${C.slate200}`, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" },
     danger:    { ...base, backgroundColor: C.red100,     color: C.red600, border: `1px solid ${C.red600}20` },
     ghost:     { ...base, backgroundColor: "transparent", color: C.slate600 },
@@ -722,7 +723,7 @@ function ConnectionCard({ conn, onEdit, onDelete, onTest, onSync, onToggleActive
         {/* Status + last sync */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, minWidth: 120 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <StatusBadge status={conn.status} />
+            <StatusBadge status={conn.status} neverSynced={!conn.last_sync_at} />
             <button
               onClick={() => onToggleActive(conn.id, conn.status === "inactive")}
               title={conn.status === "inactive" ? "Activate" : "Deactivate"}
@@ -735,8 +736,12 @@ function ConnectionCard({ conn, onEdit, onDelete, onTest, onSync, onToggleActive
               {conn.status === "inactive" ? "Activate" : "Deactivate"}
             </button>
           </div>
-          <span style={{ fontSize: 11, color: C.slate400 }}>
-            Last sync: {formatRelativeTime(conn.last_sync_at)}
+          <span style={{
+            fontSize: 11,
+            color: conn.last_sync_at ? C.slate400 : C.amber600,
+            fontWeight: conn.last_sync_at ? 400 : 600,
+          }}>
+            {conn.last_sync_at ? `Last sync: ${formatRelativeTime(conn.last_sync_at)}` : "Never synced"}
           </span>
         </div>
 
@@ -1461,8 +1466,8 @@ export default function EmrConfigPage() {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .emr-input:focus { border-color: #3B82F6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important; }
-        .emr-input::placeholder { color: #94A3B8; }
+        .emr-input:focus { border-color: ${tokens.infoBlue} !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important; }
+        .emr-input::placeholder { color: ${tokens.slate400}; }
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
@@ -1536,7 +1541,7 @@ export default function EmrConfigPage() {
             alignItems: "center",
             justifyContent: "space-between",
             background: pipelineSettings?.pipeline_mode === "auto_ai"
-              ? "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)"
+              ? `linear-gradient(135deg, ${tokens.primarySoft} 0%, ${tokens.primary}18 100%)`
               : `linear-gradient(135deg, ${C.slate50} 0%, ${C.white} 100%)`,
             borderBottom: `1px solid ${C.slate100}`,
           }}>
@@ -1545,9 +1550,9 @@ export default function EmrConfigPage() {
                 width: 40, height: 40, borderRadius: 10,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: pipelineSettings?.pipeline_mode === "auto_ai"
-                  ? "linear-gradient(135deg, #2563EB, #7C3AED)"
+                  ? `linear-gradient(135deg, ${tokens.primary}, ${tokens.accentPurple})`
                   : C.slate200,
-                color: pipelineSettings?.pipeline_mode === "auto_ai" ? "#fff" : C.slate500,
+                color: pipelineSettings?.pipeline_mode === "auto_ai" ? tokens.white : C.slate500,
               }}>
                 <Zap size={20} />
               </div>
@@ -1573,8 +1578,8 @@ export default function EmrConfigPage() {
                 fontSize: 11,
                 fontWeight: 600,
                 letterSpacing: "0.02em",
-                background: pipelineSettings?.pipeline_mode === "auto_ai" ? "#DBEAFE" : C.slate100,
-                color: pipelineSettings?.pipeline_mode === "auto_ai" ? "#1D4ED8" : C.slate600,
+                background: pipelineSettings?.pipeline_mode === "auto_ai" ? `${tokens.primary}18` : C.slate100,
+                color: pipelineSettings?.pipeline_mode === "auto_ai" ? tokens.primaryDark : C.slate600,
               }}>
                 {pipelineSettings?.pipeline_mode === "auto_ai" ? "AUTO AI" : pipelineSettings?.pipeline_mode === "manual" ? "MANUAL" : "BASIC"}
               </span>
@@ -1591,7 +1596,7 @@ export default function EmrConfigPage() {
                   border: "none",
                   cursor: aiToggling ? "wait" : "pointer",
                   background: pipelineSettings?.pipeline_mode === "auto_ai"
-                    ? "linear-gradient(135deg, #2563EB, #7C3AED)"
+                    ? `linear-gradient(135deg, ${tokens.primary}, ${tokens.accentPurple})`
                     : C.slate300,
                   transition: "background 0.3s ease",
                   flexShrink: 0,
@@ -1634,8 +1639,8 @@ export default function EmrConfigPage() {
                   <span style={{
                     padding: "2px 8px",
                     borderRadius: 4,
-                    background: i === 2 ? "#DBEAFE" : C.slate100,
-                    color: i === 2 ? "#1D4ED8" : C.slate600,
+                    background: i === 2 ? `${tokens.primary}18` : C.slate100,
+                    color: i === 2 ? tokens.primaryDark : C.slate600,
                     fontWeight: i === 2 ? 700 : 500,
                     fontSize: 10,
                   }}>
@@ -1699,11 +1704,25 @@ export default function EmrConfigPage() {
 
           {/* Empty state */}
           {!isLoading && !isError && connections.length === 0 && (
-            <EmptyState
-              icon={<Database size={24} />}
-              title="No EMR connections yet"
-              description="Add your first EMR connection to start syncing patient data. Supports Direct DB, FHIR R4, and REST API connections."
-            />
+            <div style={{ padding: "48px 24px", textAlign: "center" }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 60, height: 60, borderRadius: 16,
+                backgroundColor: C.blue100, color: C.blue600, marginBottom: 16,
+              }}>
+                <Database size={28} />
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.slate900, marginBottom: 6 }}>
+                No EMR connections yet
+              </div>
+              <div style={{ fontSize: 13, color: C.slate500, marginBottom: 20, maxWidth: 380, margin: "0 auto 20px" }}>
+                Connect your first EMR to start syncing patient data for RAF scoring. Supports FHIR R4 and REST API integrations.
+              </div>
+              <Btn variant="primary" onClick={handleAdd}>
+                <Plus size={14} />
+                Connect an EMR
+              </Btn>
+            </div>
           )}
 
           {/* Connection cards */}

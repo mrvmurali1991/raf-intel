@@ -28,22 +28,22 @@ import { FONT_SYS } from "@/lib/ui-utils";
 // Match the patients page palette so the upload page blends with the rest of
 // the product without introducing a new design system.
 const C = {
-  text: tokens.slate900,
-  textMuted: tokens.slate600,
+  text:       tokens.slate900,
+  textMuted:  tokens.slate600,
   textSubtle: tokens.slate500,
-  label: tokens.slate400,
-  border: tokens.slate200,
-  borderSoft: "#EEF2F6",
+  label:      tokens.slate400,
+  border:     tokens.slate200,
+  borderSoft: tokens.slate100,
   rowDivider: tokens.slate100,
-  bgPage: tokens.slate50,
-  bgCard: tokens.white,
-  bgSubtle: tokens.slate50,
-  brand: "#0F766E",
-  brandSoft: "rgba(15, 118, 110, 0.06)",
-  brandRing: "rgba(15, 118, 110, 0.18)",
-  danger: "#DC2626",
-  warning: "#D97706",
-  success: "#047857",
+  bgPage:     tokens.slate50,
+  bgCard:     tokens.white,
+  bgSubtle:   tokens.slate50,
+  brand:      tokens.riskLow,            // #059669 emerald
+  brandSoft:  tokens.riskLowSoft,
+  brandRing:  `${tokens.riskLow}2E`,
+  danger:     tokens.riskHigh,
+  warning:    tokens.riskMedium,
+  success:    tokens.successDark,
 };
 
 function formatBytes(n: number | null | undefined): string {
@@ -76,12 +76,12 @@ function statusPillStyle(status: string): React.CSSProperties {
     border: "1px solid",
   };
   if (status === "completed")
-    return { ...base, background: "#ECFDF5", color: C.success, borderColor: "#A7F3D0" };
+    return { ...base, background: tokens.riskLowSoft, color: C.success, borderColor: tokens.emerald100 };
   if (status === "partial")
-    return { ...base, background: "#FFFBEB", color: C.warning, borderColor: "#FDE68A" };
+    return { ...base, background: tokens.riskMediumSoft, color: C.warning, borderColor: tokens.warningBorder };
   if (status === "failed")
-    return { ...base, background: "#FEF2F2", color: C.danger, borderColor: "#FECACA" };
-  return { ...base, background: "#F1F5F9", color: C.textMuted, borderColor: C.border };
+    return { ...base, background: tokens.riskHighSoft, color: C.danger, borderColor: tokens.dangerBorder };
+  return { ...base, background: tokens.slate100, color: C.textMuted, borderColor: C.border };
 }
 
 export default function UploadsPage() {
@@ -202,6 +202,7 @@ export default function UploadsPage() {
         onClick={() => fileInputRef.current?.click()}
         role="button"
         tabIndex={0}
+        aria-label="Drop a CSV or Excel file here, or press Enter to open file picker"
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
         }}
@@ -323,13 +324,13 @@ export default function UploadsPage() {
                     marginTop: 8,
                     padding: "10px 14px",
                     listStyle: "none",
-                    background: "#FEF2F2",
-                    border: "1px solid #FECACA",
+                    background: tokens.riskHighSoft,
+                    border: `1px solid ${tokens.dangerBorder}`,
                     borderRadius: 10,
                     maxHeight: 220,
                     overflow: "auto",
                     fontSize: 12,
-                    color: "#7F1D1D",
+                    color: tokens.danger,
                   }}
                 >
                   {lastResult.errors.map((e, i) => (
@@ -418,7 +419,7 @@ export default function UploadsPage() {
               </button>
             </div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <table aria-label="Upload history" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: C.bgSubtle, color: C.label, textAlign: "left" }}>
                   <th style={th}>Filename</th>
@@ -475,7 +476,7 @@ export default function UploadsPage() {
                         style={{
                           ...btnSecondary,
                           color: C.danger,
-                          borderColor: "#FECACA",
+                          borderColor: tokens.dangerBorder,
                         }}
                       >
                         <Trash2 size={14} /> Delete
