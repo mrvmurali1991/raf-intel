@@ -15,10 +15,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
+from app.rate_limit import limiter
 from app.services.knowledge_graph.snomed_service import (
     bulk_resolve_problem_list,
     icd10_to_hcc,
@@ -108,7 +109,9 @@ def icd10_to_hcc_route(
 
 
 @router.post("/text-to-hcc", summary="Full pipeline: clinical text → HCC candidates")
+@limiter.limit("60/minute")
 def text_to_hcc_route(
+    request: Request,
     body: TextToHCCBody,
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
