@@ -31,10 +31,38 @@
 --   3. The IRR endpoint aggregates all rows where both labels are non-NULL and
 --      computes κ = (p_o – p_e) / (1 – p_e).
 
-ALTER TABLE recapture_gaps
-    ADD COLUMN IF NOT EXISTS primary_coder_label
-        ENUM('accept', 'reject') NULL DEFAULT NULL
-        COMMENT 'Independent HCC label set by the primary coder before dual-coder review',
-    ADD COLUMN IF NOT EXISTS secondary_coder_label
-        ENUM('accept', 'reject') NULL DEFAULT NULL
-        COMMENT 'Independent HCC label set by the secondary coder before dual-coder review';
+-- MySQL 8.0 does not support ADD COLUMN IF NOT EXISTS on ALTER TABLE, so
+-- each column add is wrapped in a procedural existence check against
+-- INFORMATION_SCHEMA so this migration is safe to re-run.
+
+DROP PROCEDURE IF EXISTS _add_irr_label_columns;
+DELIMITER //
+CREATE PROCEDURE _add_irr_label_columns()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'recapture_gaps'
+          AND COLUMN_NAME  = 'primary_coder_label'
+    ) THEN
+        ALTER TABLE recapture_gaps
+            ADD COLUMN primary_coder_label
+                ENUM('accept', 'reject') NULL DEFAULT NULL
+                COMMENT 'Independent HCC label set by the primary coder before dual-coder review';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'recapture_gaps'
+          AND COLUMN_NAME  = 'secondary_coder_label'
+    ) THEN
+        ALTER TABLE recapture_gaps
+            ADD COLUMN secondary_coder_label
+                ENUM('accept', 'reject') NULL DEFAULT NULL
+                COMMENT 'Independent HCC label set by the secondary coder before dual-coder review';
+    END IF;
+END //
+DELIMITER ;
+CALL _add_irr_label_columns();
+DROP PROCEDURE IF EXISTS _add_irr_label_columns;

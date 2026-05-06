@@ -19,13 +19,46 @@
 -- the patients.tenant_id join before enabling the model_version filter in
 -- recapture_gap_service.
 
-ALTER TABLE raf_patient_hcc
-    ADD COLUMN IF NOT EXISTS model_version VARCHAR(10) NOT NULL DEFAULT 'V28'
-        COMMENT 'CMS HCC model version: V24 or V28',
-    ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) NOT NULL DEFAULT '1'
-        COMMENT 'Owning tenant — propagated from patients.tenant_id at write time';
+-- MySQL 8.0 does not support ADD COLUMN IF NOT EXISTS on ALTER TABLE, so
+-- each column add is wrapped in a procedural existence check against
+-- INFORMATION_SCHEMA so this migration is safe to re-run.
 
--- Index that makes the gap-detection query fast: the WHERE clause filters on
--- (tenant_id, measurement_year, model_version) before the self-join.
-CREATE INDEX IF NOT EXISTS idx_rph_tenant_year_mv
-    ON raf_patient_hcc (tenant_id, measurement_year, model_version);
+DROP PROCEDURE IF EXISTS _add_rph_columns;
+DELIMITER //
+CREATE PROCEDURE _add_rph_columns()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'raf_patient_hcc'
+          AND COLUMN_NAME  = 'model_version'
+    ) THEN
+        ALTER TABLE raf_patient_hcc
+            ADD COLUMN model_version VARCHAR(10) NOT NULL DEFAULT 'V28'
+                COMMENT 'CMS HCC model version: V24 or V28';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'raf_patient_hcc'
+          AND COLUMN_NAME  = 'tenant_id'
+    ) THEN
+        ALTER TABLE raf_patient_hcc
+            ADD COLUMN tenant_id VARCHAR(64) NOT NULL DEFAULT '1'
+                COMMENT 'Owning tenant — propagated from patients.tenant_id at write time';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'raf_patient_hcc'
+          AND INDEX_NAME   = 'idx_rph_tenant_year_mv'
+    ) THEN
+        CREATE INDEX idx_rph_tenant_year_mv
+            ON raf_patient_hcc (tenant_id, measurement_year, model_version);
+    END IF;
+END //
+DELIMITER ;
+CALL _add_rph_columns();
+DROP PROCEDURE IF EXISTS _add_rph_columns;
