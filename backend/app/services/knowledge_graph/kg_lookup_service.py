@@ -46,6 +46,17 @@ from app.db import raf_cursor
 logger = logging.getLogger(__name__)
 
 
+def _calibration_service():
+    """Lazy import of the KG calibration service.
+
+    Kept lazy so the module's import-time graph stays minimal — the
+    service has no third-party dependencies but we follow the same
+    pattern as the other sub-service shims for consistency.
+    """
+    from app.services.knowledge_graph import calibration_service
+    return calibration_service
+
+
 # ---------------------------------------------------------------------------
 # Sub-service loader — graceful degradation if a sibling agent hasn't merged
 # ---------------------------------------------------------------------------
@@ -529,6 +540,25 @@ def get_related_hccs(
         reverse=True,
     )[:limit]
 
+    # Apply Platt-scaling calibration so callers see calibrated probs.
+    # See patient_full_inference for the rationale; we surface both raw
+    # and calibrated values per candidate.
+    a, b = _calibration_service().load_calibration()
+    is_identity = _calibration_service().is_identity(a, b)
+    for cand in ranked:
+        try:
+            raw = float(cand.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            raw = 0.0
+        cand["raw_confidence"] = raw
+        if is_identity:
+            cand["calibrated_confidence"] = raw
+        else:
+            cand["calibrated_confidence"] = round(
+                _calibration_service().apply_calibration(raw, a, b), 4
+            )
+            cand["confidence"] = cand["calibrated_confidence"]
+
     duration_ms = int((time.perf_counter() - start) * 1000)
     _log_query(
         "get_related_hccs",
@@ -994,6 +1024,31 @@ def patient_full_inference(
         reverse=True,
     )
 
+    # Apply Platt scaling to each candidate confidence so consumers see
+    # well-calibrated probabilities.  We surface BOTH raw and calibrated
+    # values; ``confidence`` is left as-is for backwards compatibility
+    # (matches the legacy raw value when calibration is identity, matches
+    # the calibrated value otherwise — see PR description).
+    a, b = _calibration_service().load_calibration()
+    is_identity = _calibration_service().is_identity(a, b)
+    for cand in ranked:
+        try:
+            raw = float(cand.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            raw = 0.0
+        cand["raw_confidence"] = raw
+        if is_identity:
+            cand["calibrated_confidence"] = raw
+        else:
+            cand["calibrated_confidence"] = round(
+                _calibration_service().apply_calibration(raw, a, b), 4
+            )
+            # Promote the calibrated value into ``confidence`` so existing
+            # downstream consumers (orchestrator, frontend) immediately
+            # see calibrated numbers.  raw_confidence preserves the
+            # original signal for diagnostics / parallel display.
+            cand["confidence"] = cand["calibrated_confidence"]
+
     duration_ms = int((time.perf_counter() - start) * 1000)
     out = {
         "patient_id": patient_id,
@@ -1001,6 +1056,11 @@ def patient_full_inference(
         "candidates": ranked,
         "execution_log": execution_log,
         "duration_ms": duration_ms,
+        "calibration": {
+            "a": a,
+            "b": b,
+            "applied": not is_identity,
+        },
     }
     _log_query(
         "patient_full_inference",
