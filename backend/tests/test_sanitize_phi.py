@@ -52,9 +52,13 @@ def test_mbi_loose_is_redacted():
     assert "[MBI]" in out
 
 
-def test_dob_is_preserved():
+def test_dob_is_redacted():
+    # Previously this test asserted DOBs were preserved.  The PHI-NER
+    # hardening (fix/phi-redaction-ner) now correctly redacts static
+    # birthdates (age 18-100 range) as required by HIPAA Safe Harbor.
     out = sanitize_note_for_llm("DOB 1965-03-12 for age gate.")
-    assert "1965-03-12" in out
+    assert "1965-03-12" not in out
+    assert "[DOB]" in out
 
 
 def test_injection_pattern_is_redacted():

@@ -5,6 +5,9 @@ Three guardrails are exported:
 
 1. :func:`sanitize_note_for_llm` — strip control characters and neutralize
    prompt-injection patterns before a clinical note is sent to any LLM.
+   Also redacts HIPAA Safe Harbor identifiers: SSN, MBI, phone, email,
+   patient names (when supplied), DOB, street addresses, ZIP codes, and
+   MRN-style identifiers.
 2. :func:`validate_llm_output`   — strict JSON-schema validation of the
    model's response; returns ``(ok, parsed, error)``.
 3. :func:`scrub_pii_from_logs`   — mask SSN / MBI / DOB (and a few other
@@ -48,17 +51,31 @@ _CONTROL_CHARS = re.compile(
 )
 
 
-def sanitize_note_for_llm(text: str) -> str:
+def sanitize_note_for_llm(
+    text: str,
+    known_names: list[str] | None = None,
+) -> str:
     """Return a sanitized copy of *text* safe to embed in an LLM prompt.
 
     In addition to stripping control chars and neutralizing prompt-injection
-    patterns, this redacts identifier-level PHI that is never clinically
-    relevant for HCC / MEAT extraction (SSN, Medicare MBI, phone, email).
+    patterns, this redacts HIPAA Safe Harbor identifiers (defence-in-depth;
+    Vertex BAA still applies):
 
-    DOB is intentionally *not* redacted here because age-at-encounter is
-    used by downstream age/sex gates — and patient age is already derived
-    server-side from the structured patient record, so leaving raw DOB in
-    the note does not leak anything the downstream code doesn't already have.
+    * SSN, Medicare MBI
+    * Phone, email
+    * Patient names — when ``known_names`` is supplied (e.g.
+      ``[patient.first_name, patient.last_name]``), each token is replaced
+      with ``[NAME]``.  Matching is case-insensitive and word-boundary-aware;
+      longer names are matched before shorter ones to avoid partial clobbers.
+    * Dates-of-birth (static birthdates for people aged 18-100) replaced with
+      ``[DOB]``.  Clinical dates such as procedure/encounter dates are NOT
+      redacted — only patterns that carry a 4-digit birth year whose computed
+      age falls within 18-100.
+    * Street addresses replaced with ``[ADDRESS]``.
+    * ZIP codes (standalone or following a state abbreviation) replaced with
+      ``[ZIP]``.
+    * MRN-style identifiers (6-12 digit numbers labelled with MRN /
+      "Medical Record Number") replaced with ``[MRN]``.
     """
     if not text:
         return ""
@@ -71,19 +88,178 @@ def sanitize_note_for_llm(text: str) -> str:
         cleaned = pat.sub(
             lambda m: f"[REDACTED:{len(m.group(0))}chars]", cleaned
         )
-    # Identifier-level PHI redaction (defense-in-depth; Vertex BAA still applies).
-    cleaned = _SSN.sub("***-**-****", cleaned)
+    # --- HIPAA Safe Harbor identifier redaction ----------------------------
+    # Apply labelled / structured identifiers FIRST so that the later
+    # broad digit-sequence rules (SSN, phone) do not clobber them.
+
+    # MBI — structured alpha-numeric; apply before SSN digit sweep
     try:
         cleaned = _MBI.sub("[MBI]", cleaned)
     except re.error:
         pass
     cleaned = _MBI_LOOSE.sub("[MBI]", cleaned)
+
+    # MRN — labelled numeric; apply before SSN so the digits are gone
+    cleaned = _MRN.sub(r"\1[MRN]", cleaned)
+
+    # ZIP — apply before SSN so ZIP+4 (d{5}-d{4}) is not mis-matched as SSN
+    cleaned = _ZIP_PREFIXED.sub(r"\1[ZIP]", cleaned)
+
+    # DOB — apply before SSN so date separators don't confuse the SSN sweep
+    cleaned = _redact_dob(cleaned)
+
+    # SSN — broad digit pattern; runs after the more-specific rules above
+    cleaned = _SSN.sub("***-**-****", cleaned)
+
+    # Phone, email
     cleaned = _PHONE.sub("[PHONE]", cleaned)
     cleaned = _EMAIL.sub("[EMAIL]", cleaned)
+
+    # Street addresses (no digit-collision risk, but keep near end for clarity)
+    cleaned = _STREET_ADDRESS.sub("[ADDRESS]", cleaned)
+    # Patient names — longest token first to avoid partial matches
+    if known_names:
+        # Filter to non-empty strings; sort longest first
+        tokens = sorted(
+            (n.strip() for n in known_names if n and n.strip()),
+            key=len,
+            reverse=True,
+        )
+        for token in tokens:
+            if not token:
+                continue
+            pattern = re.compile(
+                r"\b" + re.escape(token) + r"\b", re.IGNORECASE
+            )
+            cleaned = pattern.sub("[NAME]", cleaned)
     # Collapse runaway whitespace so prompt-token budgets are predictable.
     cleaned = re.sub(r"[ \t]{3,}", "  ", cleaned)
     cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)
     return cleaned.strip()
+
+
+# ---------------------------------------------------------------------------
+# 1b. Additional HIPAA Safe Harbor patterns (used by sanitize_note_for_llm)
+# ---------------------------------------------------------------------------
+
+# MRN: 6-12 digit number preceded by "MRN", "MRN#", "Medical Record Number",
+# or "Medical Record #".  We capture the label in group 1 so we can keep it
+# in the replacement (readable context) and only blank the number itself.
+_MRN = re.compile(
+    r"(\bMRN\s*[:#]?\s*|\bMedical\s+Record(?:\s+Number)?\s*[:#]?\s*)"
+    r"\d{6,12}\b",
+    re.IGNORECASE,
+)
+
+# Street address: leading house number + street name + type abbreviation.
+# Matches addresses like "123 Main Street", "45 N Oak Ave", "6 Elm Blvd Apt 2".
+_STREET_ADDRESS = re.compile(
+    r"\b\d{1,5}\s+"                          # house number
+    r"(?:[NSEW]\s+)?"                         # optional cardinal direction
+    r"[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?"  # street name (1-2 words)
+    r"\s+"
+    r"(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr"
+    r"|Way|Place|Pl|Court|Ct|Circle|Cir|Terrace|Ter|Trail|Trl"
+    r"|Highway|Hwy|Parkway|Pkwy)"             # street type
+    r"(?:\s+(?:Apt|Suite|Ste|Unit|#)\s*[\w-]+)?"  # optional unit
+    r"\b",
+    re.IGNORECASE,
+)
+
+# ZIP: only redact when the 5-digit sequence is clearly a ZIP, not a lab value.
+# Strategy: require it to follow a US state abbreviation (2 upper-case letters)
+# or the literal words "ZIP" / "zip code" / "postal code", with optional comma
+# and space between the state and the number.
+_ZIP_PREFIXED = re.compile(
+    r"(\b(?:[A-Z]{2}|ZIP(?:\s+code)?|zip(?:\s+code)?|postal\s+code)[,\s]+)"
+    r"(\d{5}(?:-\d{4})?)\b",
+)
+
+# Months for text-format DOB (Jan-Dec, full or abbreviated)
+_MONTHS = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?"
+    r"|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
+)
+
+# Numeric DOB patterns:
+#   ISO:        1962-01-15  or 1962/01/15
+#   US slash:   01/15/1962  or 1/15/62  (4-digit year → strict; 2-digit → loose)
+#   US dash:    01-15-1962
+_DOB_ISO = re.compile(
+    r"\b((?:19|20)\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b"
+)
+_DOB_US4 = re.compile(
+    r"\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-]((?:19|20)\d{2})\b"
+)
+_DOB_US2 = re.compile(
+    r"\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-](\d{2})\b"
+)
+# Text DOB: "Jan 15, 1962" / "January 15 1962" / "15 Jan 1962"
+_DOB_TEXT_MDY = re.compile(
+    rf"\b{_MONTHS}\s+(0?[1-9]|[12]\d|3[01]),?\s+((?:19|20)\d{{2}})\b",
+    re.IGNORECASE,
+)
+_DOB_TEXT_DMY = re.compile(
+    rf"\b(0?[1-9]|[12]\d|3[01])\s+{_MONTHS},?\s+((?:19|20)\d{{2}})\b",
+    re.IGNORECASE,
+)
+
+import datetime as _dt
+
+_CURRENT_YEAR = _dt.date.today().year
+
+
+def _year_looks_like_dob(year_str: str) -> bool:
+    """Return True if a 4-digit year string corresponds to age 18-100."""
+    try:
+        year = int(year_str)
+    except (ValueError, TypeError):
+        return False
+    age = _CURRENT_YEAR - year
+    return 18 <= age <= 100
+
+
+def _year2_looks_like_dob(year2_str: str) -> bool:
+    """Expand a 2-digit year and check age 18-100.
+
+    Convention: 00-39 → 2000-2039, 40-99 → 1940-1999.
+    """
+    try:
+        yy = int(year2_str)
+    except (ValueError, TypeError):
+        return False
+    year = 2000 + yy if yy < 40 else 1900 + yy
+    age = _CURRENT_YEAR - year
+    return 18 <= age <= 100
+
+
+def _redact_dob(text: str) -> str:
+    """Replace date patterns that look like DOBs (age 18-100) with [DOB].
+
+    Clinical encounter dates (recent years or future) are left untouched.
+    """
+    def _sub_iso(m: re.Match[str]) -> str:
+        return "[DOB]" if _year_looks_like_dob(m.group(1)) else m.group(0)
+
+    def _sub_us4(m: re.Match[str]) -> str:
+        return "[DOB]" if _year_looks_like_dob(m.group(3)) else m.group(0)
+
+    def _sub_us2(m: re.Match[str]) -> str:
+        return "[DOB]" if _year2_looks_like_dob(m.group(3)) else m.group(0)
+
+    def _sub_text_mdy(m: re.Match[str]) -> str:
+        # Last group is the 4-digit year
+        return "[DOB]" if _year_looks_like_dob(m.group(m.lastindex)) else m.group(0)
+
+    def _sub_text_dmy(m: re.Match[str]) -> str:
+        return "[DOB]" if _year_looks_like_dob(m.group(m.lastindex)) else m.group(0)
+
+    text = _DOB_ISO.sub(_sub_iso, text)
+    text = _DOB_US4.sub(_sub_us4, text)
+    text = _DOB_US2.sub(_sub_us2, text)
+    text = _DOB_TEXT_MDY.sub(_sub_text_mdy, text)
+    text = _DOB_TEXT_DMY.sub(_sub_text_dmy, text)
+    return text
 
 
 # ---------------------------------------------------------------------------
