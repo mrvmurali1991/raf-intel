@@ -91,6 +91,7 @@ from app.routers import knowledge_graph as knowledge_graph_router
 from app.routers import snomed_mapping as snomed_mapping_router
 from app.routers import loinc_signals as loinc_signals_router
 from app.routers import atc_classification as atc_classification_router
+from app.routers import polypharmacy as polypharmacy_router
 from app.routers import comorbidity_patterns as comorbidity_patterns_router
 from app.routers import demographic_risk as demographic_risk_router
 from app.routers import specialty_priors as specialty_priors_router
@@ -183,6 +184,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(snomed_mapping_router.router)
     app.include_router(loinc_signals_router.router)
     app.include_router(atc_classification_router.router)
+    app.include_router(polypharmacy_router.router)
     app.include_router(comorbidity_patterns_router.router)
     app.include_router(demographic_risk_router.router)
     app.include_router(specialty_priors_router.router)

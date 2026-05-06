@@ -285,21 +285,31 @@ def icd10_to_hcc(icd10_code: str, model_year: int = 2026) -> list[dict[str, Any]
     if not icd10_code:
         return []
 
-    code_norm = icd10_code.strip().upper().replace(".", "")
+    code_raw = icd10_code.strip().upper()
+    code_no_dot = code_raw.replace(".", "")
+    # The on-disk crosswalk historically stores codes WITH dots (e.g. "E11.40"),
+    # but callers may pass either form. Match both.
+    code_with_dot = code_raw if "." in code_raw else (
+        f"{code_raw[:3]}.{code_raw[3:]}" if len(code_raw) > 3 else code_raw
+    )
     model_version = _model_version_for_year(model_year)
     seen: set[tuple[int, str]] = set()
     rows: list[dict[str, Any]] = []
 
     # 1. Canonical crosswalk table -------------------------------------------
+    # NOTE: The crosswalk schema uses ``effective_year`` (not ``model_version``)
+    # and stores codes WITH dots. We accept both code formats and infer the
+    # version from year.
     crosswalk_sql = (
-        "SELECT icd10_code, hcc_code, hcc_label, model_version, model_year "
+        "SELECT icd10_code, hcc_code, hcc_label, effective_year "
         "FROM hcc_icd10_crosswalk "
-        "WHERE icd10_code = %s AND model_version = %s "
-        "ORDER BY hcc_code"
+        "WHERE icd10_code IN (%s, %s) "
+        "  AND effective_year <= %s "
+        "ORDER BY effective_year DESC, hcc_code"
     )
     try:
         with raf_cursor() as cur:
-            cur.execute(crosswalk_sql, (code_norm, model_version))
+            cur.execute(crosswalk_sql, (code_with_dot, code_no_dot, model_year))
             for row in cur.fetchall():
                 hcc_code = int(row["hcc_code"])
                 key = (hcc_code, model_version)
@@ -308,11 +318,11 @@ def icd10_to_hcc(icd10_code: str, model_year: int = 2026) -> list[dict[str, Any]
                 seen.add(key)
                 rows.append(
                     {
-                        "icd10_code": code_norm,
+                        "icd10_code": code_no_dot,
                         "hcc_code": hcc_code,
                         "hcc_label": row.get("hcc_label"),
                         "model_version": model_version,
-                        "model_year": int(row.get("model_year") or model_year),
+                        "model_year": int(row.get("effective_year") or model_year),
                         "raf_coefficient": _coefficient_for(hcc_code, model_version),
                         "source": "hcc_icd10_crosswalk",
                     }
@@ -327,7 +337,7 @@ def icd10_to_hcc(icd10_code: str, model_year: int = 2026) -> list[dict[str, Any]
         "FROM knowledge_graph_edges e "
         "JOIN knowledge_graph_concepts src ON src.id = e.src_concept_id "
         "JOIN knowledge_graph_concepts dst ON dst.id = e.dst_concept_id "
-        "WHERE src.ontology = 'icd10' AND src.code = %s "
+        "WHERE src.ontology = 'icd10' AND src.code IN (%s, %s) "
         "  AND e.edge_type = 'maps_to' "
         "  AND dst.ontology = 'hcc' "
         "  AND e.source IN ('CMS-V28','CMS-V24') "
@@ -335,7 +345,7 @@ def icd10_to_hcc(icd10_code: str, model_year: int = 2026) -> list[dict[str, Any]
     )
     try:
         with raf_cursor() as cur:
-            cur.execute(kg_sql, (code_norm, kg_source))
+            cur.execute(kg_sql, (code_with_dot, code_no_dot, kg_source))
             for row in cur.fetchall():
                 try:
                     hcc_code = int(row["hcc_code"])
@@ -347,7 +357,7 @@ def icd10_to_hcc(icd10_code: str, model_year: int = 2026) -> list[dict[str, Any]
                 seen.add(key)
                 rows.append(
                     {
-                        "icd10_code": code_norm,
+                        "icd10_code": code_no_dot,
                         "hcc_code": hcc_code,
                         "hcc_label": row.get("hcc_label"),
                         "model_version": model_version,

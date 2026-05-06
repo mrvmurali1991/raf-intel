@@ -34,6 +34,7 @@ import functools
 import json
 import logging
 import os
+import re
 import time
 from collections import deque
 from datetime import datetime, timedelta
@@ -60,6 +61,14 @@ _SUB_SERVICE_NAMES: tuple[str, ...] = (
     "evidence_rules_engine",
     "drug_class_reasoner",
 )
+
+
+_ICD10_RE = re.compile(r"^[A-Z]\d{2}(\.?\d{1,4})?$", re.IGNORECASE)
+
+
+def _looks_like_icd10(text: str) -> bool:
+    """True when *text* matches an ICD-10-CM code shape (e.g. E1140, E11.40)."""
+    return bool(_ICD10_RE.match(text or ""))
 
 
 def _load_sub_services() -> None:
@@ -304,51 +313,106 @@ def get_related_hccs(
     candidates: dict[str, dict[str, Any]] = {}
 
     # 1. Resolve concept (text → SNOMED/ICD-10/concept_uri)
-    snomed_matches = _safe_call("snomed_service", "search_concept", concept_uri_or_text) or []
     icd_codes: list[str] = []
-    if isinstance(snomed_matches, list):
-        for m in snomed_matches:
-            if isinstance(m, dict):
-                icd_codes.extend(m.get("icd10_codes") or [])
+
+    # 1a. If the input already looks like an ICD-10 code or "icd10:..." URI,
+    #     short-circuit straight into the ICD list. This is critical because the
+    #     SNOMED resolver only does fuzzy text-matching and won't recognise raw
+    #     codes.
+    raw = (concept_uri_or_text or "").strip()
+    if raw.lower().startswith("icd10:"):
+        icd_codes.append(raw.split(":", 1)[1].strip())
+    elif _looks_like_icd10(raw):
+        icd_codes.append(raw)
+
+    if not icd_codes:
+        snomed_matches = _safe_call(
+            "snomed_service", "resolve_text_to_snomed", concept_uri_or_text
+        ) or []
+        for m in snomed_matches or []:
+            # resolve_text_to_snomed returns Concept objects; pull the SNOMED id
+            # then crosswalk to ICD-10 via snomed_to_icd10.
+            sid = getattr(m, "code", None) or (m.get("code") if isinstance(m, dict) else None)
+            if not sid:
+                continue
+            mapped = _safe_call("snomed_service", "snomed_to_icd10", sid) or []
+            if isinstance(mapped, list):
+                icd_codes.extend(str(c) for c in mapped)
 
     # Fallback: try concept-graph row
     concept_row = _query_kg_concept(concept_uri_or_text)
     if concept_row and not icd_codes:
-        # Some KG concepts carry icd10 in attributes JSON
-        attrs = concept_row.get("attributes") or {}
+        # If the concept itself is an ICD-10 row, use its code directly.
+        if str(concept_row.get("ontology", "")).lower() == "icd10":
+            code = concept_row.get("code")
+            if code:
+                icd_codes.append(str(code))
+        # Some KG concepts carry icd10 in metadata JSON as a list
+        attrs = concept_row.get("metadata") or concept_row.get("attributes") or {}
         if isinstance(attrs, str):
             try:
                 attrs = json.loads(attrs)
             except Exception:
                 attrs = {}
-        icd_codes.extend(attrs.get("icd10_codes") or [])
+        if isinstance(attrs, dict):
+            icd_codes.extend(attrs.get("icd10_codes") or [])
 
-    # 2. Map ICDs → HCCs via evidence-rules engine (preferred — has citations)
-    rule_hits = _safe_call(
-        "evidence_rules_engine",
-        "fire_rules_for_codes",
-        icd_codes,
-    ) or []
-    for hit in rule_hits or []:
-        if not isinstance(hit, dict):
-            continue
-        hcc = str(hit.get("hcc_code") or hit.get("hcc") or "").strip()
-        if not hcc:
-            continue
-        cand = candidates.setdefault(hcc, {
-            "hcc": hcc,
-            "confidence": 0.0,
-            "sources": [],
-            "reasoning": [],
-        })
-        cand["sources"].append("evidence_rules_engine")
-        cand["reasoning"].append({
-            "kind": "evidence_rule",
-            "rule_id": hit.get("rule_id"),
-            "citation": hit.get("citation"),
-            "icd10": hit.get("icd10"),
-        })
-        cand["confidence"] = max(cand["confidence"], float(hit.get("confidence", 0.6)))
+    # 2. Map ICDs → HCCs via evidence-rules engine (preferred — has citations).
+    # The engine's public entry point is ``evaluate_evidence(evidence: dict)``,
+    # not ``fire_rules_for_codes`` — call the real function, then also fall back
+    # to the canonical ICD-10 → HCC crosswalk so plain codes always map.
+    if icd_codes:
+        rule_hits = _safe_call(
+            "evidence_rules_engine",
+            "evaluate_evidence",
+            {"icd10": [str(c) for c in icd_codes]},
+        ) or []
+        for hit in rule_hits or []:
+            if not isinstance(hit, dict):
+                continue
+            hcc = str(
+                hit.get("output_hcc") or hit.get("hcc_code") or hit.get("hcc") or ""
+            ).strip()
+            if not hcc:
+                continue
+            cand = candidates.setdefault(hcc, {
+                "hcc": hcc,
+                "confidence": 0.0,
+                "sources": [],
+                "reasoning": [],
+            })
+            cand["sources"].append("evidence_rules_engine")
+            cand["reasoning"].append({
+                "kind": "evidence_rule",
+                "rule_id": hit.get("rule_id"),
+                "citation": hit.get("source_citation") or hit.get("citation"),
+                "icd10": hit.get("output_icd10") or hit.get("icd10"),
+            })
+            cand["confidence"] = max(cand["confidence"], float(hit.get("confidence", 0.6)))
+
+        # 2b. Crosswalk fallback — for every ICD code, snomed_service.icd10_to_hcc
+        # consults hcc_icd10_crosswalk + KG edges. This guarantees a result when
+        # no curated rule fires.
+        for icd in icd_codes:
+            xs = _safe_call("snomed_service", "icd10_to_hcc", icd) or []
+            for hit in xs or []:
+                if not isinstance(hit, dict):
+                    continue
+                hcc = str(hit.get("hcc_code") or "").strip()
+                if not hcc:
+                    continue
+                cand = candidates.setdefault(hcc, {
+                    "hcc": hcc, "confidence": 0.0, "sources": [], "reasoning": [],
+                })
+                if "hcc_icd10_crosswalk" not in cand["sources"]:
+                    cand["sources"].append("hcc_icd10_crosswalk")
+                cand["reasoning"].append({
+                    "kind": "icd10_crosswalk",
+                    "icd10": hit.get("icd10_code") or icd,
+                    "hcc_label": hit.get("hcc_label"),
+                    "model_version": hit.get("model_version"),
+                })
+                cand["confidence"] = max(cand["confidence"], 0.5)
 
     # 3. Drug-class inference (only if patient_context provides drugs)
     drugs = patient_context.get("drugs") or []

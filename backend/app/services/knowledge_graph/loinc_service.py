@@ -390,11 +390,15 @@ def get_loinc_signals_for_hcc(hcc_code: str | int) -> list[dict[str, Any]]:
         return []
     target_num = target.removeprefix("HCC")
 
+    # NOTE: knowledge_graph_concepts columns are ``ontology``, ``code``,
+    # ``preferred_label`` — NOT the legacy ``code_system`` / ``display_name`` /
+    # ``hcc_code`` names that an earlier draft of this service expected.
     sql = """
         SELECT s.id, s.loinc_code, s.test_name, s.unit, s.threshold_low,
                s.threshold_high, s.threshold_meaning, s.confidence, s.notes,
-               c.id  AS concept_id, c.code AS concept_code, c.code_system,
-               c.display_name AS concept_display, c.hcc_code AS concept_hcc
+               c.id  AS concept_id, c.code AS concept_code,
+               c.ontology AS concept_ontology,
+               c.preferred_label AS concept_display
         FROM kg_lab_signals s
         JOIN knowledge_graph_concepts c ON c.id = s.signals_concept_id
         WHERE s.is_active = 1
@@ -410,21 +414,23 @@ def get_loinc_signals_for_hcc(hcc_code: str | int) -> list[dict[str, Any]]:
 
     out: list[dict[str, Any]] = []
     for r in rows:
-        concept_hcc = (r.get("concept_hcc") or "").strip()
-        if concept_hcc:
-            cmp_hcc = concept_hcc if concept_hcc.upper().startswith("HCC") else f"HCC{concept_hcc}"
+        concept_ontology = (r.get("concept_ontology") or "").strip().lower()
+        concept_code = (r.get("concept_code") or "").strip()
+
+        # If the concept is itself an HCC concept, compare codes directly.
+        if concept_ontology == "hcc":
+            cmp_hcc = (
+                concept_code
+                if concept_code.upper().startswith("HCC")
+                else f"HCC{concept_code}"
+            )
             if cmp_hcc.upper() != target:
                 continue
         else:
-            # Fall back to ICD-10 crosswalk
-            mapped = _hcc_for_icd10(r.get("concept_code"))
+            # Otherwise treat the concept code as ICD-10 and traverse the crosswalk.
+            mapped = _hcc_for_icd10(concept_code)
             if mapped is None or mapped.upper() != target:
-                # As a last resort, try matching by HCC number column type (int)
-                try:
-                    if int(concept_hcc) != int(target_num):
-                        continue
-                except (TypeError, ValueError):
-                    continue
+                continue
 
         out.append({
             "loinc_code": r["loinc_code"],

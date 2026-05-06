@@ -1,0 +1,1800 @@
+{
+  "version": "2026-05-extended",
+  "count": 52,
+  "charts": [
+    {
+      "id": "c001",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Metformin 1000mg BID"
+        }
+      ],
+      "labs": [],
+      "problem_list": [
+        {
+          "diagnosis": "E119",
+          "title": "Type 2 diabetes mellitus"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "65F established T2DM, A1c 7.2 on metformin, no complications.",
+      "gold_hccs": [
+        "38"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E119",
+          "hcc": "38",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c002",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Insulin glargine"
+        },
+        {
+          "drug": "gabapentin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "HbA1c",
+          "value": 8.6
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "E119",
+          "title": "Type 2 diabetes"
+        },
+        {
+          "title": "diabetic polyneuropathy"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Burning paresthesias in both feet, EMG confirmed diabetic polyneuropathy.",
+      "gold_hccs": [
+        "37"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E1142",
+          "hcc": "37",
+          "confidence": 0.82
+        }
+      ]
+    },
+    {
+      "id": "c003",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Insulin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 28
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "E119"
+        },
+        {
+          "title": "CKD"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "DM with worsening renal function; nephrology following.",
+      "gold_hccs": [
+        "37",
+        "327"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E1122",
+          "hcc": "37",
+          "confidence": 0.83
+        },
+        {
+          "icd10": "N184",
+          "hcc": "327",
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "id": "c004",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Metformin"
+        }
+      ],
+      "labs": [],
+      "problem_list": [
+        {
+          "diagnosis": "E119"
+        },
+        {
+          "title": "diabetic foot ulcer left great toe"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Wound care for diabetic foot ulcer; exposed tendon.",
+      "gold_hccs": [
+        "37",
+        "383"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E11621",
+          "hcc": "37",
+          "confidence": 0.82
+        },
+        {
+          "icd10": "L97529",
+          "hcc": "383",
+          "confidence": 0.55
+        }
+      ]
+    },
+    {
+      "id": "c005",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Empagliflozin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "HbA1c",
+          "value": 11.4
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Poorly-controlled DM, A1c 11.4.",
+      "gold_hccs": [
+        "38"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E1165",
+          "hcc": "38",
+          "confidence": 0.92
+        }
+      ]
+    },
+    {
+      "id": "c006",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 22
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "N184"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Stage 4 CKD; nephrology q3mo.",
+      "gold_hccs": [
+        "327"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "N184",
+          "hcc": "327",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c007",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 11
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "N184",
+          "title": "stage 5 CKD on dialysis"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "ESRD, started dialysis last quarter.",
+      "gold_hccs": [
+        "326"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "N185",
+          "hcc": "326",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "c008",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Sacubitril/valsartan"
+        },
+        {
+          "drug": "Furosemide"
+        }
+      ],
+      "labs": [
+        {
+          "name": "BNP",
+          "value": 1200
+        },
+        {
+          "name": "EF",
+          "value": 28
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "I5022"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "HFrEF, EF 28%, NYHA II on guideline-directed medical therapy.",
+      "gold_hccs": [
+        "226"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5022",
+          "hcc": "226",
+          "confidence": 0.93
+        }
+      ]
+    },
+    {
+      "id": "c009",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Furosemide 40mg"
+        }
+      ],
+      "labs": [
+        {
+          "name": "BNP",
+          "value": 650
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Lower extremity edema improved with diuresis.",
+      "gold_hccs": [
+        "226"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5032",
+          "hcc": "226",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "c010",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Sacubitril/valsartan"
+        },
+        {
+          "drug": "Spironolactone"
+        }
+      ],
+      "labs": [
+        {
+          "name": "BNP",
+          "value": 2200
+        },
+        {
+          "name": "EF",
+          "value": 22
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "I5022",
+          "title": "Acute on chronic systolic heart failure decompensation"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Admitted with acute on chronic systolic decompensation.",
+      "gold_hccs": [
+        "224"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5023",
+          "hcc": "224",
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "id": "c011",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Warfarin 5mg"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Chronic atrial fibrillation, INR 2.4.",
+      "gold_hccs": [
+        "238"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c012",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Apixaban 5mg"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Paroxysmal AF, on DOAC.",
+      "gold_hccs": [
+        "238"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "c013",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Donepezil 10mg"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Established Alzheimer dementia, MoCA 19/30.",
+      "gold_hccs": [
+        "127"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "G309",
+          "hcc": "127",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c014",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Memantine 10mg BID"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Moderate dementia.",
+      "gold_hccs": [
+        "127"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "G309",
+          "hcc": "127",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c015",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Tiotropium"
+        },
+        {
+          "drug": "Fluticasone/salmeterol"
+        }
+      ],
+      "labs": [
+        {
+          "name": "spo2",
+          "value": 89
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "GOLD III COPD, daily LAMA/ICS.",
+      "gold_hccs": [
+        "280"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "J449",
+          "hcc": "280",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c016",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Risperidone 2mg"
+        },
+        {
+          "drug": "Haloperidol prn"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Long-standing schizophrenia, stable on meds.",
+      "gold_hccs": [
+        "151"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F209",
+          "hcc": "151",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c017",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Lithium 300mg TID"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Bipolar I disorder, stable since last hospitalization.",
+      "gold_hccs": [
+        "154"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F319",
+          "hcc": "154",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c018",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Buprenorphine/naloxone film"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Opioid use disorder in sustained remission on MAT.",
+      "gold_hccs": [
+        "137"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F1120",
+          "hcc": "137",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c019",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Lenalidomide 25mg"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Multiple myeloma on maintenance therapy.",
+      "gold_hccs": [
+        "19"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "C9000",
+          "hcc": "19",
+          "confidence": 0.92
+        }
+      ]
+    },
+    {
+      "id": "c020",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [],
+      "problem_list": [
+        {
+          "diagnosis": "Z853"
+        }
+      ],
+      "prior_year_hccs": [
+        "18"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "History of breast cancer with bone mets noted last year.",
+      "gold_hccs": [
+        "18"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "C7989",
+          "hcc": "18",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "c021",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Insulin"
+        },
+        {
+          "drug": "Gabapentin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 26
+        },
+        {
+          "name": "HbA1c",
+          "value": 9.6
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "E119"
+        },
+        {
+          "title": "diabetic polyneuropathy"
+        },
+        {
+          "title": "diabetic foot ulcer right heel"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "DM with multiple complications: neuropathy, CKD4, plantar ulcer.",
+      "gold_hccs": [
+        "37",
+        "327",
+        "383"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E1142",
+          "hcc": "37",
+          "confidence": 0.85
+        },
+        {
+          "icd10": "N184",
+          "hcc": "327",
+          "confidence": 0.88
+        },
+        {
+          "icd10": "L97419",
+          "hcc": "383",
+          "confidence": 0.55
+        }
+      ]
+    },
+    {
+      "id": "c022",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 12
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "N184",
+          "title": "CKD now stage 5 dialysis dependent"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Stage 5 CKD on dialysis since June.",
+      "gold_hccs": [
+        "326"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "N185",
+          "hcc": "326",
+          "confidence": 0.92
+        }
+      ]
+    },
+    {
+      "id": "c023",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Furosemide"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "226"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "HF history, on long-standing diuretic; should re-document this year.",
+      "gold_hccs": [
+        "226"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5032",
+          "hcc": "226",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "c024",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Donepezil"
+        },
+        {
+          "drug": "Warfarin"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "127",
+        "238"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Dementia and AFib both stable.",
+      "gold_hccs": [
+        "127",
+        "238"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "G309",
+          "hcc": "127",
+          "confidence": 0.88
+        },
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.82
+        }
+      ]
+    },
+    {
+      "id": "c025",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Sertraline 100mg"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "MDD on SSRI, well-controlled.",
+      "gold_hccs": [],
+      "llm_mock": []
+    },
+    {
+      "id": "c026",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Lithium"
+        },
+        {
+          "drug": "Sertraline"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Bipolar, depressed phase, lithium plus SSRI.",
+      "gold_hccs": [
+        "154"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F319",
+          "hcc": "154",
+          "confidence": 0.83
+        }
+      ]
+    },
+    {
+      "id": "c027",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Risperidone"
+        },
+        {
+          "drug": "Escitalopram"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Schizophrenia with co-occurring depressive symptoms.",
+      "gold_hccs": [
+        "151"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F209",
+          "hcc": "151",
+          "confidence": 0.86
+        }
+      ]
+    },
+    {
+      "id": "c028",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Insulin lispro (steroid-induced hyperglycemia, no DM)"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Transient steroid-induced hyperglycemia; no diabetes diagnosed.",
+      "gold_hccs": [],
+      "llm_mock": []
+    },
+    {
+      "id": "c029",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Lenalidomide"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "19"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Multiple myeloma, on maintenance.",
+      "gold_hccs": [
+        "19"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "C9000",
+          "hcc": "19",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c030",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Sacubitril/valsartan"
+        },
+        {
+          "drug": "Apixaban"
+        },
+        {
+          "drug": "Metformin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "EF",
+          "value": 30
+        },
+        {
+          "name": "HbA1c",
+          "value": 7.8
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "HFrEF + AFib + T2DM.",
+      "gold_hccs": [
+        "226",
+        "238",
+        "38"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5022",
+          "hcc": "226",
+          "confidence": 0.92
+        },
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.84
+        },
+        {
+          "icd10": "E119",
+          "hcc": "38",
+          "confidence": 0.82
+        }
+      ]
+    },
+    {
+      "id": "c031",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Tiotropium"
+        },
+        {
+          "drug": "Fluticasone"
+        }
+      ],
+      "labs": [
+        {
+          "name": "spo2",
+          "value": 86
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "GOLD IV COPD, on home O2.",
+      "gold_hccs": [
+        "280"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "J449",
+          "hcc": "280",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "c032",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Rivaroxaban"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Persistent AF.",
+      "gold_hccs": [
+        "238"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.78
+        }
+      ]
+    },
+    {
+      "id": "c033",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "19"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Multiple myeloma, in remission, last labs stable.",
+      "gold_hccs": [
+        "19"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "C9000",
+          "hcc": "19",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "c034",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [
+        {
+          "name": "BNP",
+          "value": 800
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "N185"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "BNP elevated, attributed to ESRD volume overload, NOT primary HF.",
+      "gold_hccs": [
+        "326"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "N185",
+          "hcc": "326",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c035",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Memantine"
+        },
+        {
+          "drug": "Warfarin"
+        },
+        {
+          "drug": "Sacubitril/valsartan"
+        }
+      ],
+      "labs": [
+        {
+          "name": "EF",
+          "value": 32
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Multi-comorbid: dementia, AFib, HFrEF.",
+      "gold_hccs": [
+        "127",
+        "238",
+        "226"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "G309",
+          "hcc": "127",
+          "confidence": 0.86
+        },
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.82
+        },
+        {
+          "icd10": "I5022",
+          "hcc": "226",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c036",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Metformin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 25
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "E119"
+        },
+        {
+          "title": "CKD"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "",
+      "gold_hccs": [
+        "37",
+        "327"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E1122",
+          "hcc": "37",
+          "confidence": 0.85
+        },
+        {
+          "icd10": "N184",
+          "hcc": "327",
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "id": "c037",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Routine annual visit, healthy.",
+      "gold_hccs": [],
+      "llm_mock": []
+    },
+    {
+      "id": "c038",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Methadone 80mg daily (clinic-administered)"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "OUD, on methadone maintenance for 8 years.",
+      "gold_hccs": [
+        "137"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F1120",
+          "hcc": "137",
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "id": "c039",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Tiotropium"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "280"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "COPD documented every year, stable.",
+      "gold_hccs": [
+        "280"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "J449",
+          "hcc": "280",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c040",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Escitalopram"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Mild generalized anxiety, on SSRI.",
+      "gold_hccs": [],
+      "llm_mock": []
+    },
+    {
+      "id": "c041",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Apixaban"
+        },
+        {
+          "drug": "Tiotropium"
+        },
+        {
+          "drug": "Donepezil"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "AFib, COPD, mild dementia all stable.",
+      "gold_hccs": [
+        "238",
+        "280",
+        "127"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.82
+        },
+        {
+          "icd10": "J449",
+          "hcc": "280",
+          "confidence": 0.86
+        },
+        {
+          "icd10": "G309",
+          "hcc": "127",
+          "confidence": 0.86
+        }
+      ]
+    },
+    {
+      "id": "c042",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Metformin"
+        },
+        {
+          "drug": "Sacubitril/valsartan"
+        }
+      ],
+      "labs": [
+        {
+          "name": "EF",
+          "value": 35
+        },
+        {
+          "name": "HbA1c",
+          "value": 7.4
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "",
+      "gold_hccs": [
+        "38",
+        "226"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E119",
+          "hcc": "38",
+          "confidence": 0.82
+        },
+        {
+          "icd10": "I5022",
+          "hcc": "226",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "c043",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [],
+      "problem_list": [
+        {
+          "diagnosis": "C7989",
+          "title": "metastatic disease"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Hx breast cancer with bone metastases \u2014 on hospice surveillance.",
+      "gold_hccs": [
+        "18"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "C7989",
+          "hcc": "18",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "c044",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Lithium"
+        },
+        {
+          "drug": "Buprenorphine"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Dual dx: bipolar disorder and OUD.",
+      "gold_hccs": [
+        "154",
+        "137"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F319",
+          "hcc": "154",
+          "confidence": 0.86
+        },
+        {
+          "icd10": "F1120",
+          "hcc": "137",
+          "confidence": 0.88
+        }
+      ]
+    },
+    {
+      "id": "c045",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 50
+        },
+        {
+          "name": "creatinine",
+          "value": 1.6
+        }
+      ],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "CKD3, stable.",
+      "gold_hccs": [],
+      "llm_mock": []
+    },
+    {
+      "id": "c046",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [],
+      "problem_list": [
+        {
+          "diagnosis": "Z853",
+          "title": "Hx breast cancer"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "New bony mets identified on PET CT \u2014 metastatic recurrence.",
+      "gold_hccs": [
+        "18"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "C7989",
+          "hcc": "18",
+          "confidence": 0.78
+        }
+      ]
+    },
+    {
+      "id": "c047",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Furosemide"
+        },
+        {
+          "drug": "Warfarin"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "226",
+        "238"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "",
+      "gold_hccs": [
+        "226",
+        "238"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5032",
+          "hcc": "226",
+          "confidence": 0.78
+        },
+        {
+          "icd10": "I4891",
+          "hcc": "238",
+          "confidence": 0.82
+        }
+      ]
+    },
+    {
+      "id": "c048",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Insulin glargine"
+        },
+        {
+          "drug": "Gabapentin"
+        }
+      ],
+      "labs": [
+        {
+          "name": "eGFR",
+          "value": 24
+        },
+        {
+          "name": "HbA1c",
+          "value": 10.5
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "E119"
+        },
+        {
+          "title": "diabetic foot ulcer"
+        },
+        {
+          "title": "diabetic polyneuropathy"
+        },
+        {
+          "title": "CKD"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Severe DM with multi-organ complications.",
+      "gold_hccs": [
+        "37",
+        "327",
+        "383"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "E1122",
+          "hcc": "37",
+          "confidence": 0.86
+        },
+        {
+          "icd10": "N184",
+          "hcc": "327",
+          "confidence": 0.88
+        },
+        {
+          "icd10": "L97529",
+          "hcc": "383",
+          "confidence": 0.55
+        }
+      ]
+    },
+    {
+      "id": "c049",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Warfarin (DVT prophylaxis)"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Started warfarin 3 months ago for provoked DVT after surgery; no AFib history.",
+      "gold_hccs": [],
+      "llm_mock": []
+    },
+    {
+      "id": "c050",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Risperidone"
+        },
+        {
+          "drug": "Metformin"
+        },
+        {
+          "drug": "Tiotropium"
+        }
+      ],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Long-standing schizophrenia, T2DM, COPD.",
+      "gold_hccs": [
+        "151",
+        "38",
+        "280"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "F209",
+          "hcc": "151",
+          "confidence": 0.85
+        },
+        {
+          "icd10": "E119",
+          "hcc": "38",
+          "confidence": 0.82
+        },
+        {
+          "icd10": "J449",
+          "hcc": "280",
+          "confidence": 0.86
+        }
+      ]
+    },
+    {
+      "id": "c051",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [],
+      "labs": [],
+      "problem_list": [],
+      "prior_year_hccs": [
+        "38",
+        "127",
+        "280"
+      ],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "Annual wellness \u2014 patient stable on all chronic conditions.",
+      "gold_hccs": [
+        "38",
+        "127",
+        "280"
+      ],
+      "llm_mock": []
+    },
+    {
+      "id": "c052",
+      "demographics": {
+        "age": 72,
+        "sex": "F"
+      },
+      "medications": [
+        {
+          "drug": "Furosemide"
+        }
+      ],
+      "labs": [
+        {
+          "name": "EF",
+          "value": 60
+        },
+        {
+          "name": "BNP",
+          "value": 480
+        }
+      ],
+      "problem_list": [
+        {
+          "diagnosis": "I5032"
+        }
+      ],
+      "prior_year_hccs": [],
+      "current_year_hccs": [],
+      "vitals": {},
+      "note_text": "HFpEF, EF preserved at 60% but symptomatic, BNP up.",
+      "gold_hccs": [
+        "226"
+      ],
+      "llm_mock": [
+        {
+          "icd10": "I5032",
+          "hcc": "226",
+          "confidence": 0.88
+        }
+      ]
+    }
+  ]
+}

@@ -2747,3 +2747,81 @@ export async function downloadRecaptureAuditPdf(year?: number): Promise<void> {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge Graph (KG) — "Why this HCC?" explainability endpoints
+// ---------------------------------------------------------------------------
+
+/** A single piece of evidence that contributed to an HCC suggestion. */
+export interface KgEvidenceItem {
+  kind: string;
+  source: string;
+  citation?: string;
+  value?: unknown;
+  verbatim?: string;
+}
+
+/** The full reasoning chain for one HCC, traced through the KG. */
+export interface KgEvidenceChain {
+  hcc_code: string;
+  suggested_icd10?: string;
+  evidence_chain: KgEvidenceItem[];
+  total_score: number;
+  decision_tree: string[];
+}
+
+/** A ranked HCC candidate from a patient-wide KG inference. */
+export interface KgHccCandidate {
+  hcc: string;
+  confidence: number;
+  sources: string[];
+  reasoning: string[];
+  final_evidence: KgEvidenceChain;
+}
+
+/** Full HCC explanation card data — used on hover popovers. */
+export async function getHccExplanation(hcc: string): Promise<unknown> {
+  const { data } = await api.get(`/api/kg/query/explain/${hcc}`);
+  return data;
+}
+
+/** Per-patient evidence chain for a single HCC. */
+export async function getEvidenceChain(
+  hcc: string,
+  pid: number,
+  year = 2026,
+): Promise<KgEvidenceChain> {
+  const { data } = await api.get(
+    `/api/kg/query/evidence-chain/${hcc}/patient/${pid}`,
+    { params: { year } },
+  );
+  return data;
+}
+
+/** Whole-patient KG inference — ranked candidate HCCs with evidence. */
+export async function getPatientFullInference(
+  pid: number,
+  year = 2026,
+): Promise<{ patient_id: number; candidates: KgHccCandidate[] }> {
+  const { data } = await api.post(`/api/kg/query/patient-full-inference/${pid}`, { year });
+  return data;
+}
+
+/** Evidence chain attached to an existing suspect row. */
+export async function getSuspectEvidenceChain(suspectId: number): Promise<KgEvidenceChain> {
+  const { data } = await api.get(`/api/suspects/${suspectId}/evidence-chain`);
+  return data;
+}
+
+/** Traverse the KG between two concepts; useful for the graph view. */
+export async function traverseKgPath(
+  from: string,
+  to: string,
+  max_depth = 5,
+): Promise<unknown> {
+  const { data } = await api.get('/api/kg/query/traverse', {
+    params: { from, to, max_depth },
+  });
+  return data;
+}

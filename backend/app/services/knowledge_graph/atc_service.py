@@ -105,6 +105,32 @@ def _safe_fetch(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
         return []
 
 
+def _brand_bridge_lookup(needle: str) -> tuple[str | None, str | None] | None:
+    """Look up a brand name in ``kg_brand_to_generic`` and return
+    ``(generic_name, atc_code)`` when it hits.
+
+    Returns ``None`` when no row matches.  Both fields in the tuple may be
+    independently ``None`` (e.g. some seeds know the generic but not the ATC).
+    Implemented inline (no import of ``brand_generic_service``) to keep this
+    module's call surface symmetric with the rest of ``_safe_fetch`` queries
+    and to avoid a circular import when callers patch ``_safe_fetch`` in
+    tests.
+    """
+    if not needle:
+        return None
+    rows = _safe_fetch(
+        """
+        SELECT generic_name, atc_code FROM kg_brand_to_generic
+         WHERE LOWER(brand_name) = %s AND is_active = 1
+         LIMIT 1
+        """,
+        (needle,),
+    )
+    if not rows:
+        return None
+    return rows[0].get("generic_name"), rows[0].get("atc_code")
+
+
 # ---------------------------------------------------------------------------
 # 1. resolve_drug_to_atc
 # ---------------------------------------------------------------------------
@@ -151,6 +177,32 @@ def resolve_drug_to_atc(drug_name_or_ndc: str) -> list[dict[str, Any]]:
             "SELECT * FROM kg_rxnorm_to_atc WHERE LOWER(drug_name) = %s LIMIT 50",
             (needle,),
         )
+
+    # 3b. Brand-bridge: when the drug name didn't hit kg_rxnorm_to_atc directly,
+    # check kg_brand_to_generic before falling through to fuzzy / stem
+    # inference.  This makes ``Ozempic`` resolve to its generic ingredient
+    # (semaglutide) and reuse whatever bridge row already exists for it.
+    if not rows:
+        bridged_atc = _brand_bridge_lookup(needle)
+        if bridged_atc:
+            generic_name, atc_code = bridged_atc
+            # Try to surface the bridge row for the generic name first.
+            if generic_name:
+                rows = _safe_fetch(
+                    "SELECT * FROM kg_rxnorm_to_atc WHERE LOWER(drug_name) = %s LIMIT 50",
+                    (generic_name.lower(),),
+                )
+            # Synthesise a minimal pseudo-row when the bridge has no entry for
+            # the generic — callers still get a usable ATC + drug_name.
+            if not rows and atc_code:
+                rows = [{
+                    "rxcui": None,
+                    "drug_name": generic_name or drug_name_or_ndc,
+                    "ndc": None,
+                    "atc_code": atc_code,
+                    "is_brand": 0,
+                    "is_generic": 1,
+                }]
 
     # 4. Fuzzy fallback over distinct drug names.
     if not rows:

@@ -1,0 +1,72 @@
+{
+  "_meta": {
+    "description": "Curated test fixtures for the 47 KG endpoints. Do NOT change values without re-running the smoke test.",
+    "base_url": "http://localhost:8500",
+    "login_email": "admin@raf.health",
+    "login_password": "Admin@123",
+    "sample_patient_ids": [3, 4, 5, 7, 17],
+    "sample_provider_ids": [1, 2, 3, 4, 5, 6],
+    "sample_hcc_codes": ["18", "19", "22", "138", "226"],
+    "sample_loinc_codes": ["4548-4", "33914-3", "30934-4"],
+    "sample_drugs": ["metformin", "Ozempic", "tirzepatide"],
+    "sample_atc_codes": ["A10BA", "A10BJ", "C09AA", "C10AA"]
+  },
+
+  "GET /api/kg/stats": {},
+  "GET /api/kg/vocabulary": {},
+  "GET /api/kg/query/stats": {"query": {"since_hours": 24}},
+  "GET /api/kg/query/sub-services": {},
+
+  "GET /api/kg/concepts/search": {"query": {"q": "diabetes", "limit": 5}},
+  "GET /api/kg/concepts/by-uri/{uri}": {"path": {"uri": "icd10:E1140"}},
+  "GET /api/kg/concepts/{concept_id}": {"path": {"concept_id": 489}},
+  "GET /api/kg/concepts/{concept_id}/edges": {"path": {"concept_id": 489}},
+  "POST /api/kg/concepts": {"body": {"ontology": "custom", "code": "SMOKE_TEST_C1", "preferred_label": "Smoke test concept (kg_smoke_test.py)", "concept_uri": "custom:SMOKE_TEST_C1", "is_active": true}},
+  "POST /api/kg/edges": {"body": {"src_concept_id": 489, "dst_concept_id": 495, "edge_type": "comorbid_with", "weight": 0.5, "source": "kg_smoke_test"}},
+
+  "GET /api/kg/snomed/resolve": {"query": {"text": "Type 2 diabetes with neuropathy", "top_k": 5, "min_score": 50}},
+  "GET /api/kg/snomed/{snomed_id}/icd10": {"path": {"snomed_id": "422088007"}},
+  "GET /api/kg/icd10/{icd10}/hcc": {"path": {"icd10": "E1140"}, "query": {"year": 2026}},
+  "POST /api/kg/text-to-hcc": {"body": {"text": "Type 2 diabetes with neuropathy", "model_year": 2026, "top_k": 10}},
+  "POST /api/kg/problem-list-to-hcc": {"body": {"items": ["Type 2 diabetes with neuropathy", "Chronic kidney disease stage 3", "Heart failure"], "model_year": 2026, "top_k_per_item": 5}},
+
+  "GET /api/kg/labs/resolve": {"query": {"test": "HbA1c", "limit": 5}},
+  "POST /api/kg/labs/evaluate": {"body": {"loinc_code": "4548-4", "value": 9.2, "unit": "%"}},
+  "POST /api/kg/labs/evaluate-patient/{pid}": {"path": {"pid": 3}, "body": {"since_days": 730}},
+  "GET /api/kg/labs/signals": {"query": {"hcc": "18"}},
+
+  "GET /api/kg/atc/resolve": {"query": {"drug": "metformin"}},
+  "POST /api/kg/atc/drug-to-hcc-chain": {"body": {"drug_name": "metformin"}},
+  "POST /api/kg/atc/unseen-drug-inference": {"body": {"drug_name": "tirzepatide"}},
+  "GET /api/kg/atc/{atc_code}": {"path": {"atc_code": "A10BA"}},
+  "GET /api/kg/atc/{atc_code}/drugs": {"path": {"atc_code": "A10BA"}, "query": {"include_subclasses": true}},
+
+  "POST /api/kg/comorbidity/evaluate-patient/{pid}": {"path": {"pid": 3}, "query": {"year": 2026}},
+  "POST /api/kg/comorbidity/evaluate-evidence": {"body": {"evidence": {"hccs": ["18"], "icds": ["E1140"], "atc_codes": ["A10BA"], "labs": [{"loinc": "4548-4", "value": 9.2}], "demographics": {"age": 68, "sex": "F"}}}},
+  "GET /api/kg/comorbidity/patterns": {"query": {"active_only": true}},
+  "GET /api/kg/comorbidity/patterns/{pattern_id}": {"path": {"pattern_id": 1}},
+
+  "POST /api/kg/demographic/modulated-prior": {"body": {"hcc_code": "138", "age": 72, "sex": "F", "dual_status": "non_dual", "base_score": 0.6}},
+  "GET /api/kg/demographic/factors": {"query": {"hcc": "138"}},
+  "POST /api/kg/demographic/panel-priors/{provider_id}": {"path": {"provider_id": 1}, "body": {"hcc_codes": ["18", "19", "22", "138"], "year": 2026}},
+
+  "GET /api/kg/specialty/canonical": {"query": {"raw": "Internal Medicine"}},
+  "GET /api/kg/specialty/{specialty}/priors": {"path": {"specialty": "Internal Medicine"}},
+  "POST /api/kg/specialty/apply": {"body": {"specialty": "Internal Medicine", "hcc_code": "138", "base_score": 0.4}},
+  "GET /api/kg/specialty/{specialty}/top-likely": {"path": {"specialty": "Internal Medicine"}, "query": {"n": 10}},
+  "GET /api/kg/specialty/provider/{provider_id}/calibrated-priors": {"path": {"provider_id": 1}},
+
+  "POST /api/kg/evidence-rules/evaluate": {"body": {"evidence": {"icd10": ["E1140"], "atc": ["A10BA"], "loinc": [{"code": "4548-4", "value": 9.2}], "notes": ["Patient with type 2 diabetes mellitus with neuropathy"]}}},
+  "GET /api/kg/evidence-rules": {"query": {"hcc": "18"}},
+  "GET /api/kg/evidence-rules/sources/{source_type}": {"path": {"source_type": "ADA-guideline"}},
+  "GET /api/kg/evidence-rules/{rule_id}": {"path": {"rule_id": 1}},
+
+  "POST /api/kg/query/related-hccs": {"body": {"concept_uri_or_text": "Type 2 diabetes with neuropathy", "limit": 10}},
+  "GET /api/kg/query/evidence-chain/{hcc_code}/patient/{pid}": {"path": {"hcc_code": "18", "pid": 3}, "query": {"year": 2026}},
+  "GET /api/kg/query/traverse": {"query": {"from": "icd10:E1140", "to": "hcc:18", "max_depth": 5}},
+  "GET /api/kg/query/explain/{hcc_code}": {"path": {"hcc_code": "18"}},
+  "POST /api/kg/query/patient-full-inference/{pid}": {"path": {"pid": 3}, "body": {"year": 2026, "include_modulation": true}},
+
+  "POST /api/suspects/kg-detect/{patient_id}": {"path": {"patient_id": 3}, "body": {"year": 2026, "tenant_id": 1}},
+  "GET /api/suspects/kg-detect/distribution": {"query": {"year": 2026}}
+}
