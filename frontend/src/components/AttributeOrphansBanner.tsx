@@ -17,6 +17,7 @@ import {
   listRecaptureGaps,
   type AttributeOrphansResult,
 } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 export default function AttributeOrphansBanner() {
   const qc = useQueryClient();
@@ -52,21 +53,21 @@ export default function AttributeOrphansBanner() {
         margin: "0 0 16px",
         padding: "12px 16px",
         borderRadius: 10,
-        background: "#FEF3C7",
-        border: "1px solid #FCD34D",
-        color: "#78350F",
+        background: tokens.warningSoft,
+        border: `1px solid ${tokens.warningBorder}`,
+        color: tokens.warningText,
         display: "flex", alignItems: "center", gap: 12,
       }}
     >
       {lastResult ? (
-        <CheckCircle2 size={18} style={{ flexShrink: 0, color: "#047857" }} />
+        <CheckCircle2 size={18} style={{ flexShrink: 0, color: tokens.successDark }} />
       ) : (
         <AlertTriangle size={18} style={{ flexShrink: 0 }} />
       )}
 
       <div style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>
         {lastResult ? (
-          <span style={{ color: "#065F46" }}>
+          <span style={{ color: tokens.successDark }}>
             Attribution complete — checked <strong>{lastResult.checked}</strong>,
             updated <strong>{lastResult.updated}</strong>,
             still orphan <strong>{lastResult.still_orphan}</strong>.
@@ -90,8 +91,8 @@ export default function AttributeOrphansBanner() {
         style={{
           display: "inline-flex", alignItems: "center", gap: 6,
           padding: "8px 14px", borderRadius: 8, border: "none",
-          background: mutation.isPending ? "#FCD34D" : "#F59E0B",
-          color: "#fff", fontSize: 13, fontWeight: 600,
+          background: mutation.isPending ? tokens.warningBorder : tokens.warningStrong,
+          color: tokens.white, fontSize: 13, fontWeight: 600,
           cursor: mutation.isPending ? "not-allowed" : "pointer",
         }}
       >

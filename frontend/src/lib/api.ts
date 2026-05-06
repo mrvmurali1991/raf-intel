@@ -2647,6 +2647,15 @@ export interface AuditReadinessResponse {
     revenue_impact: number;
     reason: string;
   }>;
+  inter_rater_reliability?: {
+    secondary_approved: number;
+    secondary_rejected: number;
+    pending_review: number;
+    agreement_pct: number | null;
+    band: "excellent" | "acceptable" | "needs_review" | null;
+    method: string;
+    note: string;
+  } | null;
 }
 
 export interface ReviewQueueResponse {

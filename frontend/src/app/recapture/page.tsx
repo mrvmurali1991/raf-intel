@@ -9,6 +9,9 @@ import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
 import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton";
+import RecaptureVelocityKpis from "@/components/RecaptureVelocityKpis";
+import RecaptureDecayChart from "@/components/RecaptureDecayChart";
+import OutreachSummaryCards from "@/components/OutreachSummaryCards";
 import { KgGapBadge } from "@/components/kg/KgGapBadge";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 
@@ -270,6 +273,29 @@ export default function RecapturePage() {
           />
         </div>
       </div>
+
+      {/* Velocity KPIs + decay curve — show recapture-rate dynamics over time */}
+      <FeatureFlag flagKey="recapture_decay_curve">
+        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+            Recapture velocity & decay
+          </h2>
+          <div style={{ marginBottom: 16 }}>
+            <RecaptureVelocityKpis />
+          </div>
+          <RecaptureDecayChart />
+        </div>
+      </FeatureFlag>
+
+      {/* Outreach summary — channel mix, response rate, last-touch metrics */}
+      <FeatureFlag flagKey="recapture_outreach">
+        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+            Patient outreach
+          </h2>
+          <OutreachSummaryCards />
+        </div>
+      </FeatureFlag>
 
       {/* RADV Dual-Coder MEAT Audit (feature-gated) */}
       <FeatureFlag flagKey="recapture_meat_audit">

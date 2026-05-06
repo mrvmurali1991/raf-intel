@@ -373,6 +373,40 @@ def dashboard_stats(
     except Exception as e:
         logger.warning("dashboard_stats top_undercoded failed: %s", e)
 
+    # Open recapture-gap count (drives the "Open recapture gaps" tile on
+    # the provider dashboard).  Tenant-scoped, status='open' only.
+    open_recapture_gaps = 0
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt FROM recapture_gaps
+                WHERE tenant_id = %s AND status = 'open'
+                  AND current_year = %s
+                """,
+                (tenant_id, measurement_year),
+            )
+            row = cur.fetchone()
+            open_recapture_gaps = int(row["cnt"]) if row else 0
+    except Exception as e:
+        logger.warning("dashboard_stats open_recapture_gaps failed: %s", e)
+
+    # Pending attestations awaiting the provider's signature.  Tenant-scoped.
+    pending_attestations = 0
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt FROM provider_attestations
+                WHERE tenant_id = %s AND status = 'pending'
+                """,
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            pending_attestations = int(row["cnt"]) if row else 0
+    except Exception as e:
+        logger.warning("dashboard_stats pending_attestations failed: %s", e)
+
     # MEAT compliance — percentage of HCCs with meat_status = 'complete'
     meat_compliance_pct = 0.0
     try:
@@ -405,6 +439,8 @@ def dashboard_stats(
         if total_patients
         else 0,
         "total_suspects_open": total_suspects_open,
+        "open_recapture_gaps": open_recapture_gaps,
+        "pending_attestations": pending_attestations,
         "meat_compliance_pct": meat_compliance_pct,
         "raf_distribution": raf_distribution,
         "top_undercoded": top_undercoded,

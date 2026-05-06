@@ -23,6 +23,27 @@ export const tokens = {
   riskMediumSoft: "#FFFBEB",
   riskLow:        "#059669", // emerald / green
   riskLowSoft:    "#ECFDF5",
+
+  // Warning / amber palette — "needs attention" banners and status pills.
+  warningSoft:   "#FEF3C7",
+  warningBorder: "#FCD34D",
+  warningText:   "#78350F",
+  warningStrong: "#F59E0B",
+
+  // Primary action / brand-info palette — primary CTAs and info icons.
+  primary:       "#2563EB",
+  primaryDark:   "#1D4ED8",
+  primarySoft:   "rgba(37, 99, 235, 0.08)",
+
+  // Success palette — confirmation icons and "all clear" states.
+  success:       "#10B981",
+  successDark:   "#047857",
+  successSoft:   "#ECFDF5",
+
+  // Danger / destructive palette — error banners, rejected states.
+  danger:        "#B91C1C",
+  dangerSoft:    "#FEF2F2",
+  dangerBorder:  "#FECACA",
 } as const;
 
 export type Tokens = typeof tokens;

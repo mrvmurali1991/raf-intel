@@ -11,6 +11,7 @@ interface ProviderDashboardStats {
   average_raf_score?: number;
   pending_attestations?: number;
   open_recapture_gaps?: number;
+  total_suspects_open?: number;
 }
 
 function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
@@ -56,6 +57,7 @@ export function ProviderDashboard() {
         average_raf_score: typeof r.average_raf_score === "number" ? r.average_raf_score : undefined,
         pending_attestations: typeof r.pending_attestations === "number" ? r.pending_attestations : undefined,
         open_recapture_gaps: typeof r.open_recapture_gaps === "number" ? r.open_recapture_gaps : undefined,
+        total_suspects_open: typeof r.total_suspects_open === "number" ? r.total_suspects_open : undefined,
       };
     },
   });
@@ -83,7 +85,7 @@ export function ProviderDashboard() {
           />
           <StatCard
             label="Suspect conditions"
-            value={"—"}
+            value={stats?.total_suspects_open ?? "—"}
             subtitle="AI-flagged suggestions awaiting your review"
             icon={<Activity size={20} />}
             color="#F59E0B"

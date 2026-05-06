@@ -12,7 +12,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { ShieldCheck, AlertTriangle, Users } from "lucide-react";
 
 import { getRecaptureAuditReadiness } from "@/lib/api";
 
@@ -20,6 +20,20 @@ function gaugeColor(pct: number): string {
   if (pct >= 80) return "#16a34a"; // green
   if (pct >= 50) return "#f59e0b"; // amber
   return "#dc2626";                // red
+}
+
+function irrColor(band: "excellent" | "acceptable" | "needs_review" | null | undefined): string {
+  if (band === "excellent") return "#16a34a";
+  if (band === "acceptable") return "#f59e0b";
+  if (band === "needs_review") return "#dc2626";
+  return "#94a3b8";
+}
+
+function irrLabel(band: "excellent" | "acceptable" | "needs_review" | null | undefined): string {
+  if (band === "excellent") return "Excellent";
+  if (band === "acceptable") return "Acceptable";
+  if (band === "needs_review") return "Needs review";
+  return "Insufficient data";
 }
 
 export function AuditReadinessCard() {
@@ -137,6 +151,44 @@ export function AuditReadinessCard() {
           <Stat label="With evidence" value={data.with_evidence} />
           <Stat label="Dual-signed" value={data.dual_signed} />
         </div>
+
+        {data.inter_rater_reliability && (
+          <div
+            title={data.inter_rater_reliability.note}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              marginBottom: 16,
+            }}
+          >
+            <Users size={18} color={irrColor(data.inter_rater_reliability.band)} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Inter-rater reliability
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: irrColor(data.inter_rater_reliability.band) }}>
+                  {data.inter_rater_reliability.agreement_pct != null
+                    ? `${data.inter_rater_reliability.agreement_pct.toFixed(1)}%`
+                    : "—"}
+                </span>
+                <span style={{ fontSize: 12, color: "#475569" }}>
+                  {irrLabel(data.inter_rater_reliability.band)}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                {data.inter_rater_reliability.secondary_approved} approved ·{" "}
+                {data.inter_rater_reliability.secondary_rejected} rejected ·{" "}
+                {data.inter_rater_reliability.pending_review} pending
+              </div>
+            </div>
+          </div>
+        )}
 
         <div>
           <h3 style={{ margin: "0 0 8px", fontSize: 13, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>

@@ -144,6 +144,42 @@ FEATURE_REGISTRY: dict[str, FeatureFlag] = {
             ),
             category="Reports",
         ),
+        FeatureFlag(
+            key="recapture_meat_audit",
+            name="Dual-coder MEAT audit defense",
+            description=(
+                "RADV audit-readiness gauge, top-5 blockers, IRR tile, and "
+                "PDF export of dual-signed gaps."
+            ),
+            category="Recapture",
+        ),
+        FeatureFlag(
+            key="recapture_decay_curve",
+            name="Recapture velocity & decay curve",
+            description=(
+                "Velocity KPIs (gaps closed per week) and decay-curve chart "
+                "showing recapture-rate dynamics across cohorts."
+            ),
+            category="Recapture",
+        ),
+        FeatureFlag(
+            key="recapture_outreach",
+            name="Patient outreach summary",
+            description=(
+                "Channel-mix breakdown, response-rate cards, and last-touch "
+                "metrics for patient outreach efforts."
+            ),
+            category="Recapture",
+        ),
+        FeatureFlag(
+            key="kg_evidence_panel",
+            name="Knowledge-Graph evidence chips & badges",
+            description=(
+                "Hoverable HCC popovers and evidence-chain badges across "
+                "providers, recapture, and suspects pages."
+            ),
+            category="Knowledge Graph",
+        ),
     ]
 }
 

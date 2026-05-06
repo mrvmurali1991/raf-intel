@@ -21,6 +21,7 @@ import {
   markGapAwvScheduled,
   type AWVSuggestion,
 } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 interface AWVSuggestionDialogProps {
   gapId: number | null;
@@ -108,7 +109,7 @@ export function AWVSuggestionDialog({
     >
       <div
         style={{
-          background: "#FFFFFF",
+          background: tokens.white,
           borderRadius: 14,
           padding: 24,
           maxWidth: 540,
@@ -120,9 +121,9 @@ export function AWVSuggestionDialog({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <h2
             id="awv-suggestion-title"
-            style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}
+            style={{ margin: 0, fontSize: 18, fontWeight: 700, color: tokens.slate900, display: "flex", alignItems: "center", gap: 8 }}
           >
-            <CalendarPlus size={20} color="#2563EB" />
+            <CalendarPlus size={20} color={tokens.primary} />
             Suggest AWV for Recurring Gap
           </h2>
           <button
@@ -135,7 +136,7 @@ export function AWVSuggestionDialog({
               cursor: "pointer",
               padding: 4,
               borderRadius: 6,
-              color: "#475569",
+              color: tokens.slate600,
             }}
           >
             <X size={18} />
@@ -143,7 +144,7 @@ export function AWVSuggestionDialog({
         </div>
 
         {loading && (
-          <div style={{ padding: 32, textAlign: "center", color: "#64748B", fontSize: 14 }}>
+          <div style={{ padding: 32, textAlign: "center", color: tokens.slate500, fontSize: 14 }}>
             Loading recommendation…
           </div>
         )}
@@ -157,9 +158,9 @@ export function AWVSuggestionDialog({
               gap: 8,
               padding: "10px 14px",
               borderRadius: 8,
-              background: "#FEF2F2",
-              border: "1px solid #FECACA",
-              color: "#B91C1C",
+              background: tokens.dangerSoft,
+              border: `1px solid ${tokens.dangerBorder}`,
+              color: tokens.danger,
               fontSize: 13,
               marginBottom: 12,
             }}
@@ -177,11 +178,11 @@ export function AWVSuggestionDialog({
                 label="AWV Eligible"
                 value={
                   suggestion.eligible ? (
-                    <span style={{ color: "#10B981", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ color: tokens.success, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
                       <CheckCircle2 size={14} /> Yes
                     </span>
                   ) : (
-                    <span style={{ color: "#F59E0B", fontWeight: 600 }}>Not currently</span>
+                    <span style={{ color: tokens.warningStrong, fontWeight: 600 }}>Not currently</span>
                   )
                 }
               />
@@ -208,13 +209,13 @@ export function AWVSuggestionDialog({
             </div>
 
             {suggestion.reason && (
-              <p style={{ fontSize: 13, color: "#475569", margin: "0 0 16px", lineHeight: 1.5 }}>
+              <p style={{ fontSize: 13, color: tokens.slate600, margin: "0 0 16px", lineHeight: 1.5 }}>
                 {suggestion.reason}
               </p>
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: tokens.slate600 }}>
                 Suggested Visit Date
                 <input
                   type="date"
@@ -225,13 +226,13 @@ export function AWVSuggestionDialog({
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: 8,
-                    border: "1px solid #E2E8F0",
+                    border: `1px solid ${tokens.slate200}`,
                     fontSize: 13,
-                    color: "#0F172A",
+                    color: tokens.slate900,
                   }}
                 />
               </label>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: tokens.slate600 }}>
                 EHR Encounter ID (optional)
                 <input
                   type="text"
@@ -243,15 +244,15 @@ export function AWVSuggestionDialog({
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: 8,
-                    border: "1px solid #E2E8F0",
+                    border: `1px solid ${tokens.slate200}`,
                     fontSize: 13,
-                    color: "#0F172A",
+                    color: tokens.slate900,
                   }}
                 />
               </label>
             </div>
 
-            <p style={{ fontSize: 11, color: "#94A3B8", margin: "0 0 16px", lineHeight: 1.5 }}>
+            <p style={{ fontSize: 11, color: tokens.slate400, margin: "0 0 16px", lineHeight: 1.5 }}>
               "Schedule on EHR" only logs metadata in the RAF system — no AWV record
               is created automatically.  Please book the actual appointment in your EHR.
             </p>
@@ -264,9 +265,9 @@ export function AWVSuggestionDialog({
                 style={{
                   padding: "8px 16px",
                   borderRadius: 8,
-                  border: "1px solid #E2E8F0",
-                  background: "#FFFFFF",
-                  color: "#475569",
+                  border: `1px solid ${tokens.slate200}`,
+                  background: tokens.white,
+                  color: tokens.slate600,
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: submitting ? "not-allowed" : "pointer",
@@ -282,8 +283,8 @@ export function AWVSuggestionDialog({
                   padding: "8px 16px",
                   borderRadius: 8,
                   border: "none",
-                  background: submitting ? "#94A3B8" : "linear-gradient(135deg,#2563EB,#1D4ED8)",
-                  color: "#FFFFFF",
+                  background: submitting ? tokens.slate400 : `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`,
+                  color: tokens.white,
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: submitting || !visitDate ? "not-allowed" : "pointer",
@@ -302,10 +303,10 @@ export function AWVSuggestionDialog({
 function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: tokens.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
         {label}
       </div>
-      <div style={{ fontSize: 13, color: "#0F172A", fontWeight: 500 }}>{value}</div>
+      <div style={{ fontSize: 13, color: tokens.slate900, fontWeight: 500 }}>{value}</div>
     </div>
   );
 }
