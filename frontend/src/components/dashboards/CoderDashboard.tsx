@@ -67,6 +67,11 @@ export function CoderDashboard() {
             icon={<AlertTriangle size={20} />}
             color="#F59E0B"
             href="/suspects"
+            emptyState={{
+              message: "No suspects pending — queue is clear.",
+              ctaLabel: "Scan for new suspects",
+              ctaHref: "/suspects",
+            }}
           />
           <StatCard
             label="Missing Documents"
@@ -74,6 +79,9 @@ export function CoderDashboard() {
             subtitle="Follow-up needed"
             icon={<FileText size={20} />}
             color="#3B82F6"
+            emptyState={{
+              message: "No documents missing — all records complete.",
+            }}
           />
           <StatCard
             label="Analyzed Patients"
@@ -82,6 +90,11 @@ export function CoderDashboard() {
             icon={<Activity size={20} />}
             color="#10B981"
             href="/patients"
+            emptyState={{
+              message: "No patients analyzed yet.",
+              ctaLabel: "Start analysis",
+              ctaHref: "/analysis",
+            }}
           />
         </div>
       )}

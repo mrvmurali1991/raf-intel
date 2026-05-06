@@ -82,6 +82,11 @@ export function ProviderDashboard() {
             icon={<FileText size={20} />}
             color="#EF4444"
             href="/recapture"
+            emptyState={{
+              message: "No open gaps — nice work! All HCCs are documented.",
+              ctaLabel: "View recapture history",
+              ctaHref: "/recapture",
+            }}
           />
           <StatCard
             label="Suspect conditions"
@@ -90,6 +95,11 @@ export function ProviderDashboard() {
             icon={<Activity size={20} />}
             color="#F59E0B"
             href="/suspects"
+            emptyState={{
+              message: "No suspects to review right now.",
+              ctaLabel: "Run AI scan",
+              ctaHref: "/suspects",
+            }}
           />
           <StatCard
             label="Panel patients"
@@ -98,6 +108,11 @@ export function ProviderDashboard() {
             icon={<Users size={20} />}
             color="#3B82F6"
             href="/patients"
+            emptyState={{
+              message: "Connect your EHR to see your patient panel.",
+              ctaLabel: "Set up integration",
+              ctaHref: "/settings/integrations",
+            }}
           />
           <StatCard
             label="Average RAF"
