@@ -150,7 +150,7 @@ export default function PeerPercentileRibbon({
       }}
     >
       {KPI_ORDER.map((kpi) => {
-        const pct = data.percentiles[kpi.key];
+        const pct = data.percentiles[kpi.key] ?? null;
         const { fg, bg } = colorFor(pct);
         const fillH = pct === null ? 4 : Math.max(4, Math.round((pct / 100) * barH));
         const tooltip =

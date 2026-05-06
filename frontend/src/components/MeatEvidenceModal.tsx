@@ -231,7 +231,7 @@ function WeakHccRow({
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {evidence.evidence.map((row, i) => (
                 <div
-                  key={`${row.patient_hcc_id}-${row.encounter_id ?? "nil"}-${i}`}
+                  key={`${row.patient_id}-${i}`}
                   style={{
                     display: "flex",
                     flexDirection: "column",

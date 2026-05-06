@@ -75,7 +75,8 @@ export function FeatureFlagProvider({ children }: { children: ReactNode }) {
 
   const refetch = useCallback(async () => {
     try {
-      const items = await getFeatureFlags();
+      const resp = await getFeatureFlags();
+      const items: FeatureFlagItem[] = resp.flags ?? [];
       const flags: Record<string, FeatureFlagItem> = {};
       const orderedKeys: string[] = [];
       for (const item of items) {
@@ -117,11 +118,14 @@ export function FeatureFlagProvider({ children }: { children: ReactNode }) {
       }));
 
       try {
-        const updated = await apiSetFeatureFlag(key, enabled);
-        setState((s) => ({
-          ...s,
-          flags: { ...s.flags, [updated.key]: updated },
-        }));
+        const resp = await apiSetFeatureFlag(key, enabled) as { flag?: FeatureFlagItem };
+        const updated: FeatureFlagItem | undefined = resp?.flag;
+        if (updated) {
+          setState((s) => ({
+            ...s,
+            flags: { ...s.flags, [updated.key]: updated },
+          }));
+        }
       } catch (err) {
         // Roll back on failure.
         if (previous) {

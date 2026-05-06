@@ -107,7 +107,7 @@ export default function HccGapDrilldownModal(props: HccGapDrilldownModalProps) {
 
   const { data, isLoading, isError, error } = useQuery<HccGapPatientsResponse>({
     queryKey: ["hcc-gap-patients", providerId, hccCode, year],
-    queryFn: () => getProviderHccGapPatients(providerId, hccCode, { year, limit: 200 }),
+    queryFn: () => getProviderHccGapPatients(providerId, hccCode, year, 200),
     enabled: open && !!providerId && !!hccCode,
     staleTime: 60_000,
   });

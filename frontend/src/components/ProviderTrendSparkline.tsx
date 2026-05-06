@@ -24,8 +24,9 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 
 import type {
   ProviderTrendMetricKey,
-  ProviderTrendPoint,
 } from "@/lib/api";
+
+interface ProviderTrendPoint { year: number; value: number | null }
 
 export interface ProviderTrendSparklineProps {
   data: Array<Pick<ProviderTrendPoint, "year" | "value">>;

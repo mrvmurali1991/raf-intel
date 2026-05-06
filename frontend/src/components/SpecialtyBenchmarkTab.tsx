@@ -16,10 +16,20 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getSpecialtyBenchmarks,
   type PeerKpiKey,
-  type SpecialtyBenchmarks,
-  type SpecialtyCohort,
-  type SpecialtyCohortRow,
 } from "@/lib/api";
+
+interface SpecialtyCohortRow {
+  provider_id: number; provider_name: string; specialty: string;
+  kpis: Partial<Record<PeerKpiKey, number | null>>;
+  values?: Partial<Record<PeerKpiKey, number | null>>;
+  percentiles: Partial<Record<PeerKpiKey, number | null>>;
+}
+interface SpecialtyCohort {
+  specialty: string; cohort_size: number; insufficient_peers: boolean;
+  cohort_summary: Partial<Record<PeerKpiKey, { min: number; median: number; max: number; n: number }>>;
+  providers: SpecialtyCohortRow[];
+}
+interface SpecialtyBenchmarks { measurement_year: number; specialties: SpecialtyCohort[] }
 
 // ---------------------------------------------------------------------------
 // Tokens
@@ -90,7 +100,7 @@ export default function SpecialtyBenchmarkTab({
 }: SpecialtyBenchmarkTabProps) {
   const q = useQuery<SpecialtyBenchmarks>({
     queryKey: ["specialty-benchmarks", year],
-    queryFn: () => getSpecialtyBenchmarks(year),
+    queryFn: () => getSpecialtyBenchmarks(year) as Promise<SpecialtyBenchmarks>,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     retry: 1,
@@ -302,7 +312,8 @@ function ProviderRow({
   row: SpecialtyCohortRow;
   isCurrent: boolean;
 }) {
-  const name = row.full_name?.trim() || `${row.first_name} ${row.last_name}`.trim();
+  const r = row as SpecialtyCohortRow & { full_name?: string; first_name?: string; last_name?: string };
+  const name = r.full_name?.trim() || `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || row.provider_name;
   return (
     <tr
       style={{
@@ -338,8 +349,8 @@ function ProviderRow({
         )}
       </td>
       {COLUMNS.map((c) => {
-        const value = row.kpis[c.key];
-        const pct = row.percentiles[c.key];
+        const value = row.kpis[c.key] ?? null;
+        const pct = row.percentiles[c.key] ?? null;
         const { fg, bg } = chipColor(pct);
         return (
           <td key={c.key} style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>

@@ -30,12 +30,21 @@ import {
   Filter,
   ArrowUpDown,
   FileDown,
+  Settings,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { initialsColor } from "@/lib/ui-utils";
 import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";
+import ProviderFeaturesSettings from "@/components/ProviderFeaturesSettings";
+import TopHccOpportunities from "@/components/TopHccOpportunities";
+import ProviderRevenueBreakdown from "@/components/ProviderRevenueBreakdown";
+import ProviderTrendCard from "@/components/ProviderTrendCard";
+import PeerPercentileRibbon from "@/components/PeerPercentileRibbon";
+import MeatAuditRiskBadge from "@/components/MeatAuditRiskBadge";
+import PreVisitBriefingPanel from "@/components/PreVisitBriefingPanel";
+import ProviderReportButton from "@/components/ProviderReportButton";
 
 // ── API base ──────────────────────────────────────────────────────────────────
 
@@ -1495,10 +1504,47 @@ function ProviderDetailPanel({
             </div>
           )}
 
+          {/* === New /providers features (10-feature integration) === */}
+
+          {/* Top 5 HCC opportunities by $ */}
+          <FeatureFlag flagKey="provider_top_hcc_opportunities">
+            <div style={{ marginTop: 24 }}>
+              <TopHccOpportunities providerId={providerId} />
+            </div>
+          </FeatureFlag>
+
+          {/* Revenue opportunity breakdown pie */}
+          <FeatureFlag flagKey="provider_revenue_breakdown">
+            <div style={{ marginTop: 24 }}>
+              <ProviderRevenueBreakdown providerId={providerId} />
+            </div>
+          </FeatureFlag>
+
+          {/* YoY RAF + recapture trend */}
+          <FeatureFlag flagKey="provider_yoy_trend">
+            <div style={{ marginTop: 24 }}>
+              <ProviderTrendCard providerId={providerId} />
+            </div>
+          </FeatureFlag>
+
+          {/* Pre-visit HCC briefing */}
+          <FeatureFlag flagKey="provider_previsit_briefing">
+            <div style={{ marginTop: 24 }}>
+              <PreVisitBriefingPanel providerId={providerId} />
+            </div>
+          </FeatureFlag>
+
           {/* Real-time suspect hot-list (gated) */}
           <FeatureFlag flagKey="provider_suspect_hotlist">
             <div style={{ marginTop: 24 }}>
               <ProviderSuspectHotlist providerId={providerId} />
+            </div>
+          </FeatureFlag>
+
+          {/* PDF report download */}
+          <FeatureFlag flagKey="provider_pdf_report">
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
+              <ProviderReportButton providerId={providerId} providerLastName="" />
             </div>
           </FeatureFlag>
         </div>
@@ -1527,6 +1573,7 @@ export default function ProvidersPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDiscoverDialog, setShowDiscoverDialog] = useState(false);
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const [showFeatureSettings, setShowFeatureSettings] = useState(false);
 
   const { data: summary, isLoading: sumLoading } = useQuery({
     queryKey: ["provider-summary"],
@@ -1670,6 +1717,26 @@ export default function ProvidersPage() {
         icon={<Stethoscope size={22} />}
         actions={
           <>
+            <button
+              onClick={() => setShowFeatureSettings(true)}
+              title="Page features (add/hide sections)"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "9px 12px",
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                background: C.white,
+                color: C.textMuted,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+            >
+              <Settings size={15} />
+              Page Features
+            </button>
             <button
               onClick={() => setShowDiscoverDialog(true)}
               style={{
@@ -2386,6 +2453,10 @@ export default function ProvidersPage() {
       <AutoDiscoverDialog
         open={showDiscoverDialog}
         onClose={() => setShowDiscoverDialog(false)}
+      />
+      <ProviderFeaturesSettings
+        open={showFeatureSettings}
+        onClose={() => setShowFeatureSettings(false)}
       />
     </div>
   );

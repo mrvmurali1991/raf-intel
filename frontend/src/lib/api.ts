@@ -2385,3 +2385,214 @@ export async function getDisputeMetrics(tenantId?: number): Promise<DisputeMetri
   });
   return data;
 }
+
+// ===========================================================================
+// Provider /providers page features (10-feature integration)
+// ===========================================================================
+
+// --- Feature flags ---------------------------------------------------------
+export interface FeatureFlagItem {
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  default_enabled: boolean;
+  enabled: boolean;
+  scope: string;
+}
+export async function getFeatureFlags(): Promise<{ user_id: number; count: number; flags: FeatureFlagItem[] }> {
+  const { data } = await api.get("/api/feature-flags");
+  return data;
+}
+export async function setFeatureFlag(key: string, enabled: boolean): Promise<unknown> {
+  const { data } = await api.put(`/api/feature-flags/${encodeURIComponent(key)}`, { enabled });
+  return data;
+}
+export async function resetFeatureFlags(): Promise<unknown> {
+  const { data } = await api.post("/api/feature-flags/reset");
+  return data;
+}
+
+// --- Top 5 HCC opportunities ----------------------------------------------
+export interface ProviderTopHccOpportunity {
+  hcc_code: string; hcc_label: string;
+  patient_count_missing: number; avg_confidence: number;
+  raf_coefficient: number; expected_lift: number;
+  peer_capture_rate: number | null;
+  model_segment: string; model_year: number;
+}
+export async function getProviderTopHccOpportunities(
+  pid: string | number, year?: number, limit: number = 5,
+): Promise<{ opportunities: ProviderTopHccOpportunity[]; count: number }> {
+  const { data } = await api.get(`/api/providers/${pid}/top-opportunities`, {
+    params: { ...(year ? { year } : {}), limit },
+  });
+  return data;
+}
+
+// --- Revenue breakdown -----------------------------------------------------
+export interface RevenueBreakdownBucket {
+  name: string; amount: number; pct_of_total: number; count: number;
+  top_3_hccs: { hcc_code: string; hcc_label: string; dollars: number }[];
+}
+export interface ProviderRevenueBreakdown {
+  provider_id: number; year: number; total: number;
+  buckets: RevenueBreakdownBucket[];
+  assumptions: { persistence: number; base_rate: number; meat_threshold: number; model_segment: string; coefficient_year: number };
+  panel_size?: number;
+}
+export async function getProviderRevenueBreakdown(
+  pid: string | number, year?: number,
+): Promise<ProviderRevenueBreakdown> {
+  const { data } = await api.get(`/api/providers/${pid}/revenue-breakdown`, {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+
+// --- Provider trend (YoY) --------------------------------------------------
+export type ProviderTrendMetricKey = "raf" | "recapture" | "capture" | "revenue";
+export interface ProviderTrendResponse {
+  provider_id: number;
+  metrics: Record<ProviderTrendMetricKey, {
+    values: { year: number; value: number | null; calculated_at: string }[];
+    current: number | null;
+    delta_vs_prior_year: number | null;
+    delta_vs_4y: number | null;
+  }>;
+  years_available: number[];
+  single_year_only: boolean;
+  years_requested: number;
+}
+export async function getProviderTrend(
+  pid: string | number, years: number = 4,
+): Promise<ProviderTrendResponse> {
+  const { data } = await api.get(`/api/providers/${pid}/trend`, { params: { years } });
+  return data;
+}
+export async function getProviderTrendAggregate(
+  metric: ProviderTrendMetricKey = "raf", years: number = 4,
+): Promise<unknown> {
+  const { data } = await api.get(`/api/providers/trend-aggregate`, { params: { metric, years } });
+  return data;
+}
+
+// --- Peer percentile -------------------------------------------------------
+export type PeerKpiKey =
+  | "average_raf" | "hcc_capture_rate" | "recapture_rate"
+  | "meat_completeness_avg" | "revenue_opportunity" | "documentation_quality_score";
+export interface PeerPercentile {
+  provider_id: number; specialty: string | null;
+  measurement_year: number; cohort_size: number; insufficient_peers: boolean;
+  provider_kpis: Partial<Record<PeerKpiKey, number | null>>;
+  percentiles: Partial<Record<PeerKpiKey, number | null>>;
+  cohort_summary: Partial<Record<PeerKpiKey, { min: number; median: number; max: number; n: number }>>;
+}
+export async function getPeerPercentile(
+  pid: string | number, year?: number,
+): Promise<PeerPercentile> {
+  const { data } = await api.get(`/api/providers/${pid}/peer-percentile`, {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+export async function getSpecialtyBenchmarks(year?: number, specialty?: string): Promise<unknown> {
+  const { data } = await api.get("/api/providers/specialty-benchmarks", {
+    params: { ...(year ? { year } : {}), ...(specialty ? { specialty } : {}) },
+  });
+  return data;
+}
+
+// --- MEAT audit risk ------------------------------------------------------
+export type MeatAuditRiskTier = "ready" | "at_risk" | "audit_risk" | "insufficient";
+export interface MeatAuditWeakHcc {
+  hcc_code: string; label: string; meat_score: number;
+  patient_hcc_ids: number[]; missing_components: string[];
+}
+export interface MeatAuditRisk {
+  provider_id: number; year: number;
+  meat_completeness: number; hcc_count: number;
+  risk_tier: MeatAuditRiskTier; risk_label: string;
+  top_weak_hccs: MeatAuditWeakHcc[];
+}
+export interface MeatEvidenceRow {
+  patient_id: number; encounter_date: string | null;
+  components_present: string[]; components_missing: string[]; evidence_snippet: string | null;
+}
+export interface MeatEvidenceResponse {
+  provider_id: number; hcc_code: string; year: number;
+  evidence: MeatEvidenceRow[]; count: number;
+}
+export async function getProviderMeatAuditRisk(
+  pid: string | number, year?: number,
+): Promise<MeatAuditRisk> {
+  const { data } = await api.get(`/api/providers/${pid}/meat-audit-risk`, {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+export async function getProviderMeatEvidence(
+  pid: string | number, hccCode: string | number, year?: number,
+): Promise<MeatEvidenceResponse> {
+  const { data } = await api.get(`/api/providers/${pid}/meat-evidence/${hccCode}`, {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+
+// --- HCC gap drilldown ----------------------------------------------------
+export interface HccGapPatient {
+  patient_id: number; patient_name: string;
+  first_name: string; last_name: string;
+  mrn: string | null; dob: string | null; age: number | null; sex: string | null;
+  last_encounter_date: string | null;
+  suspect_status: "open" | "none" | string;
+  confidence: number | null;
+  evidence_type: string | null; evidence_detail: unknown;
+  evidence_snippet: string | null; top_evidence_snippet: string | null;
+  prior_year_coded: boolean;
+}
+export interface HccGapPatientsResponse {
+  provider_id: number; provider_name: string;
+  hcc_code: string; year: number;
+  panel_size: number; missing_count: number;
+  patients: HccGapPatient[];
+}
+export async function getProviderHccGapPatients(
+  pid: string | number, hccCode: string | number, year?: number, limit: number = 50,
+): Promise<HccGapPatientsResponse> {
+  const { data } = await api.get(`/api/providers/${pid}/hcc/${hccCode}/gap-patients`, {
+    params: { ...(year ? { year } : {}), limit },
+  });
+  return data;
+}
+
+// --- Pre-visit HCC briefing -----------------------------------------------
+export interface PreVisitBriefingTopHcc {
+  hcc_code: string; hcc_label: string;
+  status: "suspect" | "recapture" | "meat_weak";
+  evidence_type: string | null; evidence_snippet: string | null;
+  confidence: number; expected_dollars: number;
+}
+export interface PreVisitBriefing {
+  encounter_id: number;
+  patient_id: number; patient_name: string;
+  dob: string | null; age: number | null; sex: string | null; mrn: string | null;
+  visit_date: string; visit_time: string | null;
+  encounter_reason: string | null;
+  model_segment: string;
+  top_hccs: PreVisitBriefingTopHcc[];
+  total_potential_dollars: number;
+}
+export interface PreVisitBriefingsResponse {
+  provider_id: number; days_ahead: number;
+  briefings: PreVisitBriefing[]; message?: string;
+}
+export async function getProviderPreVisitBriefings(
+  pid: string | number, days: number = 7, limit_per_patient: number = 3,
+): Promise<PreVisitBriefingsResponse> {
+  const { data } = await api.get(`/api/providers/${pid}/pre-visit-briefings`, {
+    params: { days, limit_per_patient },
+  });
+  return data;
+}

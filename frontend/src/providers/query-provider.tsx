@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { FeatureFlagProvider } from "@/components/FeatureFlagContext";
 
 /**
  * Do not retry requests blocked by the EMR gate (HTTP 423) — the state only
@@ -31,5 +32,9 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         },
       })
   );
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <FeatureFlagProvider>{children}</FeatureFlagProvider>
+    </QueryClientProvider>
+  );
 }

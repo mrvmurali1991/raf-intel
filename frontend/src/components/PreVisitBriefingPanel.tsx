@@ -23,9 +23,10 @@ import {
   getProviderPreVisitBriefings,
   type PreVisitBriefing,
   type PreVisitBriefingsResponse,
-  type PreVisitHcc,
-  type PreVisitHccStatus,
+  type PreVisitBriefingTopHcc as PreVisitHcc,
 } from "@/lib/api";
+
+type PreVisitHccStatus = PreVisitHcc["status"];
 
 // ---------------------------------------------------------------------------
 // Design tokens (mirrors providers page)
@@ -133,7 +134,7 @@ export default function PreVisitBriefingPanel({
 }: Props) {
   const q = useQuery<PreVisitBriefingsResponse>({
     queryKey: ["pre-visit-briefings", providerId, days],
-    queryFn: () => getProviderPreVisitBriefings(providerId, { days }),
+    queryFn: () => getProviderPreVisitBriefings(providerId, days),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -162,7 +163,7 @@ export default function PreVisitBriefingPanel({
       {!q.isLoading && !q.isError && q.data && (
         <>
           {q.data.briefings.length === 0 ? (
-            <EmptyState message={q.data.message} days={days} />
+            <EmptyState message={q.data.message ?? "No upcoming visits."} days={days} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {q.data.briefings.map((b) => (
@@ -348,7 +349,7 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
               marginBottom: 2,
             }}
           >
-            {formatVisitDate(briefing.visit_date, briefing.visit_time)}
+            {formatVisitDate(briefing.visit_date, briefing.visit_time ?? "")}
           </div>
           {briefing.encounter_reason && (
             <div
@@ -510,7 +511,7 @@ function HccRow({ hcc }: { hcc: PreVisitHcc }) {
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
-            title={hcc.evidence_snippet}
+            title={hcc.evidence_snippet ?? undefined}
           >
             {hcc.evidence_snippet}
           </span>

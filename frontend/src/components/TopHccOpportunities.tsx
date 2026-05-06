@@ -15,8 +15,13 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getProviderTopHccOpportunities,
-  type ProviderTopHccOpportunitiesResponse,
+  type ProviderTopHccOpportunity,
 } from "@/lib/api";
+
+type ProviderTopHccOpportunitiesResponse = {
+  opportunities: ProviderTopHccOpportunity[];
+  count: number;
+};
 
 const T = {
   white: "#FFFFFF",
@@ -61,7 +66,7 @@ interface Props {
 export default function TopHccOpportunities({ providerId, year, limit = 5 }: Props) {
   const q = useQuery<ProviderTopHccOpportunitiesResponse>({
     queryKey: ["provider-top-hcc", providerId, year],
-    queryFn: () => getProviderTopHccOpportunities(providerId, { year, limit }),
+    queryFn: () => getProviderTopHccOpportunities(providerId, year, limit),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });

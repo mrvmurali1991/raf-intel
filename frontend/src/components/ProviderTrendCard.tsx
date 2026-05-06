@@ -24,11 +24,12 @@ import { ArrowDown, ArrowRight, ArrowUp, TrendingUp } from "lucide-react";
 
 import {
   getProviderTrend,
-  type ProviderTrendMetric,
   type ProviderTrendMetricKey,
   type ProviderTrendResponse,
 } from "@/lib/api";
 import ProviderTrendSparkline from "./ProviderTrendSparkline";
+
+type ProviderTrendMetric = ProviderTrendResponse["metrics"][ProviderTrendMetricKey];
 
 export interface ProviderTrendCardProps {
   providerId: number;
@@ -163,7 +164,7 @@ export default function ProviderTrendCard({
 }: ProviderTrendCardProps) {
   const { data, isLoading, isError } = useQuery<ProviderTrendResponse>({
     queryKey: ["provider-trend", providerId, years],
-    queryFn: () => getProviderTrend(providerId, { years }),
+    queryFn: () => getProviderTrend(providerId, years),
     initialData,
     // Trends move once a day at most — 5 minutes is a comfortable cache.
     staleTime: 5 * 60_000,
