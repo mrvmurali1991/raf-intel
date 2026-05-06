@@ -2824,3 +2824,1180 @@ export async function traverseKgPath(
   });
   return data;
 }
+
+// =============================================================================
+// RECAPTURE — NEW EXPORTS (batch 1)
+// Added to resolve 122 tsc errors across 31 untracked components.
+// Every type is derived directly from the corresponding Pydantic schema or
+// service-layer docstring in backend/app/routers/recapture_*.py and
+// backend/app/services/recapture_*.py.
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// Shared gap row — used by CloseHistoryTimeline and SmartCloseDialog
+// ---------------------------------------------------------------------------
+
+/**
+ * A single recapture_gaps DB row as serialised by the close-history and
+ * list-gaps endpoints. Fields mirror `get_close_history()` and `list_gaps()`
+ * return values (recapture_close_service / recapture_gap_service).
+ */
+export interface RecaptureGapRow {
+  id: number;
+  patient_id: number;
+  patient_name?: string | null;
+  hcc_code: string;
+  /** Human-readable HCC description added by list_gaps() service. */
+  hcc_description?: string | null;
+  icd10_code?: string | null;
+  status: "open" | "recaptured" | "dismissed";
+  evidence_phrase?: string | null;
+  meat_element?: string | null;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+  revenue_impact?: number | null;
+  provider_npi?: string | null;
+  current_year?: number;
+  created_at?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// AI suggestion — AISuggestionPanel
+// ---------------------------------------------------------------------------
+
+/** One row from `recapture_ai_suggestions`, returned by the AI-recoding endpoints. */
+export interface AISuggestion {
+  id: number;
+  gap_id: number;
+  evidence_phrase: string;
+  confidence: number;
+  meat_element?: string | null;
+  encounter_date?: string | null;
+  source_note_id?: string | null;
+  status?: "pending" | "accepted" | "rejected";
+}
+
+/** Response shape for POST /api/recapture/gaps/{gap_id}/ai-suggest */
+export interface AISuggestResponse {
+  gap_id: number;
+  suggestions: AISuggestion[];
+  scanned_note_count: number;
+  llm_model_used: string;
+  error?: string | null;
+}
+
+/** Scan recent clinical notes for AI evidence supporting this gap. */
+export async function aiSuggestRecapture(
+  gapId: number,
+  months = 12,
+): Promise<AISuggestResponse> {
+  const { data } = await api.post<AISuggestResponse>(
+    `/api/recapture/gaps/${gapId}/ai-suggest`,
+    null,
+    { params: { months } },
+  );
+  return data;
+}
+
+/** List pending AI suggestions for a gap. */
+export async function listAiSuggestions(gapId: number): Promise<AISuggestion[]> {
+  const { data } = await api.get<{ suggestions: AISuggestion[] }>(
+    `/api/recapture/gaps/${gapId}/ai-suggestions`,
+  );
+  return data.suggestions;
+}
+
+/** Accept an AI suggestion (promotes evidence to the gap). */
+export async function acceptAiSuggestion(
+  suggestionId: number,
+): Promise<{ ok: boolean; suggestion_id: number; status: string }> {
+  const { data } = await api.post(`/api/recapture/ai-suggestions/${suggestionId}/accept`);
+  return data;
+}
+
+/** Reject an AI suggestion. */
+export async function rejectAiSuggestion(
+  suggestionId: number,
+): Promise<{ ok: boolean; suggestion_id: number; status: string }> {
+  const { data } = await api.post(`/api/recapture/ai-suggestions/${suggestionId}/reject`);
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Orphan-gap attribution — AttributeOrphansBanner
+// ---------------------------------------------------------------------------
+
+/** Response shape for POST /api/recapture/orphan-gaps/attribute */
+export interface AttributeOrphansResult {
+  checked: number;
+  updated: number;
+  still_orphan: number;
+}
+
+/** Attribute orphan recapture gaps to a provider via the patient panel. */
+export async function attributeOrphanGaps(): Promise<AttributeOrphansResult> {
+  const { data } = await api.post<AttributeOrphansResult>('/api/recapture/orphan-gaps/attribute');
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// List recapture gaps — AttributeOrphansBanner, etc.
+// ---------------------------------------------------------------------------
+
+export interface ListRecaptureGapsParams {
+  patient_id?: number;
+  status?: string;
+  hcc_code?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** List recapture gaps with optional filters.
+ *  Returns the items array directly (convenience wrapper). */
+export async function listRecaptureGaps(
+  params?: ListRecaptureGapsParams,
+): Promise<RecaptureGapRow[]> {
+  const { data } = await api.get<{ gaps: RecaptureGapRow[] }>(
+    '/api/recapture/gaps',
+    { params },
+  );
+  return data.gaps;
+}
+
+// ---------------------------------------------------------------------------
+// AWV suggestion — AWVSuggestionDialog
+// ---------------------------------------------------------------------------
+
+/**
+ * Response from POST /api/recapture/gaps/{gap_id}/suggest-awv
+ * (SuggestAWVResponse Pydantic model in recapture_recurring.py)
+ */
+export interface AWVSuggestion {
+  gap_id: number;
+  patient_id: number;
+  eligible: boolean;
+  suggested_visit_date: string;
+  last_awv_date?: string | null;
+  days_since?: number | null;
+  recommended_provider_id?: number | null;
+  hcc_code?: string | null;
+  reason?: string | null;
+}
+
+/** Read-only AWV recommendation for a recurring gap. */
+export async function suggestAwvForGap(gapId: number): Promise<AWVSuggestion> {
+  const { data } = await api.post<AWVSuggestion>(
+    `/api/recapture/gaps/${gapId}/suggest-awv`,
+  );
+  return data;
+}
+
+/** Record that an AWV has been booked (metadata only — no EHR call). */
+export async function markGapAwvScheduled(
+  gapId: number,
+  body: { visit_date: string; encounter_id?: string },
+): Promise<{ gap_id: number; awv_suggested: boolean; awv_visit_date: string; awv_encounter_id?: string | null }> {
+  const { data } = await api.post(
+    `/api/recapture/gaps/${gapId}/mark-awv-scheduled`,
+    body,
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Bonus — BonusBadgeForGap, BonusLeaderboard, BonusMultiplierBanner, CoderEarningsCard
+// ---------------------------------------------------------------------------
+
+/** Current-month multiplier sub-object inside BonusConfigResponse / LeaderboardResponse. */
+export interface BonusMonthMultiplier {
+  month: number;
+  multiplier: number;
+  next_month: number;
+  next_multiplier: number;
+  delta: number;
+  days_until_next_month: number;
+}
+
+/**
+ * Response from GET /api/recapture/bonus/config
+ * (BonusConfigResponse Pydantic model)
+ */
+export interface RecaptureBonusConfig {
+  id: number;
+  tenant_id: string;
+  bonus_per_closure_default: number;
+  month_multipliers: Record<string, number>;
+  active: boolean;
+  current_month_multiplier: BonusMonthMultiplier;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** Per-tenant bonus configuration. */
+export async function getRecaptureBonusConfig(): Promise<RecaptureBonusConfig> {
+  const { data } = await api.get<RecaptureBonusConfig>('/api/recapture/bonus/config');
+  return data;
+}
+
+/**
+ * One coder row in the leaderboard
+ * (LeaderboardEntry Pydantic model in recapture_bonus.py)
+ */
+export interface LeaderboardEntry {
+  rank: number;
+  coder_id?: number | null;
+  resolved_by: string;
+  name: string;
+  email: string;
+  ytd_closures: number;
+  ytd_dollars_recaptured: number;
+  bonus_earned: number;
+  open_gaps: number;
+  win_rate: number;
+}
+
+/**
+ * Response from GET /api/recapture/bonus/leaderboard
+ * (LeaderboardResponse Pydantic model)
+ */
+export interface BonusLeaderboardResponse {
+  tenant_id: string;
+  year: number;
+  current_month_multiplier: BonusMonthMultiplier;
+  leaderboard: LeaderboardEntry[];
+}
+
+/** Ranked coder leaderboard for a given year. */
+export async function getRecaptureBonusLeaderboard(
+  year?: number,
+  limit = 20,
+): Promise<BonusLeaderboardResponse> {
+  const { data } = await api.get<BonusLeaderboardResponse>(
+    '/api/recapture/bonus/leaderboard',
+    { params: { year, limit } },
+  );
+  return data;
+}
+
+/** One month's bonus breakdown in CoderEarningsResponse. */
+export interface CoderEarningsMonth {
+  month: number;
+  closures: number;
+  bonus: number;
+  dollars_recaptured: number;
+}
+
+/**
+ * Response from GET /api/recapture/bonus/coder/{coder_id}/earnings
+ * (CoderEarningsResponse Pydantic model)
+ */
+export interface CoderEarnings {
+  coder_id: number;
+  name: string;
+  email: string;
+  role: string;
+  year: number;
+  ytd_closures: number;
+  ytd_dollars_recaptured: number;
+  bonus_earned: number;
+  bonus_at_risk: number;
+  open_gaps: number;
+  current_month: number;
+  current_multiplier: number;
+  next_month: number;
+  next_multiplier: number;
+  monthly_breakdown: CoderEarningsMonth[];
+}
+
+/** Per-coder year-to-date bonus earnings. */
+export async function getCoderEarnings(
+  coderId: number,
+  year?: number,
+): Promise<CoderEarnings> {
+  const { data } = await api.get<CoderEarnings>(
+    `/api/recapture/bonus/coder/${coderId}/earnings`,
+    { params: { year } },
+  );
+  return data;
+}
+
+/**
+ * Response from GET /api/recapture/gaps/{gap_id}/bonus-preview
+ * (BonusPreviewResponse Pydantic model)
+ */
+export interface BonusPreview {
+  gap_id: number;
+  bonus: number;
+  base_bonus: number;
+  month: number;
+  multiplier: number;
+  eligible: boolean;
+  reason?: string | null;
+}
+
+/** Preview the bonus a coder would earn closing a gap right now. */
+export async function getGapBonusPreview(gapId: number): Promise<BonusPreview> {
+  const { data } = await api.get<BonusPreview>(
+    `/api/recapture/gaps/${gapId}/bonus-preview`,
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk close — BulkCloseToolbar
+// ---------------------------------------------------------------------------
+
+export interface BulkCloseRequest {
+  gap_ids: number[];
+  evidence_phrase: string;
+  meat_element?: string | null;
+  write_to_raf_hcc?: boolean;
+  measurement_year?: number | null;
+}
+
+/**
+ * Response from POST /api/recapture/gaps/bulk-close
+ * (BulkCloseResponse Pydantic model)
+ */
+export interface BulkCloseResult {
+  closed: number;
+  raf_hcc_inserted: number;
+  errors: Array<Record<string, unknown>>;
+  results: Array<Record<string, unknown>>;
+}
+
+/** Bulk-close recapture gaps with shared evidence. */
+export async function bulkCloseGaps(body: BulkCloseRequest): Promise<BulkCloseResult> {
+  const { data } = await api.post<BulkCloseResult>('/api/recapture/gaps/bulk-close', body);
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Smart close — SmartCloseDialog
+// ---------------------------------------------------------------------------
+
+/**
+ * Response from POST /api/recapture/gaps/{gap_id}/smart-close
+ * (SmartCloseResponse Pydantic model)
+ */
+export interface SmartCloseResult {
+  gap_id: number;
+  status: string;
+  raf_hcc_inserted: boolean;
+  raf_hcc_already_present: boolean;
+  measurement_year: number;
+}
+
+/** Close a recapture gap with documentation evidence + MEAT element. */
+export async function smartCloseGap(
+  gapId: number,
+  body: {
+    evidence_phrase: string;
+    meat_element?: string | null;
+    write_to_raf_hcc?: boolean;
+    measurement_year?: number | null;
+  },
+): Promise<SmartCloseResult> {
+  const { data } = await api.post<SmartCloseResult>(
+    `/api/recapture/gaps/${gapId}/smart-close`,
+    body,
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Close history — CloseHistoryTimeline
+// ---------------------------------------------------------------------------
+
+/** Response from GET /api/recapture/close-history */
+export interface CloseHistoryResponse {
+  items: RecaptureGapRow[];
+  count: number;
+}
+
+/** Recent recapture-gap closures with evidence. */
+export async function getRecaptureCloseHistory(
+  year?: number,
+  limit = 50,
+): Promise<CloseHistoryResponse> {
+  const { data } = await api.get<CloseHistoryResponse>(
+    '/api/recapture/close-history',
+    { params: { year, limit } },
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Campaign management — CampaignKanban, RecaptureCampaignList, CreateCampaignModal, CoderDashboard
+// ---------------------------------------------------------------------------
+
+export type AssignmentStatus = "assigned" | "in_progress" | "closed" | "dismissed";
+
+export type RecaptureCampaignStatus = "draft" | "active" | "paused" | "completed" | "archived";
+
+/** A single assignment card as returned by the kanban endpoint. */
+export interface AssignmentCard {
+  assignment_id: number;
+  gap_id: number;
+  patient_id: number;
+  hcc_code: string;
+  icd10_code?: string | null;
+  coder_id?: number | null;
+  coder_name?: string | null;
+  campaign_id: number;
+  campaign_name?: string | null;
+  assignment_status: AssignmentStatus;
+  revenue_impact?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** Rolled-up campaign stats sub-object. */
+export interface CampaignStats {
+  total_gaps: number;
+  assigned: number;
+  in_progress: number;
+  closed: number;
+  dismissed: number;
+  closure_rate: number;
+  recaptured_revenue: number;
+  at_risk_revenue: number;
+}
+
+/** A single recapture campaign record. */
+export interface RecaptureCampaign {
+  id: number;
+  tenant_id: string;
+  name: string;
+  description?: string | null;
+  status: RecaptureCampaignStatus;
+  filter_criteria?: Record<string, unknown> | null;
+  target_close_date?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  stats?: CampaignStats | null;
+}
+
+/** Response from GET /api/recapture/campaigns/{id}/kanban */
+export interface KanbanResponse {
+  campaign_id: number;
+  buckets: {
+    assigned: AssignmentCard[];
+    in_progress: AssignmentCard[];
+    closed: AssignmentCard[];
+    dismissed: AssignmentCard[];
+  };
+  stats: CampaignStats;
+}
+
+/** Kanban-bucketed assignments for a campaign. */
+export async function getRecaptureKanban(campaignId: number): Promise<KanbanResponse> {
+  const { data } = await api.get<KanbanResponse>(
+    `/api/recapture/campaigns/${campaignId}/kanban`,
+  );
+  return data;
+}
+
+/** Update an assignment's kanban state. */
+export async function markRecaptureAssignment(
+  assignmentId: number,
+  body: { status: AssignmentStatus; notes?: string | null },
+): Promise<Record<string, unknown>> {
+  const { data } = await api.post(
+    `/api/recapture/assignments/${assignmentId}/mark`,
+    body,
+  );
+  return data;
+}
+
+/** List recapture campaigns, optionally filtered by status. */
+export async function listRecaptureCampaigns(
+  status?: RecaptureCampaignStatus,
+  limit = 100,
+  offset = 0,
+): Promise<{ campaigns: RecaptureCampaign[]; total: number; limit: number; offset: number }> {
+  const { data } = await api.get('/api/recapture/campaigns', {
+    params: { status, limit, offset },
+  });
+  return data;
+}
+
+/** Create a new recapture campaign. Returns the persisted campaign row. */
+export async function createRecaptureCampaign(body: {
+  name: string;
+  description?: string | null;
+  filter_criteria?: Record<string, unknown> | null;
+  target_close_date?: string | null;
+  status?: string;
+}): Promise<RecaptureCampaign> {
+  const { data } = await api.post<RecaptureCampaign>('/api/recapture/campaigns', body);
+  return data;
+}
+
+/** Bulk-assign matching gaps to coders. */
+export async function assignRecaptureCampaign(
+  campaignId: number,
+  body: { coder_ids: number[]; distribution: "round_robin" | "by_specialty" },
+): Promise<{ assigned: number; campaign_id: number }> {
+  const { data } = await api.post(
+    `/api/recapture/campaigns/${campaignId}/assign`,
+    body,
+  );
+  return data;
+}
+
+/** An eligible coder returned by GET /api/recapture/coders */
+export interface EligibleCoder {
+  id: number;
+  full_name: string;
+  email: string;
+  role: string;
+}
+
+/** List active users eligible for campaign assignment. */
+export async function listEligibleCoders(): Promise<EligibleCoder[]> {
+  const { data } = await api.get<{ coders: EligibleCoder[] }>('/api/recapture/coders');
+  return data.coders;
+}
+
+/** Filter criteria for previewing / creating campaigns. */
+export interface RecaptureFilterCriteria {
+  hcc_codes?: string[];
+  min_revenue?: number;
+  max_age_days?: number;
+  [key: string]: unknown;
+}
+
+/** By-HCC breakdown row in the filter preview. */
+export interface PreviewByHcc {
+  hcc_code: string;
+  count: number;
+  revenue: number;
+}
+
+/** Response from POST /api/recapture/campaigns/preview-filter */
+export interface RecaptureFilterPreview {
+  matched_gaps: number;
+  total_revenue_at_risk: number;
+  by_hcc: PreviewByHcc[];
+}
+
+/** Preview how many gaps match a filter before creating a campaign. */
+export async function previewRecaptureFilter(
+  filter_criteria: RecaptureFilterCriteria,
+): Promise<RecaptureFilterPreview> {
+  const { data } = await api.post<RecaptureFilterPreview>(
+    '/api/recapture/campaigns/preview-filter',
+    { filter_criteria },
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Coder dashboard — CoderDashboard
+// ---------------------------------------------------------------------------
+
+/** Weekly closure velocity data point. */
+export interface VelocityDay {
+  day: string;
+  closed: number;
+}
+
+/** Response from GET /api/recapture/coder/{coder_id}/dashboard */
+export interface CoderDashboardResponse {
+  coder_id: number;
+  today_closures: number;
+  week_closures: number;
+  totals: { open: number; closed: number; dismissed: number };
+  weekly_velocity: VelocityDay[];
+  my_open_assignments: AssignmentCard[];
+}
+
+/** Coder queue + closure velocity. */
+export async function getCoderDashboard(coderId: number): Promise<CoderDashboardResponse> {
+  const { data } = await api.get<CoderDashboardResponse>(
+    `/api/recapture/coder/${coderId}/dashboard`,
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// CFO summary — CfoExecutiveSummary, RecapturedByCondition
+// ---------------------------------------------------------------------------
+
+/** Quarter breakdown row in the CFO executive summary. */
+export interface CfoQuarterBreakdown {
+  quarter: string;
+  opened: number;
+  closed: number;
+  recaptured_dollars: number;
+  remaining_dollars: number;
+}
+
+/** Top-3 condition row in the CFO executive summary. */
+export interface CfoTopCondition {
+  hcc_code: string;
+  description: string;
+  count: number;
+  dollars: number;
+}
+
+/** Top provider contributor row in the CFO executive summary. */
+export interface CfoTopProvider {
+  provider_npi: string;
+  recaptured_count: number;
+  recaptured_dollars: number;
+}
+
+/**
+ * Response from GET /api/recapture/cfo/summary
+ * (ExecutiveSummary Pydantic model)
+ */
+export interface CfoExecutiveSummary {
+  year: number;
+  generated_at: string;
+  total_gaps_open: number;
+  total_dollars_at_risk: number;
+  ytd_dollars_recaptured: number;
+  ytd_closures: number;
+  ytd_velocity_per_day: number;
+  budget_dollars: number;
+  forecast_ye_dollars: number;
+  variance_to_budget: number;
+  month_breakdown: Array<{
+    month: number;
+    opened: number;
+    closed: number;
+    recaptured_dollars: number;
+    remaining_dollars: number;
+  }>;
+  quarter_breakdown: CfoQuarterBreakdown[];
+  top_3_recaptured_conditions: CfoTopCondition[];
+  top_3_at_risk_conditions: CfoTopCondition[];
+  top_3_provider_contributors: CfoTopProvider[];
+  audit_risk_flag: boolean;
+  audit_dual_coded_pct: number;
+  totals: Record<string, number>;
+  days_elapsed: number;
+  days_in_year: number;
+}
+
+/** CFO executive summary for a measurement year. */
+export async function getCfoSummary(year: number): Promise<CfoExecutiveSummary> {
+  const { data } = await api.get<CfoExecutiveSummary>('/api/recapture/cfo/summary', {
+    params: { year },
+  });
+  return data;
+}
+
+/** One YoY series row (YoyRow Pydantic model). */
+export interface CfoYoyRow {
+  year: number;
+  opened: number;
+  closed: number;
+  recaptured_dollars: number;
+  at_risk_dollars: number;
+  closure_rate_pct: number;
+}
+
+/** Response from GET /api/recapture/cfo/yoy */
+export interface CfoYoyResponse {
+  tenant_id: string;
+  years_back: number;
+  series: CfoYoyRow[];
+}
+
+/** Year-over-year recapture trend. */
+export async function getCfoYoy(years = 3): Promise<CfoYoyResponse> {
+  const { data } = await api.get<CfoYoyResponse>('/api/recapture/cfo/yoy', {
+    params: { years },
+  });
+  return data;
+}
+
+/** Download CFO export as a Blob (CSV or JSON). */
+export async function downloadCfoExport(year: number, format: "csv" | "json"): Promise<Blob> {
+  const response = await api.get('/api/recapture/cfo/export', {
+    params: { year, format },
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+}
+
+// ---------------------------------------------------------------------------
+// Outreach — GapOutreachHistoryDrawer, OutreachChannelBreakdown,
+//             OutreachSummaryCards, OutreachTemplateManager
+// ---------------------------------------------------------------------------
+
+export type OutreachChannel = "sms" | "portal" | "phone" | "email" | "letter";
+
+export type OutreachStatus =
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "responded"
+  | "failed"
+  | "opted_out";
+
+/**
+ * One outreach event record (OutreachEventResponse Pydantic model).
+ */
+export interface OutreachEvent {
+  id: number;
+  tenant_id: string;
+  gap_id: number;
+  patient_id: string;
+  template_id?: number | null;
+  template_name?: string | null;
+  channel: OutreachChannel;
+  status: OutreachStatus;
+  scheduled_for?: string | null;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  responded_at?: string | null;
+  response_text?: string | null;
+  resulted_in_visit: boolean;
+  resulted_in_closure: boolean;
+  metadata?: unknown;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/**
+ * An outreach template record (TemplateResponse Pydantic model).
+ */
+export interface OutreachTemplate {
+  id: number;
+  tenant_id: string;
+  channel: OutreachChannel;
+  name: string;
+  subject?: string | null;
+  message_text: string;
+  trigger_rules?: unknown;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** Per-channel metrics sub-object (ChannelMetrics Pydantic model). */
+export interface OutreachChannelMetrics {
+  queued: number;
+  sent: number;
+  delivered: number;
+  responded: number;
+  visits: number;
+  closed: number;
+  response_rate: number;
+  visit_rate: number;
+  closure_rate: number;
+}
+
+/**
+ * Response from GET /api/recapture/outreach/summary
+ * (OutreachSummaryResponse Pydantic model)
+ */
+export interface OutreachSummary {
+  year?: number | null;
+  total_sent: number;
+  total_responded: number;
+  total_closed: number;
+  conversion_rate: number;
+  avg_days_to_response?: number | null;
+  estimated_revenue: number;
+  by_channel: Record<string, OutreachChannelMetrics>;
+}
+
+/** Aggregate outreach metrics for a year. */
+export async function getOutreachSummary(year?: number): Promise<OutreachSummary> {
+  const { data } = await api.get<OutreachSummary>('/api/recapture/outreach/summary', {
+    params: { year },
+  });
+  return data;
+}
+
+/** List outreach templates. Returns the templates array directly. */
+export async function getOutreachTemplates(): Promise<OutreachTemplate[]> {
+  const { data } = await api.get<{ templates: OutreachTemplate[]; total: number }>(
+    '/api/recapture/outreach/templates',
+  );
+  return data.templates;
+}
+
+/** Create an outreach template. */
+export async function createOutreachTemplate(body: {
+  channel: OutreachChannel;
+  name: string;
+  message_text: string;
+  subject?: string | null;
+  trigger_rules?: unknown;
+  is_active?: boolean;
+}): Promise<OutreachTemplate> {
+  const { data } = await api.post<OutreachTemplate>(
+    '/api/recapture/outreach/templates',
+    body,
+  );
+  return data;
+}
+
+/** Seed default SMS/portal/phone templates if missing. */
+export async function seedOutreachDefaults(): Promise<{
+  created: OutreachTemplate[];
+  total_created: number;
+}> {
+  const { data } = await api.post('/api/recapture/outreach/templates/seed-defaults');
+  return data;
+}
+
+/** Chronological outreach events for a gap. */
+export async function getGapOutreachHistory(gapId: number): Promise<OutreachEvent[]> {
+  const { data } = await api.get<{ events: OutreachEvent[]; total: number; gap_id: number }>(
+    `/api/recapture/gaps/${gapId}/outreach-history`,
+  );
+  return data.events;
+}
+
+// ---------------------------------------------------------------------------
+// Provider benchmark — ProviderRecaptureCard, ProviderRecaptureLeaderboard
+// ---------------------------------------------------------------------------
+
+/**
+ * One provider row in the leaderboard.
+ * Field names mirror the dict returned by compute_provider_rates().
+ */
+export interface ProviderRecaptureRow {
+  provider_id: number;
+  provider_name?: string | null;
+  npi?: string | null;
+  specialty?: string | null;
+  panel_size: number;
+  total_gaps: number;
+  gaps_open: number;
+  gaps_closed: number;
+  recapture_rate: number;
+  /** Dollar field names include $ to match the backend dict keys. */
+  "$_recaptured": number;
+  "$_at_risk": number;
+}
+
+/** Specialty cohort statistics sub-object. */
+export interface SpecialtyCohort {
+  n: number;
+  median_rate: number;
+  q1_rate: number;
+  q3_rate: number;
+  top_provider?: string | null;
+}
+
+/** Network-wide quartile summary sub-object. */
+export interface NetworkSummary {
+  n: number;
+  median_rate: number;
+  q1_rate: number;
+  q3_rate: number;
+}
+
+/** Response from GET /api/recapture/provider-leaderboard */
+export interface ProviderRecaptureLeaderboardResponse {
+  year: number;
+  providers: ProviderRecaptureRow[];
+  specialty_cohorts: Record<string, SpecialtyCohort>;
+  network: NetworkSummary;
+}
+
+/** Per-provider recapture rate leaderboard with cohort context. */
+export async function getProviderRecaptureLeaderboard(
+  year: number,
+): Promise<ProviderRecaptureLeaderboardResponse> {
+  const { data } = await api.get<ProviderRecaptureLeaderboardResponse>(
+    '/api/recapture/provider-leaderboard',
+    { params: { year } },
+  );
+  return data;
+}
+
+/**
+ * Response from GET /api/recapture/provider/{id}/percentile
+ * Derived from provider_percentile() in recapture_provider_benchmark.py.
+ * The router appends top_unrecaptured_hccs and year to this response.
+ */
+export interface ProviderPercentileResponse {
+  provider_id: number;
+  provider_name?: string | null;
+  specialty?: string | null;
+  recapture_rate: number;
+  percentile_in_specialty?: number | null;
+  percentile_in_network?: number | null;
+  specialty_median?: number | null;
+  network_median: number;
+  ranks_among_n: number;
+  insufficient_peers: boolean;
+  year: number;
+  top_unrecaptured_hccs: Array<{
+    hcc_code: string;
+    /** Patient count (field name from provider_unrecaptured_top_hccs service). */
+    count: number;
+    "$_at_risk": number;
+  }>;
+}
+
+/** Provider percentile rank vs specialty + network.
+ *  Response includes provider's own rates plus top unrecaptured HCCs. */
+export async function getProviderRecapturePercentile(
+  providerId: number,
+  year: number,
+): Promise<ProviderPercentileResponse> {
+  const { data } = await api.get<ProviderPercentileResponse>(
+    `/api/recapture/provider/${providerId}/percentile`,
+    { params: { year } },
+  );
+  return data;
+}
+
+/**
+ * Response from GET /api/recapture/provider/{id}/trend
+ * Derived from provider_decay() in recapture_provider_benchmark.py.
+ */
+export interface ProviderTrendResponse {
+  provider_id: number;
+  years: number[];
+  rates: number[];
+  deltas: Array<number | null>;
+}
+
+/** Per-year recapture rate for a single provider (sparkline data). */
+export async function getProviderRecaptureTrend(
+  providerId: number,
+  years = 3,
+): Promise<ProviderTrendResponse> {
+  const { data } = await api.get<ProviderTrendResponse>(
+    `/api/recapture/provider/${providerId}/trend`,
+    { params: { years } },
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Readiness — ReadinessDetailModal, ReadinessSummaryCard
+// ---------------------------------------------------------------------------
+
+/** Score components sub-object (ReadinessComponents Pydantic model). */
+export interface ReadinessComponents {
+  problem_list: boolean;
+  problem_list_recent: boolean;
+  recent_encounter: boolean;
+  meat: Record<string, number>;
+}
+
+/**
+ * Single-gap readiness payload (ReadinessPayload Pydantic model).
+ */
+export interface GapReadiness {
+  gap_id: number;
+  patient_id: number | string;
+  hcc_code: string;
+  icd10_code?: string | null;
+  current_year: number;
+  score: number;
+  components: ReadinessComponents;
+  score_breakdown: Record<string, number>;
+  defensibility_tier: "strong" | "moderate" | "weak";
+  recommended_actions: string[];
+  problem_list_matches: Array<Record<string, unknown>>;
+  last_encounter_in_window?: string | null;
+  computed_at: string;
+}
+
+/** Recapture readiness score for one gap. */
+export async function getGapReadiness(gapId: number): Promise<GapReadiness> {
+  const { data } = await api.get<GapReadiness>(
+    `/api/recapture/gaps/${gapId}/readiness`,
+  );
+  return data;
+}
+
+/**
+ * Aggregate readiness summary (ReadinessSummaryResponse Pydantic model).
+ */
+export interface ReadinessSummary {
+  year: number;
+  total_open_gaps: number;
+  average_score: number;
+  defensibility_distribution: {
+    strong: number;
+    moderate: number;
+    weak: number;
+  };
+  actionable_gaps: number;
+}
+
+/** Aggregate recapture readiness summary for all open gaps in a year. */
+export async function getReadinessSummary(year: number): Promise<ReadinessSummary> {
+  const { data } = await api.get<ReadinessSummary>(
+    '/api/recapture/readiness/summary',
+    { params: { year } },
+  );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Recurring gaps — RecurringGapsList, RecurringGapAlert (type only)
+// ---------------------------------------------------------------------------
+
+/**
+ * A recurring-gap record as returned by GET /api/recapture/recurring.
+ * The actual row is a dict from get_recurring_gaps() so we type all fields
+ * that the RecurringGapsList component accesses.
+ */
+export interface RecurringGap {
+  id: number;
+  patient_id: number;
+  patient_name?: string | null;
+  hcc_code: string;
+  icd10_code?: string | null;
+  years_recurring?: number | null;
+  is_recurring?: boolean | null;
+  current_year?: number;
+  status?: string;
+  revenue_impact?: number | null;
+  /** Set after markGapAwvScheduled is called. */
+  awv_suggested?: boolean | null;
+  /** ISO date string set by the AWV scheduled endpoint. */
+  awv_visit_date?: string | null;
+  /** Patient date of birth (joined from patients table). */
+  dob?: string | null;
+  /** Provider NPI attributed to this gap. */
+  provider_npi?: string | null;
+}
+
+/** Response wrapper from GET /api/recapture/recurring */
+export interface RecurringListResponse {
+  year: number;
+  total: number;
+  items: RecurringGap[];
+}
+
+/** Detect recurring (multi-year) recapture gaps and flag them. */
+export async function detectRecurringGaps(
+  currentYear: number,
+  lookbackYears = 3,
+): Promise<{ current_year: number; lookback_years: number; matches: number; items: RecurringGap[] }> {
+  const { data } = await api.post('/api/recapture/recurring/detect', {
+    current_year: currentYear,
+    lookback_years: lookbackYears,
+  });
+  return data;
+}
+
+/** List recurring recapture gaps for a year. */
+export async function listRecurringGaps(year: number): Promise<RecurringListResponse> {
+  const { data } = await api.get<RecurringListResponse>('/api/recapture/recurring', {
+    params: { year },
+  });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Decay curve + velocity + slow movers — RecaptureDecayChart, RecaptureVelocityKpis, RecaptureSlowMovers
+// ---------------------------------------------------------------------------
+
+/** One data point in a decay-curve cohort. */
+export interface DecayCurvePoint {
+  month_of_year: number;
+  closed_count: number;
+  closure_rate: number;
+  cumulative_closed_pct: number;
+  "$_recaptured": number;
+  "cumulative_$_recaptured": number;
+}
+
+/** One cohort in the decay-curve response. */
+export interface DecayCurveCohort {
+  cohort_year: number;
+  total_gaps: number;
+  closed_gaps: number;
+  points: DecayCurvePoint[];
+}
+
+/**
+ * Response from GET /api/recapture/decay-curve
+ * Derived from get_decay_curve() return dict in recapture_decay.py.
+ */
+export interface RecaptureDecayCurveResponse {
+  current_year: number;
+  lookback_years: number;
+  cohorts: DecayCurveCohort[];
+}
+
+/** Multi-year recapture decay curve (cohort × month-of-year). */
+export async function getRecaptureDecayCurve(
+  year?: number,
+  lookback = 3,
+): Promise<RecaptureDecayCurveResponse> {
+  const { data } = await api.get<RecaptureDecayCurveResponse>(
+    '/api/recapture/decay-curve',
+    { params: { year, lookback } },
+  );
+  return data;
+}
+
+/**
+ * Response from GET /api/recapture/velocity
+ * Derived from get_velocity_kpis() return dict in recapture_decay.py.
+ * Note: backend keys include $ characters (e.g. "ytd_$_recaptured").
+ */
+export interface RecaptureVelocityResponse {
+  year: number;
+  avg_days_to_close: number;
+  median_days_to_close: number;
+  "ytd_$_recaptured": number;
+  "ye_projected_$": number;
+  days_remaining_in_year: number;
+  days_to_close_target_30: number;
+  early_recapture_rate: number;
+  late_recapture_rate: number;
+  total_cohort_gaps: number;
+  closed_cohort_gaps: number;
+  open_cohort_gaps: number;
+}
+
+/** Recapture velocity KPIs for the given measurement year. */
+export async function getRecaptureVelocity(year?: number): Promise<RecaptureVelocityResponse> {
+  const { data } = await api.get<RecaptureVelocityResponse>('/api/recapture/velocity', {
+    params: { year },
+  });
+  return data;
+}
+
+/** One slow-mover HCC row. */
+export interface SlowMoverRow {
+  hcc_code: string;
+  description: string;
+  avg_days_to_close: number | null;
+  open_count: number;
+  "$_at_risk": number;
+  total_gaps: number;
+  closed_count: number;
+}
+
+/**
+ * Response from GET /api/recapture/slow-movers
+ * Derived from the router return dict in recapture_decay.py.
+ */
+export interface RecaptureSlowMoversResponse {
+  year: number;
+  limit: number;
+  slow_movers: SlowMoverRow[];
+}
+
+/** HCC codes with the slowest closure velocity. */
+export async function getRecaptureSlowMovers(
+  year?: number,
+  limit = 10,
+): Promise<RecaptureSlowMoversResponse> {
+  const { data } = await api.get<RecaptureSlowMoversResponse>(
+    '/api/recapture/slow-movers',
+    { params: { year, limit } },
+  );
+  return data;
+}

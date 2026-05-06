@@ -9,7 +9,8 @@ import { getDashboardStats } from "@/lib/api";
 interface ProviderDashboardStats {
   total_patients?: number;
   average_raf_score?: number;
-  [key: string]: unknown;
+  pending_attestations?: number;
+  open_recapture_gaps?: number;
 }
 
 function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
@@ -44,14 +45,26 @@ function KPISkeleton() {
 export function ProviderDashboard() {
   const { data: stats, isLoading } = useQuery<ProviderDashboardStats>({
     queryKey: ["dashboard-stats"],
-    queryFn: () => getDashboardStats() as unknown as ProviderDashboardStats,
+    queryFn: async () => {
+      const result = await getDashboardStats();
+      // getDashboardStats returns DashboardStats; cast through unknown so we
+      // can pluck the optional fields this dashboard renders without
+      // depending on the full shape.
+      const r = result as unknown as Record<string, unknown>;
+      return {
+        total_patients: typeof r.total_patients === "number" ? r.total_patients : undefined,
+        average_raf_score: typeof r.average_raf_score === "number" ? r.average_raf_score : undefined,
+        pending_attestations: typeof r.pending_attestations === "number" ? r.pending_attestations : undefined,
+        open_recapture_gaps: typeof r.open_recapture_gaps === "number" ? r.open_recapture_gaps : undefined,
+      };
+    },
   });
 
   return (
     <div className="fade-in-up">
-      <PageHeader 
-        title="Provider Dashboard" 
-        subtitle="Review your patient panel, RAF compliance scorecard, and missing care gaps."
+      <PageHeader
+        title="Today's priorities"
+        subtitle="Patients you should see this week, gaps to close, and your RAF performance at a glance."
       />
 
       <div style={{ paddingBottom: 24 }} />
@@ -59,48 +72,63 @@ export function ProviderDashboard() {
       {isLoading ? (
         <KPISkeleton />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>
           <StatCard
-            label="Total Panel Patients"
-            value={stats?.total_patients ?? "0"}
+            label="Open recapture gaps"
+            value={stats?.open_recapture_gaps ?? "—"}
+            subtitle="HCCs from prior year not yet documented"
+            icon={<FileText size={20} />}
+            color="#EF4444"
+            href="/recapture"
+          />
+          <StatCard
+            label="Suspect conditions"
+            value={"—"}
+            subtitle="AI-flagged suggestions awaiting your review"
+            icon={<Activity size={20} />}
+            color="#F59E0B"
+            href="/suspects"
+          />
+          <StatCard
+            label="Panel patients"
+            value={stats?.total_patients ?? "—"}
             subtitle="Under your care"
             icon={<Users size={20} />}
             color="#3B82F6"
             href="/patients"
           />
           <StatCard
-            label="Average Patient RAF"
-            value={stats?.average_raf_score ? stats.average_raf_score.toFixed(3) : "1.000"}
-            subtitle="Target: 1.200"
-            icon={<Activity size={20} />}
+            label="Average RAF"
+            value={stats?.average_raf_score ? stats.average_raf_score.toFixed(3) : "—"}
+            subtitle="Across your panel"
+            icon={<CheckCircle size={20} />}
             color="#10B981"
-          />
-          <StatCard
-            label="Pending Attestations"
-            value={"0"}
-            subtitle="Awaiting your signature"
-            icon={<FileText size={20} />}
-            color="#F59E0B"
-            href="/attestations"
+            href="/providers"
           />
         </div>
       )}
 
-      <SectionHeader title="Your Workflows" />
+      <SectionHeader title="Where to start" />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 16 }}>
-        <Link href="/patients" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-sky-600 mb-2">
-            <Users size={24} />
-            <span className="font-semibold text-lg text-foreground">View Panel</span>
+        <Link href="/recapture" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <div className="flex items-center gap-3 text-rose-600 mb-2">
+            <FileText size={24} />
+            <span className="font-semibold text-lg text-foreground">Close recapture gaps</span>
           </div>
-          <p className="text-muted-foreground text-sm">Access clinical records, demographics, and active RAF suspects for your assigned patients.</p>
+          <p className="text-muted-foreground text-sm">
+            Patients with HCCs documented last year that haven't been re-coded
+            this year — the highest-revenue lever in your worklist.
+          </p>
         </Link>
-        <Link href="/providers" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-emerald-600 mb-2">
-            <CheckCircle size={24} />
-            <span className="font-semibold text-lg text-foreground">Provider Scorecard</span>
+        <Link href="/suspects" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <div className="flex items-center gap-3 text-amber-600 mb-2">
+            <Activity size={24} />
+            <span className="font-semibold text-lg text-foreground">Review suspect conditions</span>
           </div>
-          <p className="text-muted-foreground text-sm">Review your coding accuracy metrics, condition recapture rates, and peer benchmarks.</p>
+          <p className="text-muted-foreground text-sm">
+            AI-suggested HCCs with KG-traced evidence chains.  Approve, reject,
+            or request more documentation in one click.
+          </p>
         </Link>
       </div>
     </div>
