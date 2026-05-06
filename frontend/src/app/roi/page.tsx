@@ -19,6 +19,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/healthcare-ui";
+import { fmtCurrencyCompact, fmtCurrencyFull } from "@/lib/format";
+import { tokens } from "@/styles/tokens";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,13 +50,11 @@ interface Results {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt$(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${Math.round(n).toLocaleString()}`;
+  return fmtCurrencyCompact(n);
 }
 
 function fmtFull$(n: number): string {
-  return "$" + Math.round(n).toLocaleString("en-US");
+  return fmtCurrencyFull(n);
 }
 
 function calcResults(inp: Inputs): Results {
@@ -159,7 +159,7 @@ function AnimatedNumber({
       style={{
         ...style,
         transition: "color 0.3s, transform 0.3s, text-shadow 0.3s",
-        color: flash ? "#10B981" : undefined,
+        color: flash ? tokens.success : undefined,
         transform: flash ? "scale(1.04)" : "scale(1)",
         display: "inline-block",
         textShadow: flash ? "0 0 20px rgba(16,185,129,0.3)" : "none",
@@ -182,9 +182,9 @@ function RafBarChart({
   const benchmark = 1.15;
   const max = Math.max(current, target, benchmark, 1.5) * 1.1;
   const bars = [
-    { label: "Current RAF", value: current, color: "#F59E0B" },
-    { label: "Target RAF", value: target, color: "#10B981" },
-    { label: "Industry Avg", value: benchmark, color: "#3B82F6" },
+    { label: "Current RAF", value: current, color: tokens.warningStrong },
+    { label: "Target RAF", value: target, color: tokens.success },
+    { label: "Industry Avg", value: benchmark, color: tokens.infoBlue },
   ];
   const svgW = 320;
   const svgH = 160;
@@ -284,7 +284,7 @@ function RafBarChart({
               textAnchor="middle"
               fontSize={10}
               fontWeight={600}
-              fill="#64748B"
+              fill={tokens.slate500}
             >
               {b.label.split(" ")[0]}
             </text>
@@ -293,7 +293,7 @@ function RafBarChart({
               y={svgH - bottomPad + 28}
               textAnchor="middle"
               fontSize={10}
-              fill="#94A3B8"
+              fill={tokens.slate400}
             >
               {b.label.split(" ").slice(1).join(" ")}
             </text>
@@ -311,13 +311,13 @@ function RevenueBreakdownChart({ results }: { results: Results }) {
     {
       label: "RAF Gap Closure",
       value: results.rafGapRevenue,
-      color: "#3B82F6",
+      color: tokens.infoBlue,
     },
-    { label: "AWV Optimization", value: results.awvRevenue, color: "#10B981" },
+    { label: "AWV Optimization", value: results.awvRevenue, color: tokens.success },
     {
       label: "Recapture Lift",
       value: results.recaptureRevenue,
-      color: "#8B5CF6",
+      color: tokens.accentPurple,
     },
   ];
   const max = Math.max(...items.map((i) => i.value), 1);
@@ -336,7 +336,7 @@ function RevenueBreakdownChart({ results }: { results: Results }) {
                 fontSize: 13,
               }}
             >
-              <span style={{ color: "#475569", fontWeight: 600 }}>
+              <span style={{ color: tokens.slate600, fontWeight: 600 }}>
                 {item.label}
               </span>
               <span style={{ color: item.color, fontWeight: 800, fontSize: 14 }}>
@@ -347,7 +347,7 @@ function RevenueBreakdownChart({ results }: { results: Results }) {
               style={{
                 height: 12,
                 borderRadius: 6,
-                background: "#F1F5F9",
+                background: tokens.slate100,
                 overflow: "hidden",
                 position: "relative",
               }}
@@ -431,17 +431,17 @@ function TimelineChart({ monthlyRevenue }: { monthlyRevenue: number }) {
     >
       <defs>
         <linearGradient id="timelineGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.35" />
-          <stop offset="50%" stopColor="#06B6D4" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.02" />
+          <stop offset="0%" stopColor={tokens.infoBlue} stopOpacity="0.35" />
+          <stop offset="50%" stopColor={tokens.infoBlue} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={tokens.accentPurple} stopOpacity="0.02" />
         </linearGradient>
         <linearGradient id="timelineLineGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#3B82F6" />
-          <stop offset="50%" stopColor="#06B6D4" />
-          <stop offset="100%" stopColor="#8B5CF6" />
+          <stop offset="0%" stopColor={tokens.infoBlue} />
+          <stop offset="50%" stopColor={tokens.infoBlue} />
+          <stop offset="100%" stopColor={tokens.accentPurple} />
         </linearGradient>
         <filter id="lineShadow">
-          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#3B82F6" floodOpacity="0.3" />
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={tokens.infoBlue} floodOpacity="0.3" />
         </filter>
       </defs>
 
@@ -453,11 +453,11 @@ function TimelineChart({ monthlyRevenue }: { monthlyRevenue: number }) {
             y1={t.y}
             x2={svgW - padR}
             y2={t.y}
-            stroke="#E2E8F0"
+            stroke={tokens.slate200}
             strokeWidth={1}
             strokeDasharray="4 4"
           />
-          <text x={padL - 4} y={t.y + 4} textAnchor="end" fontSize={9} fill="#94A3B8">
+          <text x={padL - 4} y={t.y + 4} textAnchor="end" fontSize={9} fill={tokens.slate400}>
             {t.label}
           </text>
         </g>
@@ -482,14 +482,14 @@ function TimelineChart({ monthlyRevenue }: { monthlyRevenue: number }) {
         .filter((_, i) => i % 2 === 0 || i === 11)
         .map((p) => (
           <g key={p.m}>
-            <circle cx={p.x} cy={p.y} r={6} fill="#fff" stroke="url(#timelineLineGrad)" strokeWidth={2.5} />
-            <circle cx={p.x} cy={p.y} r={3} fill="#3B82F6" />
+            <circle cx={p.x} cy={p.y} r={6} fill={tokens.white} stroke="url(#timelineLineGrad)" strokeWidth={2.5} />
+            <circle cx={p.x} cy={p.y} r={3} fill={tokens.infoBlue} />
             <text
               x={p.x}
               y={padT + chartH + 14}
               textAnchor="middle"
               fontSize={9}
-              fill="#94A3B8"
+              fill={tokens.slate400}
             >
               M{p.m}
             </text>
@@ -532,11 +532,11 @@ function PricingCard({
       onMouseLeave={() => setHovered(false)}
       style={{
         background: highlight
-          ? "linear-gradient(160deg, #1E3A8A 0%, #1d4ed8 50%, #2563EB 100%)"
-          : "#FFFFFF",
+          ? `linear-gradient(160deg, #1E3A8A 0%, ${tokens.primaryDark} 50%, ${tokens.primary} 100%)`
+          : tokens.white,
         border: highlight
           ? "none"
-          : `1px solid ${hovered ? "#3B82F6" : "#E5E7EB"}`,
+          : `1px solid ${hovered ? tokens.infoBlue : tokens.slate200}`,
         borderRadius: 16,
         padding: 28,
         display: "flex",
@@ -591,8 +591,8 @@ function PricingCard({
               display: "inline-flex",
               alignItems: "center",
               gap: 4,
-              background: highlight ? "rgba(255,255,255,0.2)" : "#EFF6FF",
-              color: highlight ? "#FFF" : "#2563EB",
+              background: highlight ? "rgba(255,255,255,0.2)" : tokens.primarySoft,
+              color: highlight ? tokens.white : tokens.primary,
               fontSize: 11,
               fontWeight: 700,
               padding: "4px 10px",
@@ -611,7 +611,7 @@ function PricingCard({
           style={{
             fontSize: 18,
             fontWeight: 700,
-            color: highlight ? "#FFFFFF" : "#1E293B",
+            color: highlight ? tokens.white : tokens.slate800,
             marginBottom: 6,
           }}
         >
@@ -622,7 +622,7 @@ function PricingCard({
             style={{
               fontSize: 36,
               fontWeight: 800,
-              color: highlight ? "#FFFFFF" : "#1E293B",
+              color: highlight ? tokens.white : tokens.slate800,
               lineHeight: 1,
             }}
           >
@@ -631,7 +631,7 @@ function PricingCard({
           <span
             style={{
               fontSize: 13,
-              color: highlight ? "rgba(255,255,255,0.7)" : "#94A3B8",
+              color: highlight ? "rgba(255,255,255,0.7)" : tokens.slate400,
             }}
           >
             {priceNote}
@@ -641,7 +641,7 @@ function PricingCard({
           <div
             style={{
               fontSize: 12,
-              color: highlight ? "rgba(255,255,255,0.6)" : "#94A3B8",
+              color: highlight ? "rgba(255,255,255,0.6)" : tokens.slate400,
               marginTop: 4,
             }}
           >
@@ -654,7 +654,7 @@ function PricingCard({
         style={{
           width: "100%",
           height: 1,
-          background: highlight ? "rgba(255,255,255,0.15)" : "#F1F5F9",
+          background: highlight ? "rgba(255,255,255,0.15)" : tokens.slate100,
           marginBottom: 20,
         }}
       />
@@ -668,7 +668,7 @@ function PricingCard({
             <CheckCircle
               size={16}
               style={{
-                color: highlight ? "#86EFAC" : "#10B981",
+                color: highlight ? tokens.emerald300 : tokens.success,
                 flexShrink: 0,
                 marginTop: 1,
               }}
@@ -676,7 +676,7 @@ function PricingCard({
             <span
               style={{
                 fontSize: 13,
-                color: highlight ? "rgba(255,255,255,0.88)" : "#475569",
+                color: highlight ? "rgba(255,255,255,0.88)" : tokens.slate600,
                 lineHeight: 1.5,
               }}
             >
@@ -697,8 +697,8 @@ function PricingCard({
           borderRadius: 10,
           fontSize: 14,
           fontWeight: 600,
-          background: highlight ? "#FFFFFF" : "#2563EB",
-          color: highlight ? "#2563EB" : "#FFFFFF",
+          background: highlight ? tokens.white : tokens.primary,
+          color: highlight ? tokens.primary : tokens.white,
           textDecoration: "none",
           transition: "opacity 0.15s, transform 0.15s",
           cursor: "pointer",
@@ -734,13 +734,13 @@ function InputField({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label
-        style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}
+        style={{ fontSize: 13, fontWeight: 600, color: tokens.slate700 }}
       >
         {label}
       </label>
       {children}
       {hint && (
-        <span style={{ fontSize: 11, color: "#94A3B8" }}>{hint}</span>
+        <span style={{ fontSize: 11, color: tokens.slate400 }}>{hint}</span>
       )}
     </div>
   );
@@ -750,10 +750,10 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
   borderRadius: 8,
-  border: "1px solid #E5E7EB",
+  border: `1px solid ${tokens.slate200}`,
   fontSize: 14,
-  color: "#1E293B",
-  background: "#FFFFFF",
+  color: tokens.slate800,
+  background: tokens.white,
   outline: "none",
   boxSizing: "border-box",
   transition: "border-color 0.15s, box-shadow 0.15s",
@@ -880,7 +880,7 @@ export default function ROICalculatorPage() {
   return (
     <div
       style={{
-        background: "#F8FAFC",
+        background: tokens.slate50,
         minHeight: "100vh",
         padding: "32px 40px 60px",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -1001,21 +1001,21 @@ export default function ROICalculatorPage() {
                 gap: 7,
                 padding: "9px 16px",
                 borderRadius: 8,
-                border: "1px solid #E5E7EB",
-                background: "#FFFFFF",
-                color: "#374151",
+                border: `1px solid ${tokens.slate200}`,
+                background: tokens.white,
+                color: tokens.slate700,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
                 transition: "all 0.15s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#F8FAFC";
-                e.currentTarget.style.borderColor = "#D1D5DB";
+                e.currentTarget.style.background = tokens.slate50;
+                e.currentTarget.style.borderColor = tokens.slate300;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#FFFFFF";
-                e.currentTarget.style.borderColor = "#E5E7EB";
+                e.currentTarget.style.background = tokens.white;
+                e.currentTarget.style.borderColor = tokens.slate200;
               }}
             >
               <Download size={14} />
@@ -1030,8 +1030,8 @@ export default function ROICalculatorPage() {
                 padding: "9px 16px",
                 borderRadius: 8,
                 border: "none",
-                background: copied ? "#10B981" : "#2563EB",
-                color: "#FFFFFF",
+                background: copied ? tokens.success : tokens.primary,
+                color: tokens.white,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
@@ -1049,7 +1049,7 @@ export default function ROICalculatorPage() {
       <div
         className="animate-in mesh-pattern"
         style={{
-          background: "linear-gradient(135deg, #0F172A 0%, #1E3A8A 40%, #2563EB 70%, #3B82F6 100%)",
+          background: `linear-gradient(135deg, ${tokens.slate900} 0%, #1E3A8A 40%, ${tokens.primary} 70%, ${tokens.infoBlue} 100%)`,
           borderRadius: 20,
           padding: "32px 36px",
           marginBottom: 32,
@@ -1088,8 +1088,25 @@ export default function ROICalculatorPage() {
           }}
         />
         <div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", fontWeight: 500, marginBottom: 4 }}>
-            Estimated Annual Revenue Opportunity
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", fontWeight: 500 }}>
+              Estimated Annual Revenue Opportunity
+            </span>
+            <span
+              aria-label="This is a projection"
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                textTransform: "uppercase" as const,
+                letterSpacing: "0.08em",
+                color: tokens.warningStrong,
+                background: tokens.warningSoft,
+                padding: "2px 6px",
+                borderRadius: 4,
+              }}
+            >
+              PROJECTED
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <AnimatedNumber
@@ -1098,7 +1115,7 @@ export default function ROICalculatorPage() {
               style={{
                 fontSize: 42,
                 fontWeight: 800,
-                color: "#FFFFFF",
+                color: tokens.white,
                 lineHeight: 1,
                 letterSpacing: "-0.02em",
               }}
@@ -1123,7 +1140,7 @@ export default function ROICalculatorPage() {
                   <Icon size={13} style={{ color: "rgba(255,255,255,0.6)" }} />
                   <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 500 }}>{m.label}</span>
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#FFFFFF" }}>{m.value}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: tokens.white }}>{m.value}</div>
               </div>
             );
           })}
@@ -1148,19 +1165,19 @@ export default function ROICalculatorPage() {
                 width: 36,
                 height: 36,
                 borderRadius: 10,
-                background: "#EFF6FF",
+                background: tokens.primarySoft,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Building2 size={18} color="#2563EB" />
+              <Building2 size={18} color={tokens.primary} />
             </div>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: tokens.slate800 }}>
                 Your Organization
               </div>
-              <div style={{ fontSize: 12, color: "#94A3B8" }}>
+              <div style={{ fontSize: 12, color: tokens.slate400 }}>
                 Adjust inputs to see real-time results
               </div>
             </div>
@@ -1240,7 +1257,7 @@ export default function ROICalculatorPage() {
                     value={inputs.hccGapRate}
                     onChange={(e) => set("hccGapRate", Number(e.target.value))}
                     style={{
-                      background: `linear-gradient(to right, #1d4ed8 0%, #3B82F6 ${((inputs.hccGapRate - 5) / 25) * 100}%, #E2E8F0 ${((inputs.hccGapRate - 5) / 25) * 100}%)`,
+                      background: `linear-gradient(to right, ${tokens.primaryDark} 0%, ${tokens.infoBlue} ${((inputs.hccGapRate - 5) / 25) * 100}%, ${tokens.slate200} ${((inputs.hccGapRate - 5) / 25) * 100}%)`,
                     }}
                   />
                   <span
@@ -1248,8 +1265,8 @@ export default function ROICalculatorPage() {
                       minWidth: 48,
                       padding: "4px 10px",
                       borderRadius: 8,
-                      background: "linear-gradient(135deg, #1d4ed8, #3B82F6)",
-                      color: "#FFFFFF",
+                      background: `linear-gradient(135deg, ${tokens.primaryDark}, ${tokens.infoBlue})`,
+                      color: tokens.white,
                       fontSize: 13,
                       fontWeight: 700,
                       textAlign: "center",
@@ -1265,7 +1282,7 @@ export default function ROICalculatorPage() {
                     display: "flex",
                     justifyContent: "space-between",
                     fontSize: 10,
-                    color: "#94A3B8",
+                    color: tokens.slate400,
                     marginTop: 6,
                   }}
                 >
@@ -1290,7 +1307,7 @@ export default function ROICalculatorPage() {
                     value={inputs.awvRate}
                     onChange={(e) => set("awvRate", Number(e.target.value))}
                     style={{
-                      background: `linear-gradient(to right, #065f46 0%, #10B981 ${inputs.awvRate}%, #E2E8F0 ${inputs.awvRate}%)`,
+                      background: `linear-gradient(to right, ${tokens.emerald800} 0%, ${tokens.success} ${inputs.awvRate}%, ${tokens.slate200} ${inputs.awvRate}%)`,
                     }}
                   />
                   <span
@@ -1298,8 +1315,8 @@ export default function ROICalculatorPage() {
                       minWidth: 48,
                       padding: "4px 10px",
                       borderRadius: 8,
-                      background: "linear-gradient(135deg, #065f46, #10B981)",
-                      color: "#FFFFFF",
+                      background: `linear-gradient(135deg, ${tokens.emerald800}, ${tokens.success})`,
+                      color: tokens.white,
                       fontSize: 13,
                       fontWeight: 700,
                       textAlign: "center",
@@ -1315,7 +1332,7 @@ export default function ROICalculatorPage() {
                     display: "flex",
                     justifyContent: "space-between",
                     fontSize: 10,
-                    color: "#94A3B8",
+                    color: tokens.slate400,
                     marginTop: 6,
                   }}
                 >
@@ -1345,12 +1362,12 @@ export default function ROICalculatorPage() {
             style={{
               marginTop: 24,
               padding: 18,
-              background: "linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%)",
+              background: `linear-gradient(135deg, ${tokens.slate50} 0%, ${tokens.primarySoft} 100%)`,
               borderRadius: 12,
-              border: "1px solid #E2E8F0",
+              border: `1px solid ${tokens.slate200}`,
             }}
           >
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, marginBottom: 12, textTransform: "uppercase" as const, letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
               <Users size={12} />
               Per-Provider Impact
             </div>
@@ -1359,21 +1376,21 @@ export default function ROICalculatorPage() {
                 <div className="gradient-text" style={{ fontSize: 20, fontWeight: 800 }}>
                   {fmt$(results.totalOpportunity / Math.max(inputs.providers, 1))}
                 </div>
-                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Revenue/Provider</div>
+                <div style={{ fontSize: 11, color: tokens.slate400, marginTop: 2 }}>Revenue/Provider</div>
               </div>
-              <div style={{ width: 1, background: "#E2E8F0" }} />
+              <div style={{ width: 1, background: tokens.slate200 }} />
               <div style={{ textAlign: "center" }}>
                 <div className="gradient-text" style={{ fontSize: 20, fontWeight: 800 }}>
                   {Math.round(inputs.members / Math.max(inputs.providers, 1)).toLocaleString()}
                 </div>
-                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Members/Provider</div>
+                <div style={{ fontSize: 11, color: tokens.slate400, marginTop: 2 }}>Members/Provider</div>
               </div>
-              <div style={{ width: 1, background: "#E2E8F0" }} />
+              <div style={{ width: 1, background: tokens.slate200 }} />
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: "#10B981" }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: tokens.success }}>
                   {results.paybackMonths}mo
                 </div>
-                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Payback</div>
+                <div style={{ fontSize: 11, color: tokens.slate400, marginTop: 2 }}>Payback</div>
               </div>
             </div>
           </div>
@@ -1391,14 +1408,14 @@ export default function ROICalculatorPage() {
           <div
             className="opportunity-card gradient-border"
             style={{
-              background: "linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 50%, #DCFCE7 100%)",
+              background: `linear-gradient(135deg, ${tokens.successSoft} 0%, ${tokens.successSoft} 50%, ${tokens.emerald100} 100%)`,
               borderRadius: 16,
               padding: 28,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-              <DollarSign size={20} color="#16A34A" />
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#15803D" }}>
+              <DollarSign size={20} color={tokens.successDark} />
+              <span style={{ fontSize: 16, fontWeight: 700, color: tokens.successDark }}>
                 Revenue Opportunity Breakdown
               </span>
             </div>
@@ -1409,19 +1426,19 @@ export default function ROICalculatorPage() {
                   label: "RAF Gap Closure",
                   desc: `${inputs.members.toLocaleString()} members × ${inputs.hccGapRate}% gap rate × HCC coefficients`,
                   value: results.rafGapRevenue,
-                  color: "#3B82F6",
+                  color: tokens.infoBlue,
                 },
                 {
                   label: "AWV Optimization",
                   desc: `${inputs.members.toLocaleString()} members × AWV uplift × $200/visit`,
                   value: results.awvRevenue,
-                  color: "#10B981",
+                  color: tokens.success,
                 },
                 {
                   label: "Recapture Improvement",
                   desc: `${inputs.members.toLocaleString()} members × 5% recapture lift`,
                   value: results.recaptureRevenue,
-                  color: "#8B5CF6",
+                  color: tokens.accentPurple,
                 },
               ].map((item) => (
                 <div
@@ -1432,7 +1449,7 @@ export default function ROICalculatorPage() {
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "14px 16px",
-                    background: "#FFFFFF",
+                    background: tokens.white,
                     borderRadius: 12,
                     border: `1px solid ${item.color}20`,
                     gap: 12,
@@ -1450,13 +1467,13 @@ export default function ROICalculatorPage() {
                       }}
                     />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: tokens.slate800 }}>
                         {item.label}
                       </div>
                       <div
                         style={{
                           fontSize: 11,
-                          color: "#94A3B8",
+                          color: tokens.slate400,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -1488,7 +1505,7 @@ export default function ROICalculatorPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "18px 22px",
-                background: "linear-gradient(135deg, #065f46 0%, #15803D 50%, #16A34A 100%)",
+                background: `linear-gradient(135deg, ${tokens.emerald800} 0%, ${tokens.successDark} 50%, ${tokens.success} 100%)`,
                 borderRadius: 14,
                 boxShadow: "0 4px 16px rgba(22,163,74,0.25)",
               }}
@@ -1507,7 +1524,7 @@ export default function ROICalculatorPage() {
                 style={{
                   fontSize: 26,
                   fontWeight: 800,
-                  color: "#FFFFFF",
+                  color: tokens.white,
                   letterSpacing: "-0.01em",
                 }}
               />
@@ -1522,9 +1539,9 @@ export default function ROICalculatorPage() {
                 value: results.platformCost,
                 format: fmtFull$,
                 sub: "$1.25 PMPM × 12 months",
-                color: "#64748B",
-                bg: "#F8FAFC",
-                border: "#E5E7EB",
+                color: tokens.slate500,
+                bg: tokens.slate50,
+                border: tokens.slate200,
                 icon: Activity,
               },
               {
@@ -1532,9 +1549,9 @@ export default function ROICalculatorPage() {
                 value: results.netRevenue,
                 format: fmtFull$,
                 sub: "Opportunity minus cost",
-                color: results.netRevenue >= 0 ? "#16A34A" : "#DC2626",
-                bg: results.netRevenue >= 0 ? "#F0FDF4" : "#FEF2F2",
-                border: results.netRevenue >= 0 ? "#86EFAC" : "#FCA5A5",
+                color: results.netRevenue >= 0 ? tokens.successDark : tokens.riskHigh,
+                bg: results.netRevenue >= 0 ? tokens.successSoft : tokens.riskHighSoft,
+                border: results.netRevenue >= 0 ? tokens.emerald300 : tokens.dangerBorder,
                 icon: DollarSign,
               },
               {
@@ -1542,9 +1559,9 @@ export default function ROICalculatorPage() {
                 value: results.roi,
                 format: (n: number) => `${Math.round(n)}%`,
                 sub: "(Net Revenue ÷ Cost) × 100",
-                color: "#2563EB",
-                bg: "#EFF6FF",
-                border: "#BFDBFE",
+                color: tokens.primary,
+                bg: tokens.primarySoft,
+                border: "rgba(37,99,235,0.20)",
                 icon: TrendingUp,
               },
               {
@@ -1552,9 +1569,9 @@ export default function ROICalculatorPage() {
                 value: results.npv3yr,
                 format: fmtFull$,
                 sub: "At 10% discount rate",
-                color: "#7C3AED",
-                bg: "#F5F3FF",
-                border: "#DDD6FE",
+                color: tokens.accentPurple,
+                bg: "rgba(139,92,246,0.08)",
+                border: "rgba(139,92,246,0.20)",
                 icon: Target,
               },
             ].map((m) => {
@@ -1598,7 +1615,7 @@ export default function ROICalculatorPage() {
                     >
                       <Icon size={14} color={m.color} />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>
                       {m.label}
                     </span>
                   </div>
@@ -1614,7 +1631,7 @@ export default function ROICalculatorPage() {
                       letterSpacing: "-0.02em",
                     }}
                   />
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>{m.sub}</div>
+                  <div style={{ fontSize: 11, color: tokens.slate400 }}>{m.sub}</div>
                 </div>
               );
             })}
@@ -1624,8 +1641,8 @@ export default function ROICalculatorPage() {
           <div
             style={{
               background: results.paybackMonths <= 6
-                ? "linear-gradient(135deg, #1E3A8A, #2563EB)"
-                : "linear-gradient(135deg, #374151, #4B5563)",
+                ? `linear-gradient(135deg, #1E3A8A, ${tokens.primary})`
+                : `linear-gradient(135deg, ${tokens.slate700}, ${tokens.slate600})`,
               borderRadius: 12,
               padding: "16px 20px",
               display: "flex",
@@ -1645,13 +1662,13 @@ export default function ROICalculatorPage() {
                 flexShrink: 0,
               }}
             >
-              <Clock size={22} color="#FFFFFF" />
+              <Clock size={22} color={tokens.white} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", fontWeight: 500 }}>
                 Estimated Payback Period
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFFFF" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: tokens.white }}>
                 {results.paybackMonths} months
               </div>
             </div>
@@ -1679,23 +1696,23 @@ export default function ROICalculatorPage() {
           }}
         >
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", letterSpacing: "-0.01em" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: tokens.slate800, letterSpacing: "-0.01em" }}>
               RAF Score Comparison
             </div>
-            <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 3 }}>
+            <div style={{ fontSize: 12, color: tokens.slate400, marginTop: 3 }}>
               Current vs Target vs Industry Benchmark
             </div>
           </div>
           <RafBarChart current={inputs.currentRaf} target={results.targetRaf} />
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
             {[
-              { label: "Current", color: "#F59E0B" },
-              { label: "Target", color: "#10B981" },
-              { label: "Industry (1.15)", color: "#3B82F6" },
+              { label: "Current", color: tokens.warningStrong },
+              { label: "Target", color: tokens.success },
+              { label: "Industry (1.15)", color: tokens.infoBlue },
             ].map((l) => (
               <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color }} />
-                <span style={{ fontSize: 11, color: "#64748B" }}>{l.label}</span>
+                <span style={{ fontSize: 11, color: tokens.slate500 }}>{l.label}</span>
               </div>
             ))}
           </div>
@@ -1709,10 +1726,10 @@ export default function ROICalculatorPage() {
           }}
         >
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: tokens.slate800 }}>
               Revenue by Source
             </div>
-            <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: tokens.slate400, marginTop: 2 }}>
               Annual opportunity breakdown
             </div>
           </div>
@@ -1721,15 +1738,15 @@ export default function ROICalculatorPage() {
             style={{
               marginTop: 20,
               padding: "14px 16px",
-              background: "linear-gradient(135deg, #F8FAFC, #EFF6FF)",
+              background: `linear-gradient(135deg, ${tokens.slate50}, ${tokens.primarySoft})`,
               borderRadius: 10,
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              border: "1px solid #E2E8F0",
+              border: `1px solid ${tokens.slate200}`,
             }}
           >
-            <span style={{ fontSize: 12, color: "#64748B", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Total</span>
+            <span style={{ fontSize: 12, color: tokens.slate500, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Total</span>
             <AnimatedNumber
               value={results.totalOpportunity}
               format={fmtFull$}
@@ -1747,15 +1764,32 @@ export default function ROICalculatorPage() {
           }}
         >
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>
-              12-Month Revenue Ramp
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: tokens.slate800 }}>
+                12-Month Revenue Ramp
+              </div>
+              <span
+                aria-label="This is a projection"
+                style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  textTransform: "uppercase" as const,
+                  letterSpacing: "0.08em",
+                  color: tokens.warningStrong,
+                  background: tokens.warningSoft,
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                }}
+              >
+                PROJECTED
+              </span>
             </div>
-            <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>
-              Projected cumulative revenue impact
+            <div style={{ fontSize: 12, color: tokens.slate400, marginTop: 2 }}>
+              Cumulative revenue impact — projection, not a guarantee
             </div>
           </div>
           <TimelineChart monthlyRevenue={results.totalOpportunity / 12} />
-          <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: tokens.slate400, marginTop: 6, textAlign: "center" }}>
             S-curve ramp assumes gradual workflow adoption
           </div>
         </div>
@@ -1769,8 +1803,8 @@ export default function ROICalculatorPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              background: "#EFF6FF",
-              color: "#2563EB",
+              background: tokens.primarySoft,
+              color: tokens.primary,
               fontSize: 12,
               fontWeight: 700,
               padding: "5px 14px",
@@ -1787,7 +1821,7 @@ export default function ROICalculatorPage() {
               margin: 0,
               fontSize: 30,
               fontWeight: 800,
-              color: "#1E293B",
+              color: tokens.slate800,
               letterSpacing: "-0.02em",
             }}
           >
@@ -1797,7 +1831,7 @@ export default function ROICalculatorPage() {
             style={{
               margin: "10px auto 0",
               fontSize: 15,
-              color: "#64748B",
+              color: tokens.slate500,
               maxWidth: 480,
               lineHeight: 1.6,
             }}
@@ -1806,7 +1840,7 @@ export default function ROICalculatorPage() {
             {inputs.members > 0 && (
               <>
                 {" "}For {inputs.members.toLocaleString()} members, Professional would cost{" "}
-                <strong style={{ color: "#2563EB" }}>{annualPro}/yr</strong>.
+                <strong style={{ color: tokens.primary }}>{annualPro}/yr</strong>.
               </>
             )}
           </p>
@@ -1891,11 +1925,11 @@ export default function ROICalculatorPage() {
                 alignItems: "center",
                 gap: 7,
                 fontSize: 13,
-                color: "#64748B",
+                color: tokens.slate500,
                 fontWeight: 500,
               }}
             >
-              <CheckCircle size={15} color="#10B981" />
+              <CheckCircle size={15} color={tokens.success} />
               {badge}
             </div>
           ))}
@@ -1907,7 +1941,7 @@ export default function ROICalculatorPage() {
         className="animate-in mesh-pattern"
         style={{
           marginTop: 40,
-          background: "linear-gradient(135deg, #0F172A 0%, #1E3A8A 60%, #2563EB 100%)",
+          background: `linear-gradient(135deg, ${tokens.slate900} 0%, #1E3A8A 60%, ${tokens.primary} 100%)`,
           borderRadius: 20,
           padding: "40px 48px",
           display: "flex",
@@ -1938,12 +1972,12 @@ export default function ROICalculatorPage() {
               margin: "0 0 8px",
               fontSize: 24,
               fontWeight: 800,
-              color: "#FFFFFF",
+              color: tokens.white,
               letterSpacing: "-0.02em",
             }}
           >
             Ready to capture{" "}
-            <span style={{ color: "#60A5FA" }}>
+            <span style={{ color: tokens.infoBlue }}>
               {fmt$(results.totalOpportunity)}
             </span>{" "}
             in revenue?
@@ -1962,8 +1996,8 @@ export default function ROICalculatorPage() {
               gap: 8,
               padding: "13px 24px",
               borderRadius: 10,
-              background: "#FFFFFF",
-              color: "#1E3A8A",
+              background: tokens.white,
+              color: tokens.slate900,
               fontSize: 14,
               fontWeight: 700,
               textDecoration: "none",
@@ -1984,7 +2018,7 @@ export default function ROICalculatorPage() {
               padding: "13px 24px",
               borderRadius: 10,
               background: "rgba(255,255,255,0.12)",
-              color: "#FFFFFF",
+              color: tokens.white,
               fontSize: 14,
               fontWeight: 600,
               textDecoration: "none",

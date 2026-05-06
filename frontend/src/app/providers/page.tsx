@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { initialsColor } from "@/lib/ui-utils";
+import { fmtCurrencySmart } from "@/lib/format";
+import { tokens } from "@/styles/tokens";
 import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
@@ -96,36 +98,36 @@ async function acknowledgeAlert(payload: { providerId: number; alertId: number }
   return data;
 }
 
-// ── Design Tokens ─────────────────────────────────────────────────────────────
+// ── Design Tokens (single source of truth: tokens.ts) ─────────────────────────
 const C = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  borderLight: "#F1F5F9",
-  text: "#0F172A",
-  textMuted: "#64748B",
-  textSub: "#94A3B8",
-  primary: "#2563EB",
-  primaryLight: "#DBEAFE",
-  primaryDark: "#1D4ED8",
-  emerald: "#10B981",
-  emeraldLight: "#D1FAE5",
-  emeraldDark: "#065F46",
-  amber: "#F59E0B",
-  amberLight: "#FEF3C7",
-  amberDark: "#92400E",
-  red: "#EF4444",
-  redLight: "#FEE2E2",
-  redDark: "#991B1B",
-  violet: "#8B5CF6",
-  violetLight: "#EDE9FE",
-  gray50: "#F9FAFB",
-  gray100: "#F3F4F6",
-  gray200: "#E5E7EB",
-  gray300: "#D1D5DB",
-  gray400: "#9CA3AF",
-  gray600: "#4B5563",
-  white: "#FFFFFF",
+  bg: tokens.slate50,
+  card: tokens.white,
+  border: tokens.slate200,
+  borderLight: tokens.slate100,
+  text: tokens.slate900,
+  textMuted: tokens.slate500,
+  textSub: tokens.slate400,
+  primary: tokens.primary,
+  primaryLight: "rgba(37,99,235,0.10)",
+  primaryDark: tokens.primaryDark,
+  emerald: tokens.success,
+  emeraldLight: tokens.successSoft,
+  emeraldDark: tokens.emerald800,
+  amber: tokens.warningStrong,
+  amberLight: tokens.warningSoft,
+  amberDark: tokens.warningText,
+  red: tokens.riskHigh,
+  redLight: tokens.riskHighSoft,
+  redDark: tokens.danger,
+  violet: tokens.accentPurple,
+  violetLight: "rgba(139,92,246,0.10)",
+  gray50: tokens.slate50,
+  gray100: tokens.slate100,
+  gray200: tokens.slate200,
+  gray300: tokens.slate300,
+  gray400: tokens.slate400,
+  gray600: tokens.slate600,
+  white: tokens.white,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -223,9 +225,7 @@ type SpecialtyFilter = "all" | "PCP" | "Specialist" | "Hospitalist";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt$(v: number | null | undefined): string {
   if (v == null) return "$0";
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
-  return `$${Math.round(v)}`;
+  return fmtCurrencySmart(v);
 }
 
 function fmtPct(v: number | null | undefined): string {
@@ -279,9 +279,9 @@ function CaptureBadge({ rate }: { rate: number | null }) {
 // ── Rank Medal ────────────────────────────────────────────────────────────────
 function RankBadge({ rank }: { rank: number }) {
   const colors: Record<number, { bg: string; fg: string }> = {
-    1: { bg: "#FEF3C7", fg: "#92400E" },
-    2: { bg: "#F1F5F9", fg: "#475569" },
-    3: { bg: "#FEF3C7", fg: "#B45309" },
+    1: { bg: tokens.warningSoft, fg: tokens.warningText },
+    2: { bg: tokens.slate100, fg: tokens.slate600 },
+    3: { bg: tokens.warningSoft, fg: tokens.riskMedium },
   };
   const style = colors[rank] ?? { bg: C.gray100, fg: C.gray600 };
   return (
@@ -430,6 +430,8 @@ function Modal({
 
   useEffect(() => {
     if (!open) return;
+    // Auto-focus the dialog container for keyboard users
+    ref.current?.focus();
     function handle(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
@@ -457,6 +459,7 @@ function Modal({
     >
       <div
         ref={ref}
+        tabIndex={-1}
         style={{
           background: C.card,
           borderRadius: 16,
@@ -465,6 +468,7 @@ function Modal({
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+          outline: "none",
         }}
       >
         {/* Modal header */}
@@ -2136,12 +2140,37 @@ export default function ProvidersPage() {
                     colSpan={10}
                     style={{ padding: 48, textAlign: "center", color: C.textMuted }}
                   >
-                    <div style={{ marginBottom: 8 }}>
-                      <Users size={32} color={C.gray300} style={{ display: "block", margin: "0 auto 8px" }} />
-                    </div>
-                    {leaderboard.length === 0
-                      ? "No providers found. Add a provider or use Auto-Discover."
-                      : "No providers match your search filters."}
+                    <Users size={36} color={C.gray300} style={{ display: "block", margin: "0 auto 12px" }} />
+                    {leaderboard.length === 0 ? (
+                      <>
+                        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: C.text }}>
+                          No providers yet
+                        </p>
+                        <p style={{ margin: "0 0 16px", fontSize: 13, color: C.textMuted }}>
+                          Add a provider to start scoring, or use Auto-Discover to import from your EMR.
+                        </p>
+                        <button
+                          onClick={() => setShowAddDialog(true)}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 7,
+                            padding: "9px 18px", borderRadius: 8, border: "none",
+                            background: C.primary, color: C.white, fontSize: 13,
+                            fontWeight: 600, cursor: "pointer",
+                          }}
+                        >
+                          <Plus size={14} /> Add Your First Provider
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: C.text }}>
+                          No providers match
+                        </p>
+                        <p style={{ margin: 0, fontSize: 13, color: C.textMuted }}>
+                          Try adjusting the search or specialty filter.
+                        </p>
+                      </>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -2343,6 +2372,7 @@ export default function ProvidersPage() {
                             </span>
                             {(row.revenue_opportunity ?? 0) > 50000 && (
                               <span
+                                aria-label="High revenue opportunity"
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",

@@ -43,6 +43,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
+import { tokens } from "@/styles/tokens";
 import { analyzeNote, getPatientsWithEncounters, getPatientEncounters, calculateRAF } from "@/lib/api";
 import api from "@/lib/api";
 import { logger } from "@/lib/logger";
@@ -2739,15 +2740,15 @@ export default function DemoPage() {
   // Render
   // ---------------------------------------------------------------------------
   const C_DEMO = {
-    text: "#0F172A",
-    textMuted: "#475569",
-    textSubtle: "#64748B",
-    label: "#94A3B8",
-    border: "#E2E8F0",
-    borderSoft: "#EEF2F6",
-    bgPage: "#F8FAFC",
-    bgCard: "#FFFFFF",
-    accent: "#0F766E", // app brand teal — matches sidebar logo
+    text: tokens.slate900,
+    textMuted: tokens.slate600,
+    textSubtle: tokens.slate500,
+    label: tokens.slate400,
+    border: tokens.slate200,
+    borderSoft: tokens.slate100,
+    bgPage: tokens.slate50,
+    bgCard: tokens.white,
+    accent: "#0F766E", // app brand teal — matches sidebar logo (not in tokens; kept intentionally)
     accentSoft: "rgba(15, 118, 110, 0.08)",
   };
   const FONT_SYS_DEMO =
@@ -2826,9 +2827,9 @@ export default function DemoPage() {
             <div className="flex items-center gap-2.5">
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-xl"
-                style={{ background: "linear-gradient(135deg, #EFF6FF, #DBEAFE)" }}
+                style={{ background: `linear-gradient(135deg, ${tokens.primarySoft}, rgba(37,99,235,0.15))` }}
               >
-                <FileText className="h-4 w-4" style={{ color: "#2563EB" }} />
+                <FileText className="h-4 w-4" style={{ color: tokens.primary }} />
               </div>
               <div>
                 <h2 className="text-sm font-semibold leading-tight">Clinical Input</h2>
@@ -2839,7 +2840,7 @@ export default function DemoPage() {
             <div
               className="inline-flex p-1 gap-1"
               style={{
-                background: "#F1F5F9",
+                background: tokens.slate100,
                 border: `1px solid ${C_DEMO.border}`,
                 borderRadius: 12,
               }}
@@ -2856,7 +2857,7 @@ export default function DemoPage() {
                   fontWeight: 600,
                   cursor: running ? "not-allowed" : "pointer",
                   background: inputMode === "paste" ? C_DEMO.accent : "transparent",
-                  color: inputMode === "paste" ? "#FFFFFF" : C_DEMO.textMuted,
+                  color: inputMode === "paste" ? tokens.white : C_DEMO.textMuted,
                   boxShadow:
                     inputMode === "paste"
                       ? "0 1px 3px rgba(15, 118, 110, 0.30), 0 1px 2px rgba(15, 118, 110, 0.20)"
@@ -2878,7 +2879,7 @@ export default function DemoPage() {
                   fontWeight: 600,
                   cursor: running ? "not-allowed" : "pointer",
                   background: inputMode === "patient" ? C_DEMO.accent : "transparent",
-                  color: inputMode === "patient" ? "#FFFFFF" : C_DEMO.textMuted,
+                  color: inputMode === "patient" ? tokens.white : C_DEMO.textMuted,
                   boxShadow:
                     inputMode === "patient"
                       ? "0 1px 3px rgba(15, 118, 110, 0.30), 0 1px 2px rgba(15, 118, 110, 0.20)"
@@ -3324,9 +3325,9 @@ export default function DemoPage() {
                   status === "running"
                     ? C_DEMO.accent
                     : status === "done" && isExpanded
-                    ? "#A7F3D0"
+                    ? tokens.emerald300
                     : status === "error"
-                    ? "#FCA5A5"
+                    ? tokens.dangerBorder
                     : C_DEMO.border
                 }`,
                 borderRadius: 16,
