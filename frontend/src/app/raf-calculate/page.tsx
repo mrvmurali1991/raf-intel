@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { AdvancedRAFPanel } from "@/components/AdvancedRAFPanel";
 import type { AdvancedRAFOptions } from "@/components/AdvancedRAFPanel";
+import { tokens } from "@/styles/tokens";
 import {
   Calculator,
   ChevronRight,
@@ -109,7 +110,7 @@ function PatientSearchBox({
         <div style={ps.statusRow}>Searching…</div>
       )}
       {open && debouncedQuery.length > 1 && !isFetching && isError && (
-        <div style={{ ...ps.statusRow, color: "#dc2626" }}>{errorMessage}</div>
+        <div style={{ ...ps.statusRow, color: tokens.riskHigh }}>{errorMessage}</div>
       )}
       {open && patients.length > 0 && (
         <div style={ps.dropdown}>
@@ -131,7 +132,7 @@ function PatientSearchBox({
                 <div style={ps.optionName}>{p.fname} {p.lname}</div>
                 <div style={ps.optionSub}>PID {p.pid} · {p.DOB ?? "—"} · {p.sex ?? "—"}</div>
               </div>
-              <ChevronRight size={14} style={{ marginLeft: "auto", color: "#94a3b8" }} />
+              <ChevronRight size={14} style={{ marginLeft: "auto", color: tokens.slate400 }} />
             </button>
           ))}
         </div>
@@ -143,13 +144,13 @@ function PatientSearchBox({
 const ps: Record<string, React.CSSProperties> = {
   input: {
     width: "100%", height: 44, borderRadius: 10,
-    border: "1.5px solid #e2e8f0", padding: "0 16px",
-    fontSize: 14, color: "#0f172a", outline: "none",
-    background: "#fff", boxSizing: "border-box",
+    border: `1.5px solid ${tokens.slate200}`, padding: "0 16px",
+    fontSize: 14, color: tokens.slate900, outline: "none",
+    background: tokens.white, boxSizing: "border-box",
   },
   dropdown: {
     position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10,
+    background: tokens.white, border: `1px solid ${tokens.slate200}`, borderRadius: 10,
     boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 100,
     overflow: "hidden",
   },
@@ -158,22 +159,22 @@ const ps: Record<string, React.CSSProperties> = {
     width: "100%", padding: "10px 14px",
     border: "none", background: "none", cursor: "pointer",
     textAlign: "left" as const,
-    borderBottom: "1px solid #f1f5f9",
+    borderBottom: `1px solid ${tokens.slate100}`,
     transition: "background .1s",
   },
   optionAvatar: {
     width: 32, height: 32, borderRadius: "50%",
-    background: "linear-gradient(135deg,#1e40af,#6366f1)",
-    color: "#fff", fontWeight: 700, fontSize: 12,
+    background: `linear-gradient(135deg, ${tokens.primaryDark}, ${tokens.accentPurple})`,
+    color: tokens.white, fontWeight: 700, fontSize: 12,
     display: "flex", alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   },
-  optionName: { fontSize: 13, fontWeight: 600, color: "#0f172a" },
-  optionSub:  { fontSize: 11, color: "#64748b" },
+  optionName: { fontSize: 13, fontWeight: 600, color: tokens.slate900 },
+  optionSub:  { fontSize: 11, color: tokens.slate500 },
   statusRow: {
     position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10,
-    padding: "10px 14px", fontSize: 12, color: "#64748b", zIndex: 100,
+    background: tokens.white, border: `1px solid ${tokens.slate200}`, borderRadius: 10,
+    padding: "10px 14px", fontSize: 12, color: tokens.slate500, zIndex: 100,
     boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
   },
 };
@@ -182,13 +183,13 @@ const ps: Record<string, React.CSSProperties> = {
 
 function ResultCard({ result }: { result: RAFResult }) {
   const risk = result.raf_score >= 2.0 ? "High" : result.raf_score >= 1.0 ? "Medium" : "Low";
-  const riskColor = result.raf_score >= 2.0 ? "#dc2626" : result.raf_score >= 1.0 ? "#d97706" : "#059669";
-  const riskBg    = result.raf_score >= 2.0 ? "#fef2f2" : result.raf_score >= 1.0 ? "#fffbeb" : "#f0fdf4";
+  const riskColor = result.raf_score >= 2.0 ? tokens.riskHigh : result.raf_score >= 1.0 ? tokens.riskMedium : tokens.riskLow;
+  const riskBg    = result.raf_score >= 2.0 ? tokens.riskHighSoft : result.raf_score >= 1.0 ? tokens.warningSoft : tokens.successSoft;
 
   return (
     <div style={rc.wrapper}>
       {/* Score Hero */}
-      <div style={{ ...rc.hero, background: `linear-gradient(135deg, #1e3a5f, #1e40af)` }}>
+      <div style={{ ...rc.hero, background: `linear-gradient(135deg, ${tokens.slate900}, ${tokens.primaryDark})` }}>
         <div>
           <div style={rc.heroLabel}>Final RAF Score</div>
           <div style={rc.heroScore}>{(result.raf_score ?? 0).toFixed(4)}</div>
@@ -201,17 +202,17 @@ function ResultCard({ result }: { result: RAFResult }) {
             <div style={rc.tag}>NE Model</div>
           )}
           {result.frailty_is_frail && (
-            <div style={{ ...rc.tag, background: "#d1fae5", color: "#059669" }}>
+            <div style={{ ...rc.tag, background: tokens.emerald100, color: tokens.riskLow }}>
               Frailty +{result.frailty_addend?.toFixed(4)}
             </div>
           )}
           {result.sweep_period && (
-            <div style={{ ...rc.tag, background: "#ede9fe", color: "#7c3aed" }}>
+            <div style={{ ...rc.tag, background: tokens.primarySoft, color: tokens.accentPurple }}>
               {result.sweep_period} sweep
             </div>
           )}
           {result.esrd_segment && (
-            <div style={{ ...rc.tag, background: "#fef3c7", color: "#d97706" }}>
+            <div style={{ ...rc.tag, background: tokens.warningSoft, color: tokens.riskMedium }}>
               ESRD: {result.esrd_segment}
             </div>
           )}
@@ -243,7 +244,7 @@ function ResultCard({ result }: { result: RAFResult }) {
           <div style={rc.blendSep}>=</div>
           <div style={rc.blendItem}>
             <span style={rc.blendLabel}>Blended RAF</span>
-            <span style={{ ...rc.blendVal, color: "#1e40af", fontWeight: 800 }}>{(result.raf_score ?? 0).toFixed(4)}</span>
+            <span style={{ ...rc.blendVal, color: tokens.primaryDark, fontWeight: 800 }}>{(result.raf_score ?? 0).toFixed(4)}</span>
           </div>
         </div>
       )}
@@ -263,7 +264,7 @@ function ResultCard({ result }: { result: RAFResult }) {
       {/* Frailty Detail */}
       {result.frailty_is_frail && (
         <div style={rc.frailtyBox}>
-          <CheckCircle size={16} color="#059669" />
+          <CheckCircle size={16} color={tokens.riskLow} />
           <div>
             <strong>Frailty Adjustment Applied</strong> — {result.frailty_adl_count} of 6 ADL impairments.
             Addend: <strong>+{result.frailty_addend?.toFixed(4)}</strong> applied to payment RAF.
@@ -273,9 +274,9 @@ function ResultCard({ result }: { result: RAFResult }) {
 
       {/* New Enrollee Note */}
       {result.new_enrollee && (
-        <div style={{ ...rc.frailtyBox, borderColor: "#c4b5fd", background: "#faf5ff" }}>
-          <Info size={16} color="#7c3aed" />
-          <div style={{ color: "#5b21b6" }}>
+        <div style={{ ...rc.frailtyBox, borderColor: tokens.slate300, background: tokens.primarySoft }}>
+          <Info size={16} color={tokens.accentPurple} />
+          <div style={{ color: tokens.primaryDark }}>
             <strong>New Enrollee (NE) Model Applied</strong> — Patient has &lt;12 months Part B coverage.
             HCC codes excluded; demographic-only score used per CMS NE methodology.
           </div>
@@ -302,11 +303,11 @@ function ScoreStat({ label, value, icon }: { label: string; value: string; icon:
 
 const rc: Record<string, React.CSSProperties> = {
   wrapper: {
-    border: "1.5px solid #bfdbfe", borderRadius: 14,
-    overflow: "hidden", background: "#fff",
+    border: `1.5px solid ${tokens.slate200}`, borderRadius: 14,
+    overflow: "hidden", background: tokens.white,
   },
   hero: {
-    padding: "20px 24px", color: "#fff",
+    padding: "20px 24px", color: tokens.white,
     display: "flex", justifyContent: "space-between", alignItems: "flex-start",
   },
   heroLabel: { fontSize: 12, opacity: 0.75, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" },
@@ -320,45 +321,45 @@ const rc: Record<string, React.CSSProperties> = {
   tag: {
     padding: "3px 10px", borderRadius: 99,
     fontSize: 11, fontWeight: 700,
-    background: "#dbeafe", color: "#1e40af",
+    background: tokens.primarySoft, color: tokens.primaryDark,
   },
   grid4: {
     display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
-    borderBottom: "1px solid #f1f5f9",
+    borderBottom: `1px solid ${tokens.slate100}`,
   },
   statCard: {
     padding: "14px 18px", textAlign: "center",
-    borderRight: "1px solid #f1f5f9",
+    borderRight: `1px solid ${tokens.slate100}`,
   },
   statIcon:  { fontSize: 18, marginBottom: 4 },
-  statVal:   { fontSize: 20, fontWeight: 700, color: "#0f172a" },
-  statLabel: { fontSize: 11, color: "#64748b", marginTop: 2, textTransform: "uppercase", letterSpacing: ".04em" },
+  statVal:   { fontSize: 20, fontWeight: 700, color: tokens.slate900 },
+  statLabel: { fontSize: 11, color: tokens.slate500, marginTop: 2, textTransform: "uppercase", letterSpacing: ".04em" },
   blendRow: {
     display: "flex", alignItems: "center", gap: 4,
-    padding: "12px 20px", background: "#f8fafc",
-    borderBottom: "1px solid #f1f5f9",
+    padding: "12px 20px", background: tokens.slate50,
+    borderBottom: `1px solid ${tokens.slate100}`,
   },
   blendItem:   { flex: 1, textAlign: "center" as const },
-  blendLabel:  { display: "block", fontSize: 11, color: "#64748b" },
-  blendVal:    { display: "block", fontSize: 16, fontWeight: 700, color: "#0f172a" },
-  blendWeight: { display: "block", fontSize: 10, color: "#94a3b8" },
-  blendSep:    { fontSize: 20, fontWeight: 700, color: "#94a3b8", padding: "0 6px" },
-  hccSection:  { padding: "14px 20px", borderBottom: "1px solid #f1f5f9" },
-  hccTitle:    { fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".04em" },
+  blendLabel:  { display: "block", fontSize: 11, color: tokens.slate500 },
+  blendVal:    { display: "block", fontSize: 16, fontWeight: 700, color: tokens.slate900 },
+  blendWeight: { display: "block", fontSize: 10, color: tokens.slate400 },
+  blendSep:    { fontSize: 20, fontWeight: 700, color: tokens.slate400, padding: "0 6px" },
+  hccSection:  { padding: "14px 20px", borderBottom: `1px solid ${tokens.slate100}` },
+  hccTitle:    { fontSize: 12, fontWeight: 700, color: tokens.slate700, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".04em" },
   hccWrap:     { display: "flex", flexWrap: "wrap", gap: 6 },
   hccChip: {
     padding: "2px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600,
-    background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe",
+    background: tokens.primarySoft, color: tokens.primaryDark, border: `1px solid ${tokens.slate200}`,
   },
   frailtyBox: {
     display: "flex", gap: 10, alignItems: "flex-start",
-    padding: "12px 20px", background: "#f0fdf4",
-    borderTop: "1px solid #bbf7d0", fontSize: 13, color: "#15803d",
-    borderBottom: "1px solid #bbf7d0",
+    padding: "12px 20px", background: tokens.successSoft,
+    borderTop: `1px solid ${tokens.emerald100}`, fontSize: 13, color: tokens.successDark,
+    borderBottom: `1px solid ${tokens.emerald100}`,
   },
   footer: {
-    padding: "10px 20px", fontSize: 11, color: "#94a3b8",
-    textAlign: "right" as const, background: "#f8fafc",
+    padding: "10px 20px", fontSize: 11, color: tokens.slate400,
+    textAlign: "right" as const, background: tokens.slate50,
   },
 };
 
@@ -412,12 +413,12 @@ export default function RAFCalculatePage() {
   }, [selectedPid]);
 
   return (
-    <div style={page.wrapper}>
+    <div className="rci-page-pad-desktop" style={page.wrapper}>
       {/* ── Page Header ──────────────────────────────────────────────────────── */}
       <div style={page.header}>
         <div style={page.headerLeft}>
           <div style={page.headerIcon}>
-            <Calculator size={22} color="#fff" />
+            <Calculator size={22} color={tokens.white} />
           </div>
           <div>
             <h1 style={page.title}>RAF Score Calculator</h1>
@@ -453,7 +454,7 @@ export default function RAFCalculatePage() {
             />
             {selectedPid && (
               <div style={page.selectedBadge}>
-                <CheckCircle size={14} color="#059669" />
+                <CheckCircle size={14} color={tokens.riskLow} />
                 <span><strong>{selectedName}</strong> (PID {selectedPid}) selected</span>
               </div>
             )}
@@ -481,7 +482,7 @@ export default function RAFCalculatePage() {
         <div style={page.rightCol}>
           {error && (
             <div style={page.errorBox}>
-              <AlertTriangle size={16} color="#dc2626" />
+              <AlertTriangle size={16} color={tokens.riskHigh} />
               <span>{error}</span>
             </div>
           )}
@@ -489,7 +490,7 @@ export default function RAFCalculatePage() {
           {!rafResult && !isCalculating && !error && (
             <div style={page.emptyState}>
               <div style={page.emptyIcon}>
-                <Calculator size={36} color="#94a3b8" />
+                <Calculator size={36} color={tokens.slate400} />
               </div>
               <div style={page.emptyTitle}>Ready to Calculate</div>
               <div style={page.emptyDesc}>
@@ -541,14 +542,14 @@ function HeaderStat({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 const page: Record<string, React.CSSProperties> = {
   wrapper: {
-    minHeight: "100vh", background: "#f8fafc",
-    padding: "32px 40px",
+    minHeight: "100vh", background: tokens.slate50,
+    padding: "20px 16px",
     fontFamily: "'Inter', -apple-system, sans-serif",
   },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    background: "linear-gradient(135deg, #1e3a5f, #1e40af)",
-    borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: "#fff",
+    background: `linear-gradient(135deg, ${tokens.slate900}, ${tokens.primaryDark})`,
+    borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: tokens.white,
     flexWrap: "wrap", gap: 16,
   },
   headerLeft: { display: "flex", alignItems: "center", gap: 14 },
@@ -565,70 +566,70 @@ const page: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", gap: 6,
     padding: "6px 12px", borderRadius: 99,
     background: "rgba(255,255,255,0.12)",
-    color: "#fff",
+    color: tokens.white,
   },
 
   body: {
-    display: "grid", gridTemplateColumns: "1fr 1.2fr",
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
     gap: 20, alignItems: "flex-start",
   },
   leftCol:  { display: "flex", flexDirection: "column", gap: 16 },
   rightCol: { position: "sticky" as const, top: 24 },
 
   card: {
-    background: "#fff", border: "1px solid #e2e8f0",
+    background: tokens.white, border: `1px solid ${tokens.slate200}`,
     borderRadius: 12, padding: "16px 18px",
   },
   cardTitle: {
     display: "flex", alignItems: "center", gap: 6,
-    fontSize: 12, fontWeight: 700, color: "#374151",
+    fontSize: 12, fontWeight: 700, color: tokens.slate700,
     textTransform: "uppercase", letterSpacing: ".04em",
     marginBottom: 12,
   },
   selectedBadge: {
     display: "flex", alignItems: "center", gap: 6,
     marginTop: 10, padding: "8px 12px",
-    background: "#f0fdf4", borderRadius: 8,
-    fontSize: 13, color: "#15803d",
+    background: tokens.successSoft, borderRadius: 8,
+    fontSize: 13, color: tokens.successDark,
   },
 
   errorBox: {
     display: "flex", alignItems: "center", gap: 10,
     padding: "12px 16px", borderRadius: 10,
-    background: "#fef2f2", border: "1px solid #fecaca",
-    color: "#dc2626", fontSize: 13, marginBottom: 16,
+    background: tokens.riskHighSoft, border: `1px solid ${tokens.dangerBorder}`,
+    color: tokens.riskHigh, fontSize: 13, marginBottom: 16,
   },
 
   emptyState: {
     padding: "48px 32px", textAlign: "center",
-    background: "#fff", border: "1.5px dashed #e2e8f0",
+    background: tokens.white, border: `1.5px dashed ${tokens.slate200}`,
     borderRadius: 16,
   },
   emptyIcon: {
     width: 72, height: 72, borderRadius: 18,
-    background: "#f1f5f9",
+    background: tokens.slate100,
     display: "flex", alignItems: "center", justifyContent: "center",
     margin: "0 auto 16px",
   },
-  emptyTitle: { fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 8 },
-  emptyDesc:  { fontSize: 14, color: "#64748b", lineHeight: 1.6, maxWidth: 380, margin: "0 auto 24px" },
+  emptyTitle: { fontSize: 18, fontWeight: 700, color: tokens.slate900, marginBottom: 8 },
+  emptyDesc:  { fontSize: 14, color: tokens.slate500, lineHeight: 1.6, maxWidth: 380, margin: "0 auto 24px" },
   featureList: { display: "flex", flexDirection: "column", gap: 8, textAlign: "left", maxWidth: 320, margin: "0 auto" },
-  featureItem: { fontSize: 13, color: "#475569" },
+  featureItem: { fontSize: 13, color: tokens.slate600 },
 
   loadingState: {
     padding: "60px 32px", textAlign: "center",
-    background: "#fff", border: "1.5px solid #bfdbfe",
+    background: tokens.white, border: `1.5px solid ${tokens.slate200}`,
     borderRadius: 16,
   },
   loadingSpinner: {
     width: 40, height: 40,
-    border: "3px solid #dbeafe",
-    borderTopColor: "#2563eb",
+    border: `3px solid ${tokens.primarySoft}`,
+    borderTopColor: tokens.primary,
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
     margin: "0 auto 16px",
     display: "inline-block",
   },
-  loadingText: { fontSize: 16, fontWeight: 700, color: "#1e40af", marginBottom: 6 },
-  loadingDesc: { fontSize: 13, color: "#64748b" },
+  loadingText: { fontSize: 16, fontWeight: 700, color: tokens.primaryDark, marginBottom: 6 },
+  loadingDesc: { fontSize: 13, color: tokens.slate500 },
 };
