@@ -44,6 +44,15 @@ export const tokens = {
   danger:        "#B91C1C",
   dangerSoft:    "#FEF2F2",
   dangerBorder:  "#FECACA",
+
+  // Emerald palette — bonus / earnings / "you earned" badges.
+  emerald100:    "#D1FAE5",
+  emerald300:    "#6EE7B7",
+  emerald800:    "#065F46",
+
+  // Info-blue and accent purple — used by velocity / forecast charts.
+  infoBlue:      "#3B82F6",
+  accentPurple:  "#8B5CF6",
 } as const;
 
 export type Tokens = typeof tokens;

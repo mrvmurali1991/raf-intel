@@ -24,6 +24,7 @@ import {
   type RecaptureDecayCurveResponse,
   type RecaptureVelocityResponse,
 } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 const REVENUE_PER_GAP = 3000;
 
@@ -38,9 +39,9 @@ function pct(n: number): string {
 }
 
 function colourForEarlyRate(rate: number): string {
-  if (rate >= 0.7) return "#10B981"; // green
-  if (rate >= 0.5) return "#F59E0B"; // amber
-  return "#DC2626";                  // red
+  if (rate >= 0.7) return tokens.success;
+  if (rate >= 0.5) return tokens.warningStrong;
+  return tokens.riskHigh;
 }
 
 export interface RecaptureVelocityKpisProps {
@@ -75,7 +76,7 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
             style={{
               height: 120,
               borderRadius: 12,
-              background: "linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 50%, #F1F5F9 100%)",
+              background: `linear-gradient(90deg, ${tokens.slate100} 0%, ${tokens.slate200} 50%, ${tokens.slate100} 100%)`,
               backgroundSize: "200% 100%",
               animation: "shimmer 1.5s infinite",
             }}
@@ -90,9 +91,9 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
         style={{
           padding: 14,
           borderRadius: 10,
-          background: "#FEF2F2",
-          border: "1px solid #FECACA",
-          color: "#B91C1C",
+          background: tokens.dangerSoft,
+          border: `1px solid ${tokens.dangerBorder}`,
+          color: tokens.danger,
           fontSize: 13,
           marginBottom: 24,
         }}
@@ -118,7 +119,7 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
         label="Avg Days to Close"
         primary={`${v.avg_days_to_close.toFixed(1)} days`}
         sub={`Median ${v.median_days_to_close.toFixed(1)} · ${pct(v.days_to_close_target_30)} closed ≤30d`}
-        accent="#3B82F6"
+        accent={tokens.infoBlue}
       >
         {sparkData.length > 0 && (
           <div style={{ width: "100%", height: 36, marginTop: 8 }}>
@@ -127,7 +128,7 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
                 <Line
                   type="monotone"
                   dataKey="v"
-                  stroke="#3B82F6"
+                  stroke={tokens.infoBlue}
                   strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
@@ -143,7 +144,7 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
         label="YTD $ Recaptured"
         primary={fmtCurrency(v.ytd_$_recaptured)}
         sub={`${v.closed_cohort_gaps} of ${v.total_cohort_gaps} gaps closed`}
-        accent="#10B981"
+        accent={tokens.success}
       />
 
       {/* Card 3 — YE Projected $ */}
@@ -151,12 +152,12 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
         label="YE Projected $"
         primary={fmtCurrency(v.ye_projected_$)}
         sub={
-          <span style={{ color: projectedDelta >= 0 ? "#10B981" : "#DC2626", fontWeight: 600 }}>
+          <span style={{ color: projectedDelta >= 0 ? tokens.success : tokens.riskHigh, fontWeight: 600 }}>
             {projectedDelta >= 0 ? "+" : ""}
             {fmtCurrency(projectedDelta)} vs budget ({fmtCurrency(budgetBaseline)})
           </span>
         }
-        accent="#8B5CF6"
+        accent={tokens.accentPurple}
       />
 
       {/* Card 4 — Early Recapture Rate */}
@@ -208,17 +209,17 @@ function KpiCard({
         style={{
           fontSize: 11,
           fontWeight: 600,
-          color: "#64748B",
+          color: tokens.slate500,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
         }}
       >
         {label}
       </div>
-      <div className="tabular-nums" style={{ fontSize: 24, fontWeight: 700, color: "#0F172A" }}>
+      <div className="tabular-nums" style={{ fontSize: 24, fontWeight: 700, color: tokens.slate900 }}>
         {primary}
       </div>
-      <div style={{ fontSize: 12, color: "#64748B" }}>{sub}</div>
+      <div style={{ fontSize: 12, color: tokens.slate500 }}>{sub}</div>
       {children}
     </div>
   );

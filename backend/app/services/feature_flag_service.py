@@ -180,6 +180,24 @@ FEATURE_REGISTRY: dict[str, FeatureFlag] = {
             ),
             category="Knowledge Graph",
         ),
+        FeatureFlag(
+            key="recapture_cfo_forecast",
+            name="CFO executive summary",
+            description=(
+                "Quarterly $ forecast, top conditions, top providers, and "
+                "year-over-year revenue comparison aimed at CFO/CMO review."
+            ),
+            category="Recapture",
+        ),
+        FeatureFlag(
+            key="recapture_bonus",
+            name="Coder bonus leaderboard",
+            description=(
+                "Per-coder $ recaptured ranking with month-multiplier badges "
+                "and gap-level bonus previews."
+            ),
+            category="Recapture",
+        ),
     ]
 }
 

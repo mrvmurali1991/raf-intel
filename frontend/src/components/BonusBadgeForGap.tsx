@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 
 import { getGapBonusPreview, type BonusPreview } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 export interface BonusBadgeForGapProps {
   gapId: number;
@@ -67,8 +68,8 @@ export function BonusBadgeForGap({
           alignItems: "center",
           padding: compact ? "2px 8px" : "3px 10px",
           borderRadius: 999,
-          background: "#F1F5F9",
-          color: "#64748B",
+          background: tokens.slate100,
+          color: tokens.slate500,
           fontSize: compact ? 10 : 11,
           fontWeight: 600,
         }}
@@ -87,11 +88,11 @@ export function BonusBadgeForGap({
         gap: 4,
         padding: compact ? "2px 8px" : "3px 10px",
         borderRadius: 999,
-        background: "linear-gradient(135deg, #ECFDF5, #D1FAE5)",
-        color: "#065F46",
+        background: `linear-gradient(135deg, ${tokens.successSoft}, ${tokens.emerald100})`,
+        color: tokens.emerald800,
         fontSize: compact ? 10 : 11,
         fontWeight: 700,
-        border: "1px solid #6EE7B7",
+        border: `1px solid ${tokens.emerald300}`,
         whiteSpace: "nowrap",
       }}
     >

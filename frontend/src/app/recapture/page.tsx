@@ -12,6 +12,8 @@ import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton"
 import RecaptureVelocityKpis from "@/components/RecaptureVelocityKpis";
 import RecaptureDecayChart from "@/components/RecaptureDecayChart";
 import OutreachSummaryCards from "@/components/OutreachSummaryCards";
+import { BonusLeaderboard } from "@/components/BonusLeaderboard";
+import CfoExecutiveSummary from "@/components/CfoExecutiveSummary";
 import { KgGapBadge } from "@/components/kg/KgGapBadge";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 
@@ -284,6 +286,26 @@ export default function RecapturePage() {
             <RecaptureVelocityKpis />
           </div>
           <RecaptureDecayChart />
+        </div>
+      </FeatureFlag>
+
+      {/* CFO executive summary — quarterly forecast, top conditions, top providers */}
+      <FeatureFlag flagKey="recapture_cfo_forecast">
+        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+            CFO executive summary
+          </h2>
+          <CfoExecutiveSummary year={year} />
+        </div>
+      </FeatureFlag>
+
+      {/* Bonus leaderboard — coder ranking by $ recaptured this period */}
+      <FeatureFlag flagKey="recapture_bonus">
+        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+            Coder bonus leaderboard
+          </h2>
+          <BonusLeaderboard />
         </div>
       </FeatureFlag>
 

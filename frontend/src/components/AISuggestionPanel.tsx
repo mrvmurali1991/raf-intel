@@ -16,6 +16,7 @@ import {
   listAiSuggestions,
   rejectAiSuggestion,
 } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 type Props = {
   gapId: number;
@@ -257,7 +258,7 @@ export function AISuggestionPanel({ gapId, onAccepted }: Props) {
                   style={{
                     margin: 0,
                     fontStyle: "italic",
-                    color: "#111827",
+                    color: tokens.slate900,
                     fontSize: 13,
                     lineHeight: 1.5,
                   }}
