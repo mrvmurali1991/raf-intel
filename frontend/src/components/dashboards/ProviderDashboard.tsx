@@ -2,9 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { CheckCircle, Users, Activity, FileText } from "lucide-react";
+import { CheckCircle, Users, Activity, FileText, Stethoscope } from "lucide-react";
 import { PageHeader, SectionHeader, StatCard } from "@/components/healthcare-ui";
 import { getDashboardStats } from "@/lib/api";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
 
 interface ProviderDashboardStats {
   total_patients?: number;
@@ -64,6 +65,7 @@ export function ProviderDashboard() {
 
   return (
     <div className="fade-in-up">
+      <DataQualityBanner />
       <PageHeader
         title="Today's priorities"
         subtitle="Patients you should see this week, gaps to close, and your RAF performance at a glance."
@@ -126,7 +128,17 @@ export function ProviderDashboard() {
       )}
 
       <SectionHeader title="Where to start" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
+        <Link href="/worklist" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <div className="flex items-center gap-3 text-sky-700 mb-2">
+            <Stethoscope size={24} />
+            <span className="font-semibold text-lg text-foreground">Today's worklist</span>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            Patients prioritized for you this week — open gaps, suspect
+            conditions, and revenue at risk on a single screen.
+          </p>
+        </Link>
         <Link href="/recapture" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
           <div className="flex items-center gap-3 text-rose-600 mb-2">
             <FileText size={24} />

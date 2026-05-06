@@ -1002,16 +1002,20 @@ export default function PatientsPage() {
       display: "flex", flexDirection: "column", gap: 0,
       background: "#FAFAF8",
       minHeight: "100vh",
-      padding: "32px 40px 48px",
+      // Mobile: 16px gutter; restored to 40px desktop padding via the
+      // ``rci-page-pad-desktop`` className declared in globals.css.
+      padding: "20px 16px",
       fontFamily: FONT_SYS,
       color: C.text,
-    }}>
+    }}
+    className="rci-page-pad-desktop"
+    >
       {/* ============================================================ */}
       {/* Page header                                                  */}
       {/* ============================================================ */}
       <div style={{
         display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-        gap: 24, marginBottom: 24,
+        gap: 16, marginBottom: 24, flexWrap: "wrap",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
           <div style={{

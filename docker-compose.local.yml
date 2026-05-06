@@ -45,6 +45,10 @@ services:
       FRONTEND_URL: http://localhost:3444
       OPENEMR_URL: http://openemr:80
       APP_ENV: development
+      # alembic.ini is not part of the bind-mounted /app/app volume, so the
+      # startup probe can't see it from inside the container.  The strict
+      # check is meant for prod / staging — local dev should bypass.
+      STRICT_MIGRATIONS: "false"
     volumes:
       - ./backend/app:/app/app:ro
       - ./models:/app/models:ro

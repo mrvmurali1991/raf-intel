@@ -1108,3 +1108,16 @@ select.appearance-none {
 .progress-fill-animate {
   animation: progressFillIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
+
+/* --- Mobile-first padding helper ---
+ * Pages set inline ``padding: 20px 16px`` for mobile defaults; this class
+ * restores the desktop 40px horizontal gutter at ≥640px so the layout
+ * does not feel cramped on tablet/desktop while still surviving 375px.
+ */
+@media (min-width: 640px) {
+  .rci-page-pad-desktop {
+    padding-left: 40px !important;
+    padding-right: 40px !important;
+    padding-top: 32px !important;
+  }
+}

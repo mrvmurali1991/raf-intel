@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { CheckCircle, AlertTriangle, FileText, Activity } from "lucide-react";
 import { PageHeader, SectionHeader, StatCard } from "@/components/healthcare-ui";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { getDashboardStats } from "@/lib/api";
 
 interface CoderDashboardStats {
@@ -49,8 +50,9 @@ export function CoderDashboard() {
 
   return (
     <div className="fade-in-up">
-      <PageHeader 
-        title="Coder Worklist Dashboard" 
+      <DataQualityBanner />
+      <PageHeader
+        title="Coder Worklist Dashboard"
         subtitle="Review suspected conditions, missing documentation, and active queue."
       />
 

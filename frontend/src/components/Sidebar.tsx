@@ -36,6 +36,7 @@ import {
   ArrowLeftRight,
   Activity,
   Upload,
+  Stethoscope,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -72,6 +73,7 @@ const navGroups: NavGroup[] = [
     title: "CORE WORKFLOW",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
+      { href: "/worklist", label: "Today's worklist", icon: Stethoscope, shortcut: "g w" },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
       { href: "/review-queue", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
     ],

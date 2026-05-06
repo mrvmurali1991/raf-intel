@@ -1,6 +1,7 @@
 "use client";
 
 import { ErrorBoundary } from "@/components/error-boundary";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -573,6 +574,7 @@ export function AdminDashboard() {
     <ErrorBoundary fallbackTitle="Dashboard failed to load">
     <TooltipProvider delay={200}>
     <div style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px" }}>
+      <DataQualityBanner />
       <style>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }
