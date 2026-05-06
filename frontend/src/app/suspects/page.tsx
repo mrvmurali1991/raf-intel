@@ -36,6 +36,9 @@ import {
 import { downloadCSV } from "@/lib/csv-export";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
+import FeatureFlag from "@/components/FeatureFlag";
+import { KgGapBadge } from "@/components/kg/KgGapBadge";
+import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 
 /* ================================================================== */
 /*  Page-specific constants                                            */
@@ -1293,9 +1296,23 @@ export default function SuspectsPage() {
                     letterSpacing: "0.01em",
                   }}
                 >
-                  {s.suspect_hcc != null && <span>HCC {s.suspect_hcc}</span>}
+                  {s.suspect_hcc != null && (
+                    <FeatureFlag flagKey="kg_evidence_panel" fallback={<span>HCC {s.suspect_hcc}</span>}>
+                      <HccChipWithPopover hccCode={String(s.suspect_hcc)}>
+                        <span>HCC {s.suspect_hcc}</span>
+                      </HccChipWithPopover>
+                    </FeatureFlag>
+                  )}
                   {s.suspect_hcc != null && s.suspect_icd10 && <span style={{ color: C.label }}>·</span>}
                   {s.suspect_icd10 && <span>ICD {s.suspect_icd10}</span>}
+                  <FeatureFlag flagKey="kg_evidence_panel">
+                    <KgGapBadge
+                      evidenceType={s.evidence_type}
+                      suspectId={s.id}
+                      hccCode={s.suspect_hcc != null ? String(s.suspect_hcc) : undefined}
+                      patientId={s.patient_id}
+                    />
+                  </FeatureFlag>
                 </div>
                 <div
                   onClick={() => setExpandedRationale(prev => {
@@ -2012,17 +2029,36 @@ function SuspectDrawer({
             }}
           >
             {s.suspect_hcc != null && (
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 6,
-                  backgroundColor: C.brandSoft,
-                  color: C.brand,
-                  fontWeight: 700,
-                }}
+              <FeatureFlag
+                flagKey="kg_evidence_panel"
+                fallback={
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 6,
+                      backgroundColor: C.brandSoft,
+                      color: C.brand,
+                      fontWeight: 700,
+                    }}
+                  >
+                    HCC {s.suspect_hcc}
+                  </span>
+                }
               >
-                HCC {s.suspect_hcc}
-              </span>
+                <HccChipWithPopover hccCode={String(s.suspect_hcc)}>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 6,
+                      backgroundColor: C.brandSoft,
+                      color: C.brand,
+                      fontWeight: 700,
+                    }}
+                  >
+                    HCC {s.suspect_hcc}
+                  </span>
+                </HccChipWithPopover>
+              </FeatureFlag>
             )}
             {s.suspect_icd10 && (
               <span

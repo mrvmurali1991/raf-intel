@@ -9,6 +9,8 @@ import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
 import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton";
+import { KgGapBadge } from "@/components/kg/KgGapBadge";
+import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,10 @@ interface Gap {
   condition: string;
   icd_code: string;
   onset_date: string;
+  /** Optional KG fields surfaced for the evidence-chain badge. */
+  id?: number;
+  hcc_code?: string;
+  evidence_type?: string;
 }
 
 interface TopCondition {
@@ -438,7 +444,30 @@ export default function RecapturePage() {
                       <td style={{ ...tdStyle, fontWeight: 600, color: colors.primary }}>
                         {g.last_name}, {g.first_name}
                       </td>
-                      <td style={tdStyle}>{g.condition}</td>
+                      <td style={tdStyle}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          {g.hcc_code ? (
+                            <FeatureFlag
+                              flagKey="kg_evidence_panel"
+                              fallback={<span>{g.condition}</span>}
+                            >
+                              <HccChipWithPopover hccCode={g.hcc_code}>
+                                <span>{g.condition}</span>
+                              </HccChipWithPopover>
+                            </FeatureFlag>
+                          ) : (
+                            <span>{g.condition}</span>
+                          )}
+                          <FeatureFlag flagKey="kg_evidence_panel">
+                            <KgGapBadge
+                              evidenceType={g.evidence_type ?? "kg_rule"}
+                              suspectId={g.id ?? undefined}
+                              hccCode={g.hcc_code}
+                              patientId={Number(g.pid) || undefined}
+                            />
+                          </FeatureFlag>
+                        </span>
+                      </td>
                       <td className="tabular-nums" style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12 }}>{g.icd_code}</td>
                       <td className="tabular-nums" style={{ ...tdStyle, color: colors.subtleText }}>{new Date(g.onset_date).toLocaleDateString()}</td>
                       <td className="tabular-nums" style={{ ...tdStyle, fontWeight: 600 }}>{g.days}</td>

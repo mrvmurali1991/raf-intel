@@ -2747,7 +2747,6 @@ export async function downloadRecaptureAuditPdf(year?: number): Promise<void> {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-}
 
 // ---------------------------------------------------------------------------
 // Knowledge Graph (KG) — "Why this HCC?" explainability endpoints

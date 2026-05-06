@@ -36,6 +36,7 @@ import { downloadCSV } from "@/lib/csv-export";
 import { initialsColor } from "@/lib/ui-utils";
 import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
+import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";
 import ProviderFeaturesSettings from "@/components/ProviderFeaturesSettings";
 import TopHccOpportunities from "@/components/TopHccOpportunities";
@@ -1450,15 +1451,32 @@ function ProviderDetailPanel({
                         }}
                       >
                         <td style={{ padding: "9px 10px" }}>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: isMissed ? C.redDark : C.primary,
-                            }}
+                          <FeatureFlag
+                            flagKey="kg_evidence_panel"
+                            fallback={
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: isMissed ? C.redDark : C.primary,
+                                }}
+                              >
+                                {row.hcc_code}
+                              </span>
+                            }
                           >
-                            {row.hcc_code}
-                          </span>
+                            <HccChipWithPopover hccCode={String(row.hcc_code)}>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: isMissed ? C.redDark : C.primary,
+                                }}
+                              >
+                                {row.hcc_code}
+                              </span>
+                            </HccChipWithPopover>
+                          </FeatureFlag>
                         </td>
                         <td
                           style={{
