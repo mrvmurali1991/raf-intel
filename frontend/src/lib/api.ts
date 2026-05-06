@@ -2596,3 +2596,154 @@ export async function getProviderPreVisitBriefings(
   });
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Recapture MEAT Audit (dual-coder) APIs
+// ---------------------------------------------------------------------------
+
+export type MeatElement = "M" | "E" | "A" | "T" | "MULTI";
+
+export type AuditStatus =
+  | "draft" | "primary_coded" | "review_pending" | "approved" | "rejected";
+
+export interface RecaptureGapAudit {
+  id: number;
+  patient_id: string | number;
+  tenant_id: string | number;
+  hcc_code: string;
+  icd10_code: string;
+  prior_year: number;
+  current_year: number;
+  status: string;
+  revenue_impact: number;
+  evidence_phrase: string | null;
+  evidence_source_url: string | null;
+  meat_element: MeatElement | null;
+  primary_coder_id: number | null;
+  primary_coded_at: string | null;
+  primary_coder_name?: string | null;
+  primary_coder_email?: string | null;
+  secondary_coder_id: number | null;
+  secondary_approved_at: string | null;
+  secondary_coder_name?: string | null;
+  secondary_coder_email?: string | null;
+  audit_status: AuditStatus;
+  audit_notes: string | null;
+  patient_name?: string | null;
+  review_required?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AuditReadinessResponse {
+  total_gaps: number;
+  with_evidence: number;
+  dual_signed: number;
+  audit_ready_pct: number;
+  missing_meat: Array<{
+    gap_id: number;
+    hcc: string;
+    patient_id: string | number;
+    revenue_impact: number;
+    reason: string;
+  }>;
+}
+
+export interface ReviewQueueResponse {
+  status: AuditStatus;
+  total: number;
+  items: RecaptureGapAudit[];
+}
+
+/** POST /api/recapture/gaps/{gap_id}/evidence */
+export async function recordGapEvidence(
+  gapId: number,
+  body: {
+    phrase: string;
+    meat_element: MeatElement;
+    source_url?: string | null;
+    notes?: string | null;
+  },
+): Promise<RecaptureGapAudit> {
+  const { data } = await api.post(`/api/recapture/gaps/${gapId}/evidence`, body);
+  return (data as { gap: RecaptureGapAudit }).gap;
+}
+
+/** POST /api/recapture/gaps/{gap_id}/submit-review */
+export async function submitGapForReview(gapId: number): Promise<RecaptureGapAudit> {
+  const { data } = await api.post(`/api/recapture/gaps/${gapId}/submit-review`);
+  return (data as { gap: RecaptureGapAudit }).gap;
+}
+
+/** POST /api/recapture/gaps/{gap_id}/approve */
+export async function approveGapReview(
+  gapId: number,
+  notes?: string,
+): Promise<RecaptureGapAudit> {
+  const { data } = await api.post(`/api/recapture/gaps/${gapId}/approve`, { notes });
+  return (data as { gap: RecaptureGapAudit }).gap;
+}
+
+/** POST /api/recapture/gaps/{gap_id}/reject */
+export async function rejectGapReview(
+  gapId: number,
+  reason: string,
+): Promise<RecaptureGapAudit> {
+  const { data } = await api.post(`/api/recapture/gaps/${gapId}/reject`, { reason });
+  return (data as { gap: RecaptureGapAudit }).gap;
+}
+
+/** GET /api/recapture/review-queue?status=review_pending */
+export async function getRecaptureReviewQueue(
+  status: AuditStatus = "review_pending",
+  limit: number = 100,
+): Promise<ReviewQueueResponse> {
+  const { data } = await api.get("/api/recapture/review-queue", {
+    params: { status, limit },
+  });
+  return data;
+}
+
+/** GET /api/recapture/audit-readiness */
+export async function getRecaptureAuditReadiness(): Promise<AuditReadinessResponse> {
+  const { data } = await api.get("/api/recapture/audit-readiness");
+  return data;
+}
+
+/** GET /api/recapture/audit-report.pdf?year=YYYY — triggers a download. */
+export async function downloadRecaptureAuditPdf(year?: number): Promise<void> {
+  let res;
+  try {
+    res = await api.get("/api/recapture/audit-report.pdf", {
+      params: year ? { year } : undefined,
+      responseType: "blob",
+    });
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { data?: unknown }; message?: string };
+    const responseData = axiosErr.response?.data;
+    if (responseData instanceof Blob) {
+      try {
+        const text = await responseData.text();
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) axiosErr.message = parsed.detail;
+        } catch {
+          if (text) axiosErr.message = text;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    throw err;
+  }
+  const blob = res.data as Blob;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const suffix = year ? `-${year}` : "";
+  a.download = `radv-audit${suffix}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

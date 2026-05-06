@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from "lucide-react";
 import { getRecaptureGapsReport } from "@/lib/api";
 import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
+import FeatureFlag from "@/components/FeatureFlag";
+import AuditReadinessCard from "@/components/AuditReadinessCard";
+import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -261,6 +264,26 @@ export default function RecapturePage() {
           />
         </div>
       </div>
+
+      {/* RADV Dual-Coder MEAT Audit (feature-gated) */}
+      <FeatureFlag flagKey="recapture_meat_audit">
+        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+              RADV Audit Defense
+            </h2>
+            <RecaptureAuditExportButton year={year} />
+          </div>
+          <AuditReadinessCard />
+        </div>
+      </FeatureFlag>
 
       {/* Top Conditions */}
       {(data.top_conditions ?? []).length > 0 && (

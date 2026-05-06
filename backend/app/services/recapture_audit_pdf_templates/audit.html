@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>RADV Audit Defense — Recapture Evidence — Tenant {{ tenant_id }}</title>
+  <style>
+    @page {
+      size: Letter;
+      margin: 0.6in 0.5in 0.7in 0.5in;
+      @bottom-center {
+        content: "RADV Audit Defense — Generated " "{{ generated_at }}" " — Page " counter(page) " / " counter(pages);
+        font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+        font-size: 9pt;
+        color: #94a3b8;
+      }
+    }
+    body {
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+      font-size: 10.5pt;
+      color: #0f172a;
+      line-height: 1.4;
+    }
+    h1.cover-title {
+      font-size: 22pt;
+      font-weight: 700;
+      margin: 0 0 6pt 0;
+      color: #1e3a8a;
+    }
+    h1.banner {
+      font-size: 14pt;
+      font-weight: 700;
+      margin: 0 0 4pt 0;
+      color: #1e3a8a;
+      border-bottom: 2pt solid #1e3a8a;
+      padding-bottom: 4pt;
+    }
+    .cover {
+      page-break-after: always;
+      padding-top: 60pt;
+    }
+    .cover-meta {
+      margin-top: 24pt;
+      font-size: 11pt;
+    }
+    .cover-meta .row {
+      margin: 6pt 0;
+    }
+    .cover-meta .label {
+      display: inline-block;
+      width: 160pt;
+      color: #475569;
+      font-weight: 600;
+    }
+    .summary-box {
+      margin-top: 24pt;
+      padding: 14pt;
+      background: #f1f5f9;
+      border-left: 4pt solid #1e3a8a;
+      border-radius: 4pt;
+    }
+    .summary-box .stat {
+      display: inline-block;
+      margin-right: 28pt;
+    }
+    .summary-box .value {
+      font-size: 18pt;
+      font-weight: 700;
+      color: #1e3a8a;
+    }
+    .summary-box .label {
+      font-size: 9pt;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .gap-page {
+      page-break-after: always;
+    }
+    .gap-page:last-child {
+      page-break-after: auto;
+    }
+    .gap-meta {
+      margin-top: 8pt;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+    }
+    .gap-meta th, .gap-meta td {
+      text-align: left;
+      padding: 4pt 6pt;
+      border-bottom: 1pt solid #e2e8f0;
+      vertical-align: top;
+    }
+    .gap-meta th {
+      width: 30%;
+      color: #475569;
+      font-weight: 600;
+      background: #f8fafc;
+    }
+    .evidence {
+      margin-top: 12pt;
+      padding: 10pt;
+      border-left: 3pt solid #2563eb;
+      background: #eff6ff;
+      font-size: 10.5pt;
+      font-style: italic;
+      color: #1e3a8a;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .meat-tag {
+      display: inline-block;
+      padding: 2pt 8pt;
+      border-radius: 4pt;
+      background: #1e3a8a;
+      color: #fff;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .signoff {
+      margin-top: 14pt;
+      padding: 10pt;
+      background: #f8fafc;
+      border: 1pt solid #e2e8f0;
+      border-radius: 4pt;
+      font-size: 10pt;
+    }
+    .signoff h3 {
+      margin: 0 0 6pt 0;
+      font-size: 11pt;
+      color: #475569;
+    }
+    .signoff .signer {
+      margin: 4pt 0;
+    }
+    .notes {
+      margin-top: 10pt;
+      font-size: 9.5pt;
+      color: #475569;
+      white-space: pre-wrap;
+    }
+    .source-link {
+      margin-top: 6pt;
+      font-size: 9pt;
+      color: #2563eb;
+      word-break: break-all;
+    }
+    .empty {
+      margin-top: 80pt;
+      text-align: center;
+      color: #64748b;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+<section class="cover">
+  <h1 class="cover-title">RADV Audit Defense — Recapture Evidence</h1>
+  <div style="font-size: 12pt; color: #64748b;">Tenant {{ tenant_id }}</div>
+  <div class="cover-meta">
+    <div class="row"><span class="label">Generated</span><span>{{ generated_at }}</span></div>
+    {% if year %}
+    <div class="row"><span class="label">Measurement Year</span><span>{{ year }}</span></div>
+    {% endif %}
+    <div class="row"><span class="label">Approved Gaps</span><span>{{ gaps|length }}</span></div>
+  </div>
+  <div class="summary-box">
+    <div class="stat">
+      <div class="value">{{ readiness.total_gaps }}</div>
+      <div class="label">Total Gaps</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ readiness.with_evidence }}</div>
+      <div class="label">With Evidence</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ readiness.dual_signed }}</div>
+      <div class="label">Dual-Signed</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ "%.1f"|format(readiness.audit_ready_pct) }}%</div>
+      <div class="label">Audit Ready</div>
+    </div>
+  </div>
+</section>
+
+{% for gap in gaps %}
+<section class="gap-page">
+  <h1 class="banner">HCC {{ gap.hcc_code }} — {{ gap.icd10_code }}</h1>
+
+  <table class="gap-meta">
+    <tr><th>Patient ID</th><td>{{ gap.patient_id }}{% if gap.patient_name %} ({{ gap.patient_name }}){% endif %}</td></tr>
+    <tr><th>HCC Code</th><td>{{ gap.hcc_code }}</td></tr>
+    <tr><th>ICD-10</th><td>{{ gap.icd10_code }}</td></tr>
+    <tr><th>Prior / Current Year</th><td>{{ gap.prior_year }} → {{ gap.current_year }}</td></tr>
+    <tr><th>Revenue Impact</th><td>${{ "%.2f"|format(gap.revenue_impact|float) }}</td></tr>
+    <tr><th>MEAT Element</th><td><span class="meat-tag">{{ gap.meat_element or "—" }}</span></td></tr>
+  </table>
+
+  <div style="margin-top: 16pt;">
+    <h3 style="margin: 0 0 4pt 0; font-size: 11pt; color: #475569;">Evidence Phrase</h3>
+    <div class="evidence">{{ gap.evidence_phrase or "(no phrase recorded)" }}</div>
+    {% if gap.evidence_source_url %}
+    <div class="source-link">Source: {{ gap.evidence_source_url }}</div>
+    {% endif %}
+  </div>
+
+  <div class="signoff">
+    <h3>Coder Sign-Off</h3>
+    <div class="signer">
+      <strong>Primary:</strong>
+      {{ gap.primary_coder_name or ("Coder #" ~ gap.primary_coder_id) if gap.primary_coder_id else "—" }}
+      {% if gap.primary_coder_email %} · {{ gap.primary_coder_email }}{% endif %}
+      <span style="color: #64748b;"> · {{ gap.primary_coded_at or "—" }}</span>
+    </div>
+    <div class="signer">
+      <strong>Secondary:</strong>
+      {{ gap.secondary_coder_name or ("Coder #" ~ gap.secondary_coder_id) if gap.secondary_coder_id else "—" }}
+      {% if gap.secondary_coder_email %} · {{ gap.secondary_coder_email }}{% endif %}
+      <span style="color: #64748b;"> · {{ gap.secondary_approved_at or "—" }}</span>
+    </div>
+    {% if gap.audit_notes %}
+    <div class="notes"><strong>Notes:</strong>
+{{ gap.audit_notes }}</div>
+    {% endif %}
+  </div>
+</section>
+{% else %}
+<div class="empty">
+  No approved gaps to display. Approve gaps in the review queue to populate this report.
+</div>
+{% endfor %}
+
+</body>
+</html>

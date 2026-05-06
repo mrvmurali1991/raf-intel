@@ -84,7 +84,9 @@ from app.routers import radv_audit as radv_audit_router
 from app.routers import raf_central as raf_central_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
 from app.routers import realtime as realtime_router
+from app.routers import recapture_audit as recapture_audit_router
 from app.routers import recapture_gaps as recapture_gaps_router
+from app.routers import recapture_provider_benchmark as recapture_provider_benchmark_router
 from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
 
@@ -145,6 +147,8 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(benchmarks.router)
     app.include_router(care_gaps.router)
     app.include_router(recapture_gaps_router.router)
+    app.include_router(recapture_provider_benchmark_router.router)
+    app.include_router(recapture_audit_router.router)
     app.include_router(awv.router)
 
     # Population health cohort analysis
