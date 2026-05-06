@@ -82,6 +82,7 @@ class AuditReadinessResponse(BaseModel):
     dual_signed: int
     audit_ready_pct: float
     missing_meat: list[dict[str, Any]]
+    inter_rater_reliability: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------

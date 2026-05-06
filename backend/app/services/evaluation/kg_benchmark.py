@@ -155,6 +155,61 @@ def _safe_div(n: float, d: float) -> float:
     return n / d if d > 0 else 0.0
 
 
+def _brier_score(samples: list[tuple[float, int]]) -> float:
+    # Mean squared error between predicted probability and actual outcome
+    # (1 = HCC was in gold, 0 = HCC was not). Lower is better; 0.0 is
+    # perfect calibration, 0.25 is the chance baseline for binary outcomes.
+    if not samples:
+        return 0.0
+    return sum((p - y) ** 2 for p, y in samples) / len(samples)
+
+
+def _reliability_bins(
+    samples: list[tuple[float, int]],
+    n_bins: int = 10,
+) -> list[dict[str, Any]]:
+    # Group predictions into equal-width confidence bins and report observed
+    # accuracy per bin.  A well-calibrated classifier has bin midpoint ≈
+    # observed accuracy across all bins.  Used to compute ECE.
+    if not samples:
+        return []
+    bins: list[list[tuple[float, int]]] = [[] for _ in range(n_bins)]
+    for conf, y in samples:
+        idx = min(int(conf * n_bins), n_bins - 1)
+        bins[idx].append((conf, y))
+    rows = []
+    for i, bucket in enumerate(bins):
+        if not bucket:
+            continue
+        avg_conf = sum(c for c, _ in bucket) / len(bucket)
+        observed = sum(y for _, y in bucket) / len(bucket)
+        rows.append({
+            "bin_lower": round(i / n_bins, 2),
+            "bin_upper": round((i + 1) / n_bins, 2),
+            "count": len(bucket),
+            "avg_confidence": round(avg_conf, 4),
+            "observed_accuracy": round(observed, 4),
+            "gap": round(avg_conf - observed, 4),
+        })
+    return rows
+
+
+def _expected_calibration_error(
+    samples: list[tuple[float, int]],
+    n_bins: int = 10,
+) -> float:
+    # Weighted average of |confidence - accuracy| across bins.  0.0 means
+    # the model knows what it knows; >0.10 is significant miscalibration.
+    if not samples:
+        return 0.0
+    total = len(samples)
+    ece = 0.0
+    for row in _reliability_bins(samples, n_bins):
+        weight = row["count"] / total
+        ece += weight * abs(row["gap"])
+    return ece
+
+
 def _per_class_pr_f1(
     tp_by_cls: dict[str, int],
     fp_by_cls: dict[str, int],
@@ -242,6 +297,10 @@ def run_kg_benchmark(
     chart_r_sum = 0.0
     chart_count_with_gold = 0
 
+    # (predicted_confidence, actual_outcome) pairs for calibration metrics.
+    # actual_outcome is 1 if the predicted HCC was in gold, else 0.
+    calibration_samples: list[tuple[float, int]] = []
+
     t0 = time.perf_counter()
     for chart in charts:
         gold = {str(h).strip() for h in (chart.get("gold_hccs") or []) if str(h).strip()}
@@ -268,10 +327,16 @@ def run_kg_benchmark(
 
         for p in preds:
             etype = (p.get("evidence_types") or [p.get("evidence_type") or "unknown"])[0]
-            if p["hcc"] in gold:
+            in_gold = 1 if p["hcc"] in gold else 0
+            if in_gold:
                 tp_by_etype[etype] += 1
             else:
                 fp_by_etype[etype] += 1
+            # Calibration: pair the model's stated confidence with the
+            # actual outcome.  Default 0.5 if a prediction lacks confidence
+            # so the baseline at least lands at chance.
+            conf = float(p.get("confidence") or 0.5)
+            calibration_samples.append((max(0.0, min(1.0, conf)), in_gold))
         for hcc in fn_set:
             fp_by_etype  # no-op: we keep FN bucket separate from etype precision math
 
@@ -318,6 +383,10 @@ def run_kg_benchmark(
 
     total_predictions = sum(len(c["predicted_hccs"]) for c in per_chart)
 
+    brier = _brier_score(calibration_samples)
+    ece = _expected_calibration_error(calibration_samples)
+    reliability = _reliability_bins(calibration_samples)
+
     return {
         "mode": mode,
         "fixture_path": str(fixture_path),
@@ -340,6 +409,16 @@ def run_kg_benchmark(
         "by_evidence_type": by_evidence_type,
         "per_chart": per_chart,
         "runtime_seconds": round(runtime, 4),
+        # Calibration block — turns the confidence floats into a number a
+        # CMO/QA reviewer can interpret.  Brier 0.0 = perfect; 0.25 = chance
+        # baseline for binary outcomes.  ECE > 0.10 = significant
+        # miscalibration that should be flagged in the demo deck.
+        "calibration": {
+            "brier_score": round(brier, 4),
+            "expected_calibration_error": round(ece, 4),
+            "sample_count": len(calibration_samples),
+            "reliability_bins": reliability,
+        },
     }
 
 

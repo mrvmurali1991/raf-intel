@@ -460,6 +460,9 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
     total = len(rows)
     with_evidence = 0
     dual_signed = 0
+    secondary_approved = 0   # secondary coder agreed with primary
+    secondary_rejected = 0   # secondary coder disagreed with primary
+    pending_review = 0       # has primary coder but no secondary action yet
     missing: list[dict[str, Any]] = []
 
     for r in rows:
@@ -472,6 +475,16 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
             and r.get("secondary_coder_id")
         ):
             dual_signed += 1
+
+        status = r.get("audit_status")
+        has_primary = bool(r.get("primary_coder_id"))
+        has_secondary = bool(r.get("secondary_coder_id"))
+        if has_primary and has_secondary and status == "approved":
+            secondary_approved += 1
+        elif has_primary and has_secondary and status == "rejected":
+            secondary_rejected += 1
+        elif has_primary and not has_secondary and status in ("primary_coded", "review_pending"):
+            pending_review += 1
 
         # Surface gaps that block audit-readiness — order by revenue desc later.
         if not has_phrase or r.get("audit_status") != "approved":
@@ -496,12 +509,38 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
 
     audit_ready_pct = round((dual_signed / total) * 100.0, 2) if total else 0.0
 
+    # Inter-rater reliability — % of secondary-reviewed gaps where the
+    # secondary coder agreed with the primary.  Pure proportion agreement
+    # (no chance correction): full Cohen's kappa would require independent
+    # labels from both coders, which the current schema does not capture.
+    irr_total = secondary_approved + secondary_rejected
+    irr_pct = round((secondary_approved / irr_total) * 100.0, 2) if irr_total else None
+    irr_band = (
+        None if irr_pct is None
+        else "excellent" if irr_pct >= 90
+        else "acceptable" if irr_pct >= 80
+        else "needs_review"
+    )
+
     return {
         "total_gaps":      total,
         "with_evidence":   with_evidence,
         "dual_signed":     dual_signed,
         "audit_ready_pct": audit_ready_pct,
         "missing_meat":    missing_top5,
+        "inter_rater_reliability": {
+            "secondary_approved":  secondary_approved,
+            "secondary_rejected":  secondary_rejected,
+            "pending_review":      pending_review,
+            "agreement_pct":       irr_pct,
+            "band":                irr_band,
+            "method":              "proportion_agreement",
+            "note": (
+                "Proportion of secondary-reviewed gaps where the secondary "
+                "coder approved (vs rejected) the primary's coding.  Lower "
+                "than 80%% suggests training/guideline drift."
+            ),
+        },
     }
 
 

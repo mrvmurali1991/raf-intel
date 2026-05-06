@@ -281,6 +281,22 @@ jobs:
             sleep 2
           done
 
+      # FastAPI app-boot check.  Catches the "router file untracked / import
+      # broken" class of bug before pytest collection does, with a much
+      # clearer error message.  ``create_app()`` registers all 11 KG
+      # routers + 50+ recapture/provider routers, so a missing service
+      # module surfaces here in seconds.
+      - name: Verify FastAPI app boots and all routers register
+        run: |
+          python -c "from app.main import app; \
+            paths = [r.path for r in app.routes]; \
+            print(f'Registered {len(paths)} routes'); \
+            assert any('/api/kg/' in p for p in paths), 'KG routers missing'; \
+            assert any('/api/recapture/' in p for p in paths), 'Recapture routers missing'; \
+            assert any('/api/worklist/' in p for p in paths), 'Worklist router missing'; \
+            assert any('/api/kg/polypharmacy/' in p for p in paths), 'Polypharmacy router missing'"
+        working-directory: backend
+
       - name: Run pytest with coverage
         run: |
           pytest \
