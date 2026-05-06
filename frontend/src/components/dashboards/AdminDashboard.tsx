@@ -963,6 +963,11 @@ export function AdminDashboard() {
             color="#3B82F6"
             href="/patients"
             info="Total number of patients imported from your connected EMR system. This includes all active patients regardless of analysis status."
+            emptyState={{
+              message: "No patients imported yet.",
+              ctaLabel: "Connect your EMR",
+              ctaHref: "/emr-config",
+            }}
           />
           <StatCard
             label="Patients Analyzed"
@@ -973,6 +978,11 @@ export function AdminDashboard() {
             trend={analyzedTrend}
             href="/analysis"
             info="Patients whose clinical encounters have been analyzed by the AI engine to identify HCC coding opportunities. 100% coverage means every patient has at least one analyzed encounter."
+            emptyState={{
+              message: "No patients analyzed yet.",
+              ctaLabel: "Run analysis",
+              ctaHref: "/analysis",
+            }}
           />
           <StatCard
             label="Average RAF Score"
@@ -992,6 +1002,11 @@ export function AdminDashboard() {
             color={revenueOpp > 0 ? "#10B981" : "#94A3B8"}
             href="/reports"
             info="Total annual revenue impact across your entire population based on RAF score gaps. This includes recapture gaps (conditions billed last year but not this year), suspect conditions, and medication-implied diagnoses. A negative value means over-coding was detected."
+            emptyState={{
+              message: "Revenue opportunity will appear after analysis.",
+              ctaLabel: "Analyze patients",
+              ctaHref: "/analysis",
+            }}
           />
         </div>
       )}

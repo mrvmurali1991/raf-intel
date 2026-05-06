@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { TenantPYChip } from "@/components/TenantPYChip";
+import { TenantAccessBanner } from "@/components/TenantAccessBanner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/Toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -141,9 +142,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* Top bar — only visible on desktop (lg+). On mobile the hamburger row
             already owns the top chrome and TenantPYChip would collide with it. */}
         <div
-          className="hidden lg:flex fixed top-0 right-0 left-64 z-20 h-14 items-center justify-end px-6 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80"
+          className="hidden lg:flex fixed top-0 right-0 left-64 z-20 h-14 items-center justify-end gap-3 px-6 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80"
           aria-label="App top bar"
         >
+          <TenantAccessBanner />
           <TenantPYChip />
         </div>
 

@@ -42,6 +42,15 @@ function riskLabel(score: number | null): string {
 
 // ─── 1. StatCard ─────────────────────────────────────────────────────────────
 
+export interface StatCardEmptyState {
+  /** Short friendly message shown instead of the bare value. */
+  message: string;
+  /** Label for the CTA button. When omitted only the message is shown. */
+  ctaLabel?: string;
+  /** href for the CTA link. Required when ctaLabel is provided. */
+  ctaHref?: string;
+}
+
 export interface StatCardProps {
   label: string;
   value: React.ReactNode;
@@ -52,9 +61,23 @@ export interface StatCardProps {
   loading?: boolean;
   href?: string;
   info?: string;
+  /**
+   * When value is 0 / null / undefined AND this prop is provided the card
+   * renders a friendly two-line empty-state layout with an optional CTA link
+   * instead of the bare numeric value.
+   */
+  emptyState?: StatCardEmptyState;
 }
 
-export function StatCard({ label, value, subtitle, icon, trend, color = colors.primary, loading, href, info }: StatCardProps) {
+/** Returns true when a value should trigger the empty-state layout. */
+function isEmptyValue(value: React.ReactNode): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "number") return value === 0;
+  if (typeof value === "string") return value === "0" || value === "—" || value === "";
+  return false;
+}
+
+export function StatCard({ label, value, subtitle, icon, trend, color = colors.primary, loading, href, info, emptyState }: StatCardProps) {
   const [showInfo, setShowInfo] = React.useState(false);
   const iconBg: React.CSSProperties = {
     width: 44,
@@ -149,10 +172,41 @@ export function StatCard({ label, value, subtitle, icon, trend, color = colors.p
           {info}
         </div>
       )}
-      <div>
-        <div className="tabular-nums" style={{ fontSize: 28, fontWeight: 700, color: colors.slate900, lineHeight: 1.1 }}>{value}</div>
-        {subtitle && <div style={{ fontSize: 12, color: colors.subtleText, marginTop: 4 }}>{subtitle}</div>}
-      </div>
+      {emptyState && isEmptyValue(value) ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: colors.slate600, lineHeight: 1.4 }}>
+            {emptyState.message}
+          </div>
+          {emptyState.ctaLabel && emptyState.ctaHref && (
+            <Link
+              href={emptyState.ctaHref}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 12,
+                fontWeight: 600,
+                color: color,
+                textDecoration: "none",
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${color}30`,
+                background: `${color}0D`,
+                width: "fit-content",
+                transition: "background 0.15s",
+              }}
+            >
+              {emptyState.ctaLabel} &rarr;
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div className="tabular-nums" style={{ fontSize: 28, fontWeight: 700, color: colors.slate900, lineHeight: 1.1 }}>{value}</div>
+          {subtitle && <div style={{ fontSize: 12, color: colors.subtleText, marginTop: 4 }}>{subtitle}</div>}
+        </div>
+      )}
       {trend && (
         <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
           {trend.value >= 0 ? (
