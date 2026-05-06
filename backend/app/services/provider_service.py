@@ -648,32 +648,68 @@ def calculate_provider_scorecard(
             round(statistics.mean(raf_by_patient.values()), 4) if raf_by_patient else None
         )
 
-        # --- 3. HCC capture rate ---
-        # coded HCCs for this year
+        # --- 3 + 4. HCC counts (current year, prior year, recaptured) in
+        # a single round-trip. Each metric is computed as a conditional
+        # aggregate against raf_patient_hcc, scoped to the same
+        # patient_id IN (panel) filter so tenant isolation is preserved
+        # exactly as before. Replaces three separate COUNT-DISTINCT round-trips.
+        prior_year = year - 1
         cur.execute(
             f"""
-            SELECT COUNT(DISTINCT CONCAT(patient_id, '-', hcc_code)) AS coded
-            FROM raf_patient_hcc
-            WHERE measurement_year = %s AND patient_id IN ({placeholders})
+            SELECT
+                COUNT(DISTINCT CASE WHEN rph.measurement_year = %s
+                                    THEN CONCAT(rph.patient_id, '-', rph.hcc_code)
+                               END) AS coded_curr,
+                COUNT(DISTINCT CASE WHEN rph.measurement_year = %s
+                                    THEN CONCAT(rph.patient_id, '-', rph.hcc_code)
+                               END) AS coded_prior,
+                COUNT(DISTINCT CASE WHEN rph.measurement_year = %s
+                                     AND EXISTS (
+                                         SELECT 1 FROM raf_patient_hcc prev
+                                         WHERE prev.patient_id = rph.patient_id
+                                           AND prev.hcc_code   = rph.hcc_code
+                                           AND prev.measurement_year = %s
+                                     )
+                                    THEN CONCAT(rph.patient_id, '-', rph.hcc_code)
+                               END) AS recaptured
+            FROM raf_patient_hcc rph
+            WHERE rph.measurement_year IN (%s, %s)
+              AND rph.patient_id IN ({placeholders})
             """,
-            tuple([year] + panel),
+            tuple([year, prior_year, year, prior_year, year, prior_year] + panel),
         )
-        row = cur.fetchone()
-        coded_hcc_count = int(row["coded"]) if row else 0
+        row = cur.fetchone() or {}
+        coded_hcc_count = int(row.get("coded_curr") or 0)
+        prior_year_hccs = int(row.get("coded_prior") or 0)
+        recaptured_count = int(row.get("recaptured") or 0)
 
-        # open suspect HCCs (represent potential HCCs not yet coded)
+        # --- 5 + 6. Suspect status counts + total confidence in one query.
+        # Conditional aggregates over raf_suspect_conditions replace four
+        # round-trips (open count, status breakdown, total confidence).
+        # 'dismissed' and legacy 'rejected' are merged here so the
+        # downstream snapshot keeps its existing semantic.
         cur.execute(
             f"""
-            SELECT COUNT(*) AS open_suspects
+            SELECT
+                SUM(CASE WHEN status = 'open' AND suspect_hcc IS NOT NULL
+                         THEN 1 ELSE 0 END)                       AS open_suspect_hccs,
+                SUM(CASE WHEN status = 'open'      THEN 1 ELSE 0 END) AS s_open,
+                SUM(CASE WHEN status = 'accepted'  THEN 1 ELSE 0 END) AS s_accepted,
+                SUM(CASE WHEN status IN ('dismissed','rejected')
+                         THEN 1 ELSE 0 END)                       AS s_dismissed,
+                SUM(CASE WHEN status = 'open'
+                         THEN confidence_score ELSE 0 END)        AS total_confidence
             FROM raf_suspect_conditions
-            WHERE status = 'open'
-              AND suspect_hcc IS NOT NULL
-              AND patient_id IN ({placeholders})
+            WHERE patient_id IN ({placeholders})
             """,
             tuple(panel),
         )
-        row = cur.fetchone()
-        open_suspect_hccs = int(row["open_suspects"]) if row else 0
+        row = cur.fetchone() or {}
+        open_suspect_hccs = int(row.get("open_suspect_hccs") or 0)
+        suspects_open = int(row.get("s_open") or 0)
+        suspects_accepted = int(row.get("s_accepted") or 0)
+        suspects_dismissed = int(row.get("s_dismissed") or 0)
+        total_confidence = float(row.get("total_confidence") or 0)
 
         possible_hcc_count = coded_hcc_count + open_suspect_hccs
         hcc_capture_rate = (
@@ -682,75 +718,9 @@ def calculate_provider_scorecard(
             else None
         )
 
-        # --- 4. Recapture rate ---
-        prior_year = year - 1
-        cur.execute(
-            f"""
-            SELECT COUNT(DISTINCT CONCAT(patient_id, '-', hcc_code)) AS prior_cnt
-            FROM raf_patient_hcc
-            WHERE measurement_year = %s AND patient_id IN ({placeholders})
-            """,
-            tuple([prior_year] + panel),
-        )
-        row = cur.fetchone()
-        prior_year_hccs = int(row["prior_cnt"]) if row else 0
-
-        cur.execute(
-            f"""
-            SELECT COUNT(DISTINCT CONCAT(rph.patient_id, '-', rph.hcc_code)) AS recaptured
-            FROM raf_patient_hcc rph
-            WHERE rph.measurement_year = %s
-              AND rph.patient_id IN ({placeholders})
-              AND EXISTS (
-                  SELECT 1 FROM raf_patient_hcc prev
-                  WHERE prev.patient_id = rph.patient_id
-                    AND prev.hcc_code   = rph.hcc_code
-                    AND prev.measurement_year = %s
-              )
-            """,
-            tuple([year] + panel + [prior_year]),
-        )
-        row = cur.fetchone()
-        recaptured_count = int(row["recaptured"]) if row else 0
-
         recapture_rate = (
             round(recaptured_count / prior_year_hccs, 4) if prior_year_hccs > 0 else None
         )
-
-        # --- 5. Suspect conditions counts ---
-        cur.execute(
-            f"""
-            SELECT status, COUNT(*) AS cnt
-            FROM raf_suspect_conditions
-            WHERE patient_id IN ({placeholders})
-            GROUP BY status
-            """,
-            tuple(panel),
-        )
-        suspect_rows = cur.fetchall()
-
-        suspect_counts: dict[str, int] = {}
-        for r in suspect_rows:
-            suspect_counts[r["status"]] = int(r["cnt"])
-
-        suspects_open = suspect_counts.get("open", 0)
-        suspects_accepted = suspect_counts.get("accepted", 0)
-        suspects_dismissed = suspect_counts.get(
-            "dismissed", suspect_counts.get("rejected", 0)
-        )
-
-        # --- 6. Revenue opportunity from open suspects ---
-        cur.execute(
-            f"""
-            SELECT SUM(confidence_score) AS total_confidence
-            FROM raf_suspect_conditions
-            WHERE status = 'open'
-              AND patient_id IN ({placeholders})
-            """,
-            tuple(panel),
-        )
-        row = cur.fetchone()
-        total_confidence = float(row["total_confidence"] or 0) if row else 0.0
 
         # Revenue opportunity = open suspects weighted by confidence * base rate
         revenue_opportunity = (
@@ -1011,41 +981,51 @@ def calculate_hcc_performance(
 
     placeholders = ", ".join(["%s"] * len(panel))
 
-    # Coded HCCs for this panel/year
+    # Coded HCCs and open suspect HCCs in a single round-trip.
+    #
+    # Previously this fired two separate aggregate queries against
+    # raf_patient_hcc and raf_suspect_conditions. Since both produce a
+    # (hcc_code, count) shape we union them into one statement and let
+    # MySQL fold them together with a single GROUP BY. The two source
+    # subqueries each keep their own tenant-scoped patient_id IN (panel)
+    # filter, so multi-tenant isolation is preserved.
+    coded_by_hcc: dict[str, int] = {}
+    suspect_by_hcc: dict[str, int] = {}
     with raf_cursor() as cur:
         cur.execute(
             f"""
-            SELECT hcc_code, COUNT(DISTINCT patient_id) AS coded_count
-            FROM raf_patient_hcc
-            WHERE measurement_year = %s AND patient_id IN ({placeholders})
-            GROUP BY hcc_code
+            SELECT src, hcc_code, SUM(cnt) AS cnt
+            FROM (
+                SELECT 'coded' AS src,
+                       hcc_code,
+                       COUNT(DISTINCT patient_id) AS cnt
+                FROM raf_patient_hcc
+                WHERE measurement_year = %s
+                  AND patient_id IN ({placeholders})
+                GROUP BY hcc_code
+                UNION ALL
+                SELECT 'suspect' AS src,
+                       suspect_hcc AS hcc_code,
+                       COUNT(*) AS cnt
+                FROM raf_suspect_conditions
+                WHERE status = 'open'
+                  AND suspect_hcc IS NOT NULL
+                  AND patient_id IN ({placeholders})
+                GROUP BY suspect_hcc
+            ) u
+            GROUP BY src, hcc_code
             """,
-            tuple([year] + panel),
+            tuple([year] + panel + panel),
         )
-        coded_rows = cur.fetchall()
-
-    coded_by_hcc: dict[str, int] = {
-        r["hcc_code"]: int(r["coded_count"]) for r in coded_rows
-    }
-
-    # Open suspects by HCC
-    with raf_cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT suspect_hcc AS hcc_code, COUNT(*) AS suspect_count
-            FROM raf_suspect_conditions
-            WHERE status = 'open'
-              AND suspect_hcc IS NOT NULL
-              AND patient_id IN ({placeholders})
-            GROUP BY suspect_hcc
-            """,
-            tuple(panel),
-        )
-        suspect_rows = cur.fetchall()
-
-    suspect_by_hcc: dict[str, int] = {
-        str(r["hcc_code"]): int(r["suspect_count"]) for r in suspect_rows
-    }
+        for r in cur.fetchall():
+            code = str(r["hcc_code"]) if r["hcc_code"] is not None else None
+            if code is None:
+                continue
+            n = int(r["cnt"] or 0)
+            if r["src"] == "coded":
+                coded_by_hcc[code] = n
+            else:
+                suspect_by_hcc[code] = n
 
     # Merge both HCC sets
     all_hccs = set(coded_by_hcc.keys()) | set(suspect_by_hcc.keys())
