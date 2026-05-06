@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { tokens } from "@/styles/tokens";
 import { Loader2, Download, AlertCircle, Info } from "lucide-react";
 import { calculateRAFFull, RAFCalcResponse } from "@/lib/api";
 import { FONT_SYS, FONT_MONO } from "@/lib/ui-utils";
@@ -11,24 +12,24 @@ import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 /* ================================================================== */
 
 const C = {
-  text: "#0F172A",
-  textMuted: "#475569",
-  textSubtle: "#64748B",
-  label: "#94A3B8",
-  border: "#E2E8F0",
-  borderSoft: "#EEF2F6",
-  rowDivider: "#F1F5F9",
-  bgPage: "#F8FAFC",
-  bgCard: "#FFFFFF",
-  bgSubtle: "#F8FAFC",
-  brand: "#0F766E",
-  brandSoft: "rgba(15, 118, 110, 0.06)",
-  accent: "#4F46E5",
-  accentSoft: "rgba(79, 70, 229, 0.08)",
-  sectionBand: "#EEF0FF",
-  high: "#DC2626",
-  low: "#059669",
-  white: "#FFFFFF",
+  text: tokens.slate900,
+  textMuted: tokens.slate600,
+  textSubtle: tokens.slate500,
+  label: tokens.slate400,
+  border: tokens.slate200,
+  borderSoft: tokens.slate100,
+  rowDivider: tokens.slate100,
+  bgPage: tokens.slate50,
+  bgCard: tokens.white,
+  bgSubtle: tokens.slate50,
+  brand: tokens.riskLow,
+  brandSoft: tokens.successSoft,
+  accent: tokens.accentPurple,
+  accentSoft: tokens.primarySoft,
+  sectionBand: tokens.primarySoft,
+  high: tokens.riskHigh,
+  low: tokens.riskLow,
+  white: tokens.white,
 };
 
 /* ================================================================== */
@@ -319,7 +320,7 @@ export default function CrosswalkPage() {
   };
 
   const totalRowStyle: React.CSSProperties = {
-    backgroundColor: "#F0EEFE",
+    backgroundColor: tokens.primarySoft,
   };
 
   const hccDetails = result?.hcc_details ?? [];
@@ -331,10 +332,11 @@ export default function CrosswalkPage() {
 
   return (
     <div
+      className="rci-page-pad-desktop"
       style={{
         minHeight: "100vh",
         backgroundColor: C.bgPage,
-        padding: "28px 32px 40px",
+        padding: "20px 16px 40px",
         fontFamily: FONT_SYS,
         color: C.text,
       }}
@@ -411,7 +413,7 @@ export default function CrosswalkPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1.6fr 1.6fr 1fr 0.7fr",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
               gap: 16,
               marginBottom: 18,
             }}
@@ -573,8 +575,8 @@ export default function CrosswalkPage() {
                 marginTop: 14,
                 padding: "10px 14px",
                 borderRadius: 10,
-                backgroundColor: "#FEF2F2",
-                border: "1px solid #FECACA",
+                backgroundColor: tokens.riskHighSoft,
+                border: `1px solid ${tokens.dangerBorder}`,
                 color: C.high,
                 fontSize: 12,
                 display: "flex",
@@ -592,9 +594,9 @@ export default function CrosswalkPage() {
                 marginTop: 14,
                 padding: "10px 14px",
                 borderRadius: 10,
-                backgroundColor: "#FFFBEB",
-                border: "1px solid #FDE68A",
-                color: "#92400E",
+                backgroundColor: tokens.warningSoft,
+                border: `1px solid ${tokens.warningBorder}`,
+                color: tokens.warningText,
                 fontSize: 12,
                 display: "flex",
                 alignItems: "center",
@@ -620,7 +622,9 @@ export default function CrosswalkPage() {
             overflow: "hidden",
           }}
         >
+          <div style={{ overflowX: "auto" }}>
           <table
+            aria-label="RAF score calculation results"
             style={{
               width: "100%",
               borderCollapse: "collapse",
@@ -908,6 +912,7 @@ export default function CrosswalkPage() {
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Footer */}

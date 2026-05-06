@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { tokens } from "@/styles/tokens";
 import { Activity, Download, BarChart3, AlertCircle, Clock, Users, TrendingUp, Zap, CheckCircle2, XCircle, FileText } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import {
@@ -227,7 +228,7 @@ export default function BatchAnalysisPage() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1200px] mx-auto px-6 py-8">
+    <div className="max-w-[1200px] mx-auto rci-page-pad-desktop" style={{ padding: "20px 16px" }}>
       <div className="animate-fade-in">
         <PageHeader
           title="Batch Analysis"
@@ -290,7 +291,7 @@ export default function BatchAnalysisPage() {
                     : "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
                 }`}
               >
-                <Activity size={16} className={isRunning ? "" : "animate-pulse"} />
+                <Activity size={16} aria-hidden="true" className={isRunning ? "" : "animate-pulse"} />
                 Start Analysis
               </button>
 
@@ -328,8 +329,8 @@ export default function BatchAnalysisPage() {
                   style={{
                     width: `${pct}%`,
                     background: isComplete
-                      ? "linear-gradient(90deg, #10B981, #34D399)"
-                      : "linear-gradient(90deg, #2563EB, #60A5FA)",
+                      ? `linear-gradient(90deg, ${tokens.success}, ${tokens.emerald300})`
+                      : `linear-gradient(90deg, ${tokens.primary}, ${tokens.infoBlue})`,
                   }}
                 >
                   {isRunning && (
@@ -346,7 +347,7 @@ export default function BatchAnalysisPage() {
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
             {[
               { label: "Patients Analyzed", value: processed, icon: <Users size={18} />, colorClass: "card-glow-blue", delay: "stagger-2" },
               { label: "New HCCs Found", value: newHccs, icon: <TrendingUp size={18} />, colorClass: "card-glow-emerald", delay: "stagger-3" },
@@ -444,12 +445,12 @@ export default function BatchAnalysisPage() {
           </div>
 
           {/* Summary stat cards */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
             {[
-              { label: "Total Patients Analyzed", value: processed, icon: <Users size={18} className="text-blue-500" />, color: "#2563EB" },
-              { label: "Total New HCCs Discovered", value: newHccs, icon: <TrendingUp size={18} className="text-emerald-500" />, color: "#10B981" },
-              { label: "Est. Revenue Opportunity", value: formatMoney(totalRevenue), icon: <BarChart3 size={18} className="text-blue-500" />, color: "#2563EB" },
-              { label: "Average RAF Increase", value: (avgRaf ?? 0).toFixed(3), icon: <TrendingUp size={18} className="text-amber-500" />, color: "#F59E0B" },
+              { label: "Total Patients Analyzed", value: processed, icon: <Users size={18} className="text-blue-500" />, color: tokens.primary },
+              { label: "Total New HCCs Discovered", value: newHccs, icon: <TrendingUp size={18} className="text-emerald-500" />, color: tokens.success },
+              { label: "Est. Revenue Opportunity", value: formatMoney(totalRevenue), icon: <BarChart3 size={18} className="text-blue-500" />, color: tokens.primary },
+              { label: "Average RAF Increase", value: (avgRaf ?? 0).toFixed(3), icon: <TrendingUp size={18} className="text-amber-500" />, color: tokens.warningStrong },
             ].map((stat, i) => (
               <div key={stat.label} className={`premium-card hover-lift animate-slide-up stagger-${i + 1} card-glow-blue p-5`}>
                 <div className="flex items-center gap-2 mb-2">
@@ -469,7 +470,7 @@ export default function BatchAnalysisPage() {
                 <span className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">Detailed Results</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table aria-label="Batch analysis results" className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/50">
                       <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Patient</th>

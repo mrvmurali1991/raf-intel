@@ -42,35 +42,36 @@ import {
   DataRow,
 } from "@/components/healthcare-ui";
 import { searchPatients } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 // ─── Axios instance with baseURL ──────────────────────────────────────────────
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 
 const c = {
-  primary: "#2563EB",
-  primaryHover: "#1D4ED8",
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate600: "#475569",
-  slate400: "#94A3B8",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  red600: "#DC2626",
-  red50: "#FEF2F2",
-  emerald600: "#059669",
-  emerald500: "#10B981",
-  emerald50: "#ECFDF5",
-  amber500: "#F59E0B",
-  amber50: "#FFFBEB",
-  blue500: "#3B82F6",
-  blue50: "#EFF6FF",
-  violet500: "#8B5CF6",
-  violet50: "#F5F3FF",
-  subtleText: "#64748B",
-  border: "#E2E8F0",
+  primary: tokens.primary,
+  primaryHover: tokens.primaryDark,
+  white: tokens.white,
+  slate900: tokens.slate900,
+  slate700: tokens.slate700,
+  slate600: tokens.slate600,
+  slate400: tokens.slate400,
+  slate200: tokens.slate200,
+  slate100: tokens.slate100,
+  slate50: tokens.slate50,
+  red600: tokens.riskHigh,
+  red50: tokens.riskHighSoft,
+  emerald600: tokens.riskLow,
+  emerald500: tokens.success,
+  emerald50: tokens.successSoft,
+  amber500: tokens.warningStrong,
+  amber50: tokens.warningSoft,
+  blue500: tokens.infoBlue,
+  blue50: tokens.primarySoft,
+  violet500: tokens.accentPurple,
+  violet50: tokens.primarySoft,
+  subtleText: tokens.slate500,
+  border: tokens.slate200,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -205,17 +206,17 @@ function formatDate(s: string): string {
 function statusConfig(status: DocumentStatus) {
   switch (status) {
     case "uploaded":
-      return { label: "Uploaded", bg: "#F1F5F9", color: "#475569", pulse: false };
+      return { label: "Uploaded", bg: tokens.slate100, color: tokens.slate600, pulse: false };
     case "processing":
-      return { label: "Processing", bg: "#EFF6FF", color: "#2563EB", pulse: true };
+      return { label: "Processing", bg: tokens.primarySoft, color: tokens.primary, pulse: true };
     case "analyzed":
-      return { label: "Analyzed", bg: "#ECFDF5", color: "#059669", pulse: false };
+      return { label: "Analyzed", bg: tokens.successSoft, color: tokens.riskLow, pulse: false };
     case "reviewed":
-      return { label: "Reviewed", bg: "#D1FAE5", color: "#065F46", pulse: false };
+      return { label: "Reviewed", bg: tokens.emerald100, color: tokens.emerald800, pulse: false };
     case "error":
-      return { label: "Error", bg: "#FEF2F2", color: "#DC2626", pulse: false };
+      return { label: "Error", bg: tokens.riskHighSoft, color: tokens.riskHigh, pulse: false };
     default:
-      return { label: status as string, bg: "#F3F4F6", color: "#6B7280", pulse: false };
+      return { label: status as string, bg: tokens.slate100, color: tokens.slate500, pulse: false };
   }
 }
 
@@ -427,7 +428,7 @@ function UploadPanel({ onClose, onUploaded }: UploadPanelProps) {
             padding: "48px 24px",
             textAlign: "center",
             cursor: "pointer",
-            background: isDragOver ? `${c.primary}08` : `linear-gradient(135deg, ${c.slate50} 0%, #EFF6FF 100%)`,
+            background: isDragOver ? `${c.primary}08` : `linear-gradient(135deg, ${c.slate50} 0%, ${tokens.primarySoft} 100%)`,
             transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             marginBottom: items.length ? 24 : 0,
             position: "relative",
@@ -534,7 +535,7 @@ function UploadPanel({ onClose, onUploaded }: UploadPanelProps) {
                       padding: "9px 24px",
                       borderRadius: 10,
                       border: "none",
-                      background: `linear-gradient(135deg, ${c.primary} 0%, #1D4ED8 100%)`,
+                      background: `linear-gradient(135deg, ${c.primary} 0%, ${tokens.primaryDark} 100%)`,
                       color: c.white,
                       fontSize: 13,
                       fontWeight: 600,
@@ -603,7 +604,7 @@ function FileItemRow({ item, patients, onUpdate, onRemove }: FileItemRowProps) {
       className={`animate-fade-in ${item.status === "error" ? "card-glow-rose" : "hover-lift"}`}
       style={{
         background: item.status === "error" ? c.red50 : c.white,
-        border: `1px solid ${item.status === "error" ? "#FECACA" : c.slate200}`,
+        border: `1px solid ${item.status === "error" ? tokens.dangerBorder : c.slate200}`,
         borderRadius: 12,
         padding: 16,
         transition: "all 0.2s ease",
@@ -1036,7 +1037,7 @@ function DocumentDetailModal({ doc, onClose, onAnalyze, onConfirmDiagnosis }: Do
                   padding: "8px 18px",
                   borderRadius: 8,
                   border: "none",
-                  background: `linear-gradient(135deg, ${c.primary} 0%, #7C3AED 100%)`,
+                  background: `linear-gradient(135deg, ${c.primary} 0%, ${tokens.accentPurple} 100%)`,
                   color: c.white,
                   fontSize: 13,
                   fontWeight: 600,
@@ -1198,7 +1199,7 @@ function DocumentDetailModal({ doc, onClose, onAnalyze, onConfirmDiagnosis }: Do
                           <pre
                             style={{
                               background: c.slate900,
-                              color: "#E2E8F0",
+                              color: tokens.slate200,
                               borderRadius: 10,
                               padding: 20,
                               fontSize: 12,
@@ -1757,7 +1758,7 @@ export default function DocumentsPage() {
   const hasFilters = statusFilter || typeFilter || patientFilter || dateFrom || dateTo || search;
 
   return (
-    <div style={{ padding: "32px 24px", maxWidth: 1280, margin: "0 auto" }}>
+    <div className="rci-page-pad-desktop" style={{ padding: "20px 16px", maxWidth: 1280, margin: "0 auto" }}>
       <PageHeader
         title="Clinical Documents"
         subtitle="Upload, analyze, and manage clinical documents for HCC extraction"
@@ -1773,7 +1774,7 @@ export default function DocumentsPage() {
               padding: "10px 22px",
               borderRadius: 10,
               border: "none",
-              background: `linear-gradient(135deg, ${c.primary} 0%, #1D4ED8 100%)`,
+              background: `linear-gradient(135deg, ${c.primary} 0%, ${tokens.primaryDark} 100%)`,
               color: c.white,
               fontSize: 14,
               fontWeight: 600,
@@ -2240,21 +2241,21 @@ export default function DocumentsPage() {
           background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)",
         }}>
           <div style={{
-            background: "#fff", borderRadius: 12, padding: "28px 32px",
+            background: tokens.white, borderRadius: 12, padding: "28px 32px",
             maxWidth: 400, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
           }}>
-            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>
               Delete Document
             </h3>
-            <p style={{ margin: "0 0 24px", fontSize: 14, color: "#64748b", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 24px", fontSize: 14, color: tokens.slate500, lineHeight: 1.5 }}>
               Are you sure you want to delete this document? This action cannot be undone.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
                 onClick={() => setConfirmDelete(null)}
                 style={{
-                  padding: "8px 18px", borderRadius: 8, border: "1px solid #e2e8f0",
-                  background: "#fff", color: "#334155", fontSize: 13, fontWeight: 600,
+                  padding: "8px 18px", borderRadius: 8, border: `1px solid ${tokens.slate200}`,
+                  background: tokens.white, color: tokens.slate700, fontSize: 13, fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
@@ -2264,7 +2265,7 @@ export default function DocumentsPage() {
                 onClick={handleConfirmDeleteAction}
                 style={{
                   padding: "8px 18px", borderRadius: 8, border: "none",
-                  background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 600,
+                  background: tokens.riskHigh, color: tokens.white, fontSize: 13, fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
@@ -2421,7 +2422,7 @@ function OpenEMRDocumentsPanel() {
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "8px 16px", borderRadius: 8, border: "none",
-            background: unimportedCount === 0 ? c.slate200 : `linear-gradient(135deg, ${c.primary} 0%, #1D4ED8 100%)`,
+            background: unimportedCount === 0 ? c.slate200 : `linear-gradient(135deg, ${c.primary} 0%, ${tokens.primaryDark} 100%)`,
             fontSize: 13, fontWeight: 600, color: unimportedCount === 0 ? c.slate400 : c.white,
             cursor: unimportedCount === 0 ? "default" : "pointer",
             opacity: pullingAll ? 0.7 : 1,
@@ -2571,7 +2572,7 @@ function DocumentRow({ doc, onView, onAnalyze, onDelete }: DocumentRowProps) {
         borderBottom: `1px solid ${c.slate100}`,
         alignItems: "center",
         gap: 8,
-        background: hovered ? "linear-gradient(135deg, #EFF6FF 0%, #F5F3FF08 100%)" : c.white,
+        background: hovered ? `linear-gradient(135deg, ${tokens.primarySoft} 0%, rgba(245,243,255,0.03) 100%)` : c.white,
         transition: "all 0.2s ease",
         cursor: "pointer",
         borderLeft: hovered ? `3px solid ${c.primary}` : "3px solid transparent",

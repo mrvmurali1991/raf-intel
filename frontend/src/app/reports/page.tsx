@@ -17,9 +17,10 @@ import {
 import { StatCard } from "@/components/healthcare-ui";
 import { FileDown, Printer } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
+import { tokens } from "@/styles/tokens";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
-type QueryResult<T = unknown> = { data?: T; isLoading?: boolean; isError?: boolean };
+type QueryResult<T = unknown> = { data?: T; isLoading?: boolean; isError?: boolean; refetch?: () => void };
 type PatientRow = PatientScorecardRow;
 type GapRow = { patient_id?: number | string; pid?: number | string; patient_name?: string; name?: string; last_name?: string; first_name?: string; condition?: string; description?: string; icd10_code?: string; icd10?: string; icd_code?: string; hcc_code?: string; hcc?: string; onset_date?: string; last_coded?: string; date?: string };
 type DataCountBlock = { count?: number; total?: number };
@@ -74,36 +75,36 @@ const getCmsAvg = (yr: number) => CMS_NATIONAL_AVG[yr] ?? CMS_NATIONAL_AVG[Math.
 // YOUR_SUSPECT_CLOSURE values are now computed from real API responses in the
 // component below.  Hardcoded values have been removed.
 
-// ── Colors ────────────────────────────────────────────────────────────────────
+// ── Colors — mapped to design tokens ─────────────────────────────────────────
 const C = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  borderLight: "#F1F5F9",
-  text: "#0F172A",
-  textMuted: "#64748B",
-  textSub: "#94A3B8",
-  primary: "#2563EB",
-  primaryLight: "#DBEAFE",
-  emerald: "#10B981",
-  emeraldLight: "#D1FAE5",
-  emeraldDark: "#065F46",
-  amber: "#F59E0B",
-  amberLight: "#FEF3C7",
-  amberDark: "#92400E",
-  red: "#EF4444",
-  redLight: "#FEE2E2",
-  redDark: "#991B1B",
-  blue: "#3B82F6",
-  blueLight: "#DBEAFE",
-  blueDark: "#1E40AF",
-  violet: "#8B5CF6",
-  gray100: "#F3F4F6",
-  gray200: "#E5E7EB",
-  gray300: "#D1D5DB",
-  gray400: "#9CA3AF",
-  gray600: "#4B5563",
-  white: "#FFFFFF",
+  bg: tokens.slate50,
+  card: tokens.white,
+  border: tokens.slate200,
+  borderLight: tokens.slate100,
+  text: tokens.slate900,
+  textMuted: tokens.slate500,
+  textSub: tokens.slate400,
+  primary: tokens.primary,
+  primaryLight: tokens.primarySoft,
+  emerald: tokens.success,
+  emeraldLight: tokens.emerald100,
+  emeraldDark: tokens.emerald800,
+  amber: tokens.warningStrong,
+  amberLight: tokens.warningSoft,
+  amberDark: tokens.warningText,
+  red: tokens.riskHigh,
+  redLight: tokens.riskHighSoft,
+  redDark: tokens.danger,
+  blue: tokens.infoBlue,
+  blueLight: tokens.primarySoft,
+  blueDark: tokens.primaryDark,
+  violet: tokens.accentPurple,
+  gray100: tokens.slate100,
+  gray200: tokens.slate200,
+  gray300: tokens.slate300,
+  gray400: tokens.slate400,
+  gray600: tokens.slate600,
+  white: tokens.white,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -129,7 +130,7 @@ function initials(name: string): string {
   return name.split(/[\s,]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
-const avatarColors = ["#2563EB", "#7C3AED", "#059669", "#DC2626", "#D97706", "#0891B2", "#DB2777", "#4F46E5"];
+const avatarColors = [tokens.primary, tokens.accentPurple, tokens.riskLow, tokens.riskHigh, tokens.riskMedium, tokens.infoBlue, tokens.riskMedium, tokens.primaryDark];
 
 // ── Sort hook ─────────────────────────────────────────────────────────────────
 type SortDir = "asc" | "desc";
@@ -159,7 +160,7 @@ function useSortable<T>(data: T[], defaultKey: keyof T, defaultDir: SortDir = "d
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
   background: C.bg,
-  padding: "32px 40px 56px",
+  padding: "20px 16px 56px",
   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   color: C.text,
 };
@@ -181,7 +182,7 @@ const thStyle: React.CSSProperties = {
   letterSpacing: "0.06em",
   color: C.textMuted,
   borderBottom: `2px solid ${C.border}`,
-  background: `linear-gradient(180deg, ${C.borderLight} 0%, #EEF2F7 100%)`,
+  background: `linear-gradient(180deg, ${C.borderLight} 0%, ${tokens.slate100} 100%)`,
   whiteSpace: "nowrap" as const,
   cursor: "pointer",
   userSelect: "none" as const,
@@ -201,13 +202,13 @@ function rowProps(index: number) {
     style: {
       cursor: "pointer" as const,
       transition: "background-color 0.15s ease",
-      background: index % 2 === 1 ? "#F8FAFD" : "transparent",
+      background: index % 2 === 1 ? tokens.slate50 : "transparent",
     },
     onMouseEnter: (e: React.MouseEvent<HTMLTableRowElement>) => {
-      e.currentTarget.style.background = "#EDF2F7";
+      e.currentTarget.style.background = tokens.slate50;
     },
     onMouseLeave: (e: React.MouseEvent<HTMLTableRowElement>) => {
-      e.currentTarget.style.background = index % 2 === 1 ? "#F8FAFD" : "transparent";
+      e.currentTarget.style.background = index % 2 === 1 ? tokens.slate50 : "transparent";
     },
   };
 }
@@ -246,7 +247,7 @@ function TabFade({ children, tabKey }: { children: React.ReactNode; tabKey: stri
 function GradientSectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
-      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, background: `linear-gradient(135deg, ${tokens.primary} 0%, ${tokens.accentPurple} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
         {title}
       </h3>
       {subtitle && <p style={{ margin: "4px 0 0", fontSize: 12, color: C.textMuted }}>{subtitle}</p>}
@@ -266,11 +267,16 @@ function Spinner({ label }: { label?: string }) {
   );
 }
 
-function ErrorBox({ message }: { message?: string }) {
+function ErrorBox({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", color: C.red }}>
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <p style={{ marginTop: 12, fontSize: 13 }}>{message ?? "Failed to load data"}</p>
+      {onRetry && (
+        <button onClick={onRetry} style={{ marginTop: 12, padding: "8px 20px", borderRadius: 8, border: `1px solid ${C.red}`, background: C.card, color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          Retry
+        </button>
+      )}
     </div>
   );
 }
@@ -304,7 +310,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div style={pageStyle}>
+    <div className="rci-page-pad-desktop" style={pageStyle}>
       {/* ── Print-only header ─────────────────────────────────────────────── */}
       <div
         id="report-print-header"
@@ -319,7 +325,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Page Header ──────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 className="gradient-text" style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Analytics &amp; Reports</h1>
           <p style={{ fontSize: 14, color: C.textMuted, marginTop: 6, fontWeight: 500 }}>Population health intelligence and revenue analytics</p>
@@ -372,7 +378,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Tab Bar (pill style) ──────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 32, padding: 6, background: "#EEF2F7", borderRadius: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 32, padding: 6, background: tokens.slate100, borderRadius: 14, flexWrap: "wrap" }}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab;
           return (
@@ -404,7 +410,7 @@ export default function ReportsPage() {
                   width: 16,
                   height: 3,
                   borderRadius: 2,
-                  background: "linear-gradient(90deg, #2563EB, #7C3AED)",
+                  background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.accentPurple})`,
                 }} />
               )}
             </button>
@@ -445,7 +451,7 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
   }, [patients]);
 
   if (revenue.isLoading || scorecard.isLoading) return <Spinner label="Loading revenue data..." />;
-  if (revenue.isError) return <ErrorBox message="Failed to load revenue data" />;
+  if (revenue.isError) return <ErrorBox message="Failed to load revenue data" onRetry={revenue.refetch} />;
 
   const totalRevenue = r?.estimated_annual_revenue ?? 0;
   const totalGap = r?.total_gap ?? 0;
@@ -453,7 +459,7 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
   return (
     <div>
       {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20, marginBottom: 32 }}>
         {/* Revenue Card */}
         <div className="hover-lift card-glow-emerald" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -524,7 +530,7 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
           </button>
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table aria-label="Revenue opportunities" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: 50, textAlign: "center" }}>#</th>
@@ -578,7 +584,7 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: 4,
                       padding: "3px 8px", borderRadius: 6,
-                      background: "rgba(37,99,235,0.08)", color: "#2563eb",
+                      background: tokens.primarySoft, color: tokens.primary,
                       fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
                       whiteSpace: "nowrap",
                     }}>
@@ -621,7 +627,7 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
   const visible = filtered.slice(0, limit);
 
   if (scorecard.isLoading) return <Spinner label="Loading scorecard..." />;
-  if (scorecard.isError) return <ErrorBox message="Failed to load scorecard" />;
+  if (scorecard.isError) return <ErrorBox message="Failed to load scorecard" onRetry={scorecard.refetch} />;
 
   const colDefs: { key: string; label: string; align?: string }[] = [
     { key: "name", label: "Patient" },
@@ -685,7 +691,7 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
 
       <div className="premium-shadow" style={cardStyle}>
         <div style={{ overflowX: "auto" }}>
-          <table className="premium-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table aria-label="Patient scorecard" className="premium-table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {colDefs.map((col) => (
@@ -773,7 +779,7 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
 // ══════════════════════════════════════════════════════════════════════════════
 function HccTab({ hccDist }: { hccDist: QueryResult<HccDistributionRow[]> }) {
   if (hccDist.isLoading) return <Spinner label="Loading HCC distribution..." />;
-  if (hccDist.isError) return <ErrorBox message="Failed to load HCC data" />;
+  if (hccDist.isError) return <ErrorBox message="Failed to load HCC data" onRetry={hccDist.refetch} />;
 
   const data: Array<{ hcc_code: string; patient_count: number }> = hccDist.data ?? [];
   const top20 = [...data].sort((a, b) => b.patient_count - a.patient_count).slice(0, 20);
@@ -844,7 +850,7 @@ function HccTab({ hccDist }: { hccDist: QueryResult<HccDistributionRow[]> }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function RecaptureTab({ recapture, router }: { recapture: QueryResult<unknown>; router: { push: (path: string) => void } }) {
   if (recapture.isLoading) return <Spinner label="Loading recapture gaps..." />;
-  if (recapture.isError) return <ErrorBox message="Failed to load recapture data" />;
+  if (recapture.isError) return <ErrorBox message="Failed to load recapture data" onRetry={recapture.refetch} />;
 
   const raw = recapture.data ?? {};
   const gaps: GapRow[] = (raw as { gaps?: GapRow[]; data?: GapRow[] }).gaps ?? (raw as { data?: GapRow[] }).data ?? (Array.isArray(raw) ? raw as GapRow[] : []);
@@ -867,7 +873,7 @@ function RecaptureTab({ recapture, router }: { recapture: QueryResult<unknown>; 
   return (
     <div>
       {/* KPI Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, marginBottom: 32 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 32 }}>
         <div className="hover-lift card-glow-rose" style={{ ...cardStyle, borderLeft: `4px solid ${C.red}`, padding: 24 }}>
           <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Total Gaps</p>
           <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", color: C.redDark }}>{totalGaps}</p>
@@ -892,7 +898,7 @@ function RecaptureTab({ recapture, router }: { recapture: QueryResult<unknown>; 
             </thead>
             <tbody>
               {topConditions.map((c, i) => (
-                <tr key={c.icd10} style={{ background: i % 2 === 1 ? "#F8FAFD" : "transparent" }}>
+                <tr key={c.icd10} style={{ background: i % 2 === 1 ? tokens.slate50 : "transparent" }}>
                   <td style={tdStyle}>{c.condition}</td>
                   <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 600, color: C.primary }}>{c.icd10}</td>
                   <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600 }}>{c.count}</td>
@@ -970,7 +976,7 @@ function RecaptureTab({ recapture, router }: { recapture: QueryResult<unknown>; 
 // ══════════════════════════════════════════════════════════════════════════════
 function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityPayload> }) {
   if (dataQuality.isLoading) return <Spinner label="Loading data quality metrics..." />;
-  if (dataQuality.isError) return <ErrorBox message="Failed to load data quality" />;
+  if (dataQuality.isError) return <ErrorBox message="Failed to load data quality" onRetry={dataQuality.refetch} />;
 
   const raw = dataQuality.data ?? {};
   const overallScore: number = raw.completeness_score ?? raw.overall_score ?? 0;
@@ -1180,7 +1186,7 @@ function LongitudinalTrendsTab({ revenue }: { revenue: QueryResult<RevenueOpport
               <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>CMS National Avg</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 14, height: 14, background: "#10B98133", border: `1px solid #10B981`, borderRadius: 3 }} />
+              <div style={{ width: 14, height: 14, background: "rgba(16,185,129,0.2)", border: `1px solid ${tokens.success}`, borderRadius: 3 }} />
               <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>Above Benchmark</span>
             </div>
           </div>
@@ -1215,7 +1221,7 @@ function LongitudinalTrendsTab({ revenue }: { revenue: QueryResult<RevenueOpport
             ))}
 
             {/* Green fill area */}
-            <path d={areaPath} fill="#10B981" fillOpacity={0.12} />
+            <path d={areaPath} fill={tokens.success} fillOpacity={0.12} />
 
             {/* CMS dashed line */}
             <polyline
@@ -1460,8 +1466,8 @@ function CmsBenchmarksTab({ revenue }: { revenue: QueryResult<RevenueOpportunity
                   width: `${yourPct}%`,
                   borderRadius: 5,
                   background: above
-                    ? `linear-gradient(90deg, ${C.emerald}, #34D399)`
-                    : `linear-gradient(90deg, ${C.red}, #F87171)`,
+                    ? `linear-gradient(90deg, ${C.emerald}, ${tokens.emerald300})`
+                    : `linear-gradient(90deg, ${C.red}, ${tokens.riskHighSoft})`,
                   transition: "width 0.5s ease",
                 }} />
                 {/* Benchmark marker */}
@@ -1535,7 +1541,7 @@ function SettlementProjectionTab({ revenue }: { revenue: QueryResult<RevenueOppo
       </div>
 
       {/* KPI Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20, marginBottom: 28 }}>
         <div className="hover-lift card-glow-blue" style={{ ...cardStyle, borderLeft: `4px solid ${C.blue}`, padding: 24 }}>
           <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>
             Current Annual RAF Payment
@@ -1580,7 +1586,7 @@ function SettlementProjectionTab({ revenue }: { revenue: QueryResult<RevenueOppo
         />
 
         {/* Result */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", background: "#F0FDF4", borderRadius: 10, border: `1px solid #BBF7D0` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", background: tokens.successSoft, borderRadius: 10, border: `1px solid ${tokens.emerald100}` }}>
           <div>
             <p style={{ margin: 0, fontSize: 13, color: C.textMuted }}>If you close {gapClosurePct}% of gaps...</p>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: C.textMuted }}>
@@ -1886,7 +1892,7 @@ function ScheduledReportsTab() {
             </thead>
             <tbody>
               {reports.map((r, idx) => (
-                <tr key={r.id} style={{ background: idx % 2 === 1 ? "#F8FAFD" : "transparent", transition: "background-color 0.15s ease" }}>
+                <tr key={r.id} style={{ background: idx % 2 === 1 ? tokens.slate50 : "transparent", transition: "background-color 0.15s ease" }}>
                   <td style={{ ...tdStyle, fontWeight: 500 }}>{r.type}</td>
                   <td style={tdStyle}>{r.frequency}</td>
                   <td style={tdStyle}>

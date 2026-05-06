@@ -142,8 +142,8 @@ function QueryError({ error, onRetry }: { error: unknown; onRetry: () => void })
 function MeatPills({ dx }: { dx: AIDiagnosis }) {
   const keys = ["monitoring", "evaluation", "assessment", "treatment"] as const;
   const labels = ["M", "E", "A", "T"];
-  const colors = ["#3B82F6", "#8B5CF6", "#F59E0B", "#10B981"];
-  const bgColors = ["#EFF6FF", "#F5F3FF", "#FFFBEB", "#ECFDF5"];
+  const colors = [tokens.infoBlue, tokens.accentPurple, tokens.warningStrong, tokens.success];
+  const bgColors = [tokens.primarySoft.replace("0.08", "0.12"), tokens.primarySoft, tokens.warningSoft, tokens.successSoft];
   return (
     <div style={{ display: "flex", gap: 5 }}>
       {keys.map((k, i) => {
@@ -152,6 +152,7 @@ function MeatPills({ dx }: { dx: AIDiagnosis }) {
           <div
             key={k}
             title={`${labels[i]}: ${present ? meatVal(dx, k) : "Not documented"}`}
+            aria-label={`${k}: ${present ? "documented" : "not documented"}`}
             style={{
               width: 28,
               height: 28,
@@ -162,9 +163,9 @@ function MeatPills({ dx }: { dx: AIDiagnosis }) {
               fontSize: 11,
               fontWeight: 800,
               letterSpacing: "0.02em",
-              background: present ? bgColors[i] : "#F3F4F6",
-              color: present ? colors[i] : "#D1D5DB",
-              border: `2px solid ${present ? colors[i] + "50" : "#E5E7EB"}`,
+              background: present ? bgColors[i] : tokens.slate100,
+              color: present ? colors[i] : tokens.slate300,
+              border: `2px solid ${present ? colors[i] + "50" : tokens.slate200}`,
               transition: "all 0.2s ease",
               boxShadow: present ? `0 2px 8px ${colors[i]}20` : "none",
             }}
@@ -179,10 +180,10 @@ function MeatPills({ dx }: { dx: AIDiagnosis }) {
 
 function ConfBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const color = value >= 0.85 ? "#10B981" : value >= 0.7 ? "#3B82F6" : value >= 0.5 ? "#F59E0B" : "#EF4444";
+  const color = value >= 0.85 ? tokens.success : value >= 0.7 ? tokens.infoBlue : value >= 0.5 ? tokens.warningStrong : tokens.riskHigh;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 110 }}>
-      <div style={{ flex: 1, height: 7, borderRadius: 4, background: "#F3F4F6", overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 7, borderRadius: 4, background: tokens.slate100, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg, ${color}CC, ${color})`, transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)" }} />
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 34, textAlign: "right", fontFamily: "monospace" }}>{pct}%</span>
@@ -215,15 +216,15 @@ function PatientDropdown({
 
   if (selected) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid #E5E7EB", background: "#F9FAFB" }}>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#DBEAFE", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <User size={14} color="#2563EB" />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${tokens.slate200}`, background: tokens.slate50 }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", background: tokens.primarySoft, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <User size={14} color={tokens.primary} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{name(selected)}</div>
-          <div style={{ fontSize: 12, color: "#6B7280" }}>PID: {selected.pid}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>{name(selected)}</div>
+          <div style={{ fontSize: 12, color: tokens.slate500 }}>PID: {selected.pid}</div>
         </div>
-        <button onClick={() => { onSelect(null); setQ(""); }} style={{ fontSize: 12, color: "#2563EB", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>
+        <button onClick={() => { onSelect(null); setQ(""); }} aria-label="Change patient selection" style={{ fontSize: 12, color: tokens.primary, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>
           Change
         </button>
       </div>
@@ -233,33 +234,33 @@ function PatientDropdown({
   return (
     <div style={{ position: "relative" }}>
       <div style={{ position: "relative" }}>
-        <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+        <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: tokens.slate400 }} />
         <input
           placeholder={loading ? "Loading patients..." : "Search patient by name or PID..."}
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           disabled={loading}
-          style={{ width: "100%", padding: "10px 12px 10px 38px", fontSize: 14, borderRadius: 10, border: "1px solid #E5E7EB", outline: "none", background: "#fff", transition: "border-color 0.2s, box-shadow 0.2s" }}
+          style={{ width: "100%", padding: "10px 12px 10px 38px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, outline: "none", background: tokens.white, transition: "border-color 0.2s, box-shadow 0.2s" }}
         />
       </div>
       {open && filtered.length > 0 && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
-          <div style={{ position: "absolute", zIndex: 50, top: "100%", marginTop: 4, width: "100%", borderRadius: 12, border: "1px solid #E5E7EB", background: "#fff", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ position: "absolute", zIndex: 50, top: "100%", marginTop: 4, width: "100%", borderRadius: 12, border: `1px solid ${tokens.slate200}`, background: tokens.white, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 260, overflowY: "auto" }}>
             {filtered.map((p) => (
               <button
                 key={p.pid}
                 onClick={() => { onSelect(p); setOpen(false); }}
-                style={{ width: "100%", textAlign: "left", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 14, border: "none", background: "none", cursor: "pointer", borderBottom: "1px solid #F3F4F6" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#F9FAFB")}
+                style={{ width: "100%", textAlign: "left", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 14, border: "none", background: "none", cursor: "pointer", borderBottom: `1px solid ${tokens.slate100}` }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = tokens.slate50)}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
               >
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#DBEAFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#2563EB" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: tokens.primarySoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: tokens.primary }}>
                   {(p.fname || p.first_name || "").trim()[0] || "\u2022"}
                 </div>
                 <span style={{ fontWeight: 500 }}>{name(p)}</span>
-                <span style={{ marginLeft: "auto", fontSize: 12, color: "#9CA3AF" }}>PID {p.pid}</span>
+                <span style={{ marginLeft: "auto", fontSize: 12, color: tokens.slate400 }}>PID {p.pid}</span>
               </button>
             ))}
           </div>
@@ -278,28 +279,28 @@ function AnalyzingOverlay() {
       <div className="shimmer" style={{ position: "absolute", inset: 0, opacity: 0.5 }} />
       <div style={{ position: "relative", zIndex: 1 }}>
         {/* Pulsing brain icon */}
-        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: 20, background: "linear-gradient(135deg, #EFF6FF, #DBEAFE)", marginBottom: 20 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, marginBottom: 20 }}>
           <div className="soft-pulse">
-            <Brain size={36} style={{ color: "#2563EB" }} />
+            <Brain size={36} style={{ color: tokens.primary }} />
           </div>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Analyzing Clinical Note</div>
-        <div style={{ fontSize: 14, color: "#6B7280", marginBottom: 20 }}>Extracting diagnoses, validating codes, and checking MEAT documentation</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: tokens.slate900, marginBottom: 6 }}>Analyzing Clinical Note</div>
+        <div style={{ fontSize: 14, color: tokens.slate500, marginBottom: 20 }}>Extracting diagnoses, validating codes, and checking MEAT documentation</div>
         {/* Progress steps */}
-        <div style={{ display: "inline-flex", gap: 24, padding: "14px 24px", borderRadius: 12, background: "#F9FAFB", border: "1px solid #F3F4F6" }}>
+        <div style={{ display: "inline-flex", gap: 24, padding: "14px 24px", borderRadius: 12, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
           {[
             { icon: <Microscope size={15} />, text: "Parsing" },
             { icon: <Stethoscope size={15} />, text: "Diagnosing" },
             { icon: <ShieldCheck size={15} />, text: "Validating" },
             { icon: <Sparkles size={15} />, text: "Scoring" },
           ].map((step, i) => (
-            <div key={`step-${i}`} className={`stagger-${i + 1}`} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6B7280", fontWeight: 500 }}>
-              <div className="soft-pulse" style={{ color: "#3B82F6", animationDelay: `${i * 0.4}s` }}>{step.icon}</div>
+            <div key={`step-${i}`} className={`stagger-${i + 1}`} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: tokens.slate500, fontWeight: 500 }}>
+              <div className="soft-pulse" style={{ color: tokens.infoBlue, animationDelay: `${i * 0.4}s` }}>{step.icon}</div>
               {step.text}
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 16 }}>Typically takes 60-90 seconds for complex notes</div>
+        <div style={{ fontSize: 12, color: tokens.slate400, marginTop: 16 }}>Typically takes 60-90 seconds for complex notes</div>
       </div>
     </div>
   );
@@ -315,13 +316,13 @@ function SectionHeader({ icon, title, count, countColor, countBg }: {
   countBg?: string;
 }) {
   return (
-    <div style={{ padding: "16px 20px", borderBottom: "1px solid #F3F4F6", display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ width: 32, height: 32, borderRadius: 8, background: countBg || "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ padding: "16px 20px", borderBottom: `1px solid ${tokens.slate100}`, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: countBg || tokens.primarySoft, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {icon}
       </div>
-      <span style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{title}</span>
+      <span style={{ fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>{title}</span>
       {count != null && (
-        <span style={{ fontSize: 12, fontWeight: 700, background: countBg || "#EFF6FF", color: countColor || "#2563EB", padding: "3px 10px", borderRadius: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, background: countBg || tokens.primarySoft, color: countColor || tokens.primary, padding: "3px 10px", borderRadius: 10 }}>
           {count}
         </span>
       )}
@@ -421,7 +422,7 @@ export default function AnalysisPage() {
   const label: React.CSSProperties = {
     fontSize: 13,
     fontWeight: 600,
-    color: "#374151",
+    color: tokens.slate700,
     marginBottom: 6,
     display: "block",
   };
@@ -434,16 +435,16 @@ export default function AnalysisPage() {
     }`;
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 16px" }}>
+    <div className="rci-page-pad-desktop" style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px" }}>
       {/* Header */}
       <div className="animate-fade-in" style={{ marginBottom: 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg, #EFF6FF, #DBEAFE)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(37, 99, 235, 0.15)" }}>
-            <Stethoscope size={20} color="#2563EB" />
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(37, 99, 235, 0.15)" }}>
+            <Stethoscope size={20} color={tokens.primary} />
           </div>
           <div>
             <h1 className="gradient-text" style={{ fontSize: 24, fontWeight: 800, margin: 0, lineHeight: 1.2 }}>Clinical Note Analysis</h1>
-            <p style={{ fontSize: 14, color: "#6B7280", margin: 0, marginTop: 2 }}>
+            <p style={{ fontSize: 14, color: tokens.slate500, margin: 0, marginTop: 2 }}>
               Extract diagnoses, validate HCC codes, and generate MEAT documentation
             </p>
           </div>
@@ -453,7 +454,7 @@ export default function AnalysisPage() {
       {/* Input Card */}
       <div className="premium-card premium-shadow" style={{ marginBottom: result ? 28 : 0 }}>
         {/* Mode Tabs */}
-        <div style={{ display: "flex", gap: 8, padding: "16px 20px", borderBottom: "1px solid #F3F4F6", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, padding: "16px 20px", borderBottom: `1px solid ${tokens.slate100}`, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => setMode("paste")} className={tabBtn(mode === "paste")}>
             <ClipboardPaste size={14} /> Paste Note
           </button>
@@ -472,23 +473,23 @@ export default function AnalysisPage() {
             <div>
               <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
                 <div style={{ flex: "0 0 180px" }}>
-                  <label style={label}>Patient ID <span style={{ fontWeight: 400, color: "#9CA3AF" }}>(optional)</span></label>
+                  <label style={label}>Patient ID <span style={{ fontWeight: 400, color: tokens.slate400 }}>(optional)</span></label>
                   <input
                     value={pastePatientId}
                     onChange={(e) => setPastePatientId(e.target.value)}
                     placeholder="e.g. 1"
                     className="focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                    style={{ width: "100%", padding: "9px 12px", fontSize: 14, borderRadius: 10, border: "1px solid #E5E7EB", outline: "none", transition: "border-color 0.2s, box-shadow 0.2s" }}
+                    style={{ width: "100%", padding: "9px 12px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, outline: "none", transition: "border-color 0.2s, box-shadow 0.2s" }}
                   />
                 </div>
               </div>
               <label style={label}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <FileText size={13} color="#6B7280" /> Clinical Note
+                  <FileText size={13} color={tokens.slate500} /> Clinical Note
                 </span>
               </label>
               {/* Polished textarea with gutter */}
-              <div style={{ position: "relative", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden", transition: "border-color 0.2s, box-shadow 0.2s" }}
+              <div style={{ position: "relative", borderRadius: 12, border: `1px solid ${tokens.slate200}`, overflow: "hidden", transition: "border-color 0.2s, box-shadow 0.2s" }}
                 className="focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400"
               >
                 {/* Line number gutter */}
@@ -498,8 +499,8 @@ export default function AnalysisPage() {
                   top: 0,
                   bottom: 0,
                   width: 44,
-                  background: "#F8FAFC",
-                  borderRight: "1px solid #F0F1F3",
+                  background: tokens.slate50,
+                  borderRight: `1px solid ${tokens.slate100}`,
                   pointerEvents: "none",
                   zIndex: 1,
                   paddingTop: 12,
@@ -510,7 +511,7 @@ export default function AnalysisPage() {
                     <div key={i} style={{
                       fontSize: 11,
                       fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace",
-                      color: "#C4C9D4",
+                      color: tokens.slate300,
                       lineHeight: "22.1px",
                       textAlign: "right",
                       paddingRight: 10,
@@ -532,7 +533,7 @@ export default function AnalysisPage() {
                     fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace",
                     lineHeight: "22.1px",
                     border: "none",
-                    background: "#FAFBFC",
+                    background: tokens.slate50,
                     outline: "none",
                     resize: "vertical",
                   }}
@@ -553,8 +554,8 @@ export default function AnalysisPage() {
                     fontWeight: 600,
                     borderRadius: 10,
                     border: "none",
-                    background: (analyzing || !noteText.trim()) ? "#D1D5DB" : "linear-gradient(135deg, #2563EB, #1D4ED8)",
-                    color: (analyzing || !noteText.trim()) ? "#9CA3AF" : "#fff",
+                    background: (analyzing || !noteText.trim()) ? tokens.slate300 : `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`,
+                    color: (analyzing || !noteText.trim()) ? tokens.slate400 : tokens.white,
                     cursor: (analyzing || !noteText.trim()) ? "not-allowed" : "pointer",
                     transition: "all 0.2s",
                     boxShadow: (analyzing || !noteText.trim()) ? "none" : "0 2px 8px rgba(37, 99, 235, 0.3)",
@@ -563,7 +564,7 @@ export default function AnalysisPage() {
                   {analyzing ? <Loader2 size={16} className="animate-spin" /> : <Activity size={16} />}
                   {analyzing ? "Analyzing..." : "Analyze Note"}
                 </button>
-                <span style={{ fontSize: 12, color: "#9CA3AF", fontFamily: "monospace" }}>
+                <span style={{ fontSize: 12, color: tokens.slate400, fontFamily: "monospace" }}>
                   {noteText.length > 0 ? `${noteText.length.toLocaleString()} chars` : ""}
                 </span>
               </div>
@@ -592,7 +593,7 @@ export default function AnalysisPage() {
                   ) : encountersIsError ? (
                     <QueryError error={encountersError} onRetry={() => refetchEncounters()} />
                   ) : encountersData?.encounters?.length ? (
-                    <div style={{ border: "1px solid #E5E7EB", borderRadius: 10, maxHeight: 240, overflowY: "auto" }}>
+                    <div style={{ border: `1px solid ${tokens.slate200}`, borderRadius: 10, maxHeight: 240, overflowY: "auto" }}>
                       {(encountersData?.encounters ?? []).map((enc) => (
                         <button
                           key={enc.encounter_id}
@@ -604,9 +605,9 @@ export default function AnalysisPage() {
                             display: "flex",
                             alignItems: "center",
                             gap: 12,
-                            background: selectedEnc === enc.encounter_id ? "#EFF6FF" : "transparent",
-                            borderLeft: selectedEnc === enc.encounter_id ? "3px solid #2563EB" : "3px solid transparent",
-                            borderBottom: "1px solid #F3F4F6",
+                            background: selectedEnc === enc.encounter_id ? tokens.primarySoft : "transparent",
+                            borderLeft: selectedEnc === enc.encounter_id ? `3px solid ${tokens.primary}` : "3px solid transparent",
+                            borderBottom: `1px solid ${tokens.slate100}`,
                             borderTop: "none",
                             borderRight: "none",
                             cursor: "pointer",
@@ -615,19 +616,19 @@ export default function AnalysisPage() {
                           }}
                         >
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, color: "#111827" }}>Encounter #{enc.encounter_id}</div>
-                            <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>{enc.reason || "No reason recorded"}</div>
+                            <div style={{ fontWeight: 600, color: tokens.slate900 }}>Encounter #{enc.encounter_id}</div>
+                            <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 2 }}>{enc.reason || "No reason recorded"}</div>
                           </div>
                           <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 12, color: "#6B7280" }}>{enc.date}</div>
-                            {enc.provider_lname && <div style={{ fontSize: 11, color: "#9CA3AF" }}>Dr. {enc.provider_lname}</div>}
+                            <div style={{ fontSize: 12, color: tokens.slate500 }}>{enc.date}</div>
+                            {enc.provider_lname && <div style={{ fontSize: 11, color: tokens.slate400 }}>Dr. {enc.provider_lname}</div>}
                           </div>
-                          {selectedEnc === enc.encounter_id && <CheckCircle2 size={16} color="#2563EB" />}
+                          {selectedEnc === enc.encounter_id && <CheckCircle2 size={16} color={tokens.primary} />}
                         </button>
                       ))}
                     </div>
                   ) : (
-                    <p style={{ fontSize: 14, color: "#9CA3AF", padding: 16 }}>No encounters found.</p>
+                    <p style={{ fontSize: 14, color: tokens.slate400, padding: 16 }}>No encounters found for this patient this year. Try the Paste Note tab to analyze a clinical note directly.</p>
                   )}
                 </div>
               )}
@@ -646,8 +647,8 @@ export default function AnalysisPage() {
                     fontWeight: 600,
                     borderRadius: 10,
                     border: "none",
-                    background: (analyzing || !selectedEnc) ? "#D1D5DB" : "linear-gradient(135deg, #2563EB, #1D4ED8)",
-                    color: (analyzing || !selectedEnc) ? "#9CA3AF" : "#fff",
+                    background: (analyzing || !selectedEnc) ? tokens.slate300 : `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`,
+                    color: (analyzing || !selectedEnc) ? tokens.slate400 : tokens.white,
                     cursor: (analyzing || !selectedEnc) ? "not-allowed" : "pointer",
                     transition: "all 0.2s",
                     boxShadow: (analyzing || !selectedEnc) ? "none" : "0 2px 8px rgba(37, 99, 235, 0.3)",
@@ -669,14 +670,14 @@ export default function AnalysisPage() {
       {result && !analyzing && (
         <div className="animate-fade-in">
           {/* Summary Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
             {[
-              { label: "Diagnoses", value: diagnoses.length, icon: <FileText size={18} />, color: "#fff", gradient: "stat-card-blue" },
-              { label: "HCC Codes", value: hccCount, icon: <ShieldCheck size={18} />, color: "#fff", gradient: "stat-card-emerald" },
-              { label: "Confidence", value: `${Math.round(confidence * 100)}%`, icon: <TrendingUp size={18} />, color: "#fff", gradient: confidence >= 0.7 ? "stat-card-emerald" : "stat-card-amber" },
-              { label: "MEAT Score", value: `${meatCount}/${meatTotal}`, icon: <Sparkles size={18} />, color: "#fff", gradient: "stat-card-rose" },
+              { label: "Diagnoses", value: diagnoses.length, icon: <FileText size={18} />, color: tokens.white, gradient: "stat-card-blue" },
+              { label: "HCC Codes", value: hccCount, icon: <ShieldCheck size={18} />, color: tokens.white, gradient: "stat-card-emerald" },
+              { label: "Confidence", value: `${Math.round(confidence * 100)}%`, icon: <TrendingUp size={18} />, color: tokens.white, gradient: confidence >= 0.7 ? "stat-card-emerald" : "stat-card-amber" },
+              { label: "MEAT Score", value: `${meatCount}/${meatTotal}`, icon: <Sparkles size={18} />, color: tokens.white, gradient: "stat-card-rose" },
             ].map((s, i) => (
-              <div key={s.label} className={`${s.gradient} hover-lift animate-fade-in stagger-${i + 1}`} style={{ padding: "18px 20px", borderRadius: 14, display: "flex", alignItems: "center", gap: 14, color: "#fff" }}>
+              <div key={s.label} className={`${s.gradient} hover-lift animate-fade-in stagger-${i + 1}`} style={{ padding: "18px 20px", borderRadius: 14, display: "flex", alignItems: "center", gap: 14, color: tokens.white }}>
                 <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
                   {s.icon}
                 </div>
@@ -698,15 +699,15 @@ export default function AnalysisPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                borderLeft: `4px solid ${confidence >= 0.85 ? "#10B981" : confidence >= 0.6 ? "#F59E0B" : "#EF4444"}`,
+                borderLeft: `4px solid ${confidence >= 0.85 ? tokens.success : confidence >= 0.6 ? tokens.warningStrong : tokens.riskHigh}`,
               }}
             >
-              {confidence >= 0.85 ? <CheckCircle2 size={20} color="#10B981" /> : confidence >= 0.6 ? <AlertTriangle size={20} color="#F59E0B" /> : <XCircle size={20} color="#EF4444" />}
+              {confidence >= 0.85 ? <CheckCircle2 size={20} color={tokens.success} /> : confidence >= 0.6 ? <AlertTriangle size={20} color={tokens.warningStrong} /> : <XCircle size={20} color={tokens.riskHigh} />}
               <div style={{ flex: 1 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: tokens.slate900 }}>
                   {confidence >= 0.85 ? "Auto-Accept" : confidence >= 0.6 ? "Needs Review" : "Full Audit Required"}
                 </span>
-                <span style={{ fontSize: 13, color: "#6B7280", marginLeft: 10 }}>
+                <span style={{ fontSize: 13, color: tokens.slate500, marginLeft: 10 }}>
                   Overall confidence: {Math.round(confidence * 100)}%
                 </span>
               </div>
@@ -717,23 +718,23 @@ export default function AnalysisPage() {
           {diagnoses.length > 0 && (
             <div className="premium-card premium-shadow animate-fade-in" style={{ marginBottom: 24, overflow: "hidden" }}>
               <SectionHeader
-                icon={<FileText size={16} color="#3B82F6" />}
+                icon={<FileText size={16} color={tokens.infoBlue} />}
                 title="Extracted Diagnoses"
                 count={diagnoses.length}
-                countColor="#2563EB"
-                countBg="#EFF6FF"
+                countColor={tokens.primary}
+                countBg={tokens.primarySoft}
               />
               <div style={{ overflowX: "auto" }}>
-                <table className="premium-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <table aria-label="Extracted diagnoses" className="premium-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
-                    <tr style={{ background: "#F9FAFB", borderBottom: "2px solid #E5E7EB" }}>
+                    <tr style={{ background: tokens.slate50, borderBottom: `2px solid ${tokens.slate200}` }}>
                       <th style={{ width: 32, padding: "12px 8px" }} />
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#6B7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>ICD-10</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#6B7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Description</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#6B7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>HCC</th>
-                      <th style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, color: "#6B7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Coeff</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#6B7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", minWidth: 130 }}>Confidence</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: "#6B7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>MEAT</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>ICD-10</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Description</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>HCC</th>
+                      <th style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Coeff</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", minWidth: 130 }}>Confidence</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>MEAT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -746,63 +747,63 @@ export default function AnalysisPage() {
                             onClick={() => toggle(i)}
                             style={{
                               cursor: "pointer",
-                              borderBottom: "1px solid #F3F4F6",
-                              borderLeft: hcc ? "3px solid #3B82F6" : "3px solid transparent",
+                              borderBottom: `1px solid ${tokens.slate100}`,
+                              borderLeft: hcc ? `3px solid ${tokens.infoBlue}` : "3px solid transparent",
                               transition: "background 0.15s",
                             }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = tokens.slate50)}
                             onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                           >
                             <td style={{ padding: "12px 8px", textAlign: "center" }}>
-                              {exp ? <ChevronDown size={14} color="#3B82F6" /> : <ChevronRight size={14} color="#9CA3AF" />}
+                              {exp ? <ChevronDown size={14} color={tokens.infoBlue} /> : <ChevronRight size={14} color={tokens.slate400} />}
                             </td>
                             <td style={{ padding: "12px 14px" }}>
-                              <code style={{ fontSize: 12, fontWeight: 700, background: "#EFF6FF", color: "#1D4ED8", padding: "4px 8px", borderRadius: 6, border: "1px solid #DBEAFE" }}>{dxIcd10(dx)}</code>
+                              <code style={{ fontSize: 12, fontWeight: 700, background: tokens.primarySoft, color: tokens.primaryDark, padding: "4px 8px", borderRadius: 6, border: `1px solid ${tokens.slate200}` }}>{dxIcd10(dx)}</code>
                             </td>
-                            <td style={{ padding: "12px 14px", fontWeight: 500, color: "#111827", maxWidth: 280 }}>
+                            <td style={{ padding: "12px 14px", fontWeight: 500, color: tokens.slate900, maxWidth: 280 }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dxCondition(dx)}</div>
                             </td>
                             <td style={{ padding: "12px 14px" }}>
                               {hcc ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg, #DBEAFE, #E0E7FF)", color: "#1D4ED8", padding: "4px 10px", borderRadius: 8, border: "1px solid #BFDBFE" }}>{hcc}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, color: tokens.primaryDark, padding: "4px 10px", borderRadius: 8, border: `1px solid ${tokens.slate200}` }}>{hcc}</span>
                               ) : (
-                                <span style={{ color: "#D1D5DB" }}>--</span>
+                                <span style={{ color: tokens.slate300 }}>--</span>
                               )}
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: "#374151", fontSize: 13 }}>
+                            <td style={{ padding: "12px 14px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: tokens.slate700, fontSize: 13 }}>
                               {dxCoeff(dx) != null ? dxCoeff(dx)!.toFixed(3) : "--"}
                             </td>
                             <td style={{ padding: "12px 14px" }}><ConfBar value={dx.confidence} /></td>
                             <td style={{ padding: "12px 14px" }}><MeatPills dx={dx} /></td>
                           </tr>
                           {exp && (
-                            <tr style={{ background: "#F8FAFC" }}>
+                            <tr style={{ background: tokens.slate50 }}>
                               <td colSpan={7} style={{ padding: "18px 24px 18px 52px" }}>
                                 {dx.supporting_text && (
-                                  <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: "#fff", border: "1px solid #E5E7EB" }}>
-                                    <span style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Supporting Evidence</span>
-                                    <div style={{ fontSize: 13, color: "#374151", fontStyle: "italic", marginTop: 6, lineHeight: 1.6 }}>&ldquo;{dx.supporting_text}&rdquo;</div>
+                                  <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}` }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em" }}>Supporting Evidence</span>
+                                    <div style={{ fontSize: 13, color: tokens.slate700, fontStyle: "italic", marginTop: 6, lineHeight: 1.6 }}>&ldquo;{dx.supporting_text}&rdquo;</div>
                                   </div>
                                 )}
-                                <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>MEAT Documentation</div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>MEAT Documentation</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
                                   {(["monitoring", "evaluation", "assessment", "treatment"] as const).map((k, idx) => {
                                     const v = meatVal(dx, k);
-                                    const colors = ["#3B82F6", "#8B5CF6", "#F59E0B", "#10B981"];
-                                    const bgColors = ["#EFF6FF", "#F5F3FF", "#FFFBEB", "#ECFDF5"];
+                                    const colors = [tokens.infoBlue, tokens.accentPurple, tokens.warningStrong, tokens.success];
+                                    const bgColors = [tokens.primarySoft, tokens.primarySoft, tokens.warningSoft, tokens.successSoft];
                                     const letters = ["M", "E", "A", "T"];
                                     return (
-                                      <div key={k} style={{ padding: "12px 14px", borderRadius: 10, background: v ? bgColors[idx] : "#F9FAFB", border: `1px solid ${v ? colors[idx] + "30" : "#E5E7EB"}`, transition: "all 0.2s" }}>
+                                      <div key={k} style={{ padding: "12px 14px", borderRadius: 10, background: v ? bgColors[idx] : tokens.slate50, border: `1px solid ${v ? colors[idx] + "30" : tokens.slate200}`, transition: "all 0.2s" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                                           <div style={{
                                             width: 22, height: 22, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
-                                            fontSize: 10, fontWeight: 800, background: v ? colors[idx] : "#D1D5DB", color: "#fff",
+                                            fontSize: 10, fontWeight: 800, background: v ? colors[idx] : tokens.slate300, color: tokens.white,
                                           }}>
                                             {letters[idx]}
                                           </div>
-                                          <span style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "capitalize" }}>{k}</span>
+                                          <span style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "capitalize" }}>{k}</span>
                                         </div>
-                                        <div style={{ fontSize: 12, color: v ? "#374151" : "#9CA3AF", fontStyle: v ? "normal" : "italic", lineHeight: 1.5 }}>
+                                        <div style={{ fontSize: 12, color: v ? tokens.slate700 : tokens.slate400, fontStyle: v ? "normal" : "italic", lineHeight: 1.5 }}>
                                           {v || "Not documented"}
                                         </div>
                                       </div>
@@ -825,11 +826,11 @@ export default function AnalysisPage() {
           {suspects.length > 0 && (
             <div className="premium-card premium-shadow animate-fade-in" style={{ marginBottom: 24, overflow: "hidden" }}>
               <SectionHeader
-                icon={<AlertTriangle size={16} color="#D97706" />}
+                icon={<AlertTriangle size={16} color={tokens.riskMedium} />}
                 title="Suspect Conditions"
                 count={suspects.length}
-                countColor="#D97706"
-                countBg="#FFFBEB"
+                countColor={tokens.riskMedium}
+                countBg={tokens.warningSoft}
               />
               <div style={{ padding: "4px 0" }}>
                 {suspects.map((s, i) => (
@@ -840,29 +841,29 @@ export default function AnalysisPage() {
                       padding: "16px 20px",
                       margin: "6px 12px",
                       borderRadius: 10,
-                      background: "#FFFBEB",
-                      border: "1px solid #FDE68A",
+                      background: tokens.warningSoft,
+                      border: `1px solid ${tokens.warningBorder}`,
                       display: "flex",
                       alignItems: "center",
                       gap: 14,
                       transition: "all 0.2s",
                     }}
                   >
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <AlertTriangle size={16} color="#D97706" />
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: tokens.warningSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <AlertTriangle size={16} color={tokens.riskMedium} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{s.condition || "Unknown"}</span>
-                        <code style={{ fontSize: 11, fontWeight: 700, background: "#FEF3C7", color: "#92400E", padding: "3px 8px", borderRadius: 6, border: "1px solid #FDE68A" }}>{suspIcd(s)}</code>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>{s.condition || "Unknown"}</span>
+                        <code style={{ fontSize: 11, fontWeight: 700, background: tokens.warningSoft, color: tokens.warningText, padding: "3px 8px", borderRadius: 6, border: `1px solid ${tokens.warningBorder}` }}>{suspIcd(s)}</code>
                         {(s.hcc_code || s.suspect_hcc) && (
-                          <span style={{ fontSize: 11, fontWeight: 700, background: "#DBEAFE", color: "#1D4ED8", padding: "3px 8px", borderRadius: 6, border: "1px solid #BFDBFE" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, background: tokens.primarySoft, color: tokens.primaryDark, padding: "3px 8px", borderRadius: 6, border: `1px solid ${tokens.slate200}` }}>
                             {s.hcc_code || s.suspect_hcc}
                           </span>
                         )}
                       </div>
                       {suspEvidence(s) && (
-                        <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6, lineHeight: 1.6 }}>{suspEvidence(s)}</div>
+                        <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 6, lineHeight: 1.6 }}>{suspEvidence(s)}</div>
                       )}
                     </div>
                     <div style={{ width: 120, flexShrink: 0 }}><ConfBar value={suspConf(s)} /></div>
@@ -886,55 +887,55 @@ export default function AnalysisPage() {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  borderBottom: pipelineOpen ? "1px solid #F3F4F6" : "none",
+                  borderBottom: pipelineOpen ? `1px solid ${tokens.slate100}` : "none",
                 }}
               >
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Clock size={15} color="#6B7280" />
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: tokens.slate100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Clock size={15} color={tokens.slate500} />
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "#374151" }}>Pipeline Details</span>
-                <ChevronDown size={14} color="#9CA3AF" style={{ marginLeft: "auto", transform: pipelineOpen ? "none" : "rotate(-90deg)", transition: "transform 0.2s" }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: tokens.slate700 }}>Pipeline Details</span>
+                <ChevronDown size={14} color={tokens.slate400} style={{ marginLeft: "auto", transform: pipelineOpen ? "none" : "rotate(-90deg)", transition: "transform 0.2s" }} />
               </button>
               {pipelineOpen && (
                 <div style={{ padding: "18px 20px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
                     {meta.pipeline_version && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: "#F9FAFB", border: "1px solid #F3F4F6" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 6 }}>Version</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>{meta.pipeline_version}</div>
+                      <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Version</div>
+                        <div style={{ fontSize: 13, fontFamily: "monospace", color: tokens.slate700, fontWeight: 600 }}>{meta.pipeline_version}</div>
                       </div>
                     )}
                     {meta.total_time_seconds != null && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: "#F9FAFB", border: "1px solid #F3F4F6" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 6 }}>Total Time</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>{Number(meta.total_time_seconds).toFixed(1)}s</div>
+                      <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Total Time</div>
+                        <div style={{ fontSize: 13, fontFamily: "monospace", color: tokens.slate700, fontWeight: 600 }}>{Number(meta.total_time_seconds).toFixed(1)}s</div>
                       </div>
                     )}
                     {meta.turns != null && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: "#F9FAFB", border: "1px solid #F3F4F6" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 6 }}>Turns</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>{meta.turns}</div>
+                      <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Turns</div>
+                        <div style={{ fontSize: 13, fontFamily: "monospace", color: tokens.slate700, fontWeight: 600 }}>{meta.turns}</div>
                       </div>
                     )}
                   </div>
                   {(meta.stages?.length ?? 0) > 0 && (
                     <div style={{ marginTop: 16 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 8 }}>Stages</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 8 }}>Stages</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {meta.stages!.map((s: string, i: number) => (
-                          <span key={i} style={{ fontSize: 11, fontFamily: "monospace", padding: "4px 10px", borderRadius: 6, border: "1px solid #E5E7EB", color: "#6B7280", background: "#F9FAFB" }}>{s}</span>
+                          <span key={i} style={{ fontSize: 11, fontFamily: "monospace", padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate200}`, color: tokens.slate500, background: tokens.slate50 }}>{s}</span>
                         ))}
                       </div>
                     </div>
                   )}
                   {meta.timings && Object.keys(meta.timings).length > 0 && (
                     <div style={{ marginTop: 16 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 8 }}>Timing</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 8 }}>Timing</div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
                         {Object.entries(meta.timings).map(([k, v]) => (
-                          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: "#F9FAFB", border: "1px solid #F3F4F6", fontSize: 12 }}>
-                            <span style={{ fontFamily: "monospace", color: "#6B7280" }}>{k}</span>
-                            <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#374151" }}>
+                          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: tokens.slate50, border: `1px solid ${tokens.slate100}`, fontSize: 12 }}>
+                            <span style={{ fontFamily: "monospace", color: tokens.slate500 }}>{k}</span>
+                            <span style={{ fontFamily: "monospace", fontWeight: 700, color: tokens.slate700 }}>
                               {typeof v === "number" ? `${(v as number).toFixed(2)}s` : String(v)}
                             </span>
                           </div>
@@ -950,13 +951,13 @@ export default function AnalysisPage() {
           {/* Coding Notes */}
           {result.coding_notes && (
             <div className="premium-card animate-fade-in" style={{ padding: "18px 20px", marginTop: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#374151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <FileText size={13} color="#6B7280" />
+              <div style={{ fontSize: 14, fontWeight: 700, color: tokens.slate700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 7, background: tokens.slate100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <FileText size={13} color={tokens.slate500} />
                 </div>
                 Coding Notes
               </div>
-              <div style={{ fontSize: 13, color: "#6B7280", lineHeight: 1.7, whiteSpace: "pre-wrap", padding: "14px 16px", borderRadius: 10, background: "#F9FAFB", border: "1px solid #F3F4F6" }}>{result.coding_notes}</div>
+              <div style={{ fontSize: 13, color: tokens.slate500, lineHeight: 1.7, whiteSpace: "pre-wrap", padding: "14px 16px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>{result.coding_notes}</div>
             </div>
           )}
         </div>
