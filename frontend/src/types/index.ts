@@ -260,6 +260,11 @@ export interface DBSuspect {
   evidence_type: string;
   evidence_detail?: any;
   confidence_score: number;
+  /** Raw (uncalibrated) confidence — same as confidence_score. Populated by backend serializer. */
+  raw_confidence?: number;
+  /** Platt-calibrated probability in [0,1]. Falls back to raw_confidence when
+   *  the calibration feature flag is off or no model artifact exists. */
+  calibrated_confidence?: number;
   status: "open" | "accepted" | "dismissed" | "coded";
   reviewed_by?: string;
   reviewed_at?: string;

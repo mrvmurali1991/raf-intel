@@ -1149,7 +1149,11 @@ export default function SuspectsPage() {
         )}
 
         {!isLoading && pagedSuspects.map((s, idx) => {
-          const conf = s.confidence_score ?? 0;
+          // Prefer calibrated_confidence (Platt-scaled) over the raw score.
+          // Falls back to confidence_score so legacy rows without the
+          // calibrated field still render correctly.
+          const conf = s.calibrated_confidence ?? s.confidence_score ?? 0;
+          const isCalibrated = s.calibrated_confidence != null && s.calibrated_confidence !== s.confidence_score;
           const cConf = confColor(conf);
           const accent = confAccent(conf);
           const isOpen = (s.status || "open") === "open";
@@ -1364,39 +1368,60 @@ export default function SuspectsPage() {
               </div>
 
               {/* Confidence bar */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <div
-                  style={{
-                    flex: 1,
-                    height: 6,
-                    borderRadius: 4,
-                    backgroundColor: confSoftBg(conf),
-                    overflow: "hidden",
-                    minWidth: 40,
-                  }}
-                >
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div
                     style={{
-                      height: "100%",
-                      width: `${Math.max(4, conf * 100)}%`,
+                      flex: 1,
+                      height: 6,
                       borderRadius: 4,
-                      backgroundColor: cConf,
-                      transition: "width 0.3s ease",
+                      backgroundColor: confSoftBg(conf),
+                      overflow: "hidden",
+                      minWidth: 40,
                     }}
-                  />
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.max(4, conf * 100)}%`,
+                        borderRadius: 4,
+                        backgroundColor: cConf,
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: cConf,
+                      fontVariantNumeric: "tabular-nums",
+                      minWidth: 32,
+                      textAlign: "right",
+                    }}
+                  >
+                    {(conf * 100).toFixed(0)}%
+                  </span>
                 </div>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: cConf,
-                    fontVariantNumeric: "tabular-nums",
-                    minWidth: 32,
-                    textAlign: "right",
-                  }}
-                >
-                  {(conf * 100).toFixed(0)}%
-                </span>
+                {/* Calibrated chip — shown when Platt scaling has been applied */}
+                {isCalibrated && (
+                  <span
+                    title={`Raw: ${((s.confidence_score ?? 0) * 100).toFixed(0)}% → Calibrated: ${(conf * 100).toFixed(0)}%`}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 600,
+                      letterSpacing: "0.04em",
+                      color: "#6366f1",
+                      backgroundColor: "#eef2ff",
+                      borderRadius: 3,
+                      padding: "1px 4px",
+                      width: "fit-content",
+                      textTransform: "uppercase" as const,
+                    }}
+                  >
+                    calibrated
+                  </span>
+                )}
               </div>
 
               {/* RAF lift */}

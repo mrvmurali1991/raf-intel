@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from "lucide-react";
@@ -9,8 +10,16 @@ import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
 import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton";
-import RecaptureVelocityKpis from "@/components/RecaptureVelocityKpis";
-import RecaptureDecayChart from "@/components/RecaptureDecayChart";
+// Recharts-heavy components are dynamically imported so the initial bundle
+// does not pay the ~250 kB Recharts parse cost on every page load.
+const RecaptureVelocityKpis = dynamic(
+  () => import("@/components/RecaptureVelocityKpis"),
+  { ssr: false }
+);
+const RecaptureDecayChart = dynamic(
+  () => import("@/components/RecaptureDecayChart"),
+  { ssr: false }
+);
 import OutreachSummaryCards from "@/components/OutreachSummaryCards";
 import { BonusLeaderboard } from "@/components/BonusLeaderboard";
 import CfoExecutiveSummary from "@/components/CfoExecutiveSummary";
