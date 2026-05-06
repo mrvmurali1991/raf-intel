@@ -206,7 +206,15 @@ def dashboard_stats(
         "meat_compliance_pct": 0.0,
         "raf_distribution": [],
         "top_undercoded": [],
+        # degraded=True signals the UI to show a soft warning instead of
+        # interpreting zeros as real clinical data.
+        "degraded": True,
     }
+
+    # Track whether any secondary metric failed so callers can surface
+    # a soft "data may be incomplete" warning rather than showing zeros
+    # as authoritative data.
+    _degraded_fields: list[str] = []
 
     try:
         with raf_cursor() as cur:
@@ -216,7 +224,7 @@ def dashboard_stats(
             )
             has_active = cur.fetchone()["cnt"] > 0
     except Exception as e:
-        logger.warning("dashboard_stats emr_connections check failed: %s", e)
+        logger.error("dashboard_stats emr_connections check failed: %s", e)
         return ZERO_RESPONSE
 
     has_uploaded_data = False
@@ -229,7 +237,7 @@ def dashboard_stats(
                 )
                 has_uploaded_data = cur.fetchone() is not None
         except Exception as e:
-            logger.warning("dashboard_stats upload patients check failed: %s", e)
+            logger.error("dashboard_stats upload patients check failed: %s", e)
         if not has_uploaded_data:
             return ZERO_RESPONSE
 
@@ -253,7 +261,8 @@ def dashboard_stats(
             )
             total_patients = cur.fetchone()["cnt"]
     except Exception as e:
-        logger.warning("dashboard_stats total_patients count failed: %s", e)
+        logger.error("dashboard_stats total_patients count failed: %s", e)
+        _degraded_fields.append("total_patients")
 
     if not has_active and has_uploaded_data:
         _score_filter = "patient_id IN (SELECT id FROM patients WHERE is_active = 1 AND data_source = 'upload' AND tenant_id = %s)"
@@ -278,7 +287,8 @@ def dashboard_stats(
             analyzed = row["cnt"]
             avg_raf = round(float(row["avg_raf"] or 0), 4)
     except Exception as e:
-        logger.warning("dashboard_stats raf_scores avg failed: %s", e)
+        logger.error("dashboard_stats raf_scores avg failed: %s", e)
+        _degraded_fields.append("patients_analyzed")
 
     # Suspects count
     total_suspects_open = 0
@@ -290,7 +300,8 @@ def dashboard_stats(
             )
             total_suspects_open = cur.fetchone()["cnt"]
     except Exception as e:
-        logger.warning("dashboard_stats suspects count failed: %s", e)
+        logger.error("dashboard_stats suspects count failed: %s", e)
+        _degraded_fields.append("total_suspects_open")
 
     # RAF distribution buckets
     raf_distribution = []
@@ -324,7 +335,8 @@ def dashboard_stats(
             )
             raf_distribution = [dict(r) for r in cur.fetchall()]
     except Exception as e:
-        logger.warning("dashboard_stats raf_distribution failed: %s", e)
+        logger.error("dashboard_stats raf_distribution failed: %s", e)
+        _degraded_fields.append("raf_distribution")
 
     # Top undercoded patients (patients with most suspect conditions)
     # Use LEFT JOIN on patients so FHIR patients (whose IDs may not be in the
@@ -371,7 +383,8 @@ def dashboard_stats(
                     "suspect_count": int(r["suspect_count"]),
                 })
     except Exception as e:
-        logger.warning("dashboard_stats top_undercoded failed: %s", e)
+        logger.error("dashboard_stats top_undercoded failed: %s", e)
+        _degraded_fields.append("top_undercoded")
 
     # Open recapture-gap count (drives the "Open recapture gaps" tile on
     # the provider dashboard).  Tenant-scoped, status='open' only.
@@ -389,7 +402,8 @@ def dashboard_stats(
             row = cur.fetchone()
             open_recapture_gaps = int(row["cnt"]) if row else 0
     except Exception as e:
-        logger.warning("dashboard_stats open_recapture_gaps failed: %s", e)
+        logger.error("dashboard_stats open_recapture_gaps failed: %s", e)
+        _degraded_fields.append("open_recapture_gaps")
 
     # Pending attestations awaiting the provider's signature.  Tenant-scoped.
     pending_attestations = 0
@@ -405,9 +419,13 @@ def dashboard_stats(
             row = cur.fetchone()
             pending_attestations = int(row["cnt"]) if row else 0
     except Exception as e:
-        logger.warning("dashboard_stats pending_attestations failed: %s", e)
+        logger.error("dashboard_stats pending_attestations failed: %s", e)
+        _degraded_fields.append("pending_attestations")
 
-    # MEAT compliance — percentage of HCCs with meat_status = 'complete'
+    # MEAT compliance — percentage of HCCs with meat_status = 'complete'.
+    # raf_patient_hcc.tenant_id was added in migration 028; on pre-migration
+    # instances the column is absent and this query will fail gracefully and
+    # be recorded in _degraded_fields.
     meat_compliance_pct = 0.0
     try:
         with raf_cursor() as cur:
@@ -429,7 +447,8 @@ def dashboard_stats(
                     100.0 * int(row["complete_count"] or 0) / int(row["total_hccs"]), 1
                 )
     except Exception as e:
-        logger.warning("dashboard_stats meat_compliance failed: %s", e)
+        logger.error("dashboard_stats meat_compliance failed: %s", e)
+        _degraded_fields.append("meat_compliance_pct")
 
     return {
         "total_patients": total_patients,
@@ -445,6 +464,11 @@ def dashboard_stats(
         "raf_distribution": raf_distribution,
         "top_undercoded": top_undercoded,
         "pipeline": _build_pipeline_block(tenant_id),
+        # degraded=True signals the UI to show a soft data-quality warning
+        # instead of interpreting any zeros as authoritative clinical data.
+        # degraded_fields lists the specific metrics that could not be fetched.
+        "degraded": bool(_degraded_fields),
+        "degraded_fields": _degraded_fields,
     }
 
 
