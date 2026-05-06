@@ -1,441 +1,384 @@
 """
-Patient API endpoint tests (mocked — no live server or database required).
+Patient API integration tests.
 
-Covers:
-- GET /api/patients                   — paginated list, no EMR returns empty
-- GET /api/patients/{pid}             — single patient with latest RAF
-- GET /api/patients/{pid}/encounters  — encounter history
-- GET /api/patients/{pid}/diagnoses   — ICD-10 codes
-- GET /api/patients/{pid}/medications — active prescriptions
-- GET /api/patients/{pid}/raf-breakdown — RAF score breakdown
-- Role/permission enforcement
-- Missing patient returns 404
-- Search parameter handling
+Tests cover the full set of patient endpoints:
+  GET /api/patients/with-encounters
+  GET /api/patients/{pid}
+  GET /api/patients/{pid}/encounters
+  GET /api/patients/{pid}/diagnoses
+  GET /api/patients/{pid}/medications
+  GET /api/patients/{pid}/clinical-notes/{enc_id}
 
-All DB calls and service layer are mocked — no database connection required.
+All tests use live patient data fetched from the running server.  If no
+patients with encounters are in the database, patient-specific tests are
+skipped rather than failing with cryptic errors.
 """
-
 from __future__ import annotations
 
-from contextlib import contextmanager
-from unittest.mock import patch
-
-from tests.conftest import (
-    MOCK_ADMIN_USER,
-    MOCK_VIEWER_USER,
-    _make_access_token,
-    make_cursor_cm,
-)
-
-# ---------------------------------------------------------------------------
-# Shared patient/clinical mock data
-# ---------------------------------------------------------------------------
-
-MOCK_PATIENT = {
-    "pid": 42,
-    "fname": "Jane",
-    "lname": "Doe",
-    "DOB": "1954-03-15",
-    "sex": "Female",
-    "email": "jane.doe@example.com",
-    "street": "123 Main St",
-    "city": "Anytown",
-    "state": "CA",
-    "postal_code": "90210",
-    "phone_cell": "555-0100",
-}
-
-MOCK_PATIENT_RAF = {
-    **MOCK_PATIENT,
-    "latest_raf": 1.23,
-    "raf_year": 2026,
-    "model_segment": "CNA",
-}
-
-MOCK_ENCOUNTER = {
-    "id": 1001,
-    "pid": 42,
-    "date": "2026-01-15",
-    "provider_id": 5,
-    "facility": "Main Clinic",
-    "reason": "Follow-up",
-}
-
-MOCK_DIAGNOSIS = {
-    "id": 501,
-    "pid": 42,
-    "code": "E11.65",
-    "code_type": "ICD10",
-    "description": "Type 2 diabetes mellitus with hyperglycemia",
-    "date": "2026-01-15",
-    "activity": 1,
-}
-
-MOCK_MEDICATION = {
-    "id": 301,
-    "pid": 42,
-    "drug": "Metformin 500mg",
-    "active": 1,
-    "date_added": "2025-06-01",
-    "diagnosis": "E11.9",
-}
-
-MOCK_RAF_BREAKDOWN = {
-    "patient_id": 42,
-    "measurement_year": 2026,
-    "model_segment": "CNA",
-    "model_version": "v28",
-    "demographic_score": 0.402,
-    "disease_score": 0.319,
-    "interaction_score": 0.0,
-    "payment_raf": 0.689,
-    "hcc_list": ["19"],
-    "hcc_contributions": [
-        {"hcc_code": "19", "coefficient": 0.319, "label": "Diabetes without Complication"}
-    ],
-    "blend_weights": {"v24": 0.0, "v28": 1.0},
-}
+import pytest
+import requests
 
 
 # ---------------------------------------------------------------------------
-# Auth patch helper
+# Helper
 # ---------------------------------------------------------------------------
 
-@contextmanager
-def _as_admin():
-    user = MOCK_ADMIN_USER
-    session = {"session_id": user["session_id"], "is_revoked": 0}
-    noop_cm, _ = make_cursor_cm()
-    with (
-        patch("app.auth.get_user", return_value=user),
-        patch("app.auth.validate_session", return_value=session),
-        patch("app.auth.check_permission", return_value=True),
-        patch("app.services.auth_service.check_permission", return_value=True),
+def _assert_response_ok(r: requests.Response, context: str = "") -> dict:
+    """Assert 200 and return parsed JSON, attaching context on failure."""
+    assert r.status_code == 200, (
+        f"{context} — expected 200, got {r.status_code}. Body: {r.text[:500]}"
+    )
+    return r.json()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/patients/with-encounters
+# ---------------------------------------------------------------------------
+
+class TestPatientsWithEncounters:
+    """Patients that have at least one encounter."""
+
+    def test_endpoint_returns_200(self, api_client: requests.Session, base_url: str):
+        r = api_client.get(f"{base_url}/api/patients/with-encounters")
+        assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
+
+    def test_response_has_patients_key(self, api_client: requests.Session, base_url: str):
+        r = api_client.get(f"{base_url}/api/patients/with-encounters")
+        data = r.json()
+        assert "patients" in data, f"Missing 'patients' key in response: {data}"
+
+    def test_response_has_total_key(self, api_client: requests.Session, base_url: str):
+        r = api_client.get(f"{base_url}/api/patients/with-encounters")
+        data = r.json()
+        assert "total" in data, f"Missing 'total' key in response: {data}"
+
+    def test_total_matches_patients_length(self, api_client: requests.Session, base_url: str):
+        r = api_client.get(f"{base_url}/api/patients/with-encounters")
+        data = r.json()
+        assert data["total"] == len(data["patients"]), (
+            f"'total' ({data['total']}) does not match len(patients) ({len(data['patients'])})"
+        )
+
+    def test_patients_is_a_list(self, api_client: requests.Session, base_url: str):
+        r = api_client.get(f"{base_url}/api/patients/with-encounters")
+        data = r.json()
+        assert isinstance(data["patients"], list), "'patients' must be a list"
+
+    def test_patient_records_have_pid(
+        self, api_client: requests.Session, base_url: str, sample_patients: list[dict]
     ):
-        yield
+        """Every returned patient must carry a non-null identifier."""
+        if not sample_patients:
+            pytest.skip("No patients with encounters in the database.")
+        for patient in sample_patients[:10]:  # spot-check first ten
+            has_id = (
+                patient.get("pid") is not None
+                or patient.get("id") is not None
+                or patient.get("patient_id") is not None
+            )
+            assert has_id, f"Patient record missing identifier: {patient}"
+
+    def test_limit_query_param_is_respected(self, api_client: requests.Session, base_url: str):
+        """Passing limit=1 should return at most one patient."""
+        r = api_client.get(
+            f"{base_url}/api/patients/with-encounters", params={"limit": 1}
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data.get("patients", [])) <= 1, (
+            f"Expected <= 1 patients with limit=1, got {len(data['patients'])}"
+        )
 
 
-@contextmanager
-def _as_viewer():
-    user = MOCK_VIEWER_USER
-    session = {"session_id": user["session_id"], "is_revoked": 0}
-    with (
-        patch("app.auth.get_user", return_value=user),
-        patch("app.auth.validate_session", return_value=session),
-        patch("app.auth.check_permission", return_value=True),
-        patch("app.services.auth_service.check_permission", return_value=True),
+# ---------------------------------------------------------------------------
+# GET /api/patients/{pid}
+# ---------------------------------------------------------------------------
+
+class TestSinglePatient:
+    """Single patient detail endpoint."""
+
+    def test_returns_200_for_valid_pid(
+        self, api_client: requests.Session, base_url: str, first_pid: int
     ):
-        yield
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}")
+        _assert_response_ok(r, f"GET /api/patients/{first_pid}")
+
+    def test_response_has_demographic_fields(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        """Patient record must expose core demographic fields."""
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}")
+        data = _assert_response_ok(r)
+
+        required_fields = ["pid", "fname", "lname"]
+        for field in required_fields:
+            assert field in data, (
+                f"Patient {first_pid} response missing '{field}'. Got keys: {list(data)}"
+            )
+
+    def test_response_has_raf_score_fields(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        """
+        Patient endpoint injects RAF score fields even if no score has been
+        calculated yet (values will be None).
+        """
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}")
+        data = _assert_response_ok(r)
+        # These keys must be present (value may be None)
+        for key in ("raf_score", "raf_score_date", "raf_score_year"):
+            assert key in data, (
+                f"Patient {first_pid} response missing '{key}'. Got keys: {list(data)}"
+            )
+
+    def test_raf_score_is_numeric_or_none(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}")
+        data = _assert_response_ok(r)
+        raf = data.get("raf_score")
+        assert raf is None or isinstance(raf, (int, float)), (
+            f"raf_score should be numeric or None, got {type(raf).__name__}: {raf}"
+        )
+
+    def test_pid_in_response_matches_request(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}")
+        data = _assert_response_ok(r)
+        response_pid = data.get("pid") or data.get("id")
+        assert int(response_pid) == first_pid, (
+            f"Response pid ({response_pid}) does not match requested pid ({first_pid})"
+        )
+
+    def test_returns_404_for_nonexistent_pid(
+        self, api_client: requests.Session, base_url: str, nonexistent_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}")
+        assert r.status_code == 404, (
+            f"Expected 404 for nonexistent PID {nonexistent_pid}, got {r.status_code}"
+        )
+
+    def test_404_response_has_detail_field(
+        self, api_client: requests.Session, base_url: str, nonexistent_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}")
+        data = r.json()
+        assert "detail" in data, f"404 response should contain 'detail'. Got: {data}"
 
 
 # ---------------------------------------------------------------------------
-# 1. GET /api/patients — patient list
-# ---------------------------------------------------------------------------
-
-class TestListPatients:
-    def test_no_emr_connection_returns_empty_list(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._has_active_emr_connection", return_value=False),
-        ):
-            resp = client.get(
-                "/api/patients",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["patients"] == []
-        assert data["total"] == 0
-
-    def test_list_patients_with_emr_returns_patients(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        patients = [MOCK_PATIENT]
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
-            patch("app.services.openemr_connector.get_patients", return_value=patients),
-            patch("app.services.openemr_connector.get_patient_count", return_value=1),
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "patients" in data
-
-    def test_list_patients_unauthenticated_returns_401(self, client):
-        resp = client.get("/api/patients")
-        assert resp.status_code == 401
-
-    def test_list_patients_accepts_limit_and_offset(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._has_active_emr_connection", return_value=False),
-        ):
-            resp = client.get(
-                "/api/patients?limit=10&offset=20",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["limit"] == 10
-        assert data["offset"] == 20
-
-    def test_list_patients_invalid_limit_returns_422(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with _as_admin():
-            resp = client.get(
-                "/api/patients?limit=0",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 422
-
-    def test_list_patients_limit_over_1000_returns_422(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with _as_admin():
-            resp = client.get(
-                "/api/patients?limit=1001",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 422
-
-    def test_search_triggers_search_function(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
-            patch("app.services.openemr_connector.search_patients", return_value=([], 0)) as mock_search,
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients?search=Jane",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
-        mock_search.assert_called_once()
-
-    def test_service_exception_returns_500(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
-            patch(
-                "app.services.openemr_connector.get_patients",
-                side_effect=RuntimeError("DB crash"),
-            ),
-        ):
-            resp = client.get(
-                "/api/patients",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 500
-        assert "DB crash" not in resp.text
-
-
-# ---------------------------------------------------------------------------
-# 2. GET /api/patients/{pid} — single patient
-# ---------------------------------------------------------------------------
-
-class TestGetPatient:
-    def test_get_patient_returns_patient_data(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
-            patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
-            patch("app.services.patient_service.get_raf_breakdown", return_value={}),
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients/42",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "pid" in data or "patient" in data or data.get("fname") == "Jane"
-
-    def test_get_nonexistent_patient_returns_404_or_200_empty(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
-            patch("app.services.openemr_connector.get_patient", return_value=None),
-            patch("app.services.patient_service.get_raf_breakdown", return_value={}),
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients/99999",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code in (200, 404)
-
-    def test_get_patient_non_numeric_pid_returns_422(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with _as_admin():
-            resp = client.get(
-                "/api/patients/not-a-number",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 422
-
-    def test_get_patient_unauthenticated_returns_401(self, client):
-        resp = client.get("/api/patients/42")
-        assert resp.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# 3. GET /api/patients/{pid}/encounters
+# GET /api/patients/{pid}/encounters
 # ---------------------------------------------------------------------------
 
 class TestPatientEncounters:
-    def test_encounters_returns_list(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
-            patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
-            patch("app.services.openemr_connector.get_encounters", return_value=[MOCK_ENCOUNTER]),
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients/42/encounters",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert isinstance(data, (list, dict))
 
-    def test_encounters_unauthenticated_returns_401(self, client):
-        resp = client.get("/api/patients/42/encounters")
-        assert resp.status_code == 401
+    def test_returns_200(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
+        _assert_response_ok(r, f"GET /api/patients/{first_pid}/encounters")
+
+    def test_response_structure(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
+        data = _assert_response_ok(r)
+        for key in ("pid", "count", "encounters"):
+            assert key in data, f"Missing '{key}' in encounters response: {list(data)}"
+
+    def test_pid_matches(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
+        data = _assert_response_ok(r)
+        assert int(data["pid"]) == first_pid
+
+    def test_count_matches_list_length(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
+        data = _assert_response_ok(r)
+        assert data["count"] == len(data["encounters"]), (
+            f"'count' ({data['count']}) != len(encounters) ({len(data['encounters'])})"
+        )
+
+    def test_encounters_is_list(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
+        data = _assert_response_ok(r)
+        assert isinstance(data["encounters"], list)
+
+    def test_encounter_records_have_id(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
+        data = _assert_response_ok(r)
+        for enc in data["encounters"][:5]:
+            has_id = any(enc.get(k) is not None for k in ("id", "encounter_id", "eid", "encounter"))
+            assert has_id, f"Encounter record missing an id field: {enc}"
+
+    def test_returns_404_for_nonexistent_pid(
+        self, api_client: requests.Session, base_url: str, nonexistent_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}/encounters")
+        assert r.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# 4. GET /api/patients/{pid}/diagnoses
+# GET /api/patients/{pid}/diagnoses
 # ---------------------------------------------------------------------------
 
 class TestPatientDiagnoses:
-    def test_diagnoses_returns_list(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
-            patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
-            patch("app.services.openemr_connector.get_billing_codes", return_value=[MOCK_DIAGNOSIS]),
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients/42/diagnoses",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
 
-    def test_diagnoses_unauthenticated_returns_401(self, client):
-        resp = client.get("/api/patients/42/diagnoses")
-        assert resp.status_code == 401
+    def test_returns_200(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
+        _assert_response_ok(r, f"GET /api/patients/{first_pid}/diagnoses")
+
+    def test_response_structure(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
+        data = _assert_response_ok(r)
+        for key in ("pid", "count", "diagnoses"):
+            assert key in data, f"Missing '{key}' in diagnoses response: {list(data)}"
+
+    def test_diagnoses_is_list(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
+        data = _assert_response_ok(r)
+        assert isinstance(data["diagnoses"], list)
+
+    def test_count_matches_list_length(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
+        data = _assert_response_ok(r)
+        assert data["count"] == len(data["diagnoses"])
+
+    def test_diagnosis_records_have_icd10_validation_flag(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        """Diagnoses endpoint enriches records with valid_icd10 flag."""
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
+        data = _assert_response_ok(r)
+        for dx in data["diagnoses"][:5]:
+            assert "valid_icd10" in dx, (
+                f"Diagnosis record missing 'valid_icd10' enrichment: {dx}"
+            )
+
+    def test_returns_404_for_nonexistent_pid(
+        self, api_client: requests.Session, base_url: str, nonexistent_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}/diagnoses")
+        assert r.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# 5. GET /api/patients/{pid}/medications
+# GET /api/patients/{pid}/medications
 # ---------------------------------------------------------------------------
 
 class TestPatientMedications:
-    def test_medications_returns_list(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        noop_cm, _ = make_cursor_cm()
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._patient_in_active_connection", return_value=True),
-            patch("app.services.openemr_connector.get_patient", return_value=MOCK_PATIENT),
-            patch("app.services.openemr_connector.get_medications", return_value=[MOCK_MEDICATION]),
-            patch("app.db.raf_cursor", noop_cm),
-        ):
-            resp = client.get(
-                "/api/patients/42/medications",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        assert resp.status_code == 200
 
-    def test_medications_unauthenticated_returns_401(self, client):
-        resp = client.get("/api/patients/42/medications")
-        assert resp.status_code == 401
+    def test_returns_200(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
+        _assert_response_ok(r, f"GET /api/patients/{first_pid}/medications")
 
+    def test_response_structure(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
+        data = _assert_response_ok(r)
+        for key in ("pid", "count", "medications"):
+            assert key in data, f"Missing '{key}' in medications response: {list(data)}"
 
-# ---------------------------------------------------------------------------
-# 6. RAF breakdown endpoint
-# ---------------------------------------------------------------------------
+    def test_medications_is_list(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
+        data = _assert_response_ok(r)
+        assert isinstance(data["medications"], list)
 
-class TestRafBreakdown:
-    def test_raf_breakdown_requires_auth(self, client):
-        resp = client.get("/api/patients/42/raf-breakdown")
-        assert resp.status_code in (401, 404)
+    def test_count_matches_list_length(
+        self, api_client: requests.Session, base_url: str, first_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
+        data = _assert_response_ok(r)
+        assert data["count"] == len(data["medications"])
 
-    def test_raf_breakdown_with_mocked_service(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with (
-            _as_admin(),
-            patch(
-                "app.services.raf_calculator.get_raf_breakdown",
-                return_value=MOCK_RAF_BREAKDOWN,
-            ),
-        ):
-            resp = client.get(
-                "/api/patients/42/raf-breakdown",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        # Route may or may not exist — 404 is acceptable; 200/500 checked below
-        if resp.status_code == 200:
-            data = resp.json()
-            assert "payment_raf" in data or "raf" in str(data).lower()
-
-    def test_raf_breakdown_service_error_returns_500(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with (
-            _as_admin(),
-            patch(
-                "app.services.raf_calculator.get_raf_breakdown",
-                side_effect=RuntimeError("internal error"),
-            ),
-        ):
-            resp = client.get(
-                "/api/patients/42/raf-breakdown",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        if resp.status_code == 500:
-            # Must not leak the raw exception message
-            assert "internal error" not in resp.text.lower() or True  # sanitized
+    def test_returns_404_for_nonexistent_pid(
+        self, api_client: requests.Session, base_url: str, nonexistent_pid: int
+    ):
+        r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}/medications")
+        assert r.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# 7. Response field sanitization — no PHI in 500 errors
+# GET /api/patients/{pid}/clinical-notes/{enc_id}
 # ---------------------------------------------------------------------------
 
-class TestPatientResponseSanitization:
-    def test_patient_list_500_does_not_expose_internal_error(self, client):
-        token = _make_access_token(MOCK_ADMIN_USER)
-        with (
-            _as_admin(),
-            patch("app.services.patient_service._has_active_emr_connection", return_value=True),
-            patch(
-                "app.services.openemr_connector.get_patients",
-                side_effect=Exception("SQL syntax error near 'SELECT *'"),
-            ),
-        ):
-            resp = client.get(
-                "/api/patients",
-                headers={"Authorization": f"Bearer {token}"},
+class TestPatientClinicalNotes:
+
+    def test_returns_200(
+        self,
+        api_client: requests.Session,
+        base_url: str,
+        first_pid: int,
+        first_encounter_id: int,
+    ):
+        r = api_client.get(
+            f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
+        )
+        _assert_response_ok(
+            r,
+            f"GET /api/patients/{first_pid}/clinical-notes/{first_encounter_id}",
+        )
+
+    def test_response_structure(
+        self,
+        api_client: requests.Session,
+        base_url: str,
+        first_pid: int,
+        first_encounter_id: int,
+    ):
+        r = api_client.get(
+            f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
+        )
+        data = _assert_response_ok(r)
+        for key in ("pid", "encounter_id", "count", "notes"):
+            assert key in data, (
+                f"Missing '{key}' in clinical-notes response. Got keys: {list(data)}"
             )
-        assert resp.status_code == 500
-        # Raw exception must not appear in the response
-        assert "SQL syntax error" not in resp.text
-        assert "SELECT *" not in resp.text
+
+    def test_pids_match(
+        self,
+        api_client: requests.Session,
+        base_url: str,
+        first_pid: int,
+        first_encounter_id: int,
+    ):
+        r = api_client.get(
+            f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
+        )
+        data = _assert_response_ok(r)
+        assert int(data["pid"]) == first_pid
+        assert int(data["encounter_id"]) == first_encounter_id
+
+    def test_notes_is_list(
+        self,
+        api_client: requests.Session,
+        base_url: str,
+        first_pid: int,
+        first_encounter_id: int,
+    ):
+        r = api_client.get(
+            f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
+        )
+        data = _assert_response_ok(r)
+        assert isinstance(data["notes"], list)

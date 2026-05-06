@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 import requests
 
+
 # ---------------------------------------------------------------------------
 # Health endpoint
 # ---------------------------------------------------------------------------
@@ -167,7 +168,7 @@ class TestICD10UtilityEndpoints:
     def test_validate_invalid_code(self, api_client: requests.Session, base_url: str):
         """ZZZZZZ is not a valid ICD-10 code."""
         r = api_client.get(f"{base_url}/api/icd10/validate/ZZZZZZ")
-        assert r.status_code == 200, "Endpoint should return 200 even for invalid codes"
+        assert r.status_code == 200, f"Endpoint should return 200 even for invalid codes"
         data = r.json()
         assert data.get("valid") is False, f"ZZZZZZ should be invalid — got: {data}"
 

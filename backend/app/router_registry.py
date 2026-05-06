@@ -84,9 +84,29 @@ from app.routers import radv_audit as radv_audit_router
 from app.routers import raf_central as raf_central_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
 from app.routers import realtime as realtime_router
+from app.routers import recapture_ai_recoding as recapture_ai_recoding_router
 from app.routers import recapture_audit as recapture_audit_router
+# Knowledge Graph routers
+from app.routers import knowledge_graph as knowledge_graph_router
+from app.routers import snomed_mapping as snomed_mapping_router
+from app.routers import loinc_signals as loinc_signals_router
+from app.routers import atc_classification as atc_classification_router
+from app.routers import comorbidity_patterns as comorbidity_patterns_router
+from app.routers import demographic_risk as demographic_risk_router
+from app.routers import specialty_priors as specialty_priors_router
+from app.routers import evidence_rules as evidence_rules_router
+from app.routers import kg_query as kg_query_router
+from app.routers import suspect_kg as suspect_kg_router
+from app.routers import recapture_bonus as recapture_bonus_router
+from app.routers import recapture_campaigns as recapture_campaigns_router
+from app.routers import recapture_cfo_forecast as recapture_cfo_forecast_router
+from app.routers import recapture_close as recapture_close_router
+from app.routers import recapture_decay as recapture_decay_router
 from app.routers import recapture_gaps as recapture_gaps_router
+from app.routers import recapture_outreach as recapture_outreach_router
 from app.routers import recapture_provider_benchmark as recapture_provider_benchmark_router
+from app.routers import recapture_readiness as recapture_readiness_router
+from app.routers import recapture_recurring as recapture_recurring_router
 from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
 
@@ -147,8 +167,29 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(benchmarks.router)
     app.include_router(care_gaps.router)
     app.include_router(recapture_gaps_router.router)
+    app.include_router(recapture_decay_router.router)
     app.include_router(recapture_provider_benchmark_router.router)
     app.include_router(recapture_audit_router.router)
+    app.include_router(recapture_campaigns_router.router)
+    app.include_router(recapture_outreach_router.router)
+    app.include_router(recapture_bonus_router.router)
+    app.include_router(recapture_cfo_forecast_router.router)
+    app.include_router(recapture_readiness_router.router)
+    app.include_router(recapture_recurring_router.router)
+    app.include_router(recapture_close_router.router)
+
+    # Knowledge Graph (closes the Navina-style "we use a knowledge graph" gap)
+    app.include_router(knowledge_graph_router.router)
+    app.include_router(snomed_mapping_router.router)
+    app.include_router(loinc_signals_router.router)
+    app.include_router(atc_classification_router.router)
+    app.include_router(comorbidity_patterns_router.router)
+    app.include_router(demographic_risk_router.router)
+    app.include_router(specialty_priors_router.router)
+    app.include_router(evidence_rules_router.router)
+    app.include_router(kg_query_router.router)
+    app.include_router(suspect_kg_router.router)
+    app.include_router(recapture_ai_recoding_router.router)
     app.include_router(awv.router)
 
     # Population health cohort analysis
