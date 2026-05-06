@@ -10,12 +10,16 @@ POST /api/kg/text-to-hcc                       full pipeline (single text)
 POST /api/kg/problem-list-to-hcc               full pipeline (list of texts)
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
+# NOTE: Do NOT add ``from __future__ import annotations`` to this module.
+# That import turns every type annotation into a ForwardRef string, which
+# Pydantic 2's TypeAdapter cannot resolve at FastAPI ``/openapi.json``
+# generation time for body-bound BaseModel parameters.  When that happens
+# the OpenAPI endpoint returns 500 and the entire interactive docs page
+# breaks.  See incident notes in commit history (search "TypeAdapter").
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
@@ -62,6 +66,8 @@ class ProblemListBody(BaseModel):
     items: list[str] = Field(..., min_length=1, max_length=200)
     model_year: int = Field(default=2026, ge=2018, le=2030)
     top_k_per_item: int = Field(default=5, ge=1, le=20)
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +118,11 @@ def icd10_to_hcc_route(
 @limiter.limit("60/minute")
 def text_to_hcc_route(
     request: Request,
-    body: TextToHCCBody,
+    # Explicit ``Body(...)`` is required because ``from __future__ import
+    # annotations`` (top of file) hides the Pydantic-ness of TextToHCCBody
+    # at FastAPI's parameter-introspection time, which otherwise falls
+    # back to treating the parameter as a Query and breaks /openapi.json.
+    body: TextToHCCBody = Body(...),
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     candidates = text_to_hcc(
@@ -130,7 +140,7 @@ def text_to_hcc_route(
 
 @router.post("/problem-list-to-hcc", summary="Full pipeline over a problem list")
 def problem_list_to_hcc_route(
-    body: ProblemListBody,
+    body: ProblemListBody = Body(...),
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     result = bulk_resolve_problem_list(

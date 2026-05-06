@@ -16,7 +16,6 @@ POST /api/kg/demographic/panel-priors/{provider_id}
 All endpoints require an authenticated user and DO NOT touch the official
 RAF calculation path — the multipliers feed only the suspect/prior layer.
 """
-from __future__ import annotations
 
 import logging
 from datetime import date

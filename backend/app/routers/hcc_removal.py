@@ -28,7 +28,6 @@ PHI auditing
 Each call writes to the phi_audit logger via ``log_phi_access`` with the
 same shape used by the patients/analysis routers.
 """
-from __future__ import annotations
 
 import logging
 from typing import Any, Optional

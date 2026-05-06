@@ -11,7 +11,6 @@ All endpoints require an authenticated user via ``Depends(get_current_user)``.
 Flags are scoped per-user — there is no tenant fallback path here, the user
 identity is mandatory.
 """
-from __future__ import annotations
 
 import logging
 from typing import Any

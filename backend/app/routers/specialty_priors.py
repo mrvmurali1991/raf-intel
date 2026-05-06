@@ -15,7 +15,6 @@ GET  /api/kg/specialty/provider/{id}/calibrated-priors - per-provider calibratio
 
 All endpoints are read-only.  Writes happen via the seed script.
 """
-from __future__ import annotations
 
 import logging
 from typing import Any

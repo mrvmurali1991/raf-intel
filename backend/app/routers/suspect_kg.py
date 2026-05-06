@@ -15,7 +15,6 @@ GET  /api/suspects/kg-detect/distribution
     Sample distribution of evidence_type across raf_suspect_conditions.
     Useful for ops dashboards to confirm KG dominance after a run.
 """
-from __future__ import annotations
 
 import logging
 from typing import Any
