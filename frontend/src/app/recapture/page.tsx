@@ -187,7 +187,7 @@ export default function RecapturePage() {
     return (
       <div style={{ padding: 32 }}>
         <PageHeader title="Recapture Gaps" subtitle="Loading recapture opportunities…" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
           {[1, 2, 3].map((i) => (
             <div key={i} className="premium-card shimmer" style={{ height: 100, borderRadius: 12 }} />
           ))}
@@ -227,7 +227,7 @@ export default function RecapturePage() {
   ];
 
   return (
-    <div style={{ padding: 32, maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto" }}>
       {/* Header */}
       <div className="animate-fade-in">
         <PageHeader
@@ -258,7 +258,7 @@ export default function RecapturePage() {
       </div>
 
       {/* Summary Strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
         <div className="animate-fade-in stagger-1">
           <StatCard
             label="Total Recapture Gaps"
@@ -372,10 +372,10 @@ export default function RecapturePage() {
                 <span style={{ width: 24, fontSize: 11, fontWeight: 700, color: colors.slate400, flexShrink: 0, textAlign: "center" }}>
                   {idx + 1}
                 </span>
-                <span style={{ width: 220, fontSize: 13, color: colors.slate900, fontWeight: 500, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 220, fontSize: 13, color: colors.slate900, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {c.condition}
                 </span>
-                <span style={{ width: 72, fontSize: 11, fontWeight: 600, color: colors.primary, flexShrink: 0, fontFamily: "monospace" }}>
+                <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: colors.primary, fontFamily: "monospace" }}>
                   {c.icd_code}
                 </span>
                 <div style={{ flex: 1, height: 8, borderRadius: 4, background: colors.slate200, overflow: "hidden" }}>
@@ -608,6 +608,8 @@ export default function RecapturePage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 16,
           background: `linear-gradient(135deg, ${colors.slate50}, ${colors.white})`,
         }}
       >

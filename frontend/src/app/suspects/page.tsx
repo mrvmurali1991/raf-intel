@@ -456,10 +456,11 @@ export default function SuspectsPage() {
 
   return (
     <div
+      className="suspects-page-wrap"
       style={{
         background: C.bgPage,
         minHeight: "100vh",
-        padding: "32px 40px 48px",
+        padding: "20px 16px 48px",
         fontFamily: FONT_SYS,
         color: C.text,
       }}
@@ -485,6 +486,9 @@ export default function SuspectsPage() {
         .suspect-row:focus-within .row-action-btn { opacity: 1; transform: translateY(0); }
         @media (max-width: 900px) {
           .row-action-btn { opacity: 1; transform: none; }
+        }
+        @media (min-width: 640px) {
+          .suspects-page-wrap { padding: 32px 40px 48px !important; }
         }
       `}</style>
 
@@ -519,11 +523,12 @@ export default function SuspectsPage() {
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 24,
+          flexWrap: "wrap",
+          gap: 16,
           marginBottom: 24,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
           <div
             style={{
               width: 48,
@@ -618,7 +623,7 @@ export default function SuspectsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
           <div style={{ position: "relative" }}>
             <Search
               size={16}
@@ -640,7 +645,7 @@ export default function SuspectsPage() {
               aria-label="Search suspects"
               style={{
                 height: 40,
-                width: 320,
+                width: "min(320px, calc(100vw - 180px))",
                 borderRadius: 10,
                 border: `1px solid ${C.border}`,
                 backgroundColor: "#FFFFFF",
@@ -699,7 +704,7 @@ export default function SuspectsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 12,
           marginBottom: 16,
         }}
@@ -1045,7 +1050,8 @@ export default function SuspectsPage() {
           backgroundColor: C.bgCard,
           border: `1px solid ${C.border}`,
           borderRadius: 14,
-          overflow: "hidden",
+          overflowX: "auto",
+          overflowY: "visible",
           boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
         }}
       >
