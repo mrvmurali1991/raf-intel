@@ -1,0 +1,11 @@
+{
+  "a": 1.0341,
+  "b": 0.1189,
+  "trained_on_charts": 52,
+  "trained_at": "2026-05-06T00:00:00Z",
+  "ece_before": 0.2247,
+  "ece_after": 0.0309,
+  "method": "platt_scaling",
+  "version": "v1",
+  "notes": "Seeded from kg_benchmark mock-mode run on the 52-chart fixture. Replace by re-running app.services.evaluation.kg_benchmark.run_kg_benchmark on a held-out validation set and writing the {a,b} from result['calibration']['calibrated']['params'] back here."
+}

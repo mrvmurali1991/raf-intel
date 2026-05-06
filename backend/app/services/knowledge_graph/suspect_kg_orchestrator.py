@@ -54,6 +54,7 @@ from datetime import datetime
 from typing import Any, Iterable
 
 from app.db import raf_cursor
+from app.services.knowledge_graph import calibration_service
 
 logger = logging.getLogger(__name__)
 
@@ -602,7 +603,26 @@ def _apply_calibration(
     detail["specialty_reasons"] = spec_reasons
     detail["final_confidence"] = round(final, 4)
 
+    # Platt-scaled confidence — load the persisted (a, b) from the KG
+    # calibration artefact and squash the demographic/specialty-adjusted
+    # final score.  When the artefact is missing the loader returns the
+    # identity params (1.0, 0.0); we detect that and pass calibrated ==
+    # final so the frontend chip reads "Raw" rather than "Calibrated".
+    a, b = calibration_service.load_calibration()
+    if calibration_service.is_identity(a, b):
+        calibrated = final
+    else:
+        calibrated = round(calibration_service.apply_calibration(final, a, b), 4)
+
+    detail["calibration_a"] = a
+    detail["calibration_b"] = b
+    detail["calibrated_confidence"] = calibrated
+
     candidate["confidence_score"] = round(final, 4)
+    # Surface raw + calibrated alongside confidence_score so the frontend
+    # can render both values.  raw_confidence is already on the candidate
+    # (set by _normalize_kg_candidate / _llm_pass) — we keep it untouched.
+    candidate["calibrated_confidence"] = calibrated
     return candidate
 
 
@@ -847,6 +867,33 @@ def get_evidence_chain(suspect_id: int) -> dict[str, Any]:
     else:
         detail = {}
 
+    confidence_score = float(row.get("confidence_score") or 0.0)
+
+    # Re-derive raw + calibrated from the persisted detail blob when
+    # available; fall back to confidence_score when older rows lack the
+    # calibration fields.  The detail's calibrated_confidence was written
+    # by _apply_calibration at insert time.
+    raw_confidence = (
+        detail.get("raw_confidence")
+        if isinstance(detail, dict) else None
+    )
+    if raw_confidence is None:
+        # Older rows: confidence_score IS the raw + post-mult value.
+        raw_confidence = confidence_score
+    calibrated_confidence = (
+        detail.get("calibrated_confidence")
+        if isinstance(detail, dict) else None
+    )
+    if calibrated_confidence is None:
+        # Run Platt on demand for legacy rows so the API stays consistent.
+        a, b = calibration_service.load_calibration()
+        if calibration_service.is_identity(a, b):
+            calibrated_confidence = confidence_score
+        else:
+            calibrated_confidence = round(
+                calibration_service.apply_calibration(confidence_score, a, b), 4
+            )
+
     return {
         "id": row.get("id"),
         "patient_id": row.get("patient_id"),
@@ -854,7 +901,9 @@ def get_evidence_chain(suspect_id: int) -> dict[str, Any]:
         "suspect_hcc": row.get("suspect_hcc"),
         "suspect_icd10": row.get("suspect_icd10"),
         "evidence_type": row.get("evidence_type"),
-        "confidence_score": float(row.get("confidence_score") or 0.0),
+        "confidence_score": confidence_score,
+        "raw_confidence": float(raw_confidence),
+        "calibrated_confidence": float(calibrated_confidence),
         "status": row.get("status"),
         "evidence_chain": detail,
     }

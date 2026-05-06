@@ -2782,7 +2782,15 @@ export interface KgEvidenceChain {
 /** A ranked HCC candidate from a patient-wide KG inference. */
 export interface KgHccCandidate {
   hcc: string;
+  /** Confidence the UI should display.  When the backend has applied
+   *  Platt-scaling calibration this matches calibrated_confidence; when
+   *  no calibration artefact is loaded it equals raw_confidence. */
   confidence: number;
+  /** Original (uncalibrated) confidence emitted by the KG sub-services. */
+  raw_confidence?: number;
+  /** Platt-scaled probability in [0,1].  Equals raw_confidence when the
+   *  calibration artefact is missing (identity fit). */
+  calibrated_confidence?: number;
   sources: string[];
   reasoning: string[];
   final_evidence: KgEvidenceChain;
