@@ -20,6 +20,7 @@ import {
   TrendingUp,
   TrendingDown,
   AlertCircle,
+  AlertTriangle,
   CheckCircle,
   Activity,
   GitMerge,
@@ -31,6 +32,8 @@ import {
   X,
 } from "lucide-react";
 import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
+import { tokens } from "@/styles/tokens";
 import {
   getQualityMeasures,
   getQualitySummary,
@@ -44,28 +47,28 @@ import type {
   CareGap,
 } from "@/lib/api";
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// ── Design tokens (all sourced from tokens.ts — no hardcoded hex) ─────────────
 const C = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  borderLight: "#F1F5F9",
-  text: "#0F172A",
-  textMuted: "#64748B",
-  textSub: "#94A3B8",
-  primary: "#2563EB",
-  primaryLight: "#DBEAFE",
-  emerald: "#10B981",
-  emeraldLight: "#D1FAE5",
-  emeraldDark: "#065F46",
-  amber: "#F59E0B",
-  amberLight: "#FEF3C7",
-  amberDark: "#92400E",
-  red: "#EF4444",
-  redLight: "#FEE2E2",
-  redDark: "#991B1B",
-  blue: "#3B82F6",
-  violet: "#8B5CF6",
+  bg:           tokens.slate50,
+  card:         tokens.white,
+  border:       tokens.slate200,
+  borderLight:  tokens.slate100,
+  text:         tokens.slate900,
+  textMuted:    tokens.slate500,
+  textSub:      tokens.slate400,
+  primary:      tokens.primary,
+  primaryLight: tokens.primarySoft,
+  emerald:      tokens.success,
+  emeraldLight: tokens.successSoft,
+  emeraldDark:  tokens.successDark,
+  amber:        tokens.warningStrong,
+  amberLight:   tokens.warningSoft,
+  amberDark:    tokens.warningText,
+  red:          tokens.riskHigh,
+  redLight:     tokens.riskHighSoft,
+  redDark:      tokens.danger,
+  blue:         tokens.infoBlue,
+  violet:       tokens.accentPurple,
 };
 
 const T = {
@@ -84,11 +87,11 @@ type TabKey = (typeof TABS)[number];
 
 // ── Helper functions ──────────────────────────────────────────────────────────
 function starsColor(s: number): string {
-  if (s >= 4.5) return "#10B981";
-  if (s >= 3.5) return "#3B82F6";
-  if (s >= 2.5) return "#F59E0B";
-  if (s >= 1.5) return "#F97316";
-  return "#EF4444";
+  if (s >= 4.5) return tokens.success;
+  if (s >= 3.5) return tokens.infoBlue;
+  if (s >= 2.5) return tokens.warningStrong;
+  if (s >= 1.5) return tokens.riskMedium;
+  return tokens.riskHigh;
 }
 
 function starsLabel(s: number): string {
@@ -130,10 +133,10 @@ function renderStars(rating: number) {
   const full = Math.floor(rating);
   const half = rating % 1 >= 0.5;
   const empty = 5 - full - (half ? 1 : 0);
-  const goldFill = "#F59E0B";
-  const goldStroke = "#D97706";
-  const emptyFill = "#E2E8F0";
-  const emptyStroke = "#CBD5E1";
+  const goldFill = tokens.warningStrong;
+  const goldStroke = tokens.riskMedium;
+  const emptyFill = tokens.slate200;
+  const emptyStroke = tokens.slate300;
   return (
     <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
       {Array.from({ length: full }).map((_, i) => (
@@ -320,7 +323,7 @@ function MeasureRow({ measure, index }: { measure: QualityMeasure; index: number
           borderBottom: `1px solid ${C.borderLight}`,
           borderLeft: `3px solid ${color}`,
           cursor: "pointer",
-          background: expanded ? "#F8FAFC" : index % 2 === 0 ? C.card : "#FAFBFC",
+          background: expanded ? tokens.slate50 : index % 2 === 0 ? C.card : tokens.slate50,
           transition: "background 0.15s ease",
         }}
         onClick={() => setExpanded(!expanded)}
@@ -390,7 +393,7 @@ function MeasureRow({ measure, index }: { measure: QualityMeasure; index: number
 
       {/* Expanded: show benchmark comparison detail */}
       {expanded && (
-        <tr className="qs-card-enter" style={{ background: "linear-gradient(135deg, #EFF6FF 0%, #F0F7FF 100%)" }}>
+        <tr className="qs-card-enter" style={{ background: `linear-gradient(135deg, ${tokens.primarySoft} 0%, ${tokens.primarySoft} 100%)` }}>
           <td colSpan={7} style={{ padding: "16px 20px 20px 48px", borderLeft: `3px solid ${color}` }}>
             <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
               <div>
@@ -519,7 +522,7 @@ function SummaryTab({
                   justifyContent: "center",
                   fontSize: 11,
                   fontWeight: 700,
-                  color: "#FFF",
+                  color: tokens.white,
                   minWidth: seg.pct > 0 ? 30 : 0,
                 }}
               >
@@ -614,7 +617,7 @@ function MeasuresTab({ measures }: { measures: QualityMeasure[] }) {
                       color: C.textMuted,
                       textAlign: ["Eligible", "Compliant", "Gap", "Benchmark"].includes(h) ? "center" : "left",
                       borderBottom: `1px solid ${C.border}`,
-                      background: "#F8FAFC",
+                      background: tokens.slate50,
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -657,16 +660,16 @@ function StarsTab({ stars }: { stars: StarsEstimate }) {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            background: "linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)",
+            background: `linear-gradient(135deg, ${tokens.slate900} 0%, ${tokens.slate800} 50%, ${tokens.slate900} 100%)`,
             border: "1px solid rgba(255,255,255,0.06)",
             borderRadius: 16,
           }}
         >
-          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: tokens.slate400, marginBottom: 16 }}>
             Current STARS Estimate — {stars.year}
           </div>
           <StarsGauge rating={stars.current_estimate} />
-          <div style={{ marginTop: 10, fontSize: 13, color: "#64748B" }}>
+          <div style={{ marginTop: 10, fontSize: 13, color: tokens.slate500 }}>
             {renderStars(stars.current_estimate)}
           </div>
         </div>
@@ -679,18 +682,18 @@ function StarsTab({ stars }: { stars: StarsEstimate }) {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            background: "linear-gradient(135deg, #0C4A6E 0%, #0369A1 50%, #075985 100%)",
+            background: `linear-gradient(135deg, ${tokens.primaryDark} 0%, ${tokens.primary} 50%, ${tokens.primaryDark} 100%)`,
             border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 16,
           }}
         >
-          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#BAE6FD", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: tokens.slate200, marginBottom: 16 }}>
             Projected STARS Estimate
           </div>
           <StarsGauge rating={stars.projected_estimate} />
-          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#BAE6FD" }}>
-            {diffUp ? <TrendingUp size={16} color="#10B981" /> : <TrendingDown size={16} color="#EF4444" />}
-            <span style={{ color: diffUp ? "#10B981" : "#EF4444", fontWeight: 700 }}>
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: tokens.slate200 }}>
+            {diffUp ? <TrendingUp size={16} color={tokens.success} /> : <TrendingDown size={16} color={tokens.riskHigh} />}
+            <span style={{ color: diffUp ? tokens.success : tokens.riskHigh, fontWeight: 700 }}>
               {diffUp ? "+" : ""}{(diff ?? 0).toFixed(2)} projected change
             </span>
           </div>
@@ -839,7 +842,7 @@ function CareGapsTab({ gaps, total }: { gaps: CareGap[]; total: number }) {
                       letterSpacing: "0.05em",
                       color: C.textMuted,
                       textAlign: "left",
-                      background: "#F8FAFC",
+                      background: tokens.slate50,
                       borderBottom: `1px solid ${C.border}`,
                       whiteSpace: "nowrap",
                     }}
@@ -858,10 +861,10 @@ function CareGapsTab({ gaps, total }: { gaps: CareGap[]; total: number }) {
                     key={gap.gap_id}
                     style={{
                       borderBottom: `1px solid ${C.borderLight}`,
-                      background: idx % 2 === 0 ? C.card : "#FAFAFA",
+                      background: idx % 2 === 0 ? C.card : tokens.slate50,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F0F7FF")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? C.card : "#FAFAFA")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = tokens.primarySoft)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? C.card : tokens.slate50)}
                   >
                     {/* Patient */}
                     <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
@@ -934,7 +937,7 @@ function CareGapsTab({ gaps, total }: { gaps: CareGap[]; total: number }) {
                           padding: "6px 14px",
                           borderRadius: 8,
                           border: `1px solid ${C.primaryLight}`,
-                          background: `linear-gradient(135deg, ${C.primaryLight}, #EFF6FF)`,
+                          background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`,
                         }}
                       >
                         View Patient <ChevronRight size={13} />
@@ -1011,8 +1014,29 @@ export default function QualityPage() {
       const measures = measuresQ.data ?? [];
       if (measures.length === 0)
         return (
-          <div style={{ textAlign: "center", padding: "60px 0", color: C.textSub, fontSize: 14 }}>
-            No HEDIS measures available.
+          <div
+            role="status"
+            style={{
+              margin: "0 0 16px",
+              padding: "16px 20px",
+              borderRadius: 10,
+              background: tokens.warningSoft,
+              border: `1px solid ${tokens.warningBorder}`,
+              color: tokens.warningText,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              fontSize: 13,
+            }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>No HEDIS measures available — this is unusual</div>
+              <div style={{ fontSize: 12 }}>
+                STARS ratings depend on HEDIS measure data. Verify the quality pipeline is running
+                and that measure data has been ingested for this plan year.
+              </div>
+            </div>
           </div>
         );
       return <MeasuresTab measures={measures} />;
@@ -1024,8 +1048,29 @@ export default function QualityPage() {
         return <ErrorBox message="Failed to load STARS estimate." onRetry={() => starsQ.refetch()} />;
       if (!starsQ.data)
         return (
-          <div style={{ textAlign: "center", padding: "60px 0", color: C.textSub, fontSize: 14 }}>
-            No STARS data available.
+          <div
+            role="status"
+            style={{
+              margin: "0 0 16px",
+              padding: "16px 20px",
+              borderRadius: 10,
+              background: tokens.warningSoft,
+              border: `1px solid ${tokens.warningBorder}`,
+              color: tokens.warningText,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              fontSize: 13,
+            }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>No STARS data available — this is unusual</div>
+              <div style={{ fontSize: 12 }}>
+                STARS estimates are required for CMS bonus payments and quality bonuses.
+                Verify STARS calculation pipeline is configured.
+              </div>
+            </div>
           </div>
         );
       return <StarsTab stars={starsQ.data} />;
@@ -1047,7 +1092,7 @@ export default function QualityPage() {
   }
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "36px 44px" }}>
+    <div style={{ background: C.bg, minHeight: "100vh", padding: "36px 44px" }} className="rci-page-pad-desktop">
       <style>{`
         @keyframes qs-spin { to { transform: rotate(360deg) } }
         @keyframes qs-fadeInUp {
@@ -1085,10 +1130,11 @@ export default function QualityPage() {
         }
         @media (max-width: 640px) {
           .qs-kpi-strip { grid-template-columns: 1fr !important; }
+          .rci-page-pad-desktop { padding: 20px 16px !important; }
         }
-        .qs-measure-table tr:hover td { background: #F0F7FF !important; }
+        .qs-measure-table tr:hover td { background: ${tokens.primarySoft} !important; }
         .qs-tab-btn { cursor: pointer; transition: all 0.2s ease; position: relative; }
-        .qs-tab-btn:hover { color: #2563EB !important; }
+        .qs-tab-btn:hover { color: ${tokens.primary} !important; }
         .qs-tab-btn::after {
           content: '';
           position: absolute;
@@ -1096,12 +1142,13 @@ export default function QualityPage() {
           left: 50%;
           width: 0;
           height: 2px;
-          background: #2563EB;
+          background: ${tokens.primary};
           transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
           transform: translateX(-50%);
         }
         .qs-tab-btn:hover::after { width: 100%; }
         .qs-tab-active::after { width: 100% !important; }
+        .qs-tab-btn:focus-visible { outline: 2px solid ${tokens.primary}; outline-offset: 2px; border-radius: 4px; }
         .qs-star-icon { transition: transform 0.2s ease; }
         .qs-star-icon:hover { animation: qs-starPulse 0.4s ease; }
         .qs-progress-bar { animation: qs-progressGrow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -1110,6 +1157,9 @@ export default function QualityPage() {
         .qs-priority-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
         .qs-gauge-path { animation: qs-gaugeStroke 1.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
       `}</style>
+
+      {/* ── Data quality banner (degraded data is critical on compliance pages) ── */}
+      <DataQualityBanner />
 
       {/* ── Page Header ── */}
       <PageHeader
@@ -1153,7 +1203,7 @@ export default function QualityPage() {
             display: "flex",
             alignItems: "center",
             gap: 28,
-            background: "linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)",
+            background: `linear-gradient(135deg, ${tokens.slate900} 0%, ${tokens.slate800} 50%, ${tokens.slate900} 100%)`,
             border: "1px solid rgba(255,255,255,0.06)",
             marginBottom: 28,
             flexWrap: "wrap",
@@ -1162,17 +1212,17 @@ export default function QualityPage() {
         >
           <StarsGauge rating={currentStars} />
           <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: tokens.slate400, marginBottom: 8 }}>
               Estimated STARS Rating
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              {diffUp ? <TrendingUp size={16} color="#10B981" /> : <TrendingDown size={16} color="#EF4444" />}
-              <span style={{ color: diffUp ? "#10B981" : "#EF4444", fontWeight: 700, fontSize: 14 }}>
+              {diffUp ? <TrendingUp size={16} color={tokens.success} /> : <TrendingDown size={16} color={tokens.riskHigh} />}
+              <span style={{ color: diffUp ? tokens.success : tokens.riskHigh, fontWeight: 700, fontSize: 14 }}>
                 {diffUp ? "+" : ""}{(diff ?? 0).toFixed(2)} projected change
               </span>
             </div>
             {summaryQ.data && (
-              <div style={{ fontSize: 12, color: "#64748B" }}>
+              <div style={{ fontSize: 12, color: tokens.slate500 }}>
                 {summaryQ.data.total_measures} measures tracked &middot; {summaryQ.data.measures_above_benchmark} above benchmark
               </div>
             )}

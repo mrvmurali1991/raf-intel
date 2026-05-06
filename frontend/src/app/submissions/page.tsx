@@ -3,6 +3,8 @@
 import React, { useState, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { tokens } from "@/styles/tokens";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
 import {
   Send,
   RefreshCw,
@@ -31,45 +33,45 @@ import {
 import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
 
 // ─────────────────────────────────────────────
-// Design Tokens
+// Design Tokens (sourced from tokens.ts — no hardcoded hex)
 // ─────────────────────────────────────────────
 
 const T = {
-  white: "#FFFFFF",
-  slate50: "#F8FAFC",
-  slate100: "#F1F5F9",
-  slate200: "#E2E8F0",
-  slate300: "#CBD5E1",
-  slate400: "#94A3B8",
-  slate500: "#64748B",
-  slate600: "#475569",
-  slate700: "#334155",
-  slate800: "#1E293B",
-  slate900: "#0F172A",
-  blue50: "#EFF6FF",
-  blue100: "#DBEAFE",
-  blue500: "#3B82F6",
-  blue600: "#2563EB",
-  blue700: "#1D4ED8",
-  emerald50: "#ECFDF5",
-  emerald100: "#D1FAE5",
-  emerald500: "#10B981",
-  emerald600: "#059669",
-  amber50: "#FFFBEB",
-  amber100: "#FEF3C7",
-  amber500: "#F59E0B",
-  amber600: "#D97706",
-  red50: "#FEF2F2",
-  red100: "#FEE2E2",
-  red500: "#EF4444",
-  red600: "#DC2626",
-  violet50: "#F5F3FF",
-  violet500: "#8B5CF6",
-  violet600: "#7C3AED",
-  gray100: "#F3F4F6",
-  gray200: "#E5E7EB",
-  gray400: "#9CA3AF",
-  gray500: "#6B7280",
+  white:      tokens.white,
+  slate50:    tokens.slate50,
+  slate100:   tokens.slate100,
+  slate200:   tokens.slate200,
+  slate300:   tokens.slate300,
+  slate400:   tokens.slate400,
+  slate500:   tokens.slate500,
+  slate600:   tokens.slate600,
+  slate700:   tokens.slate700,
+  slate800:   tokens.slate800,
+  slate900:   tokens.slate900,
+  blue50:     tokens.primarySoft,
+  blue100:    "rgba(37,99,235,0.12)",
+  blue500:    tokens.infoBlue,
+  blue600:    tokens.primary,
+  blue700:    tokens.primaryDark,
+  emerald50:  tokens.successSoft,
+  emerald100: tokens.emerald100,
+  emerald500: tokens.success,
+  emerald600: tokens.riskLow,
+  amber50:    tokens.warningSoft,
+  amber100:   tokens.warningSoft,
+  amber500:   tokens.warningStrong,
+  amber600:   tokens.riskMedium,
+  red50:      tokens.riskHighSoft,
+  red100:     tokens.dangerSoft,
+  red500:     tokens.riskHigh,
+  red600:     tokens.danger,
+  violet50:   "rgba(139,92,246,0.08)",
+  violet500:  tokens.accentPurple,
+  violet600:  "rgba(124,58,237,1)",
+  gray100:    tokens.slate100,
+  gray200:    tokens.slate200,
+  gray400:    tokens.slate400,
+  gray500:    tokens.slate500,
 };
 
 
@@ -227,7 +229,7 @@ function StatusBadge({ status }: { status: BatchStatus }) {
     partial: { label: "Partial Accept", bg: T.amber100, color: T.amber600, dot: T.amber500, icon: <AlertCircle size={11} /> },
     error: { label: "Error", bg: T.red50, color: T.red500, dot: T.red500, icon: <XCircle size={11} /> },
   };
-  const cfg = map[status] ?? { label: status, bg: "#F3F4F6", color: "#6B7280", dot: "#9CA3AF", icon: null };
+  const cfg = map[status] ?? { label: status, bg: T.gray100, color: T.gray500, dot: T.gray400, icon: null };
   return (
     <span
       style={{
@@ -1781,11 +1783,13 @@ function BatchesTable({
           textAlign: "center",
         }}
       >
-        <EmptyState
-          icon={<Send size={28} />}
-          title="No submission batches"
-          description="Generate your first CMS submission batch to get started."
-        />
+        <div>
+          <EmptyState
+            icon={<Send size={28} />}
+            title="No CMS submission batches yet — this is unusual"
+            description="CMS submissions are required for MA plan payment. Verify the submission pipeline is running and generate your first batch above."
+          />
+        </div>
       </div>
     );
   }
@@ -1797,18 +1801,18 @@ function BatchesTable({
       }}
     >
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+        <table aria-label="CMS submission batches" style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
           <thead>
             <tr>
-              <th style={{ ...colHeader, width: 40 }}></th>
-              <th style={colHeader}>Batch ID</th>
-              <th style={colHeader}>Type</th>
-              <th style={colHeader}>PY</th>
-              <th style={colHeader}>Sweep</th>
-              <th style={{ ...colHeader, textAlign: "right" }}>Records</th>
-              <th style={colHeader}>Status</th>
-              <th style={colHeader}>Submitted</th>
-              <th style={colHeader}>Actions</th>
+              <th scope="col" style={{ ...colHeader, width: 40 }}><span className="sr-only">Expand</span></th>
+              <th scope="col" style={colHeader}>Batch ID</th>
+              <th scope="col" style={colHeader}>Type</th>
+              <th scope="col" style={colHeader}>PY</th>
+              <th scope="col" style={colHeader}>Sweep</th>
+              <th scope="col" style={{ ...colHeader, textAlign: "right" }}>Records</th>
+              <th scope="col" style={colHeader}>Status</th>
+              <th scope="col" style={colHeader}>Submitted</th>
+              <th scope="col" style={colHeader}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -2095,6 +2099,8 @@ export default function SubmissionsPage() {
         .sub-gradient-btn:hover { box-shadow: 0 4px 16px rgba(37,99,235,0.45); transform: translateY(-1px); }
         .sub-outline-btn { transition: all 0.18s ease; }
         .sub-outline-btn:hover { border-color: ${T.blue500}; color: ${T.blue600}; background-color: ${T.blue50}; }
+        @media (max-width: 640px) { .rci-page-pad-desktop { padding: 20px 16px !important; } }
+        button:focus-visible { outline: 2px solid ${T.blue600}; outline-offset: 2px; border-radius: 4px; }
       `}</style>
 
       {queryError && (
@@ -2142,7 +2148,10 @@ export default function SubmissionsPage() {
         </div>
       )}
 
-      <div style={contentStyle}>
+      <div style={contentStyle} className="rci-page-pad-desktop">
+        {/* Data quality banner — degraded data on a compliance page is a critical signal */}
+        <DataQualityBanner />
+
         {/* Page Header */}
         <PageHeader
           title="CMS Submissions"

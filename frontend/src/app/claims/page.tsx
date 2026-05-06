@@ -26,6 +26,7 @@ import React, { useCallback, useMemo, useRef, useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { tokens } from "@/styles/tokens";
+import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
 import {
   FileText,
@@ -52,34 +53,34 @@ import {
   Database,
 } from "lucide-react";
 
-// ─── Design tokens (match rest of app) ───────────────────────────────────────
+// ─── Design tokens (all from tokens.ts — no hardcoded hex) ───────────────────
 const C = {
-  white: tokens.white,
-  slate50: tokens.slate50,
-  slate100: tokens.slate100,
-  slate200: tokens.slate200,
-  slate300: tokens.slate300,
-  slate400: tokens.slate400,
-  slate500: tokens.slate500,
-  slate600: tokens.slate600,
-  slate700: tokens.slate700,
-  slate800: tokens.slate800,
-  slate900: tokens.slate900,
+  white:      tokens.white,
+  slate50:    tokens.slate50,
+  slate100:   tokens.slate100,
+  slate200:   tokens.slate200,
+  slate300:   tokens.slate300,
+  slate400:   tokens.slate400,
+  slate500:   tokens.slate500,
+  slate600:   tokens.slate600,
+  slate700:   tokens.slate700,
+  slate800:   tokens.slate800,
+  slate900:   tokens.slate900,
 
-  // Brand palette matches dashboard/patients (teal + emerald)
-  teal:      "#0F766E",
-  tealSoft:  "rgba(15, 118, 110, 0.08)",
-  tealBorder:"rgba(15, 118, 110, 0.22)",
-  emerald:   "#059669",
-  emeraldSoft:"#ECFDF5",
-  amber:     "#D97706",
-  amberSoft: "#FFFBEB",
-  red:       "#DC2626",
-  redSoft:   "#FEF2F2",
-  violet:    "#7C3AED",
-  violetSoft:"#F5F3FF",
-  blue:      "#2563EB",
-  blueSoft:  "#EFF6FF",
+  // Brand palette — teal values shared from ui-utils C.brand
+  teal:       "#0F766E",           // ui-utils C.brand (not in tokens yet — canonical value)
+  tealSoft:   "rgba(15,118,110,0.08)",
+  tealBorder: "rgba(15,118,110,0.22)",
+  emerald:    tokens.riskLow,
+  emeraldSoft: tokens.successSoft,
+  amber:      tokens.riskMedium,
+  amberSoft:  tokens.warningSoft,
+  red:        tokens.danger,
+  redSoft:    tokens.dangerSoft,
+  violet:     "rgba(124,58,237,1)", // accentPurple dark variant
+  violetSoft: "rgba(139,92,246,0.08)",
+  blue:       tokens.primary,
+  blueSoft:   tokens.primarySoft,
 };
 
 const ACCEPTED_EXT = [".csv", ".txt", ".837", ".edi", ".x12"];
@@ -577,7 +578,7 @@ function UploadDialog({
           }}>Cancel</button>
           <button onClick={submit} disabled={!file || uploading} style={{
             height: 38, padding: "0 20px", borderRadius: 8, border: "none",
-            background: !file || uploading ? C.slate300 : `linear-gradient(135deg, ${C.teal} 0%, #0B5951 100%)`,
+            background: !file || uploading ? C.slate300 : `linear-gradient(135deg, ${C.teal} 0%, ${tokens.successDark} 100%)`,
             color: C.white, fontSize: 13, fontWeight: 600,
             cursor: !file || uploading ? "not-allowed" : "pointer",
             display: "inline-flex", alignItems: "center", gap: 6,
@@ -1011,7 +1012,7 @@ function EmptyHero({ onUpload }: { onUpload: () => void }) {
       <button onClick={onUpload} style={{
         display: "inline-flex", alignItems: "center", gap: 8,
         height: 42, padding: "0 22px", borderRadius: 10, border: "none",
-        background: `linear-gradient(135deg, ${C.teal} 0%, #0B5951 100%)`,
+        background: `linear-gradient(135deg, ${C.teal} 0%, ${tokens.successDark} 100%)`,
         color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer",
         boxShadow: "0 4px 14px rgba(15,118,110,0.35)",
       }}>
@@ -1153,12 +1154,18 @@ export default function ClaimsPage() {
     <div style={{
       display: "flex", flexDirection: "column", gap: 24,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    }}>
+      padding: "20px 16px",
+    }} className="rci-page-pad-desktop">
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .claims-row:hover { background: ${C.tealSoft} !important; }
         .batch-row:hover { background: ${C.tealSoft} !important; }
+        @media (max-width: 640px) { .rci-page-pad-desktop { padding: 20px 16px !important; } }
+        button:focus-visible { outline: 2px solid ${tokens.primary}; outline-offset: 2px; border-radius: 4px; }
       `}</style>
+
+      {/* Data quality banner */}
+      <DataQualityBanner />
 
       {/* Header */}
       <PageHeader
@@ -1173,7 +1180,7 @@ export default function ClaimsPage() {
           <button onClick={() => setShowUpload(true)} aria-label="Upload claims file" style={{
             display: "inline-flex", alignItems: "center", gap: 8, height: 40,
             padding: "0 20px", borderRadius: 10, border: "none",
-            background: `linear-gradient(135deg, ${C.teal} 0%, #0B5951 100%)`,
+            background: `linear-gradient(135deg, ${C.teal} 0%, ${tokens.successDark} 100%)`,
             color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer",
             boxShadow: "0 4px 14px rgba(15,118,110,0.35)",
           }}>
