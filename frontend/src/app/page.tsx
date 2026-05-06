@@ -12,8 +12,8 @@ export default function DashboardOrchestrator() {
 
   if (isLoading || !user) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
-        <div className="animate-pulse flex items-center gap-2">
+      <div className="flex items-center justify-center h-64 text-muted-foreground" role="status" aria-label="Loading dashboard">
+        <div className="animate-pulse flex items-center gap-2" aria-hidden="true">
           <div className="w-4 h-4 rounded-full bg-slate-300" />
           <div className="w-4 h-4 rounded-full bg-slate-300" />
           <div className="w-4 h-4 rounded-full bg-slate-300" />

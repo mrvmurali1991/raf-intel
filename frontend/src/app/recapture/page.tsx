@@ -9,6 +9,8 @@ import { getRecaptureGapsReport } from "@/lib/api";
 import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
+import DataQualityBanner from "@/components/DataQualityBanner";
+import { tokens } from "@/styles/tokens";
 import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton";
 // Recharts-heavy components are dynamically imported so the initial bundle
 // does not pay the ~250 kB Recharts parse cost on every page load.
@@ -60,19 +62,20 @@ interface RecaptureReport {
 const REVENUE_PER_GAP = 3000;
 const PAGE_SIZE = 25;
 
+// Alias tokens for concise inline usage — NO raw hex literals beyond this map.
 const colors = {
-  primary: "#2563EB",
-  slate900: "#0F172A",
-  slate600: "#475569",
-  slate400: "#94A3B8",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  white: "#FFFFFF",
-  red600: "#DC2626",
-  amber500: "#F59E0B",
-  emerald500: "#10B981",
-  subtleText: "#64748B",
+  primary:    tokens.primary,
+  slate900:   tokens.slate900,
+  slate600:   tokens.slate600,
+  slate400:   tokens.slate400,
+  slate200:   tokens.slate200,
+  slate100:   tokens.slate100,
+  slate50:    tokens.slate50,
+  white:      tokens.white,
+  red600:     tokens.dangerStrong,
+  amber500:   tokens.warningStrong,
+  emerald500: tokens.successStrong,
+  subtleText: tokens.slate500,
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -83,9 +86,9 @@ function daysSince(dateStr: string): number {
 }
 
 function priorityFromDays(days: number): { label: string; color: string; rank: number; border: string } {
-  if (days > 365) return { label: "High", color: colors.red600, rank: 3, border: "#DC2626" };
-  if (days >= 180) return { label: "Medium", color: colors.amber500, rank: 2, border: "#F59E0B" };
-  return { label: "Low", color: colors.emerald500, rank: 1, border: "#10B981" };
+  if (days > 365) return { label: "High", color: colors.red600, rank: 3, border: tokens.dangerStrong };
+  if (days >= 180) return { label: "Medium", color: colors.amber500, rank: 2, border: tokens.warningStrong };
+  return { label: "Low", color: colors.emerald500, rank: 1, border: tokens.successStrong };
 }
 
 function formatCurrency(n: number): string {
@@ -201,15 +204,16 @@ export default function RecapturePage() {
     return (
       <div style={{ padding: 32 }}>
         <PageHeader title="Recapture Gaps" />
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", fontSize: 14, marginTop: 16 }}>
-          <AlertTriangle size={18} />
+        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 10, background: tokens.dangerSoft, border: `1px solid ${tokens.dangerBorder}`, color: tokens.danger, fontSize: 14, marginTop: 16 }}>
+          <AlertTriangle size={18} aria-hidden="true" />
           <span style={{ flex: 1 }}>Failed to load recapture data. Please try again.</span>
           <button
             type="button"
             onClick={() => refetch()}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#fff", color: "#B91C1C", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            aria-label="Retry loading recapture data"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${tokens.dangerBorder}`, background: tokens.white, color: tokens.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
-            <RefreshCw size={14} /> Retry
+            <RefreshCw size={14} aria-hidden="true" /> Retry
           </button>
         </div>
       </div>
@@ -227,7 +231,8 @@ export default function RecapturePage() {
   ];
 
   return (
-    <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto" }} className="rci-page-pad-desktop">
+      <DataQualityBanner />
       {/* Header */}
       <div className="animate-fade-in">
         <PageHeader
@@ -238,6 +243,7 @@ export default function RecapturePage() {
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
+              aria-label="Measurement year"
               style={{
                 padding: "8px 12px",
                 borderRadius: 8,
@@ -384,7 +390,7 @@ export default function RecapturePage() {
                       height: "100%",
                       width: `${(c.gap_count / maxConditionCount) * 100}%`,
                       borderRadius: 4,
-                      background: "linear-gradient(90deg, #2563EB, #3B82F6)",
+                      background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.infoBlue})`,
                       transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
                     }}
                   />
@@ -413,6 +419,7 @@ export default function RecapturePage() {
                 placeholder="Search patient..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search patients by name"
                 style={{
                   padding: "7px 10px 7px 30px",
                   borderRadius: 20,
@@ -465,27 +472,34 @@ export default function RecapturePage() {
         ) : (
           <>
             <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${colors.slate200}` }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }} aria-label="Patients requiring recapture">
                 <thead>
                   <tr>
-                    <th style={thStyle}>Patient</th>
-                    <th style={thStyle}>Condition</th>
-                    <th style={thStyle}>ICD-10</th>
-                    <th style={thStyle}>Last Coded</th>
-                    <th style={thStyle}>Days Since</th>
-                    <th style={thStyle}>Priority</th>
+                    <th scope="col" style={thStyle}>Patient</th>
+                    <th scope="col" style={thStyle}>Condition</th>
+                    <th scope="col" style={thStyle}>ICD-10</th>
+                    <th scope="col" style={thStyle}>Last Coded</th>
+                    <th scope="col" style={thStyle}>Days Since</th>
+                    <th scope="col" style={thStyle}>Priority</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paged.map((g, i) => (
                     <tr
                       key={`${g.pid}-${g.icd_code}-${i}`}
+                      tabIndex={0}
+                      role="row"
+                      aria-label={`${g.last_name}, ${g.first_name} — ${g.condition}, ${g.priority.label} priority`}
                       onClick={() => router.push(`/patients/${g.pid}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/patients/${g.pid}`); }
+                      }}
                       style={{
                         cursor: "pointer",
                         transition: "all 0.15s ease",
                         borderLeft: `3px solid ${g.priority.border}`,
                         background: i % 2 === 0 ? colors.white : colors.slate50,
+                        outline: "none",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = `${g.priority.border}08`;
@@ -497,6 +511,8 @@ export default function RecapturePage() {
                         e.currentTarget.style.transform = "none";
                         e.currentTarget.style.boxShadow = "none";
                       }}
+                      onFocus={(e) => { e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${tokens.primary}`; }}
+                      onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }}
                     >
                       <td style={{ ...tdStyle, fontWeight: 600, color: colors.primary }}>
                         {g.last_name}, {g.first_name}
@@ -623,6 +639,7 @@ export default function RecapturePage() {
         </div>
         <button
           onClick={exportCSV}
+          aria-label="Export recapture gaps to CSV"
           className="btn-press"
           style={{
             display: "flex",
@@ -631,7 +648,7 @@ export default function RecapturePage() {
             padding: "10px 20px",
             borderRadius: 8,
             border: "none",
-            background: "linear-gradient(135deg, #2563EB, #1D4ED8)",
+            background: `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`,
             color: colors.white,
             fontSize: 13,
             fontWeight: 600,

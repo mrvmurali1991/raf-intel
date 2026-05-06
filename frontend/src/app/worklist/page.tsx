@@ -22,6 +22,7 @@ import { AlertTriangle, ChevronRight, FileText, Activity, Stethoscope } from "lu
 import { useAuth } from "@/contexts/auth-context";
 import { PageHeader } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
+import DataQualityBanner from "@/components/DataQualityBanner";
 import api from "@/lib/api";
 
 interface WorklistGap {
@@ -96,7 +97,7 @@ export default function WorklistPage() {
 
   if (authLoading || (providerId != null && isLoading)) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
         <PageHeader title="Today's worklist" subtitle="Loading prioritized patients…" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginTop: 16 }}>
           {[1, 2, 3].map((i) => (
@@ -109,7 +110,7 @@ export default function WorklistPage() {
 
   if (providerId == null) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
         <PageHeader title="Today's worklist" />
         <div style={{ marginTop: 16, padding: 16, borderRadius: 10, background: tokens.warningSoft, border: `1px solid ${tokens.warningBorder}`, color: tokens.warningText, fontSize: 14 }}>
           Sign in to view your worklist.
@@ -120,7 +121,7 @@ export default function WorklistPage() {
 
   if (isError || !data) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
         <PageHeader title="Today's worklist" />
         <div role="alert" style={{ marginTop: 16, padding: 14, borderRadius: 10, background: tokens.dangerSoft, border: `1px solid ${tokens.dangerBorder}`, color: tokens.danger, display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
           <AlertTriangle size={18} />
@@ -130,6 +131,7 @@ export default function WorklistPage() {
           <button
             type="button"
             onClick={() => refetch()}
+            aria-label="Retry loading worklist"
             style={{
               padding: "6px 12px",
               borderRadius: 8,
@@ -150,7 +152,7 @@ export default function WorklistPage() {
 
   if (data.items.length === 0) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
         <PageHeader title="Today's worklist" subtitle={`Measurement year ${measurementYear}`} />
         <div
           style={{
@@ -206,7 +208,8 @@ export default function WorklistPage() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1280, margin: "0 auto" }}>
+    <div style={{ padding: "20px 16px", maxWidth: 1280, margin: "0 auto" }} className="rci-page-pad-desktop">
+      <DataQualityBanner />
       <PageHeader
         title="Today's worklist"
         subtitle={`${summary.patients} patient${summary.patients === 1 ? "" : "s"} prioritized for ${measurementYear}`}

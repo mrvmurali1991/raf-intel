@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials, riskAccentColor, riskTone } from "@/lib/ui-utils";
+import { tokens } from "@/styles/tokens";
 
 // ---------------------------------------------------------------------------
 // Constants & Types
@@ -106,7 +107,7 @@ function SortLabel({
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: "0.08em",
-        color: active ? "#0F172A" : "#64748B",
+        color: active ? tokens.slate900 : tokens.slate500,
         whiteSpace: "nowrap",
         transition: "color 0.15s ease",
         justifySelf: align === "right" ? "end" : "start",
@@ -116,8 +117,8 @@ function SortLabel({
       {active && (
         <span style={{ display: "inline-flex", marginLeft: 2 }}>
           {sort.dir === "asc"
-            ? <ChevronUp size={11} color="#0F172A" />
-            : <ChevronDown size={11} color="#0F172A" />
+            ? <ChevronUp size={11} color={tokens.slate900} />
+            : <ChevronDown size={11} color={tokens.slate900} />
           }
         </span>
       )}
@@ -345,7 +346,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
   };
 
   const MODAL: React.CSSProperties = {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: tokens.white,
     borderRadius: 20,
     padding: 32,
     width: "100%",
@@ -359,13 +360,18 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
   };
 
   return (
-    <div style={OVERLAY} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      style={OVERLAY}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      role="presentation"
+    >
       <FocusTrap>
-        <div style={MODAL} role="dialog" aria-modal="true" aria-label="Import patients">
+        <div style={MODAL} role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0F172A" }}>Import Patients</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 14, color: "#64748B" }}>
+            <h2 id="import-modal-title" style={{ margin: 0, fontSize: 20, fontWeight: 700, color: tokens.slate900 }}>Import Patients</h2>
+            <p style={{ margin: "4px 0 0", fontSize: 14, color: tokens.slate500 }}>
               {format === "csv"
                 ? "Upload a CSV file to bulk-import patients into OpenEMR."
                 : "Upload a FHIR R4 Patient resource or Bundle to import patients."}
@@ -374,7 +380,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
           <button
             onClick={onClose}
             aria-label="Close"
-            style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: "#94A3B8", borderRadius: 8 }}
+            style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: tokens.slate400, borderRadius: 8 }}
           >
             <X size={20} />
           </button>
@@ -382,7 +388,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
         <div style={{
           display: "inline-flex", alignItems: "center",
-          backgroundColor: "#F1F5F9", borderRadius: 10, padding: 4, gap: 2,
+          backgroundColor: tokens.slate100, borderRadius: 10, padding: 4, gap: 2,
           alignSelf: "flex-start",
         }}>
           {(["csv", "fhir"] as const).map((f) => (
@@ -393,8 +399,8 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 padding: "5px 18px", borderRadius: 7, border: "none",
                 fontSize: 13, fontWeight: 600, cursor: "pointer",
                 transition: "all 0.15s ease",
-                backgroundColor: format === f ? "#0f766e" : "transparent",
-                color: format === f ? "#FFFFFF" : "#64748B",
+                backgroundColor: format === f ? tokens.teal700 : "transparent",
+                color: format === f ? tokens.white : tokens.slate500,
                 boxShadow: format === f ? "0 2px 6px rgba(15,118,110,0.25)" : "none",
               }}
               aria-pressed={format === f}
@@ -412,7 +418,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
               padding: "7px 14px", borderRadius: 8,
               border: "1px solid rgba(15, 118, 110, 0.3)",
               backgroundColor: "rgba(15, 118, 110, 0.06)",
-              color: "#0f766e", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              color: tokens.teal700, fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}
           >
             <Download size={14} /> {format === "csv" ? "Download Template" : "Download FHIR Template"}
@@ -437,13 +443,13 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 padding: "7px 14px", borderRadius: 8,
                 border: "1px solid rgba(15, 118, 110, 0.3)",
                 backgroundColor: "rgba(15, 118, 110, 0.06)",
-                color: "#0f766e", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                color: tokens.teal700, fontSize: 13, fontWeight: 600, cursor: "pointer",
               }}
             >
               <Download size={14} /> Download Excel Template
             </button>
           )}
-          <span style={{ fontSize: 12, color: "#94A3B8" }}>
+          <span style={{ fontSize: 12, color: tokens.slate400 }}>
             {format === "csv"
               ? "Required columns: first_name, last_name, dob, sex (CSV or Excel)"
               : "FHIR R4 Patient resource or Bundle"}
@@ -457,12 +463,12 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             style={{
-              border: `2px dashed ${dragOver ? "#0f766e" : file ? "#10B981" : "#CBD5E1"}`,
+              border: `2px dashed ${dragOver ? tokens.teal700 : file ? tokens.success : tokens.slate300}`,
               borderRadius: 14,
               padding: "32px 24px",
               textAlign: "center",
               cursor: "pointer",
-              backgroundColor: dragOver ? "rgba(15, 118, 110, 0.04)" : file ? "rgba(16, 185, 129, 0.04)" : "#F8FAFC",
+              backgroundColor: dragOver ? tokens.tealSoft : file ? "rgba(16, 185, 129, 0.04)" : tokens.slate50,
               transition: "all 0.2s ease",
             }}
           >
@@ -479,23 +485,23 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 backgroundColor: file ? "rgba(16, 185, 129, 0.12)" : "rgba(15, 118, 110, 0.1)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                {file ? <CheckCircle size={24} color="#10B981" /> : <Upload size={24} color="#0f766e" />}
+                {file ? <CheckCircle size={24} color={tokens.success} /> : <Upload size={24} color={tokens.teal700} />}
               </div>
               {file ? (
                 <>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0F172A" }}>{file.name}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#64748B" }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>{file.name}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: tokens.slate500 }}>
                     {(file.size / 1024).toFixed(1)} KB — click to change
                   </p>
                 </>
               ) : (
                 <>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0F172A" }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>
                     {format === "csv"
                       ? "Drop a CSV or Excel file here or click to browse"
                       : "Drop a FHIR JSON file here or click to browse"}
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#94A3B8" }}>
+                  <p style={{ margin: 0, fontSize: 12, color: tokens.slate400 }}>
                     {format === "csv"
                       ? "Accepts .csv and .xlsx files up to 10 MB"
                       : "Accepts .json files up to 10 MB"}
@@ -508,7 +514,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
         {file && !result && (
           <div>
-            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#475569" }}>
+            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: tokens.slate600 }}>
               If a patient already exists in the system:
             </p>
             <div style={{ display: "flex", gap: 10 }}>
@@ -524,28 +530,28 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                     flex: 1,
                     padding: "14px 16px",
                     borderRadius: 10,
-                    border: `2px solid ${onDuplicate === key ? (key === "replace" ? "#DC2626" : "#0f766e") : "#E2E8F0"}`,
-                    backgroundColor: onDuplicate === key ? (key === "replace" ? "rgba(220, 38, 38, 0.05)" : "rgba(15, 118, 110, 0.05)") : "#FFFFFF",
+                    border: `2px solid ${onDuplicate === key ? (key === "replace" ? tokens.dangerStrong : tokens.teal700) : tokens.slate200}`,
+                    backgroundColor: onDuplicate === key ? (key === "replace" ? "rgba(220, 38, 38, 0.05)" : tokens.tealSoft) : tokens.white,
                     cursor: "pointer",
                     textAlign: "left",
                     transition: "border-color 0.15s, background-color 0.15s",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <Icon size={16} color={onDuplicate === key ? (key === "replace" ? "#DC2626" : "#0f766e") : "#94A3B8"} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: onDuplicate === key ? (key === "replace" ? "#DC2626" : "#0f766e") : "#0F172A" }}>
+                    <Icon size={16} color={onDuplicate === key ? (key === "replace" ? tokens.dangerStrong : tokens.teal700) : tokens.slate400} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: onDuplicate === key ? (key === "replace" ? tokens.dangerStrong : tokens.teal700) : tokens.slate900 }}>
                       {label}
                     </span>
                   </div>
-                  <p style={{ margin: 0, fontSize: 12, color: "#64748B", lineHeight: 1.4 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: tokens.slate500, lineHeight: 1.4 }}>
                     {desc}
                   </p>
                 </button>
               ))}
             </div>
             {onDuplicate === "replace" && (
-              <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, backgroundColor: "rgba(220, 38, 38, 0.08)", border: "1px solid #FECACA" }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#DC2626", fontWeight: 600 }}>
+              <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, backgroundColor: "rgba(220, 38, 38, 0.08)", border: `1px solid ${tokens.dangerBorder}` }}>
+                <p style={{ margin: 0, fontSize: 12, color: tokens.dangerStrong, fontWeight: 600 }}>
                   Warning: This will permanently delete all existing patients before importing.
                 </p>
               </div>
@@ -556,8 +562,8 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
         {uploadError && (
           <div style={{
             padding: "12px 16px", borderRadius: 10,
-            backgroundColor: "#FEF2F2", border: "1px solid #FECACA",
-            color: "#991B1B", fontSize: 13,
+            backgroundColor: tokens.dangerSoft, border: `1px solid ${tokens.dangerBorder}`,
+            color: tokens.dangerAlt, fontSize: 13,
           }}>
             <strong>Error: </strong>{uploadError}
           </div>
@@ -570,8 +576,8 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
             border: "1px solid rgba(15, 118, 110, 0.25)",
             display: "flex", alignItems: "center", gap: 10,
           }}>
-            <CheckCircle size={18} color="#0f766e" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#0f766e" }}>
+            <CheckCircle size={18} color={tokens.teal700} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: tokens.teal700 }}>
               Excel file selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
             </span>
           </div>
@@ -579,18 +585,18 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
         {file && format === "csv" && headers.length > 0 && !result && (
           <div>
-            <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#475569" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: tokens.slate600 }}>
               Preview (first 5 rows)
             </p>
-            <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #E2E8F0" }}>
+            <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${tokens.slate200}` }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr style={{ backgroundColor: "#F8FAFC" }}>
+                  <tr style={{ backgroundColor: tokens.slate50 }}>
                     {headers.map((h) => (
                       <th key={h} style={{
                         padding: "8px 12px", textAlign: "left",
-                        fontWeight: 600, color: "#64748B",
-                        borderBottom: "1px solid #E2E8F0",
+                        fontWeight: 600, color: tokens.slate500,
+                        borderBottom: `1px solid ${tokens.slate200}`,
                         whiteSpace: "nowrap",
                       }}>{h}</th>
                     ))}
@@ -598,9 +604,9 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 </thead>
                 <tbody>
                   {preview.map((row, ri) => (
-                    <tr key={ri} style={{ borderBottom: ri < preview.length - 1 ? "1px solid #F1F5F9" : "none" }}>
+                    <tr key={ri} style={{ borderBottom: ri < preview.length - 1 ? `1px solid ${tokens.slate100}` : "none" }}>
                       {headers.map((_, ci) => (
-                        <td key={ci} style={{ padding: "7px 12px", color: "#0F172A", whiteSpace: "nowrap" }}>
+                        <td key={ci} style={{ padding: "7px 12px", color: tokens.slate900, whiteSpace: "nowrap" }}>
                           {row[ci] ?? ""}
                         </td>
                       ))}
@@ -615,12 +621,12 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
         {file && format === "fhir" && fhirResourceCount !== null && !result && (
           <div style={{
             padding: "14px 18px", borderRadius: 10,
-            backgroundColor: fhirResourceCount > 0 ? "rgba(15, 118, 110, 0.06)" : "#FEF2F2",
-            border: `1px solid ${fhirResourceCount > 0 ? "rgba(15, 118, 110, 0.25)" : "#FECACA"}`,
+            backgroundColor: fhirResourceCount > 0 ? tokens.tealSoft : tokens.dangerSoft,
+            border: `1px solid ${fhirResourceCount > 0 ? tokens.tealRing : tokens.dangerBorder}`,
             display: "flex", alignItems: "center", gap: 10,
           }}>
-            <CheckCircle size={18} color={fhirResourceCount > 0 ? "#0f766e" : "#DC2626"} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: fhirResourceCount > 0 ? "#0f766e" : "#991B1B" }}>
+            <CheckCircle size={18} color={fhirResourceCount > 0 ? tokens.teal700 : tokens.dangerStrong} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: fhirResourceCount > 0 ? tokens.teal700 : tokens.dangerAlt }}>
               {fhirResourceCount > 0
                 ? `Found ${fhirResourceCount} Patient resource${fhirResourceCount === 1 ? "" : "s"}`
                 : "No Patient resources found in this file"}
@@ -631,25 +637,25 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
         {result && (
           <div style={{
             padding: "20px 24px", borderRadius: 14,
-            backgroundColor: result.errors > 0 ? "#FFFBEB" : "#F0FDF4",
-            border: `1px solid ${result.errors > 0 ? "#FDE68A" : "#BBF7D0"}`,
+            backgroundColor: result.errors > 0 ? tokens.warningSoft : tokens.successSoft,
+            border: `1px solid ${result.errors > 0 ? tokens.warningBorder : tokens.emerald100}`,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <CheckCircle size={20} color={result.errors > 0 ? "#D97706" : "#059669"} />
-              <span style={{ fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Import Complete</span>
+              <CheckCircle size={20} color={result.errors > 0 ? tokens.riskMedium : tokens.riskLow} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: tokens.slate900 }}>Import Complete</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: onDuplicate === "replace" ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr 1fr 1fr", gap: 12, marginBottom: result.error_details.length > 0 ? 16 : 0 }}>
               {[
-                { label: "Total Rows", value: result.total_rows, color: "#475569" },
-                ...(onDuplicate === "replace" ? [{ label: "Deleted (old)", value: result.deleted ?? 0, color: "#DC2626" }] : []),
-                { label: "Imported", value: result.imported, color: "#059669" },
-                ...(onDuplicate !== "replace" ? [{ label: "Updated", value: result.updated, color: "#0891B2" }] : []),
-                ...(onDuplicate !== "replace" ? [{ label: onDuplicate === "update" ? "Unchanged" : "Skipped (dup)", value: result.duplicates_skipped, color: "#64748B" }] : []),
-                { label: "Errors", value: result.errors, color: result.errors > 0 ? "#DC2626" : "#94A3B8" },
+                { label: "Total Rows", value: result.total_rows, color: tokens.slate600 },
+                ...(onDuplicate === "replace" ? [{ label: "Deleted (old)", value: result.deleted ?? 0, color: tokens.dangerStrong }] : []),
+                { label: "Imported", value: result.imported, color: tokens.riskLow },
+                ...(onDuplicate !== "replace" ? [{ label: "Updated", value: result.updated, color: tokens.skyText }] : []),
+                ...(onDuplicate !== "replace" ? [{ label: onDuplicate === "update" ? "Unchanged" : "Skipped (dup)", value: result.duplicates_skipped, color: tokens.slate500 }] : []),
+                { label: "Errors", value: result.errors, color: result.errors > 0 ? tokens.dangerStrong : tokens.slate400 },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{label}</div>
+                  <div style={{ fontSize: 11, color: tokens.slate400, marginTop: 2 }}>{label}</div>
                 </div>
               ))}
             </div>
@@ -657,10 +663,10 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
               <div style={{
                 maxHeight: 140, overflowY: "auto", padding: "10px 12px",
                 backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 8,
-                border: "1px solid #FDE68A",
+                border: `1px solid ${tokens.warningBorder}`,
               }}>
                 {result.error_details.map((e, i) => (
-                  <p key={`err-${i}`} style={{ margin: "0 0 4px", fontSize: 12, color: "#92400E" }}>{e}</p>
+                  <p key={`err-${i}`} style={{ margin: "0 0 4px", fontSize: 12, color: tokens.warningMuted }}>{e}</p>
                 ))}
               </div>
             )}
@@ -672,8 +678,8 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
             onClick={onClose}
             style={{
               padding: "9px 20px", borderRadius: 10,
-              border: "1px solid #E2E8F0", backgroundColor: "#FFFFFF",
-              fontSize: 14, fontWeight: 500, color: "#475569", cursor: "pointer",
+              border: `1px solid ${tokens.slate200}`, backgroundColor: tokens.white,
+              fontSize: 14, fontWeight: 500, color: tokens.slate600, cursor: "pointer",
             }}
           >
             {result ? "Close" : "Cancel"}
@@ -685,8 +691,8 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
               style={{
                 padding: "9px 22px", borderRadius: 10,
                 border: "none",
-                backgroundColor: !file || uploading ? "#94A3B8" : "#0f766e",
-                color: "#FFFFFF", fontSize: 14, fontWeight: 600,
+                backgroundColor: !file || uploading ? tokens.slate400 : tokens.teal700,
+                color: tokens.white, fontSize: 14, fontWeight: 600,
                 cursor: !file || uploading ? "not-allowed" : "pointer",
                 display: "inline-flex", alignItems: "center", gap: 7,
                 boxShadow: !file || uploading ? "none" : "0 4px 10px rgba(15,118,110,0.2)",
@@ -935,8 +941,8 @@ export default function PatientsPage() {
   if (isError && isEmrDeactivatedError(error)) {
     return (
       <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, fontFamily: FONT_SYS }}>
-        <div style={{ borderRadius: 16, backgroundColor: "#FEF3C7", padding: 20 }}>
-          <AlertTriangle size={40} color="#D97706" />
+        <div style={{ borderRadius: 16, backgroundColor: tokens.warningSoft, padding: 20 }}>
+          <AlertTriangle size={40} color={tokens.riskMedium} />
         </div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>No patient data available</h2>
         <p style={{ fontSize: 14, color: C.textSubtle, margin: 0, maxWidth: 440, textAlign: "center" }}>
@@ -949,7 +955,7 @@ export default function PatientsPage() {
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               borderRadius: 10, border: `1px solid ${C.brand}`, backgroundColor: C.brand,
-              padding: "8px 16px", fontSize: 14, fontWeight: 600, color: "#FFFFFF",
+              padding: "8px 16px", fontSize: 14, fontWeight: 600, color: tokens.white,
               cursor: "pointer",
             }}
           >
@@ -960,7 +966,7 @@ export default function PatientsPage() {
             onClick={() => router.push("/emr-config")}
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
-              borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: "#FFFFFF",
+              borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: tokens.white,
               padding: "8px 16px", fontSize: 14, fontWeight: 500, color: C.textMuted,
               cursor: "pointer",
             }}
@@ -976,8 +982,8 @@ export default function PatientsPage() {
   if (isError) {
     return (
       <div role="alert" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, fontFamily: FONT_SYS }}>
-        <div style={{ borderRadius: 16, backgroundColor: "#FEF2F2", padding: 20 }}>
-          <AlertTriangle size={40} color="#EF4444" />
+        <div style={{ borderRadius: 16, backgroundColor: tokens.dangerSoft, padding: 20 }}>
+          <AlertTriangle size={40} color={tokens.dangerMedium} />
         </div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>Failed to load patients</h2>
         <p style={{ fontSize: 14, color: C.textSubtle, margin: 0 }}>Check that the server is running and try again.</p>
@@ -985,7 +991,7 @@ export default function PatientsPage() {
           onClick={() => refetch()}
           style={{
             display: "inline-flex", alignItems: "center", gap: 8,
-            borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: "#FFFFFF",
+            borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: tokens.white,
             padding: "8px 16px", fontSize: 14, fontWeight: 500, color: C.textMuted,
             cursor: "pointer",
           }}
@@ -1000,7 +1006,7 @@ export default function PatientsPage() {
     <ErrorBoundary fallbackTitle="Patients page failed to load">
     <div style={{
       display: "flex", flexDirection: "column", gap: 0,
-      background: "#FAFAF8",
+      background: tokens.bgSubtle,
       minHeight: "100vh",
       // Mobile: 16px gutter; restored to 40px desktop padding via the
       // ``rci-page-pad-desktop`` className declared in globals.css.
@@ -1020,12 +1026,12 @@ export default function PatientsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
           <div style={{
             width: 48, height: 48, borderRadius: 14,
-            background: "linear-gradient(135deg, #0F766E 0%, #134E4A 100%)",
+            background: `linear-gradient(135deg, ${tokens.teal700} 0%, ${tokens.teal900} 100%)`,
             display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: "0 6px 16px rgba(15, 118, 110, 0.25), inset 0 1px 0 rgba(255,255,255,0.18)",
             flexShrink: 0,
           }}>
-            <Users size={22} color="#FFFFFF" strokeWidth={2.25} />
+            <Users size={22} color={tokens.white} strokeWidth={2.25} />
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1111,7 +1117,7 @@ export default function PatientsPage() {
               style={{
                 height: 40, width: 320, borderRadius: 10,
                 border: `1px solid ${C.border}`,
-                backgroundColor: "#FFFFFF",
+                backgroundColor: tokens.white,
                 paddingLeft: 38, paddingRight: 14,
                 fontSize: 13, color: C.text,
                 fontFamily: FONT_SYS,
@@ -1135,7 +1141,7 @@ export default function PatientsPage() {
               display: "inline-flex", alignItems: "center", gap: 7,
               height: 40, padding: "0 14px", borderRadius: 10,
               border: `1px solid ${C.border}`,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               color: C.textMuted, fontSize: 13, fontWeight: 600,
               fontFamily: FONT_SYS,
               cursor: "pointer", flexShrink: 0,
@@ -1160,13 +1166,13 @@ export default function PatientsPage() {
               display: "inline-flex", alignItems: "center", gap: 7,
               height: 40, padding: "0 16px", borderRadius: 10,
               border: "none", backgroundColor: C.brand,
-              color: "#FFFFFF", fontSize: 13, fontWeight: 600,
+              color: tokens.white, fontSize: 13, fontWeight: 600,
               fontFamily: FONT_SYS,
               cursor: "pointer", flexShrink: 0,
               boxShadow: "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
               transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#0d6b63"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = tokens.teal900; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.brand; }}
           >
             <FileDown size={14} />
@@ -1183,13 +1189,13 @@ export default function PatientsPage() {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "14px 20px",
           borderRadius: 16,
-          backgroundColor: "#FFFBEB",
-          border: "1px solid #FDE68A",
+          backgroundColor: tokens.warningSoft,
+          border: `1px solid ${tokens.warningBorder}`,
           marginBottom: 16,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <AlertTriangle size={18} color="#D97706" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#92400E" }}>
+            <AlertTriangle size={18} color={tokens.riskMedium} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: tokens.warningMuted }}>
               {stats.high} High Risk Patient{stats.high !== 1 ? "s" : ""} Need{stats.high === 1 ? "s" : ""} Review
             </span>
           </div>
@@ -1200,7 +1206,7 @@ export default function PatientsPage() {
               padding: "7px 16px", borderRadius: 8,
               border: "none",
               backgroundColor: C.brand,
-              color: "#FFFFFF",
+              color: tokens.white,
               fontSize: 13, fontWeight: 600,
               cursor: "pointer",
               boxShadow: "0 2px 6px rgba(15,118,110,0.25)",
@@ -1307,8 +1313,8 @@ export default function PatientsPage() {
               <span style={{
                 display: "inline-flex", alignItems: "center",
                 padding: "1px 6px", borderRadius: 4,
-                backgroundColor: "#ECFDF5",
-                color: "#059669",
+                backgroundColor: tokens.successSoft,
+                color: tokens.riskLow,
                 fontSize: 10, fontWeight: 700,
               }}>
                 {stats.analyzedPct}% scored
@@ -1367,7 +1373,7 @@ export default function PatientsPage() {
               key === "high" ? C.high :
               key === "medium" ? C.medium :
               key === "low" ? C.low :
-              key === "unscored" ? "#CBD5E1" : null;
+              key === "unscored" ? tokens.slate300 : null;
             return (
               <button
                 key={key}
@@ -1377,8 +1383,8 @@ export default function PatientsPage() {
                   height: 34, padding: "0 14px",
                   borderRadius: 999,
                   border: active ? "none" : `1px solid ${C.border}`,
-                  backgroundColor: active ? "#1E293B" : "#FFFFFF",
-                  color: active ? "#FFFFFF" : C.textMuted,
+                  backgroundColor: active ? tokens.slate800 : tokens.white,
+                  color: active ? tokens.white : C.textMuted,
                   fontSize: 12.5, fontWeight: 600,
                   fontFamily: FONT_SYS,
                   cursor: "pointer",
@@ -1416,7 +1422,7 @@ export default function PatientsPage() {
               display: "inline-flex", alignItems: "center", gap: 6,
               height: 34, padding: "0 14px", borderRadius: 999,
               border: `1px solid ${showColumnFilters || hasActiveColFilters ? C.brand : C.border}`,
-              backgroundColor: showColumnFilters || hasActiveColFilters ? C.brandSoft : "#FFFFFF",
+              backgroundColor: showColumnFilters || hasActiveColFilters ? C.brandSoft : tokens.white,
               color: showColumnFilters || hasActiveColFilters ? C.brand : C.textMuted,
               fontSize: 12, fontWeight: 600,
               fontFamily: FONT_SYS,
@@ -1493,24 +1499,24 @@ export default function PatientsPage() {
           gridTemplateColumns: WORKLIST_GRID,
           alignItems: "center",
           padding: `12px ${WORKLIST_PAD_X}px 12px`,
-          backgroundColor: "#FAFBFC",
+          backgroundColor: tokens.bgFaintCard,
           borderBottom: `1px solid ${C.border}`,
           gap: WORKLIST_GAP,
         }}>
           <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
           <span role="columnheader" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: "#64748B",
+            letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Level</span>
           <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
           <span role="columnheader" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: "#64748B",
+            letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Factors</span>
           <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
           <span role="columnheader" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: "#64748B",
+            letterSpacing: "0.08em", color: tokens.slate500,
           }}>Status</span>
           <span role="columnheader" aria-label="Open patient detail" />
         </div>
@@ -1522,7 +1528,7 @@ export default function PatientsPage() {
             gridTemplateColumns: WORKLIST_GRID,
             alignItems: "center",
             padding: `10px ${WORKLIST_PAD_X}px`,
-            backgroundColor: "#F8FAFC",
+            backgroundColor: tokens.slate50,
             borderBottom: `1px solid ${C.border}`,
             gap: WORKLIST_GAP,
           }}>
@@ -1684,20 +1690,20 @@ export default function PatientsPage() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+              <div style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ width: 140, height: 12, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
-                <div style={{ width: 80, height: 10, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+                <div style={{ width: 140, height: 12, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
+                <div style={{ width: 80, height: 10, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
               </div>
             </div>
-            <div style={{ width: 64, height: 22, borderRadius: 999, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div style={{ width: 56, height: 18, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 64, height: 22, borderRadius: 999, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 56, height: 18, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
             <div style={{ display: "flex", gap: 6 }}>
-              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
-              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
+              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
             </div>
-            <div style={{ width: 40, height: 18, borderRadius: 4, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite", justifySelf: "end" }} />
-            <div style={{ width: 86, height: 24, borderRadius: 999, backgroundColor: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 40, height: 18, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite", justifySelf: "end" }} />
+            <div style={{ width: 86, height: 24, borderRadius: 999, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
             <div />
           </div>
         ))}
@@ -1707,7 +1713,7 @@ export default function PatientsPage() {
           <div style={{ padding: "72px 24px", textAlign: "center" }}>
             <div style={{
               width: 72, height: 72, borderRadius: 18, margin: "0 auto 18px",
-              background: "linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)",
+              background: `linear-gradient(135deg, ${tokens.slate50} 0%, ${tokens.slate100} 100%)`,
               display: "flex", alignItems: "center", justifyContent: "center",
               border: `1px dashed ${C.border}`,
             }}>
@@ -1732,14 +1738,14 @@ export default function PatientsPage() {
                 style={{
                   padding: "8px 18px", borderRadius: 10,
                   border: `1px solid ${C.border}`,
-                  backgroundColor: "#FFFFFF",
+                  backgroundColor: tokens.white,
                   color: C.brand,
                   fontSize: 13, fontWeight: 600, cursor: "pointer",
                   fontFamily: FONT_SYS,
                   transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.brand; e.currentTarget.style.backgroundColor = C.brandSoft; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.backgroundColor = "#FFFFFF"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.backgroundColor = tokens.white; }}
               >
                 Clear all filters
               </button>
@@ -1789,7 +1795,7 @@ export default function PatientsPage() {
                 padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
                 borderBottom: `1px solid ${C.rowDivider}`,
                 borderLeft: `3px solid ${accent}`,
-                backgroundColor: isHovered ? "#FAFBFC" : C.bgCard,
+                backgroundColor: isHovered ? tokens.bgFaintCard : C.bgCard,
                 cursor: "pointer",
                 transition: "background-color 0.15s ease",
                 gap: WORKLIST_GAP,
@@ -1830,21 +1836,21 @@ export default function PatientsPage() {
                     letterSpacing: "0.02em",
                   }}>
                     {age !== null ? `${age}${sexLabel !== "\u2014" ? sexLabel : ""}` : ""}
-                    {age !== null && <span style={{ margin: "0 4px", color: "#CBD5E1" }}>&middot;</span>}
+                    {age !== null && <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>}
                     {pid}
                     {location !== "\u2014" && (
                       <>
-                        <span style={{ margin: "0 4px", color: "#CBD5E1" }}>&middot;</span>
+                        <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>
                         {location}
                       </>
                     )}
                     {p.data_source === "upload" && (
                       <>
-                        <span style={{ margin: "0 4px", color: "#CBD5E1" }}>&middot;</span>
+                        <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>
                         <span style={{
                           fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
                           padding: "1px 5px", borderRadius: 4,
-                          background: "#EFF6FF", color: "#3B82F6", border: "1px solid #BFDBFE",
+                          background: tokens.skyBg, color: tokens.infoBlue, border: `1px solid ${tokens.skyBorder}`,
                           textTransform: "uppercase",
                         }}>CSV</span>
                       </>
@@ -1872,7 +1878,7 @@ export default function PatientsPage() {
                     display: "inline-flex", alignItems: "center",
                     height: 24, padding: "0 10px",
                     borderRadius: 999,
-                    backgroundColor: "#F1F5F9",
+                    backgroundColor: tokens.slate100,
                     color: C.label,
                     fontSize: 11.5, fontWeight: 600,
                   }}>
@@ -1897,7 +1903,7 @@ export default function PatientsPage() {
                   </span>
                 ) : (
                   <span style={{
-                    fontSize: 18, color: "#CBD5E1", fontWeight: 400,
+                    fontSize: 18, color: tokens.slate300, fontWeight: 400,
                     fontVariantNumeric: "tabular-nums",
                   }}>{"\u2014"}</span>
                 )}
@@ -1912,9 +1918,9 @@ export default function PatientsPage() {
                       display: "inline-flex", alignItems: "center", gap: 3,
                       height: 22, padding: "0 8px",
                       borderRadius: 6,
-                      backgroundColor: "#F0F9FF",
-                      border: "1px solid #BAE6FD",
-                      color: "#0369A1",
+                      backgroundColor: tokens.skyBg,
+                      border: `1px solid ${tokens.skyBorder}`,
+                      color: tokens.skyText,
                       fontSize: 10.5, fontWeight: 600,
                       fontVariantNumeric: "tabular-nums",
                       whiteSpace: "nowrap",
@@ -1930,9 +1936,9 @@ export default function PatientsPage() {
                       display: "inline-flex", alignItems: "center", gap: 3,
                       height: 22, padding: "0 8px",
                       borderRadius: 6,
-                      backgroundColor: "#FFF7ED",
-                      border: "1px solid #FED7AA",
-                      color: "#C2410C",
+                      backgroundColor: tokens.orangeBg,
+                      border: `1px solid ${tokens.orangeBorder}`,
+                      color: tokens.orangeText,
                       fontSize: 10.5, fontWeight: 600,
                       fontVariantNumeric: "tabular-nums",
                       whiteSpace: "nowrap",
@@ -1948,9 +1954,9 @@ export default function PatientsPage() {
                       display: "inline-flex", alignItems: "center", gap: 3,
                       height: 22, padding: "0 8px",
                       borderRadius: 6,
-                      backgroundColor: "#F5F3FF",
-                      border: "1px solid #DDD6FE",
-                      color: "#6D28D9",
+                      backgroundColor: tokens.violetBg,
+                      border: `1px solid ${tokens.violetBorder}`,
+                      color: tokens.violetText,
                       fontSize: 10.5, fontWeight: 600,
                       fontVariantNumeric: "tabular-nums",
                       whiteSpace: "nowrap",
@@ -1964,7 +1970,7 @@ export default function PatientsPage() {
                   (p.disease_score == null || p.disease_score === 0) &&
                   (p.interaction_score == null || p.interaction_score === 0)
                 )) && (
-                  <span style={{ fontSize: 12, color: "#CBD5E1" }}>{"\u2014"}</span>
+                  <span style={{ fontSize: 12, color: tokens.slate300 }}>{"\u2014"}</span>
                 )}
               </div>
 
@@ -1993,7 +1999,7 @@ export default function PatientsPage() {
                     </span>
                   </>
                 ) : (
-                  <span style={{ fontSize: 17, color: "#CBD5E1", fontWeight: 400 }}>{"\u2014"}</span>
+                  <span style={{ fontSize: 17, color: tokens.slate300, fontWeight: 400 }}>{"\u2014"}</span>
                 )}
               </div>
 
@@ -2004,28 +2010,28 @@ export default function PatientsPage() {
                   height: 24, padding: "0 12px 0 10px",
                   borderRadius: 999,
                   backgroundColor:
-                    !scored ? "#F8FAFC" :
+                    !scored ? tokens.slate50 :
                     tone.label === "High" ? C.highSoft :
                     C.lowSoft,
                   border: `1px solid ${
                     !scored ? C.border :
-                    tone.label === "High" ? "#FECACA" :
-                    "#BBF7D0"
+                    tone.label === "High" ? tokens.dangerBorder :
+                    tokens.emerald100
                   }`,
                   fontSize: 11.5, fontWeight: 600,
                   color:
                     !scored ? C.label :
-                    tone.label === "High" ? "#DC2626" :
-                    "#047857",
+                    tone.label === "High" ? tokens.dangerStrong :
+                    tokens.successDark,
                   whiteSpace: "nowrap",
                   letterSpacing: "-0.005em",
                 }}>
                   <span style={{
                     width: 6, height: 6, borderRadius: 3,
                     backgroundColor:
-                      !scored ? "#CBD5E1" :
-                      tone.label === "High" ? "#EF4444" :
-                      "#10B981",
+                      !scored ? tokens.slate300 :
+                      tone.label === "High" ? tokens.dangerMedium :
+                      tokens.success,
                     boxShadow:
                       !scored ? "none" :
                       tone.label === "High" ? "0 0 0 2px rgba(239,68,68,0.18)" :
@@ -2038,7 +2044,7 @@ export default function PatientsPage() {
               {/* Chevron */}
               <ChevronRight
                 size={16}
-                color={isHovered ? C.brand : "#CBD5E1"}
+                color={isHovered ? C.brand : tokens.slate300}
                 style={{
                   transform: isHovered ? "translateX(2px)" : "translateX(0)",
                   transition: "transform 0.15s ease, color 0.15s ease",
@@ -2054,7 +2060,7 @@ export default function PatientsPage() {
             display: "flex", alignItems: "center", justifyContent: "space-between",
             gap: 8, padding: "14px 20px",
             borderTop: `1px solid ${C.border}`,
-            backgroundColor: "#FCFDFE",
+            backgroundColor: tokens.bgFaintCard,
           }}>
             <span style={{
               fontSize: 12, color: C.textSubtle,
@@ -2074,9 +2080,9 @@ export default function PatientsPage() {
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 4,
                   height: 32, padding: "0 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, backgroundColor: "#FFFFFF",
+                  border: `1px solid ${C.border}`, backgroundColor: tokens.white,
                   fontSize: 12, fontWeight: 500,
-                  color: page === 0 ? "#CBD5E1" : C.textMuted,
+                  color: page === 0 ? tokens.slate300 : C.textMuted,
                   cursor: page === 0 ? "not-allowed" : "pointer",
                   opacity: page === 0 ? 0.6 : 1,
                   fontFamily: FONT_SYS,
@@ -2108,7 +2114,7 @@ export default function PatientsPage() {
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       border: isActive ? "none" : `1px solid transparent`,
                       backgroundColor: isActive ? C.brand : "transparent",
-                      color: isActive ? "#FFFFFF" : C.textSubtle,
+                      color: isActive ? tokens.white : C.textSubtle,
                       fontSize: 12, fontWeight: isActive ? 600 : 500,
                       fontFamily: FONT_SYS,
                       fontVariantNumeric: "tabular-nums",
@@ -2116,7 +2122,7 @@ export default function PatientsPage() {
                       transition: "all 0.15s ease",
                       boxShadow: isActive ? "0 2px 6px rgba(15, 118, 110, 0.25)" : "none",
                     }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "#F1F5F9"; }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = tokens.slate100; }}
                     onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
                     {pageNum + 1}
@@ -2130,9 +2136,9 @@ export default function PatientsPage() {
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 4,
                   height: 32, padding: "0 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, backgroundColor: "#FFFFFF",
+                  border: `1px solid ${C.border}`, backgroundColor: tokens.white,
                   fontSize: 12, fontWeight: 500,
-                  color: page >= totalPages - 1 ? "#CBD5E1" : C.textMuted,
+                  color: page >= totalPages - 1 ? tokens.slate300 : C.textMuted,
                   cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                   opacity: page >= totalPages - 1 ? 0.6 : 1,
                   fontFamily: FONT_SYS,

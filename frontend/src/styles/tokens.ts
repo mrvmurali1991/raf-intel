@@ -53,6 +53,41 @@ export const tokens = {
   // Info-blue and accent purple — used by velocity / forecast charts.
   infoBlue:      "#3B82F6",
   accentPurple:  "#8B5CF6",
+
+  // Sky / teal palette — used by demographic/score sub-chips.
+  skyBg:         "#F0F9FF",
+  skyBorder:     "#BAE6FD",
+  skyText:       "#0369A1",
+  orangeBg:      "#FFF7ED",
+  orangeBorder:  "#FED7AA",
+  orangeText:    "#C2410C",
+  violetBg:      "#F5F3FF",
+  violetBorder:  "#DDD6FE",
+  violetText:    "#6D28D9",
+
+  // Indigo accent — bulk-action selected state, KG annotation chips.
+  indigoText:    "#6366f1",
+  indigoBg:      "#eef2ff",
+
+  // Utility / separator colour.
+  divider:       "#CBD5E1",
+
+  // Brand teal (clinical/OpenEMR) — distinct from "primary" blue.
+  teal700:       "#0F766E",
+  teal900:       "#134E4A",
+  tealSoft:      "rgba(15, 118, 110, 0.06)",
+  tealRing:      "rgba(15, 118, 110, 0.18)",
+
+  // Neutral hover / stripe helpers used in tables.
+  bgFaintCard:   "#FAFBFC",
+  bgSubtle:      "#FAFAF8",
+  warningMuted:  "#92400E",
+  dangerStrong:  "#DC2626",
+  dangerMedium:  "#EF4444",
+  dangerAlt:     "#991B1B",
+  successMedium: "#059669",
+  successStrong: "#10B981",
+  amber600:      "#D97706",
 } as const;
 
 export type Tokens = typeof tokens;

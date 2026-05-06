@@ -3,6 +3,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import DataQualityBanner from "@/components/DataQualityBanner";
+import { tokens } from "@/styles/tokens";
 import {
   getSuspects,
   acceptSuspect,
@@ -64,7 +66,7 @@ const STATUS_TABS: { value: StatusTab; label: string; dot: string | null }[] = [
   { value: "all", label: "All", dot: null },
   { value: "open", label: "Open", dot: C.blue },
   { value: "accepted", label: "Accepted", dot: C.low },
-  { value: "dismissed", label: "Dismissed", dot: "#94A3B8" },
+  { value: "dismissed", label: "Dismissed", dot: tokens.slate400 },
   { value: "coded", label: "Coded", dot: C.brand },
 ];
 
@@ -97,13 +99,13 @@ function confColor(score: number): string {
 function confSoftBg(score: number): string {
   if (score >= 0.85) return C.lowSoft;
   if (score >= 0.65) return C.mediumSoft;
-  return "#F1F5F9";
+  return tokens.slate100;
 }
 
 function confAccent(score: number): string {
   if (score >= 0.85) return C.low;
   if (score >= 0.65) return C.medium;
-  return "#CBD5E1";
+  return tokens.slate300;
 }
 
 function matchesBand(score: number, band: ConfidenceBand): boolean {
@@ -170,11 +172,11 @@ function statusPill(status: string | undefined): { bg: string; fg: string; borde
     case "accepted":
       return { bg: C.lowSoft, fg: C.low, border: "rgba(5, 150, 105, 0.25)", label: "Accepted" };
     case "dismissed":
-      return { bg: "#F1F5F9", fg: C.textSubtle, border: C.border, label: "Dismissed" };
+      return { bg: tokens.slate100, fg: C.textSubtle, border: C.border, label: "Dismissed" };
     case "coded":
       return { bg: C.brandSoft, fg: C.brand, border: C.brandRing, label: "Coded" };
     default:
-      return { bg: C.blueSoft, fg: "#0369A1", border: "rgba(14, 165, 233, 0.25)", label: "Open" };
+      return { bg: C.blueSoft, fg: tokens.skyText, border: "rgba(14, 165, 233, 0.25)", label: "Open" };
   }
 }
 
@@ -198,25 +200,25 @@ function SkeletonRow({ index }: { index: number }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "#E2E8F0" }} />
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: tokens.slate200 }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ width: "70%", height: 12, borderRadius: 4, background: "#E2E8F0" }} />
-          <div style={{ width: "50%", height: 9, borderRadius: 4, background: "#EEF2F6" }} />
+          <div style={{ width: "70%", height: 12, borderRadius: 4, background: tokens.slate200 }} />
+          <div style={{ width: "50%", height: 9, borderRadius: 4, background: tokens.slate100 }} />
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ width: "80%", height: 12, borderRadius: 4, background: "#E2E8F0" }} />
-        <div style={{ width: "55%", height: 9, borderRadius: 4, background: "#EEF2F6" }} />
+        <div style={{ width: "80%", height: 12, borderRadius: 4, background: tokens.slate200 }} />
+        <div style={{ width: "55%", height: 9, borderRadius: 4, background: tokens.slate100 }} />
       </div>
-      <div style={{ width: 92, height: 22, borderRadius: 999, background: "#E2E8F0" }} />
+      <div style={{ width: 92, height: 22, borderRadius: 999, background: tokens.slate200 }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1, height: 6, borderRadius: 4, background: "#E2E8F0" }} />
-        <div style={{ width: 30, height: 12, borderRadius: 4, background: "#E2E8F0" }} />
+        <div style={{ flex: 1, height: 6, borderRadius: 4, background: tokens.slate200 }} />
+        <div style={{ width: 30, height: 12, borderRadius: 4, background: tokens.slate200 }} />
       </div>
-      <div style={{ width: 50, height: 14, borderRadius: 4, background: "#E2E8F0", justifySelf: "end" }} />
-      <div style={{ width: 60, height: 14, borderRadius: 4, background: "#E2E8F0", justifySelf: "end" }} />
-      <div style={{ width: 78, height: 22, borderRadius: 999, background: "#E2E8F0", justifySelf: "end" }} />
-      <div style={{ width: 64, height: 28, borderRadius: 8, background: "#E2E8F0", justifySelf: "end" }} />
+      <div style={{ width: 50, height: 14, borderRadius: 4, background: tokens.slate200, justifySelf: "end" }} />
+      <div style={{ width: 60, height: 14, borderRadius: 4, background: tokens.slate200, justifySelf: "end" }} />
+      <div style={{ width: 78, height: 22, borderRadius: 999, background: tokens.slate200, justifySelf: "end" }} />
+      <div style={{ width: 64, height: 28, borderRadius: 8, background: tokens.slate200, justifySelf: "end" }} />
     </div>
   );
 }
@@ -465,6 +467,7 @@ export default function SuspectsPage() {
         color: C.text,
       }}
     >
+      <DataQualityBanner />
       <style>{`
         @keyframes pulseSk { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
         @keyframes rowEnter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -501,7 +504,7 @@ export default function SuspectsPage() {
             alignItems: "center",
             gap: 12,
             background: C.highSoft,
-            border: `1px solid #FCA5A5`,
+            border: `1px solid ${tokens.dangerBorder}`,
             borderRadius: 12,
             padding: "12px 16px",
             marginBottom: 20,
@@ -543,7 +546,7 @@ export default function SuspectsPage() {
               flexShrink: 0,
             }}
           >
-            <Sparkles size={22} color="#FFFFFF" strokeWidth={2.25} />
+            <Sparkles size={22} color={tokens.white} strokeWidth={2.25} aria-hidden="true" />
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -648,7 +651,7 @@ export default function SuspectsPage() {
                 width: "min(320px, calc(100vw - 180px))",
                 borderRadius: 10,
                 border: `1px solid ${C.border}`,
-                backgroundColor: "#FFFFFF",
+                backgroundColor: tokens.white,
                 paddingLeft: 38,
                 paddingRight: 14,
                 fontSize: 13,
@@ -679,7 +682,7 @@ export default function SuspectsPage() {
               borderRadius: 10,
               border: "none",
               backgroundColor: C.brand,
-              color: "#FFFFFF",
+              color: tokens.white,
               fontSize: 13,
               fontWeight: 600,
               fontFamily: FONT_SYS,
@@ -689,7 +692,7 @@ export default function SuspectsPage() {
                 "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
               transition: "background-color 0.15s ease",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#0d6b63"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = tokens.teal900; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.brand; }}
           >
             <FileDown size={14} />
@@ -824,7 +827,7 @@ export default function SuspectsPage() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               border: `1px solid ${C.border}`,
               borderRadius: 10,
               padding: 3,
@@ -848,7 +851,7 @@ export default function SuspectsPage() {
                     borderRadius: 7,
                     border: "none",
                     backgroundColor: active ? C.text : "transparent",
-                    color: active ? "#FFFFFF" : C.textMuted,
+                    color: active ? tokens.white : C.textMuted,
                     fontSize: 12,
                     fontWeight: 600,
                     fontFamily: FONT_SYS,
@@ -888,7 +891,7 @@ export default function SuspectsPage() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               border: `1px solid ${C.border}`,
               borderRadius: 10,
               padding: 3,
@@ -931,7 +934,7 @@ export default function SuspectsPage() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               border: `1px solid ${C.border}`,
               borderRadius: 10,
               padding: 3,
@@ -993,7 +996,7 @@ export default function SuspectsPage() {
               padding: "0 14px",
               borderRadius: 10,
               border: `1px solid ${C.border}`,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               color: C.textMuted,
               fontSize: 12,
               fontWeight: 600,
@@ -1237,7 +1240,7 @@ export default function SuspectsPage() {
                     height: 36,
                     borderRadius: 10,
                     background: `linear-gradient(135deg, ${aColor}, ${aColor}CC)`,
-                    color: "#FFFFFF",
+                    color: tokens.white,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1417,8 +1420,8 @@ export default function SuspectsPage() {
                       fontSize: 9,
                       fontWeight: 600,
                       letterSpacing: "0.04em",
-                      color: "#6366f1",
-                      backgroundColor: "#eef2ff",
+                      color: tokens.indigoText,
+                      backgroundColor: tokens.indigoBg,
                       borderRadius: 3,
                       padding: "1px 4px",
                       width: "fit-content",
@@ -1592,7 +1595,7 @@ export default function SuspectsPage() {
                 )}
                 <ChevronRight
                   size={14}
-                  color={isExpanded || hoveredId === s.id ? C.brand : "#CBD5E1"}
+                  color={isExpanded || hoveredId === s.id ? C.brand : tokens.slate300}
                   style={{
                     transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
                     transition: "transform 0.18s ease",
@@ -1642,7 +1645,7 @@ export default function SuspectsPage() {
               height: 36,
               borderRadius: 10,
               border: `1px solid ${C.border}`,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               cursor: page === 0 ? "default" : "pointer",
               opacity: page === 0 ? 0.4 : 1,
               display: "flex",
@@ -1672,7 +1675,7 @@ export default function SuspectsPage() {
               height: 36,
               borderRadius: 10,
               border: `1px solid ${C.border}`,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: tokens.white,
               cursor: page >= totalPages - 1 ? "default" : "pointer",
               opacity: page >= totalPages - 1 ? 0.4 : 1,
               display: "flex",
@@ -1714,7 +1717,7 @@ export default function SuspectsPage() {
             style={{
               fontSize: 13,
               fontWeight: 600,
-              color: "#FFFFFF",
+              color: tokens.white,
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -1723,7 +1726,7 @@ export default function SuspectsPage() {
             <span
               style={{
                 backgroundColor: C.brand,
-                color: "#FFFFFF",
+                color: tokens.white,
                 fontSize: 12,
                 fontWeight: 700,
                 borderRadius: 999,
@@ -1755,7 +1758,7 @@ export default function SuspectsPage() {
               borderRadius: 10,
               border: "none",
               backgroundColor: C.low,
-              color: "#FFFFFF",
+              color: tokens.white,
               fontSize: 13,
               fontWeight: 700,
               cursor: bulkMut.isPending ? "not-allowed" : "pointer",
@@ -1779,7 +1782,7 @@ export default function SuspectsPage() {
               borderRadius: 10,
               border: `1px solid rgba(255,255,255,0.2)`,
               backgroundColor: "transparent",
-              color: "#FFFFFF",
+              color: tokens.white,
               fontSize: 13,
               fontWeight: 600,
               cursor: bulkMut.isPending ? "not-allowed" : "pointer",
@@ -1892,7 +1895,7 @@ function SuspectDrawer({
       onClick={(e) => e.stopPropagation()}
       style={{
         padding: "18px 22px 22px 22px",
-        backgroundColor: "#FCFDFE",
+        backgroundColor: tokens.bgFaintCard,
         borderTop: `1px solid ${C.borderSoft}`,
         borderLeft: `3px solid ${confAccent(conf)}`,
         display: "grid",
@@ -2153,7 +2156,7 @@ function SuspectDrawer({
                 borderRadius: 10,
                 border: "none",
                 backgroundColor: C.low,
-                color: "#FFFFFF",
+                color: tokens.white,
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: acceptPending ? "default" : "pointer",
@@ -2176,7 +2179,7 @@ function SuspectDrawer({
                 height: 40,
                 borderRadius: 10,
                 border: `1px solid ${C.high}`,
-                backgroundColor: "#FFFFFF",
+                backgroundColor: tokens.white,
                 color: C.high,
                 fontSize: 13,
                 fontWeight: 700,
