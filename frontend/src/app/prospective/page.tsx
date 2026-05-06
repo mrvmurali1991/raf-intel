@@ -35,32 +35,34 @@ import {
   getRevenueOpportunity,
 } from "@/lib/api";
 import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { fmtCurrencyFull, fmtCurrencyCompact } from "@/lib/format";
+import { tokens } from "@/styles/tokens";
 
-// ─── Design Tokens ────────────────────────────────────────────────────────────
+// ─── Design Tokens (single source of truth: tokens.ts) ───────────────────────
 
 const C = {
-  primary: "#2563EB",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate600: "#475569",
-  slate400: "#94A3B8",
-  slate300: "#CBD5E1",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  white: "#FFFFFF",
-  red600: "#DC2626",
-  red50: "#FEF2F2",
-  amber500: "#F59E0B",
-  amber50: "#FFFBEB",
-  emerald500: "#10B981",
-  emerald50: "#ECFDF5",
-  purple600: "#7C3AED",
-  purple50: "#F5F3FF",
-  gold: "#D97706",
-  silver: "#64748B",
-  bronze: "#92400E",
-  subtleText: "#64748B",
+  primary: tokens.primary,
+  slate900: tokens.slate900,
+  slate700: tokens.slate700,
+  slate600: tokens.slate600,
+  slate400: tokens.slate400,
+  slate300: tokens.slate300,
+  slate200: tokens.slate200,
+  slate100: tokens.slate100,
+  slate50: tokens.slate50,
+  white: tokens.white,
+  red600: tokens.riskHigh,
+  red50: tokens.riskHighSoft,
+  amber500: tokens.warningStrong,
+  amber50: tokens.warningSoft,
+  emerald500: tokens.success,
+  emerald50: tokens.successSoft,
+  purple600: tokens.accentPurple,
+  purple50: "rgba(139,92,246,0.08)",
+  gold: tokens.riskMedium,
+  silver: tokens.slate500,
+  bronze: tokens.warningText,
+  subtleText: tokens.slate500,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -128,7 +130,7 @@ function fmtDate(dateStr: string | null): string {
 }
 
 function fmtCurrency(n: number): string {
-  return "$" + Math.round(n).toLocaleString("en-US");
+  return fmtCurrencyFull(n);
 }
 
 function calcAge(dob?: string): number | null {
@@ -150,9 +152,9 @@ function priorityColor(level: "High" | "Medium" | "Low"): string {
 }
 
 function rankMedal(rank: number): { bg: string; color: string; label: string } | null {
-  if (rank === 1) return { bg: "#FEF9C3", color: C.gold, label: "1" };
-  if (rank === 2) return { bg: "#F1F5F9", color: C.silver, label: "2" };
-  if (rank === 3) return { bg: "#FEF3C7", color: C.bronze, label: "3" };
+  if (rank === 1) return { bg: tokens.warningSoft, color: C.gold, label: "1" };
+  if (rank === 2) return { bg: tokens.slate100, color: C.silver, label: "2" };
+  if (rank === 3) return { bg: tokens.warningSoft, color: C.bronze, label: "3" };
   return null;
 }
 
@@ -945,13 +947,29 @@ export default function ProspectivePage() {
     return (
       <div style={{ padding: 32, maxWidth: 1400, margin: "0 auto" }}>
         <PageHeader title="Prospective RAF Management" icon={<Target size={22} />} />
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", fontSize: 14, marginBottom: 24 }}>
-          <AlertTriangle size={18} />
+        <div
+          role="alert"
+          style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "14px 18px", borderRadius: 10,
+            background: tokens.riskHighSoft,
+            border: `1px solid ${tokens.dangerBorder}`,
+            color: tokens.riskHigh, fontSize: 14, marginBottom: 24,
+          }}
+        >
+          <AlertTriangle size={18} aria-hidden="true" />
           <span style={{ flex: 1 }}>Failed to load patient data. Please check your connection and try again.</span>
           <button
             type="button"
             onClick={() => refetchPatients()}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#fff", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            aria-label="Retry loading patient data"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 8,
+              border: `1px solid ${tokens.dangerBorder}`,
+              background: tokens.white, color: tokens.riskHigh,
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}
           >
             <RefreshCw size={14} /> Retry
           </button>
@@ -965,7 +983,7 @@ export default function ProspectivePage() {
       <div style={{ padding: 32, maxWidth: 1400, margin: "0 auto" }}>
         <PageHeader title="Prospective RAF Management" icon={<Target size={22} />} />
         {/* Stats skeleton */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className={`premium-card shimmer animate-slide-up stagger-${i + 1}`} style={{ background: C.white, border: `1px solid ${C.slate200}`, borderRadius: 12, padding: 20 }}>
               <div className="skeleton" style={{ width: 90, height: 12, borderRadius: 4, marginBottom: 10 }} />
@@ -1061,7 +1079,7 @@ export default function ProspectivePage() {
       />
 
       {/* Stats Row */}
-      <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
+      <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 28 }}>
         <div className="animate-slide-up stagger-1 card-glow-rose">
           <StatCard
             label="Not Seen This Year"
@@ -1083,7 +1101,7 @@ export default function ProspectivePage() {
         <div className="animate-slide-up stagger-3 card-glow-emerald">
           <StatCard
             label="Revenue at Risk"
-            value={fmtCurrency(stats.totalRevenue)}
+            value={fmtCurrencyCompact(stats.totalRevenue)}
             subtitle="estimated opportunity"
             color={C.emerald500}
             icon={<TrendingUp size={18} />}
@@ -1199,11 +1217,19 @@ export default function ProspectivePage() {
 
         {/* Table */}
         {filtered.length === 0 ? (
-          <EmptyState
-            icon={<Search size={24} />}
-            title="No patients match your filters"
-            description="Try adjusting the search or filter criteria."
-          />
+          enrichedPatients.length === 0 ? (
+            <EmptyState
+              icon={<Users size={24} />}
+              title="No upcoming visits this week"
+              description="Check back tomorrow as new visits are scheduled, or add patients to your panel."
+            />
+          ) : (
+            <EmptyState
+              icon={<Search size={24} />}
+              title="No patients match your filters"
+              description="Try adjusting the search or filter criteria."
+            />
+          )
         ) : (
           <>
             <div style={{ overflowX: "auto" }}>
