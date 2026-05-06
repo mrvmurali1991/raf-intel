@@ -87,6 +87,7 @@ from app.routers import realtime as realtime_router
 from app.routers import recapture_gaps as recapture_gaps_router
 from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
+from app.routers import snomed_mapping as snomed_mapping_router
 
 
 def register_routers(app: FastAPI) -> None:
@@ -195,3 +196,6 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(radv_router.router)
     app.include_router(data_quality_router.router)
     app.include_router(raf_inbox_admin_router.router)
+
+    # Knowledge-graph services (SNOMED CT mapping, free-text → HCC pipeline)
+    app.include_router(snomed_mapping_router.router)
