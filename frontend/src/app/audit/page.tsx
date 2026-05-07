@@ -529,7 +529,7 @@ export default function AuditPage() {
         </div>
         <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Patient + Year row */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+          <div className="audit-form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#475569", marginBottom: 6 }}>Patient</label>
               <PatientSelect patients={patientList} value={selectedPid} onChange={setSelectedPid} />
@@ -559,7 +559,7 @@ export default function AuditPage() {
           </div>
 
           {/* Toggles */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="audit-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Toggle checked={includeSuspects} onChange={setIncludeSuspects} label="Include suspect conditions" />
             <Toggle checked={recalculate} onChange={setRecalculate} label="Recalculate RAF before generating" />
           </div>
@@ -726,8 +726,15 @@ export default function AuditPage() {
         )}
       </div>
 
-      {/* Spinner keyframe */}
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      {/* Spinner keyframe + responsive overrides */}
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @media (max-width: 640px) {
+          .audit-form-row {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

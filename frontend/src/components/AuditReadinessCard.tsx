@@ -16,6 +16,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { ShieldCheck, AlertTriangle, Users, Info } from "lucide-react";
 
 import { getRecaptureAuditReadiness } from "@/lib/api";
@@ -214,6 +215,16 @@ function IrrTile({
 // ---- Main component ----------------------------------------------------------
 
 export function AuditReadinessCard() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["recapture-audit-readiness"],
     queryFn: getRecaptureAuditReadiness,
@@ -252,12 +263,13 @@ export function AuditReadinessCard() {
   return (
     <div
       className="premium-card"
+      data-testid="arc-card"
       style={{
-        padding: 24,
+        padding: isMobile ? 16 : 24,
         borderRadius: 12,
         display: "grid",
-        gridTemplateColumns: "260px 1fr",
-        gap: 24,
+        gridTemplateColumns: isMobile ? "1fr" : "260px 1fr",
+        gap: isMobile ? 16 : 24,
         alignItems: "stretch",
       }}
     >
@@ -269,7 +281,9 @@ export function AuditReadinessCard() {
           alignItems: "center",
           justifyContent: "center",
           padding: 12,
-          borderRight: `1px solid ${tokens.slate200}`,
+          borderRight: isMobile ? "none" : `1px solid ${tokens.slate200}`,
+          borderBottom: isMobile ? `1px solid ${tokens.slate200}` : "none",
+          paddingBottom: isMobile ? 16 : 12,
         }}
       >
         <div
@@ -339,7 +353,13 @@ export function AuditReadinessCard() {
       {/* Right column: stats + IRR tile + blockers */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Numeric breakdown */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: isMobile ? 8 : 12,
+          }}
+        >
           <Stat label="Total gaps" value={data.total_gaps} />
           <Stat label="With evidence" value={data.with_evidence} />
           <Stat label="Dual-signed" value={data.dual_signed} />
@@ -375,13 +395,14 @@ export function AuditReadinessCard() {
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     padding: "8px 10px",
                     borderBottom: `1px solid ${tokens.slate100}`,
                     fontSize: 13,
+                    gap: 8,
                   }}
                 >
-                  <div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ fontWeight: 600, color: tokens.slate900 }}>
                       HCC {m.hcc}
                     </span>
@@ -389,7 +410,7 @@ export function AuditReadinessCard() {
                       patient {m.patient_id} &middot; {m.reason}
                     </span>
                   </div>
-                  <div style={{ color: tokens.riskHigh, fontWeight: 600, fontSize: 12 }}>
+                  <div style={{ color: tokens.riskHigh, fontWeight: 600, fontSize: 12, flexShrink: 0 }}>
                     ${(m.revenue_impact || 0).toLocaleString()}
                   </div>
                 </li>
