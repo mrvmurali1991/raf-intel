@@ -1514,6 +1514,7 @@ export default function PatientsPage() {
               <button
                 key={key}
                 onClick={() => { setRiskFilter(key); setPage(0); }}
+                className="rci-filter-pill"
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
                   height: 34, padding: "0 14px",
@@ -2298,6 +2299,14 @@ export default function PatientsPage() {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        /* WCAG 2.5.5 — touch targets ≥44px on mobile */
+        @media (max-width: 768px) {
+          .rci-filter-pill {
+            min-height: 44px !important;
+            padding-top: 5px !important;
+            padding-bottom: 5px !important;
+          }
         }
       `}</style>
 

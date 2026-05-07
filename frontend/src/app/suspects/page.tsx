@@ -494,6 +494,22 @@ export default function SuspectsPage() {
         @media (min-width: 640px) {
           .suspects-page-wrap { padding: 32px 40px 48px !important; }
         }
+        /* WCAG 2.5.5 — touch targets ≥44px on mobile */
+        @media (max-width: 768px) {
+          .row-action-btn {
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 10px !important;
+          }
+          .suspects-filter-chip-group {
+            min-height: 44px !important;
+          }
+          .suspects-filter-chip-group button {
+            min-height: 38px !important;
+            padding-top: 5px !important;
+            padding-bottom: 5px !important;
+          }
+        }
       `}</style>
 
       {/* ── Error Banner ─────────────────────────────────────────── */}
@@ -825,6 +841,7 @@ export default function SuspectsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", overflowX: "auto", paddingBottom: 2 }}>
           {/* Status segmented chips */}
           <div
+            className="suspects-filter-chip-group"
             style={{
               display: "inline-flex",
               alignItems: "center",
