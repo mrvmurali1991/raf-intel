@@ -502,13 +502,14 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
     from app.services.emr_manager import get_active_direct_db_credentials
 
     creds = get_active_direct_db_credentials(tenant_id)
-    if creds is None:
+    if creds is None or not creds.get("db_host") or not creds.get("db_name"):
         # Fallback to the direct OpenEMR pool configured via env vars.
         # This keeps the app functional before the user configures an
-        # EMR connection through the UI.
+        # EMR connection through the UI, and when the active connection row
+        # has NULL host/name (e.g. a placeholder row with no real credentials).
         logger.debug(
-            "No UI-configured EMR connection found — falling back to "
-            "direct OpenEMR pool (env vars)."
+            "No UI-configured EMR connection found (or credentials incomplete) — "
+            "falling back to direct OpenEMR pool (env vars)."
         )
         with _db_cursor(get_openemr_pool, dictionary=dictionary) as cursor:
             yield cursor
@@ -519,7 +520,7 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
         database=creds["db_name"],
         user=creds["db_user"],
         password=creds.get("db_password") or "",
-        db_type=creds.get("db_type", "mysql"),
+        db_type=creds.get("db_type") or "mysql",
         dictionary=dictionary,
     ) as cursor:
         yield cursor

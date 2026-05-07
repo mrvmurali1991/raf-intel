@@ -744,6 +744,13 @@ def svc_get_patient(pid: int, tenant_id: str) -> dict[str, Any] | None:
     if not patient:
         return None
 
+    # Ensure mrn is always a non-empty string.  The patients VIEW exposes
+    # pubpid AS mrn but pubpid is often blank for demo/imported patients.
+    # Fall back to a synthetic "PID{pid}" so the UI never shows an empty MRN.
+    if not patient.get("mrn"):
+        emr_pid_val = patient.get("emr_pid") or patient.get("providerID") or ""
+        patient["mrn"] = str(emr_pid_val).strip() if emr_pid_val else f"PID{pid}"
+
     raf_data: dict = {}
     for yr in [_date.today().year, _date.today().year - 1]:
         raf_data = get_raf_breakdown(pid, yr, tenant_id=tenant_id)
@@ -1350,7 +1357,7 @@ def svc_get_recapture_gaps(pid: int, year: int | None, tenant_id: str) -> dict[s
     return {
         "pid": pid,
         "year": year,
-        "count": len(gaps),
+        "gap_count": len(gaps),
         "recapture_gaps": gaps,
     }
 

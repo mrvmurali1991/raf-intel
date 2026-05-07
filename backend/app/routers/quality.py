@@ -201,12 +201,9 @@ def care_gaps(
 
     try:
         gaps = get_care_gaps(calc_year, measure, limit=limit, tenant_id=int(tenant_id))
-    except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
-        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as exc:
         logger.error("care_gaps error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        gaps = []
 
     # Aggregate gap counts per measure for the summary header
     measure_gap_counts: dict[str, int] = {}
@@ -254,7 +251,24 @@ def quality_summary(
         summary = get_quality_summary(calc_year, tenant_id=int(tenant_id))
     except Exception as exc:
         logger.error("quality_summary error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        # Return empty-but-typed payload so the UI can render gracefully
+        empty_measures = {
+            code: {
+                "measure_name": HEDIS_MEASURES[code]["name"],
+                "eligible_count": 0,
+                "met_count": 0,
+                "gap_count": 0,
+                "compliance_rate": None,
+                "hcc_overlap": HEDIS_MEASURES[code]["hcc_overlap"],
+            }
+            for code in HEDIS_MEASURES
+        }
+        summary = {
+            "year": calc_year,
+            "total_patients_evaluated": 0,
+            "overall_compliance_rate": None,
+            "measures": empty_measures,
+        }
 
     return summary
 
@@ -291,7 +305,18 @@ def stars_estimate(
         result = estimate_stars_rating(calc_year, tenant_id=int(tenant_id))
     except Exception as exc:
         logger.error("stars_estimate error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        # Return empty-but-typed payload so the UI can render gracefully
+        result = {
+            "year": calc_year,
+            "estimated_stars": None,
+            "interpretation": "Insufficient data",
+            "star_breakdown": {},
+            "disclaimer": (
+                "This is an internal estimate based on available EHR data. "
+                "Actual CMS STARS ratings use HEDIS hybrid/administrative methodology "
+                "and official denominator/numerator criteria."
+            ),
+        }
 
     return result
 
