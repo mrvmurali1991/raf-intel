@@ -5,7 +5,15 @@
  *
  * Lifecycle
  * ---------
- *   - On mount, fetches `/api/feature-flags` ONCE.
+ *   - Fetches `/api/feature-flags` once the user is authenticated.
+ *   - The `isAuthenticated` prop gates the fetch so it never fires on cold-load
+ *     before the auth context has exchanged the refresh token for an access token.
+ *     Without this guard every cold page-load produces a 401, because the
+ *     FeatureFlagProvider mounts (and immediately calls `refetch`) before
+ *     AuthProvider.init() has set the Bearer token on the axios instance.
+ *   - When `isAuthenticated` transitions false → true the fetch fires automatically
+ *     (handles login) and when it transitions true → false the flag cache is wiped
+ *     (handles logout / session expiry).
  *   - Exposes:
  *       useFeatureFlag(key)        -> { enabled, loading, exists, flag }
  *       useSetFeatureFlag()        -> (key, enabled) => Promise<void>
@@ -30,6 +38,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "@/contexts/auth-context";
 
 import {
   getFeatureFlags,
@@ -65,15 +74,32 @@ const FeatureFlagContext = createContext<FeatureFlagContextValue | null>(null);
 // Provider
 // ---------------------------------------------------------------------------
 
-export function FeatureFlagProvider({ children }: { children: ReactNode }) {
+interface FeatureFlagProviderProps {
+  children: ReactNode;
+  /**
+   * Pass the resolved authentication state from AuthContext.
+   * The flags fetch is held until this becomes `true`, preventing the
+   * cold-load 401 that occurs when the provider mounts before AuthProvider
+   * has restored the session token.
+   * When this transitions back to `false` (logout / session expiry) the
+   * local flag cache is wiped so stale per-user flags don't leak across
+   * accounts.
+   */
+  isAuthenticated: boolean;
+}
+
+export function FeatureFlagProvider({ children, isAuthenticated }: FeatureFlagProviderProps) {
   const [state, setState] = useState<FeatureFlagState>({
     flags: {},
     orderedKeys: [],
-    loading: true,
+    // Start as NOT loading when unauthenticated — we know we can't fetch.
+    // Flip to `true` only once we actually kick off the authenticated fetch.
+    loading: false,
     error: null,
   });
 
   const refetch = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const resp = await getFeatureFlags();
       const items: FeatureFlagItem[] = resp.flags ?? [];
@@ -97,10 +123,17 @@ export function FeatureFlagProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Fetch once on mount.
+  // Fetch flags whenever the user authenticates (false → true transition).
+  // Wipe the cache when the user logs out (true → false transition) so stale
+  // per-user overrides don't bleed across accounts on the same browser tab.
   useEffect(() => {
-    void refetch();
-  }, [refetch]);
+    if (isAuthenticated) {
+      void refetch();
+    } else {
+      // User logged out or session expired — clear cached flags.
+      setState({ flags: {}, orderedKeys: [], loading: false, error: null });
+    }
+  }, [isAuthenticated, refetch]);
 
   const setFlag = useCallback(
     async (key: string, enabled: boolean) => {
@@ -250,4 +283,32 @@ export function useFeatureFlagsAll() {
     setFlag: ctx.setFlag,
     resetAll: ctx.resetAll,
   };
+}
+
+// ---------------------------------------------------------------------------
+// AuthedFeatureFlagProvider — convenience wrapper for use inside AuthProvider.
+//
+// Reads `isAuthenticated` from the nearest AuthContext so the parent (layout.tsx)
+// does not need to wire it through manually.  This must be rendered as a
+// descendant of <AuthProvider>.
+// ---------------------------------------------------------------------------
+
+/**
+ * Drop-in replacement for `<FeatureFlagProvider isAuthenticated={...}>` that
+ * reads auth state from AuthContext automatically.
+ *
+ * Usage (layout.tsx):
+ *   <AuthProvider>
+ *     <AuthedFeatureFlagProvider>
+ *       ...
+ *     </AuthedFeatureFlagProvider>
+ *   </AuthProvider>
+ */
+export function AuthedFeatureFlagProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  return (
+    <FeatureFlagProvider isAuthenticated={isAuthenticated}>
+      {children}
+    </FeatureFlagProvider>
+  );
 }
