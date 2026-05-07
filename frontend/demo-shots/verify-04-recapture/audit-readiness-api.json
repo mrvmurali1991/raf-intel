@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "url": "http://localhost:8500/api/recapture/audit-readiness",
+    "status": 200,
+    "timestamp": "2026-05-07T18:40:46.151Z"
+  },
+  "total_gaps": 16,
+  "with_evidence": 16,
+  "dual_signed": 16,
+  "audit_ready_pct": 100,
+  "missing_meat": [],
+  "inter_rater_reliability": {
+    "secondary_approved": 16,
+    "secondary_rejected": 0,
+    "pending_review": 0,
+    "agreement_pct": 100,
+    "band": "excellent",
+    "method": "proportion_agreement",
+    "kappa": null,
+    "kappa_n": 0,
+    "note": "Proportion of secondary-reviewed gaps where the secondary coder approved (vs rejected) the primary's coding.  Lower than 80%% suggests training/guideline drift."
+  }
+}
