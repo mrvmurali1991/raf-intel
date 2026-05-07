@@ -313,7 +313,25 @@ export default function SuspectsPage() {
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       {/* Pulse keyframes */}
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      <style>{`
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        /* WCAG 2.5.5 — touch targets ≥44px on mobile */
+        @media (max-width: 768px) {
+          .row-action-btn {
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 10px !important;
+          }
+          .suspects-filter-chip-group {
+            min-height: 44px !important;
+          }
+          .suspects-filter-chip-group button {
+            min-height: 38px !important;
+            padding-top: 5px !important;
+            padding-bottom: 5px !important;
+          }
+        }
+      `}</style>
 
       {/* ── Page Header ─────────────────────────────────────────── */}
       <PageHeader
@@ -385,7 +403,7 @@ export default function SuspectsPage() {
         }}
       >
         {/* Status pills */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4, background: TOKENS.slate50, borderRadius: 999, padding: 3 }}>
+        <div className="suspects-filter-chip-group" style={{ display: "flex", alignItems: "center", gap: 4, background: TOKENS.slate50, borderRadius: 999, padding: 3 }}>
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.value}
@@ -729,6 +747,7 @@ export default function SuspectsPage() {
                         onClick={() => acceptMut.mutate(s.id)}
                         aria-label="Accept"
                         title="Accept"
+                        className="row-action-btn"
                         style={{
                           width: 32,
                           height: 32,
@@ -759,6 +778,7 @@ export default function SuspectsPage() {
                         onClick={() => dismissMut.mutate(s.id)}
                         aria-label="Dismiss"
                         title="Dismiss"
+                        className="row-action-btn"
                         style={{
                           width: 32,
                           height: 32,

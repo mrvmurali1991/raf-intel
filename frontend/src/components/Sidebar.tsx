@@ -458,7 +458,7 @@ export function Sidebar() {
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-lg shadow-lg lg:hidden"
+        className="fixed left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-lg shadow-lg lg:hidden"
         style={{ backgroundColor: BG, border: `1px solid ${BORDER_COLOR}` }}
         aria-label="Open navigation menu"
       >
