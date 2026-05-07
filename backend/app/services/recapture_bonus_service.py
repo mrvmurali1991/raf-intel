@@ -131,6 +131,19 @@ def _iso(value: Any) -> str | None:
 # 1. Configuration management
 # ---------------------------------------------------------------------------
 
+def _ephemeral_config(tenant_id: str) -> dict[str, Any]:
+    """Return an in-memory default config when the DB table is unavailable."""
+    return {
+        "id": 0,
+        "tenant_id": str(tenant_id),
+        "bonus_per_closure_default": DEFAULT_BONUS_PER_CLOSURE,
+        "month_multipliers": dict(DEFAULT_MONTH_MULTIPLIERS),
+        "active": True,
+        "created_at": None,
+        "updated_at": None,
+    }
+
+
 def get_or_create_config(tenant_id: str) -> dict[str, Any]:
     """
     Return the bonus configuration for ``tenant_id``, seeding a default
@@ -139,6 +152,10 @@ def get_or_create_config(tenant_id: str) -> dict[str, Any]:
     Sensible defaults (see :data:`DEFAULT_BONUS_PER_CLOSURE` and
     :data:`DEFAULT_MONTH_MULTIPLIERS`) mean an admin never has to touch
     this table before the UI works for the first time.
+
+    DEFENSIVE: if the ``recapture_bonus_config`` table does not yet exist
+    (migration not applied), return an ephemeral in-memory config so the
+    leaderboard and other endpoints return 200 with defaults rather than 500.
     """
     select_sql = """
         SELECT id, tenant_id, bonus_per_closure_default, month_multipliers,
@@ -152,23 +169,31 @@ def get_or_create_config(tenant_id: str) -> dict[str, Any]:
         VALUES (%s, %s, %s, 1)
     """
 
-    with raf_cursor() as cursor:
-        cursor.execute(select_sql, (str(tenant_id),))
-        row = cursor.fetchone()
-        if row:
-            return _row_to_config(row)
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(select_sql, (str(tenant_id),))
+            row = cursor.fetchone()
+            if row:
+                return _row_to_config(row)
 
-        # Seed default
-        cursor.execute(
-            insert_sql,
-            (
-                str(tenant_id),
-                DEFAULT_BONUS_PER_CLOSURE,
-                json.dumps({str(k): v for k, v in DEFAULT_MONTH_MULTIPLIERS.items()}),
-            ),
+            # Seed default
+            cursor.execute(
+                insert_sql,
+                (
+                    str(tenant_id),
+                    DEFAULT_BONUS_PER_CLOSURE,
+                    json.dumps({str(k): v for k, v in DEFAULT_MONTH_MULTIPLIERS.items()}),
+                ),
+            )
+            cursor.execute(select_sql, (str(tenant_id),))
+            row = cursor.fetchone()
+    except Exception as _db_exc:
+        logger.error(
+            "recapture_bonus: get_or_create_config DB error tenant=%s — "
+            "returning ephemeral default; %s",
+            tenant_id, _db_exc, exc_info=True,
         )
-        cursor.execute(select_sql, (str(tenant_id),))
-        row = cursor.fetchone()
+        return _ephemeral_config(tenant_id)
 
     if not row:
         # Should not happen but guard against pool weirdness — synthesise
@@ -178,15 +203,7 @@ def get_or_create_config(tenant_id: str) -> dict[str, Any]:
             "returning ephemeral default",
             tenant_id,
         )
-        return {
-            "id": 0,
-            "tenant_id": str(tenant_id),
-            "bonus_per_closure_default": DEFAULT_BONUS_PER_CLOSURE,
-            "month_multipliers": dict(DEFAULT_MONTH_MULTIPLIERS),
-            "active": True,
-            "created_at": None,
-            "updated_at": None,
-        }
+        return _ephemeral_config(tenant_id)
     return _row_to_config(row)
 
 
@@ -446,11 +463,19 @@ def compute_coder_earnings(
           AND {coder_clause}
     """
 
-    with raf_cursor() as cursor:
-        cursor.execute(closures_sql, [str(tenant_id), int(year), *coder_params])
-        rows = cursor.fetchall() or []
-        cursor.execute(open_sql, [str(tenant_id), *coder_params])
-        open_row = cursor.fetchone() or {}
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(closures_sql, [str(tenant_id), int(year), *coder_params])
+            rows = cursor.fetchall() or []
+            cursor.execute(open_sql, [str(tenant_id), *coder_params])
+            open_row = cursor.fetchone() or {}
+    except Exception as _db_exc:
+        logger.error(
+            "compute_coder_earnings: DB error tenant=%s coder=%s year=%s; %s",
+            tenant_id, coder_id, year, _db_exc, exc_info=True,
+        )
+        rows = []
+        open_row = {}
 
     monthly_breakdown: list[dict[str, Any]] = []
     ytd_closures = 0
@@ -569,18 +594,25 @@ def compute_leaderboard(
 
     users_sql = "SELECT id, email, full_name FROM users"
 
-    with raf_cursor() as cursor:
-        cursor.execute(closed_sql, (str(tenant_id), int(year)))
-        closed_rows = cursor.fetchall() or []
-        # NOTE: open_sql intentionally has no resolved_by filter — we only
-        # use it to compute win_rate for coders who DID close at least one
-        # gap, which is unusual usage but sound: if a coder has open gaps
-        # tagged with their id but zero closures, they will not appear on
-        # the leaderboard at all (filtered below).
-        cursor.execute(open_sql, (str(tenant_id),))
-        open_rows = cursor.fetchall() or []
-        cursor.execute(users_sql)
-        user_rows = cursor.fetchall() or []
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(closed_sql, (str(tenant_id), int(year)))
+            closed_rows = cursor.fetchall() or []
+            # NOTE: open_sql intentionally has no resolved_by filter — we only
+            # use it to compute win_rate for coders who DID close at least one
+            # gap, which is unusual usage but sound: if a coder has open gaps
+            # tagged with their id but zero closures, they will not appear on
+            # the leaderboard at all (filtered below).
+            cursor.execute(open_sql, (str(tenant_id),))
+            open_rows = cursor.fetchall() or []
+            cursor.execute(users_sql)
+            user_rows = cursor.fetchall() or []
+    except Exception as _db_exc:
+        logger.error(
+            "compute_leaderboard: DB error tenant=%s year=%s — returning empty; %s",
+            tenant_id, year, _db_exc, exc_info=True,
+        )
+        return []
 
     # Index users by id, email, full_name so we can resolve the resolved_by
     # string back to a canonical user record regardless of which form was

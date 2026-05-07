@@ -77,6 +77,11 @@ def get_decay_curve(
     tid = str(tenant_id) if tenant_id is not None else "1"
 
     # One query per request — pull all rows for cohorts in range, group in Python.
+    # DEFENSIVE: current_year / revenue_impact / resolved_at may not exist if the
+    # schema was created from the legacy migration (add_recapture_ai_suggestions.sql)
+    # before the service-layer DDL columns were added.  On any DB error we log and
+    # return an empty payload so the frontend renders the empty-state chart instead
+    # of a red error banner.
     sql = """
         SELECT
             current_year,
@@ -87,9 +92,21 @@ def get_decay_curve(
         WHERE tenant_id    = %s
           AND current_year BETWEEN %s AND %s
     """
-    with raf_cursor() as cursor:
-        cursor.execute(sql, (tid, earliest_year, int(current_year)))
-        rows = cursor.fetchall()
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(sql, (tid, earliest_year, int(current_year)))
+            rows = cursor.fetchall()
+    except Exception as _db_exc:
+        logger.error(
+            "get_decay_curve: DB error tenant=%s year=%s lookback=%s — returning empty; %s",
+            tid, current_year, lookback, _db_exc, exc_info=True,
+        )
+        return {
+            "current_year": int(current_year),
+            "lookback_years": lookback,
+            "cohorts": [],
+            "degraded": True,
+        }
 
     # cohort_year -> {"total": int, "by_month": {1..12: {"closed": int, "$": float}}}
     buckets: dict[int, dict[str, Any]] = {
@@ -192,9 +209,30 @@ def get_velocity_kpis(
         WHERE tenant_id    = %s
           AND current_year = %s
     """
-    with raf_cursor() as cursor:
-        cursor.execute(sql, (tid, int(year)))
-        rows = cursor.fetchall()
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(sql, (tid, int(year)))
+            rows = cursor.fetchall()
+    except Exception as _db_exc:
+        logger.error(
+            "get_velocity_kpis: DB error tenant=%s year=%s — returning empty; %s",
+            tid, year, _db_exc, exc_info=True,
+        )
+        return {
+            "year": int(year),
+            "avg_days_to_close": 0.0,
+            "median_days_to_close": 0.0,
+            "ytd_$_recaptured": 0.0,
+            "ye_projected_$": 0.0,
+            "days_remaining_in_year": 0,
+            "days_to_close_target_30": 0.0,
+            "early_recapture_rate": 0.0,
+            "late_recapture_rate": 0.0,
+            "total_cohort_gaps": 0,
+            "closed_cohort_gaps": 0,
+            "open_cohort_gaps": 0,
+            "degraded": True,
+        }
 
     days_to_close: list[float] = []
     ytd_dollars = 0.0
@@ -310,9 +348,16 @@ def get_top_slow_movers(
         WHERE tenant_id    = %s
           AND current_year = %s
     """
-    with raf_cursor() as cursor:
-        cursor.execute(sql, (tid, int(year)))
-        rows = cursor.fetchall()
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(sql, (tid, int(year)))
+            rows = cursor.fetchall()
+    except Exception as _db_exc:
+        logger.error(
+            "get_top_slow_movers: DB error tenant=%s year=%s — returning empty; %s",
+            tid, year, _db_exc, exc_info=True,
+        )
+        return []
 
     # hcc_code -> {"days":[..], "open":int, "at_risk":float, "total":int, "closed":int}
     buckets: dict[str, dict[str, Any]] = {}

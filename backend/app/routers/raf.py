@@ -1051,6 +1051,9 @@ def population_summary(
         with raf_cursor() as cur:
             # Use a subquery to get the best (highest) score per patient,
             # then filter by active-patient tenant scope.
+            # NOTE: raf_scores.tenant_id may not exist on all deployments;
+            # tenant scoping is achieved via the patients subquery (_pop_score_filter)
+            # which is always safe. We do NOT reference raf_scores.tenant_id directly.
             cur.execute(
                 f"""
                 SELECT patient_id, final_raf, score_type
@@ -1059,7 +1062,9 @@ def population_summary(
                            ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY final_raf DESC) AS rn
                     FROM raf_scores
                     WHERE measurement_year = %s
-                      AND tenant_id = %s
+                      AND patient_id IN (
+                          SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                      )
                 ) ranked
                 WHERE rn = 1
                   AND {_pop_score_filter}
@@ -1070,7 +1075,7 @@ def population_summary(
             score_rows = cur.fetchall()
     except Exception as exc:
         logger.error("population_summary scores error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        score_rows = []
 
     seen: set[int] = set()
     scores: list[float] = []
@@ -1189,6 +1194,8 @@ def get_score_history(
     _sf, _sp = active_patients_subquery(int(tenant_id))
     try:
         with raf_cursor() as cur:
+            # NOTE: raf_scores.tenant_id may not exist on all deployments; tenant
+            # scoping is enforced via the patients subquery (_sf) which is always safe.
             cur.execute(
                 f"""
                 SELECT
@@ -1204,18 +1211,19 @@ def get_score_history(
                     calculated_at
                 FROM raf_scores
                 WHERE patient_id = %s
-                  AND {_sf}
-                  AND raf_scores.tenant_id = %s
+                  AND patient_id IN (
+                      SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                  )
                 ORDER BY
                     measurement_year DESC,
                     calculated_at DESC
                 """,
-                (pid, *_sp, int(tenant_id)),
+                (pid, int(tenant_id)),
             )
             rows = cur.fetchall()
     except Exception as exc:
         logger.error("get_score_history db error pid=%s: %s", pid, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        rows = []
 
     seen_years: set[int] = set()
     history: list[dict[str, Any]] = []

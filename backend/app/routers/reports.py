@@ -848,8 +848,9 @@ def data_completeness(
         # frontend renders properly.
         pass
     except Exception as exc:
-        logger.error("data_completeness db error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        # Any DB connection or pool error (not just NoActiveEMRConnection) should
+        # degrade gracefully — return zero-filled clinical metrics rather than 500.
+        logger.error("data_completeness db error (degraded): %s", exc, exc_info=True)
 
     total = counts.get("total_patients", 0)
 
