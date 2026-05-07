@@ -308,6 +308,24 @@ jobs:
             --timeout=60
         working-directory: backend
 
+      - name: Smoke /openapi.json + key endpoints
+        run: |
+          # Start the FastAPI app on a random port and probe key endpoints.
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8500 --log-level warning &
+          APP_PID=$!
+          # Wait for /health up to 30s
+          for i in {1..30}; do
+            if curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8500/health | grep -q "200"; then break; fi
+            sleep 1
+          done
+          # Probe — every one of these MUST return 2xx
+          set -e
+          curl -sS -o /dev/null -w "openapi=%{http_code}\n" http://127.0.0.1:8500/openapi.json | grep -q "200"
+          curl -sS -o /dev/null -w "docs=%{http_code}\n"    http://127.0.0.1:8500/docs        | grep -q "200"
+          # Tear down
+          kill $APP_PID 2>/dev/null || true
+        working-directory: backend
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
@@ -423,6 +441,26 @@ jobs:
 
       - name: Build Next.js application
         run: npm run build
+        working-directory: frontend
+
+      - name: Smoke all 25 sidebar pages return 200
+        run: |
+          npm run build
+          PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js &
+          APP_PID=$!
+          for i in {1..30}; do
+            if curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/login | grep -q "200"; then break; fi
+            sleep 1
+          done
+          set -e
+          for p in / /providers /recapture /suspects /patients /worklist /analysis /reports /audit /quality /submissions /review-queue /claims /users /system /developer /settings /uploads /emr-config /prospective /roi /demo /raf-calculate /crosswalk /documents; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000$p")
+            if [ "$code" != "200" ] && [ "$code" != "308" ]; then
+              echo "FAIL $p=$code"; exit 1
+            fi
+            echo "  $p=$code"
+          done
+          kill $APP_PID 2>/dev/null || true
         working-directory: frontend
 
   # ---------------------------------------------------------------------------
