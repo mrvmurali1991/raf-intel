@@ -110,6 +110,11 @@ def _ensure_demo_environment() -> None:
 
 
 def _ensure_patients_view(cur: Any) -> None:
+    # Bridge raf_intelligence.patients → openemr.patient_data so the
+    # bundled OpenEMR (raf-mysql/openemr DB, populated by the project's
+    # docker-compose.local.yml openemr container) is the single source
+    # of truth for patient identity.  No synthetic patient inserts —
+    # gaps / suspects / HCCs all reference real openemr pids.
     cur.execute(
         """
         CREATE OR REPLACE VIEW patients AS
@@ -126,37 +131,32 @@ def _ensure_patients_view(cur: Any) -> None:
             street, city, state, postal_code,
             phone_home, phone_cell, email,
             providerID                 AS provider_id,
-            CASE WHEN is_demo = 1 THEN 'demo' ELSE 'emr' END AS data_source,
+            'emr'                      AS data_source,
             1                          AS is_active,
             CAST(1 AS CHAR(64))        AS tenant_id,
             date                       AS created_at
-        FROM patient_data
+        FROM openemr.patient_data
         """
     )
 
 
 def _seed_patient_data(cur: Any) -> dict[int, str]:
-    """Insert demo patients into patient_data; return {pid: 'first last'}."""
-    inserted: dict[int, str] = {}
-    for first, last, dob, sex, race, ethn in PANEL:
-        cur.execute(
-            "SELECT pid FROM patient_data WHERE fname=%s AND lname=%s AND DOB=%s",
-            (first, last, dob),
-        )
-        row = cur.fetchone()
-        if row:
-            inserted[row["pid"]] = f"{first} {last}"
-            continue
-        cur.execute(
-            """
-            INSERT INTO patient_data
-                (fname, lname, DOB, sex, race, ethnicity, is_demo)
-            VALUES (%s, %s, %s, %s, %s, %s, 1)
-            """,
-            (first, last, dob, sex, race, ethn),
-        )
-        inserted[cur.lastrowid] = f"{first} {last}"
-    return inserted
+    """Pick the first 12 patients from openemr.patient_data — they are
+    real-looking demo patients (Margaret Chen, Robert Williams, etc.)
+    seeded by the bundled OpenEMR docker container.  We do NOT insert
+    new rows; gaps / suspects / HCCs reference the real openemr pids.
+
+    Returns ``{pid: 'first last'}`` for the 12-patient demo cohort.
+    """
+    cur.execute(
+        """
+        SELECT pid, fname, lname
+        FROM openemr.patient_data
+        ORDER BY pid ASC
+        LIMIT 12
+        """
+    )
+    return {row["pid"]: f"{row['fname']} {row['lname']}" for row in cur.fetchall()}
 
 
 def _seed_demo_provider(cur: Any) -> int:
