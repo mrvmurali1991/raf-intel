@@ -88,6 +88,16 @@ export const tokens = {
   successMedium: "#059669",
   successStrong: "#10B981",
   amber600:      "#D97706",
+
+  // Cohen's kappa IRR band colours
+  kappaExcellent:     "#16A34A", // green-600  — kappa >= 0.80
+  kappaExcellentSoft: "#DCFCE7", // green-100
+  kappaModerate:      "#D97706", // amber-600  — 0.40 <= kappa < 0.80
+  kappaModerateSoft:  "#FEF3C7", // amber-100
+  kappaPoor:          "#DC2626", // red-600    — kappa < 0.40
+  kappaPoorSoft:      "#FEE2E2", // red-100
+  kappaNeutral:       "#94A3B8", // slate-400  — no data / proportion-only
+  kappaNeutralSoft:   "#F1F5F9", // slate-100
 } as const;
 
 export type Tokens = typeof tokens;
