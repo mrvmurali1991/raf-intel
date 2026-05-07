@@ -219,6 +219,7 @@ class UserProfileResponse(BaseModel):
     last_login_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    onboarding_complete: bool = False
 
 
 class UserDetailResponse(BaseModel):
@@ -887,6 +888,31 @@ def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileRespons
             "created_at": user["created_at"],
         }
     )
+
+    tid = user.get("tenant_id")
+    onboarding_complete = False
+    if tid is not None:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM emr_connections
+                         WHERE tenant_id = %s AND is_active = 1) AS emr_count,
+                        (SELECT COUNT(*) FROM patients
+                         WHERE tenant_id = %s) AS patient_count
+                    """,
+                    (tid, tid),
+                )
+                counts = cur.fetchone() or {}
+            onboarding_complete = (
+                int(counts.get("emr_count") or 0) > 0
+                and int(counts.get("patient_count") or 0) > 0
+            )
+        except Exception:
+            onboarding_complete = False
+
+    row["onboarding_complete"] = onboarding_complete
     return UserProfileResponse(**row)
 
 

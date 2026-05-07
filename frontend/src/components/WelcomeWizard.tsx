@@ -16,6 +16,7 @@
 import { useEffect, useState, CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/auth-context";
 import {
   Sparkles,
   Database,
@@ -155,9 +156,12 @@ interface WelcomeWizardProps {
 export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuth();
+
   const [visible, setVisible] = useState(() => {
     if (typeof window === "undefined") return false;
-    return !localStorage.getItem(ONBOARDING_KEY) || !!forceOpen;
+    if (forceOpen) return true;
+    return !localStorage.getItem(ONBOARDING_KEY);
   });
   const [step, setStep] = useState(0);
 
@@ -183,6 +187,17 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
   const [prevForce, setPrevForce] = useState(forceOpen);
   if (forceOpen && !prevForce) { setPrevForce(forceOpen); setVisible(true); setStep(0); }
   if (forceOpen !== prevForce) setPrevForce(forceOpen);
+
+  // Suppress wizard for already-onboarded tenants via server-side signal.
+  // This fires once user loads from /api/auth/me and survives incognito / fresh tabs.
+  useEffect(() => {
+    if (!forceOpen && user?.onboarding_complete === true) {
+      setVisible(false);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ONBOARDING_KEY, "true");
+      }
+    }
+  }, [user?.onboarding_complete, forceOpen]);
 
   // Re-trigger event
   useEffect(() => {
