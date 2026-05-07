@@ -1218,137 +1218,272 @@ export default function PatientsPage() {
       )}
 
       {/* ============================================================ */}
-      {/* Summary stat strip                                           */}
+      {/* Population Overview — hero block with risk distribution bar  */}
       {/* ============================================================ */}
-      <div style={{
-        display: "flex",
-        gap: 12,
-        marginBottom: 16,
-      }}>
-        {/* High Risk */}
-        <div style={{
-          flex: 1,
-          backgroundColor: C.bgCard,
-          border: `1px solid ${C.borderSoft}`,
-          borderRadius: 16,
-          padding: "16px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-        }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: "50%",
-            backgroundColor: C.highSoft,
-            color: C.high,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, fontWeight: 800,
-            fontVariantNumeric: "tabular-nums",
-            flexShrink: 0,
-          }}>
-            {stats.high}
+      <div
+        className="rci-population-overview"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(260px, 1.4fr) repeat(3, minmax(160px, 1fr))",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        {/* Hero card — total + stacked risk distribution bar */}
+        <div
+          style={{
+            backgroundColor: C.bgCard,
+            border: `1px solid ${C.borderSoft}`,
+            borderRadius: 16,
+            padding: "18px 22px",
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: 36,
+                fontWeight: 800,
+                color: C.text,
+                fontVariantNumeric: "tabular-nums",
+                letterSpacing: "-0.025em",
+                lineHeight: 1,
+              }}
+            >
+              {stats.all.toLocaleString()}
+            </span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: C.textSubtle,
+                letterSpacing: "0.02em",
+                textTransform: "uppercase",
+              }}
+            >
+              Active Patients
+            </span>
+            <span
+              style={{
+                marginLeft: "auto",
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "2px 8px",
+                borderRadius: 6,
+                backgroundColor: tokens.successSoft,
+                color: tokens.successDark,
+                fontSize: 11,
+                fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+                whiteSpace: "nowrap",
+              }}
+              title="Percentage of the panel with a calculated RAF score"
+            >
+              {stats.analyzedPct}% scored
+            </span>
           </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>High Risk</div>
-            <div style={{ fontSize: 12, color: C.textSubtle }}>RAF &ge; 2.00</div>
-          </div>
-        </div>
 
-        {/* Medium Risk */}
-        <div style={{
-          flex: 1,
-          backgroundColor: C.bgCard,
-          border: `1px solid ${C.borderSoft}`,
-          borderRadius: 16,
-          padding: "16px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-        }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: "50%",
-            backgroundColor: C.mediumSoft,
-            color: C.medium,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, fontWeight: 800,
-            fontVariantNumeric: "tabular-nums",
-            flexShrink: 0,
-          }}>
-            {stats.medium}
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Medium Risk</div>
-            <div style={{ fontSize: 12, color: C.textSubtle }}>RAF 1.00 &ndash; 1.99</div>
-          </div>
+          {/* Stacked risk distribution bar — instant population at-a-glance */}
+          {(() => {
+            const total = Math.max(1, stats.all);
+            const segs: Array<{ key: RiskFilter; count: number; color: string; label: string }> = [
+              { key: "high", count: stats.high, color: tokens.riskHigh, label: "High" },
+              { key: "medium", count: stats.medium, color: tokens.warningStrong, label: "Medium" },
+              { key: "low", count: stats.low, color: tokens.success, label: "Low" },
+              { key: "unscored", count: stats.unscored, color: tokens.slate300, label: "Unscored" },
+            ];
+            return (
+              <>
+                <div
+                  role="img"
+                  aria-label={`Risk distribution: ${stats.high} high, ${stats.medium} medium, ${stats.low} low, ${stats.unscored} unscored`}
+                  style={{
+                    display: "flex",
+                    height: 12,
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    border: `1px solid ${C.borderSoft}`,
+                    backgroundColor: tokens.slate50,
+                  }}
+                >
+                  {segs.map((s) => {
+                    const pct = (s.count / total) * 100;
+                    if (pct <= 0) return null;
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        title={`${s.label}: ${s.count} (${pct.toFixed(1)}%)`}
+                        onClick={() => { setRiskFilter(s.key); setPage(0); }}
+                        aria-label={`Filter to ${s.label.toLowerCase()} risk: ${s.count} patient${s.count === 1 ? "" : "s"}`}
+                        style={{
+                          flexBasis: `${pct}%`,
+                          backgroundColor: s.color,
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
+                          transition: "filter 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 14,
+                    flexWrap: "wrap",
+                    fontSize: 12,
+                    color: C.textSubtle,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {segs.map((s) => (
+                    <span key={s.key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: s.color }} />
+                      <span style={{ color: C.text, fontWeight: 700 }}>{s.count}</span>
+                      <span>{s.label}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Average RAF */}
-        <div style={{
-          flex: 1,
-          backgroundColor: C.bgCard,
-          border: `1px solid ${C.borderSoft}`,
-          borderRadius: 16,
-          padding: "16px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-        }}>
-          <div style={{
-            fontSize: 26, fontWeight: 800,
-            color: C.text,
-            fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.02em",
-            lineHeight: 1,
-            flexShrink: 0,
-            minWidth: 60,
-          }}>
-            {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "\u2014"}
+        <div
+          style={{
+            backgroundColor: C.bgCard,
+            border: `1px solid ${C.borderSoft}`,
+            borderRadius: 16,
+            padding: "18px 22px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 8,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+            minHeight: 132,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Activity size={16} color={tokens.success} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Average RAF
+            </span>
           </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Average RAF</div>
-            <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", alignItems: "center", gap: 6 }}>
-              {stats.avgRaf > 0 ? stats.avgRaf.toFixed(3) : "\u2014"}
-              <span style={{
-                display: "inline-flex", alignItems: "center",
-                padding: "1px 6px", borderRadius: 4,
-                backgroundColor: tokens.successSoft,
-                color: tokens.riskLow,
-                fontSize: 10, fontWeight: 700,
-              }}>
-                {stats.analyzedPct}% scored
-              </span>
-            </div>
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 800,
+              color: C.text,
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+            }}
+          >
+            {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "—"}
+          </div>
+          <div style={{ fontSize: 12, color: C.textSubtle }}>
+            {stats.avgRaf > 0 ? `${stats.avgRaf.toFixed(3)} mean across panel` : "No scored patients yet"}
           </div>
         </div>
 
         {/* Total HCCs */}
-        <div style={{
-          flex: 1,
-          backgroundColor: C.bgCard,
-          border: `1px solid ${C.borderSoft}`,
-          borderRadius: 16,
-          padding: "16px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-        }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: "50%",
-            backgroundColor: C.blueSoft,
-            color: C.blue,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, fontWeight: 800,
-            fontVariantNumeric: "tabular-nums",
-            flexShrink: 0,
-          }}>
-            {stats.hccTotal}
+        <div
+          style={{
+            backgroundColor: C.bgCard,
+            border: `1px solid ${C.borderSoft}`,
+            borderRadius: 16,
+            padding: "18px 22px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 8,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+            minHeight: 132,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ShieldCheck size={16} color={tokens.infoBlue} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              HCCs Captured
+            </span>
           </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Total HCCs</div>
-            <div style={{ fontSize: 12, color: C.textSubtle }}>In current view</div>
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 800,
+              color: C.text,
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+            }}
+          >
+            {stats.hccTotal.toLocaleString()}
+          </div>
+          <div style={{ fontSize: 12, color: C.textSubtle }}>
+            {stats.all > 0 ? `${(stats.hccTotal / stats.all).toFixed(1)} avg per patient` : "Across current view"}
+          </div>
+        </div>
+
+        {/* High-priority focus */}
+        <div
+          style={{
+            backgroundColor: C.bgCard,
+            border: `1px solid ${C.borderSoft}`,
+            borderRadius: 16,
+            padding: "18px 22px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 8,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+            minHeight: 132,
+            cursor: stats.high > 0 ? "pointer" : "default",
+            transition: "border-color 0.15s ease",
+          }}
+          onClick={() => { if (stats.high > 0) { setRiskFilter("high"); setPage(0); } }}
+          onMouseEnter={(e) => { if (stats.high > 0) { e.currentTarget.style.borderColor = tokens.riskHigh; } }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSoft; }}
+          aria-label={stats.high > 0 ? `Show ${stats.high} high-risk patients` : "No high-risk patients"}
+          role={stats.high > 0 ? "button" : undefined}
+          tabIndex={stats.high > 0 ? 0 : undefined}
+          onKeyDown={(e) => {
+            if (stats.high > 0 && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              setRiskFilter("high");
+              setPage(0);
+            }
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <TrendingUp size={16} color={tokens.riskHigh} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Need Review
+            </span>
+          </div>
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 800,
+              color: stats.high > 0 ? tokens.riskHigh : C.text,
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+            }}
+          >
+            {stats.high}
+          </div>
+          <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", alignItems: "center", gap: 4 }}>
+            High-risk patients
+            {stats.high > 0 && <ChevronRight size={12} color={tokens.riskHigh} />}
           </div>
         </div>
       </div>
