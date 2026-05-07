@@ -367,7 +367,7 @@ INSERT IGNORE INTO users (
   must_change_password,
   password_changed_at
 ) VALUES (
-  'default',
+  1,
   'admin@raf.health',
   '$2b$12$Q55kf48dv2PSK.xhl1lPTOLxn3nv1K1toWHa6NLdMW2H8swtm7Zqu',  -- bcrypt('Admin@123', 12)
   'System',
