@@ -1155,11 +1155,56 @@ def seed_openemr_demo() -> None:
 
         logger.info("OpenEMR demo data seeded successfully (all data types).")
 
+        # Repair any double-encoded em-dashes left over from the initial DB snapshot.
+        # The em-dash U+2014 (UTF-8: E2 80 94) was mistakenly stored as its
+        # Windows-1252 mojibake 'â€"' then re-encoded as UTF-8, producing the
+        # byte sequence C3 A2  E2 82 AC  E2 80 9D.  Replace all occurrences with
+        # the correct UTF-8 bytes.  The UNHEX / HEX approach works independently
+        # of the connection charset, making it safe to run on every startup.
+        _repair_mojibake_emdash(cur)
+
         # Generate demo PDF files for document viewing
         _generate_demo_pdfs()
 
     except Exception as exc:
         logger.error("Failed to seed OpenEMR demo data: %s", exc)
+
+
+def _repair_mojibake_emdash(cur: object) -> None:
+    """Fix double-encoded em-dash in OpenEMR text columns (idempotent).
+
+    Root cause: the em-dash U+2014 (UTF-8 bytes E2 80 94) was written to MySQL
+    via a connection whose client charset was latin-1 (or the Python string was
+    already the Windows-1252 mojibake 'â€"').  MySQL then stored the UTF-8
+    encoding of those three replacement characters instead of the single E2 80 94
+    sequence, yielding the 9-byte string C3 A2  E2 82 AC  E2 80 9D.
+
+    Using REPLACE(col, UNHEX(wrong), UNHEX(correct)) operates on raw bytes and
+    is charset-agnostic, so it is safe regardless of the connection collation.
+    """
+    _WRONG = "C3A2E282ACE2809D"  # UTF-8 bytes for 'â€"' (mojibake em-dash)
+    _RIGHT = "E28094"            # UTF-8 bytes for '—' (U+2014 em-dash)
+
+    columns = [
+        ("form_encounter",      "reason"),
+        ("form_clinical_notes", "description"),
+    ]
+    for table, col in columns:
+        try:
+            cur.execute(
+                f"UPDATE {table} SET {col} = REPLACE({col}, UNHEX(%s), UNHEX(%s)) "  # noqa: S608
+                f"WHERE HEX({col}) LIKE %s",
+                (_WRONG, _RIGHT, f"%{_WRONG}%"),
+            )
+            if cur.rowcount:
+                logger.info(
+                    "_repair_mojibake_emdash: fixed %d row(s) in %s.%s",
+                    cur.rowcount,
+                    table,
+                    col,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("_repair_mojibake_emdash: could not fix %s.%s — %s", table, col, exc)
 
 
 def _generate_demo_pdfs() -> None:
