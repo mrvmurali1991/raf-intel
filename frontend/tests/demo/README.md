@@ -16,38 +16,41 @@ docs/DEMO_PRESENTER_GUIDE.md         what to say while the script runs
 
 ## Quickstart
 
+Run all commands from the repo root unless otherwise noted.
+
 ```bash
 # 1. Bring up the stack
-docker compose -f ../../../docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml up -d
 
-# 2. Apply schema + KG seeds + IRR labels
-docker cp ../../../database/migrations raf-backend:/tmp/migrations
+# 2. Apply schema migrations (idempotent)
+docker cp database/migrations raf-backend:/tmp/migrations
 docker exec -e MIGRATIONS_DIR=/tmp/migrations raf-backend python /app/scripts/apply_migrations.py
-docker exec raf-backend sh /app/scripts/run_all_seeds.sh
-docker exec raf-backend python /app/scripts/seed_irr_demo.py
 
-# 3. CRITICAL — seed the demo panel (12 patients + 36 gaps + 33 suspects)
-#    Without this the storyboard shows the onboarding flow on every scene.
-docker cp ../../scripts/seed_demo_panel.py raf-backend:/app/scripts/seed_demo_panel.py
-docker exec raf-backend python /app/scripts/seed_demo_panel.py
+# 3. Seed the demo panel — 12 patients, ~16 gaps, ~15 suspects, RAF scores
+#    This also creates an active emr_connections row so /api/emr/status
+#    returns connected=true.
+#    Do NOT use POST /api/emr/demo-connect or the "Connect Demo EMR" button
+#    on /emr-config — that endpoint requires a live OpenEMR instance and
+#    returns 500 on a local stack that does not have one running.
+docker exec -e APP_ENV=demo raf-backend python /app/scripts/seed_demo_panel.py
 
-# 4. Verify dashboard counts are non-zero
+# 4. Seed IRR labels (Cohen's kappa tile in Scene 4)
+docker exec -e APP_ENV=demo raf-backend python /app/scripts/seed_irr_demo.py
+
+# 5. Enable demo feature flags (KG evidence panel, velocity strip, CFO forecast)
+docker exec -e APP_ENV=demo raf-backend python /app/scripts/enable_demo_flags.py
+
+# 6. Verify auth
 curl -sS -X POST http://localhost:8500/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@raf.health","password":"Admin@123"}' \
-  | python3 -c "import json,sys,urllib.request; t=json.load(sys.stdin)['access_token']; \
-                req=urllib.request.Request('http://localhost:8500/api/dashboard/stats', \
-                headers={'Authorization': f'Bearer {t}'}); \
-                d=json.loads(urllib.request.urlopen(req).read()); \
-                print('patients:', d.get('total_patients'), \
-                      'gaps:', d.get('open_recapture_gaps'), \
-                      'suspects:', d.get('total_suspects_open'))"
+  | grep -q access_token && echo "auth=OK"
 
-# 5. Run the demo
+# 7. Run the Playwright demo (from the frontend/ directory)
 cd frontend
 DEMO_PASSWORD='Admin@123' npx playwright test --config=playwright.demo.config.ts
 
-# 6. Storyboard is at frontend/playwright-report/demo-shots/
+# 8. Storyboard is at frontend/playwright-report/demo-shots/
 ls playwright-report/demo-shots/
 ```
 
@@ -94,7 +97,7 @@ Typical "needs data" scenes:
 - Scene 4 (kappa tile) — needs `seed_irr_demo.py` to have populated `primary_coder_label` / `secondary_coder_label`
 - Scene 5–6 (velocity, CFO) — need recapture-decay/CFO endpoints to return non-empty rows
 
-Run the seeds **and** connect the demo EMR before recording the final storyboard.
+Run the seed steps (Steps 3–5 in Quickstart) before recording the final storyboard. The `seed_demo_panel.py` script creates the EMR connection row directly — there is no need to click "Connect Demo EMR" in the UI or call any external OpenEMR endpoint.
 
 ## Troubleshooting
 

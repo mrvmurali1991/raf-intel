@@ -8,45 +8,51 @@ The Playwright script at `frontend/tests/demo/demo-flow.spec.ts` automates the n
 
 ## Pre-flight (5 minutes before joining the call)
 
+For a one-page cheat sheet with exact commands and expected output for every step, see `docs/DEMO_QUICKSTART.md`.
+
 ```bash
 # 1. Bring the stack up
 docker compose -f docker-compose.local.yml up -d
 
-# 2. Apply schema + seed reference data (idempotent — re-runs are safe)
+# 2. Apply schema migrations (idempotent — re-runs are safe)
 docker cp database/migrations raf-backend:/tmp/migrations
 docker exec -e MIGRATIONS_DIR=/tmp/migrations raf-backend python /app/scripts/apply_migrations.py
-docker exec raf-backend sh /app/scripts/run_all_seeds.sh
-docker exec raf-backend python /app/scripts/seed_irr_demo.py
 
-# 3. CONNECT THE DEMO EMR
-#    The /worklist landing shows "AI-Powered Risk Adjustment" onboarding
-#    when no EMR is connected — that's correct behaviour for a fresh tenant.
-#    Hit POST /api/emr/demo-connect from the UI's "Connect Demo EMR" button
-#    on /emr-config, OR run the seed scripts that create the demo panel.
-#    This step is what populates the patients, gaps, and suspect data the
-#    demo flow relies on.
+# 3. Seed the demo panel — 12 synthetic patients, 16 gaps, 15 suspects, RAF scores
+#    This also marks the EMR connection as active so /api/emr/status returns connected=true.
+#    Do NOT use POST /api/emr/demo-connect or the "Connect Demo EMR" button on /emr-config —
+#    that endpoint requires a live OpenEMR instance and will 500 on a local stack without one.
+docker exec -e APP_ENV=demo raf-backend python /app/scripts/seed_demo_panel.py
 
-# 4. Verify auth works
+# 4. Seed IRR labels (Cohen's kappa tile in Scene 4)
+docker exec -e APP_ENV=demo raf-backend python /app/scripts/seed_irr_demo.py
+
+# 5. Enable demo feature flags (KG panel, velocity strip, CFO forecast, peer percentile)
+docker exec -e APP_ENV=demo raf-backend python /app/scripts/enable_demo_flags.py
+
+# 6. Verify auth and data
 curl -sS -X POST http://localhost:8500/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@raf.health","password":"Admin@123"}' \
   | grep -q access_token && echo "auth=OK"
 
-# 5. Open http://localhost:3444/login in a fresh browser tab
+# 7. Open http://localhost:3444/login in a fresh browser tab
+#    Login: admin@raf.health / Admin@123
+#    Expected: /worklist with 12 patient cards and non-zero stats strip
 ```
 
 **Common pre-flight gotchas**:
 - If `/api/auth/me` returns 401 immediately after login: check
   `users.tenant_id IS NOT NULL` for the admin row.  Migration 005 sets
   it but a hand-applied schema may have left it NULL.
-- If `/api/auth/refresh` returns 500: apply migration
-  `030_user_sessions_prev_refresh_hash.sql`.
-- If pages spin forever after login: the auth-context falls back to
-  refresh on every cold load — both the above migrations need to be
-  applied.
+- If `/api/auth/refresh` returns 500: re-run Step 2 (migrations).
+- If pages spin forever after login: both the refresh-hash migration
+  and the sessions migration need to be applied — re-run Step 2.
 - If admin login is locked from prior failed attempts: clear it with
   `UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE
    email='admin@raf.health';`
+- If the worklist is empty despite a successful seed: re-run Step 3.
+  The seed is fully idempotent and re-running it is safe.
 
 ---
 
@@ -213,3 +219,17 @@ Drop the screenshots into a Keynote / Google Slides storyboard before the call s
 - `/audit`, `/quality`, `/submissions` — compliance ops; show in the *technical deep-dive* call
 
 The **first** call is about **value**, not breadth. 7 scenes is enough.
+
+---
+
+## What's still imperfect (be honest)
+
+Volunteer these caveats before the buyer finds them. Honesty builds more trust than a polished dodge.
+
+| Area | What to say |
+|---|---|
+| **Worklist empty state** | If the seed steps were skipped, `/worklist` shows an "AI-Powered Risk Adjustment" onboarding banner with no patient cards. This is intentional empty-state behavior, not a bug — but it kills the demo story. Always run the pre-flight seed before the call. If the worklist is empty during the demo: "I need to run one setup step — give me 60 seconds." Re-run `docker exec -e APP_ENV=demo raf-backend python /app/scripts/seed_demo_panel.py` and hard-refresh. |
+| **Cohen's kappa N=20** | The IRR tile on `/recapture` shows kappa = 0.52 ("moderate") on a 20-gap labeled set. If a buyer asks "what's this based on?" say: "This is our demo synthetic set of 20 dual-coded gaps — a realistic distribution but not production volume. In a live tenant the kappa computes over all dual-coded gaps in the measurement year, so accuracy improves with volume." Do not claim the 0.52 is a real-world benchmark. |
+| **Synthetic data benchmark** | The 84.8% precision / 100% recall benchmark in Q&A is from N=52 synthetic charts, not live clinical records. Lead with this, not hide it: "Our benchmark on 52 synthetic charts is 84.8%. We are building the real-chart benchmark on N≥1000 clinical records — that is the number we'll stand behind for procurement." The calibration story (ECE 0.03) is robust and worth leading with. |
+| **Scenes 4–6 onboarding capture** | The velocity strip (Scene 5) and CFO summary (Scene 6) depend on recapture-decay and CFO forecast endpoints. If these return empty rows (the feature flags were not enabled in Step 5 of pre-flight), Scenes 5 and 6 show empty charts. Recovery: run `docker exec -e APP_ENV=demo raf-backend python /app/scripts/enable_demo_flags.py` and hard-refresh. |
+| **No SOC2 yet** | SOC2 Type 1 is in scope for next quarter. Do not say "we are SOC2 compliant." Say "we have the controls in place and the audit is scheduled — we are not yet certified." |
