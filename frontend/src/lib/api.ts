@@ -573,8 +573,11 @@ export interface ProspectiveSummary {
 export interface QualityMeasure {
   measure_id: string;
   name: string;
+  /** numerator = met_count from API */
   numerator: number;
+  /** denominator = eligible_count from API */
   denominator: number;
+  /** rate as 0-100 (not 0-1) — compliance_rate from API */
   rate: number;
   benchmark?: number;
   gap: number;
@@ -582,9 +585,13 @@ export interface QualityMeasure {
 
 export interface QualitySummary {
   year: number;
+  /** Derived: Object.keys(measures).length */
   total_measures: number;
+  /** Derived: count of measures where compliance_rate > 0 and above some threshold */
   measures_above_benchmark: number;
+  /** overall_compliance_rate from API (0-100 scale) */
   composite_score: number;
+  /** estimated_stars from /api/quality/stars-estimate */
   stars_estimate: number;
 }
 
@@ -601,11 +608,14 @@ export interface StarsEstimate {
 
 export interface CareGap {
   gap_id: number;
+  /** patient_id from API */
   pid: number;
   patient_name: string;
+  /** measure_code from API */
   measure_id: string;
   measure_name: string;
   due_date?: string;
+  /** API doesn't return status; we synthesise as "open" for all gaps returned */
   status: "open" | "closed" | "excluded";
 }
 
@@ -1681,18 +1691,68 @@ export async function getProspectiveSummary(): Promise<ProspectiveSummary> {
 // Quality APIs
 // ---------------------------------------------------------------------------
 
+/**
+ * /api/quality/measures — returns an array of measure definitions (no rates).
+ * /api/quality/summary  — returns compliance_rate per measure in `measures` obj.
+ * We merge both to produce QualityMeasure[] with rate/numerator/denominator/gap.
+ */
 export async function getQualityMeasures(): Promise<QualityMeasure[]> {
-  const { data } = await api.get("/api/quality/measures");
-  return data;
+  const [defsRes, summaryRes] = await Promise.all([
+    api.get("/api/quality/measures"),
+    api.get("/api/quality/summary"),
+  ]);
+  const defs: Array<{ code: string; name: string; stars_weight: number }> = defsRes.data;
+  const summaryMeasures: Record<string, {
+    measure_name: string;
+    eligible_count: number;
+    met_count: number;
+    gap_count: number;
+    compliance_rate: number | null;
+  }> = summaryRes.data.measures ?? {};
+
+  return defs.map((def) => {
+    const s = summaryMeasures[def.code];
+    const rate = s?.compliance_rate ?? 0;
+    return {
+      measure_id: def.code,
+      name: def.name,
+      numerator: s?.met_count ?? 0,
+      denominator: s?.eligible_count ?? 0,
+      // API compliance_rate is already 0-100; MeasureRow multiplies by 100 expecting 0-1,
+      // so we store as 0-1 fraction here.
+      rate: rate / 100,
+      gap: s?.gap_count ?? 0,
+    } satisfies QualityMeasure;
+  });
 }
 
 export async function getQualitySummary(
   year?: number
 ): Promise<QualitySummary> {
-  const { data } = await api.get("/api/quality/summary", {
-    params: year ? { year } : undefined,
-  });
-  return data;
+  const [summaryRes, starsRes] = await Promise.all([
+    api.get("/api/quality/summary", { params: year ? { year } : undefined }),
+    api.get("/api/quality/stars-estimate", { params: year ? { year } : undefined }),
+  ]);
+  const raw = summaryRes.data as {
+    year: number;
+    total_patients_evaluated: number;
+    overall_compliance_rate: number;
+    measures: Record<string, { compliance_rate: number | null }>;
+  };
+  const measuresArr = Object.values(raw.measures ?? {});
+  const total = measuresArr.length;
+  // "above benchmark" = compliance_rate >= 60 (reasonable mid-tier threshold)
+  const aboveBenchmark = measuresArr.filter(
+    (m) => (m.compliance_rate ?? 0) >= 60
+  ).length;
+
+  return {
+    year: raw.year,
+    total_measures: total,
+    measures_above_benchmark: aboveBenchmark,
+    composite_score: raw.overall_compliance_rate / 100,
+    stars_estimate: starsRes.data.estimated_stars ?? 0,
+  };
 }
 
 export async function getStarsEstimate(
@@ -1701,7 +1761,21 @@ export async function getStarsEstimate(
   const { data } = await api.get("/api/quality/stars-estimate", {
     params: year ? { year } : undefined,
   });
-  return data;
+  // Raw shape: { year, estimated_stars, star_breakdown: { CODE: { stars, weight, ... } } }
+  const raw = data as {
+    year: number;
+    estimated_stars: number;
+    star_breakdown: Record<string, { stars: number; weight: number }>;
+  };
+  const breakdown = Object.entries(raw.star_breakdown ?? {}).map(
+    ([code, v]) => ({ measure_id: code, stars: v.stars, weight: v.weight })
+  );
+  return {
+    year: raw.year,
+    current_estimate: raw.estimated_stars,
+    projected_estimate: raw.estimated_stars, // no projection in API yet; same value
+    measure_breakdown: breakdown,
+  };
 }
 
 export async function getCareGaps(params?: {
@@ -1712,7 +1786,28 @@ export async function getCareGaps(params?: {
   offset?: number;
 }): Promise<{ total: number; gaps: CareGap[] }> {
   const { data } = await api.get("/api/quality/gaps", { params });
-  return data;
+  // Raw shape: { total_gaps, gaps: [{ patient_id, patient_name, measure_code, measure_name, gap, ... }] }
+  const raw = data as {
+    total_gaps: number;
+    gaps: Array<{
+      patient_id: number;
+      patient_name: string;
+      measure_code: string;
+      measure_name: string;
+    }>;
+  };
+  return {
+    total: raw.total_gaps ?? 0,
+    gaps: (raw.gaps ?? []).map((g, i) => ({
+      gap_id: i,
+      pid: g.patient_id,
+      patient_name: g.patient_name,
+      measure_id: g.measure_code,
+      measure_name: g.measure_name,
+      due_date: undefined,
+      status: "open" as const,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
