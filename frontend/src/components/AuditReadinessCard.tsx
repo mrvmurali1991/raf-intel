@@ -24,7 +24,7 @@ import { tokens } from "@/styles/tokens";
 
 // ---- Helpers -----------------------------------------------------------------
 
-type IrrBand = "excellent" | "acceptable" | "needs_review" | null | undefined;
+type IrrBand = "excellent" | "acceptable" | "moderate" | "needs_review" | null | undefined;
 
 /** Map audit-ready % to a gauge stroke colour via tokens. */
 function gaugeColor(pct: number): string {
@@ -36,7 +36,7 @@ function gaugeColor(pct: number): string {
 /** Map kappa IRR band to { text, soft } token pair. */
 function kappaBandTokens(band: IrrBand): { text: string; soft: string } {
   if (band === "excellent") return { text: tokens.kappaExcellent, soft: tokens.kappaExcellentSoft };
-  if (band === "acceptable") return { text: tokens.kappaModerate, soft: tokens.kappaModerateSoft };
+  if (band === "acceptable" || band === "moderate") return { text: tokens.kappaModerate, soft: tokens.kappaModerateSoft };
   if (band === "needs_review") return { text: tokens.kappaPoor, soft: tokens.kappaPoorSoft };
   return { text: tokens.kappaNeutral, soft: tokens.kappaNeutralSoft };
 }
@@ -44,7 +44,7 @@ function kappaBandTokens(band: IrrBand): { text: string; soft: string } {
 /** Human-readable band label. */
 function bandLabel(band: IrrBand): string {
   if (band === "excellent") return "Excellent";
-  if (band === "acceptable") return "Moderate";
+  if (band === "acceptable" || band === "moderate") return "Moderate";
   if (band === "needs_review") return "Needs review";
   return "Insufficient data";
 }
@@ -83,7 +83,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 function IrrTile({
   irr,
 }: {
-  irr: NonNullable<AuditReadinessResponse["inter_rater_reliability"]>;
+  irr: NonNullable<AuditReadinessResponse["inter_rater_reliability"]> & { band?: IrrBand };
 }) {
   const { text: bandText, soft: bandSoft } = kappaBandTokens(irr.band);
   const isKappa = irr.method === "cohens_kappa" && irr.kappa != null;

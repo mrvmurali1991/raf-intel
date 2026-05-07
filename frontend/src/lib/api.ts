@@ -2652,7 +2652,7 @@ export interface AuditReadinessResponse {
     secondary_rejected: number;
     pending_review: number;
     agreement_pct: number | null;
-    band: "excellent" | "acceptable" | "needs_review" | null;
+    band: "excellent" | "acceptable" | "moderate" | "needs_review" | null;
     method: string;
     /** Cohen's kappa coefficient — present when method === "cohens_kappa" */
     kappa?: number | null;
