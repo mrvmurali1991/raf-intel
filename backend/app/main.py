@@ -248,10 +248,19 @@ def _run_demo_seeds() -> None:
     DISABLED — they write rows with tenant_id='1' targeting OpenEMR pids
     1..15, which collides with the real synced patients and silently drops
     their RAF scores on every restart.
+
+    seed_panel_demo runs FIRST — it owns the core patient panel (patient_data,
+    raf_patient_hcc, recapture_gaps, raf_suspect_conditions, raf_scores,
+    normalized_encounters).  It is a no-op when is_demo=1 rows already exist,
+    so a ``docker compose up`` restart after a non-destructive stop never
+    duplicates data.  A ``docker compose down -v`` wipe triggers a full reseed
+    on the next ``up``, keeping the demo panel resilient to volume rebuilds.
     """
     import importlib
 
     seeds = [
+        # Panel seed runs first — idempotency guard: COUNT(is_demo=1) >= 12
+        ("seed_panel_demo", "seed_panel_demo"),
         ("seed_openemr_demo", "seed_openemr_demo"),
         ("seed_documents_demo", "seed_documents_demo"),
         ("seed_providers_demo", "seed_providers_demo"),
