@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS knowledge_graph_concepts (
 
 CREATE TABLE IF NOT EXISTS knowledge_graph_edges (
   id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  source_concept_id INT UNSIGNED NOT NULL,
-  target_concept_id INT UNSIGNED NOT NULL,
+  source_concept_id BIGINT UNSIGNED NOT NULL,
+  target_concept_id BIGINT UNSIGNED NOT NULL,
   relation        VARCHAR(60)  NOT NULL,           -- 'has_indication', 'is_a', 'treats', 'maps_to_hcc'
   weight          DECIMAL(5,4) DEFAULT 1.0000,
   metadata        JSON         NULL,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS kg_atc_classes (
   name VARCHAR(255) NOT NULL,
   level TINYINT NOT NULL,                            -- 1-5
   parent_atc_code VARCHAR(20) NULL,
-  concept_id INT UNSIGNED NOT NULL,                  -- FK to knowledge_graph_concepts (ontology=atc)
+  concept_id BIGINT UNSIGNED NOT NULL,                  -- FK to knowledge_graph_concepts (ontology=atc)
   indication_concept_ids JSON NULL,                  -- [concept_id, ...] for primary indications
   is_active TINYINT(1) DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS kg_lab_signals (
   threshold_low       DECIMAL(10,4) NULL,
   threshold_high      DECIMAL(10,4) NULL,
   threshold_meaning   ENUM('above','below','outside','within') NOT NULL,
-  signals_concept_id  INT UNSIGNED NOT NULL,
+  signals_concept_id  BIGINT UNSIGNED NOT NULL,
   confidence          DECIMAL(5,4) DEFAULT 0.7000,
   source              VARCHAR(80)  DEFAULT 'curated',
   notes               TEXT,
