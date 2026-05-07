@@ -119,22 +119,34 @@ def _ensure_patients_view(cur: Any) -> None:
         """
         CREATE OR REPLACE VIEW patients AS
         SELECT
-            pid                        AS id,
-            CAST(pid AS CHAR(20))      AS emr_pid,
-            fname                      AS first_name,
-            lname                      AS last_name,
-            mname                      AS middle_name,
-            DOB                        AS dob,
-            sex                        AS gender,
+            pid                             AS id,
+            CAST(pid AS CHAR(20))           AS emr_pid,
+            fname                           AS first_name,
+            lname                           AS last_name,
+            mname                           AS middle_name,
+            DOB                             AS dob,
+            sex                             AS sex,
+            pubpid                          AS mrn,
             race,
             ethnicity,
-            street, city, state, postal_code,
-            phone_home, phone_cell, email,
-            providerID                 AS provider_id,
-            'emr'                      AS data_source,
-            1                          AS is_active,
-            CAST(1 AS CHAR(64))        AS tenant_id,
-            date                       AS created_at
+            language                        AS preferred_language,
+            street                          AS address,
+            street,
+            city,
+            state,
+            postal_code                     AS zip,
+            postal_code,
+            phone_cell                      AS phone,
+            phone_home,
+            phone_cell,
+            email,
+            CAST(NULL AS CHAR(20))          AS mbi,
+            CAST(NULL AS CHAR(50))          AS insurance_type,
+            providerID                      AS provider_id,
+            'emr'                           AS data_source,
+            1                               AS is_active,
+            CAST(1 AS CHAR(64))             AS tenant_id,
+            date                            AS created_at
         FROM openemr.patient_data
         """
     )
