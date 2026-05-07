@@ -343,12 +343,12 @@ INSERT IGNORE INTO role_default_permissions (role, resource, action, granted) VA
 -- =============================================================================
 -- SEED: default admin user
 --   email:    admin@raf.health
---   password: admin123  (bcrypt cost 12)
+--   password: Admin@123  (bcrypt cost 12) — canonical demo credential
 --   role:     admin
 --
 -- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 -- WARNING: THIS PASSWORD MUST BE CHANGED ON FIRST LOGIN.
--- The default credential "admin123" is well-known and provides full admin
+-- The default credential "Admin@123" is well-known and provides full admin
 -- access.  Leaving it in place is a critical security vulnerability.
 -- The must_change_password flag is set to 1; the application MUST enforce a
 -- password change before granting access to any protected resource.
@@ -369,7 +369,7 @@ INSERT IGNORE INTO users (
 ) VALUES (
   'default',
   'admin@raf.health',
-  '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/o8X8GVZF2',  -- bcrypt('admin123', 12)
+  '$2b$12$Q55kf48dv2PSK.xhl1lPTOLxn3nv1K1toWHa6NLdMW2H8swtm7Zqu',  -- bcrypt('Admin@123', 12)
   'System',
   'Administrator',
   'admin',
