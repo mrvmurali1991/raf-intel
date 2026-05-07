@@ -1,12 +1,23 @@
 /**
- * /quality verification spec — iter1-06
+ * /quality verification spec — iter6 (fix/post-review-batch-10)
+ *
+ * Fixes applied vs iter5:
+ *  1. Spec sentinel bug: replaced `waitForFunction` that matched "Quality Measures"
+ *     (present in the static <h1>) with a strict KPI-only sentinel:
+ *     page.getByText("Total Measures").waitFor() — text that only exists after
+ *     the Summary tab's StatCard renders (i.e. data resolved).
+ *  2. Auth-on-mobile bug: the mobile section no longer calls page.goto() after
+ *     setViewportSize.  Instead it uses a FRESH BrowserContext (viewport set to
+ *     414x896 BEFORE any navigation, then login via UI, then navigate to /quality).
+ *     This avoids the mid-page re-navigation that was aborting the in-flight
+ *     /api/auth/refresh and causing the 401 on /api/quality/summary.
  *
  * Run with:
  *   cd frontend && npx playwright test tests/demo/verify10-quality.spec.ts \
  *       --config playwright.demo.config.ts
  */
 
-import { test } from "@playwright/test";
+import { test, expect, chromium } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -15,23 +26,46 @@ const API_URL  = process.env.API_URL  ?? "http://localhost:8500";
 const EMAIL    = "admin@raf.health";
 const PASSWORD = "Admin@123";
 
-const SHOT_DIR = path.resolve(__dirname, "../../demo-shots/iter4-06-quality");
-const FRESH_AUTH_STATE_PATH = "/tmp/fresh-auth-state.json";
+const SHOT_DIR       = path.resolve(__dirname, "../../demo-shots/fix-quality-mobile-auth");
+const SHOT_DIR_DESK  = path.resolve(__dirname, "../../demo-shots/fix-quality-mobile-auth");
 
 function ensureDir(d: string) { fs.mkdirSync(d, { recursive: true }); }
 
-const consoleErrors: string[] = [];
-const pageErrors:    string[] = [];
-const networkFailures: string[] = [];
+// ── KPI sentinel text — only rendered when summaryQ has resolved data ──────
+// "Total Measures" appears exclusively inside the StatCard label of SummaryTab.
+// It does NOT appear in the page header ("Quality Measures & STARS") so it
+// cannot be matched by the static h1.
+const KPI_SENTINEL = "Total Measures";
 
-test.describe("/quality verification", () => {
-  test("desktop + mobile capture", async ({ page, request }) => {
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+async function loginViaUI(page: import("@playwright/test").Page) {
+  await page.waitForSelector('input[type="email"]', { state: "visible", timeout: 20_000 });
+  await page.fill('input[type="email"]', EMAIL);
+  await page.fill('input[type="password"]', PASSWORD);
+  await page.click('button[type="submit"]');
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30_000 });
+}
+
+async function waitForKpis(page: import("@playwright/test").Page, timeoutMs = 20_000) {
+  // Wait for the KPI-only sentinel — only appears after summaryQ resolves.
+  await page.getByText(KPI_SENTINEL, { exact: false }).waitFor({ timeout: timeoutMs });
+  // Also confirm the compliance distribution chart is present.
+  await page.getByText("Compliance Rate Distribution", { exact: false }).waitFor({ timeout: 5_000 });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DESKTOP TEST
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe("/quality desktop verification", () => {
+  test("desktop 1440x900 — KPIs visible", async ({ page, request }) => {
     ensureDir(SHOT_DIR);
 
-    page.on("pageerror", (err) => {
-      pageErrors.push(err.message);
-      console.error("[PAGE ERROR]", err.message);
-    });
+    const consoleErrors: string[] = [];
+    const networkFailures: string[] = [];
+
+    page.on("pageerror", (err) => console.error("[PAGE ERROR]", err.message));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
         consoleErrors.push(msg.text());
@@ -39,186 +73,215 @@ test.describe("/quality verification", () => {
       }
     });
     page.on("requestfailed", (req) => {
-      const failure = req.failure();
-      const msg = `${req.method()} ${req.url()} — ${failure?.errorText ?? "unknown"}`;
+      const msg = `${req.method()} ${req.url()} — ${req.failure()?.errorText ?? "unknown"}`;
       networkFailures.push(msg);
       console.error("[NETWORK FAIL]", msg);
     });
     page.on("response", (resp) => {
-      const status = resp.status();
-      if (status >= 500) {
-        const msg = `${status} ${resp.request().method()} ${resp.url()}`;
+      if (resp.status() >= 500) {
+        const msg = `${resp.status()} ${resp.request().method()} ${resp.url()}`;
         networkFailures.push(msg);
-        console.error("[HTTP " + status + "]", msg);
+        console.error("[HTTP 5xx]", msg);
       }
     });
 
-    // ──── Auth ────
-    console.log("\n[STEP 1] Auth …");
-    if (fs.existsSync(FRESH_AUTH_STATE_PATH)) {
-      try {
-        const rawState = JSON.parse(fs.readFileSync(FRESH_AUTH_STATE_PATH, "utf-8")) as {
-          cookies: Array<{
-            name: string; value: string; domain: string; path: string;
-            expires: number; httpOnly: boolean; secure: boolean; sameSite: string;
-          }>;
-        };
-        await page.context().addCookies(rawState.cookies as Parameters<typeof page.context.addCookies>[0]);
-        console.log("[STEP 1] cookies injected from", FRESH_AUTH_STATE_PATH);
-      } catch (e) {
-        console.log("[STEP 1] could not load fresh state:", (e as Error).message);
-      }
-    }
-
+    // ── Auth ────
+    console.log("\n[DESKTOP] Navigating to /quality …");
     await page.goto(`${BASE_URL}/quality`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(1500);
 
     if (page.url().includes("/login")) {
-      console.log("[STEP 1] UI login fallback …");
-      await page.waitForSelector('input[type="email"]', { state: "visible", timeout: 15_000 });
-      await page.fill('input[type="email"]', EMAIL);
-      await page.fill('input[type="password"]', PASSWORD);
-      await page.click('button[type="submit"]');
-      try {
-        await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30_000 });
-      } catch {
-        console.log("[STEP 1] login waitURL timed out");
-      }
+      console.log("[DESKTOP] UI login …");
+      await loginViaUI(page);
       await page.goto(`${BASE_URL}/quality`, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(2500);
     }
 
-    console.log("[STEP 1] URL:", page.url());
+    console.log("[DESKTOP] URL:", page.url());
 
-    // ──── Wait for mount ────
-    console.log("\n[STEP 2] Waiting for React mount …");
+    // ── Wait for KPI sentinel (not the h1) ────
+    console.log("[DESKTOP] Waiting for KPI sentinel …");
     try {
-      await page.waitForSelector('h1, [role="alert"], [class*="PageHeader"]', { timeout: 30_000 });
+      await waitForKpis(page, 20_000);
+      console.log("[DESKTOP] KPI sentinel matched — data resolved");
     } catch {
-      console.log("[STEP 2] no h1/alert/PageHeader within 30s");
+      console.log("[DESKTOP] KPI sentinel timed out — capturing anyway");
     }
-    await page.waitForTimeout(5000);
 
-    // ──── Desktop screenshots ────
-    console.log("\n[STEP 3] Desktop screenshots …");
+    // ── Screenshots ────
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(SHOT_DIR, "01-desktop-top.png"), fullPage: false });
     await page.screenshot({ path: path.join(SHOT_DIR, "02-desktop-fullpage.png"), fullPage: true });
+    console.log("[DESKTOP] screenshots captured");
 
+    // ── Presence checks ────
     const h1Text = await page.locator("h1").first().textContent().catch(() => null);
-    console.log("[STEP 3] h1:", h1Text?.trim());
+    console.log("[DESKTOP] h1:", h1Text?.trim());
 
-    // ──── Quality content presence ────
-    console.log("\n[STEP 4] Inventory …");
-    const checks: Array<[string, string]> = [
-      ["Quality / STARS heading", "Quality"],
-      ["STARS rating",  "STARS"],
-      ["HEDIS",         "HEDIS"],
-      ["Care Gaps",     "Care Gap"],
-      ["Summary tab",   "Summary"],
-      ["Measures",      "Measures"],
-    ];
-    for (const [label, txt] of checks) {
-      const cnt = await page.getByText(txt, { exact: false }).count();
-      console.log(`[STEP 4] ${label}: ${cnt > 0 ? "PRESENT (" + cnt + ")" : "ABSENT"}`);
-    }
+    const kpiVisible = await page.getByText(KPI_SENTINEL, { exact: false }).isVisible().catch(() => false);
+    const distVisible = await page.getByText("Compliance Rate Distribution", { exact: false }).isVisible().catch(() => false);
+    console.log("[DESKTOP] Total Measures KPI visible:", kpiVisible);
+    console.log("[DESKTOP] Distribution chart visible:", distVisible);
 
-    // KPI / metric tiles
-    const statCards = await page.locator('[class*="StatCard"], [data-testid*="stat"], [class*="card"]').count();
-    console.log("[STEP 4] card-like elements:", statCards);
+    // Read specific KPI values
+    const totalMeasuresCard = page.locator('text="Total Measures"').locator("xpath=ancestor::*[contains(@class,\"StatCard\") or contains(@style,\"card\")]").first();
+    console.log("[DESKTOP] KPI cards found:", await page.locator('[class*="StatCard"]').count());
 
-    // ──── Try clicking tabs (Stars, HEDIS, Care Gaps) for additional shots ────
-    const tabsToTry = ["Stars", "HEDIS", "Care Gaps", "Summary"];
-    for (const tabLabel of tabsToTry) {
-      const tab = page.getByRole("tab", { name: new RegExp(tabLabel, "i") }).first();
-      const cnt = await tab.count();
-      if (cnt > 0) {
-        try {
-          await tab.click({ timeout: 5000 });
-          await page.waitForTimeout(1500);
-          await page.screenshot({
-            path: path.join(SHOT_DIR, `03-tab-${tabLabel.toLowerCase().replace(/\s+/g, "-")}.png`),
-            fullPage: false,
-          });
-          console.log(`[STEP 4] tab "${tabLabel}" captured`);
-        } catch (e) {
-          console.log(`[STEP 4] tab "${tabLabel}" click failed:`, (e as Error).message);
-        }
+    // ── Tab screenshots ────
+    for (const tabLabel of ["HEDIS Measures", "STARS Estimate", "Care Gaps"]) {
+      const tab = page.getByRole("button", { name: new RegExp(tabLabel, "i") }).first();
+      if (await tab.isVisible().catch(() => false)) {
+        await tab.click();
+        await page.waitForTimeout(1500);
+        await page.screenshot({
+          path: path.join(SHOT_DIR, `03-tab-${tabLabel.toLowerCase().replace(/\s+/g, "-")}.png`),
+          fullPage: false,
+        });
+        console.log(`[DESKTOP] tab "${tabLabel}" captured`);
       }
     }
 
-    // ──── Mobile (414x896) ────
-    // Navigate fresh at the new viewport.  Auth init + cold query cache can
-    // take 6-9 s on the first load, so wait for the page header (h1) or the
-    // KPI strip to appear rather than relying on a fixed 5 s sleep.
-    console.log("\n[STEP 5] Mobile viewport …");
-    await page.setViewportSize({ width: 414, height: 896 });
-    await page.goto(`${BASE_URL}/quality`, { waitUntil: "domcontentloaded" });
-    // Wait up to 15 s for the quality page header or KPI content to appear.
-    try {
-      await page.waitForFunction(
-        () =>
-          document.body.innerText.includes("Total Measures") ||
-          document.body.innerText.includes("STARS Estimate") ||
-          document.body.innerText.includes("Quality Measures"),
-        { timeout: 15_000 }
-      );
-      console.log("[STEP 5] content appeared");
-    } catch {
-      console.log("[STEP 5] content did not appear within 15 s — capturing anyway");
-    }
-    await page.waitForTimeout(800); // settle animations
-    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(SHOT_DIR, "04-mobile-top.png"), fullPage: false });
-    await page.screenshot({ path: path.join(SHOT_DIR, "05-mobile-fullpage.png"), fullPage: true });
-
-    // overflow check: docElement.scrollWidth vs window.innerWidth
-    const overflow = await page.evaluate(() => ({
-      docW: document.documentElement.scrollWidth,
-      winW: window.innerWidth,
-    }));
-    console.log("[STEP 5] mobile docW:", overflow.docW, "winW:", overflow.winW,
-      "overflow:", overflow.docW > overflow.winW ? "YES (" + (overflow.docW - overflow.winW) + "px)" : "no");
-
-    // ──── API ground-truth ────
-    console.log("\n[STEP 6] API checks …");
+    // ── API ground-truth ────
+    console.log("\n[DESKTOP] API checks …");
     for (const url of [
       `${API_URL}/api/quality/summary`,
       `${API_URL}/api/quality/measures`,
-      `${API_URL}/api/quality/stars`,
-      `${API_URL}/api/quality/care-gaps`,
+      `${API_URL}/api/quality/stars-estimate`,
+      `${API_URL}/api/quality/gaps`,
     ]) {
       try {
         const r = await request.get(url);
-        console.log(`[STEP 6] GET ${url} → ${r.status()}`);
+        console.log(`  GET ${url} → ${r.status()}`);
       } catch (e) {
-        console.log(`[STEP 6] GET ${url} → error: ${(e as Error).message}`);
+        console.log(`  GET ${url} → error: ${(e as Error).message}`);
       }
     }
 
-    // ──── Summary ────
-    console.log("\n========= /quality VERIFY SUMMARY =========");
-    console.log(`URL:                ${page.url()}`);
-    console.log(`H1:                 ${h1Text?.trim() ?? "(none)"}`);
-    console.log(`Console errors:     ${consoleErrors.length}`);
-    console.log(`Page JS errors:     ${pageErrors.length}`);
-    console.log(`Network failures:   ${networkFailures.length}`);
-    console.log(`Mobile overflow:    ${overflow.docW > overflow.winW ? "YES" : "NO"}`);
-    console.log(`Shots dir:          ${SHOT_DIR}`);
-    if (consoleErrors.length > 0) {
-      console.log("-- console errors (first 8) --");
-      consoleErrors.slice(0, 8).forEach((e, i) => console.log(`  [CE ${i}] ${e.slice(0, 180)}`));
-    }
-    if (pageErrors.length > 0) {
-      console.log("-- page JS errors --");
-      pageErrors.slice(0, 8).forEach((e, i) => console.log(`  [PE ${i}] ${e.slice(0, 180)}`));
-    }
-    if (networkFailures.length > 0) {
-      console.log("-- network failures --");
-      networkFailures.slice(0, 8).forEach((e, i) => console.log(`  [NF ${i}] ${e.slice(0, 180)}`));
-    }
+    // ── Summary ────
+    console.log("\n========= /quality DESKTOP SUMMARY =========");
+    console.log("URL:", page.url());
+    console.log("H1:", h1Text?.trim() ?? "(none)");
+    console.log("KPI 'Total Measures' visible:", kpiVisible);
+    console.log("Distribution chart visible:", distVisible);
+    console.log("Console errors:", consoleErrors.length);
+    console.log("Network failures:", networkFailures.length);
+    if (networkFailures.length > 0) networkFailures.slice(0, 5).forEach((e, i) => console.log(`  [NF ${i}] ${e.slice(0, 200)}`));
     console.log("===========================================\n");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MOBILE TEST — Fresh BrowserContext at 414×896 set BEFORE any navigation
+// This prevents the re-navigation race that caused 401s in iter5.
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe("/quality mobile fresh-context verification", () => {
+  test("mobile 414x896 fresh context — KPIs visible", async () => {
+    ensureDir(SHOT_DIR);
+
+    // Launch a new browser with 414×896 viewport before any navigation
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      viewport: { width: 414, height: 896 },
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      // No stored auth state — always login fresh
+    });
+
+    const page = await context.newPage();
+
+    const mobileConsoleErrors: string[] = [];
+    const mobileNetworkFailures: string[] = [];
+
+    page.on("pageerror", (err) => console.error("[MOBILE PAGE ERROR]", err.message));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        mobileConsoleErrors.push(msg.text());
+        console.error("[MOBILE CONSOLE ERROR]", msg.text().slice(0, 200));
+      }
+    });
+    page.on("requestfailed", (req) => {
+      const msg = `${req.method()} ${req.url()} — ${req.failure()?.errorText ?? "unknown"}`;
+      mobileNetworkFailures.push(msg);
+      console.error("[MOBILE NETWORK FAIL]", msg);
+    });
+    page.on("response", (resp) => {
+      if (resp.status() >= 400) {
+        const msg = `${resp.status()} ${resp.request().method()} ${resp.url()}`;
+        if (!resp.url().includes("/api/auth/")) {
+          // Log non-auth 4xx/5xx responses
+          mobileNetworkFailures.push(msg);
+        }
+        console.log("[MOBILE HTTP]", msg);
+      }
+    });
+
+    try {
+      // ── Navigate to login (414x896 viewport already set) ────
+      console.log("\n[MOBILE] Fresh context 414x896 — navigating to login …");
+      await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+      await loginViaUI(page);
+      console.log("[MOBILE] Logged in, URL:", page.url());
+
+      // ── Navigate to /quality ────
+      await page.goto(`${BASE_URL}/quality`, { waitUntil: "domcontentloaded" });
+      console.log("[MOBILE] At /quality, waiting for KPI sentinel …");
+
+      // ── Wait for KPI sentinel — NOT "Quality Measures" which is in the h1 ────
+      try {
+        await waitForKpis(page, 20_000);
+        console.log("[MOBILE] KPI sentinel matched — data resolved");
+      } catch {
+        console.log("[MOBILE] KPI sentinel timed out — capturing anyway");
+      }
+
+      await page.waitForTimeout(800); // settle animations
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      await page.waitForTimeout(400);
+
+      // ── Screenshots ────
+      await page.screenshot({ path: path.join(SHOT_DIR, "04-mobile-top.png"), fullPage: false });
+      await page.screenshot({ path: path.join(SHOT_DIR, "05-mobile-fullpage.png"), fullPage: true });
+      console.log("[MOBILE] screenshots captured");
+
+      // ── Overflow check ────
+      const overflow = await page.evaluate(() => ({
+        docW: document.documentElement.scrollWidth,
+        winW: window.innerWidth,
+      }));
+      const hasOverflow = overflow.docW > overflow.winW;
+      console.log(
+        "[MOBILE] docW:", overflow.docW, "winW:", overflow.winW,
+        "overflow:", hasOverflow ? `YES (+${overflow.docW - overflow.winW}px)` : "none"
+      );
+
+      // ── KPI visibility ────
+      const kpiVisible = await page.getByText(KPI_SENTINEL, { exact: false }).isVisible().catch(() => false);
+      const distVisible = await page.getByText("Compliance Rate Distribution", { exact: false }).isVisible().catch(() => false);
+      const aboveVisible = await page.getByText("Above Benchmark", { exact: false }).isVisible().catch(() => false);
+      const compositeVisible = await page.getByText("Composite Score", { exact: false }).isVisible().catch(() => false);
+      const starsVisible = await page.getByText("STARS Estimate", { exact: false }).isVisible().catch(() => false);
+
+      // ── Summary ────
+      console.log("\n========= /quality MOBILE SUMMARY =========");
+      console.log("Viewport: 414x896 (fresh context, login before navigate)");
+      console.log("URL:", page.url());
+      console.log("KPI 'Total Measures' visible:", kpiVisible);
+      console.log("KPI 'Above Benchmark' visible:", aboveVisible);
+      console.log("KPI 'Composite Score' visible:", compositeVisible);
+      console.log("KPI 'STARS Estimate' visible:", starsVisible);
+      console.log("Distribution chart visible:", distVisible);
+      console.log("Horizontal overflow:", hasOverflow ? `YES (+${overflow.docW - overflow.winW}px)` : "none");
+      console.log("Mobile console errors:", mobileConsoleErrors.length);
+      console.log("Mobile network failures:", mobileNetworkFailures.length);
+      if (mobileNetworkFailures.length > 0) mobileNetworkFailures.slice(0, 5).forEach((e, i) => console.log(`  [NF ${i}] ${e.slice(0, 200)}`));
+      console.log("===========================================\n");
+
+      // Assert KPIs are visible — this is the core product verification
+      expect(kpiVisible, "Total Measures KPI must be visible on mobile").toBe(true);
+
+    } finally {
+      await browser.close();
+    }
   });
 });
