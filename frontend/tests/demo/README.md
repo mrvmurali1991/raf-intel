@@ -17,21 +17,37 @@ docs/DEMO_PRESENTER_GUIDE.md         what to say while the script runs
 ## Quickstart
 
 ```bash
-# 1. Make sure the local stack is up and seeded — see ../../../docs/DEMO_PRESENTER_GUIDE.md
+# 1. Bring up the stack
 docker compose -f ../../../docker-compose.local.yml up -d
+
+# 2. Apply schema + KG seeds + IRR labels
+docker cp ../../../database/migrations raf-backend:/tmp/migrations
 docker exec -e MIGRATIONS_DIR=/tmp/migrations raf-backend python /app/scripts/apply_migrations.py
 docker exec raf-backend sh /app/scripts/run_all_seeds.sh
 docker exec raf-backend python /app/scripts/seed_irr_demo.py
 
-# 2. CRITICAL — connect demo EMR so /worklist has patients to show
-#    Either click "Connect Demo EMR" on http://localhost:3444/emr-config
-#    or POST /api/emr/demo-connect
+# 3. CRITICAL — seed the demo panel (12 patients + 36 gaps + 33 suspects)
+#    Without this the storyboard shows the onboarding flow on every scene.
+docker cp ../../scripts/seed_demo_panel.py raf-backend:/app/scripts/seed_demo_panel.py
+docker exec raf-backend python /app/scripts/seed_demo_panel.py
 
-# 3. Run the demo
+# 4. Verify dashboard counts are non-zero
+curl -sS -X POST http://localhost:8500/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@raf.health","password":"Admin@123"}' \
+  | python3 -c "import json,sys,urllib.request; t=json.load(sys.stdin)['access_token']; \
+                req=urllib.request.Request('http://localhost:8500/api/dashboard/stats', \
+                headers={'Authorization': f'Bearer {t}'}); \
+                d=json.loads(urllib.request.urlopen(req).read()); \
+                print('patients:', d.get('total_patients'), \
+                      'gaps:', d.get('open_recapture_gaps'), \
+                      'suspects:', d.get('total_suspects_open'))"
+
+# 5. Run the demo
 cd frontend
 DEMO_PASSWORD='Admin@123' npx playwright test --config=playwright.demo.config.ts
 
-# 4. Storyboard is at frontend/playwright-report/demo-shots/
+# 6. Storyboard is at frontend/playwright-report/demo-shots/
 ls playwright-report/demo-shots/
 ```
 

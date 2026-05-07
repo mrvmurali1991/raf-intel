@@ -213,6 +213,9 @@ test("RAF Intelligence — full sales demo flow", async ({ page, request }) => {
       "Scene 5",
       "PAIN: Most plans discover in November they're behind on recapture and panic-spam providers.  Year-end cliff = $5M of unrecaptured RAF.",
     );
+    // Force a hard reload — Next.js client-router was retaining the
+    // dashboard view from a previous scene's redirect chain.
+    await page.goto("about:blank");
     await page.goto(`${BASE_URL}/recapture`);
     await waitForFirst(page, ["Recapture", "Total Gaps"]);
 
@@ -252,6 +255,9 @@ test("RAF Intelligence — full sales demo flow", async ({ page, request }) => {
       "Scene 6",
       "PAIN: Your CFO wants one number for the board: 'how much MA revenue do we have at risk this cycle?' — and the answer takes 3 weeks to assemble.",
     );
+    // Force a hard reload — Next.js client-router was retaining the
+    // dashboard view from a previous scene's redirect chain.
+    await page.goto("about:blank");
     await page.goto(`${BASE_URL}/recapture`);
     await waitForFirst(page, ["Recapture", "Total Gaps"]);
 
