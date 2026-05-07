@@ -1907,6 +1907,10 @@ export async function generateAudit(
 /** @alias generateAudit — kept for callers using the old name */
 export const generateAuditPackage = generateAudit;
 
+export function getAuditDownloadUrl(packageId: string | number): string {
+  return `${API_BASE}/api/audit/download/${packageId}`;
+}
+
 /**
  * Download a RADV (Risk Adjustment Data Validation) audit packet PDF.
  *
