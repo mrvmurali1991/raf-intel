@@ -334,9 +334,9 @@ function RadarChart({ scores }: { scores: Record<string, number> }) {
   const labels = Object.keys(scores);
   const values = Object.values(scores);
   const n = labels.length;
-  const cx = 120;
-  const cy = 120;
-  const r = 90;
+  const cx = 130;
+  const cy = 130;
+  const r = 80;
 
   function point(i: number, pct: number) {
     const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
@@ -352,7 +352,7 @@ function RadarChart({ scores }: { scores: Record<string, number> }) {
   const polygonPoints = dataPoints.map((p) => `${p.x},${p.y}`).join(" ");
 
   return (
-    <svg width={240} height={240} viewBox="0 0 240 240">
+    <svg width={260} height={260} viewBox="0 0 260 260" style={{ overflow: "visible" }}>
       {/* Grid circles */}
       {gridLevels.map((lvl) => {
         const pts = labels.map((_, i) => point(i, lvl));
@@ -1729,6 +1729,12 @@ export default function ProvidersPage() {
         @media (min-width: 640px) {
           .providers-page-wrap { padding: 32px 40px !important; }
         }
+        /* Bug 2: drilldown inline row — no phantom height when collapsed */
+        .provider-detail-td { height: auto !important; min-height: 0 !important; }
+        /* Bug 1 radar: contain labels inside chart area on mobile */
+        @media (max-width: 768px) {
+          .provider-radar-wrap { overflow: visible; width: 100%; display: flex; justify-content: center; }
+        }
       `}</style>
 
       {/* ── Page Header ───────────────────────────────────────────────────── */}
@@ -1893,7 +1899,8 @@ export default function ProvidersPage() {
         style={{
           background: C.card,
           borderRadius: 16,
-          overflow: "hidden",
+          /* overflow:hidden clips border-radius; use clip so inline scroll still works on mobile */
+          overflow: "clip",
           animation: "fadeInUp 0.5s ease-out both",
           animationDelay: "300ms",
         }}
@@ -2428,10 +2435,12 @@ export default function ProvidersPage() {
                         <tr>
                           <td
                             colSpan={10}
+                            className="provider-detail-td"
                             style={{
                               padding: "0 16px 20px",
                               borderBottom: `1px solid ${C.border}`,
                               background: C.bg,
+                              height: "auto",
                             }}
                           >
                             <ProviderDetailPanel

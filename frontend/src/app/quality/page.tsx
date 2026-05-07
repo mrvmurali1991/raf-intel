@@ -1092,7 +1092,7 @@ export default function QualityPage() {
   }
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "36px 44px" }} className="rci-page-pad-desktop">
+    <div style={{ background: C.bg, minHeight: "100vh", padding: "36px 44px", overflowX: "hidden" }} className="rci-page-pad-desktop">
       <style>{`
         @keyframes qs-spin { to { transform: rotate(360deg) } }
         @keyframes qs-fadeInUp {
@@ -1231,7 +1231,9 @@ export default function QualityPage() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div className="qs-fade-in qs-fade-in-2" style={{ display: "flex", gap: 0, borderBottom: `2px solid ${C.borderLight}`, marginBottom: 24 }}>
+      {/* overflow-x: auto lets the strip scroll horizontally on narrow viewports */}
+      <div className="qs-fade-in qs-fade-in-2" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderBottom: `2px solid ${C.borderLight}`, marginBottom: 24 } as React.CSSProperties}>
+        <div style={{ display: "flex", gap: 0, minWidth: "max-content" }}>
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -1249,11 +1251,13 @@ export default function QualityPage() {
               marginBottom: -2,
               cursor: "pointer",
               letterSpacing: "0.01em",
+              whiteSpace: "nowrap",
             }}
           >
             {tab}
           </button>
         ))}
+        </div>
       </div>
 
       {/* ── Active Tab Content ── */}

@@ -573,7 +573,7 @@ export function AdminDashboard() {
   return (
     <ErrorBoundary fallbackTitle="Dashboard failed to load">
     <TooltipProvider delay={200}>
-    <div style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px" }}>
+    <div style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
       <DataQualityBanner />
       <style>{`
         @keyframes shimmer {
@@ -610,6 +610,11 @@ export function AdminDashboard() {
           .row-60-40 { grid-template-columns: 1fr !important; }
           .row-55-45 { grid-template-columns: 1fr !important; }
           .row-50-50 { grid-template-columns: 1fr !important; }
+          /* Bug 3: H1 must clear the fixed hamburger button.
+             Hamburger: fixed left-4(16px) + w-11(44px) + 4px gap = 64px from left.
+             main p-5 gives 20px + AdminDashboard 40px = 60px already.
+             Add 8px more to the H1 container to guarantee clearance. */
+          .admin-dash-header { padding-left: 8px !important; }
         }
         @media (max-width: 640px) {
           .kpi-strip { grid-template-columns: 1fr !important; }
@@ -617,7 +622,7 @@ export function AdminDashboard() {
       `}</style>
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 16 }}>
+      <div className="admin-dash-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
             Population Health Intelligence
@@ -1296,7 +1301,9 @@ export function AdminDashboard() {
                 <div>Run clinical analysis to identify revenue gaps.</div>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              /* overflow-x: auto so fixed-width columns scroll on mobile rather than overflow the page */
+              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 360 }}>
                 {/* Table header */}
                 <div style={{ display: "flex", alignItems: "center", padding: "0 8px 10px", borderBottom: "1px solid #E5E7EB" }}>
                   <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient</span>
@@ -1392,6 +1399,7 @@ export function AdminDashboard() {
                     </Link>
                   );
                 })}
+              </div>
               </div>
             )}
           </div>
