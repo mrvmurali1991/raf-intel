@@ -9,6 +9,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getHccExplanation } from "@/lib/api";
+import { tokens } from "@/styles/tokens";
 
 interface HccExplainCardProps {
   hccCode: string;
@@ -17,46 +18,35 @@ interface HccExplainCardProps {
   style?: CSSProperties;
 }
 
-interface HccExplainShape {
-  hcc_code?: string;
+/**
+ * Matches the live API response from kg_lookup_service.explain_hcc:
+ * {
+ *   hcc: string,
+ *   definition: { label?: string; model?: string },
+ *   icd10_codes: string[],
+ *   common_drugs: string[],
+ *   common_labs: string[],
+ *   common_comorbidities: string[],
+ *   citations: string[],
+ * }
+ */
+interface HccApiDefinition {
   label?: string;
-  name?: string;
-  description?: string;
-  definition?: string;
-  top_icd10s?: Array<string | { code: string; description?: string }>;
-  common_drugs?: Array<string | { name?: string; atc?: string }>;
-  common_labs?: Array<string | { code?: string; name?: string }>;
-  comorbid_hccs?: Array<string | { hcc_code?: string; label?: string }>;
-  citations?: Array<string | { text?: string; href?: string }>;
+  model?: string;
+}
+
+interface HccExplainShape {
+  hcc?: string;
+  definition?: HccApiDefinition;
+  icd10_codes?: string[];
+  common_drugs?: string[];
+  common_labs?: string[];
+  common_comorbidities?: string[];
+  citations?: string[];
 }
 
 function isHccExplainShape(x: unknown): x is HccExplainShape {
   return typeof x === "object" && x !== null;
-}
-
-function asString(item: string | { [k: string]: unknown }, ...keys: string[]): string {
-  if (typeof item === "string") return item;
-  for (const k of keys) {
-    const v = item?.[k];
-    if (typeof v === "string" && v) return v;
-  }
-  return "";
-}
-
-function asListString(
-  list: HccExplainShape["top_icd10s" | "common_drugs" | "common_labs" | "comorbid_hccs"] | undefined,
-  ...keys: string[]
-): string[] {
-  if (!Array.isArray(list)) return [];
-  return list
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (typeof item === "object" && item !== null) {
-        return asString(item as { [k: string]: unknown }, ...keys);
-      }
-      return "";
-    })
-    .filter(Boolean);
 }
 
 const SECTION_TITLE: CSSProperties = {
@@ -64,7 +54,7 @@ const SECTION_TITLE: CSSProperties = {
   fontWeight: 700,
   letterSpacing: 0.6,
   textTransform: "uppercase",
-  color: "#64748B",
+  color: tokens.slate500,
   marginTop: 12,
   marginBottom: 4,
 };
@@ -96,24 +86,26 @@ export function HccExplainCard({ hccCode, mode = "card", style }: HccExplainCard
   }
 
   const data = query.data;
-  const label = data.label ?? data.name ?? "";
-  const description = data.description ?? data.definition ?? "";
-  const icds = asListString(data.top_icd10s, "code", "icd10");
-  const drugs = asListString(data.common_drugs, "name", "atc");
-  const labs = asListString(data.common_labs, "name", "code");
-  const comorbid = asListString(data.comorbid_hccs, "hcc_code", "label");
-  const citations = (data.citations ?? []).map((c) => {
-    if (typeof c === "string") return { text: c, href: undefined as string | undefined };
-    if (typeof c === "object" && c !== null) {
-      const obj = c as { text?: string; href?: string };
-      return { text: obj.text ?? "", href: obj.href };
-    }
-    return { text: "", href: undefined };
-  });
+
+  // Map the real API field names → display values
+  const displayCode = data.hcc ?? hccCode;
+  const label = data.definition?.label ?? "";
+  const modelLabel = data.definition?.model ?? "";
+  const icds = Array.isArray(data.icd10_codes) ? data.icd10_codes.filter(Boolean) : [];
+  const drugs = Array.isArray(data.common_drugs) ? data.common_drugs.filter(Boolean) : [];
+  const labs = Array.isArray(data.common_labs) ? data.common_labs.filter(Boolean) : [];
+  const comorbid = Array.isArray(data.common_comorbidities)
+    ? data.common_comorbidities.filter(Boolean)
+    : [];
+  const citations = Array.isArray(data.citations) ? data.citations.filter(Boolean) : [];
+
+  const hasContent =
+    label || icds.length > 0 || drugs.length > 0 || labs.length > 0 ||
+    comorbid.length > 0 || citations.length > 0;
 
   return (
     <CardShell mode={mode} style={style}>
-      <div style={{ fontSize: 11, color: "#64748B", letterSpacing: 0.5, fontWeight: 600 }}>
+      <div style={{ fontSize: 11, color: tokens.slate500, letterSpacing: 0.5, fontWeight: 600 }}>
         WHAT IS THIS?
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
@@ -122,39 +114,48 @@ export function HccExplainCard({ hccCode, mode = "card", style }: HccExplainCard
             fontSize: 14,
             fontWeight: 700,
             fontFamily: "monospace",
-            background: "#FEE2E2",
-            color: "#B91C1C",
+            background: tokens.dangerSoft,
+            color: tokens.danger,
             padding: "2px 6px",
             borderRadius: 4,
           }}
         >
-          HCC {data.hcc_code ?? hccCode}
+          HCC {displayCode}
         </span>
-        {label ? <span style={{ fontSize: 13, color: "#0F172A", fontWeight: 600 }}>{label}</span> : null}
+        {label ? (
+          <span style={{ fontSize: 13, color: tokens.slate900, fontWeight: 600 }}>{label}</span>
+        ) : null}
       </div>
-      {description ? (
-        <p style={{ fontSize: 12, color: "#475569", margin: "8px 0 0", lineHeight: 1.5 }}>
-          {description}
+
+      {modelLabel ? (
+        <div style={{ marginTop: 4, fontSize: 10, color: tokens.slate400, fontStyle: "italic" }}>
+          {modelLabel}
+        </div>
+      ) : null}
+
+      {!hasContent ? (
+        <p style={{ fontSize: 12, color: tokens.slate500, margin: "8px 0 0", lineHeight: 1.5 }}>
+          No additional detail available for HCC {displayCode}.
         </p>
       ) : null}
 
       {icds.length > 0 ? (
         <>
-          <div style={SECTION_TITLE}>Top ICD-10s</div>
+          <div style={SECTION_TITLE}>Top ICD-10 Codes</div>
           <ChipRow items={icds} tone="purple" />
         </>
       ) : null}
 
       {drugs.length > 0 ? (
         <>
-          <div style={SECTION_TITLE}>Common drugs</div>
+          <div style={SECTION_TITLE}>Common Drugs</div>
           <ChipRow items={drugs} tone="green" />
         </>
       ) : null}
 
       {labs.length > 0 ? (
         <>
-          <div style={SECTION_TITLE}>Common labs</div>
+          <div style={SECTION_TITLE}>Common Labs</div>
           <ChipRow items={labs} tone="orange" />
         </>
       ) : null}
@@ -162,7 +163,10 @@ export function HccExplainCard({ hccCode, mode = "card", style }: HccExplainCard
       {comorbid.length > 0 ? (
         <>
           <div style={SECTION_TITLE}>Comorbid HCCs</div>
-          <ChipRow items={comorbid.map((h) => (h.startsWith("HCC") ? h : `HCC ${h}`))} tone="red" />
+          <ChipRow
+            items={comorbid.map((h) => (h.startsWith("HCC") ? h : `HCC ${h}`))}
+            tone="red"
+          />
         </>
       ) : null}
 
@@ -175,27 +179,14 @@ export function HccExplainCard({ hccCode, mode = "card", style }: HccExplainCard
               padding: 0,
               listStyle: "none",
               fontSize: 11,
-              color: "#475569",
+              color: tokens.slate600,
               display: "flex",
               flexDirection: "column",
               gap: 3,
             }}
           >
             {citations.map((c, i) => (
-              <li key={i}>
-                {c.href ? (
-                  <a
-                    href={c.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#2563EB", textDecoration: "underline" }}
-                  >
-                    {c.text || c.href}
-                  </a>
-                ) : (
-                  c.text
-                )}
-              </li>
+              <li key={`citation-${i}`}>{c}</li>
             ))}
           </ul>
         </>
@@ -217,8 +208,8 @@ function CardShell({
     <div
       data-testid="hcc-explain-card"
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E2E8F0",
+        background: tokens.white,
+        border: `1px solid ${tokens.slate200}`,
         borderRadius: 10,
         padding: 14,
         boxShadow: mode === "popover" ? "0 8px 24px rgba(15, 23, 42, 0.12)" : undefined,
@@ -232,10 +223,10 @@ function CardShell({
 }
 
 const TONE_PALETTE: Record<string, { bg: string; fg: string; border: string }> = {
-  purple: { bg: "#EDE9FE", fg: "#6D28D9", border: "#DDD6FE" },
-  green: { bg: "#D1FAE5", fg: "#047857", border: "#A7F3D0" },
-  orange: { bg: "#FFEDD5", fg: "#C2410C", border: "#FED7AA" },
-  red: { bg: "#FEE2E2", fg: "#B91C1C", border: "#FECACA" },
+  purple: { bg: tokens.violetBg, fg: tokens.violetText, border: tokens.violetBorder },
+  green:  { bg: tokens.emerald100, fg: tokens.successDark, border: tokens.emerald300 },
+  orange: { bg: tokens.orangeBg, fg: tokens.orangeText, border: tokens.orangeBorder },
+  red:    { bg: tokens.dangerSoft, fg: tokens.danger, border: tokens.dangerBorder },
 };
 
 function ChipRow({ items, tone }: { items: string[]; tone: keyof typeof TONE_PALETTE }) {
@@ -310,9 +301,9 @@ export function HccChipWithPopover({ hccCode, children, style }: HccChipWithPopo
             fontWeight: 700,
             padding: "2px 6px",
             borderRadius: 4,
-            background: "#FEE2E2",
-            color: "#B91C1C",
-            border: "1px solid #FECACA",
+            background: tokens.dangerSoft,
+            color: tokens.danger,
+            border: `1px solid ${tokens.dangerBorder}`,
             cursor: "help",
           }}
         >
