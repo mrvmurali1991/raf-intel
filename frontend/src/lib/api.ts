@@ -2654,6 +2654,10 @@ export interface AuditReadinessResponse {
     agreement_pct: number | null;
     band: "excellent" | "acceptable" | "needs_review" | null;
     method: string;
+    /** Cohen's kappa coefficient — present when method === "cohens_kappa" */
+    kappa?: number | null;
+    /** Number of dual-coded gaps used to compute kappa */
+    kappa_n?: number | null;
     note: string;
   } | null;
 }
