@@ -185,14 +185,11 @@ def get_provider_worklist(
             cur.execute(
                 """
                 SELECT DISTINCT
-                       p.id       AS patient_id,
-                       COALESCE(NULLIF(p.first_name, ''), epm.first_name) AS first_name,
-                       COALESCE(NULLIF(p.last_name,  ''), epm.last_name)  AS last_name,
+                       p.id         AS patient_id,
+                       p.first_name AS first_name,
+                       p.last_name  AS last_name,
                        p.dob
                 FROM   patients p
-                LEFT JOIN emr_patient_matches epm
-                       ON  epm.patient_id  = p.id
-                       AND epm.tenant_id   = %s
                 WHERE  p.tenant_id  = %s
                   AND  p.is_active  = 1
                   AND  p.id IN (
@@ -201,10 +198,9 @@ def get_provider_worklist(
                        WHERE  ne.tenant_id    = %s
                          AND  ne.provider_npi = %s
                   )
-                ORDER BY COALESCE(NULLIF(p.last_name, ''), epm.last_name),
-                         COALESCE(NULLIF(p.first_name, ''), epm.first_name)
+                ORDER BY p.last_name, p.first_name
                 """,
-                (tenant_id, tenant_id, tenant_id, npi_filter),
+                (tenant_id, tenant_id, npi_filter),
             )
             patients = cur.fetchall()
     except Exception as exc:
