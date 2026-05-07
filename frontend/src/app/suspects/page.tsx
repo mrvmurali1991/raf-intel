@@ -659,7 +659,7 @@ export default function SuspectsPage() {
             <input
               type="text"
               title="Search by patient, ICD, HCC, or rationale"
-              placeholder="Search suspects\u2026"
+              placeholder="Search suspects…"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
               onKeyDown={(e) => e.stopPropagation()}
@@ -860,7 +860,8 @@ export default function SuspectsPage() {
               return (
                 <button
                   key={value}
-                  onClick={() => handleStatusChange(value)}
+                  onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
+                  onKeyDown={(e) => e.stopPropagation()}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -923,7 +924,8 @@ export default function SuspectsPage() {
               return (
                 <button
                   key={value}
-                  onClick={() => { setEvidenceFilter(value); setPage(0); }}
+                  onClick={(e) => { e.stopPropagation(); setEvidenceFilter(value); setPage(0); }}
+                  onKeyDown={(e) => e.stopPropagation()}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -966,7 +968,8 @@ export default function SuspectsPage() {
               return (
                 <button
                   key={value}
-                  onClick={() => { setConfidenceBand(value); setPage(0); }}
+                  onClick={(e) => { e.stopPropagation(); setConfidenceBand(value); setPage(0); }}
+                  onKeyDown={(e) => e.stopPropagation()}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",

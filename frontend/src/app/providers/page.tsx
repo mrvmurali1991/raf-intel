@@ -1252,7 +1252,7 @@ function ProviderDetailPanel({
             background: C.card,
           }}
         >
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div className="provider-radar-wrap" style={{ textAlign: "center", marginBottom: 20 }}>
             <RadarChart scores={radarScores} />
           </div>
           {/* Score pills */}
@@ -1731,9 +1731,10 @@ export default function ProvidersPage() {
         }
         /* Bug 2: drilldown inline row — no phantom height when collapsed */
         .provider-detail-td { height: auto !important; min-height: 0 !important; }
-        /* Bug 1 radar: contain labels inside chart area on mobile */
+        /* Bug 1 radar: cap height and clip overflow on mobile to kill phantom gap */
         @media (max-width: 768px) {
-          .provider-radar-wrap { overflow: visible; width: 100%; display: flex; justify-content: center; }
+          .provider-radar-wrap { overflow: hidden; width: 100%; display: flex; justify-content: center; max-height: 280px; }
+          .provider-detail-td { padding-bottom: 12px !important; }
         }
       `}</style>
 
