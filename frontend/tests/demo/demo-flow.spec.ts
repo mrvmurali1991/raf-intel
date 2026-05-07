@@ -1,39 +1,30 @@
 /**
- * RAF Intelligence — sales / investor demo flow (v2).
+ * RAF Intelligence — sales demo flow (final).
  *
- * 7 narrative scenes, ~5–7 minutes at conversational pace.  Each scene:
- *   - prints a one-line talking point to the terminal so the presenter
- *     can read along
- *   - waits for the actual content the value-prop depends on (no
- *     ``waitForLoadState`` — React Query keeps the network busy so
- *     ``networkidle`` never fires reliably)
- *   - takes TWO screenshots: an unannotated full-page shot for the
- *     deck, and an annotated shot with a red highlight box around the
- *     specific tile / chip / banner the scene argues from
- *   - uses ``softAssertVisible`` to flag when a value-prop element is
- *     missing without aborting the run (so we always produce a
- *     storyboard for the presenter to review)
+ * 7 narrative scenes inside ONE test, sharing a single browser context
+ * and page across the entire flow.  This eliminates the
+ * storageState-cookie-handoff problem that plagued v1/v2 — the scenes
+ * are just a guided tour of the same authenticated session.
  *
- * Run examples
- * ------------
- *   # Headed live demo (1.5s pause between scenes)
- *   cd frontend && DEMO_PASSWORD='Admin@123' \
- *     npx playwright test --config=playwright.demo.config.ts --headed
+ * Pre-flight is part of the test:
+ *   1. UI login (using the "Demo Login — Fill Credentials" button)
+ *   2. POST /api/emr/demo-connect to populate the panel
+ *   3. Walk the 7 scenes
  *
- *   # Slow-mo for live screen-share (3s dwell)
- *   DEMO_PAUSE_MS=3000 PWDEBUG_SLOWMO=400 \
- *     npx playwright test --config=playwright.demo.config.ts --headed
- *
- *   # Headless + recorded video
- *   DEMO_VIDEO=1 \
- *     npx playwright test --config=playwright.demo.config.ts
- *
- *   # Run a single scene (e.g. just rehearse Scene 4)
- *   npx playwright test --config=playwright.demo.config.ts -g "Scene 4"
+ * The narration follows the PM-grade structure:
+ *   "PAIN → MOMENT → PROOF → SO WHAT"
+ * Every scene leads with the buyer's pain, lands the moment that
+ * solves it, points at the visible proof, and closes with what it
+ * means for revenue / audit defense / clinician time.
  */
-import { test } from "@playwright/test";
+import { test, type Page, type APIRequestContext } from "@playwright/test";
 import {
-  authResolved,
+  API_URL,
+  BASE_URL,
+  EMAIL,
+  PASSWORD,
+  SHOT_DIR,
+  ensureDir,
   narrate,
   status,
   shot,
@@ -42,103 +33,79 @@ import {
   softAssertVisible,
   probeDataReadiness,
   logReadiness,
-  ensureDir,
-  SHOT_DIR,
-  BASE_URL,
 } from "./demo-helpers";
 
+// One test, run start-to-finish, 6–7 minutes at conversational pace.
 test.describe.configure({ mode: "serial" });
 
-test.describe("RAF Intelligence — sales demo flow", () => {
-  // Auth setup runs in ./global-setup.ts — see that file for why we
-  // can't just login per-scene (rate-limit + access-token-in-memory).
-  // beforeAll here is just a data-readiness banner; the storageState
-  // is already in place when each scene's `page` fixture spawns.
-  test.beforeAll(async ({ browser }) => {
-    ensureDir(SHOT_DIR);
-    const ctx = await browser.newContext({ storageState: undefined });
-    const page = await ctx.newPage();
+test("RAF Intelligence — full sales demo flow", async ({ page, request }) => {
+  ensureDir(SHOT_DIR);
+  test.setTimeout(420_000); // 7 min hard cap
+
+  // -----------------------------------------------------------------------
+  // PRE-FLIGHT  ::  UI login + connect demo EMR + readiness probe
+  // -----------------------------------------------------------------------
+
+  await test.step("Pre-flight: log in and connect demo EMR", async () => {
+    await loginViaUiResilient(page);
+    await connectDemoEmr(request, page);
     const readiness = await probeDataReadiness(page);
     logReadiness(readiness);
-    await ctx.close();
-    if (
-      !readiness.emr_connected ||
-      (readiness.patients_total === 0 &&
-        readiness.open_recapture_gaps === 0)
-    ) {
-      // eslint-disable-next-line no-console
-      console.log(
-        "\n  ⚠  Demo data is sparse.  The screenshots will capture\n" +
-          "     onboarding / empty states for sparse-data scenes.  This\n" +
-          "     is the correct UX behaviour — but for a deck-ready\n" +
-          "     storyboard you want EMR connected + patient panel\n" +
-          "     loaded.  Connect Demo EMR via /emr-config, then\n" +
-          "     re-run this command.\n",
-      );
-    }
-    // eslint-disable-next-line no-console
-    console.log(`\n  Demo shots: ${SHOT_DIR}`);
-    console.log(`  Target:     ${BASE_URL}\n`);
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 1 — Monday morning: Today's worklist", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 1  ::  "Monday morning"  →  /worklist
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 1 — Today's worklist", async () => {
     narrate(
       "Scene 1",
-      "A provider opens the app on Monday morning.  They don't want a generic dashboard — they want to know which patients to see this week and why.",
+      "PAIN: Your providers waste the first 40 minutes of every Monday hunting through patient charts looking for who actually needs to be seen this week.",
     );
-
     await page.goto(`${BASE_URL}/worklist`);
-
-    if (!(await authResolved(page))) {
-      status("auth-context never resolved — capturing what we have");
-    }
-
-    const matched = await waitForFirst(page, [
+    await waitForFirst(page, [
       "Today's worklist",
       "Patients to see",
       "patients prioritized",
       "You're caught up",
-      "AI-Powered Risk Adjustment", // onboarding fallback
     ]);
-    if (matched) {
-      const txt = (await matched.textContent())?.trim() ?? "";
-      status(`landed on: "${txt.slice(0, 60)}"`);
-    } else {
-      status("no expected content — page may be blank");
-    }
 
     narrate(
       "Scene 1",
-      "Today's worklist sorts patients by priority score (open gaps × revenue at risk).  Each card is mobile-friendly so the iPad in an exam room is a first-class device, not an afterthought.",
+      "MOMENT: The single screen they actually want — patients ranked by priority score, every card showing open gaps and revenue at risk.",
     );
 
     await shot(page, "01-worklist", { fullPage: true });
     await annotatedShot(page, "01-worklist", [
       page.getByText(/Patients to see/i),
-      page.getByText(/Open gaps/i),
       page.getByText(/Today's worklist/i),
     ]);
+
+    narrate(
+      "Scene 1",
+      "SO WHAT: 40 minutes of chart hunting → 40 minutes of patient care.  Repeated across 1,200 PCPs in a 50K-member plan, that's 800 provider-hours back per week.",
+    );
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 2 — Why this HCC? KG explainability", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 2  ::  "Why this HCC?"  →  /recapture + KG hover
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 2 — Why this HCC? KG explainability", async () => {
     narrate(
       "Scene 2",
-      "The differentiator vs Navina and Apixio: every suspect HCC has a traceable evidence chain.  Hover any HCC chip to see ICD-10 → SNOMED → HCC mapping with literature citations.",
+      "PAIN: Apixio and Navina hand you a black box.  When the auditor asks 'why did you code HCC 19?', you answer 'because the model said so' — and you lose the appeal.",
     );
-
     await page.goto(`${BASE_URL}/recapture`);
-    await waitForFirst(page, [
-      "Recapture Gaps",
-      "Total Gaps",
-      "Most Common",
-      "No data",
-    ]);
+    await waitForFirst(page, ["Recapture Gaps", "Total Gaps", "Most Common"]);
 
     await shot(page, "02a-recapture-overview", { fullPage: true });
 
-    // Hover a real HCC chip if any are rendered.
+    narrate(
+      "Scene 2",
+      "MOMENT: Every HCC chip is hoverable.  We trace ICD-10 → SNOMED CT → HCC with the exact peer-reviewed citations the rule was derived from.",
+    );
+
     const hccChip = page.getByRole("button", { name: /HCC \d/i }).first();
     if (await hccChip.count()) {
       await hccChip.scrollIntoViewIfNeeded();
@@ -150,22 +117,25 @@ test.describe("RAF Intelligence — sales demo flow", () => {
         page.getByText(/SNOMED|ICD-10|Why this/i),
         hccChip,
       ]);
-      narrate(
-        "Scene 2",
-        "Auditors love this — RADV defense argues from documented evidence, not 'the model said so'.  Citations are the difference between getting paid and getting clawed back.",
-      );
     } else {
-      status("no HCC chips rendered — gaps table is empty");
+      status("no HCC chips rendered — recapture table is empty");
     }
+
+    narrate(
+      "Scene 2",
+      "SO WHAT: When CMS asks for justification, you show citations — not chat-completions.  This is the difference between getting paid and getting clawed back.",
+    );
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 3 — Calibrated confidence", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 3  ::  Calibrated confidence  →  /suspects
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 3 — Calibrated confidence", async () => {
     narrate(
       "Scene 3",
-      "Every confidence number is Platt-calibrated.  Raw ECE was 0.22 — when the model said 78%, the real-world rate was closer to 56%.  After Platt scaling, ECE drops to 0.03.  When you see 78% here, it means 78%.",
+      "PAIN: Your coders learn to ignore the model's confidence number because it's miscalibrated — 78% means anywhere from 50% to 95% in practice.",
     );
-
     await page.goto(`${BASE_URL}/suspects`);
     await waitForFirst(page, [
       "Suspect",
@@ -173,6 +143,11 @@ test.describe("RAF Intelligence — sales demo flow", () => {
       "Suspected Condition",
       "No suspects",
     ]);
+
+    narrate(
+      "Scene 3",
+      "MOMENT: We trained Platt scaling on a held-out fixture.  Raw ECE was 0.22 — calibrated ECE is 0.03.  When you see 78% on this page, it actually means 78%.",
+    );
 
     await shot(page, "03-suspects-overview", { fullPage: true });
 
@@ -182,15 +157,22 @@ test.describe("RAF Intelligence — sales demo flow", () => {
       page.getByText(/calibrated/i),
       page.getByText(/Confidence/i).first(),
     ]);
+
+    narrate(
+      "Scene 3",
+      "SO WHAT: Coders trust the score, filter by threshold, hit higher throughput.  No competitor ships calibrated probabilities — they ship raw logits.",
+    );
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 4 — Audit defense (RADV + Cohen's kappa)", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 4  ::  Audit defense  →  /recapture (RADV section)
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 4 — Audit defense (RADV + Cohen's kappa)", async () => {
     narrate(
       "Scene 4",
-      "Dual-coder MEAT audit trail with Cohen's kappa for inter-rater reliability — not naïve proportion-agreement.  One-click PDF export of audit-ready gaps for CMS RADV submission.",
+      "PAIN: A failed RADV audit costs an MA plan $10–50M.  Your current defense is a coder's word against a CMS auditor's.",
     );
-
     await page.goto(`${BASE_URL}/recapture`);
     await waitForFirst(page, ["Recapture", "RADV Audit Defense", "Audit Ready"]);
 
@@ -202,25 +184,35 @@ test.describe("RAF Intelligence — sales demo flow", () => {
       await page.waitForTimeout(600);
     }
 
-    await shot(page, "04-audit-readiness", { fullPage: false });
+    narrate(
+      "Scene 4",
+      "MOMENT: Dual-coder MEAT workflow with Cohen's kappa for inter-rater reliability — not naïve agreement-percentage.  Every gap shows the timestamp, primary coder, secondary coder, and the verbatim chart phrase.",
+    );
 
-    // The IRR tile is the value-prop of this scene.
+    await shot(page, "04-audit-readiness");
     const irrTile = page.getByText(/Inter-rater reliability/i).first();
-    await softAssertVisible(irrTile, "inter-rater reliability tile (kappa)");
+    await softAssertVisible(irrTile, "Cohen's kappa IRR tile");
     await annotatedShot(page, "04-audit-readiness", [
       page.getByText(/Inter-rater reliability/i),
       page.getByText(/Audit Ready/i),
       auditHeader,
     ]);
+
+    narrate(
+      "Scene 4",
+      "SO WHAT: When CMS challenges a code, you export the audit-ready PDF in one click.  Auditor sees evidence, signs off, you keep the revenue.",
+    );
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 5 — Velocity & decay", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 5  ::  Velocity & decay  →  /recapture (KPI strip)
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 5 — Velocity & decay", async () => {
     narrate(
       "Scene 5",
-      "Recapture velocity KPIs + decay curve.  Tells the operations team how fast gaps close month-over-month so they can intervene before the year-end cliff — most teams discover in November they're behind; we surface that gap in February.",
+      "PAIN: Most plans discover in November they're behind on recapture and panic-spam providers.  Year-end cliff = $5M of unrecaptured RAF.",
     );
-
     await page.goto(`${BASE_URL}/recapture`);
     await waitForFirst(page, ["Recapture", "Total Gaps"]);
 
@@ -232,22 +224,34 @@ test.describe("RAF Intelligence — sales demo flow", () => {
       await page.waitForTimeout(600);
     }
 
-    await shot(page, "05-velocity-decay", { fullPage: false });
+    narrate(
+      "Scene 5",
+      "MOMENT: Velocity strip shows YTD recaptured, projected vs budget, and avg days-to-close.  Decay curve below shows the cumulative-closure rate by month.",
+    );
+
+    await shot(page, "05-velocity-decay");
     await softAssertVisible(velocityHeader, "Recapture velocity & decay header");
     await annotatedShot(page, "05-velocity-decay", [
       page.getByText(/Avg Days to Close/i),
       page.getByText(/YE Projected/i),
       velocityHeader,
     ]);
+
+    narrate(
+      "Scene 5",
+      "SO WHAT: You see the gap in February, intervene in May, hit the target in October.  No more November fire-drill.",
+    );
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 6 — CFO executive summary", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 6  ::  CFO summary  →  /recapture (CFO section)
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 6 — CFO executive summary", async () => {
     narrate(
       "Scene 6",
-      "CFO view: quarterly $ projection, top conditions by revenue, top providers, year-over-year.  The amber 'PROJECTED' badge tells the CFO at a glance what's actual vs forecast — the single most-asked question in the finance review.",
+      "PAIN: Your CFO wants one number for the board: 'how much MA revenue do we have at risk this cycle?' — and the answer takes 3 weeks to assemble.",
     );
-
     await page.goto(`${BASE_URL}/recapture`);
     await waitForFirst(page, ["Recapture", "Total Gaps"]);
 
@@ -259,24 +263,36 @@ test.describe("RAF Intelligence — sales demo flow", () => {
       await page.waitForTimeout(600);
     }
 
-    await shot(page, "06-cfo-summary", { fullPage: false });
+    narrate(
+      "Scene 6",
+      "MOMENT: One screen.  Quarterly $ projection, top 5 conditions by revenue contribution, top 5 providers driving lift, year-over-year comparison.  Amber 'PROJECTED' badge so the CFO can never confuse forecast with actual.",
+    );
+
+    await shot(page, "06-cfo-summary");
     await softAssertVisible(cfoHeader, "CFO executive summary header");
     await annotatedShot(page, "06-cfo-summary", [
       page.getByText(/PROJECTED/),
       page.getByText(/Q1|Q2|Q3|Q4/i).first(),
       cfoHeader,
     ]);
+
+    narrate(
+      "Scene 6",
+      "SO WHAT: The CFO stops asking finance for a revenue-at-risk model.  Self-serve.  Updated nightly.",
+    );
   });
 
-  // -------------------------------------------------------------------------
-  test("Scene 7 — Mobile (iPad in the exam room)", async ({ page }) => {
+  // -----------------------------------------------------------------------
+  // SCENE 7  ::  Mobile  →  /worklist on phone + tablet
+  // -----------------------------------------------------------------------
+
+  await test.step("Scene 7 — Mobile (iPad in the exam room)", async () => {
     narrate(
       "Scene 7",
-      "Same worklist, on a phone-sized viewport.  Auto-fit grid collapses to a single column on phone, two on tablet — providers chart at the bedside, not in front of a laptop.  KG popovers and audit defense work identically.",
+      "PAIN: Doctors chart on iPads at the bedside.  If your tool only works on a 27-inch monitor, you've lost the workflow.",
     );
 
-
-    // Phone (iPhone 13 Pro Max) — single column expected.
+    // Phone
     await page.setViewportSize({ width: 414, height: 896 });
     await page.goto(`${BASE_URL}/worklist`);
     await waitForFirst(page, [
@@ -286,7 +302,7 @@ test.describe("RAF Intelligence — sales demo flow", () => {
     ]);
     await shot(page, "07a-worklist-phone", { fullPage: true });
 
-    // Tablet (iPad portrait) — 2-column grid expected.
+    // Tablet
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.reload();
     await waitForFirst(page, [
@@ -296,13 +312,133 @@ test.describe("RAF Intelligence — sales demo flow", () => {
     ]);
     await shot(page, "07b-worklist-tablet", { fullPage: true });
 
-    // Reset to desktop so any subsequent debugging in --ui mode is normal.
+    narrate(
+      "Scene 7",
+      "MOMENT: Same worklist, same KG popovers, same MEAT workflow — single column on phone, two on tablet, three on desktop.  No separate mobile app to maintain.",
+    );
+
+    // Reset for any post-test debugging.
     await page.setViewportSize({ width: 1440, height: 900 });
   });
 
-  // -------------------------------------------------------------------------
-  test.afterAll(() => {
-    // eslint-disable-next-line no-console
-    console.log(`\n  Demo run complete.  Storyboard: ${SHOT_DIR}\n`);
-  });
+  // -----------------------------------------------------------------------
+  // CLOSE
+  // -----------------------------------------------------------------------
+
+  // eslint-disable-next-line no-console
+  console.log(`\n  Demo run complete.  Storyboard: ${SHOT_DIR}\n`);
 });
+
+// ---------------------------------------------------------------------------
+// Local helpers (kept in this file because they couple to the test page)
+// ---------------------------------------------------------------------------
+
+/** Resilient UI login that survives the React-form hydrate-and-detach
+ * race.  Strategy: prefer the "Demo Login — Fill Credentials" button if
+ * it's present (it's wired specifically for this purpose), otherwise
+ * type the credentials with ``pressSequentially`` (auto-retries on
+ * detached elements, unlike ``fill``). */
+async function loginViaUiResilient(page: Page): Promise<void> {
+  await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+
+  const submit = page.getByRole("button", {
+    name: /^Secure Sign In$|^Sign In$/i,
+  });
+  await submit.waitFor({ state: "visible", timeout: 15_000 });
+  await page.waitForTimeout(800); // hydration settle
+
+  const demoFill = page.getByRole("button", {
+    name: /Demo Login.*Fill Credentials/i,
+  });
+  if (await demoFill.count()) {
+    await demoFill.click();
+    await page.waitForTimeout(400);
+  } else {
+    const email = page.locator('input[type="email"]').first();
+    const pw = page.locator('input[type="password"]').first();
+    await email.click();
+    await email.pressSequentially(EMAIL, { delay: 25 });
+    await pw.click();
+    await pw.pressSequentially(PASSWORD, { delay: 25 });
+  }
+  await submit.click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"), {
+    timeout: 30_000,
+  });
+}
+
+/** Connect the bundled demo OpenEMR and trigger a full sync so the
+ * worklist actually has patients to show.  Idempotent — returns the
+ * existing connection if one is active and skips sync if data is
+ * already present. */
+async function connectDemoEmr(
+  request: APIRequestContext,
+  page: Page,
+): Promise<void> {
+  try {
+    const login = await request.post(`${API_URL}/api/auth/login`, {
+      data: { email: EMAIL, password: PASSWORD },
+    });
+    if (!login.ok()) {
+      status(`demo-connect skipped — login returned ${login.status()}`);
+      return;
+    }
+    const { access_token } = (await login.json()) as { access_token: string };
+    const auth = { Authorization: `Bearer ${access_token}` };
+
+    // 1. Check if patients already loaded — skip sync.
+    const stats = await request.get(`${API_URL}/api/dashboard/stats`, {
+      headers: auth,
+    });
+    if (stats.ok()) {
+      const body = (await stats.json()) as { total_patients?: number };
+      if ((body.total_patients ?? 0) > 0) {
+        status(`patient panel present (${body.total_patients}); skipping sync`);
+        return;
+      }
+    }
+
+    // 2. Connect the demo EMR.
+    const conn = await request.post(`${API_URL}/api/emr/demo-connect`, {
+      headers: auth,
+    });
+    if (!conn.ok()) {
+      status(`demo-connect returned ${conn.status()} — non-fatal`);
+      return;
+    }
+    const connBody = (await conn.json()) as {
+      connection_id?: number;
+      display_name?: string;
+    };
+    status(
+      `demo EMR connected: ${connBody.display_name ?? "(active)"} ` +
+        `id=${connBody.connection_id ?? "?"}`,
+    );
+
+    // 3. Trigger a full sync so patients flow into the worklist.
+    if (connBody.connection_id) {
+      const sync = await request.post(
+        `${API_URL}/api/emr/connections/${connBody.connection_id}/sync?sync_type=full`,
+        { headers: auth },
+      );
+      status(`sync trigger: ${sync.status()}`);
+      // Sync runs async — wait up to 30s for total_patients > 0.
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const s = await request.get(`${API_URL}/api/dashboard/stats`, {
+          headers: auth,
+        });
+        if (s.ok()) {
+          const body = (await s.json()) as { total_patients?: number };
+          if ((body.total_patients ?? 0) > 0) {
+            status(`sync delivered ${body.total_patients} patients`);
+            break;
+          }
+        }
+        await page.waitForTimeout(2000);
+      }
+    }
+  } catch (e) {
+    status(`demo-connect threw: ${(e as Error).message}`);
+  }
+}

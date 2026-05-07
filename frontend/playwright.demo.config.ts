@@ -35,10 +35,6 @@ export default defineConfig({
     ["list"],
   ],
 
-  // Runs ONCE before any project / test — populates .demo-auth-state.json
-  // so the projects' ``use.storageState`` reference always resolves.
-  globalSetup: "./tests/demo/global-setup.ts",
-
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:3444",
     actionTimeout: 30_000,
@@ -57,13 +53,6 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
-        // Each scene's `page` fixture loads cookies from this file —
-        // populated by ``saveAuthState`` in beforeAll.  The path is
-        // ``frontend/tests/demo/.demo-auth-state.json``.  Playwright is
-        // forgiving if the file is missing on first run (treats it as
-        // an empty context), so the very first beforeAll login still
-        // works without a chicken-and-egg problem.
-        storageState: "./tests/demo/.demo-auth-state.json",
       },
     },
   ],
