@@ -465,6 +465,7 @@ export default function SuspectsPage() {
         padding: "20px 16px 48px",
         fontFamily: FONT_SYS,
         color: C.text,
+        overflowX: "hidden",
       }}
     >
       <DataQualityBanner />
@@ -821,7 +822,7 @@ export default function SuspectsPage() {
           marginBottom: 14,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", overflowX: "auto", paddingBottom: 2 }}>
           {/* Status segmented chips */}
           <div
             style={{

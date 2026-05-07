@@ -231,7 +231,7 @@ export default function RecapturePage() {
   ];
 
   return (
-    <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto" }} className="rci-page-pad-desktop">
+    <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto", overflowX: "hidden" }} className="rci-page-pad-desktop">
       <DataQualityBanner />
       {/* Header */}
       <div className="animate-fade-in">
@@ -410,7 +410,7 @@ export default function RecapturePage() {
           <h3 className="gradient-text" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
             Patients Requiring Recapture
           </h3>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {/* Search */}
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.slate400 }} />
@@ -426,7 +426,7 @@ export default function RecapturePage() {
                   border: `1px solid ${colors.slate200}`,
                   fontSize: 13,
                   color: colors.slate900,
-                  width: 200,
+                  width: "min(200px, calc(100vw - 180px))",
                   outline: "none",
                   transition: "border-color 0.2s, box-shadow 0.2s",
                 }}

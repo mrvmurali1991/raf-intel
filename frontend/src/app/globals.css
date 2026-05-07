@@ -676,8 +676,11 @@ select.appearance-none {
     overflow-x: auto !important;
   }
 
-  /* Patient list grid — stack on mobile */
-  [style*="gridTemplateColumns: minmax(220px"] {
+  /* Patient list grid + population-overview — stack on mobile */
+  [style*="gridTemplateColumns: minmax(220px"],
+  [style*="gridTemplateColumns: minmax(260px"],
+  [style*="gridTemplateColumns: minmax(180px"],
+  .rci-population-overview {
     grid-template-columns: 1fr !important;
     gap: 4px !important;
   }
