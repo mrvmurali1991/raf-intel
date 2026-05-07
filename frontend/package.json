@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "sharp": "^0.34.5",
     "@storybook/addon-a11y": "^10.3.5",
     "@storybook/nextjs": "^10.3.5",
     "@storybook/react": "^10.3.5",

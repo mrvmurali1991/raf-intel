@@ -20,15 +20,41 @@ export const API_URL = process.env.API_URL ?? "http://localhost:8500";
 export const EMAIL = process.env.DEMO_EMAIL ?? "admin@raf.health";
 export const PASSWORD = process.env.DEMO_PASSWORD ?? "Admin@123";
 
+/** When set to "1", annotatedShot always overwrites existing PNGs. */
+export const DEMO_REGENERATE = process.env.DEMO_REGENERATE === "1";
+
+// demo-shots lives NEXT TO playwright-report (not inside it) so the HTML
+// reporter does not wipe it when it rebuilds playwright-report/ on each run.
 export const SHOT_DIR = path.resolve(
   __dirname,
-  "../../playwright-report/demo-shots"
+  "../../demo-shots"
 );
 export const STATE_FILE = path.resolve(__dirname, ".demo-auth-state.json");
 
 // ``DEMO_PAUSE_MS`` controls the dwell time before each screenshot.  Bump
 // this for slow-motion live screen-shares, drop it for headless CI runs.
 export const PAUSE_MS = Number(process.env.DEMO_PAUSE_MS ?? "1500");
+
+// ---------------------------------------------------------------------------
+// Scene metadata — used by storyboard generator
+// ---------------------------------------------------------------------------
+
+export interface SceneMeta {
+  /** Short file-name prefix, e.g. "01-worklist-annotated" */
+  file: string;
+  /** One-line caption for the tile border. */
+  caption: string;
+  /** Scene number 1-based. */
+  scene: number;
+}
+
+/** Registry populated as shots are captured — storyboard reads this. */
+export const SCENE_REGISTRY: SceneMeta[] = [];
+
+/** Register a scene for the storyboard grid. */
+export function registerScene(meta: SceneMeta): void {
+  SCENE_REGISTRY.push(meta);
+}
 
 // ---------------------------------------------------------------------------
 // Filesystem helpers
@@ -133,7 +159,7 @@ export async function authResolved(page: Page): Promise<boolean> {
 
 /** Wait for the FIRST visible match from a list of candidate text
  * fragments, with sensible timeout, and return the matched locator (or
- * null if none matched).  Use this instead of ``waitForLoadState`` —
+ * null if none matched).  Use this instead of ``waitForLoadState`` --
  * React Query keeps the network busy with refetches so ``networkidle``
  * never fires reliably. */
 export async function waitForFirst(
@@ -193,6 +219,12 @@ export async function shot(
   const file = path.join(SHOT_DIR, `${name}.png`);
   const dwell = opts.dwellMs ?? PAUSE_MS;
 
+  // Honour DEMO_REGENERATE: skip if file already exists and flag is off.
+  if (!DEMO_REGENERATE && fs.existsSync(file)) {
+    status(`shot (cached) -> ${file}`);
+    return file;
+  }
+
   if (opts.highlight) {
     await opts.highlight.scrollIntoViewIfNeeded();
     await applyHighlight(page, opts.highlight);
@@ -200,7 +232,7 @@ export async function shot(
 
   await page.waitForTimeout(dwell);
   await page.screenshot({ path: file, fullPage: opts.fullPage ?? false });
-  status(`shot → ${file}`);
+  status(`shot -> ${file}`);
 
   if (opts.highlight) {
     await clearHighlight(page);
@@ -208,29 +240,75 @@ export async function shot(
   return file;
 }
 
+/** Annotated screenshot options. */
+export interface AnnotatedShotOpts {
+  /** One-line caption to burn into the highlight overlay. */
+  caption?: string;
+  /** Scene number for storyboard registration. */
+  sceneNum?: number;
+  /** Short storyboard caption for the tile border. */
+  storyCaption?: string;
+}
+
 /** Annotated screenshot: tries each candidate locator until one is
- * visible, highlights it, snaps with name+`-annotated` suffix.  Useful
- * for "the proof point of this scene is THIS specific tile". */
+ * visible, highlights it with an enhanced overlay (thicker border,
+ * shadow, optional caption), snaps with name+`-annotated` suffix.
+ *
+ * When ``DEMO_REGENERATE=1`` the file is always rewritten even if it
+ * already exists on disk. */
 export async function annotatedShot(
   page: Page,
   name: string,
   candidates: Locator[],
+  opts: AnnotatedShotOpts = {},
 ): Promise<string | null> {
+  const file = path.join(SHOT_DIR, `${name}-annotated.png`);
+
+  // Skip re-capture when file exists and regenerate flag is off.
+  if (!DEMO_REGENERATE && fs.existsSync(file)) {
+    status(`annotatedShot (cached) -> ${file}`);
+    if (opts.sceneNum !== undefined && opts.storyCaption) {
+      registerScene({ file: `${name}-annotated`, caption: opts.storyCaption, scene: opts.sceneNum });
+    }
+    return file;
+  }
+
   for (const loc of candidates) {
     if (await loc.count()) {
       try {
         await loc.first().waitFor({ state: "visible", timeout: 4000 });
-        return await shot(page, `${name}-annotated`, {
+        const result = await shot(page, `${name}-annotated`, {
           highlight: loc.first(),
         });
+        if (opts.caption) {
+          await applyCaption(page, loc.first(), opts.caption);
+          // Re-snap with the caption rendered.
+          await page.waitForTimeout(300);
+          ensureDir(SHOT_DIR);
+          await page.screenshot({ path: file, fullPage: false });
+          await clearCaption(page);
+          status(`annotatedShot+caption -> ${file}`);
+        }
+        if (opts.sceneNum !== undefined && opts.storyCaption) {
+          registerScene({ file: `${name}-annotated`, caption: opts.storyCaption, scene: opts.sceneNum });
+        }
+        return result;
       } catch {
         // try next candidate
       }
     }
   }
   status(`annotatedShot ${name}: no candidates matched, skipping`);
+  // Still register with a placeholder path so the storyboard grid is consistent.
+  if (opts.sceneNum !== undefined && opts.storyCaption) {
+    registerScene({ file: `${name}`, caption: opts.storyCaption, scene: opts.sceneNum });
+  }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Highlight + caption DOM helpers
+// ---------------------------------------------------------------------------
 
 async function applyHighlight(page: Page, loc: Locator): Promise<void> {
   const box = await loc.boundingBox();
@@ -239,31 +317,60 @@ async function applyHighlight(page: Page, loc: Locator): Promise<void> {
     ({ x, y, w, h }) => {
       const el = document.createElement("div");
       el.id = "__demo_highlight";
-      el.style.cssText = `
-        position: fixed;
-        left: ${x - 6}px;
-        top: ${y - 6}px;
-        width: ${w + 12}px;
-        height: ${h + 12}px;
-        border: 3px solid #DC2626;
-        border-radius: 8px;
-        box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.18);
-        z-index: 99999;
-        pointer-events: none;
-        animation: __demo_pulse 1.2s ease-in-out 1;
-      `;
+      el.style.cssText = [
+        `position: fixed`,
+        `left: ${x - 8}px`,
+        `top: ${y - 8}px`,
+        `width: ${w + 16}px`,
+        `height: ${h + 16}px`,
+        `border: 5px solid #DC2626`,
+        `border-radius: 10px`,
+        `box-shadow: 0 0 0 3px rgba(220,38,38,0.35), 0 0 0 9999px rgba(15,23,42,0.22), 0 6px 24px rgba(220,38,38,0.45)`,
+        `z-index: 99999`,
+        `pointer-events: none`,
+      ].join(";");
+      document.body.appendChild(el);
+
       const style = document.createElement("style");
       style.id = "__demo_highlight_style";
-      style.textContent = `
-        @keyframes __demo_pulse {
-          0%   { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.30); }
-          100% { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.18); }
-        }
-      `;
+      style.textContent = "";
       document.head.appendChild(style);
-      document.body.appendChild(el);
     },
     { x: box.x, y: box.y, w: box.width, h: box.height },
+  );
+}
+
+async function applyCaption(page: Page, loc: Locator, caption: string): Promise<void> {
+  const box = await loc.boundingBox();
+  if (!box) return;
+  await page.evaluate(
+    ({ x, y, w, h, text }) => {
+      const tag = document.createElement("div");
+      tag.id = "__demo_caption";
+      const maxW = Math.max(w + 16, 260);
+      tag.style.cssText = [
+        `position: fixed`,
+        `left: ${x - 8}px`,
+        `top: ${y + h + 12}px`,
+        `max-width: ${maxW}px`,
+        `background: #DC2626`,
+        `color: #ffffff`,
+        `font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
+        `font-size: 13px`,
+        `font-weight: 600`,
+        `line-height: 1.4`,
+        `padding: 6px 12px`,
+        `border-radius: 6px`,
+        `box-shadow: 0 4px 12px rgba(0,0,0,0.35)`,
+        `z-index: 100000`,
+        `pointer-events: none`,
+        `white-space: pre-line`,
+        `letter-spacing: 0.01em`,
+      ].join(";");
+      tag.textContent = text;
+      document.body.appendChild(tag);
+    },
+    { x: box.x, y: box.y, w: box.width, h: box.height, text: caption },
   );
 }
 
@@ -272,6 +379,123 @@ async function clearHighlight(page: Page): Promise<void> {
     document.getElementById("__demo_highlight")?.remove();
     document.getElementById("__demo_highlight_style")?.remove();
   });
+}
+
+async function clearCaption(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.getElementById("__demo_caption")?.remove();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Storyboard composite generator (3x3 grid, 9 scenes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a single storyboard.png that tiles every scene screenshot in a
+ * 3x3 grid.  Each tile includes a scene-number badge and a 1-line
+ * caption in its bottom border.
+ *
+ * Requires the ``sharp`` package (already in node_modules).
+ */
+export async function generateStoryboard(
+  scenes: SceneMeta[],
+  outputPath: string,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const sharp = require("sharp") as typeof import("sharp");
+
+  const COLS = 3;
+  const TILE_W = 640;
+  const TILE_H = 400;
+  const CAPTION_H = 48;
+  const BORDER = 4;
+
+  const FULL_TILE_H = TILE_H + CAPTION_H;
+  const GRID_W = COLS * TILE_W + (COLS + 1) * BORDER;
+
+  // Sort scenes by scene number.
+  const sorted = [...scenes].sort((a, b) => a.scene - b.scene);
+
+  // Always produce a 3x3 grid; pad with placeholder grey tiles if < 9.
+  const TOTAL = 9;
+  while (sorted.length < TOTAL) {
+    sorted.push({ file: "", caption: "(no screenshot)", scene: sorted.length + 1 });
+  }
+
+  const ROWS = Math.ceil(TOTAL / COLS);
+  const GRID_H = ROWS * FULL_TILE_H + (ROWS + 1) * BORDER;
+
+  // Create blank canvas (dark background).
+  const canvas = sharp({
+    create: {
+      width: GRID_W,
+      height: GRID_H,
+      channels: 3,
+      background: { r: 15, g: 23, b: 42 },
+    },
+  });
+
+  const compositeInputs: import("sharp").OverlayOptions[] = [];
+
+  for (let i = 0; i < TOTAL; i++) {
+    const meta = sorted[i];
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const tileX = BORDER + col * (TILE_W + BORDER);
+    const tileY = BORDER + row * (FULL_TILE_H + BORDER);
+
+    // Build scene thumbnail.
+    let thumbBuf: Buffer;
+    const filePath = path.join(SHOT_DIR, `${meta.file}.png`);
+    if (meta.file && fs.existsSync(filePath)) {
+      thumbBuf = await sharp(filePath)
+        .resize(TILE_W, TILE_H, { fit: "cover", position: "top" })
+        .toBuffer();
+    } else {
+      thumbBuf = await sharp({
+        create: {
+          width: TILE_W,
+          height: TILE_H,
+          channels: 3,
+          background: { r: 30, g: 41, b: 59 },
+        },
+      }).png().toBuffer();
+    }
+
+    compositeInputs.push({ input: thumbBuf, top: tileY, left: tileX });
+
+    // Caption strip rendered as SVG.
+    const sceneLabel = `Scene ${meta.scene}`;
+    const captionText = meta.caption.length > 68
+      ? meta.caption.slice(0, 65) + "..."
+      : meta.caption;
+
+    const captionSvg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${TILE_W}" height="${CAPTION_H}">` +
+      `<rect width="${TILE_W}" height="${CAPTION_H}" fill="#0F172A"/>` +
+      `<rect width="64" height="${CAPTION_H}" fill="#DC2626"/>` +
+      `<text x="32" y="${Math.floor(CAPTION_H / 2) + 6}" ` +
+        `font-family="monospace" font-size="13" font-weight="bold" ` +
+        `fill="#ffffff" text-anchor="middle" dominant-baseline="middle">` +
+        `${sceneLabel}</text>` +
+      `<text x="76" y="${Math.floor(CAPTION_H / 2) + 6}" ` +
+        `font-family="-apple-system, sans-serif" font-size="12" ` +
+        `fill="#CBD5E1" dominant-baseline="middle" text-anchor="start">` +
+        `${captionText}</text>` +
+      `</svg>`
+    );
+
+    const captionBuf = await sharp(captionSvg).png().toBuffer();
+    compositeInputs.push({ input: captionBuf, top: tileY + TILE_H, left: tileX });
+  }
+
+  await canvas
+    .composite(compositeInputs)
+    .png({ compressionLevel: 8 })
+    .toFile(outputPath);
+
+  status(`storyboard -> ${outputPath}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +541,7 @@ export async function probeDataReadiness(
           : 0;
     } else {
       notes.push(
-        `dashboard/stats returned ${stats.status()} — auth may be misconfigured`,
+        `dashboard/stats returned ${stats.status()} -- auth may be misconfigured`,
       );
     }
   } catch (e) {
@@ -336,7 +560,7 @@ export async function probeDataReadiness(
 
   if (!result.emr_connected) {
     notes.push(
-      "EMR is not connected — /worklist will show the onboarding flow.  " +
+      "EMR is not connected -- /worklist will show the onboarding flow.  " +
         "POST /api/emr/demo-connect (or click 'Connect Demo EMR' on /emr-config) " +
         "to populate patients, gaps, and suspects.",
     );
@@ -347,7 +571,7 @@ export async function probeDataReadiness(
     result.total_suspects_open === 0
   ) {
     notes.push(
-      "Zero patients / gaps / suspects — the storyboard will show empty states.  " +
+      "Zero patients / gaps / suspects -- the storyboard will show empty states.  " +
         "Run the seed scripts then re-run the demo.",
     );
   }
@@ -363,16 +587,12 @@ export function logReadiness(r: DataReadiness): void {
   );
   for (const note of r.notes) {
     // eslint-disable-next-line no-console
-    console.log(`    ⚠  ${note}`);
+    console.log(`    NOTE  ${note}`);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Scene assertions — used by the demo to fail fast when a critical
-// piece of UI is missing (e.g. the AuditReadinessCard didn't render at
-// all because the IRR endpoint 500ed).  Soft-fails: if the assertion
-// fails the storyboard still gets the screenshot, but we log a clear
-// "this scene's value-prop is broken" line so the presenter knows.
+// Scene assertions
 // ---------------------------------------------------------------------------
 
 export async function softAssertVisible(
@@ -382,6 +602,6 @@ export async function softAssertVisible(
   try {
     await expect(loc).toBeVisible({ timeout: 8000 });
   } catch {
-    status(`SOFT-FAIL  ${description} not visible — value-prop missing on this scene`);
+    status(`SOFT-FAIL  ${description} not visible -- value-prop missing on this scene`);
   }
 }
