@@ -111,6 +111,12 @@ def _fetch_gap_rows(tenant_id: str, year: int) -> list[dict[str, Any]]:
     """Return every recapture_gaps row for *(tenant, current_year=year)*.
 
     Includes open + recaptured + dismissed; callers filter by status.
+
+    DEFENSIVE: columns current_year, prior_year, revenue_impact, resolved_at,
+    resolved_by, provider_npi may not exist on instances running the legacy
+    migration schema (add_recapture_ai_suggestions.sql). On any DB error this
+    function returns an empty list so callers produce zero-filled dashboards
+    rather than 500 errors.
     """
     sql = """
         SELECT
@@ -133,9 +139,16 @@ def _fetch_gap_rows(tenant_id: str, year: int) -> list[dict[str, Any]]:
         WHERE tenant_id    = %s
           AND current_year = %s
     """
-    with raf_cursor() as cursor:
-        cursor.execute(sql, (tenant_id, year))
-        return list(cursor.fetchall() or [])
+    try:
+        with raf_cursor() as cursor:
+            cursor.execute(sql, (tenant_id, year))
+            return list(cursor.fetchall() or [])
+    except Exception as _db_exc:
+        logger.error(
+            "_fetch_gap_rows: DB error tenant=%s year=%s — returning empty; %s",
+            tenant_id, year, _db_exc, exc_info=True,
+        )
+        return []
 
 
 # ---------------------------------------------------------------------------
