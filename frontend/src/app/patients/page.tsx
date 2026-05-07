@@ -1096,7 +1096,7 @@ export default function PatientsPage() {
               fontVariantNumeric: "tabular-nums",
             }}>
               {isLoading
-                ? "Loading registry\u2026"
+                ? "Loading registry…"
                 : `${totalPatients.toLocaleString()} patients in registry \u00B7 CMS-HCC V28 \u00B7 MY ${measurementYear}`}
             </p>
           </div>
@@ -1111,7 +1111,7 @@ export default function PatientsPage() {
             <input
               type="text"
               title="Search patients by name or PID"
-              placeholder="Search patients\u2026"
+              placeholder="Search patients…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search patients"
@@ -1653,7 +1653,7 @@ export default function PatientsPage() {
           <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
           <span role="columnheader" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: tokens.slate500,
+            letterSpacing: "0.08em", color: tokens.slate500, paddingLeft: 8,
           }}>Status</span>
           <span role="columnheader" aria-label="Open patient detail" />
         </div>
@@ -1688,7 +1688,7 @@ export default function PatientsPage() {
                 <option value="Female">F</option>
               </select>
               <input
-                title="Minimum age" placeholder="Age\u2265"
+                title="Minimum age" placeholder="Age≥"
                 value={colFilters.ageMin}
                 onChange={(e) => { setColFilters((f) => ({ ...f, ageMin: e.target.value })); setPage(0); }}
                 style={{
@@ -1700,7 +1700,7 @@ export default function PatientsPage() {
                 type="number"
               />
               <input
-                title="Maximum age" placeholder="Age\u2264"
+                title="Maximum age" placeholder="Age≤"
                 value={colFilters.ageMax}
                 onChange={(e) => { setColFilters((f) => ({ ...f, ageMax: e.target.value })); setPage(0); }}
                 style={{
@@ -1747,16 +1747,16 @@ export default function PatientsPage() {
             {/* Risk Factors col — demo/disease/interact filters */}
             <div style={{ display: "flex", gap: 4 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min demographic score" placeholder="Demo\u2265" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max demographic score" placeholder="Demo\u2264" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Min demographic score" placeholder="Demo≥" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max demographic score" placeholder="Demo≤" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min disease score" placeholder="Dis\u2265" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max disease score" placeholder="Dis\u2264" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Min disease score" placeholder="Dis≥" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max disease score" placeholder="Dis≤" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min interaction score" placeholder="Int\u2265" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max interaction score" placeholder="Int\u2264" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Min interaction score" placeholder="Int≥" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max interaction score" placeholder="Int≤" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
             </div>
 
