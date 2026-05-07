@@ -46,14 +46,19 @@ def _build_cors_origins() -> list[str]:
     """Derive the CORS allowed-origins list from environment configuration."""
     frontend_url = os.getenv("FRONTEND_URL", "")
 
+    # localhost/127.0.0.1 URLs are always treated as dev-safe — they cannot
+    # be reached by external attackers regardless of the APP_ENV label.
+    _is_localhost_url = frontend_url.startswith("http://localhost") or frontend_url.startswith("http://127.0.0.1")
+
     if settings.app_env == "production":
         if not frontend_url:
             raise RuntimeError("FRONTEND_URL must be set in production")
-        if frontend_url.startswith("http://"):
+        # Require https:// in production only when the URL is an external host.
+        if frontend_url.startswith("http://") and not _is_localhost_url:
             raise RuntimeError("FRONTEND_URL must use https:// in production")
 
     origins: list[str] = []
-    if settings.app_env in ("development", "testing"):
+    if settings.app_env in ("development", "testing") or _is_localhost_url:
         origins = [
             "http://localhost:3500",
             "http://localhost:3000",
@@ -64,7 +69,7 @@ def _build_cors_origins() -> list[str]:
             "http://127.0.0.1:3001",
             "http://127.0.0.1:3444",
         ]
-    if frontend_url:
+    if frontend_url and frontend_url not in origins:
         origins.append(frontend_url)
 
     if not origins:
@@ -129,6 +134,15 @@ def setup_middleware(app: FastAPI) -> list[str]:
             "Accept",
             "Origin",
             "X-Requested-With",
+            # Custom request headers sent by the frontend
+            "X-Request-ID",
+            "X-Tenant-ID",
+        ],
+        expose_headers=[
+            # Custom response headers the browser is allowed to read
+            "X-Request-ID",
+            "X-Process-Time-Ms",
+            "X-API-Version",
         ],
     )
 
