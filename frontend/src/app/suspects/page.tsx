@@ -662,6 +662,7 @@ export default function SuspectsPage() {
               placeholder="Search suspects\u2026"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+              onKeyDown={(e) => e.stopPropagation()}
               aria-label="Search suspects"
               style={{
                 height: 40,
