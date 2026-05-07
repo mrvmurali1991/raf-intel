@@ -1013,6 +1013,7 @@ export default function PatientsPage() {
       padding: "20px 16px",
       fontFamily: FONT_SYS,
       color: C.text,
+      overflowX: "hidden",
     }}
     className="rci-page-pad-desktop"
     >
@@ -1101,7 +1102,7 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
           <div style={{ position: "relative" }}>
             <Search
               size={16}
@@ -1115,7 +1116,7 @@ export default function PatientsPage() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search patients"
               style={{
-                height: 40, width: 320, borderRadius: 10,
+                height: 40, width: "min(320px, calc(100vw - 180px))", borderRadius: 10,
                 border: `1px solid ${C.border}`,
                 backgroundColor: tokens.white,
                 paddingLeft: 38, paddingRight: 14,
@@ -1224,7 +1225,7 @@ export default function PatientsPage() {
         className="rci-population-overview"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(260px, 1.4fr) repeat(3, minmax(160px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
           gap: 12,
           marginBottom: 16,
         }}
@@ -1623,7 +1624,7 @@ export default function PatientsPage() {
         style={{
           backgroundColor: C.bgCard,
           borderRadius: 16,
-          overflow: "hidden",
+          overflowX: "auto",
           border: `1px solid ${C.borderSoft}`,
           boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04)",
         }}
