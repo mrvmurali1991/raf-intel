@@ -43,6 +43,24 @@ test("RAF Intelligence — full sales demo flow", async ({ page, request }) => {
   test.setTimeout(420_000); // 7 min hard cap
 
   // -----------------------------------------------------------------------
+  // INIT SCRIPT — runs before every page load in this context, including
+  // after page.goto("about:blank") + page.goto(url) hard-reloads.
+  //
+  // WHY: WelcomeWizard shows itself whenever localStorage is missing the
+  // "raf_onboarding_complete" key.  Without this guard the wizard renders
+  // as a full-screen dark overlay (position:fixed, z-index:9998) on top of
+  // every page — making scenes 1, 4, 5, 6 byte-identical screenshots of
+  // the onboarding splash ("AI-Powered Risk Adjustment / Get Started").
+  //
+  // The e2e test suite already does `localStorage.setItem(...)` per-test.
+  // Here we use addInitScript so the key survives full-page reboots
+  // (about:blank → /recapture) without having to repeat it per-scene.
+  // -----------------------------------------------------------------------
+  await page.addInitScript(() => {
+    localStorage.setItem("raf_onboarding_complete", "true");
+  });
+
+  // -----------------------------------------------------------------------
   // PRE-FLIGHT  ::  UI login + connect demo EMR + readiness probe
   // -----------------------------------------------------------------------
 
@@ -217,6 +235,7 @@ test("RAF Intelligence — full sales demo flow", async ({ page, request }) => {
     // dashboard view from a previous scene's redirect chain.
     await page.goto("about:blank");
     await page.goto(`${BASE_URL}/recapture`);
+    await page.waitForURL("**/recapture", { timeout: 30_000 });
     await waitForFirst(page, ["Recapture", "Total Gaps"]);
 
     const velocityHeader = page
@@ -259,6 +278,7 @@ test("RAF Intelligence — full sales demo flow", async ({ page, request }) => {
     // dashboard view from a previous scene's redirect chain.
     await page.goto("about:blank");
     await page.goto(`${BASE_URL}/recapture`);
+    await page.waitForURL("**/recapture", { timeout: 30_000 });
     await waitForFirst(page, ["Recapture", "Total Gaps"]);
 
     const cfoHeader = page
