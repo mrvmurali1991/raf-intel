@@ -59,6 +59,7 @@ export interface User {
   permissions?: string[];
   mfa_enabled?: boolean;
   must_change_password?: boolean;
+  onboarding_complete?: boolean;
 }
 
 interface AuthContextType {
