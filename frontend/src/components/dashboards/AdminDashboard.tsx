@@ -573,7 +573,7 @@ export function AdminDashboard() {
   return (
     <ErrorBoundary fallbackTitle="Dashboard failed to load">
     <TooltipProvider delay={200}>
-    <div style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
+    <div className="admin-dash-outer" style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
       <DataQualityBanner />
       <style>{`
         @keyframes shimmer {
@@ -610,11 +610,15 @@ export function AdminDashboard() {
           .row-60-40 { grid-template-columns: 1fr !important; }
           .row-55-45 { grid-template-columns: 1fr !important; }
           .row-50-50 { grid-template-columns: 1fr !important; }
-          /* Bug 3: H1 must clear the fixed hamburger button.
-             Hamburger: fixed left-4(16px) + w-11(44px) + 4px gap = 64px from left.
-             main p-5 gives 20px + AdminDashboard 40px = 60px already.
-             Add 8px more to the H1 container to guarantee clearance. */
-          .admin-dash-header { padding-left: 8px !important; }
+          /* Fix 2: Reduce outer div padding on mobile to prevent horizontal overflow.
+             On mobile main has ~12px padding; 40px L/R here = 92px total → overflows 414px.
+             Use 12px to match main padding, keeping total ≤ viewport width. */
+          .admin-dash-outer { padding-left: 12px !important; padding-right: 12px !important; }
+          /* Fix 1: H1 must clear the fixed hamburger button.
+             Hamburger: fixed left-4(16px) + w-11(44px) = 60px right edge.
+             main padding (12px) + outer padding (12px) = 24px → H1 at x=24.
+             Add 48px left padding to header to push H1 to x ≥ 72px. */
+          .admin-dash-header { padding-left: 48px !important; }
         }
         @media (max-width: 640px) {
           .kpi-strip { grid-template-columns: 1fr !important; }
