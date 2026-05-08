@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import {
@@ -182,6 +182,30 @@ async function syncEmrConnection(id: string, syncType: string = "full"): Promise
 async function getSyncHistory(id: string): Promise<SyncRecord[]> {
   const { data } = await api.get(`/api/emr/connections/${id}/sync/history`);
   return Array.isArray(data) ? data : (data?.history ?? []);
+}
+
+// ---------------------------------------------------------------------------
+// Auto-sync status
+// ---------------------------------------------------------------------------
+
+interface AutoSyncStatus {
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_in_seconds: number | null;
+  new_patients_last_cycle: number;
+  total_synced_today: number;
+  current_cycle_running: boolean;
+  last_error: string | null;
+}
+
+async function getAutoSyncStatus(): Promise<AutoSyncStatus | null> {
+  try {
+    const { data } = await api.get("/api/emr/auto-sync/status");
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return null;
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1281,6 +1305,245 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Live Auto-Sync Panel
+// ---------------------------------------------------------------------------
+
+function useRelativeTime(iso: string | null | undefined): string {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!iso) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [iso]);
+
+  if (!iso) return "Never";
+  const diffSec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diffSec < 5) return "Just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const mins = Math.floor(diffSec / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ago`;
+}
+
+function useCountdown(seconds: number | null | undefined): string {
+  const [, setTick] = useState(0);
+  const startRef = useRef<{ at: number; val: number }>({ at: Date.now(), val: seconds ?? 0 });
+  useEffect(() => {
+    if (seconds == null) return;
+    startRef.current.at = Date.now();
+    startRef.current.val = seconds;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [seconds]);
+
+  if (seconds == null) return "";
+  const elapsed = Math.floor((Date.now() - startRef.current.at) / 1000);
+  const remaining = Math.max(0, startRef.current.val - elapsed);
+  return `${remaining}s`;
+}
+
+function LiveAutoSyncPanel() {
+  const { data: status, isError } = useQuery({
+    queryKey: ["auto-sync-status"],
+    queryFn: getAutoSyncStatus,
+    refetchInterval: 5000,
+    staleTime: 4000,
+    retry: 1,
+  });
+
+  const relTime = useRelativeTime(status?.last_run_at);
+  const countdown = useCountdown(status?.next_run_in_seconds);
+
+  // 404 / not configured yet
+  if (status === null || isError) {
+    return (
+      <div className="premium-card animate-slide-up" style={{
+        borderRadius: 14,
+        overflow: "hidden",
+        marginBottom: 24,
+        padding: "20px 24px",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+      }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 9,
+          backgroundColor: C.slate100, display: "flex", alignItems: "center", justifyContent: "center",
+          color: C.slate400, flexShrink: 0,
+        }}>
+          <RefreshCw size={18} />
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.slate700 }}>Live Auto-Sync</div>
+          <div style={{ fontSize: 12, color: C.slate400, marginTop: 2 }}>Auto-sync not yet configured</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === undefined) {
+    // loading skeleton
+    return (
+      <div className="premium-card animate-slide-up" style={{
+        borderRadius: 14, overflow: "hidden", marginBottom: 24,
+        height: 100, animation: "pulse 1.5s ease-in-out infinite", backgroundColor: C.slate50,
+      }} />
+    );
+  }
+
+  const isEnabled = status.enabled;
+  const hasError = !!status.last_error;
+  const isRunning = status.current_cycle_running;
+
+  // Status pill config
+  const statusConfig = hasError
+    ? { label: "Error", bg: C.red100, color: C.red600, dot: C.red500, glow: "0 0 8px rgba(239,68,68,0.4)" }
+    : !isEnabled
+    ? { label: "Paused", bg: C.slate100, color: C.slate600, dot: C.slate400, glow: "none" }
+    : isRunning
+    ? { label: "Running", bg: C.amber100, color: C.amber600, dot: C.amber500, glow: "0 0 8px rgba(245,158,11,0.4)" }
+    : { label: "Active", bg: C.emerald100, color: C.emerald600, dot: C.emerald500, glow: "0 0 8px rgba(16,185,129,0.4)" };
+
+  return (
+    <div
+      className="premium-card animate-slide-up"
+      style={{ borderRadius: 14, overflow: "hidden", marginBottom: 24 }}
+    >
+      {/* Header row */}
+      <div style={{
+        padding: "16px 24px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 12,
+        background: isEnabled
+          ? `linear-gradient(135deg, ${C.emerald100} 0%, ${C.white} 100%)`
+          : `linear-gradient(135deg, ${C.slate50} 0%, ${C.white} 100%)`,
+        borderBottom: `1px solid ${C.slate100}`,
+      }}>
+        {/* Title + pulse dot */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
+            <span style={{
+              position: "absolute", inset: 0, borderRadius: "50%",
+              backgroundColor: statusConfig.dot,
+              animation: isEnabled && !hasError ? "liveAutoSyncPing 1.5s ease-in-out infinite" : "none",
+              opacity: 0.5,
+            }} />
+            <span style={{
+              position: "absolute", inset: 1, borderRadius: "50%",
+              backgroundColor: statusConfig.dot,
+            }} />
+          </div>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.slate900 }}>Live Auto-Sync</span>
+          {countdown && isEnabled && !hasError && (
+            <span style={{
+              fontSize: 11, fontWeight: 600,
+              padding: "2px 8px", borderRadius: 4,
+              backgroundColor: C.slate100, color: C.slate500,
+            }}>
+              Next: {countdown}
+            </span>
+          )}
+        </div>
+
+        {/* Status pill */}
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "5px 14px", borderRadius: 999,
+          backgroundColor: statusConfig.bg, color: statusConfig.color,
+          fontSize: 12, fontWeight: 700,
+          border: `1px solid ${statusConfig.dot}30`,
+          boxShadow: statusConfig.glow,
+        }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: "50%",
+            backgroundColor: statusConfig.dot,
+            animation: isEnabled && !hasError ? "pulse 2s ease-in-out infinite" : "none",
+          }} />
+          {statusConfig.label}
+        </span>
+      </div>
+
+      {/* KPI tiles */}
+      <div className="auto-sync-kpi-grid" style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 0,
+        padding: "0",
+      }}>
+        {/* Status tile */}
+        <div style={{
+          padding: "16px 20px",
+          borderRight: `1px solid ${C.slate100}`,
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Status
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: statusConfig.color, lineHeight: 1.2 }}>
+            {statusConfig.label}
+          </div>
+          <div style={{ fontSize: 11, color: C.slate400 }}>
+            {isRunning ? "Cycle in progress..." : isEnabled ? "Polling active" : "Sync paused"}
+          </div>
+        </div>
+
+        {/* Last sync tile */}
+        <div style={{
+          padding: "16px 20px",
+          borderRight: `1px solid ${C.slate100}`,
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Last Sync
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.slate900, lineHeight: 1.2 }}>
+            {relTime}
+          </div>
+          <div style={{ fontSize: 11, color: C.slate400 }}>
+            {status.new_patients_last_cycle > 0
+              ? `+${status.new_patients_last_cycle} new patient${status.new_patients_last_cycle !== 1 ? "s" : ""}`
+              : "No new patients"}
+          </div>
+        </div>
+
+        {/* Total synced today tile */}
+        <div style={{
+          padding: "16px 20px",
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Total Synced Today
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.primary, lineHeight: 1.2 }}>
+            {status.total_synced_today.toLocaleString()}
+          </div>
+          <div style={{ fontSize: 11, color: C.slate400 }}>patients ingested</div>
+        </div>
+      </div>
+
+      {/* Error strip */}
+      {status.last_error && (
+        <div style={{
+          padding: "10px 20px",
+          backgroundColor: C.red100,
+          borderTop: `1px solid ${C.red500}20`,
+          display: "flex", alignItems: "center", gap: 8,
+          color: C.red600, fontSize: 12,
+        }}>
+          <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+          <span style={{ fontWeight: 600 }}>Last error:&nbsp;</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{status.last_error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Fallback vendors rendered when /api/emr/vendors is unavailable
 const FALLBACK_VENDORS: VendorPreset[] = [
   { id: "openemr",        vendor: "openemr",        name: "OpenEMR",           connection_type: "fhir_r4",   description: "OpenEMR FHIR R4 endpoint" },
@@ -1466,8 +1729,14 @@ export default function EmrConfigPage() {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes liveAutoSyncPing { 0% { transform: scale(1); opacity: 0.5; } 70% { transform: scale(2.4); opacity: 0; } 100% { transform: scale(2.4); opacity: 0; } }
         .emr-input:focus { border-color: ${tokens.infoBlue} !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important; }
         .emr-input::placeholder { color: ${tokens.slate400}; }
+        @media (max-width: 480px) {
+          .auto-sync-kpi-grid { grid-template-columns: 1fr !important; }
+          .auto-sync-kpi-grid > div { border-right: none !important; border-bottom: 1px solid ${tokens.slate100}; }
+          .auto-sync-kpi-grid > div:last-child { border-bottom: none; }
+        }
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
@@ -1489,6 +1758,9 @@ export default function EmrConfigPage() {
             </div>
           }
         />
+
+        {/* Live Auto-Sync Panel */}
+        <LiveAutoSyncPanel />
 
         {/* Stats bar */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginBottom: 32 }}>
