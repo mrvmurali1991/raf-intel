@@ -21,7 +21,6 @@ import {
   Brain,
   CalendarClock,
   Trash2,
-  KeyRound,
 } from "lucide-react";
 import {
   StatCard,
@@ -70,13 +69,6 @@ interface RetentionPolicy {
   eligible_for_purge: number;
 }
 
-interface JwtKeyStatus {
-  algorithm: string;
-  last_rotated: string | null;
-  rotation_due: string | null;
-  status: "ok" | "due" | "overdue";
-}
-
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
@@ -115,19 +107,7 @@ async function fetchRetention(): Promise<RetentionPolicy[]> {
   }
 }
 
-async function fetchJwtKeyStatus(): Promise<JwtKeyStatus | null> {
-  try {
-    const { data } = await authApi.get("/api/admin/jwt-key-status");
-    return data;
-  } catch (err: unknown) {
-    // Silently ignore 404 — endpoint may not be provisioned yet
-    const status = (err as { response?: { status?: number } })?.response?.status;
-    if (status !== 404) {
-      console.warn("jwt-key-status fetch failed:", status);
-    }
-    return null;
-  }
-}
+// fetchJwtKeyStatus removed — endpoint not provisioned; avoids 404 noise
 
 // ---------------------------------------------------------------------------
 // Skeleton row helper
@@ -242,12 +222,7 @@ export default function SystemHealthPage() {
     retry: 1,
   });
 
-  const { data: jwtStatus } = useQuery({
-    queryKey: ["system-jwt-status"],
-    queryFn: fetchJwtKeyStatus,
-    refetchInterval: 300_000,
-    retry: 1,
-  });
+  // jwtStatus query removed — endpoint not yet provisioned
 
   const handleRefresh = () => {
     setRefetchKey((k) => k + 1);
@@ -503,54 +478,7 @@ export default function SystemHealthPage() {
         </div>
       </div>
 
-      {/* ── JWT Key Rotation Status ── */}
-      {(jwtStatus || healthLoading) && (
-        <div style={{ marginTop: 32 }}>
-          <SectionHeader title="JWT Signing Key" icon={<KeyRound style={{ width: 18, height: 18 }} />} />
-          <div
-            style={{
-              marginTop: 12,
-              padding: 20,
-              borderRadius: 12,
-              border: `1px solid ${jwtStatus?.status === "overdue" ? tokens.dangerBorder : jwtStatus?.status === "due" ? tokens.warningBorder : tokens.slate200}`,
-              background: jwtStatus?.status === "overdue" ? tokens.dangerSoft : jwtStatus?.status === "due" ? tokens.warningSoft : tokens.white,
-            }}
-          >
-            {healthLoading ? (
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                {[120, 100, 100].map((w, i) => (
-                  <div key={i} className="skeleton" style={{ height: 14, width: w, borderRadius: 4 }} />
-                ))}
-              </div>
-            ) : jwtStatus ? (
-              <div style={{ display: "flex", gap: 32, flexWrap: "wrap", fontSize: 13 }}>
-                <div>
-                  <div style={{ color: tokens.slate400, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Algorithm</div>
-                  <div style={{ fontWeight: 700, color: tokens.slate900 }}>{jwtStatus.algorithm}</div>
-                </div>
-                <div>
-                  <div style={{ color: tokens.slate400, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Last Rotated</div>
-                  <div style={{ fontWeight: 600, color: tokens.slate700 }}>
-                    {jwtStatus.last_rotated ? new Date(jwtStatus.last_rotated).toLocaleDateString() : "Never"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: tokens.slate400, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Rotation Due</div>
-                  <div style={{ fontWeight: 600, color: jwtStatus.status === "overdue" ? tokens.danger : jwtStatus.status === "due" ? tokens.warningStrong : tokens.riskLow }}>
-                    {jwtStatus.rotation_due ? new Date(jwtStatus.rotation_due).toLocaleDateString() : "Not scheduled"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: tokens.slate400, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Status</div>
-                  <div style={{ fontWeight: 700, color: jwtStatus.status === "overdue" ? tokens.danger : jwtStatus.status === "due" ? tokens.warningStrong : tokens.riskLow }}>
-                    {jwtStatus.status === "overdue" ? "Rotation Overdue" : jwtStatus.status === "due" ? "Rotation Due Soon" : "Up to Date"}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
+      {/* JWT Key Rotation Status section removed — endpoint not yet provisioned */}
 
       {/* ── Monitoring / Error Stats ── */}
       {health?.monitoring && Object.keys(health.monitoring).length > 0 && (
