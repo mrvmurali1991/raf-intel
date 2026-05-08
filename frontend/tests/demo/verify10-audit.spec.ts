@@ -17,6 +17,7 @@ function isNoiseRequest(url: string, errorText?: string | null): boolean {
   if (url.includes("/api/feature-flags") && (errorText ?? "").includes("ERR_ABORTED")) return true;
   if (url.includes("_rsc=")) return true;
   if (url.includes("/api/admin/jwt-key-status")) return true;
+  if (url.includes("/api/auth/me") && (errorText ?? "").includes("ERR_ABORTED")) return true;
   return false;
 }
 
