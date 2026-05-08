@@ -208,10 +208,28 @@ def _read_total_synced_today() -> int:
 
 
 def _safe_broadcast(event_type: str, payload: dict[str, Any]) -> None:
+    """Schedule the async broadcast on the running event loop.
+
+    auto_sync_loop runs as an asyncio task; ``_process_patient`` is a sync
+    function called from inside that task (so we share the loop's thread).
+    We can't ``await`` here, but we *can* schedule a task on the running loop
+    that will fire at the next ``await`` point in ``run_auto_sync_loop``.
+
+    Also injects ``tenant_id`` (defaults to "1") because
+    ``realtime_service.broadcast_patient_event`` drops events without it.
+    """
     if broadcast_patient_event is None:
         return
+    payload = {"tenant_id": "1", **payload}  # ensure tenant_id present
     try:
-        broadcast_patient_event(event_type, payload)
+        loop = asyncio.get_running_loop()
+        loop.create_task(broadcast_patient_event(event_type, payload))
+    except RuntimeError:
+        # No running loop in this context — fall back to running synchronously
+        try:
+            asyncio.run(broadcast_patient_event(event_type, payload))
+        except Exception as exc:
+            logger.debug("auto_sync: broadcast %s failed (non-fatal): %s", event_type, exc)
     except Exception as exc:
         logger.debug("auto_sync: broadcast %s failed (non-fatal): %s", event_type, exc)
 
