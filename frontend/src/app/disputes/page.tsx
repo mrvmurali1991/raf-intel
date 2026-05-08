@@ -243,7 +243,8 @@ export default function DisputesPage() {
       </div>
 
       {/* ── Kanban ──────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(240px, 1fr))", gap: 12 }}>
+      <div style={{ overflowX: "auto", marginBottom: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(220px, 1fr))", gap: 12, minWidth: 1100 }}>
         {COLUMNS.map((col) => (
           <KanbanColumn
             key={col.status}
@@ -269,6 +270,7 @@ export default function DisputesPage() {
             }}
           />
         ))}
+      </div>
       </div>
 
       {/* Abandoned section (collapsed) */}
