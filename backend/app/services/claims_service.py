@@ -705,20 +705,46 @@ def get_batch(batch_id: int, tenant_id: str = "") -> dict[str, Any] | None:
 
 
 def list_batches(limit: int = 50, offset: int = 0, tenant_id: str = "") -> list[dict[str, Any]]:
-    """Return all claims batches ordered by most recent."""
-    with raf_cursor() as cur:
-        if tenant_id:
-            cur.execute(
-                "SELECT * FROM claims_batches WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                (tenant_id, limit, offset),
+    """Return all claims batches ordered by most recent.
+
+    Falls back to an unfiltered (no tenant_id clause) query when the
+    ``tenant_id`` column is absent from ``claims_batches`` due to schema
+    drift, so a missing migration never produces a 500 for callers.
+    """
+    try:
+        with raf_cursor() as cur:
+            if tenant_id:
+                cur.execute(
+                    "SELECT * FROM claims_batches WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                    (tenant_id, limit, offset),
+                )
+            else:
+                cur.execute(
+                    "SELECT * FROM claims_batches ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                    (limit, offset),
+                )
+            rows = cur.fetchall()
+        return [_serialize_row(r) for r in rows]
+    except Exception as exc:
+        exc_lower = str(exc).lower()
+        if "tenant_id" in exc_lower or "unknown column" in exc_lower:
+            logger.warning(
+                "claims_batches missing tenant_id column — returning unfiltered list. "
+                "Run migration 021_batch1_schema_additions to fix. Error: %s",
+                exc,
             )
-        else:
-            cur.execute(
-                "SELECT * FROM claims_batches ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                (limit, offset),
-            )
-        rows = cur.fetchall()
-    return [_serialize_row(r) for r in rows]
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        "SELECT * FROM claims_batches ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                        (limit, offset),
+                    )
+                    rows = cur.fetchall()
+                return [_serialize_row(r) for r in rows]
+            except Exception as inner_exc:
+                logger.error("list_batches fallback also failed: %s", inner_exc)
+                return []
+        raise
 
 
 def delete_batch(batch_id: int, tenant_id: str = "") -> int:
