@@ -279,31 +279,32 @@ test.describe("RAF Intelligence — demo video", () => {
     await page.goto(`${BASE_URL}/patients`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("main", { timeout: 20_000 });
     await page.waitForTimeout(1000);
+
+    // Wait for the auto-sync toast — match by actual text content, not role.
     await setSubtitle(page, "RAF Intelligence is watching for new patients...");
-
-    const toastSelector =
-      '[data-sonner-toast], [role="status"], [role="alert"], .toast, [aria-label*="Patient"], [aria-label*="patient"]';
-
+    const t0 = Date.now();
     let toastFired = false;
     let toastTimeMs = -1;
-
-    const t0 = Date.now();
+    let toastText = "";
     try {
-      await page.waitForSelector(toastSelector, { state: "visible", timeout: 35_000 });
+      // Match the actual toast text fired by /patients page on patient.synced/scored.
+      const toastLocator = page.getByText(/Patient (synced|scored):/i).first();
+      await toastLocator.waitFor({ state: "visible", timeout: 35_000 });
       toastFired = true;
       toastTimeMs = Date.now() - t0;
+      toastText = (await toastLocator.textContent()) ?? "";
       const elapsed = Math.round(toastTimeMs / 1000);
-      console.log(`[TOAST] fired at ${elapsed}s after insert`);
+      console.log(`[TOAST] fired at ${elapsed}s — "${toastText}"`);
       await setSubtitle(page, `Synced in ${elapsed}s — auto-scored, auto-analyzed.`);
       await page.screenshot({ path: path.join(FRAMES_DIR, "06-toast.png") });
-      await page.waitForTimeout(2500); // dwell so viewer reads the subtitle
+      // Dwell so the toast is on screen for the viewer; the toast itself dismisses in 15s
+      await page.waitForTimeout(4000);
     } catch {
-      // Toast didn't appear within 35s — show fallback subtitle
       await setSubtitle(page, "Auto-sync detected the new patient.");
       await page.screenshot({ path: path.join(FRAMES_DIR, "06-toast.png") });
-      await page.waitForTimeout(2000);
-      console.log(`[TOAST] not detected within 35s`);
+      await page.waitForTimeout(2500);
     }
+    console.log(`[record-demo] toast seen: ${toastFired}`);
 
     // Also poll for the row to appear (needed for navigation)
     let rowVisible = false;
@@ -443,6 +444,7 @@ test.describe("RAF Intelligence — demo video", () => {
         {
           toast_fired: toastFired,
           toast_time_s: toastTimeMs > 0 ? Math.round(toastTimeMs / 1000) : null,
+          toast_text: toastText,
           row_visible: rowVisible,
           emr_pid: newEmrPid,
           local_pid: localPid,
