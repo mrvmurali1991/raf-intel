@@ -1162,6 +1162,8 @@ export default function ClaimsPage() {
         .batch-row:hover { background: ${C.tealSoft} !important; }
         @media (max-width: 640px) { .rci-page-pad-desktop { padding: 20px 16px !important; } }
         button:focus-visible { outline: 2px solid ${tokens.primary}; outline-offset: 2px; border-radius: 4px; }
+        @media (max-width: 768px) { .claims-kpi-row { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 480px) { .claims-kpi-row { grid-template-columns: 1fr !important; } }
       `}</style>
 
       {/* Data quality banner */}
@@ -1189,9 +1191,9 @@ export default function ClaimsPage() {
         }
       />
 
-      {/* KPI row */}
+      {/* KPI row — auto-fit wraps to 2-col on mobile */}
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 16,
+        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16,
       }}>
         <StatCard loading={statsQ.isLoading} label="Total Batches" value={fmtN(kpi.totalBatches)}
           subtitle={statsQ.data?.last_upload ? `Last upload ${fmtDate(statsQ.data.last_upload)}` : "No uploads yet"}

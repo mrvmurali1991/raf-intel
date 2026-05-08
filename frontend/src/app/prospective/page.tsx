@@ -1231,8 +1231,8 @@ export default function ProspectivePage() {
           )
         ) : (
           <>
-            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                 <thead>
                   <tr>
                     <th style={{ ...thStyle, width: 56 }}>Rank</th>
@@ -1593,8 +1593,8 @@ export default function ProspectivePage() {
               </span>
             </div>
           </div>
-          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
                 <tr>
                   <th style={thStyle}>Patient</th>

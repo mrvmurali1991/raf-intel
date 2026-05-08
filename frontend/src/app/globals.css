@@ -180,7 +180,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    overflow-x: hidden;
+    /* overflow-x removed: was clipping horizontal scroll wrappers inside tables.
+       The sidebar layout uses position:fixed/sticky so no page-level overflow needed. */
   }
   html {
     @apply font-sans;

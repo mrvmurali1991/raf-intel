@@ -879,11 +879,13 @@ export default function ROICalculatorPage() {
 
   return (
     <div
+      className="roi-page-root"
       style={{
         background: tokens.slate50,
         minHeight: "100vh",
         padding: "32px 40px 60px",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        overflowX: "hidden",
       }}
     >
       <style>{`
@@ -915,6 +917,7 @@ export default function ROICalculatorPage() {
           .results-2col { grid-template-columns: 1fr !important; }
           .charts-3col { grid-template-columns: 1fr !important; }
           .pricing-row { grid-template-columns: 1fr !important; }
+          .roi-page-root { padding: 20px 16px 40px !important; }
         }
         .roi-slider {
           -webkit-appearance: none;
@@ -1157,6 +1160,9 @@ export default function ROICalculatorPage() {
             padding: 28,
             position: "sticky",
             top: 20,
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflowX: "hidden",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>

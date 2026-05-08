@@ -243,8 +243,8 @@ export default function DisputesPage() {
       </div>
 
       {/* ── Kanban ──────────────────────────────────────────────── */}
-      <div style={{ overflowX: "auto", marginBottom: 0 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(220px, 1fr))", gap: 12, minWidth: 1100 }}>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%", marginBottom: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(200px, 1fr))", gap: 10, minWidth: 1020 }}>
         {COLUMNS.map((col) => (
           <KanbanColumn
             key={col.status}

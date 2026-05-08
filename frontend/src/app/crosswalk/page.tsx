@@ -621,13 +621,14 @@ export default function CrosswalkPage() {
             boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
           }}
         >
-          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 14 }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 14, width: "100%", maxWidth: "100%", display: "block" }}>
           <table
             aria-label="RAF score calculation results"
             style={{
               width: "100%",
               borderCollapse: "collapse",
               fontSize: 13,
+              minWidth: 560,
             }}
           >
             <thead>
