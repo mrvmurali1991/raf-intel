@@ -181,7 +181,8 @@ export default function UploadsPage() {
 
   return (
     <div style={{ fontFamily: FONT_SYS, padding: "28px 32px", maxWidth: 1120, margin: "0 auto" }}>
-      <header style={{ marginBottom: 24 }}>
+      <style>{`@media (max-width: 1024px) { .uploads-header { padding-left: 56px !important; } }`}</style>
+      <header className="uploads-header" style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: 0 }}>
           Patient Data Uploads
         </h1>
