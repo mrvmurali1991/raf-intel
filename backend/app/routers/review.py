@@ -85,48 +85,54 @@ def list_candidates(
     kind: ItemKind | None = Query(default=None),
     status: str = Query(default="open"),
     limit: int = Query(default=200, ge=1, le=1000),
+    sort_by: str | None = Query(default=None, description="Ignored — reserved for future use"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ) -> CandidatesResponse:
     items: list[ReviewItem] = []
     with raf_cursor() as cur:
         # --- suspects --------------------------------------------------------
-        # form_suspects has no tenant_id column; scope via patients subquery
+        # form_suspects has no tenant_id column; scope via patients subquery.
+        # Wrapped in try/except so a missing table doesn't fail the whole call.
         if kind in (None, "suspect"):
-            cur.execute(
-                """
-                SELECT s.id, s.patient_id, s.suspect_hcc AS hcc,
-                       s.suspect_icd10 AS icd10,
-                       s.suspected_condition AS `condition`,
-                       s.confidence_score AS confidence,
-                       s.trigger_value AS evidence_snippet,
-                       s.status, s.created_at,
-                       CONCAT_WS(' ', p.fname, p.lname) AS patient_name
-                  FROM form_suspects s
-                  LEFT JOIN patient_data p ON p.pid = s.patient_id
-                 WHERE (%s IS NULL OR s.status = %s)
-                   AND s.patient_id IN (
-                       SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
-                   )
-                 ORDER BY s.confidence_score IS NULL, s.confidence_score DESC, s.id DESC
-                 LIMIT %s
-                """,
-                (status or None, status, tenant_id, limit),
-            )
-            for r in cur.fetchall() or []:
-                items.append(ReviewItem(
-                    id=f"suspect:{r['id']}",
-                    kind="suspect",
-                    patient_id=r["patient_id"],
-                    patient_name=r.get("patient_name"),
-                    hcc=r.get("hcc"),
-                    icd10=r.get("icd10"),
-                    condition=r.get("condition"),
-                    confidence=r.get("confidence"),
-                    evidence_snippet=r.get("evidence_snippet"),
-                    status=r.get("status") or "open",
-                    created_at=str(r.get("created_at")) if r.get("created_at") else None,
-                ))
+            try:
+                cur.execute(
+                    """
+                    SELECT s.id, s.patient_id, s.suspect_hcc AS hcc,
+                           s.suspect_icd10 AS icd10,
+                           s.suspected_condition AS `condition`,
+                           s.confidence_score AS confidence,
+                           s.trigger_value AS evidence_snippet,
+                           s.status, s.created_at,
+                           CONCAT_WS(' ', p.fname, p.lname) AS patient_name
+                      FROM form_suspects s
+                      LEFT JOIN patient_data p ON p.pid = s.patient_id
+                     WHERE (%s IS NULL OR s.status = %s)
+                       AND s.patient_id IN (
+                           SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
+                       )
+                     ORDER BY s.confidence_score IS NULL, s.confidence_score DESC, s.id DESC
+                     LIMIT %s
+                    """,
+                    (status or None, status, tenant_id, limit),
+                )
+                for r in cur.fetchall() or []:
+                    items.append(ReviewItem(
+                        id=f"suspect:{r['id']}",
+                        kind="suspect",
+                        patient_id=r["patient_id"],
+                        patient_name=r.get("patient_name"),
+                        hcc=r.get("hcc"),
+                        icd10=r.get("icd10"),
+                        condition=r.get("condition"),
+                        confidence=r.get("confidence"),
+                        evidence_snippet=r.get("evidence_snippet"),
+                        status=r.get("status") or "open",
+                        created_at=str(r.get("created_at")) if r.get("created_at") else None,
+                    ))
+            except Exception:
+                # Table may not yet exist in all environments — don't fail the call.
+                logger.debug("form_suspects query skipped", exc_info=True)
 
         # --- HCC candidates (from NLP extractions) --------------------------
         # ai_hcc_candidates has no tenant_id column; scope via patients subquery
