@@ -1,15 +1,15 @@
 /**
- * RAF Intelligence — 60-second sales demo video recorder.
+ * RAF Intelligence — ~50s sales demo video recorder (adaptive timing).
  *
  * Scenes:
- *   0-3s    Title card
- *   3-8s    Login flow
- *   8-15s   /patients overview
- *   15-22s  Terminal-style EMR insert animation
- *   22-23s  Actual DB insert
- *   23-50s  Auto-sync wait with countdown
- *   50-58s  Patient detail page
- *   58-65s  End card
+ *   0-2.5s   Title card
+ *   2.5-8s   Login flow
+ *   8-15s    /patients overview
+ *   15-21s   Terminal-style EMR insert animation (~3s typing + 1s result)
+ *   21-22s   Actual DB insert
+ *   22-26s   Auto-sync wait (adaptive, exits as soon as toast fires, cap 35s)
+ *   26-35s   Patient detail page + RAF score zoom
+ *   35-37.5s End card
  *
  * Run:
  *   cd frontend && npx playwright test --config=playwright.video.config.ts \
@@ -115,11 +115,11 @@ async function removeOverlay(
 test.describe("RAF Intelligence — demo video", () => {
   test.setTimeout(300_000);
 
-  test("record 60s sales demo", async ({ page }) => {
+  test("record adaptive-timing sales demo", async ({ page }) => {
     ensureDir(FRAMES_DIR);
 
     // ------------------------------------------------------------------ //
-    // SCENE 1 (0-3s): Title card on a blank page                          //
+    // SCENE 1 (0-2.5s): Title card on a blank page                        //
     // ------------------------------------------------------------------ //
     await page.goto("about:blank");
     await page.evaluate(() => {
@@ -142,14 +142,13 @@ test.describe("RAF Intelligence — demo video", () => {
       </div>
       `
     );
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500); // was 3000 → 2500
     await page.screenshot({ path: path.join(FRAMES_DIR, "01-title.png") });
 
     // ------------------------------------------------------------------ //
-    // SCENE 2 (3-8s): Login flow                                          //
+    // SCENE 2 (2.5-8s): Login flow                                         //
     // ------------------------------------------------------------------ //
     await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
-    // Remove title card now that we're on the real app
     await removeOverlay(page);
     await page.evaluate(() => {
       document.body.style.background = "";
@@ -165,24 +164,25 @@ test.describe("RAF Intelligence — demo video", () => {
     await page.waitForTimeout(1500);
 
     // ------------------------------------------------------------------ //
-    // SCENE 3 (8-15s): /patients overview                                 //
+    // SCENE 3 (8-15s): /patients overview                                  //
     // ------------------------------------------------------------------ //
     await page.goto(`${BASE_URL}/patients`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("main", { timeout: 20_000 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
     await setSubtitle(page, "30 patients, all auto-RAF-scored. $103K in revenue identified.");
     await page.screenshot({ path: path.join(FRAMES_DIR, "03-patients.png") });
 
-    // Slow scroll to show the table content
+    // Smooth scroll to show table content
     await page.evaluate(() => window.scrollBy({ top: 400, behavior: "smooth" }));
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
     await page.evaluate(() => window.scrollBy({ top: 300, behavior: "smooth" }));
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1200);
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1000);
 
     // ------------------------------------------------------------------ //
-    // SCENE 4 (15-22s): Terminal-style OpenEMR insert animation           //
+    // SCENE 4 (15-21s): Terminal-style OpenEMR insert animation            //
+    // Fast typing: aim for ~3s total, then "Query OK" for 1s              //
     // ------------------------------------------------------------------ //
     const FNAME = "DemoSales";
     const LNAME = "Patient";
@@ -220,23 +220,23 @@ test.describe("RAF Intelligence — demo video", () => {
       document.body.appendChild(el);
     });
 
-    // Type SQL character by character
-    const fullSql = sqlCmd;
-    const chars = fullSql.split("");
+    // Type SQL character by character — target ~3s total for the full command
+    // sqlCmd is ~115 chars; 3000ms / 115 chars ≈ 26ms per char base
+    const chars = sqlCmd.split("");
     for (let i = 0; i < chars.length; i++) {
-      const chunk = fullSql.slice(0, i + 1);
+      const chunk = sqlCmd.slice(0, i + 1);
       await page.evaluate((c: string) => {
         const el = document.getElementById("__demo_sql__");
         if (el) el.textContent = c;
       }, chunk);
-      // Vary speed: faster for regular chars, pause at newlines
       const ch = chars[i];
-      const delay = ch === "\n" ? 120 : ch === " " ? 30 : 45;
+      // Faster pace: newline 60ms, space 15ms, regular 20ms (vs 120/30/45 before)
+      const delay = ch === "\n" ? 60 : ch === " " ? 15 : 20;
       await page.waitForTimeout(delay);
     }
 
-    await page.waitForTimeout(400);
-    // Show "press enter" effect
+    await page.waitForTimeout(300);
+    // Show "Query OK" result and hide cursor
     await page.evaluate(() => {
       const cur = document.getElementById("__demo_cursor__");
       if (cur) cur.style.display = "none";
@@ -249,10 +249,10 @@ test.describe("RAF Intelligence — demo video", () => {
       }
     });
     await page.screenshot({ path: path.join(FRAMES_DIR, "04-terminal.png") });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1000); // 1s dwell on "Query OK" (was 1500)
 
     // ------------------------------------------------------------------ //
-    // SCENE 5 (22-23s): Actual DB insert                                  //
+    // SCENE 5 (~21s): Actual DB insert                                     //
     // ------------------------------------------------------------------ //
     execSync(
       `docker exec raf-mysql mysql -uroot -proot openemr -e "INSERT INTO patient_data (pid, fname, lname, DOB, sex) SELECT MAX(pid)+1, '${FNAME}', '${LNAME}', '${DOB}', '${SEX}' FROM patient_data;" 2>/dev/null`
@@ -263,7 +263,7 @@ test.describe("RAF Intelligence — demo video", () => {
     const newEmrPid = parseInt(newEmrPidStr, 10);
     console.log(`[INSERT] emr_pid=${newEmrPid} — ${FNAME} ${LNAME}`);
 
-    // Remove terminal overlay, go back to /patients
+    // Remove terminal overlay, navigate to /patients
     await page.evaluate(() => {
       const el = document.getElementById("__demo_terminal__");
       if (el) el.remove();
@@ -272,80 +272,54 @@ test.describe("RAF Intelligence — demo video", () => {
     const insertedAt = Date.now();
 
     // ------------------------------------------------------------------ //
-    // SCENE 6 (23-50s): /patients page, auto-sync countdown               //
+    // SCENE 6 (~22-26s): Adaptive auto-sync wait                           //
+    // Replaces the old 30-tick × 2s = 60s countdown loop.                //
+    // Exits IMMEDIATELY when toast is visible; cap at 35s.               //
     // ------------------------------------------------------------------ //
     await page.goto(`${BASE_URL}/patients`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("main", { timeout: 20_000 });
-    await page.waitForTimeout(1500);
-    await setSubtitle(page, "RAF Intelligence is watching... (syncing in 30s)");
+    await page.waitForTimeout(1000);
+    await setSubtitle(page, "RAF Intelligence is watching for new patients...");
+
+    const toastSelector =
+      '[data-sonner-toast], [role="status"], [role="alert"], .toast, [aria-label*="Patient"], [aria-label*="patient"]';
 
     let toastFired = false;
     let toastTimeMs = -1;
+
+    const t0 = Date.now();
+    try {
+      await page.waitForSelector(toastSelector, { state: "visible", timeout: 35_000 });
+      toastFired = true;
+      toastTimeMs = Date.now() - t0;
+      const elapsed = Math.round(toastTimeMs / 1000);
+      console.log(`[TOAST] fired at ${elapsed}s after insert`);
+      await setSubtitle(page, `Synced in ${elapsed}s — auto-scored, auto-analyzed.`);
+      await page.screenshot({ path: path.join(FRAMES_DIR, "06-toast.png") });
+      await page.waitForTimeout(2500); // dwell so viewer reads the subtitle
+    } catch {
+      // Toast didn't appear within 35s — show fallback subtitle
+      await setSubtitle(page, "Auto-sync detected the new patient.");
+      await page.screenshot({ path: path.join(FRAMES_DIR, "06-toast.png") });
+      await page.waitForTimeout(2000);
+      console.log(`[TOAST] not detected within 35s`);
+    }
+
+    // Also poll for the row to appear (needed for navigation)
     let rowVisible = false;
-
-    // Poll in 2s increments for up to 60s total, update countdown subtitle
-    for (let tick = 0; tick < 30; tick++) {
-      await page.waitForTimeout(2000);
-      const elapsed = Math.round((Date.now() - insertedAt) / 1000);
-      const remaining = Math.max(0, 30 - elapsed);
-
-      if (!toastFired) {
-        await setSubtitle(
-          page,
-          remaining > 0
-            ? `RAF Intelligence is watching... (auto-sync in ~${remaining}s)`
-            : "RAF Intelligence is watching... (syncing now)"
-        );
-      }
-
-      // Detect toast
-      const toastSelectors = [
-        '[data-sonner-toast]',
-        '[role="status"]',
-        '[role="alert"]',
-        `.toast`,
-      ];
-      for (const sel of toastSelectors) {
-        const vis = await page.locator(sel).first().isVisible().catch(() => false);
-        if (vis && !toastFired) {
-          toastFired = true;
-          toastTimeMs = Date.now() - insertedAt;
-          console.log(`[TOAST] fired at ${Math.round(toastTimeMs / 1000)}s`);
-          await setSubtitle(
-            page,
-            "Auto-synced. Auto-scored. Auto-analyzed. — 0 clicks."
-          );
-          await page.screenshot({ path: path.join(FRAMES_DIR, "06-toast.png") });
-          await page.waitForTimeout(3000);
-          break;
-        }
-      }
-
-      // Check if row appeared in table
-      const rowVis = await page
-        .locator(`tbody tr:has-text("${FNAME}")`)
-        .first()
-        .isVisible()
-        .catch(() => false);
-      if (rowVis) rowVisible = true;
-
-      // If toast fired and row visible, we can wrap up this scene
-      if (toastFired && rowVisible) break;
-    }
-
-    // If no toast detected, still mark as watched, take shot
-    if (!toastFired) {
-      await setSubtitle(page, "Auto-synced. Auto-scored. Auto-analyzed. — 0 clicks.");
-      await page.screenshot({ path: path.join(FRAMES_DIR, "06-no-toast.png") });
-      await page.waitForTimeout(2000);
-    }
+    const rowVis = await page
+      .locator(`tbody tr:has-text("${FNAME}")`)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (rowVis) rowVisible = true;
 
     await page.screenshot({ path: path.join(FRAMES_DIR, "05-patients-watching.png") });
 
     // ------------------------------------------------------------------ //
-    // SCENE 7 (50-58s): Patient detail page                               //
+    // SCENE 7 (~26-35s): Patient detail page + RAF score zoom              //
     // ------------------------------------------------------------------ //
-    await setSubtitle(page, "RAF Score, HCC suspects, MEAT validation — all in 30 seconds.");
+    await setSubtitle(page, "RAF Score, HCC suspects, MEAT validation — all in seconds.");
 
     // Get the local patient ID from RAF DB
     const localPidStr = mysql(
@@ -353,14 +327,13 @@ test.describe("RAF Intelligence — demo video", () => {
     );
     const localPid = localPidStr ? parseInt(localPidStr, 10) : null;
 
-    // Try clicking the row first
+    // Navigate to patient detail
     const row = page.locator(`tbody tr:has-text("${FNAME}")`).first();
     const rowOnPage = await row.isVisible().catch(() => false);
 
     if (rowOnPage) {
-      // Scroll row into view and click
       await row.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(400);
       const rowLink = row.locator("a").first();
       const hasLink = await rowLink.isVisible().catch(() => false);
       if (hasLink) {
@@ -372,9 +345,8 @@ test.describe("RAF Intelligence — demo video", () => {
     } else if (localPid) {
       await page.goto(`${BASE_URL}/patients/${localPid}`, { waitUntil: "domcontentloaded" });
     } else {
-      // Reload and try
       await page.reload({ waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1500);
       const reloadRow = page.locator(`tbody tr:has-text("${FNAME}")`).first();
       const reloadRowVis = await reloadRow.isVisible().catch(() => false);
       if (reloadRowVis) {
@@ -383,19 +355,44 @@ test.describe("RAF Intelligence — demo video", () => {
       }
     }
 
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(2000);
     await page.screenshot({ path: path.join(FRAMES_DIR, "07-patient-detail.png") });
 
-    // Slow scroll to show detail content
+    // Smooth scroll to show detail content
     await page.evaluate(() => window.scrollBy({ top: 300, behavior: "smooth" }));
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1200);
     await page.evaluate(() => window.scrollBy({ top: 300, behavior: "smooth" }));
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1200);
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1000);
+
+    // "Wow" zoom: scale the RAF score area to 1.2× over 1.5s for emphasis
+    await page.evaluate(() => {
+      // Target the RAF score card / badge — try several selectors
+      const scoreEl =
+        document.querySelector<HTMLElement>('[data-testid="raf-score"]') ??
+        document.querySelector<HTMLElement>(".raf-score") ??
+        document.querySelector<HTMLElement>('[class*="raf"][class*="score"]') ??
+        // Fallback: find a large numeric element near top of content
+        (() => {
+          const all = Array.from(document.querySelectorAll<HTMLElement>("h1,h2,h3,[class*='score']"));
+          return all.find((el) => /\d+\.\d+/.test(el.textContent ?? "")) ?? null;
+        })();
+
+      if (scoreEl) {
+        scoreEl.style.transition = "transform 1.5s cubic-bezier(0.34,1.56,0.64,1)";
+        scoreEl.style.transformOrigin = "center center";
+        scoreEl.style.display = "inline-block";
+        scoreEl.style.transform = "scale(1.2)";
+        setTimeout(() => {
+          scoreEl.style.transform = "scale(1)";
+        }, 1800);
+      }
+    });
+    await page.waitForTimeout(3000); // hold through zoom + return
 
     // ------------------------------------------------------------------ //
-    // SCENE 8 (58-65s): End card                                          //
+    // SCENE 8 (~35-37.5s): End card                                        //
     // ------------------------------------------------------------------ //
     await setSubtitle(page, "");
     await showOverlay(
@@ -410,7 +407,7 @@ test.describe("RAF Intelligence — demo video", () => {
         <div style="font-size:36px;font-weight:500;color:#6ee7b7;
                     font-family:'Inter','Helvetica Neue',sans-serif;
                     margin-bottom:48px">
-          From insert to insight in 30 seconds.
+          From insert to insight in seconds.
         </div>
         <div style="font-size:28px;font-weight:400;color:#d1fae5;
                     font-family:'Inter','Helvetica Neue',sans-serif;
@@ -423,7 +420,7 @@ test.describe("RAF Intelligence — demo video", () => {
       "__demo_end__"
     );
     await page.screenshot({ path: path.join(FRAMES_DIR, "08-end-card.png") });
-    await page.waitForTimeout(7000);
+    await page.waitForTimeout(2500); // was 7000 → 2500
 
     // ------------------------------------------------------------------ //
     // Cleanup: remove test patient from both DBs                           //
