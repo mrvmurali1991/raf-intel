@@ -295,35 +295,48 @@ def _upsert_raf_score(
             # Sync the authoritative RAF columns back to the patients table so
             # that list/search queries always reflect the latest calculated score
             # without requiring a JOIN to raf_scores.
+            #
+            # NOTE: when `patients` is a VIEW (OpenEMR-bridged deployments) this
+            # UPDATE will fail because the VIEW doesn't expose those columns.
+            # Wrap it independently so a failure here doesn't roll back the
+            # raf_scores INSERT above.
             patient_id: int = result["patient_id"]
             final_raf: float = result["payment_raf"]
             demographic_score: float = result["demographic_score"]
-            cur.execute(
-                """
-                UPDATE patients SET
-                    raf_score        = %s,
-                    hcc_count        = (
-                        SELECT COUNT(*)
-                        FROM raf_patient_hcc
-                        WHERE patient_id = %s
-                          AND measurement_year = %s
-                          AND tenant_id = %s
-                          AND is_trumped = 0
+            try:
+                cur.execute(
+                    """
+                    UPDATE patients SET
+                        raf_score        = %s,
+                        hcc_count        = (
+                            SELECT COUNT(*)
+                            FROM raf_patient_hcc
+                            WHERE patient_id = %s
+                              AND measurement_year = %s
+                              AND tenant_id = %s
+                              AND is_trumped = 0
+                        ),
+                        demographic_score = %s,
+                        updated_at        = NOW()
+                    WHERE id = %s AND tenant_id = %s
+                    """,
+                    (
+                        final_raf,
+                        patient_id,
+                        result["measurement_year"],
+                        tenant_id,
+                        demographic_score,
+                        patient_id,
+                        tenant_id,
                     ),
-                    demographic_score = %s,
-                    updated_at        = NOW()
-                WHERE id = %s AND tenant_id = %s
-                """,
-                (
-                    final_raf,
+                )
+            except Exception as denorm_exc:
+                logger.warning(
+                    "Skipped patients-table denormalization for pid=%s "
+                    "(read-only VIEW or missing column): %s",
                     patient_id,
-                    result["measurement_year"],
-                    tenant_id,
-                    demographic_score,
-                    patient_id,
-                    tenant_id,
-                ),
-            )
+                    denorm_exc,
+                )
     except Exception as exc:
         logger.error(
             "Failed to persist raf_scores for pid=%s tenant=%s: %s",
