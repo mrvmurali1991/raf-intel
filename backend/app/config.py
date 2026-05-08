@@ -301,6 +301,15 @@ class Settings:
     # Example: "http://otel-collector:4317"
     otel_exporter_otlp_endpoint: str = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 
+    # Auto-sync polling loop — runs every 30 s and syncs new OpenEMR patients
+    # into raf_intelligence, then scores and analyzes them automatically.
+    # Default: enabled in development/demo, disabled in production.
+    auto_sync_enabled: bool = os.getenv(
+        "AUTO_SYNC_ENABLED",
+        "true" if _APP_ENV in ("development", "demo") else "false",
+    ).lower() in ("1", "true", "yes")
+    auto_sync_interval_seconds: int = int(os.getenv("AUTO_SYNC_INTERVAL_SECONDS", "30"))
+
 
 def _validate_settings(s: Settings) -> None:
     """Run post-instantiation checks and emit the mandatory APP_ENV banner.

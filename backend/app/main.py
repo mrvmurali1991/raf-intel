@@ -13,6 +13,7 @@ Environment:
 # Note: do NOT use 'from __future__ import annotations' here —
 # it breaks FastAPI/Pydantic schema generation (ForwardRef errors in /openapi.json).
 
+import asyncio
 import logging
 import os
 import subprocess
@@ -126,6 +127,22 @@ async def lifespan(app: FastAPI):
     setup_pipeline_chain()
     start_scheduler()
 
+    # Auto-sync polling task — runs only when AUTO_SYNC_ENABLED=true.
+    _auto_sync_task = None
+    if settings.auto_sync_enabled:
+        from app.services.auto_sync_loop import run_auto_sync_loop
+
+        _auto_sync_task = asyncio.create_task(
+            run_auto_sync_loop(interval=settings.auto_sync_interval_seconds),
+            name="auto_sync_loop",
+        )
+        logger.info(
+            "auto_sync: background task started (interval=%ds)",
+            settings.auto_sync_interval_seconds,
+        )
+    else:
+        logger.info("auto_sync: disabled (AUTO_SYNC_ENABLED=false)")
+
     # Recover zombie jobs left in RUNNING/QUEUED state by a previous crash
     # or restart. FastAPI BackgroundTasks are in-process and lost on restart,
     # so without this sweep callers polling /api/analysis/jobs/{id} would wait
@@ -144,6 +161,14 @@ async def lifespan(app: FastAPI):
         logger.warning("Startup recovery of stale jobs failed (non-fatal): %s", exc)
 
     yield  # application runs
+
+    if _auto_sync_task is not None and not _auto_sync_task.done():
+        _auto_sync_task.cancel()
+        try:
+            await _auto_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("auto_sync: background task stopped.")
 
     stop_scheduler()
     shutdown_db_executor()
