@@ -215,7 +215,7 @@ export default function DisputesPage() {
       />
 
       {/* ── Metrics Strip ───────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16, marginBottom: 24 }}>
         <StatCard
           label="Win Rate"
           value={metrics ? `${(metrics.win_rate * 100).toFixed(1)}%` : "--"}
@@ -243,8 +243,8 @@ export default function DisputesPage() {
       </div>
 
       {/* ── Kanban ──────────────────────────────────────────────── */}
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%", marginBottom: 0 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(200px, 1fr))", gap: 10, minWidth: 1020 }}>
+      <div style={{ width: "100%", maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", marginBottom: 0 }}>
+      <div style={{ display: "flex", gap: 10, minWidth: 1100 }}>
         {COLUMNS.map((col) => (
           <KanbanColumn
             key={col.status}
@@ -367,7 +367,7 @@ function KanbanColumn(props: {
   onRecordOutcome: (d: Dispute) => void;
 }) {
   return (
-    <div style={{ background: T.slate50, borderRadius: 10, padding: 10, minHeight: 400 }}>
+    <div style={{ background: T.slate50, borderRadius: 10, padding: 10, minHeight: 400, flex: "1 0 200px" }}>
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 10, padding: "0 4px",
