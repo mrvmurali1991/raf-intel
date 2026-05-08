@@ -33,7 +33,7 @@ from app.services.email_service import (
     get_email_config,
     send_email,
 )
-from app.services.realtime_service import connection_manager
+from app.services.realtime_service import broadcast_patient_event, connection_manager
 
 logger = logging.getLogger(__name__)
 
@@ -370,3 +370,43 @@ async def notifications_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Patient-event broadcast endpoint (admin-only, used for testing / triggers)
+# ---------------------------------------------------------------------------
+
+class _PatientBroadcastBody(BaseModel):
+    event_type: str = Field(
+        ...,
+        description='One of "patient.synced", "patient.scored", "patient.analyzed"',
+    )
+    payload: dict[str, Any] = Field(
+        ...,
+        description="Must include pid and tenant_id; additional fields passed through",
+    )
+
+
+@router.post(
+    "/broadcast-patient-event",
+    summary="Broadcast a patient-pipeline SSE event to all subscribers (admin only)",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def broadcast_patient_event_endpoint(
+    body: _PatientBroadcastBody,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Trigger a ``broadcast_patient_event`` from within the web-server process
+    so it reaches all currently connected SSE clients.
+
+    Requires admin role.  Accepts the same event types and payload structure
+    as ``broadcast_patient_event()``.
+    """
+    if current_user.get("role") not in ("admin", "superadmin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required to broadcast patient events",
+        )
+    await broadcast_patient_event(body.event_type, body.payload)
+    return {"status": "queued", "event_type": body.event_type}

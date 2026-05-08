@@ -64,6 +64,10 @@ REALTIME_EVENTS = [
     "awv_completed",
     "system_alert",
     "kpi_refresh",          # internal — triggers widget reload, not persisted
+    # Patient pipeline events
+    "patient.synced",
+    "patient.scored",
+    "patient.analyzed",
 ]
 
 # Map from realtime event type → dashboard_alerts.alert_type ENUM value.
@@ -887,4 +891,82 @@ def publish_raf_updated_sync(
         logger.error(
             "realtime: publish_raf_updated_sync failed pid=%s tenant=%s: %s",
             pid, tenant_id, exc,
+        )
+
+
+# ---------------------------------------------------------------------------
+# broadcast_patient_event — public async API for patient pipeline events
+# ---------------------------------------------------------------------------
+
+_PATIENT_EVENT_TYPES = frozenset({"patient.synced", "patient.scored", "patient.analyzed"})
+
+
+async def broadcast_patient_event(event_type: str, payload: dict[str, Any]) -> None:
+    """
+    Push a patient-pipeline event to every SSE client in the payload's tenant.
+
+    Parameters
+    ----------
+    event_type : str
+        One of "patient.synced", "patient.scored", "patient.analyzed".
+    payload : dict
+        Must include ``pid`` and ``tenant_id``.  Additional fields such as
+        ``raf_score``, ``suspects_count``, and ``hcc_count`` are passed
+        through verbatim to the SSE ``data`` field.
+
+    Behaviour
+    ---------
+    - Validates ``event_type`` and ``tenant_id`` / ``pid`` presence.
+    - Attaches an ISO-8601 ``timestamp`` if the caller omitted one.
+    - Routes through ``connection_manager.broadcast`` which uses Redis
+      pub/sub when available, falling back to the in-process asyncio.Queue.
+    - Slow consumers are protected by the per-connection ``maxsize=256``
+      queue: ``put_nowait`` drops the event and logs a warning rather than
+      blocking.
+    - Never raises — errors are logged and swallowed so callers are not
+      interrupted.
+
+    Example
+    -------
+    ::
+
+        await broadcast_patient_event(
+            "patient.scored",
+            {"pid": 42, "tenant_id": "1", "raf_score": 1.87},
+        )
+    """
+    if event_type not in _PATIENT_EVENT_TYPES:
+        logger.warning(
+            "broadcast_patient_event: unknown event_type=%r (expected one of %s)",
+            event_type, sorted(_PATIENT_EVENT_TYPES),
+        )
+
+    tenant_id = str(payload.get("tenant_id", ""))
+    if not tenant_id:
+        logger.error("broadcast_patient_event: missing tenant_id in payload, dropping event")
+        return
+
+    pid = payload.get("pid")
+    if pid is None:
+        logger.error("broadcast_patient_event: missing pid in payload, dropping event")
+        return
+
+    envelope: dict[str, Any] = {
+        "event_type": event_type,
+        "pid": int(pid),
+        "tenant_id": tenant_id,
+        "timestamp": payload.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        **{k: v for k, v in payload.items() if k not in {"event_type", "tenant_id", "pid", "timestamp"}},
+    }
+
+    try:
+        await connection_manager.broadcast(envelope, tenant_id)
+        logger.info(
+            "realtime: broadcast_patient_event type=%s pid=%s tenant=%s",
+            event_type, pid, tenant_id,
+        )
+    except Exception as exc:
+        logger.error(
+            "realtime: broadcast_patient_event failed type=%s pid=%s tenant=%s: %s",
+            event_type, pid, tenant_id, exc,
         )
