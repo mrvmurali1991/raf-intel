@@ -2028,7 +2028,18 @@ export default function SubmissionsPage() {
   // Stats and deadlines have their own inline error states.
   const queryError = batchesQuery.isError;
 
-  const stats = statsQuery.data ?? { total_batches: 0, records_submitted: 0, acceptance_rate: 0, pending_validation: 0, upcoming_deadlines: 0 };
+  // Normalize API response — upcoming_deadlines arrives as an array of objects,
+  // records_submitted is total_records, pending_validation is total_invalid.
+  const rawStats = statsQuery.data as Record<string, unknown> | undefined;
+  const stats = {
+    total_batches: (rawStats?.total_batches as number) ?? 0,
+    records_submitted: (rawStats?.records_submitted as number) ?? (rawStats?.total_records as number) ?? 0,
+    acceptance_rate: (rawStats?.acceptance_rate as number) ?? 0,
+    pending_validation: (rawStats?.pending_validation as number) ?? (rawStats?.total_invalid as number) ?? 0,
+    upcoming_deadlines: Array.isArray(rawStats?.upcoming_deadlines)
+      ? (rawStats!.upcoming_deadlines as unknown[]).length
+      : (rawStats?.upcoming_deadlines as number) ?? 0,
+  };
   const deadlines = deadlinesQuery.data ?? [];
 
   const batches = useMemo(() => {

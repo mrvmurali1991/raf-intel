@@ -44,7 +44,7 @@ interface HealthResponse {
     retention_check_interval_hours: number;
     last_retention_sweep: string | null;
   };
-  monitoring: Record<string, number>;
+  monitoring: Record<string, unknown>;
 }
 
 interface AuditEntry {
@@ -119,7 +119,12 @@ async function fetchJwtKeyStatus(): Promise<JwtKeyStatus | null> {
   try {
     const { data } = await authApi.get("/api/admin/jwt-key-status");
     return data;
-  } catch {
+  } catch (err: unknown) {
+    // Silently ignore 404 — endpoint may not be provisioned yet
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status !== 404) {
+      console.warn("jwt-key-status fetch failed:", status);
+    }
     return null;
   }
 }
@@ -255,9 +260,9 @@ export default function SystemHealthPage() {
   const healthHttpStatus = (healthRawError as { response?: { status?: number } } | null | undefined)?.response?.status;
   const isPermDenied = healthHttpStatus === 403;
 
-  // Count total errors from monitoring stats
+  // Count total errors from monitoring stats — only scalar numeric values
   const totalErrors = health?.monitoring
-    ? Object.values(health.monitoring).reduce((sum, v) => sum + (typeof v === "number" ? v : 0), 0)
+    ? Object.entries(health.monitoring).reduce((sum, [, v]) => sum + (typeof v === "number" ? v : 0), 0)
     : 0;
 
   // Database degraded?
@@ -563,16 +568,19 @@ export default function SystemHealthPage() {
               gap: 16,
             }}
           >
-            {Object.entries(health.monitoring).map(([key, value]) => (
-              <div key={key} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: typeof value === "number" && value > 0 ? tokens.riskHigh : tokens.riskLow }}>
-                  {typeof value === "number" ? value : String(value)}
+            {Object.entries(health.monitoring)
+              // Only render scalar (number | string | boolean) values — skip nested objects/arrays
+              .filter(([, value]) => typeof value !== "object" || value === null)
+              .map(([key, value]) => (
+                <div key={key} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: typeof value === "number" && value > 0 ? tokens.riskHigh : tokens.riskLow }}>
+                    {typeof value === "number" ? value : String(value ?? "—")}
+                  </div>
+                  <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 4 }}>
+                    {key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 4 }}>
-                  {key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
