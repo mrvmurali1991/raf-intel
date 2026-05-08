@@ -770,16 +770,16 @@ export default function PatientsPage() {
   useEffect(() => {
     let es: EventSource | null = null;
     let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    (async () => {
+    const connect = async () => {
+      if (cancelled) return;
       try {
         const ticketRes = await api.get<{ ticket: string }>("/api/notifications/sse-ticket");
         if (cancelled) return;
         const ticket = ticketRes.data.ticket;
-        es = new EventSource(`${API_BASE}/api/notifications/stream?ticket=${ticket}`, { withCredentials: true });
-
-        // Mark as active immediately on successful ticket fetch (SSE stream opened)
-        if (!cancelled) setAutoSyncActive(true);
+        // withCredentials is NOT needed — auth is in the ticket URL param
+        es = new EventSource(`${API_BASE}/api/notifications/stream?ticket=${ticket}`);
 
         es.onopen = () => { if (!cancelled) setAutoSyncActive(true); };
 
@@ -803,24 +803,41 @@ export default function PatientsPage() {
 
               setSyncToast({ msg, id: Date.now() });
               if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-              toastTimerRef.current = setTimeout(() => setSyncToast(null), 5000);
+              // 15s dismiss — long enough to be seen during demos
+              toastTimerRef.current = setTimeout(() => setSyncToast(null), 15000);
             }
           } catch {}
         };
 
         es.onerror = () => {
+          if (cancelled) return;
           setAutoSyncActive(false);
-          if (es && es.readyState === EventSource.CLOSED) return;
-          es?.close();
+          // Close the dead stream and schedule a reconnect rather than
+          // staying silent. Do NOT call es.close() when readyState is
+          // CONNECTING — that prevents the native auto-reconnect.
+          if (es && es.readyState === EventSource.OPEN) {
+            es.close();
+            es = null;
+          }
+          // Re-fetch a fresh ticket and reconnect after a short delay
+          if (!cancelled) {
+            reconnectTimer = setTimeout(connect, 5000);
+          }
         };
       } catch {
-        // SSE ticket endpoint unavailable — silent fail
+        // SSE ticket endpoint unavailable — retry after delay
+        if (!cancelled) {
+          reconnectTimer = setTimeout(connect, 10000);
+        }
       }
-    })();
+    };
+
+    connect();
 
     return () => {
       cancelled = true;
       setAutoSyncActive(false);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (es) es.close();
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
