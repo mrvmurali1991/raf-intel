@@ -60,9 +60,13 @@ _MAX_RETRIES = len(_RETRY_DELAYS)
 # ---------------------------------------------------------------------------
 
 def _get_new_emr_pids() -> list[int]:
-    """Return emr_pids present in openemr.patient_data but absent from
-    raf_intelligence.patients (a VIEW), also excluding retry-exhausted pids
-    tracked in auto_sync_failed_pids."""
+    """Return emr_pids that haven't been scored yet (i.e. no row in raf_scores).
+
+    Note: ``patients`` is a VIEW over ``openemr.patient_data`` so the patient
+    appears there immediately on insert. The real signal that we haven't yet
+    processed them is the absence of a raf_scores row. We use that as our
+    "new patient" detector. Retry-exhausted pids are also excluded.
+    """
     from app.db import openemr_cursor, raf_cursor
 
     try:
@@ -78,16 +82,18 @@ def _get_new_emr_pids() -> list[int]:
 
     try:
         with raf_cursor() as cur:
-            # patients is a VIEW over openemr.patient_data — emr_pid == id
-            cur.execute("SELECT emr_pid FROM patients WHERE emr_pid IS NOT NULL")
-            known_pids = {int(row["emr_pid"]) for row in cur.fetchall()}
+            # "Already processed" = has at least one raf_scores row.
+            # Since patient.id == emr_pid for OpenEMR-bridged tenants, we
+            # query raf_scores.patient_id directly.
+            cur.execute("SELECT DISTINCT patient_id FROM raf_scores")
+            scored_pids = {int(row["patient_id"]) for row in cur.fetchall()}
             cur.execute("SELECT emr_pid FROM auto_sync_failed_pids")
             failed_pids = {int(row["emr_pid"]) for row in cur.fetchall()}
     except Exception as exc:
         logger.warning("auto_sync: failed to query raf_intelligence tables: %s", exc)
         return []
 
-    new_pids = sorted(emr_pids - known_pids - failed_pids)
+    new_pids = sorted(emr_pids - scored_pids - failed_pids)
     return new_pids
 
 
