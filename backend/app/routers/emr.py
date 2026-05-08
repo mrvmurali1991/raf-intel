@@ -25,6 +25,7 @@ PUT    /api/emr/connections/{id}/mappings           - Update field mappings
 # it breaks FastAPI/Pydantic schema generation (ForwardRef errors in /openapi.json).
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -1487,6 +1488,148 @@ def get_match_stats(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return stats
+
+
+# ---------------------------------------------------------------------------
+# Auto-sync loop observability endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/auto-sync/status",
+    summary="Get auto-sync loop health and last-cycle metrics",
+)
+@limiter.limit("60/minute")
+def auto_sync_status(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Return live metrics for the background auto-sync polling loop.
+
+    Fields:
+    - ``enabled``               — whether the loop will execute on the next tick
+    - ``last_run_at``           — ISO-8601 UTC timestamp of the last completed cycle
+    - ``next_run_in_seconds``   — estimated seconds until the next cycle fires
+    - ``new_patients_last_cycle`` — patients discovered in the last cycle
+    - ``total_synced_today``    — cumulative new patients synced since UTC midnight
+    - ``current_cycle_running`` — True when a cycle is in progress right now
+    - ``last_error``            — last per-patient error string, or null
+    """
+    from app.config import settings
+    from app.db import raf_cursor
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT enabled, last_run_at, new_patients, total_synced_today,"
+                " current_cycle_at, last_error FROM auto_sync_status WHERE id = 1 LIMIT 1"
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.warning("auto_sync_status: DB read failed: %s", exc)
+        row = None
+
+    if row is None:
+        return {
+            "enabled": settings.auto_sync_enabled,
+            "last_run_at": None,
+            "next_run_in_seconds": settings.auto_sync_interval_seconds,
+            "new_patients_last_cycle": 0,
+            "total_synced_today": 0,
+            "current_cycle_running": False,
+            "last_error": None,
+        }
+
+    last_run_at = row.get("last_run_at")
+    last_run_iso: str | None = None
+    next_run_in: int = settings.auto_sync_interval_seconds
+
+    if last_run_at:
+        if hasattr(last_run_at, "replace"):
+            # datetime object from DB driver
+            last_run_dt = last_run_at.replace(tzinfo=timezone.utc) if last_run_at.tzinfo is None else last_run_at
+        else:
+            from datetime import datetime as _dt
+            last_run_dt = _dt.fromisoformat(str(last_run_at)).replace(tzinfo=timezone.utc)
+        last_run_iso = last_run_dt.isoformat()
+        elapsed = int((datetime.now(timezone.utc) - last_run_dt).total_seconds())
+        next_run_in = max(0, settings.auto_sync_interval_seconds - elapsed)
+
+    return {
+        "enabled": bool(row.get("enabled", 1)),
+        "last_run_at": last_run_iso,
+        "next_run_in_seconds": next_run_in,
+        "new_patients_last_cycle": int(row.get("new_patients") or 0),
+        "total_synced_today": int(row.get("total_synced_today") or 0),
+        "current_cycle_running": row.get("current_cycle_at") is not None,
+        "last_error": row.get("last_error"),
+    }
+
+
+@router.post(
+    "/auto-sync/disable",
+    summary="Pause the auto-sync loop without restarting the backend",
+)
+@limiter.limit("30/minute")
+def auto_sync_disable(
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "manager")),
+) -> dict[str, Any]:
+    """
+    Persist ``enabled=0`` in auto_sync_status so the background loop skips
+    processing on every subsequent tick until re-enabled.  Takes effect on
+    the next iteration (within one interval).
+    """
+    from app.db import raf_cursor
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO auto_sync_status (id, enabled)
+                VALUES (1, 0)
+                ON DUPLICATE KEY UPDATE enabled = 0
+                """
+            )
+        logger.info("auto_sync: loop DISABLED by user=%s", current_user.get("email", "unknown"))
+    except Exception as exc:
+        logger.error("auto_sync_disable: DB write failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to disable auto-sync loop")
+
+    return {"enabled": False, "message": "Auto-sync loop paused"}
+
+
+@router.post(
+    "/auto-sync/enable",
+    summary="Resume the auto-sync loop",
+)
+@limiter.limit("30/minute")
+def auto_sync_enable(
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "manager")),
+) -> dict[str, Any]:
+    """
+    Persist ``enabled=1`` in auto_sync_status so the background loop resumes
+    processing on the next tick.
+    """
+    from app.db import raf_cursor
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO auto_sync_status (id, enabled)
+                VALUES (1, 1)
+                ON DUPLICATE KEY UPDATE enabled = 1
+                """
+            )
+        logger.info("auto_sync: loop ENABLED by user=%s", current_user.get("email", "unknown"))
+    except Exception as exc:
+        logger.error("auto_sync_enable: DB write failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to enable auto-sync loop")
+
+    return {"enabled": True, "message": "Auto-sync loop resumed"}
 
 
 # ---------------------------------------------------------------------------
