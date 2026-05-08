@@ -3,10 +3,10 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { FocusTrap } from "@/components/ui/focus-trap";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { searchPatients, isEmrDeactivatedError } from "@/lib/api";
-import api from "@/lib/api";
+import api, { API_BASE } from "@/lib/api";
 import type { Patient } from "@/types";
 import { calculateAge } from "@/lib/utils";
 import {
@@ -758,6 +758,74 @@ export default function PatientsPage() {
   const hasActiveColFilters = colFilters.sex !== "all" || colFilters.ageMin || colFilters.ageMax || colFilters.rafMin || colFilters.rafMax || colFilters.demoMin || colFilters.demoMax || colFilters.diseaseMin || colFilters.diseaseMax || colFilters.interactMin || colFilters.interactMax || colFilters.hccMin || colFilters.hccMax || colFilters.status !== "all";
   const clearColFilters = () => setColFilters({ sex: "all", ageMin: "", ageMax: "", rafMin: "", rafMax: "", demoMin: "", demoMax: "", diseaseMin: "", diseaseMax: "", interactMin: "", interactMax: "", hccMin: "", hccMax: "", status: "all" });
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  // ---------------------------------------------------------------------------
+  // Auto-sync: SSE subscription for patient.synced / patient.scored events
+  // ---------------------------------------------------------------------------
+  const [syncToast, setSyncToast] = useState<{ msg: string; id: number } | null>(null);
+  const [autoSyncActive, setAutoSyncActive] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const ticketRes = await api.get<{ ticket: string }>("/api/notifications/sse-ticket");
+        if (cancelled) return;
+        const ticket = ticketRes.data.ticket;
+        es = new EventSource(`${API_BASE}/api/notifications/stream?ticket=${ticket}`, { withCredentials: true });
+
+        // Mark as active immediately on successful ticket fetch (SSE stream opened)
+        if (!cancelled) setAutoSyncActive(true);
+
+        es.onopen = () => { if (!cancelled) setAutoSyncActive(true); };
+
+        es.onmessage = (e) => {
+          if (cancelled) return;
+          try {
+            const payload = JSON.parse(e.data) as Record<string, unknown>;
+            const evType = payload.event_type as string | undefined;
+            if (evType === "patient.synced" || evType === "patient.scored") {
+              // Invalidate the patients list so the table re-fetches
+              queryClient.invalidateQueries({ queryKey: ["patients"] });
+
+              // Build toast message
+              const fname = (payload.fname as string | undefined) ?? "";
+              const lname = (payload.lname as string | undefined) ?? "";
+              const raf = payload.raf_score != null ? Number(payload.raf_score).toFixed(2) : null;
+              const name = [fname, lname].filter(Boolean).join(" ") || `PID ${payload.pid ?? ""}`;
+              const msg = evType === "patient.synced"
+                ? `New patient synced: ${name}${raf ? ` (RAF ${raf})` : ""}`
+                : `Patient scored: ${name}${raf ? ` (RAF ${raf})` : ""}`;
+
+              setSyncToast({ msg, id: Date.now() });
+              if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+              toastTimerRef.current = setTimeout(() => setSyncToast(null), 5000);
+            }
+          } catch {}
+        };
+
+        es.onerror = () => {
+          setAutoSyncActive(false);
+          if (es && es.readyState === EventSource.CLOSED) return;
+          es?.close();
+        };
+      } catch {
+        // SSE ticket endpoint unavailable — silent fail
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      setAutoSyncActive(false);
+      if (es) es.close();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Server-side search & pagination
   const { data: apiResult, isLoading, isError, error, refetch } = useQuery({
@@ -1004,6 +1072,36 @@ export default function PatientsPage() {
 
   return (
     <ErrorBoundary fallbackTitle="Patients page failed to load">
+    <>
+    {/* ============================================================ */}
+    {/* Auto-sync toast notification                                 */}
+    {/* ============================================================ */}
+    {syncToast && (
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label={syncToast.msg}
+        style={{
+          position: "fixed", top: 20, right: 20, zIndex: 9999,
+          display: "flex", alignItems: "center", gap: 10,
+          backgroundColor: "#0f172a", color: "#f8fafc",
+          padding: "12px 16px", borderRadius: 10,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+          fontSize: 14, fontWeight: 500, fontFamily: FONT_SYS,
+          maxWidth: 380, animation: "slideInRight 0.25s ease",
+        }}
+      >
+        <span style={{ fontSize: 18, flexShrink: 0 }}>🆕</span>
+        <span style={{ flex: 1 }}>{syncToast.msg}</span>
+        <button
+          onClick={() => setSyncToast(null)}
+          aria-label="Dismiss notification"
+          style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: 2, display: "flex" }}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    )}
     <div style={{
       display: "flex", flexDirection: "column", gap: 0,
       background: tokens.bgSubtle,
@@ -1046,6 +1144,17 @@ export default function PatientsPage() {
               }}>
                 Patient Population
               </h1>
+              {/* Auto-sync live indicator */}
+              <div
+                title={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting…"}
+                aria-label={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting"}
+                style={{
+                  width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                  backgroundColor: autoSyncActive ? "#22c55e" : "#94a3b8",
+                  boxShadow: autoSyncActive ? "0 0 0 3px rgba(34,197,94,0.25)" : "none",
+                  transition: "background-color 0.3s, box-shadow 0.3s",
+                }}
+              />
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 height: 26, padding: "0 4px 0 10px",
@@ -2317,6 +2426,7 @@ export default function PatientsPage() {
         />
       )}
     </div>
+    </>
     </ErrorBoundary>
   );
 }
