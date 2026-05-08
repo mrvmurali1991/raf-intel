@@ -160,6 +160,7 @@ export default function RAFForecastCard({ pid, year }: Props) {
 
       {/* Metrics row ---------------------------------------------------- */}
       <div
+        className="raf-forecast-metrics"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
@@ -291,6 +292,11 @@ export default function RAFForecastCard({ pid, year }: Props) {
         Projection = Σ(coefficient × confidence) × ${f.base_rate.toLocaleString()} PMPY ·
         segment {f.model_segment} · persistence {Math.round(f.persistence_assumption * 100)}%
       </div>
+      <style>{`
+        @media (max-width: 640px) {
+          .raf-forecast-metrics { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+      `}</style>
     </Card>
   );
 }

@@ -893,7 +893,6 @@ export default function ProspectivePage() {
     background: C.white,
     border: `1px solid ${C.slate200}`,
     borderRadius: 12,
-    overflow: "hidden",
   };
 
   const thStyle: React.CSSProperties = {
@@ -1232,7 +1231,7 @@ export default function ProspectivePage() {
           )
         ) : (
           <>
-            <div style={{ overflowX: "auto" }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
@@ -1594,7 +1593,7 @@ export default function ProspectivePage() {
               </span>
             </div>
           </div>
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>

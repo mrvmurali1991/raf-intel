@@ -529,7 +529,7 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
             Export CSV
           </button>
         </div>
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table aria-label="Revenue opportunities" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>

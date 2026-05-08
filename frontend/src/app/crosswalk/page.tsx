@@ -343,7 +343,7 @@ export default function CrosswalkPage() {
     >
       <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: 18 }}>
+        <div className="crosswalk-header" style={{ marginBottom: 18 }}>
           <h1
             style={{
               fontSize: 22,
@@ -619,10 +619,9 @@ export default function CrosswalkPage() {
             borderRadius: 14,
             border: `1px solid ${C.border}`,
             boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-            overflow: "hidden",
           }}
         >
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 14 }}>
           <table
             aria-label="RAF score calculation results"
             style={{
@@ -965,6 +964,7 @@ export default function CrosswalkPage() {
           border-color: ${C.accent} !important;
           box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important;
         }
+        @media (max-width: 1024px) { .crosswalk-header { padding-left: 56px !important; } }
       `}</style>
     </div>
   );

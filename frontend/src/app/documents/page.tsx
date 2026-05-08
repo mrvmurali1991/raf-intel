@@ -1826,6 +1826,7 @@ export default function DocumentsPage() {
       <>
       {/* Stats Row */}
       <div
+        id="docs-kpi-grid"
         role="status"
         aria-live="polite"
         style={{
@@ -2284,6 +2285,9 @@ export default function DocumentsPage() {
         @keyframes docPulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.45; }
+        }
+        @media (max-width: 640px) {
+          #docs-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
         }
       `}</style>
     </div>
