@@ -1,37 +1,64 @@
-"use client";
-
-import type React from "react";
-import { useAuth } from "@/contexts/auth-context";
+import { cookies, headers } from "next/headers";
 import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
 import { CoderDashboard } from "@/components/dashboards/CoderDashboard";
 import { ProviderDashboard } from "@/components/dashboards/ProviderDashboard";
 import { AIHealthBanner } from "@/components/AIHealthBanner";
 
-export default function DashboardOrchestrator() {
-  const { user, isLoading } = useAuth();
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8500";
 
-  if (isLoading || !user) {
-    return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground" role="status" aria-label="Loading dashboard">
-        <div className="animate-pulse flex items-center gap-2" aria-hidden="true">
-          <div className="w-4 h-4 rounded-full bg-slate-300" />
-          <div className="w-4 h-4 rounded-full bg-slate-300" />
-          <div className="w-4 h-4 rounded-full bg-slate-300" />
-        </div>
-      </div>
-    );
+/** Resolve the current user's role by forwarding cookies to the backend. */
+async function getRole(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const isAuthed = cookieStore.get("raf_authenticated")?.value === "true";
+  if (!isAuthed) return null;
+
+  // Forward all cookies so the backend can read the httpOnly refresh token.
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+
+  try {
+    // Step 1: exchange refresh token for a new access token.
+    const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: "POST",
+      headers: { Cookie: cookieHeader },
+      cache: "no-store",
+    });
+    if (!refreshRes.ok) return null;
+    const { access_token } = (await refreshRes.json()) as {
+      access_token?: string;
+    };
+    if (!access_token) return null;
+
+    // Step 2: fetch user info.
+    const meRes = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        Cookie: cookieHeader,
+      },
+      cache: "no-store",
+    });
+    if (!meRes.ok) return null;
+    const user = (await meRes.json()) as { role?: string };
+    return user.role ?? null;
+  } catch {
+    return null;
   }
+}
 
-  // Pick the dashboard segment by role (enforces Minimum Necessary Information).
+export default async function DashboardOrchestrator() {
+  const role = await getRole();
+
   let Dashboard: React.ComponentType;
-  if (user.role === "admin" || user.role === "manager" || user.role === "auditor") {
+  if (role === "admin" || role === "manager" || role === "auditor") {
     Dashboard = AdminDashboard;
-  } else if (user.role === "coder") {
+  } else if (role === "coder") {
     Dashboard = CoderDashboard;
-  } else if (user.role === "provider" || user.role === "clinician") {
-    Dashboard = ProviderDashboard;
   } else {
-    Dashboard = ProviderDashboard; // fallback
+    // "provider", "clinician", unknown, or unauthenticated (middleware redirects before reaching here)
+    Dashboard = ProviderDashboard;
   }
 
   return (

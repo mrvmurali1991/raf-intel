@@ -67,6 +67,7 @@ import {
   DateRangeSelector,
   ExportButton,
 } from "@/components/dashboard-charts";
+import { tokens } from "@/styles/tokens";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -265,46 +266,47 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
 
   return (
     <div
-      className="card-glow-blue animate-fade-in"
+      className="animate-fade-in"
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
-        border: "1px solid #334155",
+        background: tokens.warningSoft,
+        border: `1px solid ${tokens.warningBorder ?? "#FDE68A"}`,
         borderRadius: 12,
-        padding: "20px 28px",
+        padding: "12px 20px",
+        marginTop: 16,
         marginBottom: 24,
         gap: 16,
         flexWrap: "wrap",
-        color: "#FFFFFF",
+        color: tokens.warningText ?? "#92400E",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ background: "rgba(56, 189, 248, 0.1)", borderRadius: 10, padding: 12, border: "1px solid rgba(56, 189, 248, 0.2)" }}>
-          <Clock size={24} color="#38BDF8" />
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ background: "rgba(217, 119, 6, 0.10)", borderRadius: 8, padding: 8, border: "1px solid rgba(217, 119, 6, 0.18)" }}>
+          <Clock size={18} color={tokens.riskMedium} />
         </div>
         <div>
-          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: tokens.warningText ?? "#92400E" }}>
             CMS Data Sweep Deadline
           </h3>
-          <p style={{ fontSize: 13, color: "#94A3B8", margin: "4px 0 0" }}>
+          <p style={{ fontSize: 12, color: tokens.warningText ?? "#92400E", opacity: 0.8, margin: "2px 0 0" }}>
             Mid-Year V24/V28 Blended Submission
           </p>
         </div>
       </div>
 
-      <div style={{ flex: 1, minWidth: 200, margin: "0 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8, fontWeight: 500 }}>
-          <span style={{ color: "#38BDF8" }}>{daysRemaining} Days Remaining</span>
-          <span style={{ color: "#94A3B8" }}>June 30th</span>
+      <div style={{ flex: 1, minWidth: 200, margin: "0 12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6, fontWeight: 500 }}>
+          <span style={{ color: tokens.riskMedium, fontWeight: 600 }}>{daysRemaining} Days Remaining</span>
+          <span style={{ color: tokens.warningText ?? "#92400E", opacity: 0.75 }}>June 30th</span>
         </div>
-        <div style={{ height: 8, background: "#334155", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: 6, background: "rgba(217, 119, 6, 0.18)", borderRadius: 4, overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
               width: `${progress}%`,
-              background: "linear-gradient(90deg, #0EA5E9 0%, #38BDF8 100%)",
+              background: tokens.riskMedium,
               borderRadius: 4,
               transition: "width 1s ease-in-out",
             }}
@@ -312,11 +314,11 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
         </div>
       </div>
 
-      <div style={{ textAlign: "right", borderLeft: "1px solid #334155", paddingLeft: 24 }}>
-        <div style={{ fontSize: 12, color: "#94A3B8", fontWeight: 500, marginBottom: 4 }}>
+      <div style={{ textAlign: "right", borderLeft: "1px solid rgba(217, 119, 6, 0.25)", paddingLeft: 20 }}>
+        <div style={{ fontSize: 11, color: tokens.warningText ?? "#92400E", opacity: 0.8, fontWeight: 500, marginBottom: 2 }}>
           Pending Opportunity
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#F8FAFC", letterSpacing: "-0.5px" }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: tokens.warningText ?? "#92400E", letterSpacing: "-0.3px" }}>
           {fmt$(revenueOpp)}
         </div>
       </div>
@@ -943,8 +945,6 @@ export function AdminDashboard() {
 
       {(emrConnected || emrStatusL || hasData) && <>
 
-      <CmsSweepWidget revenueOpp={revenueOpp} />
-
       {/* Partial data warning */}
       {(statsErr || revErr) && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 10, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", fontSize: 13, marginBottom: 16 }}>
@@ -1022,6 +1022,8 @@ export function AdminDashboard() {
         </div>
       )}
       </div>
+
+      <CmsSweepWidget revenueOpp={revenueOpp} />
 
       {/* ══════════════════════════════════════════════════════════════════════
           ROW 2: Risk Stratification (60%) + Suspect Conditions (40%)

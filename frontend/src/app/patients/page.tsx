@@ -50,9 +50,23 @@ type RiskFilter = "all" | "high" | "medium" | "low" | "unscored";
 // 7 cells: Patient | Risk Level | RAF Score | Risk Factors | HCCs | Status | >
 const WORKLIST_GRID =
   "minmax(240px, 2.2fr) 120px 100px minmax(200px, 2fr) 100px 140px 32px";
+// Tablet variant — drops the wide Risk Factors column and the 32px chevron
+// column so the row fits in ~700px of usable width (sidebar collapsed). The
+// .risk-factors-cell helper in globals.css hides the matching DOM cells via
+// `display: none` so the grid's 5 visible cells line up cleanly.
+const WORKLIST_GRID_TABLET =
+  "minmax(200px, 2fr) 100px 90px 100px 32px";
 const WORKLIST_GAP = 0;
 const WORKLIST_PAD_X = 24;
 const ROW_HEIGHT = 80;
+
+// CSS variables consumed by the `.worklist-grid` class (see globals.css).
+// Applied via inline style on every row container so a single media query
+// can switch desktop ↔ tablet templates without per-row JS.
+const WORKLIST_GRID_VARS = {
+  ["--gt-desktop" as string]: WORKLIST_GRID,
+  ["--gt-tablet" as string]: WORKLIST_GRID_TABLET,
+} as React.CSSProperties;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -458,10 +472,19 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
         {!result && (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Click or drag to upload patient CSV"
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
             style={{
               border: `2px dashed ${dragOver ? tokens.teal700 : file ? tokens.success : tokens.slate300}`,
               borderRadius: 14,
@@ -1563,8 +1586,9 @@ export default function PatientsPage() {
         {/* High-priority focus */}
         <div
           style={{
-            backgroundColor: C.bgCard,
+            backgroundColor: stats.high > 0 ? tokens.riskHighSoft : C.bgCard,
             border: `1px solid ${C.borderSoft}`,
+            borderTop: `3px solid ${tokens.riskHigh}`,
             borderRadius: 16,
             padding: "18px 22px",
             display: "flex",
@@ -1757,9 +1781,9 @@ export default function PatientsPage() {
         }}
       >
         {/* Column header */}
-        <div role="row" style={{
+        <div role="row" className="worklist-grid" style={{
           display: "grid",
-          gridTemplateColumns: WORKLIST_GRID,
+          ...WORKLIST_GRID_VARS,
           alignItems: "center",
           padding: `12px ${WORKLIST_PAD_X}px 12px`,
           backgroundColor: tokens.bgFaintCard,
@@ -1772,7 +1796,7 @@ export default function PatientsPage() {
             letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Level</span>
           <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
-          <span role="columnheader" style={{
+          <span role="columnheader" className="risk-factors-cell" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Factors</span>
@@ -1786,9 +1810,9 @@ export default function PatientsPage() {
 
         {/* ---- Column Filter Row ---- */}
         {showColumnFilters && (
-          <div style={{
+          <div className="worklist-grid worklist-filter-row" style={{
             display: "grid",
-            gridTemplateColumns: WORKLIST_GRID,
+            ...WORKLIST_GRID_VARS,
             alignItems: "center",
             padding: `10px ${WORKLIST_PAD_X}px`,
             backgroundColor: tokens.slate50,
