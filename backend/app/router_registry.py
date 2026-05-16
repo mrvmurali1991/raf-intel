@@ -112,6 +112,7 @@ from app.routers import recapture_readiness as recapture_readiness_router
 from app.routers import recapture_recurring as recapture_recurring_router
 from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
+from app.routers import suspect_feedback as suspect_feedback_router
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +184,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, disputes_router.router)
     _mount(app, analysis.router)
     _mount(app, suspects.router)
+    _mount(app, suspect_feedback_router.router)
     _mount(app, attestations.router)
     _mount(app, chart_chase.router)
     _mount(app, documents.router)

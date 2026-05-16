@@ -76,6 +76,7 @@ export function SuspectCardView({
   const [showExplain, setShowExplain] = useState(false);
   const [showDismissDialog, setShowDismissDialog] = useState(false);
   const [showAcceptGate, setShowAcceptGate] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const toast = useToast();
 
   // Mutations — invalidate raf-central query key on success
@@ -137,21 +138,39 @@ export function SuspectCardView({
     );
   };
 
-  // Lightweight feedback affordance — closes the model-trust loop. Real
-  // backend wiring is a follow-up ticket; for now we log + toast so usage
-  // signals show up in browser logs and the user gets immediate ack.
-  const sendFeedback = (helpful: boolean) => {
-    const event = {
-      suspect_id: suspect.id,
-      hcc: suspect.hcc,
-      icd10: suspect.icd10,
-      helpful,
-      ts: new Date().toISOString(),
-    };
-    // eslint-disable-next-line no-console
-    console.info("[suspect-feedback]", event);
-    // TODO: POST /api/suspects/${suspect.id}/feedback once endpoint exists.
-    toast.success("Feedback noted", helpful ? "Marked as helpful" : "Marked as incorrect");
+  // Send clinician sentiment to the backend and disable buttons after one click.
+  const sendFeedback = async (sentiment: "helpful" | "incorrect" | "irrelevant") => {
+    if (feedbackSent) return;
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/suspects/${suspect.id}/feedback`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sentiment }),
+        }
+      );
+      if (res.status === 409) {
+        toast.error("Feedback already submitted", "You have already rated this suspect today.");
+        setFeedbackSent(true);
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      setFeedbackSent(true);
+      const label =
+        sentiment === "helpful"
+          ? "Marked as helpful"
+          : sentiment === "incorrect"
+          ? "Marked as incorrect"
+          : "Marked as irrelevant";
+      toast.success("Feedback noted", label);
+    } catch {
+      toast.error("Feedback failed", "Could not save your feedback. Please try again.");
+    }
   };
 
   const confPct = Math.round(suspect.confidence * 100);
@@ -201,7 +220,7 @@ export function SuspectCardView({
             >
               <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
             </Button>
-            {/* Feedback affordance — thin scaffold; backend wiring is a follow-up ticket. */}
+            {/* Feedback affordance — persisted via POST /api/suspects/{id}/feedback. */}
             <div
               className="ml-auto flex items-center gap-0.5"
               role="group"
@@ -210,20 +229,20 @@ export function SuspectCardView({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => sendFeedback(true)}
-                disabled={busy !== null}
+                onClick={() => sendFeedback("helpful")}
+                disabled={busy !== null || feedbackSent}
                 aria-label="Suggestion was helpful"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600 disabled:opacity-40"
               >
                 <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => sendFeedback(false)}
-                disabled={busy !== null}
+                onClick={() => sendFeedback("incorrect")}
+                disabled={busy !== null || feedbackSent}
                 aria-label="Suggestion was incorrect"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 disabled:opacity-40"
               >
                 <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
               </Button>
