@@ -1,0 +1,9 @@
+# primary.cnf — MySQL primary (master) binlog configuration
+# Mount at /etc/mysql/conf.d/primary.cnf inside the mysql service container.
+# These settings enable binary logging required for replication.
+
+[mysqld]
+server-id = 1
+log-bin = mysql-bin
+binlog-format = ROW
+binlog_expire_logs_seconds = 86400

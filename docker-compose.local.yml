@@ -107,7 +107,31 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  mysql-replica:
+    image: mysql:8.0
+    container_name: raf-mysql-replica
+    restart: unless-stopped
+    profiles: [replica]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: raf_intelligence
+      MYSQL_SERVER_ID: "2"
+    ports:
+      - "3310:3306"
+    volumes:
+      - raf_mysql_replica_data:/var/lib/mysql
+      - ./mysql/replica-init.sql:/docker-entrypoint-initdb.d/init.sql
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   raf_mysql_data:
+  raf_mysql_replica_data:
   openemr_sites:
   openemr_logs:
