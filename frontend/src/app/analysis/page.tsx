@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, Fragment } from "react";
+import dynamic from "next/dynamic";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   getPatients,
@@ -33,6 +34,17 @@ import {
   Brain,
   Microscope,
 } from "lucide-react";
+
+// ── Dynamic import: defer heavy results panel until analysis completes (~40 kB) ──
+const AnalysisResultsPanel = dynamic(
+  () => import("./AnalysisResultsPanel"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="premium-card shimmer" style={{ height: 200, borderRadius: 12, marginTop: 8 }} />
+    ),
+  }
+);
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -113,7 +125,7 @@ function QueryError({ error, onRetry }: { error: unknown; onRetry: () => void })
         <div style={{ fontWeight: 700, color: tokens.riskHigh, marginBottom: 2 }}>
           Failed to load
         </div>
-        <div style={{ color: tokens.slate600, wordBreak: "break-word" }}>
+        <div className="text-muted-foreground" style={{ wordBreak: "break-word" }}>
           {queryErrorMessage(error)}
         </div>
       </div>
@@ -221,8 +233,8 @@ function PatientDropdown({
           <User size={14} color={tokens.primary} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>{name(selected)}</div>
-          <div style={{ fontSize: 12, color: tokens.slate500 }}>PID: {selected.pid}</div>
+          <div className="text-foreground" style={{ fontSize: 14, fontWeight: 600 }}>{name(selected)}</div>
+          <div className="text-muted-foreground" style={{ fontSize: 12 }}>PID: {selected.pid}</div>
         </div>
         <button onClick={() => { onSelect(null); setQ(""); }} aria-label="Change patient selection" style={{ fontSize: 12, color: tokens.primary, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>
           Change
@@ -284,8 +296,8 @@ function AnalyzingOverlay() {
             <Brain size={36} style={{ color: tokens.primary }} />
           </div>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: tokens.slate900, marginBottom: 6 }}>Analyzing Clinical Note</div>
-        <div style={{ fontSize: 14, color: tokens.slate500, marginBottom: 20 }}>Extracting diagnoses, validating codes, and checking MEAT documentation</div>
+        <div className="text-foreground" style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Analyzing Clinical Note</div>
+        <div className="text-muted-foreground" style={{ fontSize: 14, marginBottom: 20 }}>Extracting diagnoses, validating codes, and checking MEAT documentation</div>
         {/* Progress steps */}
         <div style={{ display: "inline-flex", gap: 24, padding: "14px 24px", borderRadius: 12, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
           {[
@@ -294,13 +306,13 @@ function AnalyzingOverlay() {
             { icon: <ShieldCheck size={15} />, text: "Validating" },
             { icon: <Sparkles size={15} />, text: "Scoring" },
           ].map((step, i) => (
-            <div key={`step-${i}`} className={`stagger-${i + 1}`} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: tokens.slate500, fontWeight: 500 }}>
+            <div key={`step-${i}`} className={`stagger-${i + 1} text-muted-foreground`} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500 }}>
               <div className="soft-pulse" style={{ color: tokens.infoBlue, animationDelay: `${i * 0.4}s` }}>{step.icon}</div>
               {step.text}
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 12, color: tokens.slate400, marginTop: 16 }}>Typically takes 60-90 seconds for complex notes</div>
+        <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 16 }}>Typically takes 60-90 seconds for complex notes</div>
       </div>
     </div>
   );
@@ -320,7 +332,7 @@ function SectionHeader({ icon, title, count, countColor, countBg }: {
       <div style={{ width: 32, height: 32, borderRadius: 8, background: countBg || tokens.primarySoft, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {icon}
       </div>
-      <span style={{ fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>{title}</span>
+      <span className="text-foreground" style={{ fontSize: 16, fontWeight: 700 }}>{title}</span>
       {count != null && (
         <span style={{ fontSize: 12, fontWeight: 700, background: countBg || tokens.primarySoft, color: countColor || tokens.primary, padding: "3px 10px", borderRadius: 10 }}>
           {count}
@@ -444,7 +456,7 @@ export default function AnalysisPage() {
           </div>
           <div>
             <h1 className="gradient-text" style={{ fontSize: 24, fontWeight: 800, margin: 0, lineHeight: 1.2 }}>Clinical Note Analysis</h1>
-            <p style={{ fontSize: 14, color: tokens.slate500, margin: 0, marginTop: 2 }}>
+            <p className="text-muted-foreground" style={{ fontSize: 14, margin: 0, marginTop: 2 }}>
               Extract diagnoses, validate HCC codes, and generate MEAT documentation
             </p>
           </div>
@@ -615,11 +627,11 @@ export default function AnalysisPage() {
                           }}
                         >
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, color: tokens.slate900 }}>Encounter #{enc.encounter_id}</div>
-                            <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 2 }}>{enc.reason || "No reason recorded"}</div>
+                            <div className="text-foreground" style={{ fontWeight: 600 }}>Encounter #{enc.encounter_id}</div>
+                            <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 2 }}>{enc.reason || "No reason recorded"}</div>
                           </div>
                           <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 12, color: tokens.slate500 }}>{enc.date}</div>
+                            <div className="text-muted-foreground" style={{ fontSize: 12 }}>{enc.date}</div>
                             {enc.provider_lname && <div style={{ fontSize: 11, color: tokens.slate400 }}>Dr. {enc.provider_lname}</div>}
                           </div>
                           {selectedEnc === enc.encounter_id && <CheckCircle2 size={16} color={tokens.primary} />}
@@ -703,10 +715,10 @@ export default function AnalysisPage() {
             >
               {confidence >= 0.85 ? <CheckCircle2 size={20} color={tokens.success} /> : confidence >= 0.6 ? <AlertTriangle size={20} color={tokens.warningStrong} /> : <XCircle size={20} color={tokens.riskHigh} />}
               <div style={{ flex: 1 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: tokens.slate900 }}>
+                <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>
                   {confidence >= 0.85 ? "Auto-Accept" : confidence >= 0.6 ? "Needs Review" : "Full Audit Required"}
                 </span>
-                <span style={{ fontSize: 13, color: tokens.slate500, marginLeft: 10 }}>
+                <span className="text-muted-foreground" style={{ fontSize: 13, marginLeft: 10 }}>
                   Overall confidence: {Math.round(confidence * 100)}%
                 </span>
               </div>
@@ -728,12 +740,12 @@ export default function AnalysisPage() {
                   <thead>
                     <tr style={{ background: tokens.slate50, borderBottom: `2px solid ${tokens.slate200}` }}>
                       <th style={{ width: 32, padding: "12px 8px" }} />
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>ICD-10</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Description</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>HCC</th>
-                      <th style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Coeff</th>
+                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>ICD-10</th>
+                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Description</th>
+                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>HCC</th>
+                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Coeff</th>
                       <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", minWidth: 130 }}>Confidence</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>MEAT</th>
+                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>MEAT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -759,7 +771,7 @@ export default function AnalysisPage() {
                             <td style={{ padding: "12px 14px" }}>
                               <code style={{ fontSize: 12, fontWeight: 700, background: tokens.primarySoft, color: tokens.primaryDark, padding: "4px 8px", borderRadius: 6, border: `1px solid ${tokens.slate200}` }}>{dxIcd10(dx)}</code>
                             </td>
-                            <td style={{ padding: "12px 14px", fontWeight: 500, color: tokens.slate900, maxWidth: 280 }}>
+                            <td className="text-foreground" style={{ padding: "12px 14px", fontWeight: 500, maxWidth: 280 }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dxCondition(dx)}</div>
                             </td>
                             <td style={{ padding: "12px 14px" }}>
@@ -769,7 +781,7 @@ export default function AnalysisPage() {
                                 <span style={{ color: tokens.slate300 }}>--</span>
                               )}
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: tokens.slate700, fontSize: 13 }}>
+                            <td className="text-foreground" style={{ padding: "12px 14px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, fontSize: 13 }}>
                               {dxCoeff(dx) != null ? dxCoeff(dx)!.toFixed(3) : "--"}
                             </td>
                             <td style={{ padding: "12px 14px" }}><ConfBar value={dx.confidence} /></td>
@@ -780,11 +792,11 @@ export default function AnalysisPage() {
                               <td colSpan={7} style={{ padding: "18px 24px 18px 52px" }}>
                                 {dx.supporting_text && (
                                   <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}` }}>
-                                    <span style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em" }}>Supporting Evidence</span>
-                                    <div style={{ fontSize: 13, color: tokens.slate700, fontStyle: "italic", marginTop: 6, lineHeight: 1.6 }}>&ldquo;{dx.supporting_text}&rdquo;</div>
+                                    <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Supporting Evidence</span>
+                                    <div className="text-foreground" style={{ fontSize: 13, fontStyle: "italic", marginTop: 6, lineHeight: 1.6 }}>&ldquo;{dx.supporting_text}&rdquo;</div>
                                   </div>
                                 )}
-                                <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>MEAT Documentation</div>
+                                <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>MEAT Documentation</div>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
                                   {(["monitoring", "evaluation", "assessment", "treatment"] as const).map((k, idx) => {
                                     const v = meatVal(dx, k);
@@ -800,7 +812,7 @@ export default function AnalysisPage() {
                                           }}>
                                             {letters[idx]}
                                           </div>
-                                          <span style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "capitalize" }}>{k}</span>
+                                          <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "capitalize" }}>{k}</span>
                                         </div>
                                         <div style={{ fontSize: 12, color: v ? tokens.slate700 : tokens.slate400, fontStyle: v ? "normal" : "italic", lineHeight: 1.5 }}>
                                           {v || "Not documented"}
@@ -853,7 +865,7 @@ export default function AnalysisPage() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>{s.condition || "Unknown"}</span>
+                        <span className="text-foreground" style={{ fontSize: 14, fontWeight: 600 }}>{s.condition || "Unknown"}</span>
                         <code style={{ fontSize: 11, fontWeight: 700, background: tokens.warningSoft, color: tokens.warningText, padding: "3px 8px", borderRadius: 6, border: `1px solid ${tokens.warningBorder}` }}>{suspIcd(s)}</code>
                         {(s.hcc_code || s.suspect_hcc) && (
                           <span style={{ fontSize: 11, fontWeight: 700, background: tokens.primarySoft, color: tokens.primaryDark, padding: "3px 8px", borderRadius: 6, border: `1px solid ${tokens.slate200}` }}>
@@ -862,7 +874,7 @@ export default function AnalysisPage() {
                         )}
                       </div>
                       {suspEvidence(s) && (
-                        <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 6, lineHeight: 1.6 }}>{suspEvidence(s)}</div>
+                        <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 6, lineHeight: 1.6 }}>{suspEvidence(s)}</div>
                       )}
                     </div>
                     <div style={{ width: 120, flexShrink: 0 }}><ConfBar value={suspConf(s)} /></div>
@@ -892,7 +904,7 @@ export default function AnalysisPage() {
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: tokens.slate100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Clock size={15} color={tokens.slate500} />
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 700, color: tokens.slate700 }}>Pipeline Details</span>
+                <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Pipeline Details</span>
                 <ChevronDown size={14} color={tokens.slate400} style={{ marginLeft: "auto", transform: pipelineOpen ? "none" : "rotate(-90deg)", transition: "transform 0.2s" }} />
               </button>
               {pipelineOpen && (
@@ -901,19 +913,19 @@ export default function AnalysisPage() {
                     {meta.pipeline_version && (
                       <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Version</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace", color: tokens.slate700, fontWeight: 600 }}>{meta.pipeline_version}</div>
+                        <div className="text-foreground" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{meta.pipeline_version}</div>
                       </div>
                     )}
                     {meta.total_time_seconds != null && (
                       <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Total Time</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace", color: tokens.slate700, fontWeight: 600 }}>{Number(meta.total_time_seconds).toFixed(1)}s</div>
+                        <div className="text-foreground" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{Number(meta.total_time_seconds).toFixed(1)}s</div>
                       </div>
                     )}
                     {meta.turns != null && (
                       <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Turns</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace", color: tokens.slate700, fontWeight: 600 }}>{meta.turns}</div>
+                        <div className="text-foreground" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{meta.turns}</div>
                       </div>
                     )}
                   </div>
@@ -933,8 +945,8 @@ export default function AnalysisPage() {
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
                         {Object.entries(meta.timings).map(([k, v]) => (
                           <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: tokens.slate50, border: `1px solid ${tokens.slate100}`, fontSize: 12 }}>
-                            <span style={{ fontFamily: "monospace", color: tokens.slate500 }}>{k}</span>
-                            <span style={{ fontFamily: "monospace", fontWeight: 700, color: tokens.slate700 }}>
+                            <span className="text-muted-foreground" style={{ fontFamily: "monospace" }}>{k}</span>
+                            <span className="text-foreground" style={{ fontFamily: "monospace", fontWeight: 700 }}>
                               {typeof v === "number" ? `${(v as number).toFixed(2)}s` : String(v)}
                             </span>
                           </div>
@@ -950,7 +962,7 @@ export default function AnalysisPage() {
           {/* Coding Notes */}
           {result.coding_notes && (
             <div className="premium-card animate-fade-in" style={{ padding: "18px 20px", marginTop: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: tokens.slate700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 28, height: 28, borderRadius: 7, background: tokens.slate100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <FileText size={13} color={tokens.slate500} />
                 </div>

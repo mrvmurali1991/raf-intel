@@ -1149,10 +1149,10 @@ export default function SuspectsPage() {
             >
               <FileSearch size={26} />
             </div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>
+            <div className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>
               No suspects match your filters
             </div>
-            <div style={{ fontSize: 13, color: C.textSubtle, maxWidth: 360 }}>
+            <div className="text-muted-foreground" style={{ fontSize: 13, maxWidth: 360 }}>
               Try widening your status, evidence, or confidence filters to see more results.
             </div>
             {hasActiveFilters && (
@@ -1336,7 +1336,7 @@ export default function SuspectsPage() {
                       </HccChipWithPopover>
                     </FeatureFlag>
                   )}
-                  {s.suspect_hcc != null && s.suspect_icd10 && <span style={{ color: C.label }}>·</span>}
+                  {s.suspect_hcc != null && s.suspect_icd10 && <span className="text-muted-foreground">·</span>}
                   {s.suspect_icd10 && <span>ICD {s.suspect_icd10}</span>}
                   <FeatureFlag flagKey="kg_evidence_panel">
                     <KgGapBadge
@@ -2026,14 +2026,14 @@ function SuspectDrawer({
           }}
         >
           <span>
-            <span style={{ color: C.label }}>Detected </span>
+            <span className="text-muted-foreground">Detected </span>
             {fmtDate(s.created_at)}
           </span>
           {s.reviewed_at && (
             <span>
-              <span style={{ color: C.label }}>Reviewed </span>
+              <span className="text-muted-foreground">Reviewed </span>
               {fmtDate(s.reviewed_at)}
-              {s.reviewed_by && <span style={{ color: C.label }}> · {s.reviewed_by}</span>}
+              {s.reviewed_by && <span className="text-muted-foreground"> · {s.reviewed_by}</span>}
             </span>
           )}
         </div>
@@ -2139,7 +2139,7 @@ function SuspectDrawer({
             }}
           >
             <div>
-              <div style={{ fontSize: 9, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
                 Confidence
               </div>
               <div style={{ fontSize: 16, fontWeight: 700, color: cConf, fontVariantNumeric: "tabular-nums" }}>
@@ -2147,7 +2147,7 @@ function SuspectDrawer({
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
                 RAF Lift
               </div>
               <div style={{ fontSize: 16, fontWeight: 700, color: C.brand, fontVariantNumeric: "tabular-nums" }}>
@@ -2155,10 +2155,10 @@ function SuspectDrawer({
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
                 Revenue
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>
+              <div className="text-foreground" style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                 {formatCurrency(revenue)}
               </div>
             </div>

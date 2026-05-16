@@ -187,10 +187,10 @@ export default function UploadsPage() {
     <div style={{ fontFamily: FONT_SYS, padding: "28px 32px", maxWidth: 1120, margin: "0 auto" }}>
       <style>{`@media (max-width: 1024px) { .uploads-header { padding-left: 56px !important; } }`}</style>
       <header className="uploads-header" style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: 0 }}>
+        <h1 className="text-foreground" style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
           Patient Data Uploads
         </h1>
-        <p style={{ marginTop: 6, fontSize: 14, color: C.textSubtle }}>
+        <p className="text-muted-foreground" style={{ marginTop: 6, fontSize: 14 }}>
           Upload a CSV or Excel file of patients to run the full RAF analysis — scoring, HCC mapping,
           audit packages and dashboards — without connecting an EMR.
         </p>
@@ -236,10 +236,10 @@ export default function UploadsPage() {
         >
           <Upload size={26} />
         </div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
+        <div className="text-foreground" style={{ fontSize: 16, fontWeight: 600 }}>
           Drag a CSV or Excel file here, or click to browse
         </div>
-        <div style={{ marginTop: 6, fontSize: 13, color: C.textSubtle }}>
+        <div className="text-muted-foreground" style={{ marginTop: 6, fontSize: 13 }}>
           Accepted formats: .csv, .xlsx — max 10 MB
         </div>
         <input
@@ -272,7 +272,7 @@ export default function UploadsPage() {
       {/* Upload progress / result */}
       {uploadMut.isPending && (
         <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.textMuted }}>
+          <div className="text-muted-foreground" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <RefreshCw size={16} className="animate-spin" />
             <span>Uploading and processing file…</span>
           </div>
@@ -289,7 +289,7 @@ export default function UploadsPage() {
             ) : (
               <AlertTriangle size={20} color={C.warning} />
             )}
-            <div style={{ fontWeight: 600, color: C.text }}>
+            <div className="text-foreground" style={{ fontWeight: 600 }}>
               {lastResult.status === "completed"
                 ? "Upload complete"
                 : lastResult.status === "failed"
@@ -352,7 +352,7 @@ export default function UploadsPage() {
       {/* Upload history */}
       <section style={{ marginTop: 32 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>
+          <h2 className="text-foreground" style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
             Upload history
           </h2>
           <button type="button" onClick={() => refetch()} style={btnLink}>
@@ -403,10 +403,10 @@ export default function UploadsPage() {
               >
                 <FileSpreadsheet size={24} />
               </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+              <div className="text-foreground" style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
                 No uploads yet
               </div>
-              <div style={{ fontSize: 13, color: C.textSubtle, marginBottom: 14 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 13, marginBottom: 14 }}>
                 Drop a CSV or Excel file above to import your first batch of patients.
               </div>
               <button
@@ -425,7 +425,7 @@ export default function UploadsPage() {
           ) : (
             <table aria-label="Upload history" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: C.bgSubtle, color: C.label, textAlign: "left" }}>
+                <tr className="bg-muted text-muted-foreground" style={{ textAlign: "left" }}>
                   <th style={th}>Filename</th>
                   <th style={th}>Date</th>
                   <th style={{ ...th, textAlign: "right" }}>Rows imported</th>
@@ -444,17 +444,17 @@ export default function UploadsPage() {
                           <FileText size={16} color={C.brand} />
                         )}
                         <div>
-                          <div style={{ color: C.text, fontWeight: 500 }}>{u.filename}</div>
-                          <div style={{ fontSize: 11, color: C.textSubtle }}>
+                          <div className="text-foreground" style={{ fontWeight: 500 }}>{u.filename}</div>
+                          <div className="text-muted-foreground" style={{ fontSize: 11 }}>
                             {formatBytes(u.file_size_bytes)}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ ...td, color: C.textMuted }}>{formatDate(u.created_at)}</td>
-                    <td style={{ ...td, textAlign: "right", color: C.text, fontWeight: 600 }}>
+                    <td className="text-muted-foreground" style={td}>{formatDate(u.created_at)}</td>
+                    <td className="text-foreground" style={{ ...td, textAlign: "right", fontWeight: 600 }}>
                       {u.row_count_imported.toLocaleString("en-US")}
-                      <span style={{ color: C.textSubtle, fontWeight: 400 }}>
+                      <span className="text-muted-foreground" style={{ fontWeight: 400 }}>
                         {" "}
                         / {u.row_count_total.toLocaleString("en-US")}
                       </span>
@@ -522,7 +522,7 @@ function MiniStat({ label, value, color }: { label: string; value: number; color
         background: C.bgSubtle,
       }}
     >
-      <div style={{ fontSize: 11, color: C.label, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div className="text-muted-foreground" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>
         {label}
       </div>
       <div style={{ fontSize: 20, fontWeight: 700, color, marginTop: 2 }}>

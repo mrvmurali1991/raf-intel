@@ -355,7 +355,7 @@ function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <Calendar size={14} style={{ color: T.slate500 }} />
+        <Calendar size={14} className="text-muted-foreground" />
         <span style={{ fontSize: 12, fontWeight: 600, color: T.slate500, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Upcoming Submission Deadlines
         </span>
@@ -658,7 +658,7 @@ function GenerateDialog({ onClose, onSuccess }: GenerateDialogProps) {
               }}
               role="alert"
             >
-              <AlertCircle size={15} style={{ color: T.red600, flexShrink: 0, marginTop: 1 }} />
+              <AlertCircle size={15} className="text-destructive" style={{ flexShrink: 0, marginTop: 1 }} />
               <span style={{ fontSize: 13, color: T.red600 }}>{generateError}</span>
             </div>
           )}
@@ -945,7 +945,7 @@ function UploadResponseDialog({ batchId, batchName, onClose, onSuccess }: Upload
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                <Upload size={28} style={{ color: T.slate400 }} />
+                <Upload size={28} className="text-muted-foreground" />
                 <span style={{ fontSize: 14, fontWeight: 600, color: T.slate700 }}>
                   Drop response file here
                 </span>
@@ -968,7 +968,7 @@ function UploadResponseDialog({ batchId, batchName, onClose, onSuccess }: Upload
               }}
               role="alert"
             >
-              <AlertCircle size={15} style={{ color: T.red600, flexShrink: 0, marginTop: 1 }} />
+              <AlertCircle size={15} className="text-destructive" style={{ flexShrink: 0, marginTop: 1 }} />
               <span style={{ fontSize: 13, color: T.red600 }}>{uploadError}</span>
             </div>
           )}
@@ -1909,7 +1909,7 @@ function BatchesTable({
                     <td style={{ ...cell, fontSize: 12, color: T.slate500 }}>
                       {b.submitted_at
                         ? new Date(b.submitted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                        : <span style={{ color: T.slate400 }}>—</span>}
+                        : <span className="text-muted-foreground">—</span>}
                     </td>
 
                     {/* Actions */}

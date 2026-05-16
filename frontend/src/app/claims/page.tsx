@@ -383,7 +383,7 @@ function ToastStack({ items }: { items: Toast[] }) {
               width: 28, height: 28, borderRadius: 7, display: "inline-flex",
               alignItems: "center", justifyContent: "center", background: tone.bg, color: tone.fg,
             }}>{tone.icon}</span>
-            <span style={{ fontSize: 13, color: C.slate700, fontWeight: 500 }}>{t.text}</span>
+            <span className="text-foreground" style={{ fontSize: 13, fontWeight: 500 }}>{t.text}</span>
           </div>
         );
       })}
@@ -459,8 +459,8 @@ function UploadDialog({
               color: C.teal, display: "flex", alignItems: "center", justifyContent: "center",
             }}><Upload size={18} /></div>
             <div>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate900 }}>Upload Claims File</h2>
-              <p style={{ margin: 0, fontSize: 12, color: C.slate500 }}>CSV, X12 837P / 837I, or EDI — up to 100 MB</p>
+              <h2 className="text-foreground" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Upload Claims File</h2>
+              <p className="text-muted-foreground" style={{ margin: 0, fontSize: 12 }}>CSV, X12 837P / 837I, or EDI — up to 100 MB</p>
             </div>
           </div>
           <button onClick={onClose} disabled={uploading} aria-label="Close dialog" style={{
@@ -496,8 +496,8 @@ function UploadDialog({
                   width: 48, height: 48, borderRadius: 12, background: `${C.emerald}1A`,
                   color: C.emerald, display: "flex", alignItems: "center", justifyContent: "center",
                 }}><FileText size={22} /></div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>{file.name}</div>
-                <div style={{ fontSize: 12, color: C.slate500 }}>
+                <div className="text-foreground" style={{ fontSize: 14, fontWeight: 600 }}>{file.name}</div>
+                <div className="text-muted-foreground" style={{ fontSize: 12 }}>
                   {(file.size / 1024).toFixed(1)} KB
                 </div>
                 {!uploading && (
@@ -514,10 +514,10 @@ function UploadDialog({
                   color: C.slate400, display: "flex", alignItems: "center", justifyContent: "center",
                 }}><Upload size={22} /></div>
                 <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.slate700 }}>
+                  <p className="text-foreground" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
                     Drop a claims file here
                   </p>
-                  <p style={{ margin: "4px 0 0", fontSize: 12, color: C.slate500 }}>
+                  <p className="text-muted-foreground" style={{ margin: "4px 0 0", fontSize: 12 }}>
                     or click to browse — {ACCEPTED_EXT.join(", ")}
                   </p>
                 </div>
@@ -549,8 +549,8 @@ function UploadDialog({
               padding: "10px 12px", borderRadius: 8,
               background: C.redSoft, border: `1px solid ${C.red}30`,
             }}>
-              <AlertTriangle size={15} style={{ color: C.red, flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: 13, color: C.red }}>{error}</span>
+              <AlertTriangle size={15} className="text-destructive" style={{ flexShrink: 0, marginTop: 1 }} />
+              <span className="text-destructive" style={{ fontSize: 13 }}>{error}</span>
             </div>
           )}
 
@@ -558,8 +558,8 @@ function UploadDialog({
             display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
             borderRadius: 8, background: C.slate50, border: `1px solid ${C.slate200}`,
           }}>
-            <Database size={14} style={{ color: C.slate500 }} />
-            <span style={{ fontSize: 12, color: C.slate500, lineHeight: 1.5 }}>
+            <Database size={14} className="text-muted-foreground" />
+            <span className="text-muted-foreground" style={{ fontSize: 12, lineHeight: 1.5 }}>
               After upload, the batch is <strong>parsed</strong>. Run <em>Process</em> to match
               patients to OpenEMR records and map ICD-10 codes to HCC categories.
             </span>
@@ -615,9 +615,9 @@ function ConfirmDeleteDialog({
           color: C.red, display: "flex", alignItems: "center", justifyContent: "center",
           marginBottom: 14,
         }}><Trash2 size={22} /></div>
-        <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: C.slate900 }}>Delete batch?</h3>
-        <p style={{ margin: "0 0 22px", fontSize: 13, color: C.slate500, lineHeight: 1.6 }}>
-          <strong style={{ color: C.slate700 }}>&ldquo;{normBatch(batch).name}&rdquo;</strong> and all{" "}
+        <h3 className="text-foreground" style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>Delete batch?</h3>
+        <p className="text-muted-foreground" style={{ margin: "0 0 22px", fontSize: 13, lineHeight: 1.6 }}>
+          <strong className="text-foreground">&ldquo;{normBatch(batch).name}&rdquo;</strong> and all{" "}
           {fmtN(normBatch(batch).total)} associated claim records will be permanently deleted.
           This action cannot be undone.
         </p>
