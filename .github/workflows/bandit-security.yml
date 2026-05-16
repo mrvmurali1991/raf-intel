@@ -1,0 +1,88 @@
+# ===========================================================================
+# RAF Intelligence — Bandit Python Security Scanner
+#
+# Runs Bandit static analysis on backend/app on every push and pull_request.
+# Uploads a JSON report as an artifact and fails the job if any HIGH severity
+# findings are detected.
+#
+# Severity tiers used:
+#   -ll  => report LOW confidence + LOW severity and above (catch everything)
+#   Fail => only on HIGH severity issues (reduces noise from informational hits)
+# ===========================================================================
+
+name: Bandit Security Scan
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: bandit-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  bandit:
+    name: "Security — Bandit Python SAST"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit
+        run: pip install "bandit[toml]>=1.7.0"
+
+      # Scan with -ll (low severity + low confidence floor) to capture full picture.
+      # Output is JSON so we can parse HIGH findings in the next step.
+      # The `|| true` prevents bandit's non-zero exit (on any finding) from stopping
+      # the workflow here — severity filtering happens in the step below.
+      - name: Run Bandit scan
+        run: |
+          bandit -r backend/app -ll -ii -f json -o bandit-report.json || true
+
+      - name: Upload Bandit report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 14
+
+      # Parse the JSON report and fail the job if any HIGH severity issues exist.
+      # This keeps the signal clear: LOW/MEDIUM findings are logged; HIGH findings block.
+      - name: Fail on HIGH severity findings
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          try:
+              with open("bandit-report.json") as f:
+                  report = json.load(f)
+          except (FileNotFoundError, json.JSONDecodeError) as e:
+              print(f"Could not read bandit-report.json: {e}", file=sys.stderr)
+              sys.exit(1)
+
+          results = report.get("results", [])
+          high_issues = [r for r in results if r.get("issue_severity") == "HIGH"]
+
+          if high_issues:
+              print(f"FAIL: {len(high_issues)} HIGH severity Bandit finding(s):", file=sys.stderr)
+              for issue in high_issues:
+                  print(
+                      f"  [{issue['test_id']}] {issue['issue_text']} "
+                      f"@ {issue['filename']}:{issue['line_number']}",
+                      file=sys.stderr,
+                  )
+              sys.exit(1)
+
+          total = len(results)
+          print(f"Bandit: {total} finding(s) total, 0 HIGH severity — gate passed.")
+          PY

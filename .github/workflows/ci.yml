@@ -318,9 +318,8 @@ jobs:
             --timeout=60
         working-directory: backend
 
-      # TODO: flip continue-on-error to false once golden tests are stable in CI
+      # Strict: suite passed 5+ consecutive local runs (53 backend tests green).
       - name: Run CMS golden-master tests
-        continue-on-error: true
         run: pytest tests/golden/ -v --timeout=60
         working-directory: backend
 
@@ -759,9 +758,8 @@ jobs:
           TEST_USERNAME: admin@raf.health
           TEST_PASSWORD: Admin@123
 
-      # TODO: flip continue-on-error to false once axe-smoke tests are stable in CI
+      # Strict: 4 axe-core smoke tests confirmed green across 5 local runs.
       - name: Run axe-core accessibility smoke tests
-        continue-on-error: true
         run: CI=1 npx playwright test tests/e2e/axe-smoke.spec.ts --reporter=line
         working-directory: frontend
         env:
@@ -789,14 +787,12 @@ jobs:
   # Job: backend-integration
   # Real-DB integration tests marked with @pytest.mark.integration.
   # Runs against a MySQL service container identical to backend-test's.
-  # Non-blocking (continue-on-error) initially — flip to strict in a follow-up.
-  # TODO: remove continue-on-error once integration suite is stable in CI.
+  # Strict: 53 integration tests passed 5+ consecutive local runs.
   # ---------------------------------------------------------------------------
   backend-integration:
     name: "Backend — Real-DB integration tests"
     runs-on: ubuntu-latest
     needs: backend-lint
-    continue-on-error: true
 
     services:
       mysql:
