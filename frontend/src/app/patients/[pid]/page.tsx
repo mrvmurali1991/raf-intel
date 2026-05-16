@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useState, useRef, useEffect, useMemo } from "react";
+import React, { use, useState, useRef, useEffect, useMemo, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -99,8 +99,13 @@ export default function PatientDetailPage({
   const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") ?? "rafcentral");
 
   // Write-through: keep ?tab= in sync without adding browser history entries.
+  // The tab-content swap is wrapped in startTransition so React can keep
+  // the previous tab interactive while the new one mounts — smoother feel
+  // than a hard re-render. URL update stays outside (urgent navigation).
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
+    startTransition(() => {
+      setActiveTab(tab);
+    });
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
     router.replace(`?${params.toString()}`);
