@@ -1975,7 +1975,7 @@ export default function PatientsPage() {
         {/* ---- Loading Skeleton ---- */}
         {isLoading && Array.from({ length: 8 }).map((_, i) => (
           <div
-            key={i}
+            key={`skeleton-${i}`}
             aria-hidden="true"
             className="worklist-grid"
             style={{
@@ -2074,7 +2074,7 @@ export default function PatientsPage() {
 
           return (
             <div
-              key={p.pid}
+              key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
               role="row"
               tabIndex={0}
               aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
