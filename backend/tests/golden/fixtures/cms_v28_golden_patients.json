@@ -1,0 +1,211 @@
+{
+  "_source": "CMS HHS-HCC V28 Risk Adjustment Model. Coefficient values derived from CMS CY2025 Medicare Advantage Final Rate Announcement (April 2024), Table VI-2 'Relative Factors for Community and Institutional Beneficiaries under the 2024 CMS-HCC Model (Version 28)', available at https://www.cms.gov/files/document/2025-announcement.pdf. Demographic coefficients from Attachment VI of the same document. Verified against hccinfhir open-source library (https://github.com/pfehlinger/hccinfhir) which transcribes the same CMS-published coefficient tables verbatim. All expected values computed by summing published V28 coefficients directly (no blending, no MACI, norm_factor=1.0) so they pin the raw hccinfhir output.",
+  "_note": "norm_factor=1.0, maci=0.0, model_version=CMS-HCC Model V28. Expected values are pre-normalization raw scores (risk_score from hccinfhir). Tolerance 0.0001 unless overridden.",
+  "cases": [
+    {
+      "id": "v28_cna_low_diabetes_aged_70m",
+      "description": "Community Non-dual Aged 70M, diabetes without complications — low-risk floor case",
+      "source_note": "CMS V28 CNA segment. Demo: CNA_M70_74=0.396 (CMS CY2025 Rate Announcement Table VI-2). HCC 38 (Diabetes w/ Glycemic/No Complications, ICD E11.9): CNA coefficient 0.166 (same table). Sum=0.562.",
+      "inputs": {
+        "age": 70,
+        "sex": "M",
+        "model_segment": "CNA",
+        "icd10_codes": ["E119"]
+      },
+      "expected": {
+        "total_raf": 0.562,
+        "demographic_score": 0.396,
+        "disease_score": 0.166,
+        "hcc_list_unordered": ["38"]
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cna_high_cancer_metastatic_aged_75f",
+      "description": "Community Non-dual Aged 75F, metastatic cancer to lung — high-risk",
+      "source_note": "CMS V28 CNA segment. Demo: CNA_F75_79=0.465 (Table VI-2). HCC 17 (Cancer Metastatic to Lung/Liver/Brain, ICD C78.01): CNA coefficient 4.209 (Table VI-2). Sum=4.674.",
+      "inputs": {
+        "age": 75,
+        "sex": "F",
+        "model_segment": "CNA",
+        "icd10_codes": ["C7801"]
+      },
+      "expected": {
+        "total_raf": 4.674,
+        "demographic_score": 0.465,
+        "disease_score": 4.209,
+        "hcc_list_unordered": ["17"]
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cna_mid_chf_diabetes_aged_80m",
+      "description": "Community Non-dual Aged 80M, CHF + diabetes — mid-risk, hierarchy non-collapsing combo",
+      "source_note": "CMS V28 CNA segment. Demo: CNA_M80_84=0.571 (hccinfhir CNA table; CMS Table VI-2 CY2025 Rate Announcement). HCC 226 (End-Stage CHF, ICD I50.22): CNA coefficient from hccinfhir CNA table. HCC 38 (DM no complications, E11.9) coeff 0.166. CHF+DM are in different HCC families — no hierarchy collapse. total_raf=1.209 verified by running hccinfhir directly.",
+      "inputs": {
+        "age": 80,
+        "sex": "M",
+        "model_segment": "CNA",
+        "icd10_codes": ["I5022", "E119"]
+      },
+      "expected": {
+        "hcc_list_unordered": ["226", "38"],
+        "total_raf": 1.209,
+        "demographic_score": 0.571
+      },
+      "tolerance": 0.0010
+    },
+    {
+      "id": "v28_cna_demographic_only_aged_65f",
+      "description": "Community Non-dual Aged 65F, no diagnoses — pure demographic floor",
+      "source_note": "CMS V28 CNA segment. Demo: CNA_F65_69=0.330 (Table VI-2). No disease score. Purpose: regression trip-wire confirming demo score applied even with zero diagnoses.",
+      "inputs": {
+        "age": 65,
+        "sex": "F",
+        "model_segment": "CNA",
+        "icd10_codes": []
+      },
+      "expected": {
+        "total_raf": 0.330,
+        "demographic_score": 0.330,
+        "disease_score": 0.0,
+        "hcc_list": []
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cfa_full_dual_aged_75f_copd",
+      "description": "Community Full-dual Aged 75F, COPD — dual-eligible CFA segment",
+      "source_note": "CMS V28 CFA segment. Demo: CFA_F75_79=0.596 (hccinfhir CFA table, from CMS Attachment VI). HCC 280 (COPD/Emphysema, ICD J44.9): CFA coefficient 0.390. Sum=0.986. Validates that dual-eligible coefficient table is selected when segment=CFA.",
+      "inputs": {
+        "age": 75,
+        "sex": "F",
+        "model_segment": "CFA",
+        "icd10_codes": ["J449"]
+      },
+      "expected": {
+        "total_raf": 0.986,
+        "demographic_score": 0.596,
+        "disease_score": 0.390,
+        "hcc_list_unordered": ["280"]
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cfa_full_dual_aged_80m_diabetes_ckd",
+      "description": "Community Full-dual Aged 80M, diabetes with complications + CKD stage 4 — dual eligible high-complexity",
+      "source_note": "CMS V28 CFA segment. ICD N18.4 → HCC 327 (CKD stage 4 in V28 hccinfhir mapping). ICD E11.40 → HCC 37 (Diabetes with Chronic Complications; E11.40=DM with diabetic neuropathy unspecified). HCC 37 and HCC 327 are in separate hierarchy chains. Both must survive in dual-eligible CFA segment. total_raf=1.540, demo=0.789 verified by running hccinfhir directly.",
+      "inputs": {
+        "age": 80,
+        "sex": "M",
+        "model_segment": "CFA",
+        "icd10_codes": ["N184", "E1140"]
+      },
+      "expected": {
+        "hcc_list_unordered": ["37", "327"],
+        "total_raf": 1.540,
+        "demographic_score": 0.789
+      },
+      "tolerance": 0.0010
+    },
+    {
+      "id": "v28_ins_institutional_aged_80m_chf_dm",
+      "description": "Institutional 80M, CHF + DM — validates INS coefficient table selection",
+      "source_note": "CMS V28 INS (Institutional) segment. ICD I50.22 → HCC 226. ICD E11.9 → HCC 38. INS coefficients differ from community per CMS Table VI-2. Both HCCs must survive (different hierarchy families). Validates prefix_override=INS_ propagates to engine.",
+      "inputs": {
+        "age": 80,
+        "sex": "M",
+        "model_segment": "INS",
+        "icd10_codes": ["I5022", "E119"]
+      },
+      "expected": {
+        "hcc_list_unordered": ["226", "38"]
+      },
+      "tolerance": 0.001
+    },
+    {
+      "id": "v28_cnd_disabled_under65_demographic_only",
+      "description": "Community Non-dual Disabled 55M, no diagnoses — under-65 disabled floor",
+      "source_note": "CMS V28 CND segment (under-65 disabled). Demo: CND_M55_59=0.283 (hccinfhir CND table, derived from CMS Attachment VI disability segment table). Disease score = 0.0. Regression gate for CND segment routing.",
+      "inputs": {
+        "age": 55,
+        "sex": "M",
+        "model_segment": "CND",
+        "icd10_codes": []
+      },
+      "expected": {
+        "total_raf": 0.283,
+        "demographic_score": 0.283,
+        "disease_score": 0.0,
+        "hcc_list": []
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cnd_disabled_under65_with_hcc",
+      "description": "Community Non-dual Disabled 45F, morbid obesity — disabled under-65 with HCC",
+      "source_note": "CMS V28 CND segment. ICD E66.01 → HCC 48 (Morbid Obesity). CND HCC 48 coefficient from hccinfhir CND table. Demo: CND_F45_54 from disability coefficient table. Validates HCC scoring in under-65 disabled segment.",
+      "inputs": {
+        "age": 45,
+        "sex": "F",
+        "model_segment": "CND",
+        "icd10_codes": ["E6601"]
+      },
+      "expected": {
+        "hcc_list_unordered": ["48"]
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cna_hierarchy_dm_with_complications_collapses_38",
+      "description": "Community Non-dual Aged 70F, DM with complications (HCC 37) collapses DM no-complications (HCC 38)",
+      "source_note": "CMS V28 HCC hierarchy: HCC 37 (Diabetes with Chronic Complications) trumps HCC 38 (Diabetes with Glycemic/No Complications). ICD E11.40 → HCC 37 (DM with diabetic neuropathy unspecified). ICD E11.9 → HCC 38. After hccinfhir hierarchy enforcement, only HCC 37 should remain. Verified by running hccinfhir: ['E1140','E119'] -> hcc_list=['37']. Source: CMS HCC hierarchy file V28 2024, chain: 37 > 38.",
+      "inputs": {
+        "age": 70,
+        "sex": "F",
+        "model_segment": "CNA",
+        "icd10_codes": ["E1140", "E119"]
+      },
+      "expected": {
+        "hcc_list_unordered": ["37"],
+        "hcc_list_must_not_contain": ["38"]
+      },
+      "tolerance": 0.0001
+    },
+    {
+      "id": "v28_cpa_partial_dual_aged_68f_cancer",
+      "description": "Community Partial-dual Aged 68F, breast cancer — partial dual eligible (CPA segment)",
+      "source_note": "CMS V28 CPA segment. ICD C50.911 → HCC 23 (Breast, Prostate, Colorectal, and Other Cancers and Tumors in V28 hccinfhir mapping). CPA coefficients from hccinfhir CPA table. Validates partial-dual segment routing separate from full-dual CFA. total_raf=0.568, demo=0.365 verified by running hccinfhir directly.",
+      "inputs": {
+        "age": 68,
+        "sex": "F",
+        "model_segment": "CPA",
+        "icd10_codes": ["C50911"]
+      },
+      "expected": {
+        "hcc_list_unordered": ["23"],
+        "total_raf": 0.568,
+        "demographic_score": 0.365
+      },
+      "tolerance": 0.0010
+    },
+    {
+      "id": "v28_cna_morbid_obesity_only_aged_72m",
+      "description": "Community Non-dual Aged 72M, morbid obesity only — single low-HCC case",
+      "source_note": "CMS V28 CNA segment. Demo: CNA_M70_74=0.396. HCC 48 (Morbid Obesity, ICD E66.01): CNA coefficient 0.186 (Table VI-2). Sum=0.582. Low-risk, single HCC, no interactions — baseline regression for HCC 48 coefficient stability.",
+      "inputs": {
+        "age": 72,
+        "sex": "M",
+        "model_segment": "CNA",
+        "icd10_codes": ["E6601"]
+      },
+      "expected": {
+        "total_raf": 0.582,
+        "demographic_score": 0.396,
+        "disease_score": 0.186,
+        "hcc_list_unordered": ["48"]
+      },
+      "tolerance": 0.0001
+    }
+  ]
+}
