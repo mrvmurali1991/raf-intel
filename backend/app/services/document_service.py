@@ -37,6 +37,7 @@ from app.services.icd_validator import (
     normalize_code,
     validate_code,
 )
+from app.services.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +269,54 @@ def _resolve_upload_path(tenant_id: str) -> Path:
         raise ValueError("Invalid upload path: path escapes base directory")
     month_dir.mkdir(parents=True, exist_ok=True)
     return month_dir
+
+
+def _build_storage_key(tenant_id: str, stored_name: str) -> str:
+    """Return the relative storage key used by StorageBackend.put/get.
+
+    Layout: ``documents/<tenant>/<YYYY-MM>/<uuid>.<ext>`` — kept stable so
+    that S3 listings and on-disk layout match.
+    """
+    safe_tenant = re.sub(r'[^a-zA-Z0-9_-]', '_', str(tenant_id))
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    return f"documents/{safe_tenant}/{month}/{stored_name}"
+
+
+def _read_document_bytes(file_path: str) -> bytes:
+    """Read document bytes via the storage backend, with legacy disk fallback.
+
+    Historical rows stored an absolute path like ``/app/uploads/documents/...``.
+    New rows store the relative storage key. We try storage backend first
+    (treating value as a key), then fall back to legacy filesystem read.
+    """
+    storage = get_storage_backend()
+    # Try as storage key first (new path)
+    try:
+        return storage.get(file_path)
+    except FileNotFoundError:
+        pass
+    # Legacy fallback — absolute path on disk
+    p = Path(file_path)
+    if p.exists():
+        return p.read_bytes()
+    raise FileNotFoundError(f"Document not found in storage or on disk: {file_path}")
+
+
+def _delete_document_object(file_path: str) -> None:
+    """Delete via storage backend, falling back to direct filesystem unlink."""
+    storage = get_storage_backend()
+    try:
+        if storage.exists(file_path):
+            storage.delete(file_path)
+            return
+    except Exception:  # noqa: BLE001 — best-effort
+        pass
+    p = Path(file_path)
+    if p.exists():
+        try:
+            p.unlink()
+        except OSError as exc:
+            logger.warning("Could not delete file %s: %s", p, exc)
 
 
 def _compute_sha256(data: bytes) -> str:
@@ -784,15 +833,9 @@ def analyze_document(document_id: str, tenant_id: str | None = None) -> dict[str
     if not doc:
         raise ValueError(f"Document {document_id!r} not found")
 
-    file_path = Path(doc["file_path"])
-    # Guard against path traversal in stored file_path values
-    resolved_file = file_path.resolve()
-    if not resolved_file.is_relative_to(UPLOADS_BASE.resolve()):
-        raise ValueError(
-            f"Stored file path escapes the uploads directory: {file_path}"
-        )
-    if not file_path.exists():
-        raise RuntimeError(f"File not found on disk: {file_path}")
+    file_path = str(doc["file_path"] or "")
+    if not file_path:
+        raise RuntimeError("Document row has no file_path")
 
     # Mark as processing
     with raf_cursor() as cur:
@@ -803,7 +846,7 @@ def analyze_document(document_id: str, tenant_id: str | None = None) -> dict[str
 
     start_ts = time.perf_counter()
     try:
-        file_bytes = file_path.read_bytes()
+        file_bytes = _read_document_bytes(file_path)
         extracted = _call_gemini_vision(file_bytes, doc["mime_type"])
     except Exception as exc:
         # Mark as failed and re-raise
@@ -892,15 +935,15 @@ def store_upload(
     )
     stored_name = f"{uuid.uuid4()}.{ext}"
 
-    upload_dir = _resolve_upload_path(tenant_id)
-    file_path = upload_dir / stored_name
-
-    file_path.write_bytes(file_bytes)
+    # Write via the configured storage backend (local disk or S3).
+    storage = get_storage_backend()
+    storage_key = _build_storage_key(tenant_id, stored_name)
+    storage.put(storage_key, file_bytes, mime_type)
     logger.info(
         "Stored upload: %s (%d bytes) -> %s",
         original_filename,
         len(file_bytes),
-        file_path,
+        storage_key,
     )
 
     doc_id = save_document_record(
@@ -908,7 +951,7 @@ def store_upload(
         patient_id=patient_id,
         original_name=original_filename,
         stored_filename=stored_name,
-        file_path=str(file_path),
+        file_path=storage_key,
         mime_type=mime_type,
         file_size=len(file_bytes),
         sha256=sha256,
@@ -1331,12 +1374,9 @@ def delete_document(
     if not doc:
         return False
 
-    file_path = Path(doc["file_path"])
-    if file_path.exists():
-        try:
-            file_path.unlink()
-        except OSError as exc:
-            logger.warning("Could not delete file %s: %s", file_path, exc)
+    file_path = str(doc.get("file_path") or "")
+    if file_path:
+        _delete_document_object(file_path)
 
     with raf_cursor() as cur:
         cur.execute(

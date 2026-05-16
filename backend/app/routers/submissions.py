@@ -44,9 +44,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.config import settings as _settings
 from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services import submission_service as svc
+from app.services.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +119,30 @@ def _require_batch(batch_id: str, tenant_id: str) -> dict[str, Any]:
     if str(batch.get("tenant_id", "")) != str(tenant_id):
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
     return batch
+
+
+def _try_signed_url_response(file_path: str) -> Any | None:
+    """Return a 302 RedirectResponse to a presigned URL when STORAGE_BACKEND is
+    not local, else None to fall back to server-routed FileResponse.
+
+    Best-effort: failures fall through to the local FileResponse path.
+    """
+    from fastapi.responses import RedirectResponse
+
+    backend = str(getattr(_settings, "storage_backend", "local") or "local").lower()
+    if backend == "local":
+        return None
+    try:
+        storage = get_storage_backend()
+        url = storage.signed_url(file_path, expires_in=3600)
+        return RedirectResponse(url=url, status_code=302)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        logger.warning(
+            "submissions: signed_url failed for %s, falling back to FileResponse: %s",
+            file_path,
+            exc,
+        )
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -426,6 +452,14 @@ def submit_batch(
     except ValueError:
         raise HTTPException(status_code=400, detail="File path is outside the submissions output directory.")
 
+    # For non-local backends, hand the client a presigned URL.
+    signed = _try_signed_url_response(file_path)
+    if signed is not None:
+        signed.headers["X-Batch-Id"] = batch_id
+        signed.headers["X-File-Type"] = str(updated_batch.get("file_type", ""))
+        signed.headers["X-Record-Count"] = str(updated_batch.get("record_count", 0))
+        return signed
+
     file_name = os.path.basename(file_path)
     return FileResponse(
         path=file_path,
@@ -474,6 +508,11 @@ def download_batch_file(
         _resolved.relative_to(_submissions_root)
     except ValueError:
         raise HTTPException(status_code=400, detail="File path is outside the submissions output directory.")
+
+    # For non-local backends, hand the client a presigned URL.
+    signed = _try_signed_url_response(file_path)
+    if signed is not None:
+        return signed
 
     file_name = os.path.basename(file_path)
     return FileResponse(
