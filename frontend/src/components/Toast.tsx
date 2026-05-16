@@ -16,6 +16,11 @@ type ToastType = "success" | "error" | "warning" | "info";
 export interface ToastAction {
   label: string;
   onClick: () => void;
+  /**
+   * When true the action button renders disabled. Useful when a feature
+   * has not shipped yet but we still want users to see the affordance.
+   */
+  disabled?: boolean;
 }
 
 interface Toast {
@@ -123,10 +128,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {t.action && (
             <button
               onClick={() => {
+                if (t.action!.disabled) return;
                 t.action!.onClick();
                 removeToast(t.id);
               }}
-              className="mt-1.5 text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
+              disabled={t.action.disabled}
+              title={t.action.disabled ? "Coming soon" : undefined}
+              className={cn(
+                "mt-1.5 text-xs font-semibold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current",
+                t.action.disabled
+                  ? "opacity-50 cursor-not-allowed no-underline"
+                  : "hover:no-underline"
+              )}
             >
               {t.action.label}
             </button>

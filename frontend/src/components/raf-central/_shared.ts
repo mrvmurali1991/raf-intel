@@ -14,10 +14,11 @@ export interface LiveRAFBar {
   year: number;
 }
 
-// TODO(types): reconcile with backend shape — GeneratedMEATGap.gaps is
-// Record<string, boolean> (dynamic keys) but the frontend uses a fixed
-// { monitor, evaluate, assess, treat } shape for type-safe dot-access.
-// The backend always sends those four keys; extend here if new keys are added.
+// gaps is intentionally Record<string, boolean> to mirror the backend
+// GeneratedMEATGap shape — the API may emit additional keys (e.g. future
+// MEAT-letter expansions). The four canonical keys monitor/evaluate/assess/
+// treat are always present today; derive booleans defensively in render
+// code with `gaps.monitor ?? false`.
 export interface MEATGap {
   patient_hcc_id: number | null;
   hcc: string;
@@ -25,7 +26,7 @@ export interface MEATGap {
   label: string;
   coefficient: number;
   status: "COMPLETE" | "PARTIAL" | "MISSING" | "NOT_COMPLIANT";
-  gaps: { monitor: boolean; evaluate: boolean; assess: boolean; treat: boolean };
+  gaps: Record<string, boolean>;
 }
 
 export interface SuspectMeat {

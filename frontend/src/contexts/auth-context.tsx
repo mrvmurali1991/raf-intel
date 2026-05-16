@@ -85,6 +85,12 @@ interface AuthContextType {
   switchTenant: (tenantId: string) => Promise<void>;
   /** The axios instance pre-configured for auth endpoints. */
   authApi: typeof authApi;
+  /**
+   * Timestamp (ms since epoch) of the most recent user activity event.
+   * Updated by the idle-tracking effect below; consumed by
+   * SessionTimeoutWarning so we have a single source of truth for "idle".
+   */
+  lastActivityAt: number;
 }
 
 /** Returned by login() so the caller knows whether MFA is required next. */
@@ -197,6 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityRef = useRef(Date.now());
+  // Exposed via context so other components (e.g. SessionTimeoutWarning)
+  // share ONE source of truth for activity instead of running their own
+  // independent listeners — which could drift out of sync.
+  const [lastActivityAt, setLastActivityAt] = useState<number>(() => Date.now());
   // Holds eject handles for the interceptors registered on lib/api's instance.
   const apiInterceptorHandlesRef = useRef<AuthInterceptorHandles | null>(null);
 
@@ -313,8 +323,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const activityEvents = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"];
 
+    // Throttle the state update so consumers don't re-render on every mouse
+    // move; the ref is still updated synchronously so the idle check below
+    // stays accurate to within a single tick.
+    const THROTTLE_MS = 10_000;
+    let lastPublishedAt = 0;
+
     const resetTimer = () => {
-      lastActivityRef.current = Date.now();
+      const now = Date.now();
+      lastActivityRef.current = now;
+      if (now - lastPublishedAt >= THROTTLE_MS) {
+        lastPublishedAt = now;
+        setLastActivityAt(now);
+      }
     };
 
     activityEvents.forEach((e) =>
@@ -572,6 +593,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearMustChangePassword,
         switchTenant,
         authApi,
+        lastActivityAt,
       }}
     >
       {children}

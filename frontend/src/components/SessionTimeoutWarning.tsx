@@ -3,14 +3,15 @@
 /**
  * SessionTimeoutWarning
  *
- * Tracks user activity independently of the auth-context idle timer.
- * After 12 minutes of inactivity (3 min before the 15-min token expiry)
- * it renders a modal with a live countdown.  The user can either
- * "Stay Logged In" (calls refreshToken) or "Log Out".  If the countdown
- * reaches zero the component calls logout automatically.
+ * Reads `lastActivityAt` from the auth context (single source of truth
+ * for user activity) and shows a 3-minute countdown modal once 12
+ * minutes of inactivity have elapsed.  At T-0 the component auto-logs
+ * the user out.  The user can dismiss with "Stay Logged In" (calls
+ * refreshToken) or "Log Out".
  *
- * Activity events are throttled to fire at most once every 10 seconds so
- * we never saturate the event loop on heavy-mouse pages.
+ * IMPORTANT: This component intentionally registers ZERO of its own
+ * activity listeners — see auth-context.tsx for the canonical clock.
+ * Two parallel clocks risked drift and unnecessary re-renders.
  *
  * Usage:
  *   <SessionTimeoutWarning />   // mount inside the authenticated shell
@@ -34,9 +35,6 @@ const WARN_AFTER_MS = 12 * 60 * 1_000; // 12 minutes
 
 /** How long the countdown runs before auto-logout (must equal 15min - WARN_AFTER_MS). */
 const COUNTDOWN_MS = 3 * 60 * 1_000; // 3 minutes
-
-/** Minimum gap between activity-reset calls (throttle). */
-const THROTTLE_MS = 10_000; // 10 seconds
 
 // ---------------------------------------------------------------------------
 // Design tokens — match the dark-glass aesthetic used in WelcomeWizard
@@ -70,16 +68,12 @@ function formatCountdown(ms: number): string {
 // ---------------------------------------------------------------------------
 
 export function SessionTimeoutWarning() {
-  const { refreshToken, logout, isAuthenticated } = useAuth();
+  const { refreshToken, logout, isAuthenticated, lastActivityAt } = useAuth();
 
   const [showModal, setShowModal] = useState(false);
   const [remainingMs, setRemainingMs] = useState(COUNTDOWN_MS);
   const [stayLoading, setStayLoading] = useState(false);
 
-  // Timestamp of the last recorded activity
-  const lastActivityRef = useRef(Date.now());
-  // The last time we actually ran the throttled reset
-  const lastThrottleRef = useRef(Date.now());
   // Whether we are currently showing the modal (avoids stale closure in timers)
   const showModalRef = useRef(false);
   // Interval handle for the countdown ticker
@@ -131,43 +125,27 @@ export function SessionTimeoutWarning() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"] as const;
-
-    const resetActivity = () => {
-      const now = Date.now();
-      // Throttle: only update lastActivityRef at most once per THROTTLE_MS
-      if (now - lastThrottleRef.current >= THROTTLE_MS) {
-        lastActivityRef.current = now;
-        lastThrottleRef.current = now;
-        // If modal is showing and user moved, dismiss it gracefully
-        // (they'll get a fresh 12 min window — no need to call refreshToken here;
-        //  the auth-context's own 401 interceptor handles silent refresh)
-        if (showModalRef.current) {
-          stopCountdown();
-          setShowModal(false);
-        }
-      }
-    };
-
-    ACTIVITY_EVENTS.forEach((e) =>
-      window.addEventListener(e, resetActivity, { passive: true })
-    );
+    // No local activity listeners — we read lastActivityAt from auth-context.
+    // If activity arrives while the modal is open, dismiss it gracefully.
+    if (showModalRef.current && Date.now() - lastActivityAt < 1_000) {
+      stopCountdown();
+      setShowModal(false);
+    }
 
     // Poll every 30 s to check whether 12 min of inactivity has passed
     const idleCheck = setInterval(() => {
       if (showModalRef.current) return; // already showing — let countdown handle it
-      if (Date.now() - lastActivityRef.current >= WARN_AFTER_MS) {
+      if (Date.now() - lastActivityAt >= WARN_AFTER_MS) {
         setShowModal(true);
         startCountdown();
       }
     }, 30_000);
 
     return () => {
-      ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, resetActivity));
       clearInterval(idleCheck);
       stopCountdown();
     };
-  }, [isAuthenticated, startCountdown, stopCountdown]);
+  }, [isAuthenticated, lastActivityAt, startCountdown, stopCountdown]);
 
   // Cleanup countdown on unmount
   useEffect(() => () => stopCountdown(), [stopCountdown]);
@@ -218,9 +196,8 @@ export function SessionTimeoutWarning() {
     setStayLoading(true);
     try {
       await refreshToken();
-      // Reset our own idle clock so the 12-min window restarts cleanly
-      lastActivityRef.current = Date.now();
-      lastThrottleRef.current = Date.now();
+      // The auth-context activity clock is reset by the user's interaction
+      // with this button (mousedown event fires before onClick handler).
     } catch {
       // If refresh fails the 401 interceptor will handle logout — just close
     } finally {

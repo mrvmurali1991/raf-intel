@@ -1,7 +1,13 @@
 /**
  * Client-side error tracking.
- * Sends scrubbed errors to backend /api/admin/errors/report endpoint.
- * Supports Sentry SDK when NEXT_PUBLIC_SENTRY_DSN is set.
+ *
+ * Two destinations:
+ *   1. Always: POST to backend /api/admin/errors/report (PHI-scrubbed).
+ *   2. Optional: @sentry/nextjs when NEXT_PUBLIC_SENTRY_DSN is set.
+ *
+ * Sentry init is dynamic so that builds without the DSN — or builds
+ * where @sentry/nextjs has not been installed yet — still succeed.
+ * Run `npm install` after pulling so the optional dep is available.
  */
 
 /**
@@ -24,7 +30,65 @@ interface ErrorEvent {
   line?: number;
 }
 
+let sentryInitialized = false;
+
+/**
+ * Initialise Sentry if a DSN is configured. No-op otherwise.
+ * Run npm install after pulling so @sentry/nextjs is available.
+ */
+async function initSentry(): Promise<void> {
+  if (sentryInitialized) return;
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return;
+
+  try {
+    // Dynamic import so the bundle does not break when the package is
+    // not yet installed in dev environments. The package is declared
+    // in package.json — run npm install after pulling.
+    // We cast to a minimal local shape because the module may be absent
+    // at typecheck time on fresh checkouts.
+    type MinimalSentryEvent = {
+      message?: string;
+      exception?: { values?: Array<{ value?: string }> };
+    };
+    interface MinimalSentry {
+      init(opts: {
+        dsn: string;
+        environment?: string;
+        tracesSampleRate?: number;
+        beforeSend?: (event: MinimalSentryEvent) => MinimalSentryEvent | null;
+      }): void;
+    }
+    const mod = (await import(
+      /* webpackChunkName: "sentry" */ "@sentry/nextjs" as string
+    ).catch(() => null)) as MinimalSentry | null;
+    if (!mod) return;
+
+    mod.init({
+      dsn,
+      environment: process.env.NEXT_PUBLIC_ENV ?? process.env.NODE_ENV,
+      tracesSampleRate: 0.1,
+      beforeSend(event: MinimalSentryEvent) {
+        // Defence-in-depth scrub on the way out.
+        if (event.message) event.message = scrub(event.message);
+        if (event.exception?.values) {
+          for (const v of event.exception.values) {
+            if (v.value) v.value = scrub(v.value);
+          }
+        }
+        return event;
+      },
+    });
+    sentryInitialized = true;
+  } catch {
+    // Swallow — if Sentry can't init, the in-app POST below still works.
+  }
+}
+
 export function initErrorTracking() {
+  // Fire-and-forget Sentry init; in-app reporting works regardless.
+  void initSentry();
+
   window.addEventListener("error", (event) => {
     reportError({
       type: "uncaught",

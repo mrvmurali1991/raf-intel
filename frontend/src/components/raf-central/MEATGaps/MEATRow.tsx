@@ -43,9 +43,12 @@ export function MEATRow({
       ? "bg-amber-500"
       : "bg-slate-400";
 
-  const doneCount = [gap.gaps.monitor, gap.gaps.evaluate, gap.gaps.assess, gap.gaps.treat].filter(
-    Boolean
-  ).length;
+  // Backend may include additional keys beyond M/E/A/T — derive defensively.
+  const monitor = gap.gaps.monitor ?? false;
+  const evaluate = gap.gaps.evaluate ?? false;
+  const assess = gap.gaps.assess ?? false;
+  const treat = gap.gaps.treat ?? false;
+  const doneCount = [monitor, evaluate, assess, treat].filter(Boolean).length;
   const isComplete = gap.status === "COMPLETE";
 
   const statusLabel = isComplete
@@ -59,7 +62,7 @@ export function MEATRow({
     ? "text-amber-700 dark:text-amber-400"
     : "text-red-700 dark:text-red-400";
 
-  const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
+  const missing = Object.entries(gap.gaps)
     .filter(([, on]) => !on)
     .map(([k]) => k);
   const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
@@ -69,10 +72,10 @@ export function MEATRow({
     setDialogMode(null);
     await meatMut.mutateAsync({
       patient_hcc_id: gap.patient_hcc_id,
-      monitor_note: gap.gaps.monitor ? null : note,
-      evaluate_note: gap.gaps.evaluate ? null : note,
-      assess_note: gap.gaps.assess ? null : note,
-      treat_note: gap.gaps.treat ? null : note,
+      monitor_note: monitor ? null : note,
+      evaluate_note: evaluate ? null : note,
+      assess_note: assess ? null : note,
+      treat_note: treat ? null : note,
     });
     onChange();
   };
@@ -162,7 +165,7 @@ export function MEATRow({
                   className="absolute right-0 top-full mt-1 z-20 rounded-md border border-border bg-popover shadow-md py-1 min-w-[140px]"
                   role="menu"
                 >
-                  {!gap.gaps.monitor && (
+                  {!monitor && (
                     <div role="menuitem" className="px-1 py-0.5">
                       <OrderLabButton
                         patientId={patientId}
@@ -172,7 +175,7 @@ export function MEATRow({
                       />
                     </div>
                   )}
-                  {!gap.gaps.treat && (
+                  {!treat && (
                     <div role="menuitem" className="px-1 py-0.5">
                       <StartTreatmentButton
                         patientId={patientId}
@@ -182,7 +185,7 @@ export function MEATRow({
                       />
                     </div>
                   )}
-                  {gap.gaps.monitor && gap.gaps.treat && (
+                  {monitor && treat && (
                     <div className="px-3 py-2 text-xs text-muted-foreground">No additional actions</div>
                   )}
                 </div>

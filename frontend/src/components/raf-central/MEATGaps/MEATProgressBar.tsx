@@ -8,7 +8,14 @@ import type { MEATGap } from "../_shared";
  */
 export function MEATProgressBar({ gaps }: { gaps: MEATGap["gaps"] }) {
   const total = 4;
-  const done = [gaps.monitor, gaps.evaluate, gaps.assess, gaps.treat].filter(Boolean).length;
+  // Backend may emit extra keys; derive the four canonical M/E/A/T values
+  // defensively so we never crash if a key is missing.
+  const done = [
+    gaps.monitor ?? false,
+    gaps.evaluate ?? false,
+    gaps.assess ?? false,
+    gaps.treat ?? false,
+  ].filter(Boolean).length;
   const pct = (done / total) * 100;
   const barColor =
     done === 4

@@ -36,7 +36,13 @@ export function MEATCard({
   const meatMut = useMEATAttest(patientId, year);
   const busy = meatMut.isPending;
 
-  const missing = (Object.entries(gap.gaps) as [keyof MEATGap["gaps"], boolean][])
+  // Backend may include additional keys beyond M/E/A/T — derive defensively.
+  const monitor = gap.gaps.monitor ?? false;
+  const evaluate = gap.gaps.evaluate ?? false;
+  const assess = gap.gaps.assess ?? false;
+  const treat = gap.gaps.treat ?? false;
+
+  const missing = Object.entries(gap.gaps)
     .filter(([, on]) => !on)
     .map(([k]) => k);
   const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
@@ -46,10 +52,10 @@ export function MEATCard({
     setDialogOpen(false);
     await meatMut.mutateAsync({
       patient_hcc_id: gap.patient_hcc_id,
-      monitor_note: gap.gaps.monitor ? null : note,
-      evaluate_note: gap.gaps.evaluate ? null : note,
-      assess_note: gap.gaps.assess ? null : note,
-      treat_note: gap.gaps.treat ? null : note,
+      monitor_note: monitor ? null : note,
+      evaluate_note: evaluate ? null : note,
+      assess_note: assess ? null : note,
+      treat_note: treat ? null : note,
     });
     onChange();
   };
@@ -119,7 +125,7 @@ export function MEATCard({
           <Button size="sm" variant="outline" onClick={markReviewed} disabled={busy}>
             {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Mark reviewed"}
           </Button>
-          {!gap.gaps.monitor ? (
+          {!monitor ? (
             <OrderLabButton
               patientId={patientId}
               hccCode={gap.hcc}
@@ -127,7 +133,7 @@ export function MEATCard({
               onOrdered={onChange}
             />
           ) : null}
-          {!gap.gaps.treat ? (
+          {!treat ? (
             <StartTreatmentButton
               patientId={patientId}
               hccCode={gap.hcc}

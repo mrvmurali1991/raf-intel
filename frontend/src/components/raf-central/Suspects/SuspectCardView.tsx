@@ -117,18 +117,20 @@ export function SuspectCardView({
     setShowDismissDialog(false);
     await dismissMut.mutateAsync({ suspect_id: suspect.id, reason });
     onChange();
-    // TODO: No restore endpoint exists yet — Undo button closes the toast without action.
-    // When a restore endpoint is added, call it here instead of just closing.
+    // The restore endpoint has not shipped yet, so the action button is
+    // disabled and labelled "Restore (coming soon)". Once the backend
+    // route POST /api/raf-central/{pid}/actions/restore-suspect ships,
+    // remove `disabled` and call it from onClick below.
     toast.success(
       "Suspect dismissed",
       suspect.label,
       {
         duration: 10_000,
         action: {
-          label: "Undo",
+          label: "Restore (coming soon)",
+          disabled: true,
           onClick: () => {
-            // No restore endpoint available yet — dismiss the toast only.
-            // TODO: POST /api/raf-central/{pid}/actions/restore-suspect when endpoint exists.
+            // No-op until the restore endpoint exists.
           },
         },
       }
