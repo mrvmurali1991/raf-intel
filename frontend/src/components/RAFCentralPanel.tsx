@@ -75,6 +75,7 @@ import { RecaptureSection } from "./raf-central/Recapture";
 import { AuditSection } from "./raf-central/Performance/PerformanceCard";
 import { FinancialSection } from "./raf-central/Performance/FinancialCard";
 import { HCCRecaptureCard } from "./raf-central/Performance/HCCRecaptureCard";
+import { RAFReconciliationCard, buildReconciliationProps } from "./raf-central/Performance/RAFReconciliationCard";
 
 // ---------------------------------------------------------------------------
 // LiveRAFSection — top strip with score + delta (panel layout only)
@@ -662,6 +663,20 @@ export function RAFCentralPanel({
           severity="low"
         >
           <FinancialSection financial={data.financial_impact} />
+          <div className="mt-4 border-t pt-4">
+            <RAFReconciliationCard
+              {...buildReconciliationProps(
+                data.financial_impact,
+                data.measurement_year,
+                // Backend ships current_raf; submitted_raf + accepted_raf
+                // wait for an EDPS feedback ingest. Until then the card
+                // gracefully shows "matches submission" + "waiting for
+                // EDPS feedback" callouts.
+                null,
+                null,
+              )}
+            />
+          </div>
         </Section>
       </div>
 
