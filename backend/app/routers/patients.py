@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.rate_limit import limiter
+from app.schemas.patient import PatientSummary
 from app.services import openemr_connector as emr
 from app.services import patient_service as svc
 from app.services.audit_logger import log_phi_access
@@ -44,10 +45,47 @@ _MAX_CSV_BYTES = 10 * 1024 * 1024
 
 
 class PatientListResponse(BaseModel):
-    patients: list[dict[str, Any]]
+    patients: list[PatientSummary]
     total: int
     limit: int
     offset: int
+
+
+def _to_patient_summary(row: dict[str, Any]) -> PatientSummary:
+    """
+    Convert a service-layer patient dict into a typed PatientSummary.
+
+    The service emits dicts with keys like ``pid``/``fname``/``lname``/
+    ``DOB`` (the casing comes straight from the SELECT aliases that the
+    legacy OpenEMR-style frontend expects). We map them onto the typed
+    PatientSummary fields here so the API contract stays clean without
+    forcing the service or the frontend to migrate in lockstep.
+    """
+    first = row.get("fname") or row.get("first_name") or ""
+    last = row.get("lname") or row.get("last_name") or ""
+    name = (f"{first} {last}").strip() or row.get("name") or ""
+
+    raf = row.get("raf_score")
+    try:
+        raf_val = float(raf) if raf is not None and raf != "" else None
+    except (TypeError, ValueError):
+        raf_val = None
+
+    emr_pid_raw = row.get("emr_pid") or row.get("pid")
+    try:
+        emr_pid_val = int(emr_pid_raw) if emr_pid_raw not in (None, "") else None
+    except (TypeError, ValueError):
+        emr_pid_val = None
+
+    return PatientSummary(
+        id=int(row.get("id") or row.get("pid") or 0),
+        name=name,
+        dob=(row.get("dob") or row.get("DOB") or None) or None,
+        emr_pid=emr_pid_val,
+        raf_score=raf_val,
+        tenant_id=str(row["tenant_id"]) if row.get("tenant_id") is not None else None,
+        mrn=row.get("mrn") or None,
+    )
 
 
 class ImportSummaryResponse(BaseModel):
@@ -293,7 +331,13 @@ def list_patients(
         user=str(current_user.get("id") or current_user.get("sub") or "system"),
         details=f"limit={limit} offset={offset} search={search!r} returned={len(result['patients'])}",
     )
-    return PatientListResponse(**result)
+    summaries = [_to_patient_summary(row) for row in result["patients"]]
+    return PatientListResponse(
+        patients=summaries,
+        total=result["total"],
+        limit=result["limit"],
+        offset=result["offset"],
+    )
 
 
 # ---------------------------------------------------------------------------

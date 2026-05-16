@@ -16,7 +16,9 @@ Routers are registered in logical / dependency order:
   - real-time dashboards
   - health, info, admin
 """
-from fastapi import FastAPI
+import copy
+
+from fastapi import APIRouter, FastAPI
 
 from app.routers import (
     admin,
@@ -112,133 +114,187 @@ from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
 
 
+# ---------------------------------------------------------------------------
+# /api/v1 dual-mount helper
+# ---------------------------------------------------------------------------
+#
+# The codebase exposes endpoints under /api/<resource>/... (legacy prefix).
+# API_CHANGELOG documents a /api/v1/<resource>/... namespace that was never
+# wired up. To avoid breaking any existing client, we mount every router
+# twice:
+#
+#   1. Under its native /api/<resource> prefix — kept for backward compat,
+#      hidden from the OpenAPI schema to prevent duplicate entries.
+#   2. Under /api/v1/<resource> — visible in the OpenAPI schema as the
+#      canonical, versioned surface.
+#
+# A small helper handles both registrations so we don't copy-paste 100+
+# include_router calls.
+
+
+def _v1_router_of(router: APIRouter) -> APIRouter:
+    """
+    Return a shallow copy of *router* whose prefix is rewritten from
+    ``/api/<name>`` to ``/api/v1/<name>``.
+
+    The original router is left untouched (it remains mounted under its
+    native prefix for backward compatibility).
+    """
+    v1 = copy.copy(router)
+    # Rewrite /api/... -> /api/v1/...  (leave anything not starting with
+    # /api alone so health/info etc. keep working).
+    if router.prefix.startswith("/api/"):
+        v1.prefix = "/api/v1/" + router.prefix[len("/api/"):]
+    elif router.prefix == "/api":
+        v1.prefix = "/api/v1"
+    else:
+        v1.prefix = router.prefix  # nothing to rewrite
+    return v1
+
+
+def _mount(app: FastAPI, router: APIRouter) -> None:
+    """
+    Mount *router* twice:
+
+      - At its native prefix with ``include_in_schema=False`` so the legacy
+        path is still served but does not double up the OpenAPI document.
+      - At the rewritten ``/api/v1/...`` prefix, visible in the schema as
+        the canonical versioned surface.
+    """
+    # Legacy mount — keep working for existing clients, hide from schema.
+    app.include_router(router, include_in_schema=False)
+    # Versioned mount — visible in OpenAPI as the canonical surface.
+    if router.prefix.startswith("/api"):
+        app.include_router(_v1_router_of(router))
+
+
 def register_routers(app: FastAPI) -> None:
     """Mount all application routers on *app*."""
 
     # Auth must come first (other routers depend on it for token issuance)
-    app.include_router(auth_router.router)
+    _mount(app, auth_router.router)
 
     # Core clinical entities
-    app.include_router(patients.router)
-    app.include_router(raf.router)
-    app.include_router(raf_central_router.router)
-    app.include_router(forecast_router.router)
-    app.include_router(hcc_removal_router.router)
-    app.include_router(disputes_router.router)
-    app.include_router(analysis.router)
-    app.include_router(suspects.router)
-    app.include_router(attestations.router)
-    app.include_router(chart_chase.router)
-    app.include_router(documents.router)
-    app.include_router(ccda.router)
-    app.include_router(uploads.router)
+    _mount(app, patients.router)
+    _mount(app, raf.router)
+    _mount(app, raf_central_router.router)
+    _mount(app, forecast_router.router)
+    _mount(app, hcc_removal_router.router)
+    _mount(app, disputes_router.router)
+    _mount(app, analysis.router)
+    _mount(app, suspects.router)
+    _mount(app, attestations.router)
+    _mount(app, chart_chase.router)
+    _mount(app, documents.router)
+    _mount(app, ccda.router)
+    _mount(app, uploads.router)
 
     # Payer / claims workflows
-    app.include_router(claims.router)
-    app.include_router(submissions.router)
-    app.include_router(bundles.router)
-    app.include_router(cms_transmission.router)
+    _mount(app, claims.router)
+    _mount(app, submissions.router)
+    _mount(app, bundles.router)
+    _mount(app, cms_transmission.router)
 
     # Integrations
-    app.include_router(fhir.router)
-    app.include_router(smart_fhir_router.router)
-    app.include_router(emr.router)
-    app.include_router(adt.router)
-    app.include_router(webhooks.router)
-    app.include_router(notifications.router)
-    app.include_router(direct_messaging.router)
-    app.include_router(clearinghouse.router)
+    _mount(app, fhir.router)
+    _mount(app, smart_fhir_router.router)
+    _mount(app, emr.router)
+    _mount(app, adt.router)
+    _mount(app, webhooks.router)
+    _mount(app, notifications.router)
+    _mount(app, direct_messaging.router)
+    _mount(app, clearinghouse.router)
 
     # Provider and quality management
     # NOTE: peer_benchmarking is registered BEFORE providers.router so that
     # the literal /api/providers/specialty-benchmarks path matches before the
     # /api/providers/{id} catch-all.
-    app.include_router(peer_benchmarking_router.router)
-    app.include_router(provider_trends_router.router)  # /api/providers/trend-aggregate before /{id}/trend
-    app.include_router(providers.router)
-    app.include_router(top_hcc_opportunities_router.router)
-    app.include_router(provider_revenue_breakdown_router.router)
-    app.include_router(meat_audit_risk_router.router)
-    app.include_router(hcc_gap_drilldown_router.router)
-    app.include_router(previsit_briefing_router.router)
-    app.include_router(provider_pdf_report_router.router)
-    app.include_router(feature_flags_router.router)
-    app.include_router(quality.router)
-    app.include_router(prospective.router)
-    app.include_router(benchmarks.router)
-    app.include_router(care_gaps.router)
-    app.include_router(recapture_gaps_router.router)
-    app.include_router(recapture_decay_router.router)
-    app.include_router(recapture_provider_benchmark_router.router)
-    app.include_router(recapture_audit_router.router)
-    app.include_router(recapture_campaigns_router.router)
-    app.include_router(recapture_outreach_router.router)
-    app.include_router(recapture_bonus_router.router)
-    app.include_router(recapture_cfo_forecast_router.router)
-    app.include_router(recapture_readiness_router.router)
-    app.include_router(recapture_recurring_router.router)
-    app.include_router(recapture_close_router.router)
+    _mount(app, peer_benchmarking_router.router)
+    _mount(app, provider_trends_router.router)  # /api/providers/trend-aggregate before /{id}/trend
+    _mount(app, providers.router)
+    _mount(app, top_hcc_opportunities_router.router)
+    _mount(app, provider_revenue_breakdown_router.router)
+    _mount(app, meat_audit_risk_router.router)
+    _mount(app, hcc_gap_drilldown_router.router)
+    _mount(app, previsit_briefing_router.router)
+    _mount(app, provider_pdf_report_router.router)
+    _mount(app, feature_flags_router.router)
+    _mount(app, quality.router)
+    _mount(app, prospective.router)
+    _mount(app, benchmarks.router)
+    _mount(app, care_gaps.router)
+    _mount(app, recapture_gaps_router.router)
+    _mount(app, recapture_decay_router.router)
+    _mount(app, recapture_provider_benchmark_router.router)
+    _mount(app, recapture_audit_router.router)
+    _mount(app, recapture_campaigns_router.router)
+    _mount(app, recapture_outreach_router.router)
+    _mount(app, recapture_bonus_router.router)
+    _mount(app, recapture_cfo_forecast_router.router)
+    _mount(app, recapture_readiness_router.router)
+    _mount(app, recapture_recurring_router.router)
+    _mount(app, recapture_close_router.router)
 
     # Knowledge Graph (closes the Navina-style "we use a knowledge graph" gap)
-    app.include_router(knowledge_graph_router.router)
-    app.include_router(snomed_mapping_router.router)
-    app.include_router(loinc_signals_router.router)
-    app.include_router(atc_classification_router.router)
-    app.include_router(polypharmacy_router.router)
-    app.include_router(comorbidity_patterns_router.router)
-    app.include_router(demographic_risk_router.router)
-    app.include_router(specialty_priors_router.router)
-    app.include_router(evidence_rules_router.router)
-    app.include_router(kg_query_router.router)
-    app.include_router(suspect_kg_router.router)
-    app.include_router(recapture_ai_recoding_router.router)
-    app.include_router(awv.router)
+    _mount(app, knowledge_graph_router.router)
+    _mount(app, snomed_mapping_router.router)
+    _mount(app, loinc_signals_router.router)
+    _mount(app, atc_classification_router.router)
+    _mount(app, polypharmacy_router.router)
+    _mount(app, comorbidity_patterns_router.router)
+    _mount(app, demographic_risk_router.router)
+    _mount(app, specialty_priors_router.router)
+    _mount(app, evidence_rules_router.router)
+    _mount(app, kg_query_router.router)
+    _mount(app, suspect_kg_router.router)
+    _mount(app, recapture_ai_recoding_router.router)
+    _mount(app, awv.router)
 
     # Population health cohort analysis
-    app.include_router(cohorts.router)
+    _mount(app, cohorts.router)
 
     # Operations and compliance
-    app.include_router(jobs.router)
-    app.include_router(pipeline_router.router)
-    app.include_router(pipeline_settings_router.router)
-    app.include_router(config_router.router)
-    app.include_router(reports.router)
-    app.include_router(dashboard_analytics_router.router)
-    app.include_router(audit.router)
+    _mount(app, jobs.router)
+    _mount(app, pipeline_router.router)
+    _mount(app, pipeline_settings_router.router)
+    _mount(app, config_router.router)
+    _mount(app, reports.router)
+    _mount(app, dashboard_analytics_router.router)
+    _mount(app, audit.router)
 
     # Compliance — consent management
-    app.include_router(consent_router.router)
+    _mount(app, consent_router.router)
 
     # BI Tools Export
-    app.include_router(bi_export.router)
+    _mount(app, bi_export.router)
 
     # Coder worklist / review queue
-    app.include_router(coder_worklist.router)
-    app.include_router(review_router.router)
+    _mount(app, coder_worklist.router)
+    _mount(app, review_router.router)
 
     # Provider worklist — prioritized patient lists and action items
-    app.include_router(provider_worklist_router.router)
+    _mount(app, provider_worklist_router.router)
 
     # Real-time suspect hot-list (provider drawer "action this week")
-    app.include_router(provider_suspect_hotlist_router.router)
+    _mount(app, provider_suspect_hotlist_router.router)
 
     # Real-time clinical intelligence insights
-    app.include_router(insights_router.router)
+    _mount(app, insights_router.router)
 
     # Real-time dashboards
-    app.include_router(realtime_router.router)
+    _mount(app, realtime_router.router)
 
     # Health and info
-    app.include_router(health_router.router)
-    app.include_router(icd10_router.router)
+    _mount(app, health_router.router)
+    _mount(app, icd10_router.router)
 
     # Admin
-    app.include_router(retention.router)
-    app.include_router(admin.router)
-    app.include_router(meat_router.router)
-    app.include_router(radv_audit_router.router)
+    _mount(app, retention.router)
+    _mount(app, admin.router)
+    _mount(app, meat_router.router)
+    _mount(app, radv_audit_router.router)
     # RADV packet PDF export (per-patient, per-payment-year audit bundle).
     # Shares the /api/radv prefix with radv_audit but owns distinct paths.
-    app.include_router(radv_router.router)
-    app.include_router(data_quality_router.router)
-    app.include_router(raf_inbox_admin_router.router)
+    _mount(app, radv_router.router)
+    _mount(app, data_quality_router.router)
+    _mount(app, raf_inbox_admin_router.router)

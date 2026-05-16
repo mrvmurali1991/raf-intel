@@ -48,12 +48,11 @@ class APIResponse(BaseModel, Generic[T]):
         return cls(success=False, data=None, message=message, errors=errors)
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
-    """Paginated list response wrapper."""
-
-    items: list[T]
-    total: int = Field(..., description="Total number of matching records")
-    page: int = Field(..., ge=1, description="Current page (1-indexed)")
-    page_size: int = Field(..., ge=1, description="Number of items per page")
-    has_next: bool = Field(..., description="True if more pages exist")
-    has_prev: bool = Field(..., description="True if previous pages exist")
+# deprecated, use schemas.pagination
+# The richer PaginatedResponse from app.schemas.pagination (with data/meta/
+# pages/total/request_id) is now the single source of truth. The old
+# items/page/page_size/has_next/has_prev shape that lived here was never
+# used by any router and has been removed. We re-export the canonical
+# class so old imports (`from app.schemas.common import PaginatedResponse`)
+# keep working.
+from app.schemas.pagination import PaginatedResponse  # re-export  # noqa: E402,F401
