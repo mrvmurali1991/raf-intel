@@ -310,6 +310,19 @@ class Settings:
     ).lower() in ("1", "true", "yes")
     auto_sync_interval_seconds: int = int(os.getenv("AUTO_SYNC_INTERVAL_SECONDS", "30"))
 
+    # ---------------------------------------------------------------------------
+    # Storage backend
+    # ---------------------------------------------------------------------------
+    # STORAGE_BACKEND  — "local" (default) or "s3".
+    #   local: files written to storage_local_root on the container filesystem.
+    #   s3:    files written to S3/MinIO; requires boto3 and storage_s3_bucket.
+    # These fields are intentionally not wired to any upload route yet —
+    # see backend/app/services/storage.py for the abstraction.
+    storage_backend: str = os.getenv("STORAGE_BACKEND", "local")
+    storage_local_root: str = os.getenv("STORAGE_LOCAL_ROOT", "/app/uploads")
+    storage_s3_bucket: str = os.getenv("STORAGE_S3_BUCKET", "")
+    storage_s3_region: str = os.getenv("STORAGE_S3_REGION", "us-east-1")
+
 
 # Known-weak / well-publicised dev JWT secrets that must never be used in
 # production.  Kept module-level so validate_startup.py can re-use the set.

@@ -57,3 +57,4 @@ tenacity>=8.2
 scikit-learn>=1.4
 joblib>=1.3
 numpy>=1.26
+boto3>=1.34.0  # optional, only required when STORAGE_BACKEND=s3
