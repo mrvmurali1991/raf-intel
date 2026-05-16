@@ -160,7 +160,7 @@ function SummaryTab({
               <div key={leg.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textMuted }}>
                 <div style={{ width: 10, height: 10, borderRadius: 2, background: leg.color }} />
                 <span>
-                  <strong style={{ color: C.text }}>{leg.count}</strong> {leg.label}
+                  <strong className="text-foreground">{leg.count}</strong> {leg.label}
                 </span>
               </div>
             ))}

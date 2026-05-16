@@ -277,7 +277,7 @@ function StatusDot({ status }: { status: UserStatus }) {
   if (status === "locked") {
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <Lock size={13} style={{ color: C.red }} />
+        <Lock size={13} className="text-destructive" />
         <span style={{ fontSize: 12, color: C.red, fontWeight: 500 }}>Locked</span>
       </span>
     );
@@ -1290,7 +1290,7 @@ export default function UsersPage() {
               margin: "0 auto 16px",
             }}
           >
-            <ShieldAlert size={28} style={{ color: C.red }} />
+            <ShieldAlert size={28} className="text-destructive" />
           </div>
           <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: C.text }}>
             Access Restricted
@@ -1324,8 +1324,8 @@ export default function UsersPage() {
           role="alert"
         >
           {toast.ok
-            ? <CheckCircle size={15} style={{ color: C.white }} />
-            : <AlertCircle size={15} style={{ color: C.white }} />}
+            ? <CheckCircle size={15} className="text-white" />
+            : <AlertCircle size={15} className="text-white" />}
           {toast.msg}
         </div>
       )}
@@ -1430,7 +1430,7 @@ export default function UsersPage() {
 
           {/* Role filter */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Filter size={14} style={{ color: C.textSub }} />
+            <Filter size={14} className="text-muted-foreground" />
             <select
               style={{ ...selectStyle, width: 140 }}
               value={filterRole}
@@ -1531,7 +1531,7 @@ export default function UsersPage() {
                     ) : (
                       <div style={{ textAlign: "center", padding: "40px 24px" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 16, backgroundColor: C.primaryLight, marginBottom: 14 }}>
-                          <UsersRound size={26} style={{ color: C.primary }} />
+                          <UsersRound size={26} className="text-primary" />
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No users yet</div>
                         <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 18 }}>Add your first user to get your team started.</div>
