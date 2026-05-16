@@ -263,9 +263,28 @@ export default function RecapturePage() {
         />
       </div>
 
-      {/* Summary Strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <div className="animate-fade-in stagger-1">
+      {/* Summary Strip — bento 12-col grid: hero "Revenue at Risk" spans 6 cols
+          x 2 rows (a true hero tile) with "Gaps" + "Patients Affected" stacking
+          to its right at 3 cols each over 2 rows. */}
+      <style>{`
+        .recapture-bento-summary > div { display: grid; }
+        .recapture-bento-summary > div > div { height: 100%; }
+        .recapture-bento-summary .recapture-hero-tile .tabular-nums { font-size: 40px !important; }
+      `}</style>
+      <div
+        className="recapture-bento-summary"
+        style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gridAutoRows: "min-content", gap: 16, marginBottom: 24 }}
+      >
+        <div className="animate-fade-in stagger-1 recapture-hero-tile" style={{ gridColumn: "span 6", gridRow: "span 2" }}>
+          <StatCard
+            label="Estimated Revenue at Risk"
+            value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
+            subtitle="Unrecaptured chronic conditions x prior-year RAF dollars"
+            color={colors.red600}
+            icon={<ArrowUpDown size={18} />}
+          />
+        </div>
+        <div className="animate-fade-in stagger-2" style={{ gridColumn: "span 3" }}>
           <StatCard
             label="Total Recapture Gaps"
             value={(data.total_gaps ?? 0).toLocaleString()}
@@ -273,7 +292,7 @@ export default function RecapturePage() {
             icon={<RefreshCw size={18} />}
           />
         </div>
-        <div className="animate-fade-in stagger-2">
+        <div className="animate-fade-in stagger-3" style={{ gridColumn: "span 3" }}>
           <StatCard
             label="Patients Affected"
             value={(data.patients_affected ?? 0).toLocaleString()}
@@ -281,82 +300,25 @@ export default function RecapturePage() {
             icon={<Calendar size={18} />}
           />
         </div>
-        <div className="animate-fade-in stagger-3">
-          <StatCard
-            label="Estimated Revenue at Risk"
-            value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
-            color={colors.red600}
-            icon={<ArrowUpDown size={18} />}
-          />
-        </div>
       </div>
 
-      {/* Velocity KPIs + decay curve — show recapture-rate dynamics over time */}
-      <FeatureFlag flagKey="recapture_decay_curve">
-        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-            Recapture velocity & decay
-          </h2>
-          <div style={{ marginBottom: 16 }}>
-            <RecaptureVelocityKpis />
-          </div>
-          <RecaptureDecayChart />
-        </div>
-      </FeatureFlag>
-
-      {/* CFO executive summary — quarterly forecast, top conditions, top providers */}
-      <FeatureFlag flagKey="recapture_cfo_forecast">
-        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-            CFO executive summary
-          </h2>
-          <CfoExecutiveSummary year={year} />
-        </div>
-      </FeatureFlag>
-
-      {/* Bonus leaderboard — coder ranking by $ recaptured this period */}
-      <FeatureFlag flagKey="recapture_bonus">
-        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-            Coder bonus leaderboard
-          </h2>
-          <BonusLeaderboard />
-        </div>
-      </FeatureFlag>
-
-      {/* Outreach summary — channel mix, response rate, last-touch metrics */}
-      <FeatureFlag flagKey="recapture_outreach">
-        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-            Patient outreach
-          </h2>
-          <OutreachSummaryCards />
-        </div>
-      </FeatureFlag>
-
-      {/* RADV Dual-Coder MEAT Audit (feature-gated) */}
-      <FeatureFlag flagKey="recapture_meat_audit">
-        <div className="animate-fade-in" style={{ marginBottom: 24 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 12,
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-              RADV Audit Defense
-            </h2>
-            <RecaptureAuditExportButton year={year} />
-          </div>
-          <AuditReadinessCard />
-        </div>
-      </FeatureFlag>
-
-      {/* Top Conditions */}
+      {/* ════════════════════════════════════════════════════════════════════
+          MAIN ROW (12-col, 8/4 split): priority patient worklist (left, 8 cols)
+          + Top Conditions chart (right, 4 cols). This is the page's primary
+          work surface — the bento hero below the summary tiles. Source order
+          is Top Conditions -> Worklist, but explicit `gridColumn` placement
+          renders them visually as Worklist (cols 1-8) + Top Conditions (9-12).
+          Velocity / CFO / bonus / outreach / audit sections render below this
+          row, each in its own 12-col grid row.
+          ════════════════════════════════════════════════════════════════════ */}
+      <div
+        className="recapture-main-row"
+        style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24, alignItems: "start" }}
+      >
+      {/* Right column: Top Conditions chart (4 cols). Listed first in source
+          but pinned to columns 9-12 by gridColumn so visual order is L->R. */}
       {(data.top_conditions ?? []).length > 0 && (
-        <div className="premium-card animate-slide-up stagger-4" style={{ padding: 24, marginBottom: 24 }}>
+        <div className="premium-card animate-slide-up stagger-4" style={{ padding: 24, gridColumn: "9 / span 4", minWidth: 0 }}>
           <h3 className="gradient-text" style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
             Most Common Uncaptured Conditions
           </h3>
@@ -404,8 +366,8 @@ export default function RecapturePage() {
         </div>
       )}
 
-      {/* Patient Worklist */}
-      <div className="premium-card animate-slide-up stagger-5" style={{ padding: 24, marginBottom: 24 }}>
+      {/* Patient Worklist — left column of the main row (8 cols) */}
+      <div className="premium-card animate-slide-up stagger-5" style={{ padding: 24, gridColumn: "1 / span 8", minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
           <h3 className="gradient-text" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
             Patients Requiring Recapture
@@ -615,8 +577,87 @@ export default function RecapturePage() {
           </>
         )}
       </div>
+      </div>
+      {/* ════════════════════════════════════════════════════════════════════
+          END MAIN ROW. Below: secondary feature-flag sections, each in its
+          own 12-col grid row so they read as full-width bento bands stacked
+          beneath the priority worklist.
+          ════════════════════════════════════════════════════════════════════ */}
 
-      {/* Action Panel */}
+      {/* Velocity KPIs + decay curve — show recapture-rate dynamics over time */}
+      <FeatureFlag flagKey="recapture_decay_curve">
+        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+              Recapture velocity & decay
+            </h2>
+            <div style={{ marginBottom: 16 }}>
+              <RecaptureVelocityKpis />
+            </div>
+            <RecaptureDecayChart />
+          </div>
+        </div>
+      </FeatureFlag>
+
+      {/* CFO executive summary — quarterly forecast, top conditions, top providers */}
+      <FeatureFlag flagKey="recapture_cfo_forecast">
+        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+              CFO executive summary
+            </h2>
+            <CfoExecutiveSummary year={year} />
+          </div>
+        </div>
+      </FeatureFlag>
+
+      {/* Bonus leaderboard — coder ranking by $ recaptured this period */}
+      <FeatureFlag flagKey="recapture_bonus">
+        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+              Coder bonus leaderboard
+            </h2>
+            <BonusLeaderboard />
+          </div>
+        </div>
+      </FeatureFlag>
+
+      {/* Outreach summary — channel mix, response rate, last-touch metrics */}
+      <FeatureFlag flagKey="recapture_outreach">
+        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+              Patient outreach
+            </h2>
+            <OutreachSummaryCards />
+          </div>
+        </div>
+      </FeatureFlag>
+
+      {/* RADV Dual-Coder MEAT Audit (feature-gated) */}
+      <FeatureFlag flagKey="recapture_meat_audit">
+        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 12,
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
+                RADV Audit Defense
+              </h2>
+              <RecaptureAuditExportButton year={year} />
+            </div>
+            <AuditReadinessCard />
+          </div>
+        </div>
+      </FeatureFlag>
+
+      {/* Action Panel — final bento row spans the full 12 columns. */}
       <div
         className="premium-card animate-slide-up stagger-6"
         style={{
