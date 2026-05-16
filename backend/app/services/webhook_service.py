@@ -16,9 +16,11 @@ import hmac
 import ipaddress
 import json
 import logging
+import os
 import secrets
 import socket
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -489,9 +491,35 @@ def fire_event(event_type: str, tenant_id: str, payload: dict[str, Any]) -> None
         )
         return
 
+    # When WEBHOOK_DELIVERY_VIA_CELERY=true (opt-in for back-compat), enqueue
+    # one webhook.deliver Celery task per matched webhook instead of doing the
+    # HTTP POST inline.  The Celery task does the real signing + retry + record
+    # via webhook_service._deliver_to_webhook so logic stays single-sourced.
+    via_celery = os.getenv("WEBHOOK_DELIVERY_VIA_CELERY", "false").lower() == "true"
+    if via_celery:
+        try:
+            from app.services.celery_tasks import deliver_webhook_task
+        except Exception as exc:
+            logger.error(
+                "fire_event: WEBHOOK_DELIVERY_VIA_CELERY=true but failed to "
+                "import deliver_webhook_task (%s) — falling back to inline delivery",
+                exc,
+            )
+            via_celery = False
+
     for webhook in matched:
         try:
-            _deliver_to_webhook(webhook, event_type, envelope)
+            if via_celery:
+                delivery_id = uuid.uuid4().hex
+                deliver_webhook_task.delay(
+                    webhook["id"], event_type, envelope, delivery_id,
+                )
+                logger.debug(
+                    "fire_event: enqueued webhook.deliver subscription=%d event=%s delivery=%s",
+                    webhook["id"], event_type, delivery_id,
+                )
+            else:
+                _deliver_to_webhook(webhook, event_type, envelope)
         except Exception as exc:
             logger.error(
                 "fire_event: unhandled error delivering to webhook %d: %s",

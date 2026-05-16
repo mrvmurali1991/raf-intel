@@ -209,6 +209,16 @@ celery_app.conf.beat_schedule = {
         "schedule": 15.0,
         "options": {"queue": "default"},
     },
+    # Auto-sync discovery: scan OpenEMR for new patients and fan out
+    # sync_patient_task per new pid.  Runs every 60s — matches the legacy
+    # in-process loop interval (see AUTO_SYNC_INTERVAL_SECONDS env var, default
+    # 30s; we run at 60s here to halve the discovery load now that work is
+    # actually dispatched to Celery rather than running inline).
+    "auto_sync_discover": {
+        "task": "auto_sync.discover",
+        "schedule": 60.0,
+        "options": {"queue": "default"},
+    },
 }
 
 
@@ -1599,3 +1609,168 @@ def verify_audit_chain_task(self) -> dict[str, Any]:
         task_logger.warning("verify_audit_chain_task: failed to emit audit event: %s", emit_exc)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Auto-sync via Celery
+#
+# These tasks replace the in-process asyncio loop in ``auto_sync_loop.py``
+# when ``AUTO_SYNC_VIA_CELERY=true``.  The Beat scheduler fires
+# ``auto_sync.discover`` every 60s; that task scans for new OpenEMR pids
+# and enqueues ``auto_sync.sync_patient`` per pid on the ``heavy`` queue.
+# ---------------------------------------------------------------------------
+
+# Route the new auto-sync tasks so callers don't have to pass queue= on
+# every .delay() / .apply_async() call.
+celery_app.conf.task_routes["auto_sync.sync_patient"] = {"queue": "heavy",   "priority": 5}
+celery_app.conf.task_routes["auto_sync.discover"]     = {"queue": "default", "priority": 4}
+celery_app.conf.task_routes["webhook.deliver"]        = {"queue": "notifications", "priority": 5}
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    queue="heavy",
+    name="auto_sync.sync_patient",
+)
+def sync_patient_task(self, tenant_id: str, pid: int) -> dict[str, Any]:
+    """Sync a single OpenEMR patient → score → analyze.
+
+    Replaces the in-process per-patient pipeline that lived in
+    ``auto_sync_loop._process_patient``.  On any exception the task retries
+    with exponential back-off: 4s, 8s, 16s.
+    """
+    task_logger.info(
+        "auto_sync.sync_patient: starting tenant=%s pid=%s", tenant_id, pid
+    )
+    try:
+        from app.services.auto_analyze_service import analyze_patient
+        from app.services.auto_score_service import score_patient
+        from app.services.auto_sync_service import sync_patient_from_openemr
+
+        local_pid = sync_patient_from_openemr(pid)
+        if local_pid is None:
+            raise RuntimeError(
+                f"sync_patient_from_openemr returned None for emr_pid={pid}"
+            )
+
+        score_patient(local_pid)
+        analyze_patient(local_pid)
+
+        task_logger.info(
+            "auto_sync.sync_patient: completed tenant=%s emr_pid=%s local_pid=%s",
+            tenant_id, pid, local_pid,
+        )
+        return {"tenant_id": tenant_id, "emr_pid": pid, "local_pid": local_pid}
+
+    except Exception as exc:
+        task_logger.warning(
+            "auto_sync.sync_patient: tenant=%s pid=%s failed (attempt %d): %s",
+            tenant_id, pid, self.request.retries + 1, exc,
+        )
+        # Exponential back-off: 4s, 8s, 16s for attempts 0/1/2
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries * 4)
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    default_retry_delay=30,
+    queue="default",
+    name="webhook.deliver",
+)
+def deliver_webhook_task(
+    self,
+    subscription_id: int,
+    event_type: str,
+    payload: dict[str, Any],
+    delivery_id: str | None = None,
+) -> dict[str, Any]:
+    """Asynchronous webhook delivery — runs the real HTTP POST.
+
+    Reuses ``webhook_service._deliver_to_webhook`` so signing / retry / record
+    logic stays in one place.  When ``WEBHOOK_DELIVERY_VIA_CELERY=true``,
+    ``webhook_service.fire_event`` enqueues this task instead of doing the
+    HTTP call inline in the request thread.
+    """
+    task_logger.info(
+        "webhook.deliver: starting subscription=%s event=%s delivery=%s",
+        subscription_id, event_type, delivery_id,
+    )
+    try:
+        from app.services import webhook_service
+
+        webhook = webhook_service.get_webhook(subscription_id)
+        if not webhook:
+            task_logger.warning(
+                "webhook.deliver: subscription %s not found — dropping", subscription_id
+            )
+            return {"status": "not_found", "subscription_id": subscription_id}
+
+        # get_webhook redacts the secret; re-fetch the raw row for HMAC signing.
+        from app.db import raf_cursor
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, tenant_id, url, secret, is_active "
+                "FROM webhooks WHERE id = %s",
+                (subscription_id,),
+            )
+            row = cur.fetchone()
+        if not row or not row.get("is_active"):
+            return {"status": "inactive", "subscription_id": subscription_id}
+
+        webhook_service._deliver_to_webhook(row, event_type, payload)
+        return {
+            "status": "delivered",
+            "subscription_id": subscription_id,
+            "event_type": event_type,
+            "delivery_id": delivery_id,
+        }
+    except Exception as exc:
+        task_logger.warning(
+            "webhook.deliver: subscription=%s event=%s failed (attempt %d): %s",
+            subscription_id, event_type, self.request.retries + 1, exc,
+        )
+        raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
+
+
+@celery_app.task(name="auto_sync.discover")
+def discover_loop_task() -> dict[str, Any]:
+    """Beat-driven discovery: scan for new OpenEMR pids and fan out sync tasks.
+
+    Replaces the in-process asyncio loop's discovery half.  Each new pid is
+    enqueued onto the ``heavy`` queue via ``sync_patient_task.delay(...)``.
+
+    Tenant scope: the legacy loop hard-codes tenant_id="1" (OpenEMR-bridged
+    single-tenant deployment).  We preserve that behavior here — if/when
+    multi-tenant OpenEMR bridging lands, this task should iterate over
+    enabled tenant connections instead.
+    """
+    from app.services.auto_sync_loop import _get_new_emr_pids, _is_loop_enabled
+
+    if not _is_loop_enabled():
+        task_logger.info("auto_sync.discover: loop disabled, skipping")
+        return {"dispatched": 0, "skipped": True}
+
+    try:
+        new_pids = _get_new_emr_pids()
+    except Exception as exc:
+        task_logger.warning("auto_sync.discover: _get_new_emr_pids failed: %s", exc)
+        return {"dispatched": 0, "error": str(exc)}
+
+    tenant_id = "1"
+    dispatched: list[int] = []
+    for pid in new_pids:
+        try:
+            sync_patient_task.delay(tenant_id, pid)
+            dispatched.append(pid)
+        except Exception as exc:
+            task_logger.warning(
+                "auto_sync.discover: failed to enqueue pid=%s: %s", pid, exc
+            )
+
+    task_logger.info(
+        "auto_sync.discover: dispatched %d new patient sync tasks", len(dispatched)
+    )
+    return {"dispatched": len(dispatched), "pids": dispatched}

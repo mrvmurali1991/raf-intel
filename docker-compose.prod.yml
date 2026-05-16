@@ -314,6 +314,67 @@ services:
         max-file: "5"
 
   # -------------------------------------------------------------------------
+  # Worker (beat) — Celery Beat scheduler; drives all periodic tasks
+  # (drain-raf-inbox, check-due-emr-syncs, auto_sync_discover, retention, ...)
+  #
+  # CRITICAL: This service MUST run as a single replica.  Two Beat processes
+  # would emit each scheduled task twice.  Do NOT set --scale on this service.
+  # -------------------------------------------------------------------------
+  worker-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: raf-worker:${IMAGE_TAG:-latest}
+    container_name: raf-worker-beat
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      <<: *backend-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/app/uploads
+      - submissions:/app/data/submissions
+      - logs:/app/logs
+      # Persist Beat's schedule DB so the "last run" timestamps survive restarts
+      # and we don't double-fire tasks immediately after a redeploy.
+      - celerybeat:/app/data
+    networks:
+      - raf-internal
+      - raf-external
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 30s
+    command: >
+      celery -A app.services.celery_tasks.celery_app beat
+        --schedule /app/data/celerybeat-schedule
+        --loglevel info
+    deploy:
+      replicas: 1
+      update_config:
+        order: stop-first       # Beat must NOT overlap; stop old before starting new
+        failure_action: rollback
+        delay: 5s
+        parallelism: 1
+      rollback_config:
+        parallelism: 1
+        failure_action: pause
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------------
   # Flower — Celery monitoring dashboard (HTTP Basic Auth via FLOWER_BASIC_AUTH)
   # Start: docker compose -f docker-compose.prod.yml --profile monitoring up -d flower
   # Access: http://host:5555
@@ -593,3 +654,8 @@ volumes:
 
   openemr_sites:
   openemr_logs:
+
+  # Celery Beat schedule database — persists "last run" timestamps for periodic
+  # tasks so a Beat restart doesn't immediately re-fire everything.
+  celerybeat:
+    driver: local

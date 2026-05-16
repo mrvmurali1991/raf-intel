@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -329,7 +330,21 @@ async def run_auto_sync_loop(interval: int = 30) -> None:
 
     Intended to be launched as an asyncio background task from the FastAPI
     lifespan context.  Runs until the task is cancelled.
+
+    When ``AUTO_SYNC_VIA_CELERY=true`` is set in the environment, this
+    coroutine short-circuits immediately and the real work is driven by
+    the ``auto_sync.discover`` Beat task (every 60s), which fans out
+    ``auto_sync.sync_patient`` jobs to the heavy queue.  The async loop
+    is kept around so dev/local setups that haven't enabled Celery Beat
+    still get sync.
     """
+    if os.getenv("AUTO_SYNC_VIA_CELERY", "false").lower() == "true":
+        logger.info(
+            "auto_sync: AUTO_SYNC_VIA_CELERY=true — delegating to Celery "
+            "(auto_sync.discover via Beat); in-process loop will not run"
+        )
+        return
+
     logger.info("auto_sync: loop started (interval=%ds)", interval)
 
     total_synced_today = _read_total_synced_today()
