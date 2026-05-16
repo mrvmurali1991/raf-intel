@@ -24,6 +24,7 @@ import {
 } from "@/lib/api";
 import { tokens } from "@/styles/tokens";
 import { FONT_SYS } from "@/lib/ui-utils";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // Match the patients page palette so the upload page blends with the rest of
 // the product without introducing a new design system.
@@ -90,6 +91,9 @@ export default function UploadsPage() {
   const [dragOver, setDragOver] = useState(false);
   const [lastResult, setLastResult] = useState<UploadResult | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  // Track which upload the user is about to delete. Set by the Delete button,
+  // cleared on confirm / cancel. Drives the ConfirmDialog below.
+  const [deleteTarget, setDeleteTarget] = useState<UploadRecord | null>(null);
 
   const { data: history, isLoading: histLoading, refetch } = useQuery({
     queryKey: ["uploads-list"],
@@ -465,15 +469,7 @@ export default function UploadsPage() {
                       <button
                         type="button"
                         disabled={deleteMut.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete upload "${u.filename}" and deactivate all ${u.row_count_imported} imported patients?`,
-                            )
-                          ) {
-                            deleteMut.mutate(u.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTarget(u)}
                         style={{
                           ...btnSecondary,
                           color: C.danger,
@@ -490,6 +486,25 @@ export default function UploadsPage() {
           )}
         </div>
       </section>
+
+      {/* Delete-upload confirmation — replaces window.confirm so we get
+          consistent styling, proper focus management (Cancel is autofocused),
+          and a visible destructive button the user must click explicitly. */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this upload?"
+        description={
+          deleteTarget
+            ? `This will delete the upload "${deleteTarget.filename}" and deactivate all ${deleteTarget.row_count_imported.toLocaleString("en-US")} imported patients. This action cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete upload"
+        destructive
+        onConfirm={() => {
+          if (deleteTarget) deleteMut.mutate(deleteTarget.id);
+        }}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

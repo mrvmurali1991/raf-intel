@@ -432,14 +432,33 @@ const features = [
 
 type LoginStep = "credentials" | "mfa";
 
+interface LoginFieldErrors {
+  email?: string;
+  password?: string;
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Validate a single field against the shared loginSchema. Stores per-field
+  // error text in `fieldErrors` so we can render it directly under the input
+  // instead of dumping into the top-level banner (which is now reserved for
+  // submit-time server errors).
+  function validateField(field: "email" | "password", value: string) {
+    const fieldSchema = loginSchema.shape[field];
+    const result = fieldSchema.safeParse(value);
+    setFieldErrors((prev) => ({
+      ...prev,
+      [field]: result.success ? undefined : result.error.issues[0]?.message,
+    }));
+  }
 
   // MFA state
   const [step, setStep] = useState<LoginStep>("credentials");
@@ -468,9 +487,18 @@ export default function LoginPage() {
 
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      // Surface every field error inline (not in the top banner) so the user
+      // can see exactly which input is wrong.
+      const nextFieldErrors: LoginFieldErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as keyof LoginFieldErrors | undefined;
+        if (key && !nextFieldErrors[key]) nextFieldErrors[key] = issue.message;
+      }
+      setFieldErrors(nextFieldErrors);
       return;
     }
+    // Cleared on a successful client-side validation.
+    setFieldErrors({});
 
     setIsSubmitting(true);
     try {
@@ -721,11 +749,29 @@ export default function LoginPage() {
                     type="email"
                     placeholder="dr.smith@hospital.org"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      // Clear inline error as the user fixes it; re-validate on blur.
+                      if (fieldErrors.email) {
+                        setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                      }
+                    }}
+                    onBlur={(e) => validateField("email", e.target.value)}
                     required
+                    aria-invalid={!!fieldErrors.email}
+                    aria-describedby={fieldErrors.email ? "email-error" : undefined}
                     className="h-12 rounded-xl border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-900 login-input-focus transition-all duration-300 text-base"
                     autoComplete="email"
                   />
+                  {fieldErrors.email && (
+                    <p
+                      id="email-error"
+                      role="alert"
+                      className="text-xs text-red-600 dark:text-red-400 mt-1"
+                    >
+                      {fieldErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -747,8 +793,16 @@ export default function LoginPage() {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••••••"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (fieldErrors.password) {
+                          setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                        }
+                      }}
+                      onBlur={(e) => validateField("password", e.target.value)}
                       required
+                      aria-invalid={!!fieldErrors.password}
+                      aria-describedby={fieldErrors.password ? "password-error" : undefined}
                       className="h-12 pr-10 rounded-xl border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-900 login-input-focus transition-all duration-300 text-base"
                       autoComplete="current-password"
                     />
@@ -765,6 +819,15 @@ export default function LoginPage() {
                       )}
                     </button>
                   </div>
+                  {fieldErrors.password && (
+                    <p
+                      id="password-error"
+                      role="alert"
+                      className="text-xs text-red-600 dark:text-red-400 mt-1"
+                    >
+                      {fieldErrors.password}
+                    </p>
+                  )}
                 </div>
 
                 <Button
@@ -801,6 +864,7 @@ export default function LoginPage() {
                   setEmail("admin@raf.health");
                   setPassword("Admin@123");
                   setError("");
+                  setFieldErrors({});
                 }}
                 className="w-full h-11 rounded-xl font-semibold text-sm border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600 dark:hover:border-teal-500 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30 transition-all duration-200 flex items-center justify-center gap-2"
               >

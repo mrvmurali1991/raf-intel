@@ -31,6 +31,7 @@ import {
   useFeatureFlagsAll,
 } from "@/components/FeatureFlagContext";
 import { tokens } from "@/styles/tokens";
+import { passwordSchema, PASSWORD_MIN_LENGTH } from "@/lib/validators";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -363,8 +364,12 @@ function ChangePasswordSection({ forceChange = false }: { forceChange?: boolean 
       setFeedback({ type: "error", message: "New passwords do not match." });
       return;
     }
-    if (next.length < 8) {
-      setFeedback({ type: "error", message: "Password must be at least 8 characters." });
+    // Use the shared password rule (12 chars + complexity) — single source of
+    // truth lives in `@/lib/validators`. Previously this check used a stale
+    // local `length < 8` that contradicted the rest of the app.
+    const pwCheck = passwordSchema.safeParse(next);
+    if (!pwCheck.success) {
+      setFeedback({ type: "error", message: pwCheck.error.issues[0].message });
       return;
     }
     setSaving(true);
@@ -428,7 +433,7 @@ function ChangePasswordSection({ forceChange = false }: { forceChange?: boolean 
           />
         </FormField>
 
-        <FormField label="Confirm new password" htmlFor="pwd-confirm" hint="Minimum 8 characters. Use a mix of letters, numbers, and symbols.">
+        <FormField label="Confirm new password" htmlFor="pwd-confirm" hint={`Minimum ${PASSWORD_MIN_LENGTH} characters with upper, lower, and number.`}>
           <Input
             id="pwd-confirm"
             type="password"

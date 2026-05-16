@@ -115,6 +115,20 @@ export const patientSearchSchema = z.object({
 export type PatientSearchData = z.infer<typeof patientSearchSchema>;
 
 // ---------------------------------------------------------------------------
+// Password — single source of truth for password strength rules.
+// Importable from any client form (settings, user-create, reset-password).
+// ---------------------------------------------------------------------------
+
+export const PASSWORD_MIN_LENGTH = 12;
+
+export const passwordSchema = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+  .regex(/[A-Z]/, "Password must contain an uppercase letter")
+  .regex(/[a-z]/, "Password must contain a lowercase letter")
+  .regex(/[0-9]/, "Password must contain a number");
+
+// ---------------------------------------------------------------------------
 // User create / update
 // ---------------------------------------------------------------------------
 
@@ -134,12 +148,7 @@ export const userCreateSchema = z.object({
     .min(1, "Last name is required")
     .max(50, "Last name must be 50 characters or fewer"),
   role: z.enum(userRoles, { error: "Role is required" }),
-  password: z
-    .string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(/[A-Z]/, "Password must contain an uppercase letter")
-    .regex(/[a-z]/, "Password must contain a lowercase letter")
-    .regex(/[0-9]/, "Password must contain a number"),
+  password: passwordSchema,
   title: z.string().max(100).optional(),
   npi: z
     .string()
@@ -153,14 +162,7 @@ export type UserCreateData = z.infer<typeof userCreateSchema>;
 export const userUpdateSchema = userCreateSchema
   .omit({ password: true })
   .extend({
-    password: z
-      .string()
-      .min(12, "Password must be at least 12 characters")
-      .regex(/[A-Z]/, "Password must contain an uppercase letter")
-      .regex(/[a-z]/, "Password must contain a lowercase letter")
-      .regex(/[0-9]/, "Password must contain a number")
-      .optional()
-      .or(z.literal("")),
+    password: passwordSchema.optional().or(z.literal("")),
   });
 
 export type UserUpdateData = z.infer<typeof userUpdateSchema>;
@@ -178,9 +180,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z
   .object({
-    new_password: z
-      .string()
-      .min(12, "Password must be at least 12 characters"),
+    new_password: passwordSchema,
     confirm_password: z.string(),
   })
   .refine((d) => d.new_password === d.confirm_password, {
