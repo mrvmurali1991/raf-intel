@@ -1,0 +1,2 @@
+# Nightly RAF DB backup — install with: sudo cp ops/cron/raf-backup /etc/cron.d/
+0 2 * * * ubuntu /opt/raf-intelligence/scripts/backup.sh >> /var/log/raf-backup.log 2>&1

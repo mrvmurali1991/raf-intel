@@ -274,6 +274,16 @@ jobs:
       - name: Install test extras (coverage, timeout)
         run: pip install pytest-cov pytest-timeout pytest-asyncio
 
+      # pip-audit in --strict mode — surfaces every CVE in the locked deps.
+      # Non-blocking for now (continue-on-error) so we can land the gate without
+      # flipping CI red on day one; flip to a hard fail in a follow-up.
+      - name: pip-audit (strict, non-blocking)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit --strict -r backend/requirements.txt
+        working-directory: ${{ github.workspace }}
+
       - name: Wait for MySQL to accept connections
         run: |
           until mysqladmin ping -h 127.0.0.1 -u root -prootpassword --silent; do
@@ -576,9 +586,23 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: false
+          load: true
           tags: raf-backend:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Trivy scan of the built backend image. Fails the build on any HIGH
+      # or CRITICAL OS-package / library CVE so vulnerable images never reach
+      # the registry. Toggle severity / exit-code if the floor needs to move.
+      - name: Trivy scan — backend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: raf-backend:ci-${{ github.sha }}
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          format: 'table'
 
       - name: Build frontend image
         uses: docker/build-push-action@v5
@@ -586,11 +610,23 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: false
+          load: true
           tags: raf-frontend:ci-${{ github.sha }}
           build-args: |
             NEXT_PUBLIC_API_URL=http://localhost:8500
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Same Trivy gate for the frontend image.
+      - name: Trivy scan — frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: raf-frontend:ci-${{ github.sha }}
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          format: 'table'
 
   # ---------------------------------------------------------------------------
   # Job: e2e-test
@@ -601,9 +637,9 @@ jobs:
   e2e-test:
     name: "E2E — Playwright"
     runs-on: ubuntu-latest
-    # E2E tests only run on push to main/develop (not PRs) to save CI minutes.
-    # Remove this condition to run on every PR.
-    if: github.event_name == 'push'
+    # E2E tests run on every push (main/develop) AND on pull_request so PRs
+    # get end-to-end feedback before they merge.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     needs:
       - backend-test
       - frontend-build
