@@ -65,7 +65,7 @@ async function apiLoginAndInject(page: Page, request: APIRequestContext): Promis
   const m = /raf_refresh_token=([^;]+)/.exec(setCookie);
   const refreshToken = m ? m[1] : "";
 
-  const cookies: Parameters<typeof page.context.prototype.addCookies>[0] = [];
+  const cookies: Array<{ name: string; value: string; domain?: string; path?: string; expires?: number; httpOnly?: boolean; secure?: boolean; sameSite?: 'Strict' | 'Lax' | 'None'; }> = [];
   if (refreshToken) {
     cookies.push({
       name: "raf_refresh_token",

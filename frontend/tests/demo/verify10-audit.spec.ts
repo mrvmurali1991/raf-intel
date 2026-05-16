@@ -6,7 +6,7 @@
  *       --config playwright.demo.config.ts --reporter=list
  */
 
-import { test } from "@playwright/test";
+import { test, type Cookie } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -66,12 +66,9 @@ test.describe("/audit verification (iter1)", () => {
     if (fs.existsSync(FRESH_AUTH_STATE_PATH)) {
       console.log("[STEP 1] Loading fresh auth cookies");
       const rawState = JSON.parse(fs.readFileSync(FRESH_AUTH_STATE_PATH, "utf-8")) as {
-        cookies: Array<{
-          name: string; value: string; domain: string; path: string;
-          expires: number; httpOnly: boolean; secure: boolean; sameSite: string;
-        }>;
+        cookies: Cookie[];
       };
-      await page.context().addCookies(rawState.cookies as Parameters<typeof page.context.prototype.addCookies>[0]);
+      await page.context().addCookies(rawState.cookies);
     }
 
     await page.goto(`${BASE_URL}/audit`, { waitUntil: "domcontentloaded" });
