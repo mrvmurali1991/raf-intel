@@ -139,7 +139,6 @@ export default function SmartCloseDialog({ open, gap, onClose, onClosed }: Props
                 resize: "vertical", padding: "10px 12px",
                 borderRadius: 8, border: "1px solid #CBD5E1",
                 fontSize: 13, fontFamily: "inherit", color: "#0F172A",
-                outline: "none",
               }}
             />
           </label>

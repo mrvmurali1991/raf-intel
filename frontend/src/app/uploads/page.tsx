@@ -215,7 +215,6 @@ export default function UploadsPage() {
           textAlign: "center",
           cursor: "pointer",
           transition: "all 120ms",
-          outline: "none",
         }}
       >
         <div

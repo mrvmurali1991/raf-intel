@@ -468,7 +468,6 @@ function Modal({
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-          outline: "none",
         }}
       >
         {/* Modal header */}
@@ -544,7 +543,6 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   fontSize: 14,
   color: C.text,
-  outline: "none",
   background: C.white,
   width: "100%",
   boxSizing: "border-box",
@@ -1979,7 +1977,6 @@ export default function ProvidersPage() {
                   borderRadius: 8,
                   fontSize: 13,
                   width: 220,
-                  outline: "none",
                   color: C.text,
                   background: C.white,
                 }}
@@ -2015,7 +2012,6 @@ export default function ProvidersPage() {
                   background: C.white,
                   cursor: "pointer",
                   appearance: "none",
-                  outline: "none",
                   paddingRight: 32,
                 }}
               >

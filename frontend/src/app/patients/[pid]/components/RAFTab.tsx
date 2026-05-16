@@ -713,7 +713,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
               placeholder="Add codes to test... e.g. N18.4, J44.1"
               style={{
                 flex: 1, padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.slate200}`,
-                fontSize: 13, fontFamily: "monospace", color: C.slate800, outline: "none",
+                fontSize: 13, fontFamily: "monospace", color: C.slate800,
                 transition: "border-color 0.15s",
               }}
               onFocus={e => (e.target.style.borderColor = C.blue600)}

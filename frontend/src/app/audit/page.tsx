@@ -154,7 +154,6 @@ function RadvScenariosCard() {
                 backgroundColor: isSelected ? "rgba(37,99,235,0.06)" : "transparent",
                 cursor: "pointer",
                 transition: "background-color 0.15s ease",
-                outline: "none",
               }}
               onFocus={(e) => { e.currentTarget.style.outline = "2px solid #2563EB"; e.currentTarget.style.outlineOffset = "-2px"; }}
               onBlur={(e) => { e.currentTarget.style.outline = "none"; }}
@@ -235,7 +234,6 @@ function RadvScenariosCard() {
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
-              outline: "none",
             }}
           >
             <PlayCircle size={14} /> Begin Audit
@@ -326,7 +324,6 @@ function PatientSelect({
           fontSize: 14,
           color: selectedLabel ? "#0F172A" : "#94A3B8",
           cursor: "pointer",
-          outline: "none",
         }}
       >
         <span>{selectedLabel ?? "Search and select a patient..."}</span>
@@ -368,7 +365,7 @@ function PatientSelect({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Type to search..."
-              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, color: "#0F172A", backgroundColor: "transparent" }}
+              style={{ flex: 1, border: "none", fontSize: 14, color: "#0F172A", backgroundColor: "transparent" }}
             />
           </div>
           <div style={{ maxHeight: 200, overflowY: "auto" }}>
@@ -547,7 +544,6 @@ export default function AuditPage() {
                   fontSize: 14,
                   color: "#0F172A",
                   backgroundColor: "#fff",
-                  outline: "none",
                   cursor: "pointer",
                 }}
               >

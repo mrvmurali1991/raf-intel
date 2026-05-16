@@ -449,7 +449,6 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   color: colors.slate900,
   background: colors.white,
-  outline: "none",
 };
 
 function Field({

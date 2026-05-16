@@ -137,7 +137,6 @@ function NotificationRow({ notification, onClick, onDismiss }: NotificationRowPr
         borderBottom: "1px solid #f1f5f9",
         position: "relative",
         transition: "background-color 120ms, transform 150ms, box-shadow 150ms",
-        outline: "none",
       }}
     >
       <div

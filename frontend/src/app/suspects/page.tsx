@@ -615,7 +615,6 @@ export default function SuspectsPage() {
                     letterSpacing: "0.01em",
                     cursor: "pointer",
                     padding: "0 18px 0 2px",
-                    outline: "none",
                     backgroundImage:
                       "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='%230F766E'><path d='M5 8l5 5 5-5H5z'/></svg>\")",
                     backgroundRepeat: "no-repeat",
@@ -675,7 +674,6 @@ export default function SuspectsPage() {
                 fontSize: 13,
                 color: C.text,
                 fontFamily: FONT_SYS,
-                outline: "none",
                 transition: "border-color 0.15s, box-shadow 0.15s",
               }}
               onFocus={(e) => {

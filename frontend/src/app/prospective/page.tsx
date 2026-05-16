@@ -924,7 +924,6 @@ export default function ProspectivePage() {
     color: C.slate900,
     background: C.white,
     cursor: "pointer",
-    outline: "none",
   };
 
   const actionBtnStyle: React.CSSProperties = {

@@ -605,7 +605,6 @@ function GenerateDialog({ onClose, onSuccess }: GenerateDialogProps) {
                 color: T.slate800,
                 backgroundColor: T.white,
                 cursor: generating ? "not-allowed" : "pointer",
-                outline: "none",
               }}
             >
               {years.map((y) => (
@@ -2407,7 +2406,6 @@ export default function SubmissionsPage() {
                   color: T.slate600,
                   backgroundColor: T.white,
                   cursor: "pointer",
-                  outline: "none",
                 }}
               >
                 <option value="ALL">All Statuses</option>

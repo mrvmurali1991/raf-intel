@@ -398,7 +398,6 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   color: C.text,
   backgroundColor: C.white,
-  outline: "none",
   boxSizing: "border-box",
   transition: "border-color 200ms ease, box-shadow 200ms ease",
 };
