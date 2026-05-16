@@ -30,11 +30,13 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
 )
 
 from app.auth import get_current_user, require_permission
 from app.db import raf_cursor
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services import claims_service as svc
 from app.services.audit_logger import log_phi_access
@@ -109,15 +111,19 @@ def _check_claims_batch_duplicate(
 @limiter.limit("10/minute")
 async def upload_claims_file(
     request: Request,
+    response: Response,
     file: UploadFile = File(..., description="Claims file — CSV, .837, .edi, or .x12"),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("claims", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Upload a claims file and parse it into a new batch.
 
     The uploader identity is derived from the authenticated JWT — the client
     cannot spoof the ``uploaded_by`` field.
+
+    Supports Idempotency-Key header (24h replay window).
     """
     uploaded_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
     filename = file.filename or "upload.csv"
@@ -183,7 +189,7 @@ async def upload_claims_file(
         details=f"batch_id={batch_id} filename='{filename}' format={file_format} claims={stored_count}",
     )
 
-    return {
+    result = {
         "batch_id": batch_id,
         "filename": filename,
         "file_format": file_format,
@@ -197,6 +203,8 @@ async def upload_claims_file(
             "Call POST /api/claims/batches/{batch_id}/process to run patient matching and HCC mapping."
         ),
     }
+    store_idempotent_response(request, response, result)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -538,6 +546,8 @@ def get_unmapped_patients(
     summary="Trigger RAF calculation for matched patients",
 )
 def calculate_raf_for_batch(
+    request: Request,
+    response: Response,
     batch_id: int,
     background_tasks: BackgroundTasks,
     measurement_year: int = Query(2026, ge=2020, le=2030),
@@ -547,10 +557,13 @@ def calculate_raf_for_batch(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("claims", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Calculate CMS-HCC V28 RAF scores for all patients in this batch that have
     been successfully matched to an OpenEMR pid.
+
+    Supports Idempotency-Key header (24h replay window).
 
     Uses ICD-10 codes from OpenEMR billing (not just from the claims file) to
     ensure the most complete code set is used for RAF scoring.
@@ -598,6 +611,7 @@ def calculate_raf_for_batch(
         ),
     )
 
+    store_idempotent_response(request, response, result)
     return result
 
 

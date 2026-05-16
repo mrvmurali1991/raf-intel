@@ -26,10 +26,11 @@ import logging
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services import attestation_service as svc
 
 logger = logging.getLogger(__name__)
@@ -206,16 +207,21 @@ def list_attestations(
 
 @router.post("", summary="Create an attestation request", status_code=201)
 def create_attestation(
+    request: Request,
+    response: Response,
     body: CreateAttestationRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("attestations", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Create a single pending attestation request for a provider to review.
 
     The ``provider_user_id`` is always taken from the authenticated session,
     not from the request body, to prevent impersonation.
+
+    Supports Idempotency-Key header (24h replay window).
     """
     provider_user_id: int = current_user["id"]
 
@@ -237,6 +243,7 @@ def create_attestation(
         logger.error("create_attestation failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    store_idempotent_response(request, response, rec)
     return rec
 
 

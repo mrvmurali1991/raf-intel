@@ -36,6 +36,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
     status,
 )
@@ -43,6 +44,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services import submission_service as svc
 
@@ -130,14 +132,18 @@ def _require_batch(batch_id: str, tenant_id: str) -> dict[str, Any]:
 @limiter.limit("10/minute")
 def generate_submission(
     request: Request,
+    response: Response,
     body: GenerateRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("submissions", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Generate a CMS RAPS (fixed-width) or EDPS (837P EDI) submission file from
     the current confirmed RAF / HCC data for the authenticated tenant.
+
+    Supports Idempotency-Key header (24h replay window).
 
     - Queries all confirmed HCC records for `payment_year`.
     - Builds one submission record per (patient, ICD-10 code).
@@ -178,6 +184,7 @@ def generate_submission(
             },
         )
 
+    store_idempotent_response(request, response, result)
     return result
 
 

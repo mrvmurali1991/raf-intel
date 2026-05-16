@@ -27,10 +27,11 @@ from collections import Counter
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.config import settings
 from app.db import raf_cursor, run_in_db_executor
 from app.rate_limit import limiter
@@ -342,14 +343,18 @@ class RAFDashboardResponse(BaseModel):
 @limiter.limit("10/minute")
 async def calculate_raf(
     request: Request,
+    response: Response,
     pid: int,
     body: CalculateRequest = CalculateRequest(),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("raf_scores", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Run the CMS-HCC RAF calculation for *pid*.
+
+    Supports Idempotency-Key header (24h replay window).
 
     **Model version** (`model_version`):
     - **auto** (default): CMS transition schedule
@@ -429,6 +434,7 @@ async def calculate_raf(
         logger.error("calculate_raf error pid=%s: %s", pid, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    store_idempotent_response(request, response, result)
     return result
 
 

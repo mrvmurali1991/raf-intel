@@ -41,6 +41,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.auth import get_current_user, get_tenant_id, require_role
 from app.config import settings
 from app.db import raf_cursor
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter, login_rate_key
 from app.services.auth_service import (
     authenticate_embed_token,
@@ -1050,9 +1051,17 @@ def admin_list_users(
     response_model_exclude_none=True,
 )
 def admin_create_user(
+    request: Request,
+    response: Response,
     body: CreateUserRequest,
     current_user: dict = Depends(require_role("admin")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> UserDetailResponse:
+    """
+    Create a new user account.
+
+    Supports Idempotency-Key header (24h replay window).
+    """
     try:
         user = create_user(
             email=body.email,
@@ -1071,6 +1080,7 @@ def admin_create_user(
         details={"email": body.email, "role": body.role},
     )
     safe = _safe_user(user)
+    store_idempotent_response(request, response, safe)
     return UserDetailResponse(**safe)
 
 
