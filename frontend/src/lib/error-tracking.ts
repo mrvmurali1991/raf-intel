@@ -59,9 +59,15 @@ async function initSentry(): Promise<void> {
         beforeSend?: (event: MinimalSentryEvent) => MinimalSentryEvent | null;
       }): void;
     }
-    const mod = (await import(
-      /* webpackChunkName: "sentry" */ "@sentry/nextjs" as string
-    ).catch(() => null)) as MinimalSentry | null;
+    // Use new Function() so Turbopack/Webpack can't statically resolve the
+    // import path — keeps the bundle clean when @sentry/nextjs isn't installed
+    // (e.g. in CI / local dev / before npm install).
+    const dynImport = new Function("m", "return import(m)") as (
+      m: string,
+    ) => Promise<unknown>;
+    const mod = (await dynImport("@sentry/nextjs").catch(
+      () => null,
+    )) as MinimalSentry | null;
     if (!mod) return;
 
     mod.init({

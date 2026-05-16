@@ -51,8 +51,12 @@ const nextConfig: NextConfig = {
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         {
           key: "Content-Security-Policy",
+          // Next/React dev mode requires `unsafe-eval` for HMR and stack-trace
+          // reconstruction. Production builds never need it.
           value:
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+            process.env.NODE_ENV === "production"
+              ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+              : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http: https: ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         },
         {
           key: "Strict-Transport-Security",
