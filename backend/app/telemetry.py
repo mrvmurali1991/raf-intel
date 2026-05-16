@@ -138,3 +138,71 @@ def init_telemetry(app=None) -> None:
 
     _OTEL_INITIALIZED = True
     logger.info("OpenTelemetry tracing initialized (endpoint=%s)", endpoint)
+
+
+# ---------------------------------------------------------------------------
+# instrument_app — idempotent helper used from main.py
+#
+# init_telemetry() already wires up FastAPI/MySQL/Celery/Redis instrumentation,
+# but call sites that just want to apply auto-instrumentation to an existing
+# FastAPI app instance can use this thinner wrapper.  It is a no-op unless
+# OTEL_EXPORTER_OTLP_ENDPOINT is configured, so importing this module never
+# alters runtime behaviour in environments without a collector.
+# ---------------------------------------------------------------------------
+
+try:
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+except ImportError:  # pragma: no cover - optional dep
+    FastAPIInstrumentor = None  # type: ignore[assignment]
+
+try:
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+except ImportError:  # pragma: no cover - optional dep
+    RequestsInstrumentor = None  # type: ignore[assignment]
+
+try:
+    from opentelemetry.instrumentation.mysql import MySQLInstrumentor
+except ImportError:  # pragma: no cover - optional dep
+    MySQLInstrumentor = None  # type: ignore[assignment]
+
+_APP_INSTRUMENTED = False
+
+
+def instrument_app(app) -> None:
+    """Apply tracing to a FastAPI app instance. Idempotent.
+
+    No-op when ``OTEL_EXPORTER_OTLP_ENDPOINT`` is not set so dev environments
+    without a collector are unaffected.  Each instrumentor is wrapped so a
+    single missing optional package does not break startup.
+    """
+    global _APP_INSTRUMENTED
+    if _APP_INSTRUMENTED:
+        return
+
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    if not endpoint:
+        logger.debug("instrument_app: OTEL_EXPORTER_OTLP_ENDPOINT not set; skipping")
+        return
+
+    if FastAPIInstrumentor is not None:
+        try:
+            FastAPIInstrumentor.instrument_app(app, excluded_urls="health.*,metrics")
+            logger.info("instrument_app: FastAPI instrumented")
+        except Exception as exc:  # noqa: BLE001 - never crash startup
+            logger.warning("instrument_app: FastAPI instrumentation failed: %s", exc)
+
+    if RequestsInstrumentor is not None:
+        try:
+            RequestsInstrumentor().instrument()
+            logger.info("instrument_app: requests instrumented")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("instrument_app: requests instrumentation failed: %s", exc)
+
+    if MySQLInstrumentor is not None:
+        try:
+            MySQLInstrumentor().instrument()
+            logger.info("instrument_app: MySQL instrumented")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("instrument_app: MySQL instrumentation failed: %s", exc)
+
+    _APP_INSTRUMENTED = True

@@ -32,7 +32,7 @@ from app.middleware import setup_middleware
 from app.metrics import init_metrics
 from app.monitoring import init_monitoring
 from app.router_registry import register_routers
-from app.telemetry import init_telemetry
+from app.telemetry import init_telemetry, instrument_app
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -335,6 +335,16 @@ Most endpoints require a valid JWT access token.
 # Starlette refuses add_middleware after startup, so keep these at module scope).
 init_metrics(app)
 init_telemetry(app)
+
+# Apply OTel auto-instrumentation (FastAPI routes / outbound requests / MySQL).
+# init_telemetry() above already covers most of this when an OTLP endpoint is
+# configured; instrument_app() is the thinner helper kept idempotent so calling
+# both is safe. Wrapped in try/except so a missing optional package can never
+# block startup. See docs/TRACING.md.
+try:
+    instrument_app(app)
+except Exception as _otel_exc:  # noqa: BLE001 - tracing must never crash boot
+    logger.warning("instrument_app skipped: %s", _otel_exc)
 
 # Register exception handlers and rate limiter
 register_exception_handlers(app)
