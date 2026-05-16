@@ -10,10 +10,11 @@ Tags: compliance
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services.consent_service import (
     CONSENT_TYPES,
     check_consent,
@@ -47,13 +48,16 @@ class CheckConsentRequest(BaseModel):
 
 @router.post("/record")
 def api_record_consent(
+    request: Request,
+    response: Response,
     body: RecordConsentRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _idem: None = Depends(idempotency_key_dependency()),
 ):
     """Record or update a patient consent decision."""
     try:
-        result = record_consent(
+        consent = record_consent(
             patient_id=body.patient_id,
             tenant_id=tenant_id,
             consent_type=body.consent_type,
@@ -62,7 +66,9 @@ def api_record_consent(
             granted_by=current_user.get("id"),
             details=body.details,
         )
-        return {"status": "ok", "consent": result}
+        result = {"status": "ok", "consent": consent}
+        store_idempotent_response(request, response, result)
+        return result
     except ValueError as exc:
         logger.warning("Consent record error: %s", exc)
         raise HTTPException(status_code=400, detail="Invalid consent data. Please check your input.")
@@ -85,9 +91,12 @@ def api_check_consent(
 
 @router.post("/revoke")
 def api_revoke_consent(
+    request: Request,
+    response: Response,
     body: RevokeConsentRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _idem: None = Depends(idempotency_key_dependency()),
 ):
     """Revoke a patient's consent."""
     updated = revoke_consent(
@@ -98,7 +107,9 @@ def api_revoke_consent(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="No active consent record found.")
-    return {"status": "ok", "revoked": True}
+    result = {"status": "ok", "revoked": True}
+    store_idempotent_response(request, response, result)
+    return result
 
 
 @router.get("/patient/{patient_id}")

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services.webhook_service import (
     WEBHOOK_EVENT_DESCRIPTIONS,
@@ -159,10 +160,12 @@ def list_event_types(
 @limiter.limit("30/minute")
 def create_webhook(
     request: Request,
+    response: Response,
     body: WebhookCreateRequest,
     tenant_id: str = Depends(get_tenant_id),
     _current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("webhooks", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Register a new webhook endpoint for the current tenant.
@@ -196,6 +199,7 @@ def create_webhook(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid input")
 
     logger.info("Webhook %d created for tenant %s", hook["id"], tenant_id)
+    store_idempotent_response(request, response, hook)
     return hook
 
 

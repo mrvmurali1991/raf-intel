@@ -19,11 +19,12 @@ POST /api/review/decision
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id
 from app.db import raf_cursor
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services import audit as audit_svc
 
 logger = logging.getLogger(__name__)
@@ -256,9 +257,12 @@ _ICD_COL = {
 
 @router.post("/decision", response_model=DecisionResponse)
 def post_decision(
+    request: Request,
+    response: Response,
     body: DecisionRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> DecisionResponse:
     kind, numeric_id = _split_id(body.candidate_id)
     if body.decision == "edit" and not body.edited_icd10:
@@ -340,4 +344,6 @@ def post_decision(
         before=before,
         after={**after, "notes": body.notes} if body.notes else after,
     )
-    return DecisionResponse(ok=True, audit_id=audit_id)
+    result = DecisionResponse(ok=True, audit_id=audit_id)
+    store_idempotent_response(request, response, result.model_dump())
+    return result

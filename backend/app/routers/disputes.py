@@ -21,9 +21,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services import dispute_service as svc
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,16 @@ class RecordOutcomePayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.post("/disputes", summary="Create a new dispute")
-def create_dispute_endpoint(payload: CreateDisputePayload) -> dict[str, Any]:
+def create_dispute_endpoint(
+    request: Request,
+    response: Response,
+    payload: CreateDisputePayload,
+    _idem: None = Depends(idempotency_key_dependency()),
+) -> dict[str, Any]:
     try:
-        return svc.create_dispute(payload.model_dump())
+        result = svc.create_dispute(payload.model_dump())
+        store_idempotent_response(request, response, result)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -152,9 +160,17 @@ def draft_appeal_endpoint(dispute_id: int, payload: DraftAppealPayload | None = 
 
 
 @router.post("/disputes/{dispute_id}/submit-appeal", summary="Persist a submitted appeal")
-def submit_appeal_endpoint(dispute_id: int, payload: SubmitAppealPayload) -> dict[str, Any]:
+def submit_appeal_endpoint(
+    request: Request,
+    response: Response,
+    dispute_id: int,
+    payload: SubmitAppealPayload,
+    _idem: None = Depends(idempotency_key_dependency()),
+) -> dict[str, Any]:
     try:
-        return svc.submit_appeal(dispute_id, payload.model_dump(exclude_none=False))
+        result = svc.submit_appeal(dispute_id, payload.model_dump(exclude_none=False))
+        store_idempotent_response(request, response, result)
+        return result
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
@@ -162,15 +178,23 @@ def submit_appeal_endpoint(dispute_id: int, payload: SubmitAppealPayload) -> dic
 
 
 @router.post("/appeals/{appeal_id}/record-outcome", summary="Record the appeal outcome")
-def record_outcome_endpoint(appeal_id: int, payload: RecordOutcomePayload) -> dict[str, Any]:
+def record_outcome_endpoint(
+    request: Request,
+    response: Response,
+    appeal_id: int,
+    payload: RecordOutcomePayload,
+    _idem: None = Depends(idempotency_key_dependency()),
+) -> dict[str, Any]:
     try:
-        return svc.record_outcome(
+        result = svc.record_outcome(
             appeal_id=appeal_id,
             outcome=payload.outcome,
             recovered_amount=payload.recovered_amount,
             response_received_at=payload.response_received_at,
             outcome_notes=payload.outcome_notes,
         )
+        store_idempotent_response(request, response, result)
+        return result
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:

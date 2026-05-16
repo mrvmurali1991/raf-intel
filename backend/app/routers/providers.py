@@ -25,10 +25,11 @@ import logging
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth import get_current_user, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services.provider_service import (
     acknowledge_alert,
@@ -228,18 +229,23 @@ def import_from_emr(
 @limiter.limit("30/minute")
 def create(
     request: Request,
+    response: Response,
     body: ProviderCreate,
     current_user: dict = Depends(get_current_user),
-    _perm: None = Depends(require_permission("providers", "write"))) -> dict[str, Any]:
+    _perm: None = Depends(require_permission("providers", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
+) -> dict[str, Any]:
     """
     Create a provider record.  Optionally link to an OpenEMR user via
     ``openemr_user_id``; if provided the field must be unique across providers.
     """
     try:
-        return create_provider(
+        result = create_provider(
             body.model_dump(exclude_none=True),
             tenant_id=current_user.get("tenant_id"),
         )
+        store_idempotent_response(request, response, result)
+        return result
     except Exception as exc:
         logger.error("create_provider error: %s", exc, exc_info=True)
         if "Duplicate" in str(exc):

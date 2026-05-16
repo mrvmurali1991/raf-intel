@@ -23,11 +23,12 @@ POST   /api/fhir/conditions/{connection_id}/process - Process conditions → HCC
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 import app.services.fhir_service as fhir_svc
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services.audit_logger import log_phi_access
 from app.services.circuit_breaker import CircuitBreakerError
 
@@ -183,9 +184,14 @@ def _run_sync_background(
 # ---------------------------------------------------------------------------
 
 @router.post("/connections", summary="Register a new FHIR server connection", status_code=201)
-def create_connection(body: FHIRConnectionCreate,
+def create_connection(
+    request: Request,
+    response: Response,
+    body: FHIRConnectionCreate,
     current_user: dict = Depends(get_current_user),
-    _perm: None = Depends(require_permission("fhir", "write"))) -> dict[str, Any]:
+    _perm: None = Depends(require_permission("fhir", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
+) -> dict[str, Any]:
     """
     Register a FHIR R4 server so the system can sync clinical data from it.
 
@@ -201,11 +207,13 @@ def create_connection(body: FHIRConnectionCreate,
         raise HTTPException(status_code=500, detail="Internal server error")
 
     conn = fhir_svc.get_connection(new_id)
-    return {
+    result = {
         "id": new_id,
         "message": "FHIR connection registered",
         "connection": _safe_connection_response(conn),
     }
+    store_idempotent_response(request, response, result)
+    return result
 
 
 @router.get("/connections", summary="List all FHIR server connections")

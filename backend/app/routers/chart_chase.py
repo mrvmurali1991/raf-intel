@@ -25,10 +25,11 @@ import logging
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services import chart_chase_service as svc
 
 logger = logging.getLogger(__name__)
@@ -244,10 +245,13 @@ def list_templates(
 
 @router.post("/templates", summary="Create an outreach template")
 def create_template(
+    request: Request,
+    response: Response,
     body: TemplateCreateRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Create a new fax cover sheet, email, or letter template.
@@ -266,7 +270,9 @@ def create_template(
         logger.error("create_template failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"status": "created", "template": template}
+    result = {"status": "created", "template": template}
+    store_idempotent_response(request, response, result)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -275,10 +281,13 @@ def create_template(
 
 @router.post("/bulk", summary="Bulk create chart chase requests")
 def bulk_create(
+    request: Request,
+    response: Response,
     body: BulkChaseRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Create multiple chase requests in a single call.  Designed for bulk
@@ -309,6 +318,7 @@ def bulk_create(
         logger.error("bulk_create failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    store_idempotent_response(request, response, result)
     return result
 
 
@@ -318,10 +328,13 @@ def bulk_create(
 
 @router.post("", summary="Create a chart chase request")
 def create_chase(
+    request: Request,
+    response: Response,
     body: ChaseCreateRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("chart_chase", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Create a new chart chase request for a patient.
@@ -349,7 +362,9 @@ def create_chase(
         logger.error("create_chase failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"status": "created", "chase": chase}
+    result = {"status": "created", "chase": chase}
+    store_idempotent_response(request, response, result)
+    return result
 
 
 # ---------------------------------------------------------------------------

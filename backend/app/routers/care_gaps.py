@@ -23,10 +23,11 @@ import logging
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services.care_gap_service import (
     add_comment,
     assign_gap_task,
@@ -167,9 +168,12 @@ def dashboard(
 
 @router.post("/bulk-assign", summary="Bulk-assign multiple gap tasks to a user")
 def bulk_assign(
+    request: Request,
+    response: Response,
     body: BulkAssignRequest,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("care_gaps", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Assign all tasks in ``task_ids`` to the user identified by ``assigned_to``
@@ -184,11 +188,13 @@ def bulk_assign(
     """
     user_id: int = int(current_user.get("id") or current_user.get("user_id") or 0)
     try:
-        return bulk_assign_gap_tasks(
+        result = bulk_assign_gap_tasks(
             task_ids=body.task_ids,
             assigned_to=body.assigned_to,
             user_id=user_id,
         )
+        store_idempotent_response(request, response, result)
+        return result
     except Exception as exc:
         logger.error("bulk_assign error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -196,10 +202,13 @@ def bulk_assign(
 
 @router.post("/generate", summary="Auto-generate care gap tasks from suspect conditions")
 def generate_gaps(
+    request: Request,
+    response: Response,
     body: GenerateGapsRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("care_gaps", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Scan ``raf_suspect_conditions`` and create gap tasks for all open suspects
@@ -214,7 +223,7 @@ def generate_gaps(
     """
     user_id: int = int(current_user.get("id") or current_user.get("user_id") or 0)
     try:
-        return generate_gaps_from_suspects(
+        result = generate_gaps_from_suspects(
             provider_id=body.provider_id,
             patient_id=body.patient_id,
             min_confidence=body.min_confidence,
@@ -222,6 +231,8 @@ def generate_gaps(
             created_by=user_id,
             tenant_id=tenant_id,
         )
+        store_idempotent_response(request, response, result)
+        return result
     except Exception as exc:
         logger.error("generate_gaps error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -291,10 +302,13 @@ def list_tasks(
 
 @router.post("", summary="Create a care gap task", status_code=201)
 def create_task(
+    request: Request,
+    response: Response,
     body: GapTaskCreate,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("care_gaps", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Create a new care gap task.
@@ -314,7 +328,7 @@ def create_task(
     """
     user_id: int = int(current_user.get("id") or current_user.get("user_id") or 0)
     try:
-        return create_gap_task(
+        result = create_gap_task(
             patient_id=body.patient_id,
             provider_id=body.provider_id,
             hcc_code=body.hcc_code,
@@ -329,6 +343,8 @@ def create_task(
             created_by=user_id,
             tenant_id=tenant_id,
         )
+        store_idempotent_response(request, response, result)
+        return result
     except Exception as exc:
         logger.error("create_task error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -469,10 +485,13 @@ def update_status(
 
 @router.post("/{task_id}/comments", summary="Add a comment to a care gap task", status_code=201)
 def post_comment(
+    request: Request,
+    response: Response,
     task_id: int,
     body: CommentCreate,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("care_gaps", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Add a comment to a care gap task.  Comments are append-only and preserved
@@ -484,7 +503,9 @@ def post_comment(
     """
     user_id: int = int(current_user.get("id") or current_user.get("user_id") or 0)
     try:
-        return add_comment(task_id, user_id=user_id, comment=body.comment)
+        result = add_comment(task_id, user_id=user_id, comment=body.comment)
+        store_idempotent_response(request, response, result)
+        return result
     except ValueError as exc:
         logger.warning("post_comment not found task=%s: %s", task_id, exc)
         raise HTTPException(status_code=404, detail=str(exc))
