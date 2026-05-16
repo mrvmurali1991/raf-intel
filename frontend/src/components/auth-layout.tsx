@@ -149,9 +149,21 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <TenantPYChip />
         </div>
 
+        {/* Tablet top bar — thin (48px) variant so the page below the
+            mobile hamburger doesn't have dead space. The Sidebar still owns
+            the hamburger, this bar just hosts the PY chip so it stays
+            reachable at tablet widths (768-1023px). */}
+        <div
+          className="hidden md:flex lg:hidden fixed top-0 right-0 left-0 z-20 h-12 items-center justify-end gap-3 px-4 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80"
+          aria-label="App tablet top bar"
+        >
+          <TenantAccessBanner />
+          <TenantPYChip />
+        </div>
+
         <main
           id="main-content"
-          className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-5 pt-16 lg:px-10 lg:pb-10 lg:pt-20"
+          className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-4 pt-14 md:p-6 md:pt-16 lg:px-10 lg:pb-10 lg:pt-20"
           tabIndex={-1}
         >
           <EmrDeactivatedBanner />
