@@ -35,6 +35,7 @@ import {
 } from "@/lib/api";
 import { ModelComparison } from "@/components/model-comparison";
 import { AIHealthBanner } from "@/components/AIHealthBanner";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import {
   RiskGauge,
   ProgressBar,
@@ -498,6 +499,15 @@ export default function PatientDetailPage({
       {/* AI availability warning — surfaces when Gemini is unreachable */}
       <div style={{ padding: "12px 16px 0" }}>
         <AIHealthBanner />
+      </div>
+      {/* Breadcrumb trail — Home > Patients > Patient {pid} */}
+      <div style={{ padding: "0 16px" }}>
+        <Breadcrumb
+          items={[
+            { label: "Patients", href: "/patients" },
+            { label: `Patient ${pid}` },
+          ]}
+        />
       </div>
       {/* PATIENT HEADER (sticky) */}
       <header
