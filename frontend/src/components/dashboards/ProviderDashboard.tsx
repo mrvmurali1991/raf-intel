@@ -76,20 +76,36 @@ export function ProviderDashboard() {
       {isLoading ? (
         <KPISkeleton />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>
-          <StatCard
-            label="Open recapture gaps"
-            value={stats?.open_recapture_gaps ?? "—"}
-            subtitle="HCCs from prior year not yet documented"
-            icon={<FileText size={20} />}
-            color="#EF4444"
-            href="/recapture"
-            emptyState={{
-              message: "No open gaps — nice work! All HCCs are documented.",
-              ctaLabel: "View recapture history",
-              ctaHref: "/recapture",
-            }}
-          />
+        <div
+          className="kpi-strip-bento"
+          style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 20, marginBottom: 32 }}
+        >
+          {/* Bento sizing: "Open recapture gaps" is the most clinically-actionable
+              tile (every gap = a chart to review + revenue at risk) — it occupies
+              the hero slot with 2x width and a larger primary number. Shared
+              min-height keeps the row visually balanced. */}
+          <style>{`
+            .kpi-strip-bento > a,
+            .kpi-strip-bento > div { min-height: 132px; display: grid; }
+            .kpi-strip-bento > a > div,
+            .kpi-strip-bento > div > div { height: 100%; }
+            .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
+          `}</style>
+          <div className="kpi-strip-hero">
+            <StatCard
+              label="Open recapture gaps"
+              value={stats?.open_recapture_gaps ?? "—"}
+              subtitle="HCCs from prior year not yet documented"
+              icon={<FileText size={20} />}
+              color="#EF4444"
+              href="/recapture"
+              emptyState={{
+                message: "No open gaps — nice work! All HCCs are documented.",
+                ctaLabel: "View recapture history",
+                ctaHref: "/recapture",
+              }}
+            />
+          </div>
           <StatCard
             label="Suspect conditions"
             value={stats?.total_suspects_open ?? "—"}

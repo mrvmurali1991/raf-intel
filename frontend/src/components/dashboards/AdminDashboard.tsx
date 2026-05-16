@@ -961,11 +961,39 @@ export function AdminDashboard() {
         <KPISkeleton />
       ) : (
         <div
-          className="kpi-strip"
+          className="kpi-strip kpi-strip-bento"
           role="status"
           aria-live="polite"
-          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 24 }}
+          style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 20, marginBottom: 24 }}
         >
+          {/* Bento sizing: hero (Revenue Opportunity) gets 2x width and a larger
+              primary number; all tiles share a minimum height so the row reads
+              as a unified bento strip even when individual cards render the
+              short empty-state layout. */}
+          <style>{`
+            .kpi-strip-bento > a,
+            .kpi-strip-bento > div { min-height: 132px; display: grid; }
+            .kpi-strip-bento > a > div,
+            .kpi-strip-bento > div > div { height: 100%; }
+            .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
+          `}</style>
+          {/* Hero tile — Revenue Opportunity dominates the row. */}
+          <div className="kpi-strip-hero">
+            <StatCard
+              label="Revenue Opportunity"
+              value={revenueOpp > 0 ? <AnimatedNumber value={Math.abs(revenueOpp)} format="currency" /> : "--"}
+              subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
+              icon={<DollarSign size={20} />}
+              color={revenueOpp > 0 ? "#10B981" : "#94A3B8"}
+              href="/reports"
+              info="Total annual revenue impact across your entire population based on RAF score gaps. This includes recapture gaps (conditions billed last year but not this year), suspect conditions, and medication-implied diagnoses. A negative value means over-coding was detected."
+              emptyState={{
+                message: "Revenue opportunity will appear after analysis.",
+                ctaLabel: "Analyze patients",
+                ctaHref: "/analysis",
+              }}
+            />
+          </div>
           <StatCard
             label="Total Members"
             value={<AnimatedNumber value={totalPop} format="number" />}
@@ -1004,20 +1032,6 @@ export function AdminDashboard() {
             trend={rafTrend}
             href="/reports"
             info="The average CMS-HCC Risk Adjustment Factor across all patients. A score of 1.0 represents an average Medicare beneficiary. Higher scores indicate greater clinical complexity and higher expected healthcare costs."
-          />
-          <StatCard
-            label="Revenue Opportunity"
-            value={revenueOpp > 0 ? <AnimatedNumber value={Math.abs(revenueOpp)} format="currency" /> : "--"}
-            subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
-            icon={<DollarSign size={20} />}
-            color={revenueOpp > 0 ? "#10B981" : "#94A3B8"}
-            href="/reports"
-            info="Total annual revenue impact across your entire population based on RAF score gaps. This includes recapture gaps (conditions billed last year but not this year), suspect conditions, and medication-implied diagnoses. A negative value means over-coding was detected."
-            emptyState={{
-              message: "Revenue opportunity will appear after analysis.",
-              ctaLabel: "Analyze patients",
-              ctaHref: "/analysis",
-            }}
           />
         </div>
       )}
