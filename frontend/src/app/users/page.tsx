@@ -37,6 +37,7 @@ import {
 import { StatCard, PageHeader, SectionHeader, EmptyState } from "@/components/healthcare-ui";
 import { useAuth } from "@/contexts/auth-context";
 import { tokens } from "@/styles/tokens";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // ── API ───────────────────────────────────────────────────────────────────────
 // Uses the shared authApi instance from auth-context, which automatically
@@ -371,21 +372,36 @@ function FormField({
   label,
   required,
   error,
+  htmlFor,
+  errorId,
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  /** id of the input the label points at; also used to derive errorId. */
+  htmlFor?: string;
+  /** Override for the error element id (must match input's aria-describedby). */
+  errorId?: string;
   children: React.ReactNode;
 }) {
+  const resolvedErrorId = errorId ?? (htmlFor ? `${htmlFor}-error` : undefined);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
+      <label htmlFor={htmlFor} style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
         {label}
         {required && <span style={{ color: C.red, marginLeft: 2 }}>*</span>}
       </label>
       {children}
-      {error && <span style={{ fontSize: 12, color: C.red }}>{error}</span>}
+      {error && (
+        <span
+          id={resolvedErrorId}
+          role="alert"
+          style={{ fontSize: 12, color: C.red }}
+        >
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -557,9 +573,45 @@ function UserFormDialog({
   function field(key: keyof UserFormData) {
     return {
       value: form[key],
-      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-        setForm((f) => ({ ...f, [key]: e.target.value })),
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        setForm((f) => ({ ...f, [key]: e.target.value }));
+        // Clear any inline error as the user edits; re-validated on blur.
+        if (errors[key]) {
+          setErrors((prev) => ({ ...prev, [key]: undefined }));
+        }
+      },
     };
+  }
+
+  // Per-field validator used by onBlur — same rules as validate() but
+  // scoped so we don't pop every error the moment the user tabs once.
+  function validateField(key: keyof UserFormData, valuesOverride?: UserFormData) {
+    const v = valuesOverride ?? form;
+    let msg: string | undefined;
+    switch (key) {
+      case "email":
+        if (!v.email.trim()) msg = "Email is required";
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) msg = "Invalid email";
+        break;
+      case "first_name":
+        if (!v.first_name.trim()) msg = "First name is required";
+        break;
+      case "last_name":
+        if (!v.last_name.trim()) msg = "Last name is required";
+        break;
+      case "password":
+        if (mode === "add") {
+          if (!v.password) msg = "Password is required";
+          else if (v.password.length < 12) msg = "Minimum 12 characters";
+        }
+        break;
+      case "confirm_password":
+        if (mode === "add" && v.password !== v.confirm_password) {
+          msg = "Passwords do not match";
+        }
+        break;
+    }
+    setErrors((prev) => ({ ...prev, [key]: msg }));
   }
 
   function validate(): boolean {
@@ -570,7 +622,7 @@ function UserFormDialog({
     if (!form.last_name.trim()) e.last_name = "Last name is required";
     if (mode === "add") {
       if (!form.password) e.password = "Password is required";
-      else if (form.password.length < 8) e.password = "Minimum 8 characters";
+      else if (form.password.length < 12) e.password = "Minimum 12 characters";
       if (form.password !== form.confirm_password) e.confirm_password = "Passwords do not match";
     }
     setErrors(e);
@@ -590,16 +642,44 @@ function UserFormDialog({
         style={{ display: "flex", flexDirection: "column", gap: 14 }}
       >
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <FormField label="First Name" required error={errors.first_name}>
-            <input className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]" style={inputStyle} {...field("first_name")} placeholder="Jane" />
+          <FormField label="First Name" required error={errors.first_name} htmlFor="user-first-name">
+            <input
+              id="user-first-name"
+              className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]"
+              style={inputStyle}
+              {...field("first_name")}
+              onBlur={() => validateField("first_name")}
+              aria-invalid={!!errors.first_name}
+              aria-describedby={errors.first_name ? "user-first-name-error" : undefined}
+              placeholder="Jane"
+            />
           </FormField>
-          <FormField label="Last Name" required error={errors.last_name}>
-            <input className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]" style={inputStyle} {...field("last_name")} placeholder="Smith" />
+          <FormField label="Last Name" required error={errors.last_name} htmlFor="user-last-name">
+            <input
+              id="user-last-name"
+              className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]"
+              style={inputStyle}
+              {...field("last_name")}
+              onBlur={() => validateField("last_name")}
+              aria-invalid={!!errors.last_name}
+              aria-describedby={errors.last_name ? "user-last-name-error" : undefined}
+              placeholder="Smith"
+            />
           </FormField>
         </div>
 
-        <FormField label="Email" required error={errors.email}>
-          <input className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]" style={inputStyle} type="email" {...field("email")} placeholder="jane@example.com" />
+        <FormField label="Email" required error={errors.email} htmlFor="user-email">
+          <input
+            id="user-email"
+            className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]"
+            style={inputStyle}
+            type="email"
+            {...field("email")}
+            onBlur={() => validateField("email")}
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "user-email-error" : undefined}
+            placeholder="jane@example.com"
+          />
         </FormField>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -621,14 +701,18 @@ function UserFormDialog({
 
         {mode === "add" && (
           <>
-            <FormField label="Password" required error={errors.password}>
+            <FormField label="Password" required error={errors.password} htmlFor="user-password">
               <div style={{ position: "relative" }}>
                 <input
+                  id="user-password"
                   className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]"
                   style={{ ...inputStyle, paddingRight: 40 }}
                   type={showPw ? "text" : "password"}
                   {...field("password")}
-                  placeholder="Min. 8 characters"
+                  onBlur={() => validateField("password")}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? "user-password-error" : undefined}
+                  placeholder="Min. 12 characters"
                   autoComplete="new-password"
                 />
                 <button
@@ -664,12 +748,16 @@ function UserFormDialog({
               )}
             </FormField>
 
-            <FormField label="Confirm Password" required error={errors.confirm_password}>
+            <FormField label="Confirm Password" required error={errors.confirm_password} htmlFor="user-confirm-password">
               <input
+                id="user-confirm-password"
                 className="focus:!border-blue-400 focus:!shadow-[0_0_0_3px_rgba(37,99,235,0.1)]"
                 style={inputStyle}
                 type="password"
                 {...field("confirm_password")}
+                onBlur={() => validateField("confirm_password")}
+                aria-invalid={!!errors.confirm_password}
+                aria-describedby={errors.confirm_password ? "user-confirm-password-error" : undefined}
                 placeholder="Re-enter password"
                 autoComplete="new-password"
               />
@@ -1025,6 +1113,9 @@ export default function UsersPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editUser, setEditUser] = useState<AppUser | null>(null);
   const [permUser, setPermUser] = useState<AppUser | null>(null);
+  // Deactivate confirm — uses the styled ConfirmDialog rather than window.confirm
+  // so we get correct a11y, focus management, and a non-default-focused destructive button.
+  const [deactivateUser, setDeactivateUser] = useState<AppUser | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -1148,9 +1239,9 @@ export default function UsersPage() {
 
   function handleToggleStatus(u: AppUser) {
     if (u.status === "active") {
-      if (window.confirm(`Deactivate ${u.first_name} ${u.last_name}?`)) {
-        deleteMut.mutate(u.id);
-      }
+      // Open styled confirm dialog; the actual mutation runs in the dialog's
+      // onConfirm callback below.
+      setDeactivateUser(u);
     } else {
       updateMut.mutate({
         id: u.id,
@@ -1614,6 +1705,24 @@ export default function UsersPage() {
         user={permUser}
         onClose={() => setPermUser(null)}
         onSave={(matrix) => permUser && permMut.mutate({ id: permUser.id, perms: matrix })}
+      />
+
+      {/* Deactivate-user confirmation — replaces window.confirm.
+          Cancel is autofocused; the destructive action requires an explicit click. */}
+      <ConfirmDialog
+        open={!!deactivateUser}
+        title="Deactivate user?"
+        description={
+          deactivateUser
+            ? `${deactivateUser.first_name} ${deactivateUser.last_name} will lose access immediately. They can be reactivated later from this screen.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        onConfirm={() => {
+          if (deactivateUser) deleteMut.mutate(deactivateUser.id);
+        }}
+        onClose={() => setDeactivateUser(null)}
       />
     </div>
   );
