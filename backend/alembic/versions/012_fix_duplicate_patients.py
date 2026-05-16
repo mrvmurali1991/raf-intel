@@ -75,4 +75,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    raise NotImplementedError(
+        "DESTRUCTIVE: drops unique index that prevents duplicate patient rows "
+        "from FHIR sync. Removing it will re-introduce silent duplicate inserts. "
+        "Manual DBA review required. To proceed, delete this guard."
+    )
     op.drop_index("uq_patients_tenant_emrpid_conn", table_name="patients")

@@ -63,6 +63,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    raise NotImplementedError(
+        "DESTRUCTIVE: narrowing VARCHAR(255) emr_pid back to INT will truncate UUID data. "
+        "Manual DBA review required. To proceed, delete this guard."
+    )
     # Note: downgrade will lose UUID data that doesn't fit in INT
     op.alter_column(
         "emr_patient_matches",

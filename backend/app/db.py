@@ -32,7 +32,15 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 _slow_query_logger = logging.getLogger("app.db.slow_queries")
 
-_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
+# DB_POOL_SIZE default raised from 20 -> 30 to absorb worker bursts.
+# Rationale: the FHIR sync + RAF recompute workers can each open several
+# concurrent transactions per patient, and during a multi-tenant resync the
+# previous 20-connection cap caused requests to queue behind workers and
+# tripped pool-acquisition timeouts.  30 gives ~50% headroom while staying
+# well below MySQL's default max_connections=151.  The executor worker count
+# (_DB_EXECUTOR_WORKERS below) deliberately mirrors this value so we never
+# dispatch more sync DB jobs than the pool can satisfy.
+_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "30"))
 _SLOW_QUERY_MS = int(os.getenv("SLOW_QUERY_THRESHOLD_MS", "500"))
 
 # ---------------------------------------------------------------------------

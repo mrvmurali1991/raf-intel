@@ -26,6 +26,10 @@ fi
 #   BACKUP_DIR             (default: ./data/backups)
 #   BACKUP_RETENTION_DAYS  (default: 30)
 #   BACKUP_ENCRYPTION_KEY  (optional — if set, backups are AES-256-CBC encrypted)
+#   BACKUP_S3_BUCKET       (optional — if set, completed dump is uploaded to s3://$BACKUP_S3_BUCKET/)
+#                          Requires AWS credentials available to `aws` CLI
+#                          (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+#                           or an attached IAM role / ~/.aws/credentials profile).
 #
 # Exit codes:
 #   0  — all requested backups completed successfully
@@ -181,6 +185,18 @@ dump_db() {
         local size
         size="$(du -sh "$filepath" 2>/dev/null | cut -f1)"
         log "Backup complete: ${filename} (${size})"
+
+        # Off-site replication: upload to S3 when BACKUP_S3_BUCKET is set.
+        # Uses STANDARD_IA storage class for cost-efficient infrequent access.
+        if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+            log "Uploading to s3://${BACKUP_S3_BUCKET}/"
+            if ! aws s3 cp "$filepath" "s3://${BACKUP_S3_BUCKET}/$(basename "$filepath")" --storage-class STANDARD_IA; then
+                err "S3 upload failed for ${filename}"
+                return 1
+            fi
+            log "S3 upload complete: s3://${BACKUP_S3_BUCKET}/$(basename "$filepath")"
+        fi
+
         return 0
     else
         local exit_code=$?
