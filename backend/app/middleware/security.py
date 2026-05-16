@@ -14,7 +14,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Headers enforce:
     - No MIME sniffing (X-Content-Type-Options)
     - No iframe embedding (X-Frame-Options)
-    - Browser XSS filter (X-XSS-Protection)
     - HTTPS-only for 1 year (Strict-Transport-Security)
     - No caching of PHI responses (Cache-Control / Pragma)
     - Reduced referrer leakage (Referrer-Policy)
@@ -25,7 +24,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
+        # X-XSS-Protection deliberately omitted: the header is obsolete and
+        # modern browsers ignore it (or, worse, the legacy filter has been a
+        # source of side-channel bugs). CSP above handles XSS defence.
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )

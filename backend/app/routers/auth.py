@@ -337,6 +337,16 @@ def _get_client_ip(request: Request) -> str | None:
 
 _COOKIE_MAX_AGE = 86400 * 7  # 7 days
 
+# Refresh-token cookie name.
+#
+# In production we use the ``__Host-`` prefix so the browser will *reject* the
+# cookie unless it is sent with Secure, Path=/, and no Domain attribute. That
+# closes a class of subdomain-takeover / cookie-tossing attacks. The prefix
+# can't be used in local dev (HTTP, no TLS), so we keep the legacy name there.
+_REFRESH_COOKIE_NAME = (
+    "__Host-raf_refresh_token" if settings.app_env == "production" else "raf_refresh_token"
+)
+
 _SENSITIVE_USER_FIELDS = frozenset({
     "password_hash",
     "mfa_secret",
@@ -457,12 +467,13 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
     resp = JSONResponse(content=result)
     if refresh_token:
         secure = settings.app_env != "development"
+        # __Host- prefix requires Secure + Path=/ + no Domain attribute.
         resp.set_cookie(
-            key="raf_refresh_token",
+            key=_REFRESH_COOKIE_NAME,
             value=refresh_token,
             httponly=True,
             secure=secure,
-            samesite="lax",
+            samesite="strict" if secure else "lax",
             max_age=_COOKIE_MAX_AGE,  # 7 days
             path="/",
         )
@@ -487,9 +498,14 @@ def forgot_password(request: Request, body: ForgotPasswordRequest) -> MessageRes
     _msg = "If an account with that email exists, a password reset link has been sent."
     try:
         token = generate_password_reset_token(body.email)
-    except ValueError as exc:
-        # Email not found – log silently and return generic response.
-        logger.info("forgot-password: no account for supplied address (%s)", exc)
+    except ValueError:
+        # Email not found – log a short hash of the address (NOT the address
+        # itself) so we keep diagnostic ability without enabling account
+        # enumeration via log scraping.
+        import hashlib as _hashlib
+
+        email_hash = _hashlib.sha256(body.email.encode()).hexdigest()[:8]
+        logger.info("forgot-password: no account for supplied address (hash=%s)", email_hash)
         return MessageResponse(message=_msg)
 
     # Log the full reset link in development so devs can test without SMTP.
@@ -540,10 +556,14 @@ def refresh_token_endpoint(
     The client MUST NOT store refresh tokens in JavaScript-accessible storage.
     """
     # Prefer explicit body token (API clients/tests), fall back to cookie
-    # token (browser clients).
+    # token (browser clients). Read both the prod (__Host- prefixed) name
+    # and the legacy name so a deploy rollover doesn't log everyone out.
     rt = body.refresh_token if body and body.refresh_token else None
     if not rt:
-        rt = request.cookies.get("raf_refresh_token")
+        rt = (
+            request.cookies.get(_REFRESH_COOKIE_NAME)
+            or request.cookies.get("raf_refresh_token")
+        )
     if not rt:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token"
@@ -558,11 +578,11 @@ def refresh_token_endpoint(
     if new_rt:
         secure = settings.app_env != "development"
         resp.set_cookie(
-            key="raf_refresh_token",
+            key=_REFRESH_COOKIE_NAME,
             value=new_rt,
             httponly=True,
             secure=secure,
-            samesite="lax",
+            samesite="strict" if secure else "lax",
             max_age=_COOKIE_MAX_AGE,
             path="/",
         )
@@ -637,7 +657,7 @@ def embed_exchange(request: Request, body: EmbedExchangeRequest) -> JSONResponse
     if refresh_token:
         secure = settings.app_env != "development"
         resp.set_cookie(
-            key="raf_refresh_token",
+            key=_REFRESH_COOKIE_NAME,
             value=refresh_token,
             httponly=True,
             secure=secure,
@@ -711,11 +731,11 @@ def verify_mfa(body: MFAVerifyRequest, request: Request) -> JSONResponse:
     if refresh_token:
         secure = settings.app_env != "development"
         resp.set_cookie(
-            key="raf_refresh_token",
+            key=_REFRESH_COOKIE_NAME,
             value=refresh_token,
             httponly=True,
             secure=secure,
-            samesite="lax",
+            samesite="strict" if secure else "lax",
             max_age=_COOKIE_MAX_AGE,
             path="/",
         )
@@ -858,11 +878,11 @@ def logout(
         request_path="/api/auth/logout",
         response_status=200,
     )
-    # Clear the httpOnly refresh token cookie
-    response.delete_cookie(
-        key="raf_refresh_token",
-        path="/",
-    )
+    # Clear the httpOnly refresh token cookie. Delete BOTH the current name
+    # and the legacy name so users mid-rollover are fully logged out.
+    response.delete_cookie(key=_REFRESH_COOKIE_NAME, path="/")
+    if _REFRESH_COOKIE_NAME != "raf_refresh_token":
+        response.delete_cookie(key="raf_refresh_token", path="/")
     return JSONResponse(content={"message": "Logged out successfully."})
 
 
@@ -1346,18 +1366,29 @@ def list_tenants(
 
 @router.post(
     "/switch-tenant",
-    summary="Switch active tenant (admin only)",
+    summary="Switch active tenant (super-admin only)",
     response_model=SwitchTenantResponse,
 )
 def switch_tenant(
     body: SwitchTenantRequest,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "super_admin")),
 ) -> SwitchTenantResponse:
     """
     Issue a new access token scoped to a different tenant.
-    Only admins can switch tenants. The user record stays on their
-    original tenant — only the JWT tenant_id claim changes.
+
+    Restricted to super-admin (highest privilege). Regular tenant admins
+    must NOT be able to cross-tenant pivot — that's a customer-data
+    boundary violation. The user record stays on their original tenant —
+    only the JWT tenant_id claim changes.
     """
+    # Defence in depth: require_role above already filters by role, but we
+    # double-check here so a future change to require_role()'s allowed list
+    # does not silently re-open cross-tenant pivot to plain "admin".
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super-admin may switch tenants.",
+        )
     target_tid = body.tenant_id
 
     # Verify target tenant exists

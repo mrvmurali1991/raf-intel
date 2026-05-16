@@ -73,8 +73,18 @@ class TenantGuardMiddleware(BaseHTTPMiddleware):
             user = None
 
         if user is None:
-            # Let downstream auth dependencies handle 401
-            return await call_next(request)
+            # SECURITY: previously we let the request through and trusted
+            # downstream auth dependencies to issue a 401. That meant any
+            # non-exempt /api/* path without a recognised dependency would
+            # silently bypass tenant isolation (potential cross-tenant PHI
+            # leak). Fail closed instead.
+            logger.warning(
+                "TENANT GUARD: Blocked unauthenticated request to %s.", path
+            )
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Authentication required"},
+            )
 
         tenant_id = user.get("tenant_id")
         if not tenant_id:
