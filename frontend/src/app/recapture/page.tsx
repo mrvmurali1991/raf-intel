@@ -389,7 +389,6 @@ export default function RecapturePage() {
                   fontSize: 13,
                   color: colors.slate900,
                   width: "min(200px, calc(100vw - 180px))",
-                  outline: "none",
                   transition: "border-color 0.2s, box-shadow 0.2s",
                 }}
                 onFocus={(e) => {
@@ -461,7 +460,6 @@ export default function RecapturePage() {
                         transition: "all 0.15s ease",
                         borderLeft: `3px solid ${g.priority.border}`,
                         background: i % 2 === 0 ? colors.white : colors.slate50,
-                        outline: "none",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = `${g.priority.border}08`;
