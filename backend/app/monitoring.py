@@ -16,7 +16,20 @@ _recent_errors: list[dict] = []
 _MAX_ERRORS = 100
 
 def init_monitoring():
-    """Initialize Sentry if DSN is configured. Called once from main.py lifespan."""
+    """Initialize Sentry if DSN is configured. Called once from main.py lifespan.
+
+    Setting SENTRY_DSN
+    ------------------
+    Obtain a project DSN from https://sentry.io/ (or your self-hosted Sentry
+    instance), then export it before starting the service:
+
+        export SENTRY_DSN="https://<key>@<org>.ingest.sentry.io/<project_id>"
+        export SENTRY_ENVIRONMENT="production"   # optional, defaults via config
+
+    In production we WARN (not info) when DSN is unset so the gap shows up
+    in alerting dashboards — running prod without error capture is a
+    compliance/observability regression.
+    """
     if settings.sentry_dsn:
         try:
             import sentry_sdk
@@ -25,7 +38,16 @@ def init_monitoring():
         except ImportError:
             logger.warning("SENTRY_DSN is set but sentry-sdk is not installed. pip install sentry-sdk")
     else:
-        logger.info("Sentry not configured (set SENTRY_DSN to enable)")
+        # Production without Sentry is a real operational gap — escalate to WARN
+        # so the absence is surfaced by log-level dashboards / alerts.
+        if (settings.sentry_environment or "").lower() == "production" or \
+                (getattr(settings, "app_env", "") or "").lower() == "production":
+            logger.warning(
+                "SENTRY_DSN is unset in production. Errors will not be captured to Sentry. "
+                "Set SENTRY_DSN to a valid project DSN to enable error monitoring."
+            )
+        else:
+            logger.info("Sentry not configured (set SENTRY_DSN to enable)")
 
 def capture_error(exc: Exception, context: dict = None):
     """Capture an error to Sentry and local store."""

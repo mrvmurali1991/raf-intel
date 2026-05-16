@@ -1,0 +1,36 @@
+# Prometheus scrape config — RAF Intelligence observability stack.
+#
+# Scrapes the FastAPI backend's auth-gated /metrics endpoint.  Set
+# METRICS_BASIC_AUTH_USER / METRICS_BASIC_AUTH_PASSWORD in the Prometheus
+# container's environment and reference them here via $-substitution.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: raf-intelligence
+    env: ${PROM_ENV:-production}
+
+scrape_configs:
+
+  # FastAPI backend — /metrics is auth-gated by app/main.py middleware.
+  - job_name: raf-backend
+    metrics_path: /metrics
+    # When METRICS_BASIC_AUTH_USER/PASSWORD are set on the backend, fill
+    # these in via env-templated reload or a secrets file mount.
+    # basic_auth:
+    #   username: ${METRICS_BASIC_AUTH_USER}
+    #   password_file: /etc/prometheus/secrets/metrics_password
+    static_configs:
+      - targets:
+          # `host.docker.internal` works on Docker Desktop; on Linux hosts
+          # set extra_hosts or use the backend container name on a shared
+          # network.
+          - host.docker.internal:8500
+        labels:
+          service: raf-backend
+
+  # Prometheus self-scrape — sanity check for the stack itself.
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
