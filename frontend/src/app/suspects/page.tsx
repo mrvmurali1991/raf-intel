@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DataQualityBanner from "@/components/DataQualityBanner";
@@ -41,6 +42,19 @@ import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import FeatureFlag from "@/components/FeatureFlag";
 import { KgGapBadge } from "@/components/kg/KgGapBadge";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
+// ── Dynamic import: defer SuspectDrawer expanded-row detail (~30 kB) ──
+// Only loaded when the user clicks a row to expand it.
+const SuspectDrawerDynamic = dynamic(
+  () => import("./SuspectDrawer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ padding: "20px 22px", background: "rgba(248,250,252,0.8)", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+        <div style={{ height: 100, borderRadius: 10, background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
+      </div>
+    ),
+  }
+);
 
 /* ================================================================== */
 /*  Page-specific constants                                            */
@@ -1624,7 +1638,7 @@ export default function SuspectsPage() {
               </div>
             </div>
             {isExpanded && (
-              <SuspectDrawer
+              <SuspectDrawerDynamic
                 suspect={s}
                 conf={conf}
                 coef={coef}

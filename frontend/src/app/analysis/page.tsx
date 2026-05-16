@@ -351,8 +351,6 @@ export default function AnalysisPage() {
   const [pastePatientId, setPastePatientId] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedEnc, setSelectedEnc] = useState<number | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [pipelineOpen, setPipelineOpen] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
   const currentYear = new Date().getFullYear();
@@ -393,20 +391,9 @@ export default function AnalysisPage() {
   });
 
   const analyzing = noteMut.isPending || encMut.isPending;
-  const diagnoses = result?.diagnoses ?? [];
-  const hccCount = diagnoses.filter((d) => !!dxHcc(d)).length;
-  const suspects = result?.suspect_conditions ?? [];
-  const confidence = result?.overall_confidence ?? 0;
-  const routing = result?.confidence_routing;
-  const meta = result?._meta;
-
-  function toggle(i: number) {
-    setExpandedRows((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-  }
 
   function analyze() {
     setResult(null);
-    setExpandedRows(new Set());
     if (mode === "paste") {
       if (!noteText.trim()) { toast.warning("Input", "Enter a clinical note"); return; }
       noteMut.mutate();
@@ -422,14 +409,7 @@ export default function AnalysisPage() {
     setPastePatientId("");
     setSelectedPatient(null);
     setSelectedEnc(null);
-    setExpandedRows(new Set());
   }
-
-  const meatCount = diagnoses.reduce((sum, dx) => {
-    const keys = ["monitoring", "evaluation", "assessment", "treatment"] as const;
-    return sum + keys.filter((k) => !!meatVal(dx, k)).length;
-  }, 0);
-  const meatTotal = diagnoses.length * 4;
 
   const label: React.CSSProperties = {
     fontSize: 13,
@@ -679,299 +659,9 @@ export default function AnalysisPage() {
 
       {/* ══════════════ RESULTS ══════════════ */}
       {result && !analyzing && (
-        <div className="animate-fade-in">
-          {/* Summary Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
-            {[
-              { label: "Diagnoses", value: diagnoses.length, icon: <FileText size={18} />, color: tokens.white, gradient: "stat-card-blue" },
-              { label: "HCC Codes", value: hccCount, icon: <ShieldCheck size={18} />, color: tokens.white, gradient: "stat-card-emerald" },
-              { label: "Confidence", value: `${Math.round(confidence * 100)}%`, icon: <TrendingUp size={18} />, color: tokens.white, gradient: confidence >= 0.7 ? "stat-card-emerald" : "stat-card-amber" },
-              { label: "MEAT Score", value: `${meatCount}/${meatTotal}`, icon: <Sparkles size={18} />, color: tokens.white, gradient: "stat-card-rose" },
-            ].map((s, i) => (
-              <div key={s.label} className={`${s.gradient} hover-lift animate-fade-in stagger-${i + 1}`} style={{ padding: "18px 20px", borderRadius: 14, display: "flex", alignItems: "center", gap: 14, color: tokens.white }}>
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
-                  {s.icon}
-                </div>
-                <div>
-                  <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ fontSize: 12, opacity: 0.85, marginTop: 3, fontWeight: 500 }}>{s.label}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Routing Banner */}
-          {!!routing && (
-            <div
-              className="premium-card animate-fade-in"
-              style={{
-                padding: "14px 20px",
-                marginBottom: 24,
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                borderLeft: `4px solid ${confidence >= 0.85 ? tokens.success : confidence >= 0.6 ? tokens.warningStrong : tokens.riskHigh}`,
-              }}
-            >
-              {confidence >= 0.85 ? <CheckCircle2 size={20} color={tokens.success} /> : confidence >= 0.6 ? <AlertTriangle size={20} color={tokens.warningStrong} /> : <XCircle size={20} color={tokens.riskHigh} />}
-              <div style={{ flex: 1 }}>
-                <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>
-                  {confidence >= 0.85 ? "Auto-Accept" : confidence >= 0.6 ? "Needs Review" : "Full Audit Required"}
-                </span>
-                <span className="text-muted-foreground" style={{ fontSize: 13, marginLeft: 10 }}>
-                  Overall confidence: {Math.round(confidence * 100)}%
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Diagnoses — card-based layout */}
-          {diagnoses.length > 0 && (
-            <div className="premium-card premium-shadow animate-fade-in" style={{ marginBottom: 24, overflow: "hidden" }}>
-              <SectionHeader
-                icon={<FileText size={16} color={tokens.infoBlue} />}
-                title="Extracted Diagnoses"
-                count={diagnoses.length}
-                countColor={tokens.primary}
-                countBg={tokens.primarySoft}
-              />
-              <div style={{ overflowX: "auto" }}>
-                <table aria-label="Extracted diagnoses" className="premium-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: tokens.slate50, borderBottom: `2px solid ${tokens.slate200}` }}>
-                      <th style={{ width: 32, padding: "12px 8px" }} />
-                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>ICD-10</th>
-                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Description</th>
-                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>HCC</th>
-                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "right", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Coeff</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: tokens.slate500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", minWidth: 130 }}>Confidence</th>
-                      <th className="text-muted-foreground" style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>MEAT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {diagnoses.map((dx, i) => {
-                      const hcc = dxHcc(dx);
-                      const exp = expandedRows.has(i);
-                      return (
-                        <Fragment key={dxIcd10(dx) || i}>
-                          <tr
-                            onClick={() => toggle(i)}
-                            style={{
-                              cursor: "pointer",
-                              borderBottom: `1px solid ${tokens.slate100}`,
-                              borderLeft: hcc ? `3px solid ${tokens.infoBlue}` : "3px solid transparent",
-                              transition: "background 0.15s",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = tokens.slate50)}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = "")}
-                          >
-                            <td style={{ padding: "12px 8px", textAlign: "center" }}>
-                              {exp ? <ChevronDown size={14} color={tokens.infoBlue} /> : <ChevronRight size={14} color={tokens.slate400} />}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}>
-                              <code style={{ fontSize: 12, fontWeight: 700, background: tokens.primarySoft, color: tokens.primaryDark, padding: "4px 8px", borderRadius: 6, border: `1px solid ${tokens.slate200}` }}>{dxIcd10(dx)}</code>
-                            </td>
-                            <td className="text-foreground" style={{ padding: "12px 14px", fontWeight: 500, maxWidth: 280 }}>
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dxCondition(dx)}</div>
-                            </td>
-                            <td style={{ padding: "12px 14px" }}>
-                              {hcc ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, color: tokens.primaryDark, padding: "4px 10px", borderRadius: 8, border: `1px solid ${tokens.slate200}` }}>{hcc}</span>
-                              ) : (
-                                <span style={{ color: tokens.slate300 }}>--</span>
-                              )}
-                            </td>
-                            <td className="text-foreground" style={{ padding: "12px 14px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, fontSize: 13 }}>
-                              {dxCoeff(dx) != null ? dxCoeff(dx)!.toFixed(3) : "--"}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}><ConfBar value={dx.confidence} /></td>
-                            <td style={{ padding: "12px 14px" }}><MeatPills dx={dx} /></td>
-                          </tr>
-                          {exp && (
-                            <tr style={{ background: tokens.slate50 }}>
-                              <td colSpan={7} style={{ padding: "18px 24px 18px 52px" }}>
-                                {dx.supporting_text && (
-                                  <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}` }}>
-                                    <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Supporting Evidence</span>
-                                    <div className="text-foreground" style={{ fontSize: 13, fontStyle: "italic", marginTop: 6, lineHeight: 1.6 }}>&ldquo;{dx.supporting_text}&rdquo;</div>
-                                  </div>
-                                )}
-                                <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>MEAT Documentation</div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-                                  {(["monitoring", "evaluation", "assessment", "treatment"] as const).map((k, idx) => {
-                                    const v = meatVal(dx, k);
-                                    const colors = [tokens.infoBlue, tokens.accentPurple, tokens.warningStrong, tokens.success];
-                                    const bgColors = [tokens.primarySoft, tokens.primarySoft, tokens.warningSoft, tokens.successSoft];
-                                    const letters = ["M", "E", "A", "T"];
-                                    return (
-                                      <div key={k} style={{ padding: "12px 14px", borderRadius: 10, background: v ? bgColors[idx] : tokens.slate50, border: `1px solid ${v ? colors[idx] + "30" : tokens.slate200}`, transition: "all 0.2s" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                                          <div style={{
-                                            width: 22, height: 22, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
-                                            fontSize: 10, fontWeight: 800, background: v ? colors[idx] : tokens.slate300, color: tokens.white,
-                                          }}>
-                                            {letters[idx]}
-                                          </div>
-                                          <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "capitalize" }}>{k}</span>
-                                        </div>
-                                        <div style={{ fontSize: 12, color: v ? tokens.slate700 : tokens.slate400, fontStyle: v ? "normal" : "italic", lineHeight: 1.5 }}>
-                                          {v || "Not documented"}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Suspect Conditions — card-based */}
-          {suspects.length > 0 && (
-            <div className="premium-card premium-shadow animate-fade-in" style={{ marginBottom: 24, overflow: "hidden" }}>
-              <SectionHeader
-                icon={<AlertTriangle size={16} color={tokens.riskMedium} />}
-                title="Suspect Conditions"
-                count={suspects.length}
-                countColor={tokens.riskMedium}
-                countBg={tokens.warningSoft}
-              />
-              <div style={{ padding: "4px 0" }}>
-                {suspects.map((s, i) => (
-                  <div
-                    key={suspIcd(s) || i}
-                    className="hover-lift"
-                    style={{
-                      padding: "16px 20px",
-                      margin: "6px 12px",
-                      borderRadius: 10,
-                      background: tokens.warningSoft,
-                      border: `1px solid ${tokens.warningBorder}`,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: tokens.warningSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <AlertTriangle size={16} color={tokens.riskMedium} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span className="text-foreground" style={{ fontSize: 14, fontWeight: 600 }}>{s.condition || "Unknown"}</span>
-                        <code style={{ fontSize: 11, fontWeight: 700, background: tokens.warningSoft, color: tokens.warningText, padding: "3px 8px", borderRadius: 6, border: `1px solid ${tokens.warningBorder}` }}>{suspIcd(s)}</code>
-                        {(s.hcc_code || s.suspect_hcc) && (
-                          <span style={{ fontSize: 11, fontWeight: 700, background: tokens.primarySoft, color: tokens.primaryDark, padding: "3px 8px", borderRadius: 6, border: `1px solid ${tokens.slate200}` }}>
-                            {s.hcc_code || s.suspect_hcc}
-                          </span>
-                        )}
-                      </div>
-                      {suspEvidence(s) && (
-                        <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 6, lineHeight: 1.6 }}>{suspEvidence(s)}</div>
-                      )}
-                    </div>
-                    <div style={{ width: 120, flexShrink: 0 }}><ConfBar value={suspConf(s)} /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Pipeline Details (collapsible) */}
-          {meta && (
-            <div className="premium-card animate-fade-in" style={{ overflow: "hidden" }}>
-              <button
-                onClick={() => setPipelineOpen(!pipelineOpen)}
-                style={{
-                  width: "100%",
-                  padding: "16px 20px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  borderBottom: pipelineOpen ? `1px solid ${tokens.slate100}` : "none",
-                }}
-              >
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: tokens.slate100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Clock size={15} color={tokens.slate500} />
-                </div>
-                <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Pipeline Details</span>
-                <ChevronDown size={14} color={tokens.slate400} style={{ marginLeft: "auto", transform: pipelineOpen ? "none" : "rotate(-90deg)", transition: "transform 0.2s" }} />
-              </button>
-              {pipelineOpen && (
-                <div style={{ padding: "18px 20px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
-                    {meta.pipeline_version && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Version</div>
-                        <div className="text-foreground" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{meta.pipeline_version}</div>
-                      </div>
-                    )}
-                    {meta.total_time_seconds != null && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Total Time</div>
-                        <div className="text-foreground" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{Number(meta.total_time_seconds).toFixed(1)}s</div>
-                      </div>
-                    )}
-                    {meta.turns != null && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 6 }}>Turns</div>
-                        <div className="text-foreground" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{meta.turns}</div>
-                      </div>
-                    )}
-                  </div>
-                  {(meta.stages?.length ?? 0) > 0 && (
-                    <div style={{ marginTop: 16 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 8 }}>Stages</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {meta.stages!.map((s: string, i: number) => (
-                          <span key={i} style={{ fontSize: 11, fontFamily: "monospace", padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate200}`, color: tokens.slate500, background: tokens.slate50 }}>{s}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {meta.timings && Object.keys(meta.timings).length > 0 && (
-                    <div style={{ marginTop: 16 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: tokens.slate400, textTransform: "uppercase", marginBottom: 8 }}>Timing</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
-                        {Object.entries(meta.timings).map(([k, v]) => (
-                          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: tokens.slate50, border: `1px solid ${tokens.slate100}`, fontSize: 12 }}>
-                            <span className="text-muted-foreground" style={{ fontFamily: "monospace" }}>{k}</span>
-                            <span className="text-foreground" style={{ fontFamily: "monospace", fontWeight: 700 }}>
-                              {typeof v === "number" ? `${(v as number).toFixed(2)}s` : String(v)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Coding Notes */}
-          {result.coding_notes && (
-            <div className="premium-card animate-fade-in" style={{ padding: "18px 20px", marginTop: 20 }}>
-              <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: tokens.slate100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <FileText size={13} color={tokens.slate500} />
-                </div>
-                Coding Notes
-              </div>
-              <div style={{ fontSize: 13, color: tokens.slate500, lineHeight: 1.7, whiteSpace: "pre-wrap", padding: "14px 16px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>{result.coding_notes}</div>
-            </div>
-          )}
-        </div>
+        // AnalysisResultsPanel is dynamically imported — deferred ~40 kB of
+        // diagnoses table, MEAT grid, suspects list, and pipeline details.
+        <AnalysisResultsPanel result={result} />
       )}
     </div>
   );

@@ -8,25 +8,20 @@ import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, Arrow
 import { getRecaptureGapsReport } from "@/lib/api";
 import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
-import AuditReadinessCard from "@/components/AuditReadinessCard";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import { tokens } from "@/styles/tokens";
-import RecaptureAuditExportButton from "@/components/RecaptureAuditExportButton";
-// Recharts-heavy components are dynamically imported so the initial bundle
-// does not pay the ~250 kB Recharts parse cost on every page load.
-const RecaptureVelocityKpis = dynamic(
-  () => import("@/components/RecaptureVelocityKpis"),
-  { ssr: false }
-);
-const RecaptureDecayChart = dynamic(
-  () => import("@/components/RecaptureDecayChart"),
-  { ssr: false }
-);
-import OutreachSummaryCards from "@/components/OutreachSummaryCards";
-import { BonusLeaderboard } from "@/components/BonusLeaderboard";
-import CfoExecutiveSummary from "@/components/CfoExecutiveSummary";
 import { KgGapBadge } from "@/components/kg/KgGapBadge";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
+// Feature-flagged secondary sections are lazy-loaded to defer ~60 kB
+// (CfoExecutiveSummary, BonusLeaderboard, OutreachSummaryCards, AuditReadinessCard,
+// RecaptureVelocityKpis, RecaptureDecayChart) that are hidden behind feature flags.
+const RecaptureFeatureSections = dynamic(
+  () => import("./RecaptureFeatureSections"),
+  {
+    ssr: false,
+    loading: () => <div style={{ height: 40 }} />,
+  }
+);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -582,78 +577,8 @@ export default function RecapturePage() {
           beneath the priority worklist.
           ════════════════════════════════════════════════════════════════════ */}
 
-      {/* Velocity KPIs + decay curve — show recapture-rate dynamics over time */}
-      <FeatureFlag flagKey="recapture_decay_curve">
-        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-              Recapture velocity & decay
-            </h2>
-            <div style={{ marginBottom: 16 }}>
-              <RecaptureVelocityKpis />
-            </div>
-            <RecaptureDecayChart />
-          </div>
-        </div>
-      </FeatureFlag>
-
-      {/* CFO executive summary — quarterly forecast, top conditions, top providers */}
-      <FeatureFlag flagKey="recapture_cfo_forecast">
-        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-              CFO executive summary
-            </h2>
-            <CfoExecutiveSummary year={year} />
-          </div>
-        </div>
-      </FeatureFlag>
-
-      {/* Bonus leaderboard — coder ranking by $ recaptured this period */}
-      <FeatureFlag flagKey="recapture_bonus">
-        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-              Coder bonus leaderboard
-            </h2>
-            <BonusLeaderboard />
-          </div>
-        </div>
-      </FeatureFlag>
-
-      {/* Outreach summary — channel mix, response rate, last-touch metrics */}
-      <FeatureFlag flagKey="recapture_outreach">
-        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-              Patient outreach
-            </h2>
-            <OutreachSummaryCards />
-          </div>
-        </div>
-      </FeatureFlag>
-
-      {/* RADV Dual-Coder MEAT Audit (feature-gated) */}
-      <FeatureFlag flagKey="recapture_meat_audit">
-        <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 12,
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.slate900 }}>
-                RADV Audit Defense
-              </h2>
-              <RecaptureAuditExportButton year={year} />
-            </div>
-            <AuditReadinessCard />
-          </div>
-        </div>
-      </FeatureFlag>
+      {/* Feature-flagged secondary sections — lazy-loaded (~60 kB deferred) */}
+      <RecaptureFeatureSections year={year} />
 
       {/* Action Panel — final bento row spans the full 12 columns. */}
       <div
