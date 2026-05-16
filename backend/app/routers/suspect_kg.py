@@ -19,9 +19,10 @@ GET  /api/suspects/kg-detect/distribution
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.auth import get_current_user, require_permission
 from app.services.knowledge_graph.suspect_kg_orchestrator import (
     get_evidence_chain,
     get_evidence_type_distribution,
@@ -55,6 +56,8 @@ class KgDetectRequest(BaseModel):
 def kg_detect(
     patient_id: int,
     body: KgDetectRequest | None = Body(default=None),
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("patients", "write")),
 ) -> dict[str, Any]:
     """
     Execute the KG-first → LLM-augmented suspect pipeline for *patient_id*.
@@ -103,6 +106,8 @@ def kg_detect(
 def kg_evidence_distribution(
     patient_id: int | None = Query(default=None),
     year: int | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("patients", "read")),
 ) -> dict[str, Any]:
     """
     Return a count of raf_suspect_conditions rows grouped by
@@ -133,7 +138,11 @@ def kg_evidence_distribution(
     "/{suspect_id}/evidence-chain",
     summary="Full KG attribution chain for one suspect",
 )
-def evidence_chain(suspect_id: int) -> dict[str, Any]:
+def evidence_chain(
+    suspect_id: int,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("patients", "read")),
+) -> dict[str, Any]:
     """
     Return the persisted suspect plus its parsed ``evidence_detail`` JSON.
 

@@ -47,6 +47,12 @@ export interface AcceptConfirmSuspect {
   meat_count?: number | null;
   clinical_rule_violation?: boolean | string | null;
   expected_dollar_impact?: number | null;
+  /** CMS-HCC model version that will determine the RAF coefficient
+   *  for this accepted suspect. Surfaced to clinicians so they know
+   *  whether they are attesting under V24, V28, or a blended PY model —
+   *  patient-safety review #4. */
+  model_version?: string | null;
+  measurement_year?: number | null;
   patient_name?: string | null;
 }
 
@@ -66,10 +72,16 @@ export interface AcceptConfirmDialogProps {
 // Defense basis options — single source here so Agent-N can mirror them
 // ---------------------------------------------------------------------------
 
+// Defense basis options offered to the clinician when overriding the
+// Accept gate. "Re-billing correction" was removed in 2026-05 after the
+// patient-safety review (#6) flagged it as regulatory red-flag language —
+// CMS auditors treat "we accepted this to bill for it later" as prima
+// facie evidence of upcoding intent. Use the chart-evidence option when
+// late-arriving documentation supports the diagnosis.
 export const DEFENSE_BASIS_OPTIONS = [
   "Provider clinical judgment",
   "Additional chart evidence exists",
-  "Override for re-billing correction",
+  "Late-arriving lab or imaging result",
   "Other (explain)",
 ] as const;
 
@@ -190,6 +202,26 @@ function AcceptConfirmDialogInner({
         {suspectLabel && (
           <p className="text-xs text-muted-foreground truncate">{suspectLabel}</p>
         )}
+
+        {/* Billing-record attestation notice — explicit so clinicians know
+            what they are signing. Added 2026-05 after patient-safety review
+            #6 flagged that "Accept with caution" alone did not convey that
+            this writes a diagnosis to the patient's billing record. */}
+        <div
+          className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs text-blue-900 dark:text-blue-200"
+          role="note"
+          aria-label="Billing attestation notice"
+        >
+          By clicking <strong>Accept</strong>, you attest that you have reviewed
+          the MEAT documentation and that this diagnosis reflects the patient&apos;s
+          current clinical status. This will insert ICD-10
+          {suspect.icd10_code ? ` ${suspect.icd10_code}` : ""} into the
+          patient&apos;s problem list and submit it for risk-adjustment billing
+          {suspect.model_version
+            ? ` under CMS-HCC ${String(suspect.model_version).toUpperCase()}`
+            : ""}
+          {suspect.measurement_year ? ` for PY${suspect.measurement_year}` : ""}.
+        </div>
 
         {/* Risk checklist */}
         <div

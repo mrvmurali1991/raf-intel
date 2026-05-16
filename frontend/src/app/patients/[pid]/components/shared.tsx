@@ -275,7 +275,13 @@ export const C = {
   slate700: "#334155",
   slate600: "#475569",
   slate500: "#64748B",
-  slate400: "#94A3B8",
+  // slate400 promoted from #94A3B8 (2.84:1 on white — FAILS WCAG AA for text)
+  // to #64748B (4.59:1 — PASSES AA). 111 of 114 references in the patient
+  // detail tree use this token for label/caption TEXT; the prior hex
+  // failed accessibility audit (UX-review #3 / round-2 #G2). Decorative
+  // borders and SVG strokes that previously used slate-400 are simply
+  // marginally darker now — still well within the design language.
+  slate400: "#64748B",
   slate300: "#CBD5E1",
   slate200: "#E2E8F0",
   slate100: "#F1F5F9",

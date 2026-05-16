@@ -31,12 +31,21 @@ export function MEATSection({
   // Suppress unused warning — setFilter is passed as onFilterChange if not controlled
   void setFilter;
 
+  // Empty-state semantics:
+  //   - gaps == [] AND we know the patient has NO HCCs → neutral "nothing to
+  //     document yet" message (NOT a success — there's nothing to succeed at).
+  //   - gaps == [] AND the patient has HCCs → success "all documented".
+  // Previously this rendered a green "All MEAT elements documented" tile
+  // even when the year filter was wrong / the breakdown hadn't loaded /
+  // the patient simply has no HCCs yet — a dangerous false-positive that
+  // told the clinician "you're done" when they were not (UX review #6).
+  // Without knowing the HCC count locally we default to the neutral copy.
   if (!gaps.length)
     return (
       <EmptyState
-        variant="success"
-        title="All MEAT elements documented"
-        subtitle="Accept a suspect below to add conditions requiring evidence."
+        variant="default"
+        title="No HCCs require MEAT documentation"
+        subtitle="Either this patient has no risk-adjusted conditions for the selected year, or the panel is still loading. Switch year filter if expected HCCs are missing."
       />
     );
 
@@ -46,7 +55,7 @@ export function MEATSection({
       return true;
     })
     .sort((a, b) => {
-      if (filter === "high-impact") return b.coefficient - a.coefficient;
+      if (filter === "high-impact") return (b.coefficient ?? 0) - (a.coefficient ?? 0);
       return 0;
     });
 

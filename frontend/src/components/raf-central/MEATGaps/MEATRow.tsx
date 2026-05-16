@@ -62,7 +62,7 @@ export function MEATRow({
     ? "text-amber-700 dark:text-amber-400"
     : "text-red-700 dark:text-red-400";
 
-  const missing = Object.entries(gap.gaps)
+  const missing = Object.entries(gap.gaps ?? {})
     .filter(([, on]) => !on)
     .map(([k]) => k);
   const missingLabel = missing.map((k) => k[0].toUpperCase() + k.slice(1)).join(", ");
@@ -117,7 +117,7 @@ export function MEATRow({
           <span className={cn("text-[11px] font-semibold", statusClass)}>{statusLabel}</span>
           <Tooltip text="Model coefficient contribution to RAF score">
             <span className="text-[10px] text-muted-foreground/70 tabular-nums cursor-default">
-              coef {gap.coefficient.toFixed(3)}
+              coef {(gap.coefficient ?? 0).toFixed(3)}
             </span>
           </Tooltip>
         </div>
@@ -170,7 +170,7 @@ export function MEATRow({
                       <OrderLabButton
                         patientId={patientId}
                         hccCode={gap.hcc}
-                        icd10={gap.icd10_codes[0] || ""}
+                        icd10={(gap.icd10_codes ?? [])[0] || ""}
                         onOrdered={() => { setOverflowOpen(false); onChange(); }}
                       />
                     </div>
@@ -180,7 +180,7 @@ export function MEATRow({
                       <StartTreatmentButton
                         patientId={patientId}
                         hccCode={gap.hcc}
-                        icd10={gap.icd10_codes[0] ?? ""}
+                        icd10={(gap.icd10_codes ?? [])[0] ?? ""}
                         onStarted={() => { setOverflowOpen(false); onChange(); }}
                       />
                     </div>

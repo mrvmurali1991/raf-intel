@@ -90,8 +90,8 @@ class AWVChecklistResponse(_AWVBase):
 class AWVChecklistItemResponse(_AWVBase):
     id: int
     awv_id: int
-    phase: str
-    item_key: str
+    checklist_type: str
+    item_name: str
     completed: bool
 
 
@@ -156,7 +156,7 @@ def get_eligible_patients(
     try:
         result = svc.get_eligible_patients(tenant_id=tenant_id, year=calc_year)
     except Exception as exc:
-        logger.error("get_eligible_patients error: %s", exc, exc_info=True)
+        logger.exception("get_eligible_patients error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if sort != "priority":
@@ -267,7 +267,7 @@ def get_priority_list(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("get_priority_list error: %s", exc, exc_info=True)
+        logger.exception("get_priority_list error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -303,7 +303,7 @@ def get_dashboard(
     try:
         return svc.get_dashboard(tenant_id=tenant_id, year=calc_year)
     except Exception as exc:
-        logger.error("get_dashboard error: %s", exc, exc_info=True)
+        logger.exception("get_dashboard error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -353,7 +353,7 @@ def bulk_outreach(
             max_patients=max_patients,
         )
     except Exception as exc:
-        logger.error("bulk_outreach error: %s", exc, exc_info=True)
+        logger.exception("bulk_outreach error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -397,7 +397,7 @@ def list_schedules(
             offset=offset,
         )
     except Exception as exc:
-        logger.error("list_schedules error: %s", exc, exc_info=True)
+        logger.exception("list_schedules error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -469,7 +469,7 @@ def create_schedule(
                 status_code=409,
                 detail=f"An AWV schedule already exists for patient {patient_id} in {schedule_year}",
             )
-        logger.error("create_schedule error: %s", exc, exc_info=True)
+        logger.exception("create_schedule error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -528,7 +528,7 @@ def update_schedule(
     try:
         result = svc.update_schedule(awv_id, body)
     except Exception as exc:
-        logger.error("update_schedule error awv_id=%s: %s", awv_id, exc, exc_info=True)
+        logger.exception("update_schedule error awv_id=%s: %s", awv_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return result
 
@@ -577,7 +577,7 @@ def set_appointment(
             notes=body.get("notes"),
         )
     except Exception as exc:
-        logger.error("set_appointment error awv_id=%s: %s", awv_id, exc, exc_info=True)
+        logger.exception("set_appointment error awv_id=%s: %s", awv_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -641,7 +641,7 @@ def complete_schedule(
             notes=body.get("notes"),
         )
     except Exception as exc:
-        logger.error("complete_schedule error awv_id=%s: %s", awv_id, exc, exc_info=True)
+        logger.exception("complete_schedule error awv_id=%s: %s", awv_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -697,7 +697,7 @@ def log_outreach(
             contact_date=body.get("contact_date"),
         )
     except Exception as exc:
-        logger.error("log_outreach error awv_id=%s: %s", awv_id, exc, exc_info=True)
+        logger.exception("log_outreach error awv_id=%s: %s", awv_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -732,7 +732,7 @@ def get_checklist(
     try:
         return svc.get_checklist(awv_id)
     except Exception as exc:
-        logger.error("get_checklist error awv_id=%s: %s", awv_id, exc, exc_info=True)
+        logger.exception("get_checklist error awv_id=%s: %s", awv_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -777,7 +777,7 @@ def mark_checklist_item(
             completed_by=current_user.get("id"),
         )
     except Exception as exc:
-        logger.error("mark_checklist_item error awv_id=%s item_id=%s: %s", awv_id, item_id, exc, exc_info=True)
+        logger.exception("mark_checklist_item error awv_id=%s item_id=%s: %s", awv_id, item_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if result is None:

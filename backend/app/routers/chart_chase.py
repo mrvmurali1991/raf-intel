@@ -187,7 +187,7 @@ def list_chases(
             offset=offset,
         )
     except Exception as exc:
-        logger.error("list_chases failed: %s", exc)
+        logger.exception("list_chases failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"count": len(chases), "chases": chases}
@@ -215,7 +215,7 @@ def dashboard(
     try:
         return svc.get_dashboard(tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("dashboard failed: %s", exc)
+        logger.exception("dashboard failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -233,7 +233,7 @@ def list_templates(
     try:
         templates = svc.list_templates(tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("list_templates failed: %s", exc)
+        logger.exception("list_templates failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"count": len(templates), "templates": templates}
@@ -267,7 +267,7 @@ def create_template(
     try:
         template = svc.create_template({**body.model_dump(), "tenant_id": tenant_id})
     except Exception as exc:
-        logger.error("create_template failed: %s", exc)
+        logger.exception("create_template failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     result = {"status": "created", "template": template}
@@ -315,7 +315,7 @@ def bulk_create(
             default_due_days=body.default_due_days,
         )
     except Exception as exc:
-        logger.error("bulk_create failed: %s", exc)
+        logger.exception("bulk_create failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     store_idempotent_response(request, response, result)
@@ -359,7 +359,7 @@ def create_chase(
     try:
         chase = svc.create_chase(data)
     except Exception as exc:
-        logger.error("create_chase failed: %s", exc)
+        logger.exception("create_chase failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     result = {"status": "created", "chase": chase}
@@ -385,7 +385,7 @@ def get_chase(
         logger.warning("get_chase id=%s not found: %s", chase_id, exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
-        logger.error("get_chase id=%s: %s", chase_id, exc)
+        logger.exception("get_chase id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"chase": chase}
@@ -422,7 +422,7 @@ def update_chase(
         logger.warning("update_chase id=%s not found: %s", chase_id, exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
-        logger.error("update_chase id=%s: %s", chase_id, exc)
+        logger.exception("update_chase id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "updated", "chase": chase}
@@ -474,7 +474,7 @@ def log_attempt(
         logger.warning("log_attempt chase_id=%s validation error: %s", chase_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("log_attempt chase_id=%s: %s", chase_id, exc)
+        logger.exception("log_attempt chase_id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "attempt_logged", "chase": chase}
@@ -518,7 +518,7 @@ def receive_chase(
         logger.warning("receive_chase id=%s validation error: %s", chase_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("receive_chase id=%s: %s", chase_id, exc)
+        logger.exception("receive_chase id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "received", "chase": chase}
@@ -550,7 +550,7 @@ def cancel_chase(
         logger.warning("cancel_chase id=%s not found: %s", chase_id, exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
-        logger.error("cancel_chase id=%s: %s", chase_id, exc)
+        logger.exception("cancel_chase id=%s: %s", chase_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "cancelled", "chase": chase}

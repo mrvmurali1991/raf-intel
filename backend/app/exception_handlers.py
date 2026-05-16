@@ -14,8 +14,9 @@ import logging
 import os
 
 from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError as PydanticValidationError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -74,16 +75,123 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _validation_error_handler(
         request: Request, exc: RequestValidationError
     ):
+        try:
+            raw_errors = exc.errors()
+        except Exception:
+            raw_errors = []
         logger.error(
             "Validation error on %s %s: %s",
             request.method,
             request.url.path,
-            exc.errors(),
+            raw_errors,
         )
+        # Build a human-readable, field-specific detail message AND surface
+        # the structured `errors` array so the frontend can render per-field
+        # validation feedback. Previously the response was the opaque string
+        # "Validation error. Check your request parameters." which left RADV
+        # reviewers/coders unable to self-correct — HCC-review round-3 #2.
+        compact: list[dict[str, Any]] = []
+        for e in raw_errors[:8]:
+            loc = ".".join(str(x) for x in (e.get("loc") or ()) if x not in ("body", "query", "path"))
+            msg = str(e.get("msg") or "").strip()
+            etype = str(e.get("type") or "").strip()
+            compact.append({"field": loc or "request", "message": msg, "type": etype})
+        if compact:
+            first = compact[0]
+            detail = f"{first['field']}: {first['message']}" if first["field"] != "request" else first["message"]
+        else:
+            detail = "Validation error. Check your request parameters."
         return JSONResponse(
             status_code=422,
             headers=_cors_headers_for_request(request),
-            content={"detail": "Validation error. Check your request parameters."},
+            content={"detail": detail, "errors": compact},
+        )
+
+    @app.exception_handler(ResponseValidationError)
+    async def _response_validation_handler(
+        request: Request, exc: ResponseValidationError
+    ):
+        """
+        FastAPI raises ResponseValidationError when a route handler returns a
+        dict that doesn't match its declared ``response_model``. Before this
+        handler existed, bare ``except Exception`` blocks in routers swallowed
+        these into opaque 500s — the SDOH / vitals-suspects / lab-suspects
+        regressions all reached production this way. Capture the full
+        ``.errors()`` payload (field name, expected type, input) so the dev
+        log alone is enough to identify the offending field without
+        re-running the request.
+        """
+        request_id = getattr(request.state, "request_id", "unknown")
+        try:
+            errors = exc.errors()
+        except Exception:  # pragma: no cover — defensive
+            errors = [{"msg": str(exc)}]
+        logger.error(
+            "Response model validation failed on %s %s [request_id=%s] errors=%s",
+            request.method,
+            request.url.path,
+            request_id,
+            errors,
+            exc_info=True,
+        )
+        capture_error(
+            exc,
+            context={
+                "method": request.method,
+                "path": request.url.path,
+                "request_id": request_id,
+                "validation_errors": errors,
+            },
+        )
+        return JSONResponse(
+            status_code=500,
+            headers=_cors_headers_for_request(request),
+            content={
+                "detail": "Response model validation error",
+                "request_id": request_id,
+            },
+        )
+
+    @app.exception_handler(PydanticValidationError)
+    async def _pydantic_validation_handler(
+        request: Request, exc: PydanticValidationError
+    ):
+        """
+        Catches Pydantic ValidationError raised *inside* a route body when a
+        handler does ``ResponseModel(**service_dict)`` directly (the pattern
+        in patients.py that produced today's three regressions). Same
+        diagnostic payload as ResponseValidationError above so the cause is
+        visible in logs without a debugger.
+        """
+        request_id = getattr(request.state, "request_id", "unknown")
+        try:
+            errors = exc.errors()
+        except Exception:  # pragma: no cover
+            errors = [{"msg": str(exc)}]
+        logger.error(
+            "Pydantic validation failed on %s %s [request_id=%s] errors=%s",
+            request.method,
+            request.url.path,
+            request_id,
+            errors,
+            exc_info=True,
+        )
+        capture_error(
+            exc,
+            context={
+                "method": request.method,
+                "path": request.url.path,
+                "request_id": request_id,
+                "validation_errors": errors,
+            },
+        )
+        return JSONResponse(
+            status_code=500,
+            headers=_cors_headers_for_request(request),
+            content={
+                "detail": "Internal validation error",
+                "request_id": request_id,
+            },
         )
 
     @app.exception_handler(NoActiveEMRConnection)

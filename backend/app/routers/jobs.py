@@ -136,7 +136,7 @@ def _fetch_jobs(
     where = "WHERE " + " AND ".join(clauses)
     sql = f"""
         SELECT id, task_name, status, progress, total, tenant_id, submitted_by,
-               args_json, result_json, error_message, started_at, completed_at AS finished_at, created_at
+               args_json, result_json, error_message, started_at, finished_at, created_at
           FROM raf_jobs
          {where}
           ORDER BY created_at DESC

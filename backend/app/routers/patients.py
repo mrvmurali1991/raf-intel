@@ -78,12 +78,34 @@ def _to_patient_summary(row: dict[str, Any]) -> PatientSummary:
     except (TypeError, ValueError):
         emr_pid_val = None
 
+    patient_id = int(row.get("id") or row.get("pid") or 0)
+    dob_val = (row.get("dob") or row.get("DOB") or None) or None
+
+    def _float_or_none(v: Any) -> float | None:
+        try:
+            return float(v) if v is not None and v != "" else None
+        except (TypeError, ValueError):
+            return None
+
     return PatientSummary(
-        id=int(row.get("id") or row.get("pid") or 0),
+        id=patient_id,
+        pid=patient_id,
         name=name,
-        dob=(row.get("dob") or row.get("DOB") or None) or None,
+        fname=row.get("fname") or row.get("first_name") or None,
+        lname=row.get("lname") or row.get("last_name") or None,
+        dob=dob_val,
+        DOB=dob_val,
+        sex=row.get("sex") or None,
+        city=row.get("city") or None,
+        state=row.get("state") or None,
+        postal_code=row.get("postal_code") or None,
+        data_source=row.get("data_source") or None,
         emr_pid=emr_pid_val,
         raf_score=raf_val,
+        hcc_count=int(row["hcc_count"]) if row.get("hcc_count") is not None else None,
+        demographic_score=_float_or_none(row.get("demographic_score")),
+        disease_score=_float_or_none(row.get("disease_score")),
+        interaction_score=_float_or_none(row.get("interaction_score")),
         tenant_id=str(row["tenant_id"]) if row.get("tenant_id") is not None else None,
         mrn=row.get("mrn") or None,
     )
@@ -1472,8 +1494,8 @@ def get_immunizations(
 )
 def get_hedis_compliance(
     pid: int,
-    year: int = Query(
-        default=0,
+    year: int | None = Query(
+        default=None,
         ge=2000,
         le=2100,
         description="Measurement year.  Defaults to the current calendar year.",

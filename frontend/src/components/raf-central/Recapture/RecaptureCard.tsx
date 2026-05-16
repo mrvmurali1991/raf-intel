@@ -15,7 +15,7 @@ export function RecaptureCard({ item }: { item: RecaptureCardType }) {
         </div>
       </div>
       <div className="text-xs font-bold text-amber-700 dark:text-amber-400 tabular-nums flex-shrink-0">
-        ${item.revenue_at_risk.toLocaleString()}
+        ${(item.revenue_at_risk ?? 0).toLocaleString()}
       </div>
     </div>
   );

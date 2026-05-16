@@ -19,7 +19,7 @@ export function LetterDots({
     { key: "assess", letter: "A", on: "bg-amber-500", label: "Assess" },
     { key: "treat", letter: "T", on: "bg-emerald-500", label: "Treat" },
   ] as const;
-  const dim = size === "sm" ? "h-4 w-4 text-[9px]" : "h-5 w-5 text-[10px]";
+  const dim = size === "sm" ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-[11px]";
   return (
     <div className="flex gap-1">
       {items.map(({ key, letter, on: onColor, label }) => {

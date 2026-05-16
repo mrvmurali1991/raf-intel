@@ -192,28 +192,28 @@ def get_eligible_patients(tenant_id: str, year: int) -> dict[str, Any]:
     # All patients from raf_intelligence.patients (including FHIR-synced ones)
     # Names are resolved from emr_patient_matches when the patients row has blank
     # first_name / last_name (common for FHIR-sourced patients).
-    _sf, _sp = active_patients_subquery(tid, patient_id_column="id")
+    _sf, _sp = active_patients_subquery(tid, patient_id_column="p.id")
     with raf_cursor() as cur:
+        # emr_patient_matches doesn't carry first_name/last_name (it only maps
+        # internal pid <-> external EMR/FHIR ids), so we read names directly
+        # from the patients table. FHIR-sourced patients have these populated
+        # by the FHIR sync worker.
         cur.execute(
             f"""
             SELECT p.id AS pid,
-                   COALESCE(NULLIF(p.first_name, ''), epm.first_name) AS fname,
-                   COALESCE(NULLIF(p.last_name,  ''), epm.last_name)  AS lname,
+                   p.first_name AS fname,
+                   p.last_name  AS lname,
                    p.dob AS dob, p.sex,
                    p.phone AS phone_home, p.phone AS phone_cell,
                    p.address AS street, p.city, p.state,
                    p.zip AS postal_code, pp.provider_id AS providerID
             FROM patients p
-            LEFT JOIN emr_patient_matches epm
-                   ON  epm.patient_id = p.id
-                   AND epm.tenant_id  = %s
-            LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id AND pp.is_active = 1
+            LEFT JOIN provider_patient_panel pp ON pp.patient_id = p.id
             WHERE p.is_active = 1 AND {_sf}
               AND p.tenant_id = %s
-            ORDER BY COALESCE(NULLIF(p.last_name, ''), epm.last_name),
-                     COALESCE(NULLIF(p.first_name, ''), epm.first_name)
+            ORDER BY p.last_name, p.first_name
             """,
-            (tid, *_sp, tid),
+            (*_sp, tid),
         )
         all_patients = cur.fetchall()
 
@@ -362,7 +362,7 @@ def list_schedules(
         "total": total,
         "limit": limit,
         "offset": offset,
-        "items": [_serialize_row(r) for r in rows],
+        "schedules": [_serialize_row(r) for r in rows],
     }
 
 
@@ -899,7 +899,12 @@ def create_bulk_outreach(
         target_rows = cur.fetchall()
 
     if not target_rows:
-        return {"created": 0, "awv_ids": [], "method": method}
+        return {
+            "created": 0,
+            "awv_ids": [],
+            "method": method,
+            "campaign_date": date.today().isoformat(),
+        }
 
     awv_ids = [int(r["id"]) for r in target_rows]
     ts = datetime.now(timezone.utc).isoformat(sep=" ", timespec="seconds")

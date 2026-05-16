@@ -277,8 +277,11 @@ export function RAFCentralPanel({
 
   if (!data) return null;
 
-  const incompleteGaps = data.meat_gaps.filter((g) => g.status !== "COMPLETE");
-  const openSuspects = data.suspects.filter((s) => s.status !== "dismissed");
+  const meatGaps = data.meat_gaps ?? [];
+  const suspectsList = data.suspects ?? [];
+  const recaptureList = data.recapture ?? [];
+  const incompleteGaps = meatGaps.filter((g) => g.status !== "COMPLETE");
+  const openSuspects = suspectsList.filter((s) => s.status !== "dismissed");
   const actionCount = incompleteGaps.length + openSuspects.length;
 
   const scrollToMeat = () => {
@@ -306,42 +309,40 @@ export function RAFCentralPanel({
         {/* ── Top strip: patient header + RAF gauge + controls ─────────── */}
         <header className="border-b bg-gradient-to-br from-background to-muted/40 dark:from-background dark:to-muted/20 px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            {/* Left: RAF gauge hero + identity */}
+            {/* Left: compact score + identity (gauge replaced to save vertical space) */}
             <div className="flex items-center gap-6">
-              <RAFGauge
-                score={data.raf_score.current}
-                delta={data.raf_score.delta}
-                year={data.raf_score.year}
-              />
               <div>
                 <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
                   RAF Intelligence
                 </div>
-                <div className="mt-0.5 text-xl font-bold text-foreground">
-                  Patient {data.patient_id}
-                  <span className="ml-2 text-base font-normal text-muted-foreground">
-                    · PY{data.measurement_year}
+                {/* Score as large plain text alongside sparkline */}
+                <div className="mt-1 flex items-end gap-3">
+                  <span className="text-4xl font-extrabold tabular-nums leading-none text-foreground">
+                    {Number(data.raf_score?.current ?? 0).toFixed(2)}
                   </span>
+                  {data.raf_score?.prior_year != null && (
+                    <div className="flex flex-col gap-0.5 pb-0.5">
+                      <SparklineTrend
+                        prior={data.raf_score.prior_year}
+                        current={data.raf_score.current}
+                        projected={data.financial_impact.projected_raf}
+                      />
+                      <span className="text-[10px] text-muted-foreground">
+                        prior → now → projected
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {/* Sparkline trend */}
-                {data.raf_score.prior_year !== null && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <SparklineTrend
-                      prior={data.raf_score.prior_year}
-                      current={data.raf_score.current}
-                      projected={data.financial_impact.projected_raf}
-                    />
-                    <span className="text-[11px] text-muted-foreground">
-                      prior → current → projected
-                    </span>
-                  </div>
-                )}
-                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="font-medium">{data.raf_score.hcc_count} HCCs</span>
+                <div className="mt-0.5 text-sm font-normal text-muted-foreground">
+                  Patient {data.patient_id}
+                  <span className="ml-2">· PY{data.measurement_year}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="font-medium">{data.raf_score?.hcc_count ?? 0} HCCs</span>
                   <span className="text-border">·</span>
-                  <span>{data.raf_score.model_segment}</span>
+                  <span>{data.raf_score?.model_segment ?? "—"}</span>
                   <span className="text-border">·</span>
-                  <span className="uppercase">{data.raf_score.model_version}</span>
+                  <span className="uppercase">{data.raf_score?.model_version ?? ""}</span>
                 </div>
               </div>
             </div>
@@ -394,12 +395,12 @@ export function RAFCentralPanel({
                 <Badge
                   className={cn(
                     "ml-1 text-[10px] font-semibold border-0",
-                    data.meat_gaps.length === 0
+                    meatGaps.length === 0
                       ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                       : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
                   )}
                 >
-                  {data.meat_gaps.length}
+                  {meatGaps.length}
                 </Badge>
                 <div className="ml-auto relative">
                   <select
@@ -419,7 +420,7 @@ export function RAFCentralPanel({
                 <MEATSection
                   patientId={patientId}
                   year={year}
-                  gaps={data.meat_gaps}
+                  gaps={meatGaps}
                   onChange={fetchPanel}
                   filter={dashMeatFilter}
                   onFilterChange={setDashMeatFilter}
@@ -440,19 +441,21 @@ export function RAFCentralPanel({
                 <Badge
                   className={cn(
                     "ml-1 text-[10px] font-semibold border-0",
-                    data.suspects.length === 0
+                    suspectsList.length === 0
                       ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                       : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
                   )}
                 >
-                  {data.suspects.length}
+                  {suspectsList.length}
                 </Badge>
               </div>
               <div className="px-5 py-4">
                 <SuspectsSection
                   patientId={patientId}
-                  suspects={data.suspects}
+                  suspects={suspectsList}
                   onChange={fetchPanel}
+                  modelVersion={data.raf_score?.model_version ?? null}
+                  measurementYear={data.measurement_year ?? null}
                 />
               </div>
             </div>
@@ -461,18 +464,18 @@ export function RAFCentralPanel({
           {/* ── RIGHT: secondary context ─────────────────────────────────── */}
           <div className="flex flex-col gap-4 min-w-0">
             {/* HCC Recapture */}
-            <div className={cn("rounded-lg bg-card overflow-hidden", stagger("delay-100"))}>
+            <div className={cn("rounded-lg border border-t-[3px] border-t-amber-400 bg-card overflow-hidden", stagger("delay-100"))}>
               <div className="flex items-center gap-2 px-4 py-3 border-b border-muted/40">
                 <History className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden />
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">HCC Recapture</span>
-                {data.recapture.length > 0 && (
+                {recaptureList.length > 0 && (
                   <Badge className="ml-1 text-[10px] font-semibold border-0 bg-muted text-muted-foreground">
-                    {data.recapture.length}
+                    {recaptureList.length}
                   </Badge>
                 )}
               </div>
               <div className="px-4 py-3">
-                <RecaptureSection recapture={data.recapture} />
+                <RecaptureSection recapture={recaptureList} />
               </div>
             </div>
 
@@ -557,14 +560,14 @@ export function RAFCentralPanel({
           <Section
             title="MEAT Gaps"
             icon={<AlertTriangle className="h-4 w-4 text-red-500" />}
-            count={data.meat_gaps.length}
+            count={meatGaps.length}
             severity="high"
             defaultOpen
           >
             <MEATSection
               patientId={patientId}
               year={year}
-              gaps={data.meat_gaps}
+              gaps={meatGaps}
               onChange={fetchPanel}
             />
           </Section>
@@ -573,24 +576,26 @@ export function RAFCentralPanel({
         <Section
           title="Suspect Conditions"
           icon={<Sparkles className="h-4 w-4 text-amber-500" />}
-          count={data.suspects.length}
+          count={suspectsList.length}
           severity="medium"
           defaultOpen
         >
           <SuspectsSection
             patientId={patientId}
-            suspects={data.suspects}
+            suspects={suspectsList}
             onChange={fetchPanel}
+            modelVersion={data.raf_score?.model_version ?? null}
+            measurementYear={data.measurement_year ?? null}
           />
         </Section>
 
         <Section
           title="HCC Recapture"
           icon={<History className="h-4 w-4 text-blue-500" />}
-          count={data.recapture.length}
+          count={recaptureList.length}
           severity="medium"
         >
-          <RecaptureSection recapture={data.recapture} />
+          <RecaptureSection recapture={recaptureList} />
         </Section>
 
         <Section

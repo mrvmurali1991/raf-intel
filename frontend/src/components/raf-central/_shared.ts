@@ -55,6 +55,12 @@ export interface SuspectCard {
   clinical_rule_violation?: boolean | string | null;
   /** Expected revenue impact of accepting this suspect — added by Agent-N. */
   expected_dollar_impact?: number | null;
+  /** When set, V28 will trump this HCC at scoring time — accepting it is
+   *  wasted effort. Surfaced by raf_central.py:_fetch_trumped_map. */
+  trumped_by_hcc?: number | null;
+  /** Fractional MEAT completeness (0..1) when the engine wrote one — used
+   *  by the UI to combine with confidence in prioritization. */
+  meat_completeness?: number | null;
 }
 
 export interface RecaptureCard {

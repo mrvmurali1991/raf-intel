@@ -25,7 +25,8 @@ import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from mysql.connector.errors import Error as MySQLError
 
 from app.auth import get_current_user, require_permission
 from app.db import raf_cursor
@@ -141,10 +142,24 @@ router = APIRouter(prefix="/api/suspects", tags=["suspects"])
 # ---------------------------------------------------------------------------
 
 
+# RADV defense-basis allow-list. Must match
+# frontend/src/components/AcceptConfirmDialog.tsx DEFENSE_BASIS_OPTIONS.
+# Enforced server-side so a scripted POST cannot bypass the UI gate
+# (patient-safety round-3 new gap #1). "Re-billing correction" was
+# intentionally removed in round 2 as regulatory-red-flag language.
+_ALLOWED_DEFENSE_BASES = {
+    "Provider clinical judgment",
+    "Additional chart evidence exists",
+    "Late-arriving lab or imaging result",
+    "Other (explain)",
+}
+
+
 class AcceptRequest(BaseModel):
     override_reason: str | None = Field(
         default=None,
         min_length=None,
+        max_length=4000,
         description=(
             "Required (min 20 chars) when accepting a low-confidence / "
             "incomplete-MEAT / clinically-denied suspect. Omit for clean accepts."
@@ -152,8 +167,39 @@ class AcceptRequest(BaseModel):
     )
     defense_basis: str | None = Field(
         default=None,
-        description="Short category tag, e.g. 'clinical_judgement', 'documentation_pending'.",
+        description=(
+            "Must be one of the allow-listed RADV defense bases. "
+            "Free-text values are rejected with HTTP 422."
+        ),
     )
+
+    @field_validator("defense_basis")
+    @classmethod
+    def _validate_defense_basis(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return v
+        if v not in _ALLOWED_DEFENSE_BASES:
+            raise ValueError(
+                f"defense_basis must be one of: {sorted(_ALLOWED_DEFENSE_BASES)}"
+            )
+        return v
+
+    @field_validator("override_reason")
+    @classmethod
+    def _validate_override_reason(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return v
+        s = v.strip()
+        # Reject character-spam (repeated single char ≥ 80% of the string).
+        # Round-3 finding #7: 20-char minimum was satisfied by "aaaaaaa...".
+        if len(s) >= 4:
+            most_common = max((s.count(c) for c in set(s)), default=0)
+            if most_common / len(s) >= 0.8:
+                raise ValueError(
+                    "override_reason appears to be character-spam — "
+                    "please describe the clinical basis in plain English."
+                )
+        return v
 
 
 class DismissRequest(BaseModel):
@@ -279,7 +325,7 @@ def list_suspects(
             limit=limit, offset=offset, tenant_id=tenant_id
         )
     except Exception as exc:
-        logger.error("list_suspects – get_all_open_suspects failed: %s", exc)
+        logger.exception("list_suspects – get_all_open_suspects failed: %s", exc)
         raise HTTPException(
             status_code=500, detail="Internal server error"
         )
@@ -324,7 +370,7 @@ def scan_all_patients(
     try:
         patients: list[dict[str, Any]] = get_all_patients(tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("scan_all_patients – get_all_patients failed: %s", exc)
+        logger.exception("scan_all_patients – get_all_patients failed: %s", exc)
         raise HTTPException(
             status_code=500, detail="Internal server error"
         )
@@ -487,7 +533,7 @@ def get_patient_suspects(
             pid, year=year, tenant_id=tenant_id or None
         )
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "get_patient_suspects pid=%s tenant=%s user=%s: %s",
             pid, tenant_id, current_user.get("email") or current_user.get("id"), exc,
         )
@@ -557,7 +603,7 @@ def scan_patient(
             pid, year=year, tenant_id=tenant_id or None
         )
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "scan_patient pid=%s tenant=%s user=%s: %s",
             pid, tenant_id, current_user.get("email") or current_user.get("id"), exc,
         )
@@ -658,10 +704,10 @@ def accept_suspect_endpoint(
             reviewed_by_user_id=reviewer_user_id,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.exception("Unexpected error: %s", exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
-        logger.error("accept_suspect_endpoint id=%s: %s", suspect_id, exc)
+        logger.exception("accept_suspect_endpoint id=%s: %s", suspect_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     # ------------------------------------------------------------------
@@ -688,12 +734,24 @@ def accept_suspect_endpoint(
                         tenant_id,
                     ),
                 )
-        except Exception as exc:
-            logger.warning(
-                "accept_suspect_endpoint: could not persist override columns "
-                "(migration 024 may not be applied) — skipping, suspect_id=%s: %s",
-                suspect_id, exc,
-            )
+        except MySQLError as exc:
+            # Narrow catch: only ignore the specific "column does not exist"
+            # error (errno 1054) which means migration 024 hasn't run yet.
+            # Any other MySQL error (deadlock, FK violation, schema mismatch
+            # elsewhere) is a real audit-write failure and must propagate so
+            # the global handler turns it into a logged 500 with traceback —
+            # silently swallowing all exceptions left a class of bugs where
+            # the accept persisted but the override was never recorded
+            # (HCC review round-5 blocker #2).
+            errno = getattr(exc, "errno", None)
+            if errno == 1054:
+                logger.warning(
+                    "accept_suspect_endpoint: override columns missing "
+                    "(migration 024 not applied) — suspect_id=%s",
+                    suspect_id,
+                )
+            else:
+                raise
 
         # Emit immutable audit event — non-fatal if it fails.
         try:
@@ -760,10 +818,10 @@ def dismiss_suspect_endpoint(
             reviewed_by_user_id=reviewer_user_id,
         )
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.exception("Unexpected error: %s", exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
-        logger.error("dismiss_suspect_endpoint id=%s: %s", suspect_id, exc)
+        logger.exception("dismiss_suspect_endpoint id=%s: %s", suspect_id, exc)
         raise HTTPException(
             status_code=500, detail="Internal server error"
         )

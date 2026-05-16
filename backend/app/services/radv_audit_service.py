@@ -41,13 +41,37 @@ def _hcc_label(hcc_code: int) -> str | None:
     return labels_default.get((str(hcc_code), DEFAULT_MODEL))
 
 
-def _parse_icd_list(raw: str | list | None) -> list[str]:
-    """Normalise the icd10_codes column value to a plain list of strings."""
+def _parse_icd_list(raw: str | list | bytes | None) -> list[str]:
+    """Normalise the icd10_codes column value to a plain list of strings.
+
+    Handles the three shapes the column has worn over time:
+      1. native list/tuple (when the driver inflates JSON for us)
+      2. JSON-encoded string like `'["N18.6", "N18.4"]'`
+         (must be parsed BEFORE the CSV fallback — otherwise CSV split
+          produces `['["N18.6"', '"N18.4"]']` — the RADV-audit
+          double-JSON-encoding bug coders flagged in round 2)
+      3. plain CSV `'N18.6, N18.4'` (legacy)
+    """
     if not raw:
         return []
     if isinstance(raw, (list, tuple)):
         return [str(c).strip() for c in raw if c]
-    return [c.strip() for c in str(raw).split(",") if c.strip()]
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", errors="ignore")
+    if isinstance(raw, str):
+        s = raw.strip()
+        # JSON-array string — most common from JSON columns.
+        if s.startswith("["):
+            try:
+                import json as _json
+                parsed = _json.loads(s)
+                if isinstance(parsed, list):
+                    return [str(c).strip() for c in parsed if c]
+            except Exception:
+                pass
+        # CSV / single value fallback.
+        return [c.strip() for c in s.split(",") if c.strip()]
+    return []
 
 
 def _float(val: Any) -> float:
@@ -103,7 +127,7 @@ def get_hcc_audit_trail(
                 icd10_codes,
                 raf_coefficient,
                 meat_status,
-                source,
+                source_encounter_ids AS source,
                 created_at
             FROM raf_patient_hcc
             WHERE patient_id       = %s
@@ -137,13 +161,8 @@ def get_hcc_audit_trail(
                 p.first_name,
                 p.last_name,
                 p.dob,
-                p.gender,
-                pd.medicare_beneficiary_id,
-                pd.insurance_id
+                p.sex AS gender
             FROM patients p
-            LEFT JOIN raf_patient_demographics pd
-                   ON pd.patient_id = p.id
-                  AND pd.tenant_id  = p.tenant_id
             WHERE p.id        = %s
               AND p.tenant_id = %s
             LIMIT 1
@@ -153,13 +172,17 @@ def get_hcc_audit_trail(
         demo_row = cur.fetchone()
 
     if demo_row:
+        # MBI/insurance_id are not yet stored in raf_intelligence (the
+        # raf_patient_demographics table only has CMS-segment fields, not
+        # PHI identifiers). Surfaced as None until the FHIR Patient sync
+        # populates them — a payer-audit-grade RADV packet will need them.
         patient_info: dict[str, Any] = {
             "patient_id": patient_id,
             "name": f"{demo_row.get('first_name', '')} {demo_row.get('last_name', '')}".strip(),
             "date_of_birth": str(demo_row["dob"]) if demo_row.get("dob") else None,
             "gender": demo_row.get("gender"),
-            "mbi": demo_row.get("medicare_beneficiary_id"),
-            "insurance_id": demo_row.get("insurance_id"),
+            "mbi": None,
+            "insurance_id": None,
         }
     else:
         patient_info = {"patient_id": patient_id}
@@ -182,11 +205,28 @@ def get_hcc_audit_trail(
             }
         )
 
+    # The "source" alias actually carries source_encounter_ids (JSON column),
+    # which the mysql connector returns as a raw string `"[]"` rather than a
+    # parsed list. Surface a parsed list of encounter ids under the more
+    # accurate `source_encounter_ids` field name, and keep the empty default
+    # so the auditor knows when no encounter linkage was recorded.
+    _src_raw = hcc_row.get("source")
+    if isinstance(_src_raw, str):
+        try:
+            import json as _json
+            source_encounters = _json.loads(_src_raw) if _src_raw.strip() else []
+        except Exception:
+            source_encounters = []
+    elif isinstance(_src_raw, list):
+        source_encounters = _src_raw
+    else:
+        source_encounters = []
+
     hcc_info: dict[str, Any] = {
         "hcc_code": hcc_code,
         "description": hcc_label or f"HCC {hcc_code}",
         "raf_coefficient": _float(hcc_row.get("raf_coefficient")),
-        "source": hcc_row.get("source"),
+        "source_encounter_ids": source_encounters,
         "meat_status": hcc_row.get("meat_status"),
     }
 
@@ -196,34 +236,77 @@ def get_hcc_audit_trail(
     # ------------------------------------------------------------------
     # 1d. Supporting encounters via normalized_encounters
     # ------------------------------------------------------------------
+    # The normalized_diagnoses table is not yet provisioned in every
+    # environment (planned schema migration). When the join fails we
+    # degrade to a patient-level encounter list rather than 500-ing the
+    # whole audit trail — the gap is surfaced in the response so the
+    # auditor knows the per-ICD linkage is missing.
     encounter_rows: list[dict[str, Any]] = []
+    enc_rows: list[dict[str, Any]] = []
     if icd_codes:
-        # Join normalized_diagnoses to find encounters for these ICD codes
-        # for this patient in the measurement year
         placeholders = ", ".join(["%s"] * len(icd_codes))
-        with raf_cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT DISTINCT
-                    ne.encounter_id              AS encounter_id,
-                    ne.encounter_date,
-                    ne.encounter_type,
-                    ne.facility_name,
-                    ne.provider_name,
-                    ne.provider_npi,
-                    ne.tenant_id
-                FROM normalized_encounters ne
-                JOIN normalized_diagnoses nd
-                   ON nd.encounter_id = ne.encounter_id
-                WHERE ne.patient_id      = %s
-                  AND ne.tenant_id       = %s
-                  AND YEAR(ne.encounter_date) = %s
-                  AND nd.icd10_code IN ({placeholders})
-                ORDER BY ne.encounter_date DESC
-                """,
-                (patient_id, tenant_id, measurement_year, *icd_codes),
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT
+                        ne.encounter_id              AS encounter_id,
+                        ne.encounter_date,
+                        ne.encounter_type,
+                        ne.facility_name,
+                        ne.provider_name,
+                        ne.provider_npi,
+                        ne.tenant_id
+                    FROM normalized_encounters ne
+                    JOIN normalized_diagnoses nd
+                       ON nd.encounter_id = ne.encounter_id
+                    WHERE ne.patient_id      = %s
+                      AND ne.tenant_id       = %s
+                      AND YEAR(ne.encounter_date) = %s
+                      AND nd.icd10_code IN ({placeholders})
+                    ORDER BY ne.encounter_date DESC
+                    """,
+                    (patient_id, tenant_id, measurement_year, *icd_codes),
+                )
+                enc_rows = cur.fetchall()
+        except Exception as exc:
+            logger.warning(
+                "radv.audit_trail: per-ICD encounter join unavailable (%s) — "
+                "falling back to patient-level encounters",
+                exc,
             )
-            enc_rows = cur.fetchall()
+            gaps.append(
+                "Per-ICD encounter linkage unavailable in this environment "
+                "(normalized_diagnoses table not provisioned)"
+            )
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            encounter_id,
+                            encounter_date,
+                            encounter_type,
+                            facility_name,
+                            provider_name,
+                            provider_npi,
+                            tenant_id
+                          FROM normalized_encounters
+                         WHERE patient_id = %s
+                           AND tenant_id = %s
+                           AND YEAR(encounter_date) = %s
+                         ORDER BY encounter_date DESC
+                         LIMIT 20
+                        """,
+                        (patient_id, tenant_id, measurement_year),
+                    )
+                    enc_rows = cur.fetchall() or []
+            except Exception as exc2:
+                logger.warning(
+                    "radv.audit_trail: patient-level encounter fallback failed: %s",
+                    exc2,
+                )
+                enc_rows = []
 
         for r in enc_rows:
             encounter_rows.append(

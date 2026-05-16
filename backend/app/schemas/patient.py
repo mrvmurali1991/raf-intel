@@ -21,13 +21,30 @@ class PatientSummary(BaseModel):
     """
 
     id: int = Field(..., description="Internal patient_id (raf_intelligence.patients.id)")
+    # pid mirrors id — the frontend worklist uses p.pid as the row key
+    pid: int = Field(..., description="Alias for id used by the worklist frontend")
     name: str = Field(..., description="Display name, typically '<first> <last>'")
+    # Individual name parts retained for legacy frontend display
+    fname: str | None = Field(None, description="First name")
+    lname: str | None = Field(None, description="Last name")
     dob: str | None = Field(None, description="Date of birth in ISO-8601 (YYYY-MM-DD)")
+    # DOB is the legacy capitalised alias the frontend reads
+    DOB: str | None = Field(None, description="Date of birth — capitalised alias for legacy frontend")
+    sex: str | None = Field(None, description="Sex/gender")
+    city: str | None = Field(None)
+    state: str | None = Field(None)
+    postal_code: str | None = Field(None)
+    data_source: str | None = Field(None, description="'upload' | 'emr' | 'fhir'")
     emr_pid: int | None = Field(
         None,
         description="Source-EMR patient identifier (OpenEMR pid, or numeric FHIR id when available)",
     )
     raf_score: float | None = Field(None, description="Most recent final RAF score")
+    hcc_count: int | None = Field(None, description="Number of active HCCs")
+    # RAF score breakdown — populated from raf_scores table when available
+    demographic_score: float | None = Field(None, description="Demographic component of RAF score")
+    disease_score: float | None = Field(None, description="Disease component of RAF score")
+    interaction_score: float | None = Field(None, description="Interaction component of RAF score")
     tenant_id: str | None = Field(None, description="Tenant the patient belongs to")
     mrn: str | None = Field(None, description="Medical Record Number")
 

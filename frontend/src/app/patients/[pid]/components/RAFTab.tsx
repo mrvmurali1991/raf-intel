@@ -15,6 +15,12 @@ import {
   ConfidencePill,
 } from "@/components/healthcare-ui";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import {
   C,
   formatDate,
   rafScoreColor,
@@ -127,13 +133,42 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.slate400, marginBottom: 4 }}>Est. MA Payment</div>
           <div style={{ fontSize: 28, fontWeight: 800, fontFamily: "monospace", color: C.emerald600, lineHeight: 1 }}>{fmtPay(grandTotal * MA_PAYMENT_PER_RAF)}</div>
           <div style={{ fontSize: 12, color: C.slate400, marginTop: 6 }}>
-            {["V28", segmentCodeUpper(breakdown.model_segment), breakdown.measurement_year || selectedYear].map(t => (
-              <span
-                key={t}
-                title={typeof t === "string" && t !== "V28" ? segmentLabel(t) : undefined}
-                style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`, marginLeft: 4 }}
-              >{t}</span>
-            ))}
+            {/* Radix Tooltip wraps V28 + segment chips so the gloss is
+                keyboard-accessible (focus reveals it, Escape dismisses) and
+                announced to screen readers via aria-describedby. The year
+                chip remains a plain span — no gloss to display. */}
+            <TooltipProvider delay={200}>
+              {["V28", segmentCodeUpper(breakdown.model_segment), breakdown.measurement_year || selectedYear].map(t => {
+                const isString = typeof t === "string";
+                const gloss = !isString
+                  ? null
+                  : t === "V28"
+                  ? "CMS-HCC V28 — the risk-adjustment model phased in for payment year 2026 onward. Replaces V24 with rebased coefficients and revised hierarchy. Coefficients differ from V24, so the same HCCs can yield different RAF scores."
+                  : segmentLabel(t);
+                const chipStyle: React.CSSProperties = { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`, marginLeft: 4, cursor: gloss ? "help" : undefined };
+                if (!gloss) {
+                  return <span key={t} style={chipStyle}>{t}</span>;
+                }
+                return (
+                  <Tooltip key={t}>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          style={{ ...chipStyle, background: C.blue50, fontFamily: "inherit" }}
+                          aria-label={typeof t === "string" && t === "V28" ? "What is CMS-HCC V28?" : `Model segment ${t}`}
+                        />
+                      }
+                    >
+                      {t}
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                      {gloss}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </TooltipProvider>
           </div>
         </div>
       </div>

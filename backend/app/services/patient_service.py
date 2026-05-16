@@ -1429,6 +1429,7 @@ def svc_get_vitals_suspects(
         "pid": pid,
         "patient_name": patient_name,
         "count": len(suspects),
+        "suspects": suspects,
         "vitals_suspects": suspects,
         "latest_vitals": latest_vitals,
     }
@@ -1465,6 +1466,7 @@ def svc_get_lab_suspects(
         "note_suspects_count": len(result["note_suspects"]),
         "vitals_suspects_count": len(result["vitals_suspects"]),
         "total_suspects": len(result["all_suspects"]),
+        "count": len(result["all_suspects"]),
         "suspects": result["all_suspects"],
     }
 
@@ -2082,7 +2084,7 @@ def svc_get_comprehensive_profile(
 def svc_get_family_history(pid: int, tenant_id: str) -> dict[str, Any]:
     """Return family history for *pid*."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
-    family_history = emr.get_family_history(emr_pid)
+    family_history = emr.get_family_history(emr_pid) or {}
     return {"pid": pid, "family_history": family_history}
 
 
@@ -2094,7 +2096,14 @@ def svc_get_family_history(pid: int, tenant_id: str) -> dict[str, Any]:
 def svc_get_sdoh(pid: int, tenant_id: str) -> dict[str, Any]:
     """Return SDOH data for *pid*."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
-    return emr.get_sdoh_data(emr_pid)
+    data = emr.get_sdoh_data(emr_pid) or {}
+    data.setdefault("pid", pid)
+    data.setdefault("sdoh_form", {})
+    data.setdefault("billed_z_codes", [])
+    data.setdefault("billable_highlights", {})
+    if data.get("sdoh_form") is None:
+        data["sdoh_form"] = {}
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -2168,7 +2177,7 @@ def svc_get_hedis_compliance(pid: int, year: int, tenant_id: str) -> dict[str, A
         year = _date.today().year
 
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
-    measures = emr.get_hedis_compliance(emr_pid, year)
+    measures = emr.get_hedis_compliance(emr_pid, year) or {}
 
     due_count = sum(1 for m in measures.values() if m.get("due"))
     compliant_count = sum(1 for m in measures.values() if m.get("due") and m.get("compliant"))
@@ -2193,5 +2202,5 @@ def svc_get_hedis_compliance(pid: int, year: int, tenant_id: str) -> dict[str, A
 def svc_get_patient_enrollment(pid: int, tenant_id: str) -> dict[str, Any]:
     """Return enrollment and insurance metadata for *pid*."""
     emr_pid = _get_emr_pid(pid, tenant_id=tenant_id) or pid
-    enrollment = emr.get_patient_enrollment_info(emr_pid)
+    enrollment = emr.get_patient_enrollment_info(emr_pid) or {}
     return {"pid": pid, "enrollment": enrollment}

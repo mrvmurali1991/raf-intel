@@ -49,16 +49,13 @@ type RiskFilter = "all" | "high" | "medium" | "low" | "unscored";
 // skeleton, column-filter row and group super-header all stay perfectly aligned.
 // 7 cells: Patient | Risk Level | RAF Score | Risk Factors | HCCs | Status | >
 const WORKLIST_GRID =
-  "minmax(240px, 2.2fr) 120px 100px minmax(200px, 2fr) 100px 140px 32px";
-// Tablet variant — drops the wide "Risk Factors" column and the 32px chevron
-// column so the row fits in the ~700px usable area when the sidebar is
-// collapsed. The `.risk-factors-cell` helper in globals.css hides the matching
-// DOM cells via `display: none` so the grid's 5 visible cells line up cleanly.
+  "minmax(240px, 2.2fr) 100px 100px minmax(200px, 2fr) 100px 110px 32px";
+// Tablet variant — matches desktop (6 tracks + chevron) so Status is always visible.
 const WORKLIST_GRID_TABLET =
-  "minmax(200px, 2fr) 100px 90px 100px 32px";
+  "minmax(180px, 2fr) 100px 90px 90px 110px 32px";
 const WORKLIST_GAP = 0;
 const WORKLIST_PAD_X = 24;
-const ROW_HEIGHT = 80;
+const ROW_HEIGHT = 64;
 
 // CSS variables consumed by the `.worklist-grid` class (see globals.css).
 // Applied via inline style on every row container so a single media query
@@ -764,7 +761,7 @@ export default function PatientsPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>(
     ["all", "high", "medium", "low", "unscored"].includes(initialRisk) ? initialRisk : "all"
   );
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "raf_score", dir: "desc" });
   const [page, setPage] = useState(0);
   const [hoveredRow, setHoveredRow] = useState<string | number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -823,14 +820,23 @@ export default function PatientsPage() {
               // Invalidate the patients list so the table re-fetches
               queryClient.invalidateQueries({ queryKey: ["patients"] });
 
-              // Build toast message
+              // Build toast message.
+              // PHI-minimization: the toast appears in the top-right corner
+              // for 15 seconds and is visible to anyone glancing at the
+              // screen. We surface initials + last-4 of the PID rather than
+              // the full first/last name to satisfy HIPAA "minimum
+              // necessary" — UX-review #1 / round-2 #G1. Clinicians who
+              // need the full name can click the row to open the chart.
               const fname = (payload.fname as string | undefined) ?? "";
               const lname = (payload.lname as string | undefined) ?? "";
               const raf = payload.raf_score != null ? Number(payload.raf_score).toFixed(2) : null;
-              const name = [fname, lname].filter(Boolean).join(" ") || `PID ${payload.pid ?? ""}`;
+              const initials = `${fname.charAt(0) || "?"}${lname.charAt(0) || ""}`.toUpperCase();
+              const pidStr = String(payload.pid ?? "");
+              const pidTail = pidStr ? pidStr.slice(-4) : "";
+              const identity = pidTail ? `${initials} (·${pidTail})` : initials || "Patient";
               const msg = evType === "patient.synced"
-                ? `New patient synced: ${name}${raf ? ` (RAF ${raf})` : ""}`
-                : `Patient scored: ${name}${raf ? ` (RAF ${raf})` : ""}`;
+                ? `New patient synced: ${identity}${raf ? ` (RAF ${raf})` : ""}`
+                : `Patient scored: ${identity}${raf ? ` (RAF ${raf})` : ""}`;
 
               setSyncToast({ msg, id: Date.now() });
               if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -1173,26 +1179,17 @@ export default function PatientsPage() {
         gap: 16, marginBottom: 24, flexWrap: "wrap",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 14,
-            background: `linear-gradient(135deg, ${tokens.teal700} 0%, ${tokens.teal900} 100%)`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 6px 16px rgba(15, 118, 110, 0.25), inset 0 1px 0 rgba(255,255,255,0.18)",
-            flexShrink: 0,
-          }}>
-            <Users size={22} color={tokens.white} strokeWidth={2.25} />
-          </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <h1 style={{
                 margin: 0,
-                fontSize: 24,
+                fontSize: 20,
                 fontWeight: 700,
                 color: C.text,
                 letterSpacing: "-0.02em",
                 lineHeight: 1.15,
               }}>
-                Patient Population
+                Worklist
               </h1>
               {/* Auto-sync live indicator. role="status" both permits the
                   `aria-label` (axe disallows it on a plain <div>) and lets
@@ -1263,7 +1260,7 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div style={{ position: "relative" }}>
             <Search
               size={16}
@@ -1295,27 +1292,11 @@ export default function PatientsPage() {
               }}
             />
           </div>
+          {/* Import button hidden from worklist toolbar — data ingestion is handled elsewhere */}
           <button
             onClick={() => setShowImportModal(true)}
             aria-label="Import patients from CSV"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              height: 40, padding: "0 14px", borderRadius: 10,
-              border: `1px solid ${C.border}`,
-              backgroundColor: tokens.white,
-              color: C.textMuted, fontSize: 13, fontWeight: 600,
-              fontFamily: FONT_SYS,
-              cursor: "pointer", flexShrink: 0,
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = C.brand;
-              e.currentTarget.style.color = C.brand;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = C.border;
-              e.currentTarget.style.color = C.textMuted;
-            }}
+            style={{ display: "none" }}
           >
             <FileUp size={14} />
             Import
@@ -1342,187 +1323,170 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* Alert Banner — High Risk                                     */}
-      {/* ============================================================ */}
-      {stats.high > 0 && (
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "14px 20px",
-          borderRadius: 16,
-          backgroundColor: tokens.warningSoft,
-          border: `1px solid ${tokens.warningBorder}`,
-          marginBottom: 16,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <AlertTriangle size={18} color={tokens.riskMedium} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: tokens.warningMuted }}>
-              {stats.high} High Risk Patient{stats.high !== 1 ? "s" : ""} Need{stats.high === 1 ? "s" : ""} Review
-            </span>
-          </div>
-          <button
-            onClick={() => { setRiskFilter("high"); setPage(0); }}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "7px 16px", borderRadius: 8,
-              border: "none",
-              backgroundColor: C.brand,
-              color: tokens.white,
-              fontSize: 13, fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(15,118,110,0.25)",
-            }}
-          >
-            Review Now <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
 
       {/* ============================================================ */}
       {/* Population Overview — hero block with risk distribution bar  */}
       {/* ============================================================ */}
+
+      {/* ---- Compact KPI strip (≤1280px) ---- */}
+      <div className="kpi-compact-strip" aria-label="Key performance indicators">
+        {/* Need Review */}
+        <div
+          className={`kpi-compact-item kpi-compact-item--alert${stats.high > 0 ? " kpi-compact-item--clickable" : ""}`}
+          onClick={() => { if (stats.high > 0) { setRiskFilter("high"); setPage(0); } }}
+          role={stats.high > 0 ? "button" : undefined}
+          tabIndex={stats.high > 0 ? 0 : undefined}
+          aria-label={stats.high > 0 ? `Show ${stats.high} high-risk patients` : "No high-risk patients"}
+          onKeyDown={(e) => { if (stats.high > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRiskFilter("high"); setPage(0); } }}
+        >
+          <TrendingUp size={14} color={tokens.riskHigh} style={{ flexShrink: 0 }} />
+          <span className="kpi-compact-label">Need Review</span>
+          <span className="kpi-compact-value" style={{ color: stats.high > 0 ? tokens.riskHigh : C.text }}>{stats.high}</span>
+        </div>
+        {/* Unscored */}
+        <div
+          className={`kpi-compact-item${stats.unscored > 0 ? " kpi-compact-item--clickable" : ""}`}
+          onClick={() => { if (stats.unscored > 0) { setRiskFilter("unscored"); setPage(0); } }}
+          role={stats.unscored > 0 ? "button" : undefined}
+          tabIndex={stats.unscored > 0 ? 0 : undefined}
+          aria-label={stats.unscored > 0 ? `Show ${stats.unscored} unscored patients` : "No unscored patients"}
+          onKeyDown={(e) => { if (stats.unscored > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRiskFilter("unscored"); setPage(0); } }}
+        >
+          <Users size={14} color={tokens.slate400} style={{ flexShrink: 0 }} />
+          <span className="kpi-compact-label">Unscored</span>
+          <span className="kpi-compact-value" style={{ color: C.text }}>{stats.unscored}</span>
+        </div>
+        {/* Average RAF */}
+        <div className="kpi-compact-item">
+          <Activity size={14} color={tokens.success} style={{ flexShrink: 0 }} />
+          <span className="kpi-compact-label">Avg RAF</span>
+          <span className="kpi-compact-value" style={{ color: C.text }}>
+            {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "—"}
+          </span>
+        </div>
+        {/* HCCs Captured */}
+        <div className="kpi-compact-item">
+          <ShieldCheck size={14} color={tokens.infoBlue} style={{ flexShrink: 0 }} />
+          <span className="kpi-compact-label">HCCs</span>
+          <span className="kpi-compact-value" style={{ color: C.text }}>{stats.hccTotal.toLocaleString()}</span>
+        </div>
+      </div>
+
+      {/* ---- Full 4-card KPI grid (>1280px only) ---- */}
       <div
-        className="rci-population-overview"
+        className="kpi-full-grid rci-population-overview"
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
           gap: 12,
           marginBottom: 16,
         }}
       >
-        {/* Hero card — total + stacked risk distribution bar */}
+        {/* Need Review — KPI order: 1st */}
+        <div
+          style={{
+            backgroundColor: C.bgCard,
+            border: `1px solid ${C.borderSoft}`,
+            borderTop: `3px solid ${tokens.riskHigh}`,
+            borderRadius: 16,
+            padding: "18px 22px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 8,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+            minHeight: 132,
+            cursor: stats.high > 0 ? "pointer" : "default",
+            transition: "border-color 0.15s ease",
+          }}
+          onClick={() => { if (stats.high > 0) { setRiskFilter("high"); setPage(0); } }}
+          onMouseEnter={(e) => { if (stats.high > 0) { e.currentTarget.style.borderTopColor = tokens.riskHigh; } }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderTopColor = tokens.riskHigh; }}
+          aria-label={stats.high > 0 ? `Show ${stats.high} high-risk patients` : "No high-risk patients"}
+          role={stats.high > 0 ? "button" : undefined}
+          tabIndex={stats.high > 0 ? 0 : undefined}
+          onKeyDown={(e) => {
+            if (stats.high > 0 && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              setRiskFilter("high");
+              setPage(0);
+            }
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <TrendingUp size={16} color={tokens.riskHigh} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Need Review
+            </span>
+          </div>
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 800,
+              color: stats.high > 0 ? tokens.riskHigh : C.text,
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+            }}
+          >
+            {stats.high}
+          </div>
+          <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", alignItems: "center", gap: 4 }}>
+            High-risk patients
+            {stats.high > 0 && <ChevronRight size={12} color={tokens.riskHigh} />}
+          </div>
+        </div>
+
+        {/* Unscored — KPI order: 2nd */}
         <div
           style={{
             backgroundColor: C.bgCard,
             border: `1px solid ${C.borderSoft}`,
             borderRadius: 16,
             padding: "18px 22px",
-            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
             display: "flex",
             flexDirection: "column",
-            gap: 14,
+            justifyContent: "space-between",
+            gap: 8,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+            minHeight: 132,
+            cursor: stats.unscored > 0 ? "pointer" : "default",
+          }}
+          onClick={() => { if (stats.unscored > 0) { setRiskFilter("unscored"); setPage(0); } }}
+          aria-label={stats.unscored > 0 ? `Show ${stats.unscored} unscored patients` : "No unscored patients"}
+          role={stats.unscored > 0 ? "button" : undefined}
+          tabIndex={stats.unscored > 0 ? 0 : undefined}
+          onKeyDown={(e) => {
+            if (stats.unscored > 0 && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              setRiskFilter("unscored");
+              setPage(0);
+            }
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-            <span
-              style={{
-                fontSize: 36,
-                fontWeight: 800,
-                color: C.text,
-                fontVariantNumeric: "tabular-nums",
-                letterSpacing: "-0.025em",
-                lineHeight: 1,
-              }}
-            >
-              {stats.all.toLocaleString()}
-            </span>
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: C.textSubtle,
-                letterSpacing: "0.02em",
-                textTransform: "uppercase",
-              }}
-            >
-              Active Patients
-            </span>
-            <span
-              style={{
-                marginLeft: "auto",
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "2px 8px",
-                borderRadius: 6,
-                backgroundColor: tokens.successSoft,
-                color: tokens.successDark,
-                fontSize: 11,
-                fontWeight: 700,
-                fontVariantNumeric: "tabular-nums",
-                whiteSpace: "nowrap",
-              }}
-              title="Percentage of the panel with a calculated RAF score"
-            >
-              {stats.analyzedPct}% scored
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Users size={16} color={tokens.slate400} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Unscored
             </span>
           </div>
-
-          {/* Stacked risk distribution bar — instant population at-a-glance */}
-          {(() => {
-            const total = Math.max(1, stats.all);
-            const segs: Array<{ key: RiskFilter; count: number; color: string; label: string }> = [
-              { key: "high", count: stats.high, color: tokens.riskHigh, label: "High" },
-              { key: "medium", count: stats.medium, color: tokens.warningStrong, label: "Medium" },
-              { key: "low", count: stats.low, color: tokens.success, label: "Low" },
-              { key: "unscored", count: stats.unscored, color: tokens.slate300, label: "Unscored" },
-            ];
-            return (
-              <>
-                <div
-                  // role="img" with focusable button descendants triggers
-                  // axe's nested-interactive rule. role="group" lets the
-                  // child filter buttons remain focusable and preserves
-                  // the aria-label as a labelled grouping.
-                  role="group"
-                  aria-label={`Risk distribution: ${stats.high} high, ${stats.medium} medium, ${stats.low} low, ${stats.unscored} unscored`}
-                  style={{
-                    display: "flex",
-                    height: 12,
-                    borderRadius: 999,
-                    overflow: "hidden",
-                    border: `1px solid ${C.borderSoft}`,
-                    backgroundColor: tokens.slate50,
-                  }}
-                >
-                  {segs.map((s) => {
-                    const pct = (s.count / total) * 100;
-                    if (pct <= 0) return null;
-                    return (
-                      <button
-                        key={s.key}
-                        type="button"
-                        title={`${s.label}: ${s.count} (${pct.toFixed(1)}%)`}
-                        onClick={() => { setRiskFilter(s.key); setPage(0); }}
-                        aria-label={`Filter to ${s.label.toLowerCase()} risk: ${s.count} patient${s.count === 1 ? "" : "s"}`}
-                        style={{
-                          flexBasis: `${pct}%`,
-                          backgroundColor: s.color,
-                          border: "none",
-                          padding: 0,
-                          cursor: "pointer",
-                          transition: "filter 0.15s ease",
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-                      />
-                    );
-                  })}
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 14,
-                    flexWrap: "wrap",
-                    fontSize: 12,
-                    color: C.textSubtle,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {segs.map((s) => (
-                    <span key={s.key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: s.color }} />
-                      <span style={{ color: C.text, fontWeight: 700 }}>{s.count}</span>
-                      <span>{s.label}</span>
-                    </span>
-                  ))}
-                </div>
-              </>
-            );
-          })()}
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 800,
+              color: C.text,
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+            }}
+          >
+            {stats.unscored}
+          </div>
+          <div style={{ fontSize: 12, color: C.textSubtle }}>
+            Pending analysis
+          </div>
         </div>
 
-        {/* Average RAF */}
+        {/* Average RAF — KPI order: 3rd */}
         <div
           style={{
             backgroundColor: C.bgCard,
@@ -1598,63 +1562,6 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        {/* High-priority focus */}
-        <div
-          style={{
-            backgroundColor: stats.high > 0 ? tokens.riskHighSoft : C.bgCard,
-            border: `1px solid ${C.borderSoft}`,
-            borderTop: `3px solid ${tokens.riskHigh}`,
-            borderRadius: 16,
-            padding: "18px 22px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            gap: 8,
-            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-            minHeight: 132,
-            cursor: stats.high > 0 ? "pointer" : "default",
-            transition: "border-color 0.15s ease",
-          }}
-          onClick={() => { if (stats.high > 0) { setRiskFilter("high"); setPage(0); } }}
-          onMouseEnter={(e) => { if (stats.high > 0) { e.currentTarget.style.borderColor = tokens.riskHigh; } }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSoft; }}
-          aria-label={stats.high > 0 ? `Show ${stats.high} high-risk patients` : "No high-risk patients"}
-          role={stats.high > 0 ? "button" : undefined}
-          tabIndex={stats.high > 0 ? 0 : undefined}
-          onKeyDown={(e) => {
-            if (stats.high > 0 && (e.key === "Enter" || e.key === " ")) {
-              e.preventDefault();
-              setRiskFilter("high");
-              setPage(0);
-            }
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <TrendingUp size={16} color={tokens.riskHigh} />
-            {/* Use the darker base text colour rather than `textSubtle`
-                — when the card switches to the red-50 background for high
-                risk, slate-500 only hits 4.35:1 (below WCAG AA 4.5:1). */}
-            <span style={{ fontSize: 12, fontWeight: 600, color: stats.high > 0 ? tokens.slate700 : C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Need Review
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 36,
-              fontWeight: 800,
-              color: stats.high > 0 ? tokens.riskHigh : C.text,
-              fontVariantNumeric: "tabular-nums",
-              letterSpacing: "-0.025em",
-              lineHeight: 1,
-            }}
-          >
-            {stats.high}
-          </div>
-          <div style={{ fontSize: 12, color: stats.high > 0 ? tokens.slate700 : C.textSubtle, display: "flex", alignItems: "center", gap: 4 }}>
-            High-risk patients
-            {stats.high > 0 && <ChevronRight size={12} color={tokens.riskHigh} />}
-          </div>
-        </div>
       </div>
 
       {/* ============================================================ */}
@@ -1673,6 +1580,21 @@ export default function PatientsPage() {
             { key: "unscored" as const, label: "Unscored", count: stats.unscored, icon: null },
           ]).map(({ key, label, count, icon }) => {
             const active = riskFilter === key;
+            const inactiveBg =
+              key === "high" ? tokens.riskHighSoft :
+              key === "medium" ? tokens.riskMediumSoft :
+              key === "low" ? tokens.riskLowSoft :
+              tokens.white;
+            const inactiveBorder =
+              key === "high" ? tokens.dangerBorder :
+              key === "medium" ? tokens.warningBorder :
+              key === "low" ? tokens.emerald100 :
+              C.border;
+            const inactiveColor =
+              key === "high" ? "#B91C1C" :
+              key === "medium" ? "#B45309" :
+              key === "low" ? "#047857" :
+              C.textMuted;
             const dotColor =
               key === "high" ? C.high :
               key === "medium" ? C.medium :
@@ -1687,9 +1609,9 @@ export default function PatientsPage() {
                   display: "inline-flex", alignItems: "center", gap: 6,
                   height: 34, padding: "0 14px",
                   borderRadius: 999,
-                  border: active ? "none" : `1px solid ${C.border}`,
-                  backgroundColor: active ? tokens.slate800 : tokens.white,
-                  color: active ? tokens.white : C.textMuted,
+                  border: active ? "none" : `1px solid ${inactiveBorder}`,
+                  backgroundColor: active ? tokens.slate800 : inactiveBg,
+                  color: active ? tokens.white : inactiveColor,
                   fontSize: 12.5, fontWeight: 600,
                   fontFamily: FONT_SYS,
                   cursor: "pointer",
@@ -1708,10 +1630,7 @@ export default function PatientsPage() {
                 {label}
                 <span style={{
                   fontSize: 11, fontWeight: 700,
-                  // slate-400 (C.label) renders at 2.56:1 on white — below
-                  // WCAG AA. textMuted (slate-600) clears 4.5:1 while still
-                  // reading as a secondary count.
-                  color: active ? "rgba(255,255,255,0.65)" : C.textMuted,
+                  color: active ? "rgba(255,255,255,0.65)" : inactiveColor,
                   fontVariantNumeric: "tabular-nums",
                   marginLeft: -2,
                 }}>
@@ -1807,7 +1726,7 @@ export default function PatientsPage() {
       >
         {/* Column header (presentational — the parent wrapper is now
             role="region", so ARIA-table child roles no longer apply). */}
-        <div className="worklist-grid" style={{
+        <div className="worklist-grid worklist-header-row" style={{
           display: "grid",
           ...WORKLIST_GRID_VARS,
           alignItems: "center",
@@ -2048,13 +1967,17 @@ export default function PatientsPage() {
               margin: "0 0 6px",
               letterSpacing: "-0.01em",
             }}>
-              No patients match your criteria
+              {riskFilter === "high" ? "No high-risk patients right now" :
+               riskFilter === "unscored" ? "No unscored patients" :
+               "No patients match your criteria"}
             </h3>
             <p style={{
               fontSize: 13, color: C.textSubtle,
-              margin: "0 auto 18px", maxWidth: 320,
+              margin: "0 auto 18px", maxWidth: 380,
             }}>
-              Try broadening your search or adjusting the risk filter to see more results.
+              {riskFilter === "high"
+                ? "Check Unscored patients for pending analysis — they may need a risk calculation."
+                : "Try broadening your search or adjusting the risk filter to see more results."}
             </p>
             {(riskFilter !== "all" || debouncedSearch || hasActiveColFilters) && (
               <button
@@ -2125,16 +2048,23 @@ export default function PatientsPage() {
               }}
               onMouseEnter={() => setHoveredRow(pid)}
               onMouseLeave={() => setHoveredRow(null)}
-              className="worklist-grid"
+              className="worklist-grid worklist-row-anchor"
               style={{
                 display: "grid",
                 ...WORKLIST_GRID_VARS,
                 alignItems: "center",
                 height: ROW_HEIGHT,
+                minHeight: ROW_HEIGHT,
+                maxHeight: ROW_HEIGHT,
+                overflow: "hidden",
                 padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
                 borderBottom: `1px solid ${C.rowDivider}`,
                 borderLeft: `3px solid ${accent}`,
-                backgroundColor: isHovered ? tokens.bgFaintCard : C.bgCard,
+                backgroundColor: isHovered
+                  ? tokens.slate50
+                  : tone.label === "High"
+                    ? tokens.riskHighSoft
+                    : C.bgCard,
                 cursor: "pointer",
                 transition: "background-color 0.15s ease",
                 gap: WORKLIST_GAP,
@@ -2146,11 +2076,11 @@ export default function PatientsPage() {
               {/* Patient: avatar + name + subtitle */}
               <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                 <div style={{
-                  width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                  width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
                   background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
                   color: avatarColor,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, fontWeight: 700,
+                  fontSize: 11, fontWeight: 700,
                   letterSpacing: "0.02em",
                   border: `1px solid ${avatarColor}26`,
                 }}>
@@ -2167,7 +2097,7 @@ export default function PatientsPage() {
                   </span>
                   <span style={{
                     fontSize: 11,
-                    color: C.label,
+                    color: C.textMuted,
                     fontFamily: FONT_MONO,
                     fontVariantNumeric: "tabular-nums",
                     whiteSpace: "nowrap",
@@ -2247,68 +2177,45 @@ export default function PatientsPage() {
                 )}
               </div>
 
-              {/* Risk Factors — sub-score tag chips */}
+              {/* Risk Factors — single muted chip with label/value contrast */}
               <div className="risk-factors-cell" style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                {p.demographic_score != null && p.demographic_score > 0 && (
+                {scored && (
+                  (p.demographic_score != null && p.demographic_score > 0) ||
+                  (p.disease_score != null && p.disease_score > 0) ||
+                  (p.interaction_score != null && p.interaction_score > 0)
+                ) ? (
                   <span
-                    title={`Demographic Score: ${Number(p.demographic_score).toFixed(4)}`}
+                    title={`Demo: ${Number(p.demographic_score ?? 0).toFixed(3)} / Disease: ${Number(p.disease_score ?? 0).toFixed(3)} / Interact: ${Number(p.interaction_score ?? 0).toFixed(3)}`}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 3,
                       height: 22, padding: "0 8px",
                       borderRadius: 6,
-                      backgroundColor: tokens.skyBg,
-                      border: `1px solid ${tokens.skyBorder}`,
-                      color: tokens.skyText,
+                      backgroundColor: tokens.slate100,
+                      border: `1px solid ${tokens.slate200}`,
                       fontSize: 10.5, fontWeight: 600,
                       fontVariantNumeric: "tabular-nums",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    Demo {Number(p.demographic_score).toFixed(3)}
+                    {[
+                      p.demographic_score != null && p.demographic_score > 0
+                        ? { label: "D·", value: Number(p.demographic_score).toFixed(2) } : null,
+                      p.disease_score != null && p.disease_score > 0
+                        ? { label: "Di·", value: Number(p.disease_score).toFixed(2) } : null,
+                      p.interaction_score != null && p.interaction_score > 0
+                        ? { label: "In·", value: Number(p.interaction_score).toFixed(2) } : null,
+                    ].filter((x): x is { label: string; value: string } => x !== null).map((seg, i, arr) => (
+                      <span key={seg.label} style={{ display: "inline-flex", alignItems: "center", gap: 0 }}>
+                        <span style={{ color: tokens.slate500 }}>{seg.label}</span>
+                        <span style={{ color: tokens.slate900 }}>{seg.value}</span>
+                        {i < arr.length - 1 && (
+                          <span style={{ color: tokens.slate400, margin: "0 3px" }}>/</span>
+                        )}
+                      </span>
+                    ))}
                   </span>
-                )}
-                {p.disease_score != null && p.disease_score > 0 && (
-                  <span
-                    title={`Disease Score: ${Number(p.disease_score).toFixed(4)}`}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 3,
-                      height: 22, padding: "0 8px",
-                      borderRadius: 6,
-                      backgroundColor: tokens.orangeBg,
-                      border: `1px solid ${tokens.orangeBorder}`,
-                      color: tokens.orangeText,
-                      fontSize: 10.5, fontWeight: 600,
-                      fontVariantNumeric: "tabular-nums",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Disease {Number(p.disease_score).toFixed(3)}
-                  </span>
-                )}
-                {p.interaction_score != null && p.interaction_score > 0 && (
-                  <span
-                    title={`Interaction Score: ${Number(p.interaction_score).toFixed(4)}`}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 3,
-                      height: 22, padding: "0 8px",
-                      borderRadius: 6,
-                      backgroundColor: tokens.violetBg,
-                      border: `1px solid ${tokens.violetBorder}`,
-                      color: tokens.violetText,
-                      fontSize: 10.5, fontWeight: 600,
-                      fontVariantNumeric: "tabular-nums",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Interact {Number(p.interaction_score).toFixed(3)}
-                  </span>
-                )}
-                {(!scored || (
-                  (p.demographic_score == null || p.demographic_score === 0) &&
-                  (p.disease_score == null || p.disease_score === 0) &&
-                  (p.interaction_score == null || p.interaction_score === 0)
-                )) && (
-                  <span style={{ fontSize: 12, color: tokens.slate300 }}>{"\u2014"}</span>
+                ) : (
+                  <span style={{ fontSize: 12, color: tokens.slate300 }}>{"—"}</span>
                 )}
               </div>
 
@@ -2329,7 +2236,7 @@ export default function PatientsPage() {
                     </span>
                     <span style={{
                       fontSize: 9, fontWeight: 600,
-                      color: C.label,
+                      color: C.textSubtle,
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
                     }}>

@@ -166,7 +166,7 @@ def list_outreach_templates(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error("list_outreach_templates error: %s", exc, exc_info=True)
+        logger.exception("list_outreach_templates error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return TemplateListResponse(total=len(rows), templates=rows)  # type: ignore[arg-type]
 
@@ -196,7 +196,7 @@ def create_outreach_template(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error("create_outreach_template error: %s", exc, exc_info=True)
+        logger.exception("create_outreach_template error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return tpl  # type: ignore[return-value]
 
@@ -214,7 +214,7 @@ def seed_defaults(
     try:
         created = seed_default_templates(tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("seed_defaults error: %s", exc, exc_info=True)
+        logger.exception("seed_defaults error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return SeedDefaultsResponse(created=created, total_created=len(created))  # type: ignore[arg-type]
 
@@ -248,7 +248,7 @@ def queue_outreach_for_gap(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
-        logger.error("queue_outreach error gap=%s: %s", gap_id, exc, exc_info=True)
+        logger.exception("queue_outreach error gap=%s: %s", gap_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return evt  # type: ignore[return-value]
 
@@ -280,7 +280,7 @@ def mark_outreach_event(
             raise HTTPException(status_code=404, detail=msg)
         raise HTTPException(status_code=400, detail=msg)
     except Exception as exc:
-        logger.error("mark_outreach_event error id=%s: %s", event_id, exc, exc_info=True)
+        logger.exception("mark_outreach_event error id=%s: %s", event_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return evt  # type: ignore[return-value]
 
@@ -303,7 +303,7 @@ def get_outreach_summary(
     try:
         data = outreach_summary(tenant_id=tenant_id, year=year)
     except Exception as exc:
-        logger.error("outreach_summary error: %s", exc, exc_info=True)
+        logger.exception("outreach_summary error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return data  # type: ignore[return-value]
 
@@ -322,7 +322,7 @@ def gap_outreach_history(
     try:
         events = get_outreach_history(gap_id=gap_id, tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("gap_outreach_history error gap=%s: %s", gap_id, exc, exc_info=True)
+        logger.exception("gap_outreach_history error gap=%s: %s", gap_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return OutreachHistoryResponse(  # type: ignore[arg-type]
         gap_id=gap_id, total=len(events), events=events,

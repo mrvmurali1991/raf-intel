@@ -3,8 +3,12 @@ import { tokens } from "@/styles/tokens";
 export const C = {
   text: tokens.slate900,
   textMuted: tokens.slate600,
-  textSubtle: tokens.slate500,
-  label: tokens.slate400,
+  // textSubtle and label promoted to slate-600 (7.5:1 vs white) so body text
+  // meets WCAG 2.1 AA on a dim clinic monitor. Previously textSubtle was
+  // slate-500 (4.49:1 — borderline) and label was slate-400 (2.84:1 — fails
+  // AA). Only icons/decorative dividers should use slate-400 from now on.
+  textSubtle: tokens.slate600,
+  label: tokens.slate600,
   border: tokens.slate200,
   borderSoft: "#EEF2F6",
   rowDivider: tokens.slate100,
@@ -62,7 +66,7 @@ export function deriveInitials(
 }
 
 export function riskAccentColor(score: number | null | undefined): string {
-  if (score == null || score === 0) return C.borderSoft;
+  if (score == null || score === 0) return tokens.slate300;
   if (score >= 2.0) return C.high;
   if (score >= 1.0) return C.medium;
   if (score >= 0.5) return C.low;

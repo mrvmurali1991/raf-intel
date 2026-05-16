@@ -2175,10 +2175,17 @@ def get_raf_dashboard(
     except Exception:
         dashboard["active_emr"] = None
 
-    # Blend weights
-    dashboard["blend_weights"] = _BLEND_WEIGHTS.get(
-        calc_year, _BLEND_WEIGHTS.get(max(_BLEND_WEIGHTS.keys()), {"v24": 0.0, "v28": 1.0})
+    # Blend weights — _BLEND_WEIGHTS stores tuples (v24_weight, v28_weight)
+    # but the schema requires a dict. Always emit the dict shape.
+    _bw_tuple = _BLEND_WEIGHTS.get(
+        calc_year, _BLEND_WEIGHTS.get(max(_BLEND_WEIGHTS.keys()), (0.0, 1.0))
     )
+    if isinstance(_bw_tuple, tuple) and len(_bw_tuple) == 2:
+        dashboard["blend_weights"] = {"v24": _bw_tuple[0], "v28": _bw_tuple[1]}
+    elif isinstance(_bw_tuple, dict):
+        dashboard["blend_weights"] = _bw_tuple
+    else:
+        dashboard["blend_weights"] = {"v24": 0.0, "v28": 1.0}
 
     # Population totals
     try:
@@ -2224,14 +2231,14 @@ def get_raf_dashboard(
         with raf_cursor() as cur:
             cur.execute(
                 f"""
-                SELECT hcc_code, hcc_description,
+                SELECT hcc_code,
                        COUNT(DISTINCT patient_id) AS patient_count,
                        AVG(raf_coefficient) AS avg_coefficient
                 FROM raf_patient_hcc
                 WHERE measurement_year = %s
                   AND {_sf}
                   AND tenant_id = %s
-                GROUP BY hcc_code, hcc_description
+                GROUP BY hcc_code
                 ORDER BY patient_count DESC
                 LIMIT 10
                 """,

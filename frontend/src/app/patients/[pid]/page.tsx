@@ -4,7 +4,7 @@ import React, { use, useState, useRef, useEffect, useMemo, startTransition } fro
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Printer } from "lucide-react";
+import { Printer, MoreHorizontal, Eye, EyeOff } from "lucide-react";
 import {
   getPatient,
   getPatientProfile,
@@ -36,6 +36,12 @@ import {
 import { ModelComparison } from "@/components/model-comparison";
 import { AIHealthBanner } from "@/components/AIHealthBanner";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import {
   RiskGauge,
   ProgressBar,
@@ -96,22 +102,88 @@ export default function PatientDetailPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   // Initialise from URL so refresh / shared links restore the correct tab.
-  const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") ?? "rafcentral");
+  // Sub-pill state for the merged "RAF" tab (item B8)
+  const [rafSubTab, setRafSubTab] = useState<"central" | "details" | "comparison">(() => {
+    const t = searchParams.get("tab");
+    if (t === "rafdetails" || t === "raf") return "details";
+    if (t === "modelcomparison" || t === "models") return "comparison";
+    return "central";
+  });
+
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get("tab");
+    // Legacy aliases → new "raf" tab
+    if (t === "rafcentral" || t === "rafdetails" || t === "modelcomparison") return "raf";
+    return t ?? "raf";
+  });
+
+  // Overflow menu open state for More Actions button
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [moreMenuOpen]);
 
   // Write-through: keep ?tab= in sync without adding browser history entries.
   // The tab-content swap is wrapped in startTransition so React can keep
   // the previous tab interactive while the new one mounts — smoother feel
   // than a hard re-render. URL update stays outside (urgent navigation).
   const handleTabChange = (tab: string) => {
+    // Resolve legacy tab aliases to the merged "raf" tab + sub-pill
+    let resolvedTab = tab;
+    if (tab === "rafcentral") { resolvedTab = "raf"; setRafSubTab("central"); }
+    else if (tab === "rafdetails") { resolvedTab = "raf"; setRafSubTab("details"); }
+    else if (tab === "modelcomparison" || tab === "models") { resolvedTab = "raf"; setRafSubTab("comparison"); }
     startTransition(() => {
-      setActiveTab(tab);
+      setActiveTab(resolvedTab);
     });
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tab);
+    params.set("tab", resolvedTab);
     router.replace(`?${params.toString()}`);
   };
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [lastAnalysisResult, setLastAnalysisResult] = useState<Record<number, AnalysisResult>>({});
+
+  // Privacy mode masks patient name + MRN in the always-visible sticky
+  // header for shoulder-surf-prone settings (open clinic monitors, shared
+  // screens during demos). Toggled via Ctrl/Cmd+Shift+P or the eye icon
+  // next to the patient name. Persisted to localStorage so a user's
+  // preference survives navigation. UX-review #1 / round-3 carry-over.
+  const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("raf_privacy_mode") === "1";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("raf_privacy_mode", privacyMode ? "1" : "0");
+  }, [privacyMode]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "P" || e.key === "p")) {
+        // Skip when focus is inside a typing surface — avoids clobbering
+        // browser-native shortcuts (Print, Find) and user text input.
+        const t = e.target as HTMLElement | null;
+        const tag = (t?.tagName || "").toLowerCase();
+        const isEditable =
+          tag === "input" || tag === "textarea" || tag === "select" ||
+          t?.isContentEditable === true;
+        if (isEditable) return;
+        e.preventDefault();
+        setPrivacyMode((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // ---- Core queries (always fetched) ----
   const patientQ = useQuery({
@@ -478,12 +550,10 @@ export default function PatientDetailPage({
     };
   }, [encountersQ.data, profile, rafBreakdownQ.data]);
 
-  // Tab definitions
+  // Tab definitions — RAF Central / Details / Comparison merged into one "RAF" tab (B8)
   const tabs = [
     { id: "overview", label: "Overview" },
-    { id: "rafcentral", label: "RAF Central" },
-    { id: "raf", label: "RAF Details" },
-    { id: "models", label: "Model Comparison" },
+    { id: "raf", label: "RAF" },
     { id: "clinical", label: "Clinical Data" },
     { id: "encounters", label: "Encounters" },
     { id: "documents", label: "Documents & Reports" },
@@ -506,11 +576,32 @@ export default function PatientDetailPage({
         <AIHealthBanner />
       </div>
       {/* Breadcrumb trail — Home > Patients > Patient {pid} */}
+      {/* Polite live region announces privacy-mode toggle to screen readers.
+          Symmetric — announces both enable AND disable so AT users get
+          consistent feedback (UX-review round-5 blocker #2). */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {privacyMode
+          ? "Privacy mode enabled. Patient name and MRN are masked."
+          : "Privacy mode disabled. Patient name and MRN are visible."}
+      </div>
       <div style={{ padding: "0 16px" }}>
         <Breadcrumb
           items={[
             { label: "Patients", href: "/patients" },
-            { label: `Patient ${pid}` },
+            {
+              // Propagate privacy-mode masking into the breadcrumb so the
+              // patient identity isn't leaked at the top of the page when
+              // the sticky-header H1 is already masked (UX review round-4
+              // carry-over).
+              label: (() => {
+                if (!patientName || patientName === "Loading…") return `Patient ${pid}`;
+                if (!privacyMode) return patientName;
+                const parts = patientName.trim().split(/\s+/);
+                const f = parts[0]?.charAt(0) || "?";
+                const l = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
+                return `${f}${l ? ". " + l + "." : "."}`;
+              })(),
+            },
           ]}
         />
       </div>
@@ -548,8 +639,12 @@ export default function PatientDetailPage({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 36,
-                height: 36,
+                // 44×44 = WCAG 2.5.5 AAA tap target; previously 36×36 was
+                // below Apple HIG/Google Material 44px minimums (UX review #4
+                // / round-2 #4). The icon stays the same size; padding does
+                // the work so visual weight isn't increased.
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 border: `1px solid ${C.slate200}`,
                 color: C.slate600,
@@ -565,6 +660,7 @@ export default function PatientDetailPage({
               </svg>
             </Link>
             <div
+              title={`PID ${pid}`}
               style={{
                 width: 44, height: 44, borderRadius: 12,
                 background: `linear-gradient(135deg, ${C.blue600}, ${C.emerald600})`,
@@ -578,24 +674,54 @@ export default function PatientDetailPage({
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <h1 className="gradient-text" style={{ margin: 0, fontSize: 24, fontWeight: 700, color: C.slate800, lineHeight: 1.2 }}>
-                  {patientName}
+                  {(() => {
+                    if (!privacyMode) return patientName;
+                    // Privacy-masked: keep first initial + last initial,
+                    // drop the body of the name so a passerby cannot
+                    // identify the patient at a glance.
+                    const parts = (patientName || "").trim().split(/\s+/);
+                    const f = parts[0]?.charAt(0) || "?";
+                    const l = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
+                    return `${f}${l ? ". " + l + "." : "."}`;
+                  })()}
                 </h1>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", padding: "3px 10px",
-                  borderRadius: 999, fontSize: 11, fontWeight: 600, fontFamily: "monospace",
-                  background: C.blue100, color: C.blue600,
-                }}>
-                  PID {pid}
-                </span>
                 {patient?.mrn && (
                   <span style={{
                     display: "inline-flex", alignItems: "center", padding: "3px 10px",
                     borderRadius: 999, fontSize: 11, fontWeight: 600, fontFamily: "monospace",
                     background: C.slate100, color: C.slate600,
                   }}>
-                    MRN {patient.mrn}
+                    MRN {privacyMode
+                      ? `••••${String(patient.mrn).slice(-4)}`
+                      : patient.mrn}
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setPrivacyMode((v) => !v)}
+                  aria-label={privacyMode ? "Disable privacy mode" : "Enable privacy mode"}
+                  aria-pressed={privacyMode}
+                  title={
+                    privacyMode
+                      ? "Privacy mode ON — name + MRN masked. Toggle with Ctrl/Cmd+Shift+P."
+                      : "Privacy mode OFF — name + MRN visible. Toggle with Ctrl/Cmd+Shift+P."
+                  }
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${C.slate200}`,
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    width: 28,
+                    height: 28,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    color: privacyMode ? C.blue600 : C.slate500,
+                  }}
+                >
+                  {privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
               </div>
             </div>
           </div>
@@ -626,54 +752,92 @@ export default function PatientDetailPage({
                 {(batchMutation.isPending || batchStatus === "running") && <Spinner size={14} />}
                 {batchStatus === "running" ? "Analyzing..." : "Analyze All Encounters"}
               </button>
-              <button
-                onClick={() => auditMutation.mutate(selectedYear)}
-                disabled={auditMutation.isPending}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "8px 16px", borderRadius: 8,
-                  border: `1px solid ${C.slate200}`, background: C.white,
-                  color: C.slate700, fontSize: 13, fontWeight: 600,
-                  cursor: auditMutation.isPending ? "not-allowed" : "pointer",
-                  opacity: auditMutation.isPending ? 0.6 : 1,
-                }}
-              >
-                {auditMutation.isPending && <Spinner size={14} />}
-                Generate Audit
-              </button>
-              {/* RADV Packet: per-patient, per-payment-year evidence PDF
-                  for CMS RADV audits. Uses the selected year from the page
-                  picker — no separate year dropdown needed. */}
-              <button
-                onClick={() => radvPacketMutation.mutate(selectedYear)}
-                disabled={radvPacketMutation.isPending}
-                aria-label={`Download RADV packet for payment year ${selectedYear}`}
-                title={`Download RADV packet for payment year ${selectedYear}`}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "8px 16px", borderRadius: 8,
-                  border: `1px solid ${C.slate200}`, background: C.white,
-                  color: C.slate700, fontSize: 13, fontWeight: 600,
-                  cursor: radvPacketMutation.isPending ? "not-allowed" : "pointer",
-                  opacity: radvPacketMutation.isPending ? 0.6 : 1,
-                }}
-              >
-                {radvPacketMutation.isPending && <Spinner size={14} />}
-                Download RADV Packet
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="no-print"
-                aria-label="Print patient record"
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "8px 16px", borderRadius: 8,
-                  border: `1px solid ${C.slate200}`, background: C.white,
-                  color: C.slate700, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                <Printer size={14} /> Print
-              </button>
+              {/* More Actions overflow menu */}
+              <div ref={moreMenuRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setMoreMenuOpen((v) => !v)}
+                  aria-label="More actions"
+                  aria-expanded={moreMenuOpen}
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 40, height: 40, borderRadius: 8,
+                    border: `1px solid ${C.slate200}`, background: C.white,
+                    color: C.slate600, cursor: "pointer",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = C.white)}
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+                {moreMenuOpen && (
+                  <div
+                    style={{
+                      position: "absolute", top: "calc(100% + 4px)", right: 0,
+                      background: C.white, border: `1px solid ${C.slate200}`,
+                      borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
+                      minWidth: 200, zIndex: 100, overflow: "hidden",
+                    }}
+                    role="menu"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => { auditMutation.mutate(selectedYear); setMoreMenuOpen(false); }}
+                      disabled={auditMutation.isPending}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        width: "100%", padding: "10px 16px", background: "transparent",
+                        border: "none", color: C.slate700, fontSize: 13, fontWeight: 500,
+                        cursor: auditMutation.isPending ? "not-allowed" : "pointer",
+                        opacity: auditMutation.isPending ? 0.6 : 1,
+                        textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      {auditMutation.isPending ? <Spinner size={13} /> : null}
+                      Generate Audit
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => { radvPacketMutation.mutate(selectedYear); setMoreMenuOpen(false); }}
+                      disabled={radvPacketMutation.isPending}
+                      aria-label={`Download RADV packet for payment year ${selectedYear}`}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        width: "100%", padding: "10px 16px", background: "transparent",
+                        border: "none", borderTop: `1px solid ${C.slate100}`,
+                        color: C.slate700, fontSize: 13, fontWeight: 500,
+                        cursor: radvPacketMutation.isPending ? "not-allowed" : "pointer",
+                        opacity: radvPacketMutation.isPending ? 0.6 : 1,
+                        textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      {radvPacketMutation.isPending ? <Spinner size={13} /> : null}
+                      Download RADV Packet
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => { window.print(); setMoreMenuOpen(false); }}
+                      className="no-print"
+                      aria-label="Print patient record"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        width: "100%", padding: "10px 16px", background: "transparent",
+                        border: "none", borderTop: `1px solid ${C.slate100}`,
+                        color: C.slate700, fontSize: 13, fontWeight: 500,
+                        cursor: "pointer", textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <Printer size={13} /> Print
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -696,9 +860,72 @@ export default function PatientDetailPage({
         </div>
       </div>
 
-      {/* RISK SUMMARY STRIP */}
+      {/* YEAR SELECTOR ROW — between action header and metric strip, right-aligned, no absolute positioning */}
       <div
-        className="animate-slide-up stagger-1"
+        style={{
+          background: C.white,
+          borderBottom: `1px solid ${C.slate100}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          padding: "0 24px",
+          height: 32,
+          gap: 4,
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Year</span>
+        {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map((yr) => (
+          <button
+            key={yr}
+            onClick={() => setSelectedYear(yr)}
+            style={{
+              padding: "3px 10px", fontSize: 11,
+              fontWeight: selectedYear === yr ? 700 : 500,
+              color: selectedYear === yr ? C.white : C.slate500,
+              background: selectedYear === yr ? C.blue600 : "transparent",
+              border: selectedYear === yr ? "none" : `1px solid ${C.slate200}`,
+              borderRadius: 6, cursor: "pointer", transition: "all 0.15s",
+              flexShrink: 0,
+            }}
+          >
+            {yr}
+          </button>
+        ))}
+      </div>
+
+      {/* RISK SUMMARY STRIP */}
+      <style>{`
+        .metric-strip {
+          display: grid;
+          grid-template-columns: 200px 1fr 1fr 1fr 1fr;
+          width: 100%;
+          gap: 0;
+        }
+        @media (max-width: 640px) {
+          .metric-strip-wrapper {
+            height: auto !important;
+            padding: 8px 12px !important;
+          }
+          .metric-strip {
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 0;
+          }
+          .metric-strip > div {
+            border-left: none !important;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 8px 12px !important;
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+          }
+          .metric-strip > div:nth-child(2),
+          .metric-strip > div:nth-child(4) {
+            border-left: 1px solid #e2e8f0 !important;
+          }
+        }
+      `}</style>
+      <div
+        className="animate-slide-up stagger-1 metric-strip-wrapper"
         style={{
           background: C.white,
           borderBottom: `1px solid ${C.slate200}`,
@@ -708,10 +935,9 @@ export default function PatientDetailPage({
           padding: "0 24px",
         }}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", width: "100%", gap: 0 }}>
+        <div className="metric-strip">
           {/* 1. RAF Score */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px" }}>
-            <RiskGauge score={rafScore} size={56} label="" />
             <div>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 2 }}>
                 RAF Score ({selectedYear})
@@ -725,7 +951,7 @@ export default function PatientDetailPage({
                   textShadow: rafScore != null ? `0 0 20px ${rafScoreColor(rafScore)}33` : "none",
                 }}
               >
-                {rafScore != null ? Number(rafScore).toFixed(3) : "\u2014"}
+                {rafScore != null ? Number(rafScore).toFixed(2) : "\u2014"}
               </div>
               {aiAnalysis && aiAnalysis.aiOnlyCount > 0 && (
                 <div style={{ fontSize: 10, color: C.emerald600, fontWeight: 600, marginTop: 2 }}>
@@ -735,17 +961,33 @@ export default function PatientDetailPage({
             </div>
           </div>
 
-          {/* 2. Model Segment */}
+          {/* 2. Model Segment — Radix Tooltip matches the MEAT trigger in
+              the same KPI rail so keyboard / screen-reader access is
+              uniform across the rail (UX round-7 last blocker). */}
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", borderLeft: `1px solid ${C.slate100}`, padding: "0 16px" }}>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 6 }}>
               Model Segment
             </div>
-            <span
-              title={`Segment code: ${segmentCodeUpper(modelSegment)}`}
-              style={{ display: "inline-flex", alignItems: "center", padding: "4px 14px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: C.slate100, color: C.slate700, textAlign: "center" }}
-            >
-              {segmentLabel(modelSegment)}
-            </span>
+            <TooltipProvider delay={200}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label={`Model segment ${segmentCodeUpper(modelSegment)}. ${segmentLabel(modelSegment)}.`}
+                      style={{ display: "inline-flex", alignItems: "center", padding: "4px 14px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: C.slate100, color: C.slate700, textAlign: "center", border: "none", cursor: "help", fontFamily: "inherit" }}
+                    />
+                  }
+                >
+                  {segmentLabel(modelSegment)}
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                  <strong>Segment {segmentCodeUpper(modelSegment)}</strong> — {segmentLabel(modelSegment)}.
+                  CMS-HCC model segment determines which coefficient table
+                  applies to this patient&apos;s RAF score.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* 3. HCC Count */}
@@ -759,17 +1001,53 @@ export default function PatientDetailPage({
             </div>
           </div>
 
-          {/* 4. MEAT Compliance */}
+          {/* 4. MEAT Compliance — Radix Tooltip provides a keyboard-accessible
+              gloss of the acronym so a new clinician/coder can learn what M/
+              E/A/T mean without leaving the chart. Native `title=` was
+              keyboard-inaccessible (failed WCAG 2.1 SC 1.4.13). */}
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", borderLeft: `1px solid ${C.slate100}`, padding: "0 16px" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 6 }}>
-              MEAT Compliance
-            </div>
+            <TooltipProvider delay={200}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="What is MEAT compliance? Explain the four documentation elements."
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        margin: 0,
+                        marginBottom: 6,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: C.slate400,
+                        cursor: "help",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                  }
+                >
+                  MEAT Compliance
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                  <strong>MEAT</strong> = Monitor, Evaluate, Assess, Treat — the
+                  four documentation elements CMS requires to support each HCC
+                  in a RADV audit.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: meatTotal === 0 ? C.slate400 : meatFilled === 0 ? C.amber600 : C.slate900, lineHeight: 1 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 16, fontWeight: 700, color: meatTotal === 0 ? C.slate400 : meatFilled === 0 && hccCount > 0 ? "#DC2626" : C.slate900, lineHeight: 1 }}>
+                {meatTotal > 0 && meatFilled === 0 && hccCount > 0 && (
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", display: "inline-block", flexShrink: 0 }} aria-hidden />
+                )}
                 {meatTotal === 0 ? "—" : meatFilled === 0 ? "Pending" : `${meatFilled}/${meatTotal}`}
               </span>
               <div style={{ width: 80 }}>
-                <ProgressBar value={meatTotal > 0 ? (meatFilled / meatTotal) * 100 : 0} showPercent={false} height={4} color={meatFilled > 0 ? C.emerald500 : C.amber600} />
+                <ProgressBar value={meatTotal > 0 ? (meatFilled / meatTotal) * 100 : 0} showPercent={false} height={4} color={meatFilled > 0 ? C.emerald500 : meatFilled === 0 && hccCount > 0 ? "#DC2626" : C.amber600} />
               </div>
             </div>
           </div>
@@ -803,27 +1081,6 @@ export default function PatientDetailPage({
             scrollbarWidth: "thin",
           }}
         >
-          {/* Year Selector */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 16, paddingRight: 16, borderRight: `1px solid ${C.slate200}`, flexShrink: 0 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Year</span>
-            {Array.from({length: 3}, (_, i) => new Date().getFullYear() - i).map((yr) => (
-              <button
-                key={yr}
-                onClick={() => setSelectedYear(yr)}
-                style={{
-                  padding: "6px 12px", fontSize: 12,
-                  fontWeight: selectedYear === yr ? 700 : 500,
-                  color: selectedYear === yr ? C.white : C.slate500,
-                  background: selectedYear === yr ? C.blue600 : "transparent",
-                  border: selectedYear === yr ? "none" : `1px solid ${C.slate200}`,
-                  borderRadius: 6, cursor: "pointer", transition: "all 0.15s",
-                  flexShrink: 0,
-                }}
-              >
-                {yr}
-              </button>
-            ))}
-          </div>
           <div role="tablist" style={{ display: "flex", flexWrap: "nowrap" }}>
             {tabs.map((tab) => (
               <button
@@ -888,22 +1145,51 @@ export default function PatientDetailPage({
           />
         )}
         {activeTab === "raf" && (
-          <RAFTab
-            breakdown={breakdown}
-            breakdownLoading={rafBreakdownQ.isLoading}
-            history={history}
-            historyLoading={rafHistoryQ.isLoading}
-            recapture={recaptureQ.data}
-            recaptureLoading={recaptureQ.isLoading}
-            rafScore={rafScore}
-            suspects={suspectsQ.data}
-            lastCalcResult={lastCalcResult}
-            selectedYear={selectedYear}
-          />
-        )}
-        {activeTab === "models" && (
-          <div style={{ maxWidth: 1100 }}>
-            <ModelComparison pid={pid} year={selectedYear} />
+          <div>
+            {/* Sub-pill navigation for merged RAF tab */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+              {([
+                { id: "central" as const, label: "Central" },
+                { id: "details" as const, label: "Details" },
+                { id: "comparison" as const, label: "Comparison" },
+              ]).map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => {
+                    setRafSubTab(pill.id);
+                  }}
+                  style={{
+                    padding: "6px 16px", fontSize: 12, fontWeight: rafSubTab === pill.id ? 700 : 500,
+                    color: rafSubTab === pill.id ? C.white : C.slate600,
+                    background: rafSubTab === pill.id ? C.blue600 : C.white,
+                    border: `1px solid ${rafSubTab === pill.id ? C.blue600 : C.slate200}`,
+                    borderRadius: 20, cursor: "pointer", transition: "all 0.15s",
+                  }}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+            {rafSubTab === "central" && <RAFCentralTab pid={pid} year={selectedYear} />}
+            {rafSubTab === "details" && (
+              <RAFTab
+                breakdown={breakdown}
+                breakdownLoading={rafBreakdownQ.isLoading}
+                history={history}
+                historyLoading={rafHistoryQ.isLoading}
+                recapture={recaptureQ.data}
+                recaptureLoading={recaptureQ.isLoading}
+                rafScore={rafScore}
+                suspects={suspectsQ.data}
+                lastCalcResult={lastCalcResult}
+                selectedYear={selectedYear}
+              />
+            )}
+            {rafSubTab === "comparison" && (
+              <div style={{ maxWidth: 1100 }}>
+                <ModelComparison pid={pid} year={selectedYear} />
+              </div>
+            )}
           </div>
         )}
         {activeTab === "clinical" && (
@@ -965,9 +1251,6 @@ export default function PatientDetailPage({
             auditMutation={auditMutation}
             selectedYear={selectedYear}
           />
-        )}
-        {activeTab === "rafcentral" && (
-          <RAFCentralTab pid={pid} year={selectedYear} />
         )}
         {activeTab === "activity" && (
           <ActivityTab

@@ -20,7 +20,11 @@ interface DismissReasonDialogProps {
 }
 
 function DismissReasonDialogInner({ suspectLabel, onCancel, onSubmit }: Omit<DismissReasonDialogProps, "open">) {
-  const [selected, setSelected] = useState<DismissReasonCode>("not_clinically_supported");
+  // Default to NO selection so an accidental Enter-press cannot auto-dismiss
+  // a valid suspect with the most destructive reason ("not clinically
+  // supported"). Submit stays disabled until the clinician makes a positive
+  // choice — UX/accessibility review #7 + patient-safety review #5.
+  const [selected, setSelected] = useState<DismissReasonCode | null>(null);
   const [otherText, setOtherText] = useState("");
   const otherTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -30,10 +34,10 @@ function DismissReasonDialogInner({ suspectLabel, onCancel, onSubmit }: Omit<Dis
     }
   }, [selected]);
 
-  const isValid = selected !== "other" || otherText.trim().length > 0;
+  const isValid = selected !== null && (selected !== "other" || otherText.trim().length > 0);
 
   const handleSubmit = () => {
-    if (!isValid) return;
+    if (!isValid || selected === null) return;
     const reason =
       selected === "other"
         ? `other: ${otherText.trim()}`
@@ -72,7 +76,7 @@ function DismissReasonDialogInner({ suspectLabel, onCancel, onSubmit }: Omit<Dis
                 name="dismiss-reason"
                 value={code}
                 checked={selected === code}
-                onChange={() => setSelected(code)}
+                onChange={() => setSelected(code as DismissReasonCode)}
                 className="accent-primary"
               />
               {label}

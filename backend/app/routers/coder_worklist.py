@@ -285,7 +285,7 @@ def list_worklist(
             offset=offset,
         )
     except Exception as exc:
-        logger.error("list_worklist coder=%s: %s", coder_id, exc)
+        logger.exception("list_worklist coder=%s: %s", coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     try:
@@ -329,7 +329,7 @@ def get_next_item(
             review_type=review_type,
         )
     except Exception as exc:
-        logger.error("get_next_item coder=%s: %s", coder_id, exc)
+        logger.exception("get_next_item coder=%s: %s", coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if item is None:
@@ -362,7 +362,7 @@ def worklist_stats(
             days=days,
         )
     except Exception as exc:
-        logger.error("worklist_stats coder=%s: %s", coder_id, exc)
+        logger.exception("worklist_stats coder=%s: %s", coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -422,7 +422,7 @@ def start_item(
         logger.warning("start_item id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("start_item id=%s coder=%s: %s", item_id, coder_id, exc)
+        logger.exception("start_item id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"item_id": item_id, "action": "started", "item": updated}
@@ -467,7 +467,7 @@ def complete_item(
         logger.warning("complete_item id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("complete_item id=%s coder=%s: %s", item_id, coder_id, exc)
+        logger.exception("complete_item id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -503,7 +503,7 @@ def escalate(
         logger.warning("escalate id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("escalate id=%s coder=%s: %s", item_id, coder_id, exc)
+        logger.exception("escalate id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"item_id": item_id, "action": "escalated", "reason": body.reason, "item": updated}
@@ -535,7 +535,7 @@ def return_for_info(
         logger.warning("return_for_info id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("return_for_info id=%s coder=%s: %s", item_id, coder_id, exc)
+        logger.exception("return_for_info id=%s coder=%s: %s", item_id, coder_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"item_id": item_id, "action": "returned", "reason": body.reason, "item": updated}
@@ -585,7 +585,7 @@ def manual_assign(
             source="manual",
         )
     except Exception as exc:
-        logger.error("manual_assign user=%s: %s", assigning_user_id, exc)
+        logger.exception("manual_assign user=%s: %s", assigning_user_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"action": "assigned", "item": item}
@@ -635,7 +635,7 @@ def auto_queue(
                 tenant_id=tenant_id,
             )
     except Exception as exc:
-        logger.error("auto_queue user=%s source=%s: %s", assigning_user_id, body.source, exc)
+        logger.exception("auto_queue user=%s source=%s: %s", assigning_user_id, body.source, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"source": body.source, **result}

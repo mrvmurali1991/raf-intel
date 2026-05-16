@@ -650,7 +650,7 @@ select.appearance-none {
    ================================================================ */
 
 /* ---- Patient worklist grid: responsive column template ----
- * Desktop default uses --gt-desktop; on tablet (≤1024px) we swap to
+ * Desktop default uses --gt-desktop; on tablet (≤1280px) we swap to
  * --gt-tablet which drops the wide "Risk Factors" column and the 32px
  * chevron column so the grid fits inside the ~880px usable area when
  * the sidebar is collapsed. Header, filter, skeleton and data rows
@@ -659,13 +659,146 @@ select.appearance-none {
 .worklist-grid {
   grid-template-columns: var(--gt-desktop) !important;
 }
-@media (max-width: 1024px) {
+/* Visible focus-visible ring on keyboard-navigated worklist rows.
+ * Without this, the next/link wrapping each row had no visible outline
+ * and a coder tabbing through could not see which row would open
+ * (UX/accessibility review #5). 2px teal outline (Brand color) sits
+ * inside the row border-radius so it doesn't clip in the scroll container. */
+.worklist-row-anchor:focus-visible {
+  outline: 2px solid #0F766E;
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+@media (max-width: 1280px) {
   .worklist-grid {
     grid-template-columns: var(--gt-tablet) !important;
   }
   .risk-factors-cell {
     display: none !important;
   }
+}
+
+/* ---- Sticky worklist header ---- */
+.worklist-header-row {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: white;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+.dark .worklist-header-row {
+  background: hsl(var(--card));
+}
+
+/* ================================================================
+   KPI COMPACT STRIP — shown at ≤1280px, hidden above
+   ================================================================ */
+
+/* The 4-card full layout is visible by default (>1280px). */
+.kpi-full-grid {
+  display: grid;
+}
+.kpi-compact-strip {
+  display: none;
+}
+
+/* At ≤1280px: hide the tall grid, show the compact strip */
+@media (max-width: 1280px) {
+  .kpi-full-grid {
+    display: none !important;
+  }
+  .kpi-compact-strip {
+    display: flex !important;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 16px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+    min-height: 64px;
+  }
+}
+
+/* On mobile (≤640px): scrollable horizontal strip with snap */
+@media (max-width: 640px) {
+  .kpi-compact-strip {
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    /* Prevent wrapping so all 4 tiles stay in one row */
+    flex-wrap: nowrap;
+  }
+}
+
+/* Each metric item inside the compact strip */
+.kpi-compact-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  flex: 1 0 auto;
+  min-width: 0;
+  cursor: default;
+  border-right: 1px solid #e2e8f0;
+  transition: background 0.15s ease;
+}
+.kpi-compact-item:last-child {
+  border-right: none;
+}
+.kpi-compact-item:hover {
+  background: #f8fafc;
+}
+.kpi-compact-item--clickable {
+  cursor: pointer;
+}
+
+/* Mobile: each item snaps and has a fixed minimum width */
+@media (max-width: 640px) {
+  .kpi-compact-item {
+    flex: 0 0 auto;
+    min-width: 150px;
+    scroll-snap-align: start;
+    padding: 0 16px;
+  }
+}
+
+/* Need Review — red left border accent */
+.kpi-compact-item--alert {
+  border-left: 3px solid #ef4444;
+  padding-left: 17px; /* 20px - 3px border */
+}
+@media (max-width: 640px) {
+  .kpi-compact-item--alert {
+    padding-left: 13px; /* 16px - 3px border */
+  }
+}
+
+.kpi-compact-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.kpi-compact-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.kpi-compact-sep {
+  width: 1px;
+  align-self: stretch;
+  background: #e2e8f0;
+  flex-shrink: 0;
 }
 
 /* Tablet-only column-filter input height (touch target).

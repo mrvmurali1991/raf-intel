@@ -17,13 +17,21 @@ export function RecaptureSection({ recapture }: { recapture: RecaptureCardType[]
       />
     );
 
-  const totalRisk = recapture.reduce((acc, r) => acc + r.revenue_at_risk, 0);
+  // Dedupe by hcc+label key to prevent backend duplicates rendering in the UI
+  const seen = new Set<string>();
+  const deduped = recapture.filter((r) => {
+    const key = `${r.hcc}-${r.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const totalRisk = deduped.reduce((acc, r) => acc + (r.revenue_at_risk ?? 0), 0);
   return (
     <div className="space-y-2">
       <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 p-2 text-xs text-amber-900 dark:text-amber-200">
-        <strong>${totalRisk.toLocaleString()}</strong> revenue at risk across {recapture.length} gaps
+        <strong>${totalRisk.toLocaleString()}</strong> revenue at risk across {deduped.length} gaps
       </div>
-      {recapture.map((r) => (
+      {deduped.map((r) => (
         <RecaptureCard key={r.id} item={r} />
       ))}
     </div>

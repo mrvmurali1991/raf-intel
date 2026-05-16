@@ -180,7 +180,7 @@ async def upload_claims_file(
         stored_count = svc.store_parsed_claims(batch_id, claims)
         svc.update_batch_status(batch_id, svc.STATUS_PARSED)
     except Exception as exc:
-        logger.error("Failed to store claims for file '%s': %s", filename, exc)
+        logger.exception("Failed to store claims for file '%s': %s", filename, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(
@@ -224,7 +224,7 @@ def list_batches(
     try:
         batches = svc.list_batches(limit=limit, offset=offset, tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("list_batches error: %s", exc)
+        logger.exception("list_batches error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -286,7 +286,7 @@ def delete_batch(
     try:
         deleted_claims = svc.delete_batch(batch_id, tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("delete_batch error for batch_id=%d: %s", batch_id, exc)
+        logger.exception("delete_batch error for batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(
@@ -350,7 +350,7 @@ def process_batch(
     try:
         result = svc.process_batch(batch_id)
     except Exception as exc:
-        logger.error("process_batch failed for batch_id=%d: %s", batch_id, exc)
+        logger.exception("process_batch failed for batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(
@@ -399,7 +399,7 @@ def list_batch_claims(
     try:
         claims, total = svc.get_batch_claims(batch_id, limit=limit, offset=offset)
     except Exception as exc:
-        logger.error("get_batch_claims error batch_id=%d: %s", batch_id, exc)
+        logger.exception("get_batch_claims error batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(
@@ -445,7 +445,7 @@ def get_batch_diagnoses(
     try:
         diagnoses = svc.get_batch_diagnoses(batch_id, limit=limit, offset=offset)
     except Exception as exc:
-        logger.error("get_batch_diagnoses error batch_id=%d: %s", batch_id, exc)
+        logger.exception("get_batch_diagnoses error batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -479,7 +479,7 @@ def get_hcc_summary(
     try:
         hcc_summary = svc.get_hcc_summary(batch_id, limit=limit, offset=offset)
     except Exception as exc:
-        logger.error("get_hcc_summary error batch_id=%d: %s", batch_id, exc)
+        logger.exception("get_hcc_summary error batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -518,7 +518,7 @@ def get_unmapped_patients(
     try:
         patients = svc.get_unmapped_patients(batch_id, limit=limit, offset=offset)
     except Exception as exc:
-        logger.error("get_unmapped_patients error batch_id=%d: %s", batch_id, exc)
+        logger.exception("get_unmapped_patients error batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(
@@ -599,7 +599,7 @@ def calculate_raf_for_batch(
     try:
         result = svc.calculate_raf_for_batch(batch_id, measurement_year)
     except Exception as exc:
-        logger.error("calculate_raf_for_batch failed batch_id=%d: %s", batch_id, exc)
+        logger.exception("calculate_raf_for_batch failed batch_id=%d: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(
@@ -643,7 +643,7 @@ def get_claims_stats(
     try:
         stats = svc.get_overall_stats()
     except Exception as exc:
-        logger.error("get_claims_stats error: %s", exc)
+        logger.exception("get_claims_stats error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return stats

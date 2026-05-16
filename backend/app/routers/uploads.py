@@ -1180,7 +1180,7 @@ async def upload_patients(
             tenant_id=int(tenant_id) if str(tenant_id).isdigit() else 1,
         )
     except Exception as exc:
-        logger.error("uploads: import_patients failed: %s", exc)
+        logger.exception("uploads: import_patients failed: %s", exc)
         _finalize_upload_session(
             upload_id, "failed", len(rows), 0, len(rows), f"Importer error: {exc}"
         )

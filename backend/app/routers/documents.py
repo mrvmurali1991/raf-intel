@@ -593,7 +593,21 @@ def document_stats(
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ) -> dict[str, Any]:
-    return _serialize(get_document_stats(tenant_id))
+    raw = _serialize(get_document_stats(tenant_id)) or {}
+    # Schema declares flat `total_documents` / `total_diagnoses` (used by the
+    # admin dashboard summary). The service returns them nested under
+    # `documents.*` / `diagnoses.*`; surface both shapes so existing
+    # frontend consumers of the nested shape keep working AND the response
+    # passes the declared response_model.
+    raw.setdefault(
+        "total_documents",
+        (raw.get("documents") or {}).get("total_documents", 0),
+    )
+    raw.setdefault(
+        "total_diagnoses",
+        (raw.get("diagnoses") or {}).get("total_diagnoses", 0),
+    )
+    return raw
 
 
 @router.get(
@@ -1331,7 +1345,7 @@ def list_openemr_documents(
                 "documents": [],
                 "warning": "OpenEMR documents table not available",
             }
-        logger.error("list_openemr_documents error: %s", exc)
+        logger.exception("list_openemr_documents error: %s", exc)
         raise HTTPException(status_code=500, detail="Could not connect to OpenEMR")
 
 

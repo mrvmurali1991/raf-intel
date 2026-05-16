@@ -109,7 +109,7 @@ def validate_batch(
         results = validate_meat_batch(body.note_text, body.icd_codes)
         return ValidateBatchResponse(results=results)
     except Exception as exc:
-        logger.error("meat.validate_batch failed: %s", exc, exc_info=True)
+        logger.exception("meat.validate_batch failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="MEAT validation failed")
 
 
@@ -122,7 +122,7 @@ def validate_single(
     try:
         return validate_meat(body.note_text, body.icd_code, body.hcc_label)
     except Exception as exc:
-        logger.error("meat.validate_single failed: %s", exc, exc_info=True)
+        logger.exception("meat.validate_single failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="MEAT validation failed")
 
 
@@ -285,7 +285,7 @@ def run_for_patient(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "meat.run_for_patient failed pid=%s: %s", patient_id, exc, exc_info=True
         )
         raise HTTPException(

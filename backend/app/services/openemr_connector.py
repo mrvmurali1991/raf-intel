@@ -685,7 +685,7 @@ def _parse_vital(value: Any) -> float | None:
         return None
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_vitals_trends(pid: int, year: int | None = None) -> dict[str, Any]:
     """
     Derive simple directional trends for weight, blood pressure, and BMI
@@ -1176,7 +1176,7 @@ def _insurance_contains(text: str, keywords: tuple[str, ...]) -> bool:
     return any(kw in t for kw in keywords)
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_patient_enrollment_info(pid: int) -> dict[str, Any]:
     """
     Derive insurance/enrollment metadata for a patient using best-effort
@@ -1648,7 +1648,7 @@ def push_medical_problem(pid: int, title: str, diagnosis_code: str) -> bool:
 
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_latest_vitals(pid: int, tenant_id: str = "") -> dict[str, Any]:
     """
     Return the single most-recent active vitals row for a patient.
@@ -1852,7 +1852,7 @@ def get_all_patients(limit: int = 500, offset: int = 0, tenant_id: str | None = 
     return [_serialize(r) for r in rows]
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_soap_notes_by_encounter(encounter_id: int) -> dict[str, Any]:
     """
     Return the SOAP note for a specific encounter as a single dict.
@@ -2034,7 +2034,7 @@ def _calculate_age(dob_raw: str | None) -> int | None:
         return None
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_hedis_compliance(pid: int, year: int) -> dict[str, Any]:
     """
     Check HEDIS/Stars quality measures for a patient and return a compliance
@@ -2383,7 +2383,7 @@ _FAMILY_HISTORY_COLUMNS: tuple[str, ...] = (
 )
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_family_history(pid: int) -> dict[str, Any]:
     """
     Return the most recent family-history record for *pid* from history_data.
@@ -2443,7 +2443,7 @@ SDOH_BILLABLE_HIGHLIGHTS: dict[str, str] = {
 }
 
 
-@_empty_on_no_emr(default=None)
+@_empty_on_no_emr(default=dict)
 def get_sdoh_data(pid: int) -> dict[str, Any]:
     """
     Return Social Determinants of Health data for *pid*.

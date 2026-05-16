@@ -418,29 +418,46 @@ export interface PatientEncountersResponse {
   }>;
 }
 
+/**
+ * Backend canonical shape for /api/raf/scores/{pid}.
+ * Returns a SINGLE object (NOT an array — the prior hand-typed `RafScore[]`
+ * was wrong cardinality; any caller doing `.map`/`.length` would crash).
+ */
 export interface RafScore {
-  pid: number;
-  year: number;
+  patient_id: number;
+  patient_name?: string | null;
+  measurement_year: number;
+  model_segment: string;
+  score_type?: string;
   raf_score: number;
-  model: string;
-  hcc_codes: string[];
-  calculated_at: string;
+  demographic_score?: number;
+  disease_score?: number;
+  interaction_score?: number;
+  hcc_count?: number;
+  blend_weights?: Record<string, unknown> | null;
+  calculated_at?: string;
 }
 
+/**
+ * Backend canonical shape for /api/raf/scores/{pid}/breakdown.
+ * The prior hand-typed `total_score` field does NOT exist on the backend —
+ * the wire fields are `raf_score` and `final_raf`. `hcc_details` is an
+ * opaque list on the backend; keep it loose until the backend tightens.
+ */
 export interface RafBreakdown {
-  pid: number;
-  year: number;
-  model: string;
-  demographic_score: number;
-  disease_score: number;
-  interaction_score: number;
-  total_score: number;
-  hcc_details: Array<{
-    hcc_code: string;
-    description: string;
-    score: number;
-    icd10_codes: string[];
-  }>;
+  patient_id: number;
+  patient_name?: string | null;
+  measurement_year: number;
+  model_segment: string;
+  score_type?: string;
+  raf_score: number;
+  final_raf?: number;
+  blend_weights?: Record<string, unknown> | null;
+  calculated_at?: string;
+  engine_input?: Record<string, unknown> | null;
+  engine_output?: Record<string, unknown> | null;
+  dos_window?: Record<string, unknown> | null;
+  hcc_details: Array<Record<string, unknown>>;
 }
 
 // PopulationSummary and DataCompleteness are now canonical in @/types — re-exported above.
@@ -874,22 +891,51 @@ export interface VitalsLatest {
   [key: string]: unknown;
 }
 
+/**
+ * Shared row shape for entries returned by /vitals-suspects and /lab-suspects.
+ * Both endpoints emit the same dict structure under the `suspects` key.
+ */
+export interface ClinicalFindingRow {
+  condition?: string;
+  finding?: string;
+  evidence?: string;
+  rationale?: string;
+  detail?: string;
+  icd10_code?: string;
+  hcc_code?: string;
+  field?: string;
+  measured_value?: number;
+  confidence?: number;
+  icd10?: string;
+  hcc?: string;
+  vitals_date?: string;
+}
+
+/**
+ * Response shape for /api/patients/{pid}/vitals-suspects and /lab-suspects.
+ * Backend canonical fields (verified live): pid, count, suspects. The optional
+ * vitals_suspects and latest_vitals aliases are kept as a transitional
+ * compatibility layer for callers still reading the old field names; they
+ * are NOT emitted by the current backend.
+ */
 export interface ClinicalFindingsResponse {
-  suspects?: Array<{
-    condition?: string; finding?: string;
-    evidence?: string; rationale?: string; detail?: string;
-    icd10_code?: string; hcc_code?: string;
-  }>;
-  /** Year-filtered latest vitals row returned by /vitals-suspects */
+  pid: number;
+  count: number;
+  suspects: ClinicalFindingRow[];
+  note?: string | null;
+  /** Lab-suspects only — present when the FHIR lab fallback returned rows. */
+  labs?: { results?: unknown[]; source?: string } | null;
+  /**
+   * @deprecated never emitted by the live backend — kept only so existing
+   * callers reading `r.vitals_suspects` continue to compile while migrating
+   * to `r.suspects`.
+   */
+  vitals_suspects?: ClinicalFindingRow[];
+  /**
+   * @deprecated never emitted by the live backend — kept transitionally for
+   * callers reading `r.latest_vitals`.
+   */
   latest_vitals?: VitalsLatest;
-  /** Raw field name as returned by the backend (vitals_suspects) */
-  vitals_suspects?: Array<{
-    condition?: string; finding?: string;
-    evidence?: string; rationale?: string; detail?: string;
-    icd10_code?: string; hcc_code?: string;
-    field?: string; measured_value?: number; confidence?: number;
-    icd10?: string; hcc?: string; vitals_date?: string;
-  }>;
 }
 
 export async function getPatientVitalsSuspects(
@@ -967,8 +1013,15 @@ export async function getPatientImmunizations(
   return data;
 }
 
+/**
+ * Backend canonical shape for /api/patients/{pid}/enrollment.
+ * Verified live: { pid, enrollment: dict }. `enrollment` is a single record,
+ * NOT an array — previously the frontend hand-typed it as an array of plans,
+ * which would have thrown on .map/.length if anyone actually consumed it.
+ */
 export interface EnrollmentResponse {
-  enrollment?: Array<{ plan?: string; start_date?: string; end_date?: string; status?: string }>;
+  pid: number;
+  enrollment: Record<string, unknown>;
 }
 
 export async function getPatientEnrollment(
@@ -996,8 +1049,17 @@ export async function getPatientMedicationGaps(
   return data;
 }
 
+/**
+ * Backend canonical shape for /api/patients/{pid}/hedis.
+ * Verified live: { pid, year, summary: dict, measures: dict, source? }.
+ * `measures` is a dict keyed by measure_id, NOT an array.
+ */
 export interface HedisResponse {
-  measures?: Array<{ measure_id?: string; name?: string; status?: string; due_date?: string }>;
+  pid: number;
+  year: number;
+  summary: Record<string, unknown>;
+  measures: Record<string, unknown>;
+  source?: string | null;
 }
 
 export async function getPatientHedis(
@@ -1010,7 +1072,18 @@ export async function getPatientHedis(
   return data;
 }
 
+/**
+ * Backend canonical shape for /api/patients/{pid}/sdoh.
+ * Verified live: { pid, sdoh_form, billed_z_codes, billable_highlights }.
+ * The legacy `factors[]` field is NOT emitted; kept as deprecated to ease
+ * migration of any caller still reading it.
+ */
 export interface SdohResponse {
+  pid: number;
+  sdoh_form: Record<string, unknown>;
+  billed_z_codes: Array<unknown>;
+  billable_highlights: Record<string, unknown>;
+  /** @deprecated never emitted by the backend — use sdoh_form. */
   factors?: Array<{ category?: string; description?: string; risk_level?: string; screening_date?: string }>;
 }
 
@@ -1019,7 +1092,18 @@ export async function getPatientSdoh(pid: string | number): Promise<SdohResponse
   return data;
 }
 
+/**
+ * Backend canonical shape for /api/patients/{pid}/family-history.
+ * Verified live: { pid, family_history: {...nested object...}, source?, note? }.
+ * The previous `history[]` array shape was hand-typed against a backend that
+ * never existed — every consumer reading `.history` always got undefined.
+ */
 export interface FamilyHistoryResponse {
+  pid: number;
+  family_history: Record<string, unknown>;
+  source?: string | null;
+  note?: string | null;
+  /** @deprecated never emitted by the backend — use family_history. */
   history?: Array<{ condition?: string; relation?: string; relative?: string; age_at_onset?: number }>;
 }
 
@@ -1097,7 +1181,7 @@ export async function calculateAllRAF(): Promise<{ job_id?: string; status?: str
 export async function getRafScores(
   pid: string | number,
   year?: number
-): Promise<RafScore[]> {
+): Promise<RafScore> {
   const { data } = await api.get(`/api/raf/scores/${pid}`, {
     params: year ? { year } : undefined,
   });

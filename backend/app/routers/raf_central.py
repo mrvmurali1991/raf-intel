@@ -149,6 +149,12 @@ class SuspectCard(BaseModel):
     evidence_type: str
     trigger: str
     status: str
+    # Hierarchy + completeness signals — surfaced so the UI can disable
+    # Accept on a suspect that V28 will trump at scoring time and so the
+    # MEAT-completeness fraction can drive prioritization instead of raw
+    # coefficient (patient-safety review #6, #7).
+    trumped_by_hcc: int | None = None
+    meat_completeness: float | None = None
 
 
 class RecaptureCard(BaseModel):
@@ -359,9 +365,26 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
         if code in letter_map:
             trues = sum(1 for v in letters.values() if v)
             actual_status = "COMPLETE" if trues == 4 else ("PARTIAL" if trues else "MISSING")
+        # patient_hcc_id resolution — three-tier fallback to guarantee the
+        # MEAT attestation buttons on this card render with a real id:
+        #   1. _fetch_meat_letters JOIN map (covers most patients)
+        #   2. meat_completeness blob if the engine attached one
+        #   3. Direct per-row lookup against raf_patient_hcc as a last resort
+        # Without these fallbacks every Mark-reviewed / Order Lab / Start
+        # Treatment button on the panel is rendered with patient_hcc_id=null
+        # and silently no-ops (PCP-review #1).
+        meat_completeness = hcc.get("meat_completeness") or {}
+        resolved_hcc_id = hcc_id_map.get(code)
+        if resolved_hcc_id is None and meat_completeness.get("patient_hcc_id") is not None:
+            try:
+                resolved_hcc_id = int(meat_completeness["patient_hcc_id"])
+            except (ValueError, TypeError):
+                resolved_hcc_id = None
+        if resolved_hcc_id is None and code:
+            resolved_hcc_id = _fetch_patient_hcc_id(pid, year, code, tenant_id)
         meat_gaps.append(
             MEATGap(
-                patient_hcc_id=hcc_id_map.get(code),
+                patient_hcc_id=resolved_hcc_id,
                 hcc=code,
                 icd10_codes=list(hcc.get("icd10_codes") or []),
                 label=hcc.get("hcc_label") or _hcc_label(code),
@@ -374,59 +397,277 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
     return raf_bar, meat_gaps, breakdown
 
 
+def _fetch_trumped_map(pid: int, year: int, tenant_id: str) -> dict[int, int]:
+    """Return {hcc_code: trumped_by_hcc} for any suspect whose HCC would be
+    trumped by an HCC already coded on the patient.
+
+    Two sources, merged:
+      1. `raf_patient_hcc.is_trumped=1` — rows the scorer has already
+         materialized (post-RAF-calculation).
+      2. `hcc_hierarchy_rules` cross-joined with the patient's active HCCs
+         (no `is_trumped` flag required) — covers the freshness gap where
+         a new suspect's hierarchy relationship hasn't been computed yet
+         (patient-safety review round-5 blocker #2). Without this, the
+         "Trumped by HCC X" badge is silently absent on the most actionable
+         (newest) suspects.
+    """
+    out: dict[int, int] = {}
+    try:
+        with raf_cursor() as cur:
+            # 1) Persisted trumping from the last scoring run.
+            cur.execute(
+                """
+                SELECT hcc_code, trumped_by_hcc
+                  FROM raf_patient_hcc
+                 WHERE patient_id = %s
+                   AND measurement_year = %s
+                   AND tenant_id = %s
+                   AND is_trumped = 1
+                   AND trumped_by_hcc IS NOT NULL
+                """,
+                (pid, year, tenant_id),
+            )
+            for r in cur.fetchall() or []:
+                try:
+                    out[int(r["hcc_code"])] = int(r["trumped_by_hcc"])
+                except (ValueError, TypeError):
+                    continue
+
+            # 2) Live rules: cross hcc_hierarchy_rules against the patient's
+            # currently-active HCCs (whether scored or not). If the patient
+            # already carries the dominant HCC of a rule, mark the
+            # subordinate as trumped — even if no raf_patient_hcc row yet
+            # bears the is_trumped flag.
+            cur.execute(
+                """
+                SELECT DISTINCT hr.hcc_code AS subordinate,
+                                hr.trumped_by_hcc AS dominant
+                  FROM hcc_hierarchy_rules hr
+                  JOIN raf_patient_hcc ph
+                    ON ph.hcc_code = hr.trumped_by_hcc
+                   AND ph.patient_id = %s
+                   AND ph.measurement_year = %s
+                   AND ph.tenant_id = %s
+                """,
+                (pid, year, tenant_id),
+            )
+            for r in cur.fetchall() or []:
+                try:
+                    sub = int(r["subordinate"])
+                    dom = int(r["dominant"])
+                except (ValueError, TypeError):
+                    continue
+                # Keep the persisted mapping if both sources agree; otherwise
+                # this is the live answer.
+                out.setdefault(sub, dom)
+    except Exception as exc:
+        logger.debug("trumped map lookup failed pid=%s: %s", pid, exc)
+    return out
+
+
 def _build_suspects(pid: int, year: int, tenant_id: str) -> list[SuspectCard]:
+    """
+    Emit one SuspectCard per open suspect for *pid*.
+
+    Label-resolution order (clinical safety):
+      1. ICD-10 description from `simple_icd_10_cm` — canonical clinical truth
+         (what the chart actually documents).
+      2. HCC label from the V28 dictionary — only when (a) ICD-10 is missing
+         or unmapped AND (b) hcc_code is non-zero.
+      3. Fall back to a generic "Suspect condition" so the UI never shows the
+         literal string "HCC " or "HCC 0".
+
+    Reason: prior versions used `_hcc_label(suspect_hcc)` exclusively, which
+    produced clinically wrong labels when the engine's HCC assignment did not
+    match the ICD-10 (e.g. hcc=111 paired with N18.4 displayed "Hemophilia"
+    while the actual ICD codes CKD Stage 4 — PCP-review #2). Accepting on the
+    strength of a wrong label would push the wrong diagnosis to the EMR.
+
+    Suspects with hcc=0 AND an unmapped ICD are dropped entirely — they are
+    almost always engine artifacts (raw text matches without HCC linkage) and
+    surfacing them as "HCC 0" / empty-label cards risks clinician confusion.
+    """
+    from app.services.icd_validator import (
+        get_description as _icd_desc,
+        get_hcc_mapping as _icd_to_hcc,
+    )
+
     try:
         rows = get_suspects_for_patient(pid, year=year, tenant_id=tenant_id) or []
     except Exception as exc:
         logger.error("raf-central: suspects fetch failed pid=%s: %s", pid, exc)
         return []
 
+    trumped_map = _fetch_trumped_map(pid, year, tenant_id)
+
+    trigger_map = {
+        "medication": "Medications",
+        "lab": "Lab results",
+        "historical": "Prior-year HCC",
+        "imaging": "Imaging",
+        "referral": "Referral",
+    }
+
     out: list[SuspectCard] = []
     for r in rows:
         if (r.get("status") or "").lower() != "open":
             continue
         ev = str(r.get("evidence_type") or "")
-        trigger_map = {
-            "medication": "Medications",
-            "lab": "Lab results",
-            "historical": "Prior-year HCC",
-            "imaging": "Imaging",
-            "referral": "Referral",
-        }
+        icd10 = str(r.get("suspect_icd10") or "").strip()
+        try:
+            hcc_int = int(str(r.get("suspect_hcc") or "0").replace("HCC", "").strip() or 0)
+        except (ValueError, TypeError):
+            hcc_int = 0
+
+        # Resolve a clinically-honest label.
+        icd_label = ""
+        if icd10:
+            try:
+                icd_label = (_icd_desc(icd10) or "").strip()
+            except Exception:
+                icd_label = ""
+
+        # If the engine emitted hcc=0 but the ICD-10 is valid, derive the
+        # correct HCC from the CMS-HCC V28 crosswalk so the row carries an
+        # HCC code (otherwise the SuspectCard renders "HCC 0" — PCP-review #2
+        # finding cluster, hcc=0 + valid ICD case).
+        if hcc_int == 0 and icd10:
+            try:
+                mapping = _icd_to_hcc(icd10)
+            except Exception:
+                mapping = None
+            if mapping and mapping.get("hcc_code"):
+                try:
+                    hcc_int = int(str(mapping["hcc_code"]).replace("HCC", "").strip() or 0)
+                except (ValueError, TypeError):
+                    hcc_int = 0
+
+        if icd_label:
+            label = icd_label
+        elif hcc_int > 0:
+            label = _hcc_label(str(hcc_int))
+        else:
+            # No usable label AND no real HCC — engine artifact, drop the row.
+            continue
+
+        # MEAT completeness fraction (0..1) from the engine's evidence_detail
+        # if present — used by the frontend to combine clinical-acuity with
+        # coefficient when sorting MEAT gaps (patient-safety review #6).
+        meat_pct: float | None = None
+        ed = r.get("evidence_detail")
+        if isinstance(ed, dict):
+            mc = ed.get("meat_completeness")
+            if isinstance(mc, (int, float)):
+                meat_pct = float(mc)
+
         out.append(
             SuspectCard(
                 id=int(r.get("suspect_id") or r.get("id") or 0),
-                hcc=int(str(r.get("suspect_hcc") or "0").replace("HCC", "").strip() or 0),
-                icd10=str(r.get("suspect_icd10") or ""),
-                label=_hcc_label(str(r.get("suspect_hcc") or "")),
+                hcc=hcc_int,
+                icd10=icd10,
+                label=label,
                 confidence=float(r.get("confidence_score") or 0.0),
                 evidence_type=ev,
                 trigger=trigger_map.get(ev, ev or "—"),
                 status=str(r.get("status") or "open"),
+                trumped_by_hcc=trumped_map.get(hcc_int),
+                meat_completeness=meat_pct,
             )
         )
     return out
 
 
 def _build_recapture(pid: int, tenant_id: str) -> list[RecaptureCard]:
+    """
+    Build the recapture list, deduped by (hcc, icd10) and hydrated with
+    last_encounter_date from the encounters table.
+
+    Why dedupe: the upstream get_patient_gaps() returns one row per source
+    transaction (claim line / suspect emission), so the same HCC+ICD pair
+    can appear 3-4 times. Rendering duplicates quadruple-counts
+    revenue-at-risk and confuses clinicians — PCP-review #7, HCC-review #7.
+
+    Why hydrate last_encounter_date: prior versions always returned None,
+    leaving the freshness chip blank — PCP-review #6.
+    """
     try:
         rows = get_patient_gaps(pid, tenant_id) or []
     except Exception as exc:
         logger.error("raf-central: recapture fetch failed pid=%s: %s", pid, exc)
         return []
 
+    # Two-pass lookup for last_encounter_date:
+    # 1) Per-ICD from claims_diagnoses (precise: "last seen for this specific
+    #    diagnosis"). Some patients won't have claims data — fall through.
+    # 2) Patient-level fallback from normalized_encounters (less precise but
+    #    populates SOMETHING so the freshness chip isn't always blank).
+    encounter_date_by_icd: dict[str, str] = {}
+    last_patient_encounter: str | None = None
+    try:
+        with raf_cursor() as _ec:
+            _ec.execute(
+                """
+                SELECT cd.icd10_code, MAX(c.service_date) AS last_date
+                  FROM claims_diagnoses cd
+                  JOIN claims c ON c.id = cd.claim_id
+                 WHERE c.patient_id = %s AND c.tenant_id = %s
+                 GROUP BY cd.icd10_code
+                """,
+                (pid, tenant_id),
+            )
+            for er in _ec.fetchall() or []:
+                code = (er.get("icd10_code") or "").strip().upper()
+                if code and er.get("last_date"):
+                    encounter_date_by_icd[code] = str(er["last_date"])
+    except Exception as exc:
+        # claims may not be wired for every tenant — fall through silently.
+        logger.debug(
+            "raf-central recapture: per-ICD claims lookup unavailable: %s", exc
+        )
+
+    try:
+        with raf_cursor() as _ec:
+            _ec.execute(
+                """
+                SELECT MAX(encounter_date) AS last_date
+                  FROM normalized_encounters
+                 WHERE patient_id = %s AND tenant_id = %s
+                """,
+                (pid, tenant_id),
+            )
+            row = _ec.fetchone()
+            if row and row.get("last_date"):
+                last_patient_encounter = str(row["last_date"])
+    except Exception as exc:
+        logger.debug(
+            "raf-central recapture: patient encounter lookup unavailable: %s", exc
+        )
+
+    seen: set[tuple[str, str]] = set()
     out: list[RecaptureCard] = []
     for r in rows:
+        hcc_code = str(r.get("hcc_code") or "")
+        icd_code = str(r.get("icd10_code") or "")
+        if not hcc_code and not icd_code:
+            continue
+        key = (hcc_code, icd_code)
+        if key in seen:
+            continue
+        seen.add(key)
         out.append(
             RecaptureCard(
                 id=int(r.get("id") or 0),
-                hcc=str(r.get("hcc_code") or ""),
-                icd10=str(r.get("icd10_code") or ""),
-                label=r.get("hcc_description") or _hcc_label(str(r.get("hcc_code") or "")),
+                hcc=hcc_code,
+                icd10=icd_code,
+                label=r.get("hcc_description") or _hcc_label(hcc_code),
                 prior_year=int(r.get("prior_year") or 0),
                 current_year=int(r.get("current_year") or 0),
                 revenue_at_risk=float(r.get("raf_impact") or 0.0),
-                last_encounter_date=r.get("last_encounter_date"),
+                last_encounter_date=(
+                    r.get("last_encounter_date")
+                    or encounter_date_by_icd.get(icd_code.upper())
+                    or last_patient_encounter
+                ),
             )
         )
     return out
@@ -1200,6 +1441,14 @@ class ContributingSignal(BaseModel):
     timestamp: str | None = None
 
 
+class ClinicalRuleAdjustment(BaseModel):
+    rule_id: str
+    rule_name: str
+    explanation: str
+    confidence_delta: float
+    failed: bool
+
+
 class ExplainResponse(BaseModel):
     suspect_id: int
     patient_id: int
@@ -1209,6 +1458,139 @@ class ExplainResponse(BaseModel):
     evidence_type: str
     contributing_signals: list[ContributingSignal]
     summary: str
+    # Optional drill-down fields read by frontend ExplainPanel. When the
+    # backend has no data for a given suspect these stay None / empty and
+    # the corresponding UI section renders nothing (was silently dead UI
+    # before — frontend declared the fields but backend never returned
+    # them, so the "stale evidence" / "negated/hypothetical" / "clinical-
+    # rule adjustments" panels never appeared).
+    clinical_rule_adjustments: list[ClinicalRuleAdjustment] | None = None
+    context_classification: str | None = None
+    evidence_date: str | None = None
+
+
+def _parse_evidence_detail_raw(evidence_detail: Any) -> Any:
+    """Return the parsed Python representation of evidence_detail (dict / list
+    / str) regardless of whether it was stored as a JSON string, bytes, or
+    already-decoded structure. Returns ``None`` when input is empty.
+    Centralised so the explain endpoint can read both contributing signals
+    AND drill-down fields (context, evidence_date, rule adjustments) from a
+    single parse pass.
+    """
+    import json as _json
+
+    if evidence_detail in (None, "", "null"):
+        return None
+    raw: Any = evidence_detail
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", errors="ignore")
+    if isinstance(raw, str):
+        try:
+            return _json.loads(raw)
+        except Exception:
+            return raw
+    return raw
+
+
+def _extract_context_classification(raw: Any) -> str | None:
+    """Pull the ConText classification (negated / hypothetical / historical /
+    family / resolved / positive) from the evidence_detail blob. The clinical
+    NLP layer writes this under one of several keys depending on which engine
+    produced the suspect. Returns ``None`` when no context flag is recorded —
+    callers MUST treat None as "unknown", NOT "positive"."""
+    if not isinstance(raw, dict):
+        return None
+    for key in ("context_classification", "context", "polarity", "modifier"):
+        val = raw.get(key)
+        if isinstance(val, str) and val.strip():
+            v = val.strip().lower()
+            # Normalise to the literal frontend ExplainPanel expects.
+            mapping = {
+                "neg": "negated",
+                "negation": "negated",
+                "negated": "negated",
+                "hist": "historical",
+                "history": "historical",
+                "historical": "historical",
+                "hypo": "hypothetical",
+                "hypothetical": "hypothetical",
+                "family": "family",
+                "family_history": "family",
+                "fhx": "family",
+                "resolved": "resolved",
+                "positive": "positive",
+                "current": "positive",
+            }
+            return mapping.get(v, v)
+    return None
+
+
+def _extract_evidence_date(raw: Any) -> str | None:
+    """Find the most recent ISO-8601 date in the evidence_detail blob so the
+    UI can render the stale-evidence banner. Walks common keys without
+    assuming a particular shape (each engine writes a slightly different
+    layout)."""
+    if raw is None:
+        return None
+    candidates: list[str] = []
+
+    def _walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                lk = k.lower() if isinstance(k, str) else ""
+                if lk in ("date", "evidence_date", "encounter_date", "service_date",
+                          "specimen_date", "collected_at", "timestamp", "ts",
+                          "last_seen", "observed_at"):
+                    if isinstance(v, str) and v.strip():
+                        candidates.append(v.strip())
+                elif isinstance(v, (dict, list)):
+                    _walk(v)
+        elif isinstance(node, list):
+            for it in node:
+                _walk(it)
+
+    _walk(raw)
+    if not candidates:
+        return None
+    # Prefer the lexicographically maximum (ISO-8601 dates sort correctly).
+    # Drop obviously non-ISO entries (length < 4) and pick the newest.
+    iso = [c for c in candidates if len(c) >= 4]
+    if not iso:
+        return None
+    return max(iso)
+
+
+def _extract_clinical_rule_adjustments(raw: Any) -> list["ClinicalRuleAdjustment"]:
+    """Pull rule adjustments (e.g. 'eGFR > 60 → downgrade CKD suspect') from
+    the evidence_detail blob if the engine recorded them. Empty list when
+    the suspect was emitted without rule introspection (most legacy rows)."""
+    if not isinstance(raw, dict):
+        return []
+    adjustments = (
+        raw.get("clinical_rule_adjustments")
+        or raw.get("rule_adjustments")
+        or raw.get("rules")
+        or []
+    )
+    if not isinstance(adjustments, list):
+        return []
+    out: list[ClinicalRuleAdjustment] = []
+    for entry in adjustments:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            out.append(
+                ClinicalRuleAdjustment(
+                    rule_id=str(entry.get("rule_id") or entry.get("id") or ""),
+                    rule_name=str(entry.get("rule_name") or entry.get("name") or ""),
+                    explanation=str(entry.get("explanation") or entry.get("reason") or ""),
+                    confidence_delta=float(entry.get("confidence_delta") or entry.get("delta") or 0.0),
+                    failed=bool(entry.get("failed")),
+                )
+            )
+        except (ValueError, TypeError):
+            continue
+    return out
 
 
 def _decompose_evidence_detail(
@@ -1219,23 +1601,12 @@ def _decompose_evidence_detail(
     a typed list of ContributingSignal rows. The blob shape varies per
     engine (meds/labs/history/nlp) — we accept a few common layouts.
     """
-    import json as _json
-
-    if evidence_detail in (None, "", "null"):
+    raw = _parse_evidence_detail_raw(evidence_detail)
+    if raw is None:
         return []
-
-    raw: Any = evidence_detail
-    if isinstance(evidence_detail, (bytes, bytearray)):
-        raw = evidence_detail.decode("utf-8", errors="ignore")
     if isinstance(raw, str):
-        try:
-            raw = _json.loads(raw)
-        except Exception as e:
-            logger.warning(
-                "evidence_detail JSON decode failed: %s",
-                e, exc_info=True,
-            )
-            return [ContributingSignal(source="other", label=raw[:200])]
+        # Was non-JSON string — surface as single "other" signal.
+        return [ContributingSignal(source="other", label=raw[:200])]
 
     signals: list[ContributingSignal] = []
     VALID_SOURCES = ("medication", "lab", "history", "nlp", "note", "other")
@@ -1267,6 +1638,11 @@ def _decompose_evidence_detail(
                     if isinstance(src_raw, str) and src_raw.strip()
                     else None
                 )
+            # Label resolution: prefer named fields. When the entire dict is
+            # a single-key wrapper like {"detail": "..."} or {"summary": "..."}
+            # walk into that single value rather than stringifying the dict
+            # (the prior `str(item)[:120]` fallback produced ugly drawer rows
+            # like `{'detail': 'eGFR declined fro` — PCP-review #3).
             label = (
                 item.get("label")
                 or item.get("name")
@@ -1276,9 +1652,17 @@ def _decompose_evidence_detail(
                 or item.get("code")
                 or item.get("icd")
                 or item.get("snippet")
+                or item.get("detail")
+                or item.get("description")
+                or item.get("summary")
+                or item.get("text")
                 or src_as_label
-                or str(item)[:120]
             )
+            if label is None:
+                # Last resort: surface a single readable string value from
+                # the dict, not the dict's repr.
+                str_vals = [str(v) for v in item.values() if isinstance(v, (str, int, float))]
+                label = str_vals[0] if str_vals else "(no detail)"
             value = (
                 item.get("value")
                 or item.get("result")
@@ -1353,6 +1737,7 @@ def explain_suspect(
             status_code=403, detail="Suspect does not belong to this patient"
         )
 
+    raw_blob = _parse_evidence_detail_raw(row.get("evidence_detail"))
     signals = _decompose_evidence_detail(
         row.get("evidence_detail"), row.get("evidence_type") or ""
     )
@@ -1364,6 +1749,12 @@ def explain_suspect(
     else:
         summary = "No evidence logged for this suspect."
 
+    # Populate the three RADV-critical drill-down fields the frontend
+    # ExplainPanel already renders banners for. Before this wiring the panel
+    # silently dropped negated-evidence warnings, stale-evidence warnings,
+    # and rule-adjustment chips — see patient-safety review findings #1, #3,
+    # and #7. None of these are required (older suspects predate the engine
+    # writing them), so they stay nullable in the schema.
     return ExplainResponse(
         suspect_id=int(row["id"]),
         patient_id=int(row["patient_id"]),
@@ -1373,6 +1764,9 @@ def explain_suspect(
         evidence_type=str(row.get("evidence_type") or ""),
         contributing_signals=signals,
         summary=summary,
+        context_classification=_extract_context_classification(raw_blob),
+        evidence_date=_extract_evidence_date(raw_blob),
+        clinical_rule_adjustments=_extract_clinical_rule_adjustments(raw_blob) or None,
     )
 
 

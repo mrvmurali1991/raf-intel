@@ -203,7 +203,7 @@ def create_connection(
     try:
         new_id = fhir_svc.create_connection(body.model_dump(exclude_none=False))
     except Exception as exc:
-        logger.error("create_connection error: %s", exc)
+        logger.exception("create_connection error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     conn = fhir_svc.get_connection(new_id)
@@ -227,7 +227,7 @@ def list_connections(
     try:
         rows = fhir_svc.list_connections()
     except Exception as exc:
-        logger.error("list_connections error: %s", exc)
+        logger.exception("list_connections error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -260,7 +260,7 @@ def update_connection(connection_id: int, body: FHIRConnectionUpdate,
             body.model_dump(exclude_unset=True),
         )
     except Exception as exc:
-        logger.error("update_connection %s error: %s", connection_id, exc)
+        logger.exception("update_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     conn = fhir_svc.get_connection(connection_id)
@@ -284,7 +284,7 @@ def delete_connection(connection_id: int,
     try:
         fhir_svc.delete_connection(connection_id)
     except Exception as exc:
-        logger.error("delete_connection %s error: %s", connection_id, exc)
+        logger.exception("delete_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"message": f"Connection {connection_id} deleted"}
@@ -311,7 +311,7 @@ def test_connection(connection_id: int,
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except Exception as exc:
-        logger.error("test_connection %s error: %s", connection_id, exc)
+        logger.exception("test_connection %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     status_code = 200 if result["success"] else 502
@@ -398,10 +398,10 @@ def trigger_sync(connection_id: int, body: SyncRequest = SyncRequest(),
             headers={"Retry-After": str(int(exc.retry_after))},
         ) from exc
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.exception("Unexpected error: %s", exc)
         raise HTTPException(status_code=400, detail="Bad request")
     except Exception as exc:
-        logger.error("trigger_sync %s error: %s", connection_id, exc)
+        logger.exception("trigger_sync %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return result
@@ -423,7 +423,7 @@ def get_sync_status(
     try:
         history = fhir_svc.get_sync_history(connection_id, limit=limit)
     except Exception as exc:
-        logger.error("get_sync_status %s error: %s", connection_id, exc)
+        logger.exception("get_sync_status %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     latest_status = history[0]["status"] if history else "never_synced"
@@ -459,7 +459,7 @@ def list_patients(
     try:
         patients = fhir_svc.list_fhir_patients(connection_id, limit=limit, offset=offset)
     except Exception as exc:
-        logger.error("list_patients fhir %s error: %s", connection_id, exc)
+        logger.exception("list_patients fhir %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     mapped = sum(1 for p in patients if p.get("openemr_pid"))
@@ -503,11 +503,11 @@ def map_patient(connection_id: int, body: PatientMapRequest,
             body.openemr_pid,
         )
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "map_patient connection=%s row=%s pid=%s error: %s",
             connection_id, body.fhir_patient_row_id, body.openemr_pid, exc,
         )
-        logger.error("Unexpected error: %s", exc)
+        logger.exception("Unexpected error: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -540,7 +540,7 @@ def list_conditions(
     try:
         conditions = fhir_svc.list_fhir_conditions(connection_id, limit=limit, offset=offset)
     except Exception as exc:
-        logger.error("list_conditions fhir %s error: %s", connection_id, exc)
+        logger.exception("list_conditions fhir %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -573,7 +573,7 @@ def list_unmapped_conditions(
     try:
         conditions = fhir_svc.list_unmapped_conditions(connection_id, limit=limit)
     except Exception as exc:
-        logger.error("list_unmapped_conditions fhir %s error: %s", connection_id, exc)
+        logger.exception("list_unmapped_conditions fhir %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -612,7 +612,7 @@ def process_conditions(
             limit=body.limit,
         )
     except Exception as exc:
-        logger.error("process_conditions fhir %s error: %s", connection_id, exc)
+        logger.exception("process_conditions fhir %s error: %s", connection_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     log_phi_access(

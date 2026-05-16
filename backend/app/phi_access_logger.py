@@ -109,13 +109,34 @@ _record_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=_QUEUE_MAX)
 # Low-level write helpers
 # ---------------------------------------------------------------------------
 
+# Column mapping note: the production schema stores the user-agent as a
+# SHA-256 hash (user_agent_hash CHAR(64)) for HIPAA-minimum-necessary
+# compliance — the raw header value is never persisted. The prior INSERT
+# referenced a non-existent `user_agent` column, which silently failed
+# with `Unknown column 'user_agent' in 'field list'` on every PHI write
+# and forced the logger into its overflow-file fallback. The endpoint-side
+# symptom was PUT /api/suspects/{id}/accept and /dismiss returning 500
+# because the audit-log write happened in the request path. Now we hash
+# upstream and persist the hash, matching the live schema.
+
 _INSERT_SQL = (
     "INSERT INTO phi_access_log "
     "(tenant_id, user_id, user_email, action, resource_type, "
-    " resource_id, ip_address, user_agent, request_path, "
-    " request_method, status_code, accessed_at) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    " resource_id, ip_address, user_agent_hash, request_path, "
+    " http_method, status_code, occurred_at, request_id) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
+
+
+def _hash_user_agent(ua: str | None) -> str | None:
+    """SHA-256 of the user-agent string, or None when the UA is missing.
+    Hashing rather than storing the raw value matches the schema
+    `user_agent_hash CHAR(64)` and avoids persisting potentially
+    fingerprintable client metadata."""
+    if not ua:
+        return None
+    import hashlib
+    return hashlib.sha256(ua.encode("utf-8", errors="ignore")).hexdigest()
 
 
 def _record_to_row(r: dict[str, Any]) -> tuple:
@@ -127,11 +148,12 @@ def _record_to_row(r: dict[str, Any]) -> tuple:
         r.get("resource_type", "unknown"),
         r.get("resource_id"),
         r.get("ip_address"),
-        r.get("user_agent"),
+        _hash_user_agent(r.get("user_agent")),
         r.get("request_path"),
         r.get("request_method"),
         r.get("status_code"),
         r.get("timestamp"),
+        r.get("request_id") or "00000000-0000-0000-0000-000000000000",
     )
 
 

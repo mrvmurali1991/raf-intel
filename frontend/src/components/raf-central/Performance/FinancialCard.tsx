@@ -21,7 +21,7 @@ export function FinancialSection({ financial }: { financial: FinancialImpact }) 
             Current annual
           </div>
           <div className="text-sm font-bold tabular-nums">
-            ${financial.current_annual.toLocaleString()}
+            ${(financial.current_annual ?? 0).toLocaleString()}
           </div>
         </div>
         <div>
@@ -29,15 +29,15 @@ export function FinancialSection({ financial }: { financial: FinancialImpact }) 
             Projected annual
           </div>
           <div className="text-sm font-bold tabular-nums">
-            ${financial.projected_annual.toLocaleString()}
+            ${(financial.projected_annual ?? 0).toLocaleString()}
           </div>
         </div>
       </div>
 
       {hasUplift && (
         <FinancialAreaChart
-          current={financial.current_annual}
-          projected={financial.projected_annual}
+          current={financial.current_annual ?? 0}
+          projected={financial.projected_annual ?? 0}
         />
       )}
 
@@ -51,14 +51,14 @@ export function FinancialSection({ financial }: { financial: FinancialImpact }) 
             <div className="text-lg font-bold tabular-nums text-foreground">
               +${gain.toLocaleString()}
               <span className="ml-2 text-xs font-medium text-muted-foreground">
-                {pct.toFixed(1)}% · ${financial.pmpm_delta.toLocaleString()}/mo
+                {pct.toFixed(1)}% · ${(financial.pmpm_delta ?? 0).toLocaleString()}/mo
               </span>
             </div>
           </div>
         </>
       ) : null}
       <div className="text-[10px] text-muted-foreground">
-        ${financial.revenue_per_raf_point.toLocaleString()}/RAF point · CMS MA benchmark
+        ${(financial.revenue_per_raf_point ?? 0).toLocaleString()}/RAF point · CMS MA benchmark
       </div>
     </div>
   );

@@ -338,19 +338,19 @@ export function ExplainPanel({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 animate-in fade-in bg-black/40 duration-150"
+      className="fixed inset-0 z-50 animate-in fade-in bg-black/75 duration-150"
       onClick={onClose}
       aria-hidden="true"
     >
       <FocusTrap enabled restoreFocus={false}>
         <div
-          className="absolute right-0 top-0 flex h-full w-full animate-in slide-in-from-right flex-col border-l bg-background shadow-2xl duration-200 sm:max-w-[460px] lg:max-w-[520px]"
+          className="absolute right-0 top-0 flex h-full w-full animate-in slide-in-from-right flex-col border-l bg-white dark:bg-zinc-900 shadow-2xl duration-200 sm:max-w-[460px] lg:max-w-[520px]"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-label={`Evidence for ${suspectLabel}`}
         >
-          <header className="flex-shrink-0 border-b bg-background">
+          <header className="flex-shrink-0 border-b bg-white dark:bg-zinc-900">
             <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex items-center gap-1.5 text-primary">
@@ -392,7 +392,11 @@ export function ExplainPanel({
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto">
+          <div
+            className="flex-1 overflow-y-auto"
+            aria-live="polite"
+            aria-busy={loading}
+          >
             <div className="space-y-4 p-5">
               {loading && <LoadingSkeleton />}
 
@@ -560,22 +564,43 @@ export function ExplainPanel({
                     )}
                   </Button>
                 )}
-                {onAccept && (
-                  <Button
-                    className="flex-1"
-                    onClick={() => void onAccept()}
-                    disabled={footerDisabled}
-                  >
-                    {busy === "accept" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Check className="mr-1.5 h-4 w-4" aria-hidden />
-                        Accept
-                      </>
-                    )}
-                  </Button>
-                )}
+                {onAccept && (() => {
+                  // Hard gate: disable Accept entirely when the source-note
+                  // context classification flags this evidence as
+                  // negated/family-history/hypothetical — these are the
+                  // four RADV "killers" that cannot be billed even with a
+                  // clinician override. Banner alone is not a safety
+                  // control (patient-safety review #3 / round-3 #C).
+                  const blockedContexts = new Set([
+                    "negated",
+                    "family",
+                    "hypothetical",
+                    "resolved",
+                  ]);
+                  const ctx = (data?.context_classification ?? "").toLowerCase();
+                  const contextBlocked = blockedContexts.has(ctx);
+                  return (
+                    <Button
+                      className="flex-1"
+                      onClick={() => void onAccept()}
+                      disabled={footerDisabled || contextBlocked}
+                      title={
+                        contextBlocked
+                          ? `Accept disabled — source note classifies this evidence as ${ctx}. RADV-uncodeable.`
+                          : undefined
+                      }
+                    >
+                      {busy === "accept" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="mr-1.5 h-4 w-4" aria-hidden />
+                          {contextBlocked ? "Accept blocked" : "Accept"}
+                        </>
+                      )}
+                    </Button>
+                  );
+                })()}
               </div>
               <p className="mt-2 text-center text-[11px] text-muted-foreground/70">
                 {loading

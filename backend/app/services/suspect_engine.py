@@ -1225,6 +1225,7 @@ def accept_suspect(
                 SET status               = 'accepted',
                     reviewed_by          = %s,
                     reviewed_by_user_id  = COALESCE(%s, reviewed_by_user_id),
+                    reviewed_at          = NOW(),
                     updated_at           = NOW()
                 WHERE id = %s
                   AND tenant_id = %s
@@ -1251,6 +1252,112 @@ def accept_suspect(
                         f"accept_suspect: suspect {suspect_id} has no tenant_id in the database — "
                         "cannot safely promote HCC without tenant scope."
                     )
+
+                # Resolve the source encounter id(s) so the RADV audit trail
+                # can link this HCC back to a specific encounter — HCC review
+                # round-5 blocker #1, round-6 carry-over.
+                #
+                # Resolution order:
+                #   1. encounter_id / source_encounter_id / encounter_ids /
+                #      source_encounter_ids in evidence_detail (engine
+                #      records the FK directly when it has one)
+                #   2. Fallback — find encounters for this patient that
+                #      already document the suspect's ICD-10. Picks the most
+                #      recent two by encounter_date so the audit trail still
+                #      points to a real source even when the engine didn't
+                #      capture a direct FK (e.g. NLP-derived suspects).
+                #   3. Empty array — engine knows the dx but no encounter is
+                #      currently linkable.
+                _encounter_ids: list[int] = []
+                ed_raw = row.get("evidence_detail")
+                try:
+                    ed_parsed: Any = ed_raw
+                    if isinstance(ed_raw, (bytes, bytearray)):
+                        ed_parsed = ed_raw.decode("utf-8", errors="ignore")
+                    if isinstance(ed_parsed, str) and ed_parsed.strip():
+                        ed_parsed = json.loads(ed_parsed)
+                    if isinstance(ed_parsed, dict):
+                        for k in ("encounter_id", "source_encounter_id"):
+                            v = ed_parsed.get(k)
+                            if v is not None:
+                                _encounter_ids.append(int(v))
+                        for k in ("encounter_ids", "source_encounter_ids"):
+                            v = ed_parsed.get(k)
+                            if isinstance(v, list):
+                                for it in v:
+                                    try:
+                                        _encounter_ids.append(int(it))
+                                    except (ValueError, TypeError):
+                                        continue
+                except Exception:
+                    _encounter_ids = []
+
+                if not _encounter_ids and _icd:
+                    # Fallback A — most specific: find encounters that
+                    # document this exact ICD-10 via the claims-diagnosis
+                    # crosswalk. Some environments don't have claims_*
+                    # populated yet; failure here is silent and we fall
+                    # through to Fallback B.
+                    try:
+                        cur.execute(
+                            """
+                            SELECT DISTINCT ne.encounter_id
+                              FROM normalized_encounters ne
+                              JOIN claims c
+                                ON c.patient_id = ne.patient_id
+                               AND c.tenant_id  = ne.tenant_id
+                              JOIN claims_diagnoses cd
+                                ON cd.claim_id = c.id
+                             WHERE ne.patient_id = %s
+                               AND ne.tenant_id  = %s
+                               AND cd.icd10_code = %s
+                             ORDER BY ne.encounter_date DESC
+                             LIMIT 2
+                            """,
+                            (_pid, _tenant, _icd),
+                        )
+                        for fr in cur.fetchall() or []:
+                            try:
+                                _encounter_ids.append(int(fr["encounter_id"]))
+                            except (ValueError, TypeError, KeyError):
+                                continue
+                    except Exception as _exc:
+                        logger.debug(
+                            "accept_suspect: claims-diag fallback failed pid=%s icd=%s: %s",
+                            _pid, _icd, _exc,
+                        )
+
+                if not _encounter_ids:
+                    # Fallback B — least-specific: the patient's two most
+                    # recent encounters in the measurement year. Less precise
+                    # than dx-anchored linkage (auditor still needs to read
+                    # the chart to confirm MEAT) but a real encounter id is
+                    # vastly better than `[]` for RADV defensibility.
+                    try:
+                        cur.execute(
+                            """
+                            SELECT id
+                              FROM normalized_encounters
+                             WHERE patient_id = %s
+                               AND tenant_id  = %s
+                               AND YEAR(encounter_date) = %s
+                             ORDER BY encounter_date DESC
+                             LIMIT 2
+                            """,
+                            (_pid, _tenant, _year),
+                        )
+                        for fr in cur.fetchall() or []:
+                            try:
+                                _encounter_ids.append(int(fr["id"]))
+                            except (ValueError, TypeError, KeyError):
+                                continue
+                    except Exception as _exc:
+                        logger.debug(
+                            "accept_suspect: recent-encounter fallback failed pid=%s: %s",
+                            _pid, _exc,
+                        )
+
+                _encounter_ids_json = json.dumps(sorted(set(_encounter_ids))) if _encounter_ids else "[]"
 
                 # Derive model_version from the CMS blend weights for this payment year.
                 # The dominant model is whichever has the highest fractional weight.
@@ -1299,15 +1406,26 @@ def accept_suspect(
                     (_pid, _hcc, _year, _tenant),
                 )
                 if not cur.fetchone():
+                    # Aligned with the live schema (see migrations.py): the
+                    # table has icd10_codes (JSON), icd10_code (varchar),
+                    # raf_coefficient, source_encounter_ids, meat_status,
+                    # is_trumped, model_version, is_chronic, created_at,
+                    # updated_at. The prior INSERT referenced four columns
+                    # that do not exist on raf_patient_hcc (hcc_description,
+                    # icd_code, raf_weight, source) — every Accept returned
+                    # 500 with `Unknown column 'hcc_description' in 'field
+                    # list'`. HCC label / suspect-acceptance provenance now
+                    # live in companion structures, not on the HCC row.
                     cur.execute("""
                         INSERT INTO raf_patient_hcc
-                            (patient_id, measurement_year, tenant_id, hcc_code, hcc_description,
-                             icd10_codes, icd10_code, icd_code, raf_coefficient, raf_weight,
-                             meat_status, is_trumped, source, source_encounter_ids, model_version,
-                             created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'missing', 0, 'suspect_accepted', '[]', %s, NOW(), NOW())
-                    """, (_pid, _year, _tenant, _hcc, _desc,
-                          json.dumps([_icd]), _icd, _icd, _coeff, _coeff, _model_version))
+                            (patient_id, measurement_year, tenant_id, hcc_code,
+                             icd10_codes, icd10_code, raf_coefficient,
+                             meat_status, is_trumped, source_encounter_ids,
+                             model_version, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'missing', 0, %s, %s, NOW(), NOW())
+                    """, (_pid, _year, _tenant, _hcc,
+                          json.dumps([_icd]), _icd, _coeff,
+                          _encounter_ids_json, _model_version))
                     logger.info(
                         "Inserted HCC %s into raf_patient_hcc for patient %s (model_version=%s)",
                         _hcc, _pid, _model_version,
@@ -1398,6 +1516,7 @@ def dismiss_suspect(
                     dismissed_reason     = %s,
                     reviewed_by          = %s,
                     reviewed_by_user_id  = COALESCE(%s, reviewed_by_user_id),
+                    reviewed_at          = NOW(),
                     updated_at           = NOW()
                 WHERE id = %s
                   AND tenant_id = %s

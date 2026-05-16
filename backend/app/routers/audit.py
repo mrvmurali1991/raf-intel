@@ -1321,6 +1321,16 @@ def get_audit_summary(
             "'attestation', 'user'"
         ),
     ),
+    patient_id: int | None = Query(
+        None,
+        description=(
+            "Optional — narrow the summary to a single patient. When supplied "
+            "we filter audit_log.resource_id to that patient id, matching the "
+            "convention used by every per-patient audit-write call site. "
+            "Previously this param was accepted silently and ignored — every "
+            "caller got tenant-wide counts (PCP-review round-3 #3)."
+        ),
+    ),
     current_user: dict = Depends(require_role("admin", "auditor")),
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
@@ -1347,13 +1357,16 @@ def get_audit_summary(
 
     # Base WHERE fragment shared by both sub-queries
     # Scoping: restrict to rows whose acting user belongs to this tenant.
-    # resource_type filter is optional.
+    # resource_type AND optional patient_id filters are appended after the
+    # tenant + date range so the index plan still uses the tenant column.
     resource_clause = "AND al.resource_type = %s" if resource_type else ""
+    patient_clause = "AND al.resource_id = %s" if patient_id is not None else ""
 
-    # Build param tuples (we execute two separate queries)
     base_params: list[Any] = [tenant_id, dt_start, dt_end]
     if resource_type:
         base_params.append(resource_type)
+    if patient_id is not None:
+        base_params.append(str(patient_id))
 
     by_action_sql = f"""
         SELECT al.action,
@@ -1362,6 +1375,7 @@ def get_audit_summary(
         WHERE al.user_id IN (SELECT id FROM users WHERE tenant_id = %s)
           AND al.created_at BETWEEN %s AND %s
           {resource_clause}
+          {patient_clause}
         GROUP BY al.action
         ORDER BY event_count DESC
     """
@@ -1369,14 +1383,15 @@ def get_audit_summary(
     top_actors_sql = f"""
         SELECT al.user_id,
                u.email,
-               CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS display_name,
+               COALESCE(u.full_name, u.email) AS display_name,
                COUNT(*) AS event_count
         FROM audit_log al
         LEFT JOIN users u ON u.id = al.user_id
         WHERE al.user_id IN (SELECT id FROM users WHERE tenant_id = %s)
           AND al.created_at BETWEEN %s AND %s
           {resource_clause}
-        GROUP BY al.user_id, u.email, u.first_name, u.last_name
+          {patient_clause}
+        GROUP BY al.user_id, u.email, u.full_name
         ORDER BY event_count DESC
         LIMIT 10
     """

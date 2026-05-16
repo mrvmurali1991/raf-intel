@@ -195,7 +195,7 @@ def list_attestations(
             offset=offset,
         )
     except Exception as exc:
-        logger.error("list_attestations failed: %s", exc)
+        logger.exception("list_attestations failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"count": len(rows), "offset": offset, "attestations": rows}
@@ -240,7 +240,7 @@ def create_attestation(
             tenant_id=tenant_id,
         )
     except Exception as exc:
-        logger.error("create_attestation failed: %s", exc)
+        logger.exception("create_attestation failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     store_idempotent_response(request, response, rec)
@@ -274,7 +274,7 @@ def attestation_dashboard(
             days=days,
         )
     except Exception as exc:
-        logger.error("attestation_dashboard failed: %s", exc)
+        logger.exception("attestation_dashboard failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return stats
@@ -306,7 +306,7 @@ def send_reminders(
             tenant_id=tenant_id,
         )
     except Exception as exc:
-        logger.error("send_reminders failed: %s", exc)
+        logger.exception("send_reminders failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
@@ -347,7 +347,7 @@ def create_batch(
         logger.warning("create_batch validation error: %s", exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("create_batch failed: %s", exc)
+        logger.exception("create_batch failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return batch
@@ -392,7 +392,7 @@ def submit_batch(
         logger.warning("submit_batch validation error batch_id=%s: %s", batch_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("submit_batch batch_id=%s failed: %s", batch_id, exc)
+        logger.exception("submit_batch batch_id=%s failed: %s", batch_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return result
@@ -413,10 +413,10 @@ def get_attestation(
     try:
         rec = svc.get_attestation(attestation_id)
     except ValueError as exc:
-        logger.error("Unexpected error: %s", exc)
+        logger.exception("Unexpected error: %s", exc)
         raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as exc:
-        logger.error("get_attestation id=%s failed: %s", attestation_id, exc)
+        logger.exception("get_attestation id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     # Non-admin users may only view their own attestations
@@ -467,7 +467,7 @@ def attest_condition(
         logger.warning("attest id=%s validation error: %s", attestation_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("attest id=%s failed: %s", attestation_id, exc)
+        logger.exception("attest id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return rec
@@ -506,7 +506,7 @@ def reject_condition(
         logger.warning("reject id=%s validation error: %s", attestation_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("reject id=%s failed: %s", attestation_id, exc)
+        logger.exception("reject id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return rec
@@ -547,7 +547,7 @@ def defer_condition(
         logger.warning("defer id=%s validation error: %s", attestation_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("defer id=%s failed: %s", attestation_id, exc)
+        logger.exception("defer id=%s failed: %s", attestation_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return rec

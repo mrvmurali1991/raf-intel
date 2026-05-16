@@ -213,7 +213,7 @@ def get_audit_integrity(
     try:
         ok, errors = verify_audit_chain()
     except Exception as exc:
-        logger.error("audit-integrity check failed: %s", exc, exc_info=True)
+        logger.exception("audit-integrity check failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Audit chain verification failed")
 
     # Count chain length (number of non-empty lines in JSONL)

@@ -147,7 +147,7 @@ def _xlsx_response(wb: Any, filename: str) -> StreamingResponse:
     try:
         data = workbook_to_bytes(wb)
     except Exception as exc:
-        logger.error("Failed to serialise workbook '%s': %s", filename, exc, exc_info=True)
+        logger.exception("Failed to serialise workbook '%s': %s", filename, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate Excel file")
     return StreamingResponse(
         BytesIO(data),
@@ -194,7 +194,7 @@ def download_patient_master(
     try:
         wb = export_patient_master(tenant_id)
     except Exception as exc:
-        logger.error("export_patient_master failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_patient_master failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Patient Master bundle")
     return _xlsx_response(wb, "01_Patient_Master.xlsx")
 
@@ -215,7 +215,7 @@ def download_encounter_diagnosis(
     try:
         wb = export_encounter_diagnosis(tenant_id)
     except Exception as exc:
-        logger.error("export_encounter_diagnosis failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_encounter_diagnosis failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Encounter & Diagnosis bundle")
     return _xlsx_response(wb, "02_Encounter_Diagnosis.xlsx")
 
@@ -236,7 +236,7 @@ def download_raf_score(
     try:
         wb = export_raf_score(tenant_id)
     except Exception as exc:
-        logger.error("export_raf_score failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_raf_score failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export RAF Score bundle")
     return _xlsx_response(wb, "03_RAF_Score_Summary.xlsx")
 
@@ -257,7 +257,7 @@ def download_meat_compliance(
     try:
         wb = export_meat_compliance(tenant_id)
     except Exception as exc:
-        logger.error("export_meat_compliance failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_meat_compliance failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export MEAT Compliance bundle")
     return _xlsx_response(wb, "04_MEAT_Compliance.xlsx")
 
@@ -278,7 +278,7 @@ def download_suspects(
     try:
         wb = export_suspects(tenant_id)
     except Exception as exc:
-        logger.error("export_suspects failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_suspects failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export HCC Suspects bundle")
     return _xlsx_response(wb, "05_HCC_Suspects.xlsx")
 
@@ -299,7 +299,7 @@ def download_recapture_gaps(
     try:
         wb = export_recapture_gaps(tenant_id)
     except Exception as exc:
-        logger.error("export_recapture_gaps failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_recapture_gaps failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Recapture Gaps bundle")
     return _xlsx_response(wb, "06_Recapture_Gaps.xlsx")
 
@@ -320,7 +320,7 @@ def download_provider_performance(
     try:
         wb = export_provider_performance(tenant_id)
     except Exception as exc:
-        logger.error("export_provider_performance failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_provider_performance failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Provider Performance bundle")
     return _xlsx_response(wb, "07_Provider_Performance.xlsx")
 
@@ -345,7 +345,7 @@ def download_cms_submission(
     try:
         wb = export_cms_submission(tenant_id, batch_id=batch_id)
     except Exception as exc:
-        logger.error("export_cms_submission failed (tenant=%s, batch_id=%s): %s", tenant_id, batch_id, exc, exc_info=True)
+        logger.exception("export_cms_submission failed (tenant=%s, batch_id=%s): %s", tenant_id, batch_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export CMS Submission bundle")
     filename = f"08_CMS_Submission_{batch_id}.xlsx" if batch_id else "08_CMS_Submission.xlsx"
     return _xlsx_response(wb, filename)
@@ -371,7 +371,7 @@ def download_audit_log(
     try:
         wb = export_audit_log(tenant_id, days=days)
     except Exception as exc:
-        logger.error("export_audit_log failed (tenant=%s, days=%s): %s", tenant_id, days, exc, exc_info=True)
+        logger.exception("export_audit_log failed (tenant=%s, days=%s): %s", tenant_id, days, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Audit Log bundle")
     return _xlsx_response(wb, "09_Audit_Log.xlsx")
 
@@ -392,7 +392,7 @@ def download_historical_raf(
     try:
         wb = export_historical_raf(tenant_id)
     except Exception as exc:
-        logger.error("export_historical_raf failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_historical_raf failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Historical RAF Trends bundle")
     return _xlsx_response(wb, "10_Historical_RAF_Trends.xlsx")
 
@@ -413,7 +413,7 @@ def download_revenue_opportunity(
     try:
         wb = export_revenue_opportunity(tenant_id)
     except Exception as exc:
-        logger.error("export_revenue_opportunity failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_revenue_opportunity failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to export Revenue Opportunity bundle")
     return _xlsx_response(wb, "11_Revenue_Opportunity.xlsx")
 
@@ -438,7 +438,7 @@ def download_all_bundles(
     try:
         bundles: dict[str, bytes] = export_all_bundles(tenant_id)
     except Exception as exc:
-        logger.error("export_all_bundles failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("export_all_bundles failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate bundle archive")
 
     buf = BytesIO()
@@ -447,7 +447,7 @@ def download_all_bundles(
             for filename, data in bundles.items():
                 zf.writestr(filename, data)
     except Exception as exc:
-        logger.error("ZIP assembly failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
+        logger.exception("ZIP assembly failed (tenant=%s): %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to assemble bundle ZIP")
 
     buf.seek(0)

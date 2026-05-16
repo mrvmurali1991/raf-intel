@@ -180,8 +180,185 @@ export function ClinicalTab({
     { id: "medgaps", label: "Medication Gaps" },
   ];
 
+  // Drug-allergy contraindication banner — patient-safety review #4 / PCP
+  // round-3 carry-over. First-pass heuristic uses well-known allergen
+  // → drug-class string matches (sulfa, penicillin, NSAID, ACE-i, statin).
+  // Not a substitute for a real DDI service; the banner reminds the
+  // clinician to verify before billing a meds-driven HCC. False
+  // positives are preferable to false negatives here.
+  const allergyContraindications: Array<{ allergy: string; drug: string; rule: string }> = (() => {
+    const out: Array<{ allergy: string; drug: string; rule: string }> = [];
+    const allergyTexts = allergyItems
+      .map((a) => `${a.title ?? ""} ${a.category ?? ""}`.toLowerCase())
+      .filter(Boolean);
+    if (!allergyTexts.length || !medItems.length) return out;
+
+    const allergyHas = (kw: string) => allergyTexts.some((t) => t.includes(kw));
+    const medMatches: Array<{ kw: RegExp; rule: string; allergyKw: string; allergyLabel: string }> = [
+      // Sulfonamides — Furosemide, Hydrochlorothiazide, Bumetanide, Glipizide
+      { kw: /furosem|hydrochlorothiazide|bumetan|glipiz|sulfamethox|sulfasalazine/i,
+        rule: "Sulfa-derived medication",
+        allergyKw: "sulfa", allergyLabel: "Sulfonamides" },
+      { kw: /furosem|hydrochlorothiazide|bumetan|glipiz|sulfamethox|sulfasalazine/i,
+        rule: "Sulfa-derived medication",
+        allergyKw: "sulfonamide", allergyLabel: "Sulfonamides" },
+      // Penicillins — Amoxicillin, Ampicillin
+      { kw: /amoxicillin|ampicillin|penicillin|piperacillin/i,
+        rule: "Penicillin-class antibiotic",
+        allergyKw: "penicillin", allergyLabel: "Penicillin" },
+      // NSAIDs — Ibuprofen, Naproxen, Diclofenac, Celecoxib, Aspirin
+      { kw: /ibuprofen|naproxen|diclofenac|celecoxib|aspirin|ketorolac|meloxicam/i,
+        rule: "NSAID",
+        allergyKw: "nsaid", allergyLabel: "NSAIDs" },
+      { kw: /ibuprofen|naproxen|diclofenac|celecoxib|aspirin|ketorolac|meloxicam/i,
+        rule: "NSAID",
+        allergyKw: "aspirin", allergyLabel: "Aspirin/NSAIDs" },
+      // ACE inhibitors — Lisinopril, Enalapril, Ramipril
+      { kw: /lisinopril|enalapril|ramipril|benazepril|captopril/i,
+        rule: "ACE inhibitor",
+        allergyKw: "ace inhibit", allergyLabel: "ACE inhibitors" },
+      // Statins — Atorvastatin, Simvastatin, Rosuvastatin
+      { kw: /atorvastatin|simvastatin|rosuvastatin|pravastatin|lovastatin/i,
+        rule: "Statin",
+        allergyKw: "statin", allergyLabel: "Statins" },
+    ];
+
+    for (const m of medItems) {
+      const drugName = String(
+        (m as { drug?: string; medication?: string; title?: string }).drug ??
+          (m as { drug?: string; medication?: string; title?: string }).medication ??
+          (m as { drug?: string; medication?: string; title?: string }).title ??
+          ""
+      );
+      if (!drugName) continue;
+      for (const rule of medMatches) {
+        if (rule.kw.test(drugName) && allergyHas(rule.allergyKw)) {
+          const key = `${rule.allergyLabel}::${drugName}`;
+          if (!out.find((x) => `${x.allergy}::${x.drug}` === key)) {
+            out.push({ allergy: rule.allergyLabel, drug: drugName, rule: rule.rule });
+          }
+        }
+      }
+    }
+    return out;
+  })();
+
+  // Drug-drug interaction banner — patient-safety / PCP round-5 blocker #1.
+  // First-pass curated pairs covering the highest-prevalence harmful
+  // combinations in geriatric Medicare Advantage panels:
+  //   • Warfarin + NSAID         → bleeding
+  //   • SSRI/SNRI + Tramadol     → serotonin syndrome
+  //   • ACE-i + Spironolactone   → hyperkalemia
+  //   • ACE-i + K-sparing diuretic same class
+  //   • Macrolide + Statin       → rhabdomyolysis
+  //   • Beta-blocker + non-DHP CCB (Verapamil/Diltiazem) → bradycardia
+  // This is a screening aid only; a real DDI service (RxNorm + class
+  // graph) is the long-term answer (PCP round-5 #1). Catching the top
+  // five well-known combos is meaningful patient safety today.
+  const drugDrugInteractions: Array<{ a: string; b: string; risk: string }> = (() => {
+    const interactions: Array<{ a: string; b: string; risk: string }> = [];
+    if (medItems.length < 2) return interactions;
+    const names = medItems.map((m) =>
+      String(
+        (m as { drug?: string; medication?: string; title?: string }).drug ??
+          (m as { drug?: string; medication?: string; title?: string }).medication ??
+          (m as { drug?: string; medication?: string; title?: string }).title ??
+          ""
+      )
+    ).filter(Boolean);
+    const has = (re: RegExp) => names.find((n) => re.test(n));
+    const pairs: Array<{ a: RegExp; b: RegExp; risk: string }> = [
+      { a: /warfarin|coumadin/i,
+        b: /ibuprofen|naproxen|diclofenac|celecoxib|ketorolac|meloxicam/i,
+        risk: "Bleeding risk (anticoagulant + NSAID)" },
+      { a: /warfarin|coumadin/i,
+        b: /aspirin/i,
+        risk: "Bleeding risk (anticoagulant + antiplatelet)" },
+      { a: /fluoxetine|sertraline|paroxetine|citalopram|escitalopram|venlafaxine|duloxetine/i,
+        b: /tramadol/i,
+        risk: "Serotonin syndrome risk (SSRI/SNRI + tramadol)" },
+      { a: /lisinopril|enalapril|ramipril|benazepril|captopril|losartan|valsartan/i,
+        b: /spironolactone|eplerenone|triamterene|amiloride/i,
+        risk: "Hyperkalemia risk (ACE-i/ARB + K-sparing diuretic)" },
+      { a: /clarithromycin|erythromycin|itraconazole|ketoconazole/i,
+        b: /atorvastatin|simvastatin|lovastatin/i,
+        risk: "Rhabdomyolysis risk (CYP3A4 inhibitor + statin)" },
+      { a: /metoprolol|atenolol|carvedilol|bisoprolol|propranolol/i,
+        b: /verapamil|diltiazem/i,
+        risk: "Bradycardia / heart block risk (β-blocker + non-DHP CCB)" },
+      { a: /digoxin/i,
+        b: /amiodarone|verapamil|clarithromycin/i,
+        risk: "Digoxin toxicity risk" },
+    ];
+    for (const p of pairs) {
+      const matchA = has(p.a);
+      const matchB = has(p.b);
+      if (matchA && matchB) {
+        const key = `${matchA}|${matchB}|${p.risk}`;
+        if (!interactions.find((i) => `${i.a}|${i.b}|${i.risk}` === key)) {
+          interactions.push({ a: matchA, b: matchB, risk: p.risk });
+        }
+      }
+    }
+    return interactions;
+  })();
+
   return (
-    <div style={{ display: "flex", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {allergyContraindications.length > 0 && (
+        <div
+          role="alert"
+          aria-label="Drug-allergy contraindication warning"
+          style={{
+            borderRadius: 8,
+            border: "1px solid #FCA5A5",
+            background: "#FEF2F2",
+            color: "#991B1B",
+            padding: "10px 14px",
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>Possible drug-allergy contraindication ({allergyContraindications.length})</strong> —
+          verify before prescribing or attesting meds-driven HCC suspects.
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {allergyContraindications.slice(0, 8).map((c, i) => (
+              <li key={i} style={{ marginTop: 2 }}>
+                <strong>{c.drug}</strong> is a {c.rule}; patient documents allergy to {c.allergy}.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {drugDrugInteractions.length > 0 && (
+        <div
+          role="alert"
+          aria-label="Drug-drug interaction warning"
+          style={{
+            borderRadius: 8,
+            border: "1px solid #F59E0B",
+            background: "#FFFBEB",
+            color: "#92400E",
+            padding: "10px 14px",
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>Possible drug-drug interaction ({drugDrugInteractions.length})</strong> —
+          confirm clinical intent and consider monitoring or alternative therapy.
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {drugDrugInteractions.slice(0, 8).map((c, i) => (
+              <li key={i} style={{ marginTop: 2 }}>
+                <strong>{c.a}</strong> + <strong>{c.b}</strong> — {c.risk}
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 6, fontSize: 11, fontStyle: "italic", color: "#92400E" }}>
+            Screening heuristic — not a substitute for a clinical DDI service.
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 24 }}>
       {/* Left nav */}
       <nav
         style={{
@@ -519,6 +696,7 @@ export function ClinicalTab({
             )}
           </ClinicalSection>
         )}
+      </div>
       </div>
     </div>
   );

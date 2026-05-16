@@ -98,7 +98,7 @@ def post_preview_filter(
     try:
         return preview_filter(tenant_id=tenant_id, filter_criteria=body.filter_criteria)
     except Exception as exc:
-        logger.error("preview_filter error tenant=%s: %s", tenant_id, exc, exc_info=True)
+        logger.exception("preview_filter error tenant=%s: %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -111,7 +111,7 @@ def get_eligible_coders(
     try:
         coders = list_coders(tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("list_coders error tenant=%s: %s", tenant_id, exc, exc_info=True)
+        logger.exception("list_coders error tenant=%s: %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return {"coders": coders, "total": len(coders)}
 
@@ -131,7 +131,7 @@ def coder_dashboard(
     try:
         return get_coder_dashboard(coder_id=coder_id, tenant_id=tenant_id)
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "coder_dashboard error coder=%s tenant=%s: %s",
             coder_id, tenant_id, exc, exc_info=True,
         )
@@ -168,7 +168,7 @@ def post_mark_assignment(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "mark_assignment error id=%s: %s", assignment_id, exc, exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -205,7 +205,7 @@ def post_create_campaign(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error("create_campaign error tenant=%s: %s", tenant_id, exc, exc_info=True)
+        logger.exception("create_campaign error tenant=%s: %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -225,7 +225,7 @@ def get_list_campaigns(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error("list_campaigns error tenant=%s: %s", tenant_id, exc, exc_info=True)
+        logger.exception("list_campaigns error tenant=%s: %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return {"campaigns": items, "total": len(items), "limit": limit, "offset": offset}
 
@@ -269,7 +269,7 @@ def put_update_campaign(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "update_campaign error id=%s tenant=%s: %s",
             campaign_id, tenant_id, exc, exc_info=True,
         )
@@ -303,7 +303,7 @@ def post_assign(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "assign_gaps_to_coders error id=%s tenant=%s: %s",
             campaign_id, tenant_id, exc, exc_info=True,
         )
@@ -322,7 +322,7 @@ def get_kanban(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
-        logger.error(
+        logger.exception(
             "get_kanban error id=%s tenant=%s: %s",
             campaign_id, tenant_id, exc, exc_info=True,
         )

@@ -240,6 +240,10 @@ def get_recurring_gaps(tenant_id: Any, year: int) -> list[dict[str, Any]]:
         List of enriched gap dicts (patient name + DOB + years_recurring etc.)
     """
     tid = _resolve_tenant_id(tenant_id)
+    # NOTE: years_recurring / awv_suggested / awv_visit_date / awv_encounter_id
+    # columns are not yet present on recapture_gaps (planned migration). Until
+    # they ship we surface synthetic defaults so the API contract stays stable
+    # and the endpoint returns 200 with usable data instead of a SQL 500.
     sql = """
         SELECT
             rg.id,
@@ -254,10 +258,10 @@ def get_recurring_gaps(tenant_id: Any, year: int) -> list[dict[str, Any]]:
             rg.provider_npi,
             rg.revenue_impact,
             rg.is_recurring,
-            rg.years_recurring,
-            rg.awv_suggested,
-            rg.awv_visit_date,
-            rg.awv_encounter_id,
+            1 AS years_recurring,
+            0 AS awv_suggested,
+            NULL AS awv_visit_date,
+            NULL AS awv_encounter_id,
             rg.created_at,
             rg.updated_at,
             CONCAT(COALESCE(pt.first_name,''), ' ', COALESCE(pt.last_name,'')) AS patient_name,
@@ -271,7 +275,7 @@ def get_recurring_gaps(tenant_id: Any, year: int) -> list[dict[str, Any]]:
         WHERE rg.tenant_id    = %s
           AND rg.current_year = %s
           AND rg.is_recurring = 1
-        ORDER BY rg.years_recurring DESC, rg.revenue_impact DESC, rg.id DESC
+        ORDER BY rg.revenue_impact DESC, rg.id DESC
     """
     with raf_cursor() as cursor:
         cursor.execute(sql, (tid, year))

@@ -154,7 +154,7 @@ def list_all_checks(
     """
     # TODO(production): persist run results to data_quality_reports table — see issue tracker
     try:
-        tenant_id = int(getattr(current_user, "tenant_id", None) or 1)
+        tenant_id = int(current_user.get("tenant_id") or 1)
         results = run_all_checks(cursor, tenant_id)
         return ChecksResponse(
             tenant_id=tenant_id,
@@ -195,7 +195,7 @@ def run_single_check(
         )
     try:
         if check_name in _TENANT_CHECK_MAP:
-            tenant_id = int(getattr(current_user, "tenant_id", None) or 1)
+            tenant_id = int(current_user.get("tenant_id") or 1)
             result = _TENANT_CHECK_MAP[check_name](cursor, tenant_id)
         else:
             result = _GLOBAL_CHECK_MAP[check_name](cursor)
