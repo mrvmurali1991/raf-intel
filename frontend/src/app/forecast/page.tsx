@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import RAFForecastCard from "@/components/RAFForecastCard";
+import dynamic from "next/dynamic";
+
+// Defer Recharts-heavy forecast card — saves ~98 kB gz on first paint.
+const RAFForecastCard = dynamic(() => import("@/components/RAFForecastCard"), {
+  ssr: false,
+  loading: () => <div className="h-64 animate-pulse bg-muted rounded-md" />,
+});
 
 export default function ForecastDemoPage() {
   const [pid, setPid] = useState<number>(3);

@@ -61,7 +61,14 @@ import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";
 import ProviderFeaturesSettings from "@/components/ProviderFeaturesSettings";
 import TopHccOpportunities from "@/components/TopHccOpportunities";
-import ProviderRevenueBreakdown from "@/components/ProviderRevenueBreakdown";
+// Defer Recharts-heavy revenue breakdown — saves ~98 kB gz on first paint.
+const ProviderRevenueBreakdown = dynamic(
+  () => import("@/components/ProviderRevenueBreakdown"),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 animate-pulse bg-muted rounded-md" />,
+  }
+);
 import ProviderTrendCard from "@/components/ProviderTrendCard";
 import PeerPercentileRibbon from "@/components/PeerPercentileRibbon";
 import MeatAuditRiskBadge from "@/components/MeatAuditRiskBadge";
