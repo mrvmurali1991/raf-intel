@@ -89,6 +89,7 @@ export function SuspectCardView({
   const queryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const queryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const queryCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const queryDialogRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
   // Focus management for the Request-docs dialog (UX review blocker #2):
@@ -103,11 +104,17 @@ export function SuspectCardView({
         if (!querySubmitting) setQueryDialogOpen(false);
       }
       if (e.key === "Tab") {
+        // Scope the Send-button lookup to THIS dialog so a second
+        // SuspectCardView mounted on the same page (or a parallel
+        // dialog) can't bleed into our focus trap. UX review N+2
+        // blocker.
+        const sendBtn = queryDialogRef.current?.querySelector<HTMLButtonElement>(
+          "[data-cq-send='1']",
+        ) ?? null;
         const focusable: HTMLElement[] = [
           queryTextareaRef.current,
           queryCloseBtnRef.current,
-          // Send button is found dynamically since it carries varying disabled state
-          document.querySelector<HTMLButtonElement>("[data-cq-send='1']"),
+          sendBtn,
         ].filter(Boolean) as HTMLElement[];
         if (!focusable.length) return;
         const first = focusable[0];
@@ -413,6 +420,7 @@ export function SuspectCardView({
       />
       {queryDialogOpen && (
         <div
+          ref={queryDialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="Request documentation"
