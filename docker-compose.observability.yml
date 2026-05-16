@@ -1,0 +1,122 @@
+# RAF Intelligence — Observability Stack
+#
+# Standalone compose file that runs alongside the main application stack.
+# Bring up:    docker compose -f docker-compose.observability.yml up -d
+# Tear down:   docker compose -f docker-compose.observability.yml down
+#
+# Required env (set in shell or .env at repo root):
+#   GRAFANA_ADMIN_PASSWORD  — Grafana admin password. NO default; fail loud.
+#
+# Optional env:
+#   METRICS_BASIC_AUTH_USER / METRICS_BASIC_AUTH_PASSWORD — used by
+#       Prometheus to scrape the auth-gated /metrics endpoint (configure
+#       in prometheus.yml under basic_auth: section).
+#
+# Ports exposed on the Docker host:
+#   9090  Prometheus UI       (bound to localhost — front via reverse proxy)
+#   3001  Grafana UI
+#   3100  Loki (NOT exposed publicly — only via internal `obs_internal` net)
+#   9080  Promtail (push API; only used internally)
+
+name: raf-observability
+
+networks:
+  # External network for UI-facing services (Grafana, Prometheus).
+  obs_public:
+    driver: bridge
+  # Internal-only network for Loki / Promtail.  No `external: true`, no
+  # host port bindings — keeps Loki off the public internet.
+  obs_internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+services:
+
+  # ----------------------------------------------------------------------
+  # Prometheus — scrapes RAF backend /metrics and any container exporters.
+  # ----------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: raf-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - obs_public
+
+  # ----------------------------------------------------------------------
+  # Grafana — dashboards + alerting UI. Datasources are provisioned from
+  # ops/grafana-provisioning/.
+  # ----------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: raf-grafana
+    restart: unless-stopped
+    environment:
+      # Fail loud if unset — no insecure default.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./ops/grafana-provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - obs_public
+      - obs_internal
+    depends_on:
+      - prometheus
+      - loki
+
+  # ----------------------------------------------------------------------
+  # Loki — log aggregation. Bound to obs_internal only; Grafana reaches it
+  # via that network. No host port published.
+  # ----------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: raf-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./ops/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    # NO ports: exposure — internal-only, accessed by Grafana over obs_internal.
+    networks:
+      - obs_internal
+
+  # ----------------------------------------------------------------------
+  # Promtail — tails Docker container logs and ships to Loki.
+  # Reads /var/lib/docker/containers (read-only) on the host.
+  # ----------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:3.2.0
+    container_name: raf-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./ops/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      # Mount the application PHI audit log (rotated by the backend) so it
+      # ships to Loki under a dedicated job label. Bind-mount path must
+      # match PHI_AUDIT_LOG_PATH on the backend container's host side.
+      - ./logs:/app/logs:ro
+    networks:
+      - obs_internal
+    depends_on:
+      - loki

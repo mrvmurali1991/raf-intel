@@ -1,0 +1,72 @@
+# Promtail — tails Docker container JSON log files and the backend
+# PHI audit log, ships to Loki on the internal observability network.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  # `loki` resolves over the obs_internal Docker network defined in
+  # docker-compose.observability.yml.
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+
+  # ----------------------------------------------------------------------
+  # Docker container stdout/stderr — JSON log driver files on the host.
+  # ----------------------------------------------------------------------
+  - job_name: docker
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+    pipeline_stages:
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            timestamp: time
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      - labels:
+          stream:
+      - output:
+          source: output
+
+  # ----------------------------------------------------------------------
+  # PHI access audit log — durable, HIPAA-tracked source. Promoted to its
+  # own job so Loki retention / access controls can be tightened on this
+  # stream independently.
+  # ----------------------------------------------------------------------
+  - job_name: phi_audit
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: phi_audit
+          compliance: hipaa_164_312_b
+          __path__: /app/logs/phi_access.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            logger: logger
+            request_id: request_id
+      - labels:
+          level:
+          logger:
+
+  # ----------------------------------------------------------------------
+  # Host syslog — useful for catching OOM kills, container daemon errors.
+  # ----------------------------------------------------------------------
+  - job_name: varlogs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: varlogs
+          __path__: /var/log/*.log

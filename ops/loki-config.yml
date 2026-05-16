@@ -1,0 +1,66 @@
+# Loki configuration — single-binary mode, filesystem storage.
+# Suitable for single-node deployments and dev/staging environments.
+# For production-scale, switch to S3/GCS-backed chunks and a memberlist
+# ring across multiple Loki replicas.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Reject log lines older than 7 days at ingest.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # Per-tenant ingestion ceiling — protects single-binary instance.
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
+  max_query_series: 5000
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  retention_enabled: true
+  # Retain logs for 30 days on local disk; durable PHI audit logs are kept
+  # separately by the application via RotatingFileHandler.
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 50
+
+# Use the new schema's TSDB shipper.
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+  filesystem:
+    directory: /loki/chunks
+
+ruler:
+  alertmanager_url: http://alertmanager:9093
+
+# Disable analytics ping to Grafana Labs.
+analytics:
+  reporting_enabled: false

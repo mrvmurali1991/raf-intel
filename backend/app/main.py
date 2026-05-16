@@ -443,5 +443,60 @@ async def emr_gate(request: Request, call_next):
     return await call_next(request)
 
 
+# ---------------------------------------------------------------------------
+# Prometheus /metrics — auth-gated to prevent public scraping.
+#
+# An existing /metrics endpoint is registered by app.metrics.init_metrics.
+# We add a thin middleware that runs ahead of it and enforces HTTP Basic
+# Auth using METRICS_BASIC_AUTH_USER / METRICS_BASIC_AUTH_PASSWORD env
+# vars (also exposed as ``settings.metrics_basic_auth`` for callers that
+# prefer the typed config object).  If either var is unset, the endpoint
+# behaves as before (closed via network policy only) so existing scrape
+# configs aren't silently broken on upgrade.
+#
+# Reminder: Prometheus label cardinality is unbounded — NEVER include
+# patient_id, MRN, or any per-user identifier as a label value.  Existing
+# metric definitions in app/metrics.py use coarse labels (method, path,
+# status, phase) only.
+# ---------------------------------------------------------------------------
+
+from prometheus_client import make_asgi_app, Counter, Histogram  # noqa: E402,F401
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+
+# Auth-gated /metrics — protect from public scraping; allowlist via env IP list or basic auth
+metrics_app = make_asgi_app()
+
+
+def _metrics_basic_auth_expected() -> str:
+    """Return the expected ``Authorization: Basic <b64>`` header, or '' when unset."""
+    user = os.getenv("METRICS_BASIC_AUTH_USER", "")
+    pw = os.getenv("METRICS_BASIC_AUTH_PASSWORD", "")
+    cfg = getattr(settings, "metrics_basic_auth", "") or ""
+    if cfg:
+        return cfg
+    if not user or not pw:
+        return ""
+    import base64
+    return "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
+
+
+class _MetricsAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path == "/metrics":
+            expected = _metrics_basic_auth_expected()
+            if expected:
+                provided = request.headers.get("Authorization", "")
+                if provided != expected:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Unauthorized"},
+                        headers={"WWW-Authenticate": 'Basic realm="metrics"'},
+                    )
+        return await call_next(request)
+
+
+app.add_middleware(_MetricsAuthMiddleware)
+
+
 # Register all routers
 register_routers(app)
