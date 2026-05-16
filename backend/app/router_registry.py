@@ -57,6 +57,7 @@ from app.routers import (
     webhooks,
 )
 from app.routers import auth as auth_router
+from app.routers import clinical_queries as clinical_queries_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
 from app.routers import feature_flags as feature_flags_router
@@ -182,6 +183,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, forecast_router.router)
     _mount(app, hcc_removal_router.router)
     _mount(app, disputes_router.router)
+    _mount(app, clinical_queries_router.router)
     _mount(app, analysis.router)
     _mount(app, suspects.router)
     _mount(app, suspect_feedback_router.router)

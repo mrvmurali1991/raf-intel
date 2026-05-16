@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, XCircle, HelpCircle, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Loader2, Check, XCircle, HelpCircle, ThumbsUp, ThumbsDown, MessageSquareWarning } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import {
   useAcceptSuspectCentral,
@@ -82,6 +82,9 @@ export function SuspectCardView({
   const [showExplain, setShowExplain] = useState(false);
   const [showDismissDialog, setShowDismissDialog] = useState(false);
   const [showAcceptGate, setShowAcceptGate] = useState(false);
+  const [queryDialogOpen, setQueryDialogOpen] = useState(false);
+  const [queryText, setQueryText] = useState("");
+  const [querySubmitting, setQuerySubmitting] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const toast = useToast();
 
@@ -269,6 +272,17 @@ export function SuspectCardView({
             >
               <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setQueryDialogOpen(true)}
+              disabled={busy !== null}
+              aria-label="Request documentation from the provider"
+              title="Open a structured query to the PCP asking for documentation that supports this suspect. Status tracked Pending → Replied → Closed."
+              className="text-muted-foreground hover:text-foreground px-2"
+            >
+              <MessageSquareWarning className="h-3 w-3 mr-1" aria-hidden /> Request docs
+            </Button>
             {/* Feedback affordance — persisted via POST /api/suspects/{id}/feedback. */}
             <div
               className="ml-auto flex items-center gap-0.5"
@@ -342,6 +356,89 @@ export function SuspectCardView({
           measurement_year: measurementYear ?? null,
         }}
       />
+      {queryDialogOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Request documentation"
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+          onClick={() => !querySubmitting && setQueryDialogOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-lg shadow-2xl w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold mb-1">Request documentation</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              {suspect.label} · HCC {suspect.hcc} · {suspect.icd10}
+            </p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Routes a structured query to the PCP for the documentation that
+              would support this suspect. Status tracked Pending → Replied →
+              Closed in the patient&apos;s query log.
+            </p>
+            <textarea
+              value={queryText}
+              onChange={(e) => setQueryText(e.target.value)}
+              placeholder="Describe the documentation needed — e.g., 'Please confirm current eGFR trend and CKD stage for PY 2026'"
+              rows={4}
+              className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Documentation request"
+              autoFocus
+            />
+            <div className="mt-2 text-[11px] text-muted-foreground">
+              {queryText.trim().length < 10
+                ? `${10 - queryText.trim().length} more character${10 - queryText.trim().length === 1 ? "" : "s"} required`
+                : "Ready to send."}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setQueryDialogOpen(false)}
+                disabled={querySubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (queryText.trim().length < 10) return;
+                  setQuerySubmitting(true);
+                  try {
+                    const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+                    const res = await fetch(`${API_BASE}/api/clinical-queries`, {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        patient_id: patientId,
+                        suspect_id: suspect.id,
+                        hcc_code: String(suspect.hcc),
+                        icd10_code: suspect.icd10,
+                        query_text: queryText.trim(),
+                      }),
+                    });
+                    if (res.ok) {
+                      toast.success("Query sent", "PCP will be notified to respond.");
+                      setQueryText("");
+                      setQueryDialogOpen(false);
+                    } else {
+                      const body = await res.json().catch(() => ({}));
+                      toast.error("Could not send", body.detail || `HTTP ${res.status}`);
+                    }
+                  } catch (e) {
+                    toast.error("Network error", String(e));
+                  } finally {
+                    setQuerySubmitting(false);
+                  }
+                }}
+                disabled={queryText.trim().length < 10 || querySubmitting}
+              >
+                {querySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send query"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
