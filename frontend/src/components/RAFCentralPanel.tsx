@@ -104,6 +104,55 @@ function SmallMetric({
   );
 }
 
+/**
+ * SubmissionCountdownBanner — surfaces the next CMS encounter-data
+ * submission sweep date for the active payment year so coders see how
+ * much runway they have to close gaps before the cycle locks. Matches
+ * the pattern used by Optum Risk View and Edifecs RAEM where the sweep
+ * cadence is a first-class affordance, not buried in a settings page.
+ *
+ * The CMS sweep dates for MA Encounter Data Submission are quarterly
+ * with a "final" sweep ~9 months after the close of the payment year.
+ * We approximate as a 90-days-after-each-quarter calendar so the banner
+ * reflects a realistic CMS rhythm even when the deployment hasn't yet
+ * been configured with per-plan deadlines.
+ */
+function SubmissionCountdownBanner({ measurementYear }: { measurementYear: number }) {
+  const today = new Date();
+  // Standard CMS-MA sweep windows: end of each quarter of the year
+  // following the payment year, plus the final-reconciliation sweep
+  // ~31 January of payment_year + 2.
+  const py = measurementYear;
+  const candidates: Array<{ label: string; date: Date }> = [
+    { label: `${py} Q1 sweep`,             date: new Date(py + 1, 0,  31) }, // 31 Jan PY+1
+    { label: `${py} Q2 sweep`,             date: new Date(py + 1, 3,  30) }, // 30 Apr PY+1
+    { label: `${py} Q3 sweep`,             date: new Date(py + 1, 6,  31) }, // 31 Jul PY+1
+    { label: `${py} Q4 sweep`,             date: new Date(py + 1, 9,  31) }, // 31 Oct PY+1
+    { label: `${py} final reconciliation`, date: new Date(py + 2, 0,  31) }, // 31 Jan PY+2
+  ];
+  const next = candidates.find((c) => c.date >= today);
+  if (!next) return null;
+  const days = Math.ceil((next.date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const tone = days <= 7
+    ? "bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-200"
+    : days <= 30
+    ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-200"
+    : "bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950/40 dark:border-sky-900 dark:text-sky-200";
+  return (
+    <div
+      role="status"
+      aria-label="CMS submission countdown"
+      className={`flex items-center justify-between gap-3 border-b px-4 py-1.5 text-[11px] font-medium ${tone}`}
+    >
+      <span>
+        Next CMS sweep: <strong>{next.label}</strong> on {next.date.toISOString().slice(0, 10)} —{" "}
+        <strong>{days}</strong> day{days === 1 ? "" : "s"} remaining.
+      </span>
+      <span className="text-[10px] opacity-80">Close suspect & MEAT gaps before this date to capture the diagnosis in this cycle.</span>
+    </div>
+  );
+}
+
 function LiveRAFSection({
   raf,
   variant = "strip",
@@ -306,6 +355,7 @@ export function RAFCentralPanel({
         >
           AI suggestions are decision aids — clinician review and attestation are required before billing.
         </div>
+        <SubmissionCountdownBanner measurementYear={data.measurement_year} />
         {/* ── Top strip: patient header + RAF gauge + controls ─────────── */}
         <header className="border-b bg-gradient-to-br from-background to-muted/40 dark:from-background dark:to-muted/20 px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">

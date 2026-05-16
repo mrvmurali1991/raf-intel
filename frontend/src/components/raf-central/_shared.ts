@@ -61,6 +61,16 @@ export interface SuspectCard {
   /** Fractional MEAT completeness (0..1) when the engine wrote one — used
    *  by the UI to combine with confidence in prioritization. */
   meat_completeness?: number | null;
+  /** Suspect taxonomy — drives the Net-new / Audit / Confirmed badge.
+   *   - "new":       net-new suspect — never coded before, evidence-supported
+   *   - "audit":     previously coded but lacks current MEAT documentation
+   *   - "confirmed": already valid and submitted (informational)
+   *   - undefined:   derive heuristically on the frontend
+   *  Frontend derives this when the backend doesn't supply it: evidence_type
+   *  == "historical" → audit; meat_completeness >= 0.75 → confirmed;
+   *  otherwise → new.
+   */
+  taxonomy?: "new" | "audit" | "confirmed" | null;
 }
 
 export interface RecaptureCard {

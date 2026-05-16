@@ -173,6 +173,26 @@ export function SuspectCardView({
 
   const confPct = Math.round((suspect.confidence ?? 0) * 100);
   const gaugeColor = confidenceTier(confPct).color;
+
+  // Net-new / Audit / Confirmed taxonomy — Apixio's HCC-Complete pattern.
+  // Drives the badge color and clarifies the coder's action path: a
+  // net-new suspect needs evidence to submit; an audit row needs
+  // documentation review BEFORE submission; a confirmed row is
+  // informational. Backend may eventually ship suspect.taxonomy; until
+  // then we derive it from evidence_type + meat_completeness.
+  const taxonomy = (() => {
+    if (suspect.taxonomy) return suspect.taxonomy;
+    const meat = suspect.meat_completeness ?? 0;
+    const ev = (suspect.evidence_type || "").toLowerCase();
+    if (ev.startsWith("hist") || ev.startsWith("recap")) return "audit" as const;
+    if (meat >= 0.75) return "confirmed" as const;
+    return "new" as const;
+  })();
+  const taxonomyMeta = {
+    new:       { label: "Net-new",   className: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", title: "Net-new suspect — evidence supports a diagnosis that has not been coded before. Accept to add it to the patient's problem list." },
+    audit:     { label: "Audit",     className: "border-amber-300   bg-amber-50   text-amber-800   dark:border-amber-700   dark:bg-amber-950/40   dark:text-amber-300",   title: "Audit candidate — diagnosis was coded in a prior year but current MEAT documentation is thin. Review the chart before re-billing." },
+    confirmed: { label: "Confirmed", className: "border-sky-300     bg-sky-50     text-sky-800     dark:border-sky-700     dark:bg-sky-950/40     dark:text-sky-300",     title: "Already-validated suspect — MEAT documentation is sufficient. Informational; safe to accept." },
+  }[taxonomy];
   // V28 hierarchy: when this HCC is trumped by a higher-priority HCC, the
   // RAF scorer will drop it at calculation time. Surface the relationship
   // as a badge AND disable Accept — patient-safety review #7. Without this
@@ -187,7 +207,15 @@ export function SuspectCardView({
         <SemiGauge value={confPct} color={gaugeColor} />
 
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-semibold leading-snug truncate block">{suspect.label}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold leading-snug truncate flex-1">{suspect.label}</span>
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${taxonomyMeta.className}`}
+              title={taxonomyMeta.title}
+            >
+              {taxonomyMeta.label}
+            </span>
+          </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             HCC {suspect.hcc} · {suspect.icd10} · {suspect.trigger}
             {isTrumped && (
