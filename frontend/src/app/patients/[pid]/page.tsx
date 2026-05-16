@@ -820,6 +820,35 @@ export default function PatientDetailPage({
                     </button>
                     <button
                       role="menuitem"
+                      onClick={() => {
+                        // Cotiviti-style hand-off: pre-fill a dispute draft
+                        // with the patient + measurement year and route the
+                        // coder to the disputes board where they can pick
+                        // an HCC + denial reason. Avoids forcing them to
+                        // copy/paste pid between two tools.
+                        const params = new URLSearchParams({
+                          new: "1",
+                          patient_id: String(pid),
+                          measurement_year: String(selectedYear),
+                        });
+                        router.push(`/disputes?${params.toString()}`);
+                        setMoreMenuOpen(false);
+                      }}
+                      aria-label="File a dispute or appeal for this patient"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        width: "100%", padding: "10px 16px", background: "transparent",
+                        border: "none", borderTop: `1px solid ${C.slate100}`,
+                        color: C.slate700, fontSize: 13, fontWeight: 500,
+                        cursor: "pointer", textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      File Dispute
+                    </button>
+                    <button
+                      role="menuitem"
                       onClick={() => { window.print(); setMoreMenuOpen(false); }}
                       className="no-print"
                       aria-label="Print patient record"

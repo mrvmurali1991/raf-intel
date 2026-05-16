@@ -16,7 +16,7 @@
  * All TailwindCSS via inline styles (matches existing /suspects page style).
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Gavel,
@@ -105,6 +105,17 @@ export default function DisputesPage() {
   const [draftModal, setDraftModal] = useState<{ disputeId: number; text: string } | null>(null);
   const [outcomeModal, setOutcomeModal] = useState<{ appealId: number; disputeId: number } | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // Allow the patient detail page to deep-link into a "new dispute" flow
+  // with patient_id + measurement_year pre-populated. Read from the URL
+  // once on mount so refreshing this page doesn't keep re-opening the
+  // dialog. UX: hand-off coder → disputes board in one click.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      setShowCreate(true);
+    }
+  }, []);
 
   /* ---------------- Data ---------------- */
 
