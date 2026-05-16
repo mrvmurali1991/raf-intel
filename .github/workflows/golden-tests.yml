@@ -1,0 +1,56 @@
+# ===========================================================================
+# RAF Intelligence — CMS Golden-Master Tests (fast feedback)
+#
+# Runs the golden-master test suite in isolation so coefficient regressions
+# surface within ~2 minutes on every push/PR — well ahead of the full CI run.
+# No database, no Docker, no network calls: pure computation against pinned
+# CMS coefficients and known reference values.
+#
+# TODO: remove continue-on-error once the suite is proven stable in CI.
+# ===========================================================================
+
+name: Golden Tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: golden-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  golden:
+    name: "CMS golden-master tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Non-blocking initially; flip to strict in a follow-up.
+    # TODO: remove continue-on-error once golden tests are stable in CI.
+    continue-on-error: true
+
+    env:
+      APP_ENV: development
+      JWT_SECRET: ci-golden-jwt-secret-not-for-production-use-64chars-pad
+      JWT_REFRESH_SECRET: ci-golden-refresh-secret-not-for-production-64chars
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-timeout hccinfhir
+        working-directory: backend
+
+      - name: Run CMS golden-master tests
+        run: pytest tests/golden/ -v --timeout=60
+        working-directory: backend

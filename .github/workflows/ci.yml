@@ -318,6 +318,12 @@ jobs:
             --timeout=60
         working-directory: backend
 
+      # TODO: flip continue-on-error to false once golden tests are stable in CI
+      - name: Run CMS golden-master tests
+        continue-on-error: true
+        run: pytest tests/golden/ -v --timeout=60
+        working-directory: backend
+
       - name: Smoke /openapi.json + key endpoints
         run: |
           # Start the FastAPI app on a random port and probe key endpoints.
@@ -753,6 +759,16 @@ jobs:
           TEST_USERNAME: admin@raf.health
           TEST_PASSWORD: Admin@123
 
+      # TODO: flip continue-on-error to false once axe-smoke tests are stable in CI
+      - name: Run axe-core accessibility smoke tests
+        continue-on-error: true
+        run: CI=1 npx playwright test tests/e2e/axe-smoke.spec.ts --reporter=line
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3001
+          TEST_USERNAME: admin@raf.health
+          TEST_PASSWORD: Admin@123
+
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
@@ -768,3 +784,79 @@ jobs:
           name: playwright-results
           path: frontend/test-results/
           retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Job: backend-integration
+  # Real-DB integration tests marked with @pytest.mark.integration.
+  # Runs against a MySQL service container identical to backend-test's.
+  # Non-blocking (continue-on-error) initially — flip to strict in a follow-up.
+  # TODO: remove continue-on-error once integration suite is stable in CI.
+  # ---------------------------------------------------------------------------
+  backend-integration:
+    name: "Backend — Real-DB integration tests"
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    continue-on-error: true
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: raf_intelligence_test
+          MYSQL_USER: raf_app
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      APP_ENV: development
+      RAF_DB_HOST: 127.0.0.1
+      RAF_DB_PORT: 3306
+      RAF_DB_USER: raf_app
+      RAF_DB_PASSWORD: testpassword
+      RAF_DB_NAME: raf_intelligence_test
+      OPENEMR_DB_HOST: 127.0.0.1
+      OPENEMR_DB_PORT: 3306
+      OPENEMR_DB_USER: raf_app
+      OPENEMR_DB_PASSWORD: testpassword
+      OPENEMR_DB_NAME: openemr_test
+      JWT_SECRET: ci-test-jwt-secret-not-for-production-use-64chars-padding-here
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-not-for-production-64chars-padding
+      REDIS_URL: redis://localhost:6379/0
+      GOOGLE_API_KEY: ""
+      SENTRY_DSN: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Install test extras
+        run: pip install pytest-cov pytest-timeout pytest-asyncio
+
+      - name: Wait for MySQL to accept connections
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -u root -prootpassword --silent; do
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+
+      - name: Run integration tests
+        run: pytest -m integration backend/tests/integration/ -v --timeout=120
+        working-directory: backend
