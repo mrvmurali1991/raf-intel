@@ -23,6 +23,24 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+// Lazy-load heavy panels — excluded from the initial paint bundle.
+const LazyDetailPane = dynamic(() => import("./ClaimsDetailPane"), {
+  ssr: false,
+  loading: () => (
+    <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} style={{ height: 36, borderRadius: 8, backgroundColor: "#F1F5F9" }} />
+      ))}
+    </div>
+  ),
+});
+
+const LazyUploadDialog = dynamic(() => import("./ClaimsUploadDialog"), {
+  ssr: false,
+  loading: () => null,
+});
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { tokens } from "@/styles/tokens";
@@ -391,209 +409,6 @@ function ToastStack({ items }: { items: Toast[] }) {
   );
 }
 
-// ─── Upload Dialog ──────────────────────────────────────────────────────────
-function UploadDialog({
-  onClose, onUploaded,
-}: { onClose: () => void; onUploaded: (batchId: number, filename: string) => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const pick = (f: File | undefined) => {
-    if (!f) return;
-    const ext = "." + (f.name.split(".").pop() ?? "").toLowerCase();
-    if (!ACCEPTED_EXT.includes(ext)) {
-      setError(`Unsupported file type "${ext}". Accepted: ${ACCEPTED_EXT.join(", ")}`);
-      return;
-    }
-    setError(null);
-    setFile(f);
-  };
-
-  const submit = async () => {
-    if (!file) return;
-    setUploading(true); setProgress(0); setError(null);
-    const form = new FormData();
-    form.append("file", file);
-    try {
-      const { data } = await api.post("/api/claims/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (e) => {
-          if (e.total) setProgress(Math.round((e.loaded / e.total) * 100));
-        },
-      });
-      onUploaded(data?.batch_id, data?.filename ?? file.name);
-      onClose();
-    } catch (e) {
-      setError(errMsg(e, "Upload failed. Please try again."));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <div
-      role="dialog" aria-modal="true" aria-label="Upload Claims File"
-      onClick={(e) => { if (e.target === e.currentTarget && !uploading) onClose(); }}
-      style={{
-        position: "fixed", inset: 0, zIndex: 100, padding: 16,
-        background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
-    >
-      <div className="animate-scale-in" style={{
-        width: "100%", maxWidth: 540, background: C.white, borderRadius: 16,
-        boxShadow: "0 25px 60px rgba(0,0,0,0.22)", overflow: "hidden",
-      }}>
-        {/* header */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "18px 22px", borderBottom: `1px solid ${C.slate200}`,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 10, background: C.tealSoft,
-              color: C.teal, display: "flex", alignItems: "center", justifyContent: "center",
-            }}><Upload size={18} /></div>
-            <div>
-              <h2 className="text-foreground" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Upload Claims File</h2>
-              <p className="text-muted-foreground" style={{ margin: 0, fontSize: 12 }}>CSV, X12 837P / 837I, or EDI — up to 100 MB</p>
-            </div>
-          </div>
-          <button onClick={onClose} disabled={uploading} aria-label="Close dialog" style={{
-            width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.slate200}`,
-            background: C.white, color: C.slate500, cursor: uploading ? "not-allowed" : "pointer",
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-          }}><X size={16} /></button>
-        </div>
-
-        {/* body */}
-        <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
-          <div
-            role="button" tabIndex={0}
-            aria-label="Claims file drop zone"
-            onClick={() => !uploading && inputRef.current?.click()}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files[0]); }}
-            style={{
-              position: "relative", borderRadius: 14, padding: "36px 22px",
-              textAlign: "center", cursor: uploading ? "default" : "pointer",
-              background: dragOver ? C.tealSoft : file ? C.emeraldSoft : C.slate50,
-              border: `2px dashed ${dragOver ? C.teal : file ? C.emerald : C.slate300}`,
-              transition: "all 0.18s ease",
-            }}
-          >
-            <input ref={inputRef} type="file" accept={ACCEPTED_EXT.join(",")}
-              onChange={(e) => pick(e.target.files?.[0])} style={{ display: "none" }} />
-            {file ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 12, background: `${C.emerald}1A`,
-                  color: C.emerald, display: "flex", alignItems: "center", justifyContent: "center",
-                }}><FileText size={22} /></div>
-                <div className="text-foreground" style={{ fontSize: 14, fontWeight: 600 }}>{file.name}</div>
-                <div className="text-muted-foreground" style={{ fontSize: 12 }}>
-                  {(file.size / 1024).toFixed(1)} KB
-                </div>
-                {!uploading && (
-                  <button onClick={(e) => { e.stopPropagation(); setFile(null); }} style={{
-                    marginTop: 4, background: "none", border: "none", fontSize: 12,
-                    color: C.slate500, cursor: "pointer", textDecoration: "underline",
-                  }}>Replace file</button>
-                )}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 12, background: C.slate100,
-                  color: C.slate400, display: "flex", alignItems: "center", justifyContent: "center",
-                }}><Upload size={22} /></div>
-                <div>
-                  <p className="text-foreground" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
-                    Drop a claims file here
-                  </p>
-                  <p className="text-muted-foreground" style={{ margin: "4px 0 0", fontSize: 12 }}>
-                    or click to browse — {ACCEPTED_EXT.join(", ")}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {uploading && (
-            <div>
-              <div style={{
-                display: "flex", justifyContent: "space-between",
-                fontSize: 12, color: C.slate500, marginBottom: 6,
-              }}>
-                <span>Uploading…</span>
-                <span style={{ fontWeight: 700, color: C.teal }}>{progress}%</span>
-              </div>
-              <div style={{ height: 6, borderRadius: 3, background: C.slate200, overflow: "hidden" }}>
-                <div style={{
-                  height: "100%", width: `${progress}%`, background: C.teal,
-                  transition: "width 0.2s ease",
-                }} />
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div role="alert" style={{
-              display: "flex", alignItems: "flex-start", gap: 8,
-              padding: "10px 12px", borderRadius: 8,
-              background: C.redSoft, border: `1px solid ${C.red}30`,
-            }}>
-              <AlertTriangle size={15} className="text-destructive" style={{ flexShrink: 0, marginTop: 1 }} />
-              <span className="text-destructive" style={{ fontSize: 13 }}>{error}</span>
-            </div>
-          )}
-
-          <div style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-            borderRadius: 8, background: C.slate50, border: `1px solid ${C.slate200}`,
-          }}>
-            <Database size={14} className="text-muted-foreground" />
-            <span className="text-muted-foreground" style={{ fontSize: 12, lineHeight: 1.5 }}>
-              After upload, the batch is <strong>parsed</strong>. Run <em>Process</em> to match
-              patients to OpenEMR records and map ICD-10 codes to HCC categories.
-            </span>
-          </div>
-        </div>
-
-        {/* footer */}
-        <div style={{
-          display: "flex", justifyContent: "flex-end", gap: 10,
-          padding: "14px 22px", borderTop: `1px solid ${C.slate200}`, background: C.slate50,
-        }}>
-          <button onClick={onClose} disabled={uploading} style={{
-            height: 38, padding: "0 18px", borderRadius: 8, border: `1px solid ${C.slate200}`,
-            background: C.white, color: C.slate600, fontSize: 13, fontWeight: 500,
-            cursor: uploading ? "not-allowed" : "pointer", opacity: uploading ? 0.5 : 1,
-          }}>Cancel</button>
-          <button onClick={submit} disabled={!file || uploading} style={{
-            height: 38, padding: "0 20px", borderRadius: 8, border: "none",
-            background: !file || uploading ? C.slate300 : `linear-gradient(135deg, ${C.teal} 0%, ${tokens.successDark} 100%)`,
-            color: C.white, fontSize: 13, fontWeight: 600,
-            cursor: !file || uploading ? "not-allowed" : "pointer",
-            display: "inline-flex", alignItems: "center", gap: 6,
-            boxShadow: !file || uploading ? "none" : "0 2px 10px rgba(15,118,110,0.35)",
-          }}>
-            {uploading
-              ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Uploading…</>
-              : <><Upload size={14} /> Upload Claims</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Confirm Delete ──────────────────────────────────────────────────────────
 function ConfirmDeleteDialog({
   batch, onCancel, onConfirm, pending,
@@ -601,20 +416,11 @@ function ConfirmDeleteDialog({
   return (
     <div role="dialog" aria-modal="true" aria-label="Confirm delete batch"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-      style={{
-        position: "fixed", inset: 0, zIndex: 110, padding: 16,
-        background: "rgba(15,23,42,0.55)", display: "flex",
-        alignItems: "center", justifyContent: "center",
-      }}>
-      <div className="animate-scale-in" style={{
-        background: C.white, borderRadius: 14, width: "100%", maxWidth: 440,
-        padding: 26, boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12, background: C.redSoft,
-          color: C.red, display: "flex", alignItems: "center", justifyContent: "center",
-          marginBottom: 14,
-        }}><Trash2 size={22} /></div>
+      style={{ position: "fixed", inset: 0, zIndex: 110, padding: 16, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="animate-scale-in" style={{ background: C.white, borderRadius: 14, width: "100%", maxWidth: 440, padding: 26, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: C.redSoft, color: C.red, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+          <Trash2 size={22} />
+        </div>
         <h3 className="text-foreground" style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>Delete batch?</h3>
         <p className="text-muted-foreground" style={{ margin: "0 0 22px", fontSize: 13, lineHeight: 1.6 }}>
           <strong className="text-foreground">&ldquo;{normBatch(batch).name}&rdquo;</strong> and all{" "}
@@ -622,368 +428,15 @@ function ConfirmDeleteDialog({
           This action cannot be undone.
         </p>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button onClick={onCancel} disabled={pending} style={{
-            height: 38, padding: "0 18px", borderRadius: 8,
-            border: `1px solid ${C.slate200}`, background: C.white,
-            color: C.slate600, fontSize: 13, fontWeight: 500,
-            cursor: pending ? "not-allowed" : "pointer",
-          }}>Cancel</button>
-          <button onClick={onConfirm} disabled={pending} style={{
-            height: 38, padding: "0 18px", borderRadius: 8, border: "none",
-            background: C.red, color: C.white, fontSize: 13, fontWeight: 600,
-            cursor: pending ? "not-allowed" : "pointer", opacity: pending ? 0.6 : 1,
-            display: "inline-flex", alignItems: "center", gap: 6,
-          }}>
+          <button onClick={onCancel} disabled={pending} style={{ height: 38, padding: "0 18px", borderRadius: 8, border: `1px solid ${C.slate200}`, background: C.white, color: C.slate600, fontSize: 13, fontWeight: 500, cursor: pending ? "not-allowed" : "pointer" }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={pending} style={{ height: 38, padding: "0 18px", borderRadius: 8, border: "none", background: C.red, color: C.white, fontSize: 13, fontWeight: 600, cursor: pending ? "not-allowed" : "pointer", opacity: pending ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
             {pending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Trash2 size={13} />}
             Delete
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Batch Detail Panel (tabbed) ────────────────────────────────────────────
-type DetailTab = "claims" | "diagnoses" | "hcc" | "unmapped";
-
-function DetailPane({ batchId }: { batchId: number }) {
-  const [tab, setTab] = useState<DetailTab>("claims");
-
-  const claimsQ = useQuery({
-    queryKey: ["claims-batch-claims", batchId],
-    queryFn: () => fetchBatchClaims(batchId),
-    enabled: tab === "claims",
-  });
-  const diagQ = useQuery({
-    queryKey: ["claims-batch-diagnoses", batchId],
-    queryFn: () => fetchBatchDiagnoses(batchId),
-    enabled: tab === "diagnoses" || tab === "hcc",
-  });
-  const hccQ = useQuery({
-    queryKey: ["claims-batch-hcc", batchId],
-    queryFn: () => fetchHccSummary(batchId),
-    enabled: tab === "hcc",
-  });
-  const unmapQ = useQuery({
-    queryKey: ["claims-batch-unmapped", batchId],
-    queryFn: () => fetchUnmapped(batchId),
-    enabled: tab === "unmapped",
-  });
-
-  const tabs: { key: DetailTab; label: string; icon: React.ReactNode; count?: number }[] = [
-    { key: "claims",    label: "Claims",            icon: <FileText size={13} />,  count: claimsQ.data?.total },
-    { key: "diagnoses", label: "Diagnoses",         icon: <Tag size={13} />,       count: diagQ.data?.length },
-    { key: "hcc",       label: "HCC Mapping",       icon: <Layers size={13} />,    count: hccQ.data?.length },
-    { key: "unmapped",  label: "Unmatched Patients",icon: <Users size={13} />,     count: unmapQ.data?.length },
-  ];
-
-  return (
-    <div style={{ background: C.white, borderRadius: 12, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
-      {/* Tabs */}
-      <div style={{
-        display: "flex", borderBottom: `1px solid ${C.slate200}`,
-        background: C.slate50, overflowX: "auto",
-      }}>
-        {tabs.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "12px 18px", fontSize: 13,
-              fontWeight: active ? 700 : 500,
-              color: active ? C.teal : C.slate500,
-              background: active ? C.white : "transparent",
-              border: "none",
-              borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
-              cursor: "pointer", whiteSpace: "nowrap",
-            }}>
-              {t.icon}
-              {t.label}
-              {t.count != null && (
-                <span style={{
-                  marginLeft: 2, padding: "1px 7px", borderRadius: 999,
-                  fontSize: 10, fontWeight: 700,
-                  background: active ? C.tealSoft : C.slate100,
-                  color: active ? C.teal : C.slate500,
-                }}>{t.count}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Content */}
-      <div style={{ padding: 18, minHeight: 200 }}>
-        {tab === "claims" && <ClaimsTabContent q={claimsQ} />}
-        {tab === "diagnoses" && <DiagnosesTabContent q={diagQ} />}
-        {tab === "hcc" && <HccTabContent q={hccQ} />}
-        {tab === "unmapped" && <UnmappedTabContent q={unmapQ} />}
-      </div>
-    </div>
-  );
-}
-
-// Tab contents ────────────────────────────────────────────────────────────────
-type QState<T> = { isLoading: boolean; isError: boolean; data?: T; refetch: () => void };
-
-function TabLoading() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} w="100%" h={36} r={8} />
-      ))}
-    </div>
-  );
-}
-function TabError({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div style={{ textAlign: "center", padding: "28px 0" }}>
-      <AlertTriangle size={24} style={{ color: C.red, marginBottom: 8 }} />
-      <p style={{ margin: "0 0 12px", fontSize: 13, color: C.slate500 }}>Failed to load data.</p>
-      <button onClick={onRetry} style={{
-        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600,
-        padding: "6px 12px", borderRadius: 999, border: `1px solid ${C.teal}33`,
-        background: C.tealSoft, color: C.teal, cursor: "pointer",
-      }}><RefreshCw size={12} /> Retry</button>
-    </div>
-  );
-}
-
-function TableShell({ cols, header, children }: { cols: string; header: string[]; children: React.ReactNode }) {
-  return (
-    <div style={{ border: `1px solid ${C.slate200}`, borderRadius: 10, overflow: "hidden" }}>
-      <div style={{
-        display: "grid", gridTemplateColumns: cols, gap: 8,
-        padding: "10px 16px", background: C.slate50, borderBottom: `1px solid ${C.slate200}`,
-      }}>
-        {header.map((h) => (
-          <span key={h} style={{
-            fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.05em", color: C.slate500,
-          }}>{h}</span>
-        ))}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ClaimsTabContent({ q }: { q: QState<{ claims: ClaimRecord[]; total: number }> }) {
-  if (q.isLoading) return <TabLoading />;
-  if (q.isError) return <TabError onRetry={q.refetch} />;
-  const rows = q.data?.claims ?? [];
-  if (!rows.length) {
-    return <EmptyState icon={<FileText size={24} />} title="No claim records" description="This batch has no parsed claims yet." />;
-  }
-  const cols = "2fr 1.1fr 1.5fr 2fr 100px";
-  return (
-    <TableShell cols={cols} header={["Patient", "DOS", "Provider", "ICD-10 Codes", "Charges"]}>
-      {rows.slice(0, 100).map((c, i) => {
-        const codes = toList(c.icd10_codes);
-        const matched = !!c.openemr_pid;
-        return (
-          <div key={c.id} className="claims-row" style={{
-            display: "grid", gridTemplateColumns: cols, gap: 8,
-            padding: "11px 16px", alignItems: "flex-start",
-            borderBottom: i < rows.length - 1 ? `1px solid ${C.slate100}` : "none",
-            background: i % 2 === 1 ? C.slate50 : C.white,
-            transition: "background 0.12s ease",
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{
-                fontSize: 13, fontWeight: 600, color: C.slate800,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                display: "flex", alignItems: "center", gap: 6,
-              }}>
-                {c.patient_name ?? "—"}
-                {matched && (
-                  <span title={`Matched to OpenEMR pid ${c.openemr_pid}`} style={{
-                    fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 999,
-                    background: C.emeraldSoft, color: C.emerald, border: `1px solid ${C.emerald}33`,
-                  }}>MATCHED</span>
-                )}
-              </div>
-              {c.member_id && (
-                <div style={{ fontSize: 11, color: C.slate400, fontFamily: "ui-monospace, monospace" }}>
-                  {c.member_id}
-                </div>
-              )}
-            </div>
-            <span style={{ fontSize: 12, color: C.slate600 }}>{c.date_of_service ?? "—"}</span>
-            <span style={{
-              fontSize: 12, color: C.slate600,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{c.provider_name ?? "—"}</span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {codes.slice(0, 5).map((code) => (
-                <span key={code} style={{
-                  padding: "2px 6px", borderRadius: 4, fontSize: 10,
-                  fontFamily: "ui-monospace, monospace", fontWeight: 600,
-                  background: C.tealSoft, color: C.teal,
-                  border: `1px solid ${C.tealBorder}`,
-                }}>{code}</span>
-              ))}
-              {codes.length > 5 && (
-                <span style={{ fontSize: 10, color: C.slate400, alignSelf: "center" }}>
-                  +{codes.length - 5}
-                </span>
-              )}
-              {codes.length === 0 && <span style={{ fontSize: 11, color: C.slate400 }}>—</span>}
-            </div>
-            <span className="tabular-nums" style={{
-              fontSize: 12, fontWeight: 600, color: C.slate700,
-              textAlign: "right", fontFamily: "ui-monospace, monospace",
-            }}>${(c.charges ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-          </div>
-        );
-      })}
-      {(q.data?.total ?? 0) > 100 && (
-        <div style={{
-          padding: "10px 16px", textAlign: "center", fontSize: 12, color: C.slate500,
-          background: C.slate50, borderTop: `1px solid ${C.slate200}`,
-        }}>
-          Showing first 100 of {fmtN(q.data?.total)} claims
-        </div>
-      )}
-    </TableShell>
-  );
-}
-
-function DiagnosesTabContent({ q }: { q: QState<DiagnosisRow[]> }) {
-  if (q.isLoading) return <TabLoading />;
-  if (q.isError) return <TabError onRetry={q.refetch} />;
-  const rows = q.data ?? [];
-  if (!rows.length) {
-    return <EmptyState icon={<Tag size={24} />} title="No diagnoses" description="Process the batch to extract ICD-10 codes." />;
-  }
-  const cols = "140px 1fr 160px 90px 90px";
-  return (
-    <TableShell cols={cols} header={["ICD-10", "HCC Label", "HCC", "Claims", "Patients"]}>
-      {rows.map((d, i) => (
-        <div key={`${d.icd10_code}-${d.hcc_code ?? ""}-${i}`} style={{
-          display: "grid", gridTemplateColumns: cols, gap: 8,
-          padding: "10px 16px", alignItems: "center",
-          borderBottom: i < rows.length - 1 ? `1px solid ${C.slate100}` : "none",
-          background: i % 2 === 1 ? C.slate50 : C.white,
-        }}>
-          <span style={{
-            fontSize: 12, fontFamily: "ui-monospace, monospace", fontWeight: 700,
-            color: C.slate700, padding: "3px 8px", background: C.slate100, borderRadius: 5,
-            display: "inline-block", justifySelf: "start",
-          }}>{d.icd10_code}</span>
-          <span style={{
-            fontSize: 12, color: C.slate600,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{d.hcc_label ?? "—"}</span>
-          {d.hcc_code ? (
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
-              background: C.tealSoft, color: C.teal, border: `1px solid ${C.tealBorder}`,
-              justifySelf: "start",
-            }}>HCC {d.hcc_code}</span>
-          ) : (
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 999,
-              background: C.slate100, color: C.slate500, justifySelf: "start",
-            }}>Unmapped</span>
-          )}
-          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: C.slate700 }}>
-            {fmtN(d.claim_count)}
-          </span>
-          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: C.slate700 }}>
-            {fmtN(d.patient_count)}
-          </span>
-        </div>
-      ))}
-    </TableShell>
-  );
-}
-
-function HccTabContent({ q }: { q: QState<HccRow[]> }) {
-  if (q.isLoading) return <TabLoading />;
-  if (q.isError) return <TabError onRetry={q.refetch} />;
-  const rows = q.data ?? [];
-  if (!rows.length) {
-    return <EmptyState icon={<Layers size={24} />} title="No HCC data" description="Process the batch to see HCC distribution." />;
-  }
-  const max = Math.max(...rows.map((r) => r.patient_count ?? 0), 1);
-  return (
-    <div>
-      <p style={{ margin: "0 0 14px", fontSize: 13, color: C.slate500 }}>
-        Ranked HCC distribution for this batch — top categories by unique patient count.
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.slice(0, 15).map((h) => {
-          const pct = ((h.patient_count ?? 0) / max) * 100;
-          return (
-            <div key={h.hcc_code} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{
-                width: 74, fontSize: 11, fontWeight: 700,
-                padding: "3px 9px", borderRadius: 999,
-                background: C.tealSoft, color: C.teal,
-                border: `1px solid ${C.tealBorder}`, textAlign: "center", flexShrink: 0,
-              }}>HCC {h.hcc_code}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 12, color: C.slate700, fontWeight: 500,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  marginBottom: 4,
-                }} title={h.hcc_label}>{h.hcc_label || "—"}</div>
-                <div style={{ height: 8, borderRadius: 4, background: C.slate100, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%", width: `${pct}%`, borderRadius: 4,
-                    background: `linear-gradient(90deg, ${C.teal}, ${C.emerald})`,
-                    transition: "width 0.4s ease",
-                  }} />
-                </div>
-              </div>
-              <span className="tabular-nums" style={{
-                width: 120, fontSize: 11, color: C.slate500, textAlign: "right", flexShrink: 0,
-              }}>
-                <strong style={{ color: C.slate800 }}>{fmtN(h.patient_count)}</strong> pts · {fmtN(h.diagnosis_count)} dx
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function UnmappedTabContent({ q }: { q: QState<UnmappedRow[]> }) {
-  if (q.isLoading) return <TabLoading />;
-  if (q.isError) return <TabError onRetry={q.refetch} />;
-  const rows = q.data ?? [];
-  if (!rows.length) {
-    return <EmptyState icon={<CheckCircle size={24} />} title="All patients matched" description="Every patient in this batch is linked to an OpenEMR record." />;
-  }
-  const cols = "2fr 120px 80px 1fr 90px";
-  return (
-    <div>
-      <p style={{ margin: "0 0 12px", fontSize: 13, color: C.slate500 }}>
-        {rows.length} distinct patient{rows.length === 1 ? "" : "s"} in this batch could not be auto-matched to an OpenEMR record.
-      </p>
-      <TableShell cols={cols} header={["Patient Name", "DOB", "Sex", "Member ID", "Claims"]}>
-        {rows.map((p, i) => (
-          <div key={`${p.patient_name}-${p.member_id}-${i}`} style={{
-            display: "grid", gridTemplateColumns: cols, gap: 8,
-            padding: "10px 16px", alignItems: "center",
-            borderBottom: i < rows.length - 1 ? `1px solid ${C.slate100}` : "none",
-            background: i % 2 === 1 ? C.slate50 : C.white,
-          }}>
-            <span style={{ fontSize: 13, color: C.slate800, fontWeight: 500 }}>{p.patient_name || "—"}</span>
-            <span style={{ fontSize: 12, color: C.slate600 }}>{p.patient_dob || "—"}</span>
-            <span style={{ fontSize: 12, color: C.slate600 }}>{p.patient_gender || "—"}</span>
-            <span style={{
-              fontSize: 12, color: C.slate600, fontFamily: "ui-monospace, monospace",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{p.member_id || "—"}</span>
-            <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: C.slate700 }}>
-              {fmtN(p.claim_count)}
-            </span>
-          </div>
-        ))}
-      </TableShell>
     </div>
   );
 }
@@ -1373,7 +826,7 @@ export default function ClaimsPage() {
                     padding: "0 20px 20px", background: C.tealSoft,
                     borderBottom: `1px solid ${C.slate200}`,
                   }}>
-                    <DetailPane batchId={b.id} />
+                    <LazyDetailPane batchId={b.id} />
                   </div>
                 )}
               </React.Fragment>
@@ -1406,7 +859,7 @@ export default function ClaimsPage() {
 
       {/* Modals + toasts */}
       {showUpload && (
-        <UploadDialog
+        <LazyUploadDialog
           onClose={() => setShowUpload(false)}
           onUploaded={(id, name) => {
             invalidateAll();
