@@ -34,6 +34,32 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth import get_current_user, require_permission
 from app.db import raf_cursor
 
+
+def _emit_audit(
+    *,
+    tenant_id: str,
+    user_id: int | None,
+    action: str,
+    resource_id: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Best-effort write to the immutable audit_log so a RADV reviewer can
+    reconstruct who-asked-what alongside accept/dismiss history. Failures
+    are logged but do NOT fail the user-facing mutation."""
+    try:
+        from app.services.immutable_audit import emit_audit_event
+
+        emit_audit_event(
+            action,
+            tenant_id=tenant_id,
+            actor_user_id=user_id,
+            subject_type="clinical_query",
+            subject_id=resource_id,
+            payload=metadata or {},
+        )
+    except Exception as exc:
+        logger.warning("clinical_query audit emit failed (%s): %s", action, exc)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/clinical-queries", tags=["clinical-queries"])
@@ -177,6 +203,18 @@ def create_query(
         # Defensive: the row was just inserted under our cursor; if it
         # vanished the database is mid-failover.
         raise HTTPException(status_code=500, detail="Failed to read back created query")
+    _emit_audit(
+        tenant_id=tenant_id,
+        user_id=int(user_id),
+        action="CLINICAL_QUERY_CREATED",
+        resource_id=str(row["id"]),
+        metadata={
+            "patient_id": body.patient_id,
+            "suspect_id": body.suspect_id,
+            "hcc_code": body.hcc_code,
+            "icd10_code": body.icd10_code,
+        },
+    )
     return _row_to_query(row)
 
 
@@ -265,6 +303,13 @@ def reply_query(
         row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Query disappeared after update")
+    _emit_audit(
+        tenant_id=tenant_id,
+        user_id=int(current_user.get("id") or 0),
+        action="CLINICAL_QUERY_REPLIED",
+        resource_id=str(query_id),
+        metadata={"reply_length": len(body.reply_text.strip())},
+    )
     return _row_to_query(row)
 
 
@@ -292,11 +337,27 @@ def close_query(
                    closed_at = NOW()
              WHERE id = %s
                AND tenant_id = %s
+               AND status NOT IN ('closed', 'cancelled')
             """,
             (final_status, query_id, tenant_id),
         )
         if cur.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Query not found")
+            # Either the row doesn't exist or it's already in a terminal
+            # state. Return 404 if missing, 409 if already terminal so the
+            # caller can distinguish "first time you tried this id" from
+            # "tried to re-close" (HCC review #3 — protect closed_at from
+            # being overwritten on retry).
+            cur.execute(
+                "SELECT status FROM raf_clinical_queries WHERE id = %s AND tenant_id = %s",
+                (query_id, tenant_id),
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                raise HTTPException(status_code=404, detail="Query not found")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Query already in terminal state '{existing['status']}'; cannot re-close.",
+            )
         cur.execute(
             "SELECT * FROM raf_clinical_queries WHERE id = %s AND tenant_id = %s",
             (query_id, tenant_id),
@@ -304,4 +365,11 @@ def close_query(
         row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Query disappeared after update")
+    _emit_audit(
+        tenant_id=tenant_id,
+        user_id=int(current_user.get("id") or 0),
+        action=f"CLINICAL_QUERY_{final_status.upper()}",
+        resource_id=str(query_id),
+        metadata={"final_status": final_status},
+    )
     return _row_to_query(row)

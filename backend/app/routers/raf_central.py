@@ -944,6 +944,40 @@ def action_accept_suspect(
     tenant_id = current_user.get("tenant_id")
     _require_patient_access(pid, tenant_id, current_user=current_user)
 
+    # Safety guard: if a clinical-documentation query is still pending on
+    # this suspect, refuse the accept. Otherwise the same coder can fire a
+    # "please confirm CKD stage" question to the PCP and Accept the
+    # suspect five seconds later — the attestation says MEAT is sufficient
+    # while the open query admits MEAT is insufficient. Safety review
+    # round-N+1 #1. Coders should explicitly close or cancel the query
+    # first.
+    try:
+        with raf_cursor() as _cq_cur:
+            _cq_cur.execute(
+                """
+                SELECT id FROM raf_clinical_queries
+                 WHERE suspect_id = %s
+                   AND tenant_id = %s
+                   AND status = 'pending'
+                 LIMIT 1
+                """,
+                (body.suspect_id, tenant_id),
+            )
+            pending_query = _cq_cur.fetchone()
+    except Exception as exc:
+        # Table may not be provisioned in every environment — log and skip.
+        logger.debug("clinical-query pre-check unavailable: %s", exc)
+        pending_query = None
+    if pending_query:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot accept suspect {body.suspect_id} while a documentation "
+                f"query (id={pending_query['id']}) is still pending for this "
+                "suspect. Close or cancel the query before attesting."
+            ),
+        )
+
     _uid = current_user.get("id")
     reviewer_user_id: int | None = int(_uid) if _uid is not None else None
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"

@@ -779,6 +779,53 @@ export default function PatientsPage() {
     });
   };
   const clearSelection = () => setSelectedPids(new Set());
+  // Bulk "Request docs" → fires a clinical-query against every selected
+  // patient in one POST loop. The backend endpoint accepts patient_id +
+  // free-text query_text; we prompt for the text once and fan it out so
+  // the coder doesn't retype it per patient. PCP review #5 / Cotiviti
+  // batch-action pattern.
+  const [bulkRequestText, setBulkRequestText] = useState("");
+  const [bulkRequestOpen, setBulkRequestOpen] = useState(false);
+  const [bulkRequestSubmitting, setBulkRequestSubmitting] = useState(false);
+  const runBulkRequestDocs = async () => {
+    if (bulkRequestText.trim().length < 10) return;
+    setBulkRequestSubmitting(true);
+    try {
+      const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+      const ids = Array.from(selectedPids);
+      const results = await Promise.allSettled(
+        ids.map((pid) =>
+          fetch(`${API_BASE}/api/clinical-queries`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patient_id: pid,
+              query_text: bulkRequestText.trim(),
+            }),
+          }),
+        ),
+      );
+      const ok = results.filter((r) => r.status === "fulfilled" && (r as PromiseFulfilledResult<Response>).value.ok).length;
+      const failed = results.length - ok;
+      const msg = failed === 0
+        ? `Sent ${ok} documentation request${ok === 1 ? "" : "s"} — PCPs notified.`
+        : `Sent ${ok}, ${failed} failed — retry the failed patients individually.`;
+      // Reuse the existing sync-toast surface rather than wiring a new
+      // toast lib — the patient worklist already shows transient banners
+      // via setSyncToast.
+      setSyncToast({ msg, id: Date.now() });
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setSyncToast(null), 8000);
+      setBulkRequestText("");
+      setBulkRequestOpen(false);
+      clearSelection();
+    } catch (e) {
+      setSyncToast({ msg: `Bulk request failed: ${String(e)}`, id: Date.now() });
+    } finally {
+      setBulkRequestSubmitting(false);
+    }
+  };
   const [showImportModal, setShowImportModal] = useState(false);
   const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [measurementYear, setMeasurementYear] = useState<number>(2026);
@@ -1791,12 +1838,137 @@ export default function PatientsPage() {
             >
               Clear
             </button>
+            <button
+              type="button"
+              onClick={() => setBulkRequestOpen(true)}
+              style={{
+                padding: "4px 12px",
+                borderRadius: 6,
+                border: `1px solid ${C.brand}`,
+                background: C.brand,
+                color: tokens.white,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Bulk request docs
+            </button>
             <span
               aria-hidden
               style={{ flex: 1, fontSize: 11, color: C.textMuted, fontStyle: "italic" }}
             >
               Hover any row to reveal selection checkboxes · Selection survives sort & filter changes
             </span>
+          </div>
+        )}
+        {bulkRequestOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bulk request documentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              background: "rgba(0,0,0,0.75)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+            onClick={() => !bulkRequestSubmitting && setBulkRequestOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && !bulkRequestSubmitting) {
+                setBulkRequestOpen(false);
+              }
+            }}
+            tabIndex={-1}
+          >
+            <div
+              style={{
+                background: tokens.white,
+                borderRadius: 10,
+                boxShadow: "0 12px 40px rgba(15,23,42,0.25)",
+                width: "100%",
+                maxWidth: 480,
+                padding: 20,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                Bulk request documentation
+              </h3>
+              <p style={{ marginTop: 6, fontSize: 12, color: C.textMuted }}>
+                Sends the same documentation request to <strong>{selectedPids.size}</strong> selected patient{selectedPids.size === 1 ? "" : "s"}. Each query is tracked Pending → Replied → Closed in the per-patient query log.
+              </p>
+              <textarea
+                value={bulkRequestText}
+                onChange={(e) => setBulkRequestText(e.target.value)}
+                placeholder="Describe the documentation needed — e.g., 'Please confirm current diabetes complications and stage for PY 2026'"
+                rows={4}
+                autoFocus
+                aria-label="Bulk documentation request"
+                style={{
+                  width: "100%",
+                  marginTop: 12,
+                  resize: "none",
+                  borderRadius: 6,
+                  border: `1px solid ${C.border}`,
+                  padding: "8px 10px",
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                }}
+              />
+              <div style={{ marginTop: 6, fontSize: 11, color: C.textMuted }}>
+                {bulkRequestText.trim().length < 10
+                  ? `${10 - bulkRequestText.trim().length} more character${10 - bulkRequestText.trim().length === 1 ? "" : "s"} required`
+                  : `Ready to fan out to ${selectedPids.size} patient${selectedPids.size === 1 ? "" : "s"}.`}
+              </div>
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setBulkRequestOpen(false)}
+                  disabled={bulkRequestSubmitting}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: `1px solid ${C.border}`,
+                    background: tokens.white,
+                    color: C.text,
+                    fontSize: 13,
+                    cursor: bulkRequestSubmitting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={runBulkRequestDocs}
+                  disabled={bulkRequestText.trim().length < 10 || bulkRequestSubmitting}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "none",
+                    background:
+                      bulkRequestText.trim().length < 10 || bulkRequestSubmitting
+                        ? C.border
+                        : C.brand,
+                    color: tokens.white,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor:
+                      bulkRequestText.trim().length < 10 || bulkRequestSubmitting
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {bulkRequestSubmitting
+                    ? "Sending…"
+                    : `Send to ${selectedPids.size}`}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {/* Column header (presentational — the parent wrapper is now
@@ -2159,17 +2331,39 @@ export default function PatientsPage() {
                     if (typeof pid === "number") togglePid(pid);
                   }}
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    // Stop the row-level Enter/Space (navigation) from
+                    // firing when the checkbox itself has focus. Native
+                    // checkbox toggles on Space already; we just need to
+                    // halt the bubble.
+                    if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+                  }}
                   aria-label={`Select ${fullName} for bulk actions`}
+                  // Always rendered + always tab-focusable so keyboard /
+                  // screen-reader users can multi-select. Visibility on
+                  // mouse-only sessions is faded until the row is hovered
+                  // or already-selected so the worklist stays clean for
+                  // single-row navigation. opacity instead of visibility
+                  // keeps the element in the focus order (UX review #1).
                   style={{
                     width: 14,
                     height: 14,
                     flexShrink: 0,
                     cursor: "pointer",
                     accentColor: C.brand,
-                    visibility:
+                    opacity:
                       isHovered || (typeof pid === "number" && selectedPids.has(pid))
-                        ? "visible"
-                        : "hidden",
+                        ? 1
+                        : 0,
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.opacity = "1";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.opacity =
+                      isHovered || (typeof pid === "number" && selectedPids.has(pid))
+                        ? "1"
+                        : "0";
                   }}
                 />
                 <div style={{

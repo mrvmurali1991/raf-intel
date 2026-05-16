@@ -109,10 +109,14 @@ export default function DisputesPage() {
   // with patient_id + measurement_year pre-populated. Read from the URL
   // once on mount so refreshing this page doesn't keep re-opening the
   // dialog. UX: hand-off coder → disputes board in one click.
+  const [deepLinkPid, setDeepLinkPid] = useState<string>("");
+  const [deepLinkMy, setDeepLinkMy] = useState<string>("");
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
+      setDeepLinkPid(params.get("patient_id") || "");
+      setDeepLinkMy(params.get("measurement_year") || "");
       setShowCreate(true);
     }
   }, []);
@@ -355,6 +359,8 @@ export default function DisputesPage() {
           onClose={() => setShowCreate(false)}
           onSubmit={(payload) => createMut.mutate(payload)}
           submitting={createMut.isPending}
+          initialPatientId={deepLinkPid}
+          initialMeasurementYear={deepLinkMy}
         />
       )}
     </div>
@@ -694,11 +700,18 @@ function CreateModal(props: {
   onClose: () => void;
   onSubmit: (payload: any) => void;
   submitting: boolean;
+  /** Optional pre-fill from a deep-link (patient-detail "File Dispute"
+   *  menu item) so the coder lands inside a partially-populated form
+   *  instead of an empty one. HCC review round-N+1 / Cotiviti hand-off. */
+  initialPatientId?: string;
+  initialMeasurementYear?: string;
 }) {
   const [form, setForm] = useState({
-    patient_id: "", hcc_code: "", icd10: "", disputed_by: "cms",
+    patient_id: props.initialPatientId ?? "",
+    hcc_code: "", icd10: "", disputed_by: "cms",
     payer_name: "", denial_reason_text: "", financial_impact: "",
     denial_received_at: new Date().toISOString().slice(0, 10),
+    measurement_year: props.initialMeasurementYear ?? "",
   });
   const set = (k: keyof typeof form, v: string) => setForm({ ...form, [k]: v });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, XCircle, HelpCircle, ThumbsUp, ThumbsDown, MessageSquareWarning } from "lucide-react";
@@ -86,7 +86,52 @@ export function SuspectCardView({
   const [queryText, setQueryText] = useState("");
   const [querySubmitting, setQuerySubmitting] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const queryTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const queryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const queryCloseBtnRef = useRef<HTMLButtonElement | null>(null);
   const toast = useToast();
+
+  // Focus management for the Request-docs dialog (UX review blocker #2):
+  //   - Esc closes the dialog
+  //   - Tab is trapped between the textarea, Cancel, and Send buttons
+  //   - Focus returns to the originating "Request docs" button on close
+  useEffect(() => {
+    if (!queryDialogOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (!querySubmitting) setQueryDialogOpen(false);
+      }
+      if (e.key === "Tab") {
+        const focusable: HTMLElement[] = [
+          queryTextareaRef.current,
+          queryCloseBtnRef.current,
+          // Send button is found dynamically since it carries varying disabled state
+          document.querySelector<HTMLButtonElement>("[data-cq-send='1']"),
+        ].filter(Boolean) as HTMLElement[];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [queryDialogOpen, querySubmitting]);
+
+  useEffect(() => {
+    if (queryDialogOpen) return;
+    // Restore focus to the trigger after close so keyboard users don't
+    // dump back to <body>.
+    queryTriggerRef.current?.focus();
+  }, [queryDialogOpen]);
 
   // Mutations — invalidate raf-central query key on success
   const acceptMut = useAcceptSuspectCentral(patientId);
@@ -183,12 +228,21 @@ export function SuspectCardView({
   // documentation review BEFORE submission; a confirmed row is
   // informational. Backend may eventually ship suspect.taxonomy; until
   // then we derive it from evidence_type + meat_completeness.
+  //
+  // Safety guard: "confirmed" implies "safe to accept" in the badge
+  // tooltip. The derivation MUST require BOTH high MEAT completeness
+  // AND high confidence AND no clinical-rule violation — otherwise a
+  // 35%-confidence suspect with thin evidence can be mislabeled
+  // "Confirmed" purely on a MEAT score the engine guessed at. Safety
+  // review round-N+1 #2.
   const taxonomy = (() => {
     if (suspect.taxonomy) return suspect.taxonomy;
     const meat = suspect.meat_completeness ?? 0;
+    const conf = suspect.confidence ?? 0;
     const ev = (suspect.evidence_type || "").toLowerCase();
     if (ev.startsWith("hist") || ev.startsWith("recap")) return "audit" as const;
-    if (meat >= 0.75) return "confirmed" as const;
+    const ruleOk = !suspect.clinical_rule_violation;
+    if (meat >= 0.75 && conf >= 0.80 && ruleOk) return "confirmed" as const;
     return "new" as const;
   })();
   const taxonomyMeta = {
@@ -275,6 +329,7 @@ export function SuspectCardView({
             <Button
               size="sm"
               variant="ghost"
+              ref={queryTriggerRef}
               onClick={() => setQueryDialogOpen(true)}
               disabled={busy !== null}
               aria-label="Request documentation from the provider"
@@ -378,6 +433,7 @@ export function SuspectCardView({
               Closed in the patient&apos;s query log.
             </p>
             <textarea
+              ref={queryTextareaRef}
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               placeholder="Describe the documentation needed — e.g., 'Please confirm current eGFR trend and CKD stage for PY 2026'"
@@ -394,12 +450,14 @@ export function SuspectCardView({
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
+                ref={queryCloseBtnRef}
                 onClick={() => setQueryDialogOpen(false)}
                 disabled={querySubmitting}
               >
                 Cancel
               </Button>
               <Button
+                data-cq-send="1"
                 onClick={async () => {
                   if (queryText.trim().length < 10) return;
                   setQuerySubmitting(true);

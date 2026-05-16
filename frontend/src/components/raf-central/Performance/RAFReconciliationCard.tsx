@@ -91,7 +91,7 @@ export function RAFReconciliationCard({
           value={fmt(projectedRaf)}
           subtitle={
             opportunityGap > 0
-              ? `+${fmt(opportunityGap, 3)} opportunity · ${fmtUsd(opportunityGap * revenuePerRafPoint)}`
+              ? `+${fmt(opportunityGap, 3)} opportunity · ${fmtUsd(opportunityGap * revenuePerRafPoint)} · assumes MEAT-complete documentation`
               : "Already at projection"
           }
           tone={opportunityGap > 0 ? "emerald" : "muted"}
