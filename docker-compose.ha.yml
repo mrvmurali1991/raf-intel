@@ -1,0 +1,158 @@
+# =============================================================================
+# HA (High Availability) overlay — 2-backend + nginx load balancer
+# =============================================================================
+# This compose file is PROFILE-GATED. By default it is INACTIVE — running
+# `docker compose -f docker-compose.local.yml up -d` will NOT start any service
+# defined here. Activate explicitly with `--profile ha`.
+#
+# Intent: eliminate single-app-server SPOF by running two stateless backend
+# replicas behind an nginx round-robin load balancer. Designed as a layered
+# overlay on top of docker-compose.local.yml (or docker-compose.prod.yml),
+# reusing the shared `mysql` service and any external `redis` service.
+#
+# WARNING: when `ha` profile is active, the LB binds host port 8500 — the SAME
+# port used by the default `backend` service in docker-compose.local.yml. To
+# avoid bind conflicts, scale the default backend to 0 OR stop it first:
+#   docker compose -f docker-compose.local.yml stop backend
+#   docker compose -f docker-compose.local.yml -f docker-compose.ha.yml \
+#     --profile ha up -d
+#
+# See docs/HA_DEPLOYMENT.md for full enablement guide.
+# =============================================================================
+
+services:
+  backend1:
+    build: ./backend
+    image: raf-backend:ha
+    container_name: raf-backend1
+    profiles: [ha]
+    restart: unless-stopped
+    ports:
+      # Host-exposed for direct probing / debugging only. The LB talks over
+      # the docker network on internal port 8500.
+      - "8501:8500"
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
+      RAF_DB_HOST: mysql
+      RAF_DB_PORT: "3306"
+      RAF_DB_USER: root
+      RAF_DB_PASSWORD: root
+      RAF_DB_NAME: raf_intelligence
+      OPENEMR_DB_HOST: mysql
+      OPENEMR_DB_PORT: "3306"
+      OPENEMR_DB_USER: root
+      OPENEMR_DB_PASSWORD: root
+      OPENEMR_DB_NAME: openemr
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-DO-NOT-USE-IN-PRODUCTION}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-dev-refresh-secret-change-me}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3444}
+      OPENEMR_URL: http://openemr:80
+      APP_ENV: ${APP_ENV:-development}
+      STRICT_MIGRATIONS: "false"
+      # Identifies which replica handled a request — useful for confirming
+      # round-robin from logs / response headers (if backend exposes it).
+      BACKEND_REPLICA_ID: backend1
+      # Required: ensure session/state lives in Redis, NOT in-process memory.
+      # See docs/HA_DEPLOYMENT.md "Stateless backend assumption".
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./models:/app/models:ro
+      - ./data/uploads:/app/uploads
+      - ./data/submissions:/app/data/submissions
+      - ./data/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend2:
+    build: ./backend
+    image: raf-backend:ha
+    container_name: raf-backend2
+    profiles: [ha]
+    restart: unless-stopped
+    ports:
+      - "8502:8500"
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
+      RAF_DB_HOST: mysql
+      RAF_DB_PORT: "3306"
+      RAF_DB_USER: root
+      RAF_DB_PASSWORD: root
+      RAF_DB_NAME: raf_intelligence
+      OPENEMR_DB_HOST: mysql
+      OPENEMR_DB_PORT: "3306"
+      OPENEMR_DB_USER: root
+      OPENEMR_DB_PASSWORD: root
+      OPENEMR_DB_NAME: openemr
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-DO-NOT-USE-IN-PRODUCTION}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-dev-refresh-secret-change-me}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3444}
+      OPENEMR_URL: http://openemr:80
+      APP_ENV: ${APP_ENV:-development}
+      STRICT_MIGRATIONS: "false"
+      BACKEND_REPLICA_ID: backend2
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./models:/app/models:ro
+      - ./data/uploads:/app/uploads
+      - ./data/submissions:/app/data/submissions
+      - ./data/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: raf-redis-ha
+    profiles: [ha]
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - raf_redis_ha_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx-lb:
+    image: nginx:1.27-alpine
+    container_name: raf-nginx-lb
+    profiles: [ha]
+    restart: unless-stopped
+    ports:
+      # Binds host port 8500 — same as default `backend` service. Stop the
+      # default backend first (see header) to avoid EADDRINUSE.
+      - "8500:8500"
+    volumes:
+      - ./nginx/lb.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend1
+      - backend2
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  raf_redis_ha_data:
