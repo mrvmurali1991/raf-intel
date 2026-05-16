@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "path";
 
 /**
  * Playwright configuration for RAF Intelligence E2E tests.
@@ -8,7 +9,8 @@ import { defineConfig, devices } from "@playwright/test";
  * headless in pipelines.
  */
 export default defineConfig({
-  testDir: "./tests/e2e",
+  testDir: "./tests",
+  testMatch: ["**/e2e/**/*.spec.ts", "**/visual/**/*.spec.ts", "**/demo/**/*.spec.ts", "*.spec.ts"],
 
   // Maximum time for one full test (pipeline can take up to 2 minutes).
   timeout: 180_000,
@@ -27,6 +29,13 @@ export default defineConfig({
     ["html", { outputFolder: "playwright-report", open: "never" }],
     ["list"],
   ],
+
+  expect: {
+    toHaveScreenshot: {
+      threshold: 0.2,
+      maxDiffPixelRatio: 0.005,
+    },
+  },
 
   use: {
     baseURL: "https://raf.comercioit.com",
@@ -51,10 +60,27 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testMatch: ["**/e2e/**/*.spec.ts", "**/demo/**/*.spec.ts", "*.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         // Wide viewport so the full dashboard layout is visible.
         viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      name: "visual",
+      testMatch: "**/visual/**/*.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        baseURL: "http://localhost:3444",
+        storageState: path.join(__dirname, "tests/visual/.auth-state.json"),
+        // No retries for VRT — flakiness must be fixed, not hidden.
+        // Traces always on so diffs are inspectable.
+        trace: "on",
+        screenshot: "only-on-failure",
+        video: "off",
+        ignoreHTTPSErrors: true,
       },
     },
   ],
