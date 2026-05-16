@@ -21,10 +21,6 @@ GET /api/data-quality/checks/{check_name}
 
 TODO
 ----
-- Persist each run into a ``data_quality_reports`` table (timestamp,
-  tenant_id, check, severity, count, sample_ids, details) so the admin
-  dashboard can chart trends over time rather than only showing the most
-  recent on-demand run.
 - Admin-gating: this router currently relies on ``require_role("admin")``
   where available; confirm the admin role is enforced in all deployments
   before exposing this router publicly.
@@ -150,9 +146,13 @@ def list_all_checks(
 ) -> ChecksResponse:
     """Execute every registered data quality check and return the report.
 
-    TODO: also persist the returned rows into a ``data_quality_reports``
-    table so the admin dashboard can show trends over time.
+    TODO(production): persist run results to ``data_quality_reports`` table
+    (timestamp, tenant_id, check, severity, count, sample_ids, details) so
+    the admin dashboard can chart trends over time rather than only showing
+    the most recent on-demand run.  See issue tracker for the follow-up
+    ticket — implementation deferred from this refactor.
     """
+    # TODO(production): persist run results to data_quality_reports table — see issue tracker
     try:
         tenant_id = int(getattr(current_user, "tenant_id", None) or 1)
         results = run_all_checks(cursor, tenant_id)

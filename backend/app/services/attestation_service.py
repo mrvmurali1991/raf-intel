@@ -20,8 +20,11 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+
+import MySQLdb  # type: ignore[import]
 
 from app.config import settings
 from app.db import raf_cursor
@@ -29,6 +32,70 @@ from app.services.emr_manager import active_patients_subquery
 from app.services.immutable_audit import append_audit_entry
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Migration guard — RADV negation gate requires diagnoses.context_classification
+# ---------------------------------------------------------------------------
+
+_MIGRATION_022_PRESENT: bool | None = None
+
+
+def _check_migration_022() -> bool:
+    """Return True if migration 022 (diagnoses.context_classification) has run.
+
+    Cached after the first call.  In production, a missing column is fatal:
+    raises RuntimeError so the service refuses to start with a broken RADV
+    negation gate.  In dev, a missing column emits a loud WARN and returns
+    False — callers (``attest``) can then skip the negation gate, but the
+    skip is visible in logs rather than silent.
+    """
+    global _MIGRATION_022_PRESENT
+    if _MIGRATION_022_PRESENT is not None:
+        return _MIGRATION_022_PRESENT
+
+    present = False
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM   information_schema.COLUMNS
+                WHERE  TABLE_NAME  = 'diagnoses'
+                  AND  COLUMN_NAME = 'context_classification'
+                LIMIT  1
+                """
+            )
+            present = cur.fetchone() is not None
+    except Exception as exc:
+        logger.warning(
+            "_check_migration_022: information_schema probe failed (%s); "
+            "treating column as missing for safety.",
+            exc,
+        )
+        present = False
+
+    if not present:
+        env = (os.getenv("APP_ENV") or "").lower()
+        msg = (
+            "migration 022 required for attestation negation gate "
+            "(diagnoses.context_classification column missing)"
+        )
+        if env == "production":
+            raise RuntimeError(msg)
+        logger.warning(
+            "ATTESTATION NEGATION GATE DISABLED: %s. "
+            "APP_ENV=%r — gate will be skipped at runtime with a visible WARN. "
+            "Run migration 022 before going to production.",
+            msg, env or "<unset>",
+        )
+
+    _MIGRATION_022_PRESENT = present
+    return present
+
+
+# Run the check once at import time so prod fails fast on a misconfigured DB.
+_check_migration_022()
 
 # ---------------------------------------------------------------------------
 # Signature helpers
@@ -339,8 +406,6 @@ def _check_dos_year_gate(
     TODO(migration-022): When context_classification column is added to raf_meat_evidence,
     tighten this to filter only active-context rows before computing MAX(encounter_date).
     """
-    import MySQLdb  # type: ignore[import]
-
     cutoff = date(payment_year, 12, 31)
     try:
         with raf_cursor() as cur:
@@ -400,8 +465,6 @@ def _check_negation_contradiction(
 
     Raises ValueError("Contradictory evidence: <classification> on <date>") if found.
     """
-    import MySQLdb  # type: ignore[import]
-
     NEGATION_LABELS = ("negated", "historical", "resolved", "family", "hypothetical")
 
     # Attempt 1: dedicated context_classification column (post-migration-022)
@@ -620,27 +683,41 @@ def attest(
 
     # ------------------------------------------------------------------
     # RADV gate (B): negation contradiction check
+    #
+    # Guarded by migration 022 — without the diagnoses.context_classification
+    # column the clinical contradiction check cannot run.  In production the
+    # import-time check raises RuntimeError; in dev we skip the gate but emit
+    # a visible WARN every time it would have run, so the skip is never silent.
     # ------------------------------------------------------------------
-    try:
-        _check_negation_contradiction(
-            tenant_id=tenant_id,
-            patient_id=patient_id,
-            hcc_code=hcc_code,
-            payment_year=payment_year,
-            active_max_dos=active_max_dos,
+    if not _check_migration_022():
+        logger.warning(
+            "attest: SKIPPING RADV negation gate for attestation_id=%s "
+            "(patient=%s hcc=%s year=%s) — migration 022 has not run; "
+            "diagnoses.context_classification column is missing. "
+            "This is acceptable in dev only — run migration 022 before prod.",
+            attestation_id, patient_id, hcc_code, payment_year,
         )
-    except ValueError as neg_exc:
-        _emit_audit(
-            event_type="ATTEST_REJECTED_CONTRADICTION",
-            user_id=provider_user_id,
-            tenant_id=tenant_id,
-            patient_id=patient_id,
-            hcc_code=hcc_code,
-            model_version=model_version,
-            payment_year=payment_year,
-            reason=str(neg_exc),
-        )
-        raise
+    else:
+        try:
+            _check_negation_contradiction(
+                tenant_id=tenant_id,
+                patient_id=patient_id,
+                hcc_code=hcc_code,
+                payment_year=payment_year,
+                active_max_dos=active_max_dos,
+            )
+        except ValueError as neg_exc:
+            _emit_audit(
+                event_type="ATTEST_REJECTED_CONTRADICTION",
+                user_id=provider_user_id,
+                tenant_id=tenant_id,
+                patient_id=patient_id,
+                hcc_code=hcc_code,
+                model_version=model_version,
+                payment_year=payment_year,
+                reason=str(neg_exc),
+            )
+            raise
 
     # ------------------------------------------------------------------
     # Persist the attestation decision
@@ -846,8 +923,6 @@ def _withdraw_patient_hcc(
     All operations execute within the caller's already-open cursor so they
     participate in the same transaction as the attestation update.
     """
-    import MySQLdb  # type: ignore[import]
-
     if patient_id is None or hcc_code is None:
         logger.warning(
             "_withdraw_patient_hcc: attestation_id=%s missing patient_id or hcc_code — "
