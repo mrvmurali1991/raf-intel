@@ -1,0 +1,2 @@
+# Weekly TLS expiry check
+0 9 * * 1 ubuntu /opt/raf-intelligence/scripts/check-tls-expiry.sh raf.comercioit.com >> /var/log/raf-tls.log 2>&1
