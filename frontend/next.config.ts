@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "path";
 import { execSync } from "child_process";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const commitSha = (() => {
   try {
@@ -73,4 +74,24 @@ const nextConfig: NextConfig = {
   ],
 };
 
-export default nextConfig;
+// Only enable the Sentry webpack plugin (source map upload, instrumentation
+// injection) when a DSN is configured. Without this guard, builds without
+// Sentry credentials emit noisy warnings on every CI run. The runtime SDK
+// in sentry.{client,server,edge}.config.ts still no-ops cleanly when DSN
+// is absent — so wrapping here is purely for the build-time integration.
+const sentryEnabled = Boolean(
+  process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN,
+);
+
+export default sentryEnabled
+  ? withSentryConfig(nextConfig, {
+      silent: true,
+      // Source map upload requires SENTRY_AUTH_TOKEN; if absent the plugin
+      // skips upload but still injects release/debug-id metadata.
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      disableLogger: true,
+      // Tunnel through a Next.js rewrite to bypass ad-blockers (optional).
+      // Not enabled by default — keep CSP/connect-src minimal.
+    })
+  : nextConfig;

@@ -5,9 +5,9 @@
  *   1. Always: POST to backend /api/admin/errors/report (PHI-scrubbed).
  *   2. Optional: @sentry/nextjs when NEXT_PUBLIC_SENTRY_DSN is set.
  *
- * Sentry init is dynamic so that builds without the DSN — or builds
- * where @sentry/nextjs has not been installed yet — still succeed.
- * Run `npm install` after pulling so the optional dep is available.
+ * Sentry is loaded via dynamic import() so that the SDK is code-split out
+ * of the main bundle and only fetched when a DSN is configured. When no
+ * DSN is set, initSentry() is a no-op.
  */
 
 /**
@@ -34,7 +34,11 @@ let sentryInitialized = false;
 
 /**
  * Initialise Sentry if a DSN is configured. No-op otherwise.
- * Run npm install after pulling so @sentry/nextjs is available.
+ *
+ * NOTE: sentry.client.config.ts already calls Sentry.init() at bundle load
+ * time when the DSN is present. This function is kept as an idempotent
+ * safety net that scrubs PHI from any events that bypass that config
+ * (e.g. very early errors before the Sentry config module evaluates).
  */
 async function initSentry(): Promise<void> {
   if (sentryInitialized) return;
@@ -42,40 +46,18 @@ async function initSentry(): Promise<void> {
   if (!dsn) return;
 
   try {
-    // Dynamic import so the bundle does not break when the package is
-    // not yet installed in dev environments. The package is declared
-    // in package.json — run npm install after pulling.
-    // We cast to a minimal local shape because the module may be absent
-    // at typecheck time on fresh checkouts.
-    type MinimalSentryEvent = {
-      message?: string;
-      exception?: { values?: Array<{ value?: string }> };
-    };
-    interface MinimalSentry {
-      init(opts: {
-        dsn: string;
-        environment?: string;
-        tracesSampleRate?: number;
-        beforeSend?: (event: MinimalSentryEvent) => MinimalSentryEvent | null;
-      }): void;
+    const Sentry = await import("@sentry/nextjs");
+    // If the auto-loaded sentry.client.config.ts has already initialised
+    // the SDK, getClient() returns a truthy hub and we just mark done.
+    if (Sentry.getClient()) {
+      sentryInitialized = true;
+      return;
     }
-    // Use new Function() so Turbopack/Webpack can't statically resolve the
-    // import path — keeps the bundle clean when @sentry/nextjs isn't installed
-    // (e.g. in CI / local dev / before npm install).
-    const dynImport = new Function("m", "return import(m)") as (
-      m: string,
-    ) => Promise<unknown>;
-    const mod = (await dynImport("@sentry/nextjs").catch(
-      () => null,
-    )) as MinimalSentry | null;
-    if (!mod) return;
-
-    mod.init({
+    Sentry.init({
       dsn,
       environment: process.env.NEXT_PUBLIC_ENV ?? process.env.NODE_ENV,
       tracesSampleRate: 0.1,
-      beforeSend(event: MinimalSentryEvent) {
-        // Defence-in-depth scrub on the way out.
+      beforeSend(event) {
         if (event.message) event.message = scrub(event.message);
         if (event.exception?.values) {
           for (const v of event.exception.values) {
