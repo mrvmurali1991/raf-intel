@@ -296,6 +296,13 @@ export function RAFCentralPanel({
 
     return (
       <div className="flex flex-col min-h-full bg-muted/30 dark:bg-background">
+        {/* Persistent AI disclaimer — RADV trust requirement, must stay visible */}
+        <div
+          className="bg-muted/50 px-3 py-1.5 text-[11px] text-muted-foreground border-b border-border"
+          role="note"
+        >
+          AI suggestions are decision aids — clinician review and attestation are required before billing.
+        </div>
         {/* ── Top strip: patient header + RAF gauge + controls ─────────── */}
         <header className="border-b bg-gradient-to-br from-background to-muted/40 dark:from-background dark:to-muted/20 px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -498,6 +505,13 @@ export function RAFCentralPanel({
   // ── Panel layout (default — iframe embed, single-column accordion) ─────────
   return (
     <div className={cn("flex h-full flex-col", embedded ? "bg-background" : "")}>
+      {/* Persistent AI disclaimer — RADV trust requirement */}
+      <div
+        className="bg-muted/50 px-3 py-1.5 text-[11px] text-muted-foreground border-b border-border"
+        role="note"
+      >
+        AI suggestions are decision aids — clinician review and attestation are required before billing.
+      </div>
       {/* Header */}
       <header className="flex items-center justify-between border-b px-4 py-3">
         <div>
