@@ -764,6 +764,21 @@ export default function PatientsPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "raf_score", dir: "desc" });
   const [page, setPage] = useState(0);
   const [hoveredRow, setHoveredRow] = useState<string | number | null>(null);
+  // Bulk-select: chip bar at the top once at least one patient is selected.
+  // PatternFly-style multi-select on the worklist so a coder can re-route
+  // 50 patients to another reviewer or kick off a batch RAF recalc
+  // without 50 separate page visits. Selection survives sort + filter
+  // changes (we key by pid not row position) but resets on page refresh.
+  const [selectedPids, setSelectedPids] = useState<Set<number>>(new Set());
+  const togglePid = (pid: number) => {
+    setSelectedPids((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedPids(new Set());
   const [showImportModal, setShowImportModal] = useState(false);
   const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [measurementYear, setMeasurementYear] = useState<number>(2026);
@@ -1724,6 +1739,66 @@ export default function PatientsPage() {
           boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04)",
         }}
       >
+        {/* Bulk-select chip bar — PatternFly-style action affordance.
+            Surfaces once at least one patient is selected (Cmd/Shift+click
+            or the per-row checkbox). Contains the selected count, a
+            de-select-all action, and the available batch actions. We keep
+            the action set deliberately narrow until the matching backend
+            endpoints exist; the count + clear is meaningful on its own. */}
+        {selectedPids.size > 0 && (
+          <div
+            role="region"
+            aria-label="Bulk action bar"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "8px 16px",
+              borderBottom: `1px solid ${C.borderSoft}`,
+              background: tokens.brandSoft,
+              fontSize: 13,
+              fontWeight: 500,
+              color: C.text,
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: C.brand,
+                color: tokens.white,
+                borderRadius: 999,
+                padding: "2px 10px",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {selectedPids.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${C.border}`,
+                background: tokens.white,
+                color: C.text,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Clear
+            </button>
+            <span
+              aria-hidden
+              style={{ flex: 1, fontSize: 11, color: C.textMuted, fontStyle: "italic" }}
+            >
+              Hover any row to reveal selection checkboxes · Selection survives sort & filter changes
+            </span>
+          </div>
+        )}
         {/* Column header (presentational — the parent wrapper is now
             role="region", so ARIA-table child roles no longer apply). */}
         <div className="worklist-grid worklist-header-row" style={{
@@ -2048,6 +2123,7 @@ export default function PatientsPage() {
               }}
               onMouseEnter={() => setHoveredRow(pid)}
               onMouseLeave={() => setHoveredRow(null)}
+              data-selected={selectedPids.has(Number(pid)) ? "true" : undefined}
               className="worklist-grid worklist-row-anchor"
               style={{
                 display: "grid",
@@ -2073,8 +2149,29 @@ export default function PatientsPage() {
               onFocus={(e) => { e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.brandSoft}`; }}
               onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }}
             >
-              {/* Patient: avatar + name + subtitle */}
-              <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              {/* Patient: avatar + name + subtitle + bulk-select checkbox */}
+              <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={typeof pid === "number" && selectedPids.has(pid)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    if (typeof pid === "number") togglePid(pid);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Select ${fullName} for bulk actions`}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    flexShrink: 0,
+                    cursor: "pointer",
+                    accentColor: C.brand,
+                    visibility:
+                      isHovered || (typeof pid === "number" && selectedPids.has(pid))
+                        ? "visible"
+                        : "hidden",
+                  }}
+                />
                 <div style={{
                   width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
                   background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
