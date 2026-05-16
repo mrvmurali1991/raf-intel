@@ -691,7 +691,10 @@ def view_document_file(
 ):
     from pathlib import Path
 
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, RedirectResponse, Response
+
+    from app.config import settings as _settings
+    from app.services.storage import get_storage_backend
 
     doc = get_document(document_id)
     if not doc:
@@ -703,17 +706,6 @@ def view_document_file(
             status_code=404, detail="No file path recorded for this document"
         )
 
-    # Resolve relative to project root
-    project_root = Path(__file__).resolve().parent.parent.parent
-    full_path = (project_root / file_path.lstrip("/")).resolve()
-
-    # Security: ensure path is within project
-    if not full_path.is_relative_to(project_root.resolve()):
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    if not full_path.exists():
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
     media_type_map = {
         "pdf": "application/pdf",
         "png": "image/png",
@@ -722,17 +714,48 @@ def view_document_file(
         "doc": "application/msword",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
-    ext = full_path.suffix.lstrip(".").lower()
-    media_type = media_type_map.get(ext, "application/octet-stream")
+    ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
+    media_type = doc.get("mime_type") or media_type_map.get(ext, "application/octet-stream")
+    display_name = doc.get("document_name") or Path(file_path).name
 
-    return FileResponse(
-        path=str(full_path),
-        media_type=media_type,
-        filename=doc.get("document_name", full_path.name),
-        headers={
-            "Content-Disposition": f'inline; filename="{doc.get("document_name", full_path.name)}"'
-        },
-    )
+    backend = str(_settings.storage_backend or "local").lower()
+    storage = get_storage_backend()
+
+    # Non-local backends (S3 / MinIO): return a presigned URL redirect so the
+    # browser fetches the object directly from object storage.
+    if backend != "local":
+        try:
+            url = storage.signed_url(file_path, expires_in=3600)
+            return RedirectResponse(url=url, status_code=302)
+        except Exception as exc:
+            logger.warning(
+                "signed_url failed for %s: %s — falling back to streamed bytes",
+                file_path,
+                exc,
+            )
+
+    # Local backend (or signed_url fallback): stream bytes through the API.
+    try:
+        data = storage.get(file_path)
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={"Content-Disposition": f'inline; filename="{display_name}"'},
+        )
+    except FileNotFoundError:
+        # Legacy rows stored an absolute path under the project — try filesystem.
+        project_root = Path(__file__).resolve().parent.parent.parent
+        full_path = (project_root / file_path.lstrip("/")).resolve()
+        if not full_path.is_relative_to(project_root.resolve()):
+            raise HTTPException(status_code=403, detail="Access denied")
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="File not found on disk")
+        return FileResponse(
+            path=str(full_path),
+            media_type=media_type,
+            filename=display_name,
+            headers={"Content-Disposition": f'inline; filename="{display_name}"'},
+        )
 
 
 @router.delete(
