@@ -470,6 +470,32 @@ export default function ReviewQueuePage() {
                 return `${Math.floor(hrs / 24)}d ago`;
               })()
             : null;
+          // Urgency tier: red when imminent cutoff or clinical rule violation;
+          // amber when 8-21 days remain or thin MEAT evidence (<=1 element).
+          const daysLeft = it.days_to_cutoff;
+          const hasRuleViolation =
+            it.clinical_rule_violation === true ||
+            (typeof it.clinical_rule_violation === "string" &&
+              it.clinical_rule_violation.length > 0 &&
+              it.clinical_rule_violation.toLowerCase() !== "false");
+          const isTier1 =
+            (daysLeft != null && daysLeft <= 7) || hasRuleViolation;
+          const isTier2 =
+            !isTier1 &&
+            (
+              (daysLeft != null && daysLeft >= 8 && daysLeft <= 21) ||
+              (it.meat_count != null && it.meat_count <= 1)
+            );
+          const tierBg = isTier1
+            ? tokens.riskHighSoft
+            : isTier2
+            ? tokens.riskMediumSoft
+            : undefined;
+          const tierBorder = isTier1
+            ? tokens.riskHigh
+            : isTier2
+            ? tokens.riskMedium
+            : null;
           return (
             <div key={it.id} style={{
               display: "grid",
@@ -485,7 +511,8 @@ export default function ReviewQueuePage() {
               ].filter(Boolean).join(" "),
               gap: 14, padding: "14px 22px", alignItems: "center",
               borderBottom: idx < items.length - 1 ? `1px solid ${C.rowDivider}` : "none",
-              borderLeft: `3px solid ${confColor(c)}`,
+              borderLeft: tierBorder ? `3px solid ${tierBorder}` : "3px solid transparent",
+              backgroundColor: tierBg,
             }}>
               {/* Patient + audit trail timestamp */}
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -578,13 +605,31 @@ export default function ReviewQueuePage() {
 
               {/* Days to cutoff */}
               {hasCutoff && (
-                <div style={{
-                  fontSize: 12, fontWeight: 700,
-                  color: it.days_to_cutoff != null && it.days_to_cutoff <= 7 ? C.high : C.text,
-                  fontFamily: FONT_MONO,
-                }}>
-                  {it.days_to_cutoff != null ? `${it.days_to_cutoff}d` : "—"}
-                </div>
+                it.days_to_cutoff != null && it.days_to_cutoff <= 7 ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: tokens.riskHigh,
+                      fontFamily: FONT_MONO,
+                    }}
+                    aria-label={`Urgent: ${it.days_to_cutoff} days remaining`}
+                  >
+                    <span aria-hidden="true">⚠</span>
+                    <span>{it.days_to_cutoff} days</span>
+                  </div>
+                ) : (
+                  <div style={{
+                    fontSize: 12, fontWeight: 700,
+                    color: C.text,
+                    fontFamily: FONT_MONO,
+                  }}>
+                    {it.days_to_cutoff != null ? `${it.days_to_cutoff}d` : "—"}
+                  </div>
+                )
               )}
 
               {/* Expected dollar impact */}
