@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { authApi } from "@/contexts/auth-context";
+import { ProfileServerForm } from "./ProfileServerForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -270,6 +271,20 @@ function ProfileSection() {
 
   return (
     <Section id="profile" icon={User} title="Profile" description="Update your personal information." staggerIndex={1}>
+      {/* Server Action path — preferred; calls updateProfile via RSC form action */}
+      <ProfileServerForm
+        defaultFirstName={user?.first_name ?? ""}
+        defaultLastName={user?.last_name ?? ""}
+        defaultTitle={user?.title ?? ""}
+        defaultAvatarUrl={user?.avatar_url ?? ""}
+      />
+
+      {/* Legacy path — kept as fallback; TODO(migration): remove once Server Action is proven */}
+      <div className="mt-8 pt-6 border-t border-border/40">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+          Legacy path (axios fallback)
+        </p>
+      </div>
       <form onSubmit={handleSave} className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="First name" htmlFor="profile-first-name">
