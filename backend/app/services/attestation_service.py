@@ -24,7 +24,10 @@ import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-import MySQLdb  # type: ignore[import]
+try:
+    import MySQLdb  # type: ignore[import]
+except ImportError:  # mysqlclient is optional at runtime
+    MySQLdb = None  # type: ignore[assignment]
 
 from app.config import settings
 from app.db import raf_cursor

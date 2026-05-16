@@ -591,10 +591,10 @@ export function Sidebar() {
             <div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
                 <span style={{ fontSize: 17, fontWeight: 800, color: TEXT_ACTIVE, letterSpacing: "-0.02em" }}>
-                  TMIAB
+                  RAF
                 </span>
                 <span style={{ fontSize: 17, fontWeight: 800, color: ACCENT_LIGHT, letterSpacing: "-0.02em" }}>
-                  RAF
+                  Intelligence
                 </span>
               </div>
               <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 600, marginTop: -2, textTransform: "uppercase", letterSpacing: "0.05em" }}>

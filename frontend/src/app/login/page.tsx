@@ -584,7 +584,7 @@ export default function LoginPage() {
             <HeartPulse className="h-6 w-6" aria-hidden="true" />
           </div>
           <div>
-            <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">TMIAB-RAF</p>
+            <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">RAF Intelligence</p>
             <p className="text-teal-600 dark:text-teal-400 text-[11px] font-bold uppercase tracking-[0.2em]">
               Clinical Intelligence
             </p>
@@ -690,7 +690,7 @@ export default function LoginPage() {
             <HeartPulse className="h-7 w-7" aria-hidden="true" />
           </div>
           <div>
-             <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">TMIAB-RAF</p>
+             <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">RAF Intelligence</p>
              <p className="text-teal-600 dark:text-teal-400 text-[11px] font-bold uppercase tracking-[0.2em]">
                Clinical Intelligence
              </p>
