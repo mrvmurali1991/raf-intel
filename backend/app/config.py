@@ -311,11 +311,110 @@ class Settings:
     auto_sync_interval_seconds: int = int(os.getenv("AUTO_SYNC_INTERVAL_SECONDS", "30"))
 
 
+# Known-weak / well-publicised dev JWT secrets that must never be used in
+# production.  Kept module-level so validate_startup.py can re-use the set.
+_WEAK_JWT_SECRETS: frozenset[str] = frozenset({
+    "change-me",
+    "dev-secret",
+    "raf-dev-secret-key-2026-do-not-use-in-production",
+    "",
+})
+
+
+def _validate_production(s: Settings) -> list[str]:
+    """Enforce production-only secret / TLS hygiene.
+
+    Returns a list of *non-fatal* warning strings so callers (validate_startup,
+    main() banner) can surface them in their summaries.  Fatal misconfigs
+    raise ``RuntimeError`` immediately — the application refuses to boot.
+    """
+    import logging as _logging
+
+    _log = _logging.getLogger(__name__)
+    warnings: list[str] = []
+
+    # --- Fatal: JWT secret must be present and non-default --------------
+    if not s.jwt_secret or s.jwt_secret in _WEAK_JWT_SECRETS or len(s.jwt_secret) < 32:
+        raise RuntimeError(
+            "FATAL: JWT_SECRET is empty, a known dev default, or shorter than "
+            "32 characters. Generate a fresh one with "
+            "`python -c 'import secrets; print(secrets.token_hex(32))'` and set "
+            "JWT_SECRET before starting in production."
+        )
+
+    # --- Fatal: PHI encryption material -------------------------------
+    # The encryption_service derives keys via HKDF; without these two the
+    # service silently falls back to JWT_SECRET + a hard-coded salt, which is
+    # explicitly rejected by encryption_service in prod.  Fail fast here so
+    # operators see a single banner instead of a confusing per-request error.
+    if not os.getenv("ENCRYPTION_SALT", ""):
+        raise RuntimeError(
+            "FATAL: ENCRYPTION_SALT is not set. Required for PHI encryption "
+            "in production. Generate with "
+            "`python -c 'import secrets; print(secrets.token_hex(16))'`."
+        )
+    if not os.getenv("DATA_ENCRYPTION_KEY", ""):
+        raise RuntimeError(
+            "FATAL: DATA_ENCRYPTION_KEY is not set. Required so PHI encryption "
+            "is independent of JWT_SECRET. Generate with "
+            "`python -c 'import secrets; print(secrets.token_hex(32))'`."
+        )
+
+    # --- Fatal: OpenEMR embed secret when embed is mounted ------------
+    # Embed routes are mounted whenever the env-var is non-empty; if a deployer
+    # has *configured* an embed default tenant but left the HMAC blank, that
+    # is almost certainly a misconfiguration and we refuse to boot.
+    if s.openemr_embed_default_tenant_id and not s.openemr_embed_secret:
+        raise RuntimeError(
+            "FATAL: OPENEMR_EMBED_DEFAULT_TENANT_ID is configured but "
+            "OPENEMR_EMBED_SECRET is empty. Either unset the tenant id "
+            "(disables embed) or set a 32+ byte HMAC secret."
+        )
+
+    # --- Warning: DB SSL disabled -------------------------------------
+    # Per RAF deployment notes the prod DB is on an internal-only network with
+    # no cert provisioned, so we warn (not fail) — see
+    # docs/operations/prod_db_ssl.md for the rationale and remediation plan.
+    if not s.db_ssl_enabled:
+        msg = (
+            "DB_SSL_ENABLED=false in production — DB traffic is in cleartext. "
+            "Acceptable only on a fully isolated internal network. See "
+            "docs/operations/prod_db_ssl.md for the migration plan."
+        )
+        warnings.append(msg)
+        _log.warning("WARNING: %s", msg)
+
+    # --- Warning: DB users named 'root' --------------------------------
+    for label, value in (("RAF_DB_USER", s.raf_db_user),
+                         ("OPENEMR_DB_USER", s.openemr_db_user)):
+        if value == "root":
+            msg = (
+                f"{label}='root' in production — create a least-privilege "
+                f"application user (DDL not required at runtime)."
+            )
+            warnings.append(msg)
+            _log.warning("WARNING: %s", msg)
+
+    # --- Warning: refresh-token secret equals access-token secret -----
+    refresh = os.getenv("JWT_REFRESH_SECRET", "")
+    if refresh and refresh == s.jwt_secret:
+        msg = (
+            "JWT_REFRESH_SECRET equals JWT_SECRET — refresh tokens should be "
+            "signed with an independent key so a JWT key compromise does not "
+            "automatically extend session lifetime."
+        )
+        warnings.append(msg)
+        _log.warning("WARNING: %s", msg)
+
+    return warnings
+
+
 def _validate_settings(s: Settings) -> None:
     """Run post-instantiation checks and emit the mandatory APP_ENV banner.
 
     Called once immediately after ``settings`` is constructed.  Raises
-    ``ValueError`` for configurations that must never reach production.
+    ``ValueError``/``RuntimeError`` for configurations that must never reach
+    production.
     """
     import logging as _logging
 
@@ -324,17 +423,8 @@ def _validate_settings(s: Settings) -> None:
     # Always emit which mode is active so operators can confirm at a glance.
     _log.warning("APP_ENV=%s", s.app_env)
 
-    # Known-weak JWT secrets that must never be used in production.
-    _WEAK_JWT_SECRETS: frozenset[str] = frozenset({"change-me", "dev-secret", ""})
-
     if s.app_env == "production":
-        secret = s.jwt_secret
-        if secret in _WEAK_JWT_SECRETS or len(secret) < 32:
-            raise ValueError(
-                "FATAL: JWT_SECRET is a known dev default or shorter than 32 characters. "
-                "Set a cryptographically random JWT_SECRET (e.g. `openssl rand -hex 32`) "
-                "before starting the application in production."
-            )
+        _validate_production(s)
 
 
 settings = Settings()

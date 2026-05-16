@@ -85,6 +85,32 @@ except Exception as exc:
     print(msg)
     errors.append(msg)
 
+# Production secret-hygiene preflight.  In dev this just no-ops; in production
+# it raises if JWT/encryption secrets are missing or weak, and returns a list
+# of non-fatal warnings (e.g. DB_SSL_ENABLED=false, DB user == 'root').
+try:
+    from app.config import _validate_production, settings as _s  # type: ignore
+    if _s.app_env == "production":
+        prod_warnings = _validate_production(_s)
+        if prod_warnings:
+            for w in prod_warnings:
+                msg = f"  [warn] prod secret hygiene: {w}"
+                print(msg)
+                warnings.append(msg)
+        else:
+            print("  [ok] prod secret hygiene (no warnings)")
+    else:
+        print(f"  [ok] prod secret hygiene SKIPPED (APP_ENV={_s.app_env})")
+except RuntimeError as exc:
+    # Fatal prod-only misconfigurations.
+    msg = f"  [FAIL] prod secret hygiene: {exc}"
+    print(msg)
+    errors.append(msg)
+except Exception as exc:
+    msg = f"  [FAIL] prod secret hygiene preflight: {exc}"
+    print(msg)
+    errors.append(msg)
+
 # app.db
 try:
     from app.db import check_connections  # noqa: F401
@@ -249,5 +275,7 @@ else:
     print(f"  Packages checked : {len(required_packages)}")
     print(f"  Routers verified : {len(routers)}")
     print(f"  Services verified: {len(services)}")
+    if warnings:
+        print(f"  Warnings         : {len(warnings)} (non-fatal — review above)")
     print(SEPARATOR)
     sys.exit(0)
