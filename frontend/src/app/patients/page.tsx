@@ -50,10 +50,10 @@ type RiskFilter = "all" | "high" | "medium" | "low" | "unscored";
 // 7 cells: Patient | Risk Level | RAF Score | Risk Factors | HCCs | Status | >
 const WORKLIST_GRID =
   "minmax(240px, 2.2fr) 120px 100px minmax(200px, 2fr) 100px 140px 32px";
-// Tablet variant — drops the wide Risk Factors column and the 32px chevron
-// column so the row fits in ~700px of usable width (sidebar collapsed). The
-// .risk-factors-cell helper in globals.css hides the matching DOM cells via
-// `display: none` so the grid's 5 visible cells line up cleanly.
+// Tablet variant — drops the wide "Risk Factors" column and the 32px chevron
+// column so the row fits in the ~700px usable area when the sidebar is
+// collapsed. The `.risk-factors-cell` helper in globals.css hides the matching
+// DOM cells via `display: none` so the grid's 5 visible cells line up cleanly.
 const WORKLIST_GRID_TABLET =
   "minmax(200px, 2fr) 100px 90px 100px 32px";
 const WORKLIST_GAP = 0;
@@ -394,7 +394,13 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
           <button
             onClick={onClose}
             aria-label="Close"
-            style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: tokens.slate400, borderRadius: 8 }}
+            style={{
+              background: "none", border: "none", padding: 10, cursor: "pointer",
+              color: tokens.slate400, borderRadius: 8,
+              width: 44, height: 44,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}
           >
             <X size={20} />
           </button>
@@ -1898,7 +1904,7 @@ export default function PatientsPage() {
             </div>
 
             {/* Risk Factors col — demo/disease/interact filters */}
-            <div style={{ display: "flex", gap: 4 }}>
+            <div className="risk-factors-cell" style={{ display: "flex", gap: 4 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
                 <input title="Min demographic score" aria-label="Min demographic score" placeholder="Demo≥" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
                 <input title="Max demographic score" aria-label="Max demographic score" placeholder="Demo≤" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
@@ -1971,9 +1977,10 @@ export default function PatientsPage() {
           <div
             key={i}
             aria-hidden="true"
+            className="worklist-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: WORKLIST_GRID,
+              ...WORKLIST_GRID_VARS,
               alignItems: "center",
               padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
               height: ROW_HEIGHT,
@@ -1991,7 +1998,7 @@ export default function PatientsPage() {
             </div>
             <div style={{ width: 64, height: 22, borderRadius: 999, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
             <div style={{ width: 56, height: 18, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div style={{ display: "flex", gap: 6 }}>
+            <div className="risk-factors-cell" style={{ display: "flex", gap: 6 }}>
               <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
               <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
             </div>
@@ -2080,9 +2087,10 @@ export default function PatientsPage() {
               }}
               onMouseEnter={() => setHoveredRow(pid)}
               onMouseLeave={() => setHoveredRow(null)}
+              className="worklist-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: WORKLIST_GRID,
+                ...WORKLIST_GRID_VARS,
                 alignItems: "center",
                 height: ROW_HEIGHT,
                 padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
@@ -2202,7 +2210,7 @@ export default function PatientsPage() {
               </div>
 
               {/* Risk Factors — sub-score tag chips */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+              <div className="risk-factors-cell" style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
                 {p.demographic_score != null && p.demographic_score > 0 && (
                   <span
                     title={`Demographic Score: ${Number(p.demographic_score).toFixed(4)}`}

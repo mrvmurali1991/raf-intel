@@ -649,6 +649,38 @@ select.appearance-none {
    RESPONSIVE MOBILE LAYOUT
    ================================================================ */
 
+/* ---- Patient worklist grid: responsive column template ----
+ * Desktop default uses --gt-desktop; on tablet (≤1024px) we swap to
+ * --gt-tablet which drops the wide "Risk Factors" column and the 32px
+ * chevron column so the grid fits inside the ~880px usable area when
+ * the sidebar is collapsed. Header, filter, skeleton and data rows
+ * all consume the same CSS variable so they stay aligned.
+ */
+.worklist-grid {
+  grid-template-columns: var(--gt-desktop) !important;
+}
+@media (max-width: 1024px) {
+  .worklist-grid {
+    grid-template-columns: var(--gt-tablet) !important;
+  }
+  .risk-factors-cell {
+    display: none !important;
+  }
+}
+
+/* Tablet-only column-filter input height (touch target).
+ * Desktop sets height inline; on tablet, bump every input/select inside
+ * the filter row to 40px so they comfortably approach the 44px touch
+ * target rule once row padding is included.
+ */
+@media (max-width: 1024px) {
+  .worklist-filter-row input,
+  .worklist-filter-row select {
+    height: 40px !important;
+    font-size: 13px !important;
+  }
+}
+
 /* Tablet breakpoint */
 @media (max-width: 1024px) {
   main#main-content {
