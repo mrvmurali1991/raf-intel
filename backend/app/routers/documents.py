@@ -24,11 +24,12 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import openemr_cursor, raf_cursor
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services.document_service import (
     analyze_document,
@@ -275,6 +276,7 @@ def _do_approve_and_score(
 @limiter.limit("10/minute")
 async def upload_document(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Clinical document file"),
     patient_id: str | None = Form(
@@ -297,7 +299,12 @@ async def upload_document(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ):
+    """Upload a clinical document for storage and optional Gemini Vision analysis.
+
+    Supports Idempotency-Key header (24h replay window).
+    """
     file_bytes = await file.read()
     result = store_upload(
         tenant_id=tenant_id,
@@ -321,6 +328,7 @@ async def upload_document(
         )
 
     result["auto_approve"] = auto_approve
+    store_idempotent_response(request, response, result)
     return result
 
 

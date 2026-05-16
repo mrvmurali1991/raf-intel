@@ -25,6 +25,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.schemas.patient import PatientSummary
 from app.services import openemr_connector as emr
@@ -425,6 +426,7 @@ def get_import_template_excel(
 @limiter.limit("5/minute")
 async def import_patients_csv(
     request: Request,
+    response: Response,
     file: UploadFile = File(
         ..., description="CSV or Excel (.xlsx) file with patient records"
     ),
@@ -435,10 +437,13 @@ async def import_patients_csv(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> ImportSummaryResponse:
     """
     Parse *file* as a patient CSV or Excel spreadsheet, validate each row,
     deduplicate against existing OpenEMR patients, and insert new patients.
+
+    Supports Idempotency-Key header (24h replay window).
 
     Accepted formats: **.csv** and **.xlsx**.
 
@@ -533,7 +538,9 @@ async def import_patients_csv(
         ),
     )
 
-    return ImportSummaryResponse(**summary)
+    result = ImportSummaryResponse(**summary)
+    store_idempotent_response(request, response, result.model_dump())
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +579,7 @@ def get_fhir_import_template(
 @limiter.limit("5/minute")
 async def import_patients_fhir(
     request: Request,
+    response: Response,
     file: UploadFile = File(
         ..., description="FHIR R4 Bundle JSON file with Patient entries"
     ),
@@ -582,6 +590,7 @@ async def import_patients_fhir(
     ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("patients", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> ImportSummaryResponse:
     """
     Parse *file* as a FHIR R4 Patient Bundle, validate each entry, deduplicate
@@ -591,6 +600,8 @@ async def import_patients_fhir(
     'transaction' containing Patient resources.
 
     Download the template via GET /api/patients/import/template/fhir.
+
+    Supports Idempotency-Key header (24h replay window).
     """
     from app.services.patient_import_service import (
         import_patients as _import,
@@ -654,7 +665,9 @@ async def import_patients_fhir(
         ),
     )
 
-    return ImportSummaryResponse(**summary)
+    fhir_result = ImportSummaryResponse(**summary)
+    store_idempotent_response(request, response, fhir_result.model_dump())
+    return fhir_result
 
 
 # ---------------------------------------------------------------------------

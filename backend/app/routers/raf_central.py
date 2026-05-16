@@ -30,11 +30,12 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_permission
 from app.cache import cache_delete_pattern, cache_get, cache_set
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.config import settings
 from app.db import openemr_cursor, raf_cursor
 from app.rate_limit import limiter
@@ -689,9 +690,16 @@ class RefreshMEATResponse(BaseModel):
 def action_accept_suspect(
     pid: int,
     body: AcceptSuspectRequest,
+    request: Request,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> AcceptSuspectResponse:
+    """Accept a suspect HCC condition and optionally push to EMR.
+
+    Supports Idempotency-Key header (24h replay window).
+    """
     tenant_id = current_user.get("tenant_id")
     _require_patient_access(pid, tenant_id, current_user=current_user)
 
@@ -710,16 +718,25 @@ def action_accept_suspect(
             pushed = push_medical_problem(pid, suspect_label, suspect_icd)
 
     _invalidate_panel_cache(pid, tenant_id)
-    return AcceptSuspectResponse(ok=True, suspect=result, pushed_to_emr=pushed)
+    accept_response = AcceptSuspectResponse(ok=True, suspect=result, pushed_to_emr=pushed)
+    store_idempotent_response(request, response, accept_response.model_dump())
+    return accept_response
 
 
 @router.post("/{pid}/actions/dismiss-suspect", response_model=DismissSuspectResponse)
 def action_dismiss_suspect(
     pid: int,
     body: DismissSuspectRequest,
+    request: Request,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("suspects", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> DismissSuspectResponse:
+    """Dismiss a suspect HCC condition with an optional reason.
+
+    Supports Idempotency-Key header (24h replay window).
+    """
     tenant_id = current_user.get("tenant_id")
     _require_patient_access(pid, tenant_id, current_user=current_user)
 
@@ -734,7 +751,9 @@ def action_dismiss_suspect(
         reviewed_by_user_id=reviewer_user_id,
     )
     _invalidate_panel_cache(pid, tenant_id)
-    return DismissSuspectResponse(ok=True, suspect=result)
+    dismiss_resp = DismissSuspectResponse(ok=True, suspect=result)
+    store_idempotent_response(request, response, dismiss_resp.model_dump())
+    return dismiss_resp
 
 
 @router.post("/{pid}/actions/mark-meat-reviewed", response_model=MarkMEATReviewedResponse)

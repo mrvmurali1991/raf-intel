@@ -26,11 +26,12 @@ Read operations require the "cohorts" read permission.
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
 from app.services.cohort_service import (
     archive_cohort,
@@ -262,10 +263,12 @@ def list_cohorts_endpoint(
 @limiter.limit("30/minute")
 def create_cohort_endpoint(
     request: Request,
+    response: Response,
     body: CohortCreate,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Create a new cohort definition and immediately populate its membership by
@@ -273,6 +276,8 @@ def create_cohort_endpoint(
 
     The response includes the freshly computed ``patient_count``,
     ``avg_raf_score``, and ``total_raf_revenue`` fields.
+
+    Supports Idempotency-Key header (24h replay window).
 
     Example body::
 
@@ -287,7 +292,7 @@ def create_cohort_endpoint(
     """
     user_id: int = int(current_user.get("id") or current_user.get("user_id") or 0)
     try:
-        return create_cohort(
+        result = create_cohort(
             name=body.name,
             description=body.description,
             cohort_type=body.cohort_type,
@@ -298,6 +303,8 @@ def create_cohort_endpoint(
     except Exception as exc:
         logger.error("create_cohort error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+    store_idempotent_response(request, response, result)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -446,10 +453,12 @@ def refresh_membership(
 @limiter.limit("30/minute")
 def snapshot(
     request: Request,
+    response: Response,
     cohort_id: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("cohorts", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     """
     Compute and persist a point-in-time snapshot of cohort aggregate metrics.
@@ -464,16 +473,20 @@ def snapshot(
     - Total projected RAF revenue
 
     Snapshots are the foundation for trend analysis via ``GET /{id}/trends``.
+
+    Supports Idempotency-Key header (24h replay window).
     """
     _get_or_404(cohort_id)
     try:
-        return take_snapshot(cohort_id, tenant_id=tenant_id)
+        snap = take_snapshot(cohort_id, tenant_id=tenant_id)
     except ValueError as exc:
         logger.warning("snapshot error id=%s: %s", cohort_id, exc)
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error("snapshot error id=%s: %s", cohort_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+    store_idempotent_response(request, response, snap)
+    return snap
 
 
 @router.get("/{cohort_id}/trends", summary="Get historical snapshot trends")
