@@ -68,21 +68,53 @@ const iconStyles: Record<ToastType, string> = {
   info: "text-blue-600 dark:text-blue-400",
 };
 
+// Exit animation duration — keep in sync with the `duration-200` class below.
+const EXIT_ANIMATION_MS = 200;
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Tracks ids in the exit-animation phase so JSX can render them with the
+  // `animate-out` classes for ~200ms before the node is actually unmounted.
+  const [closingIds, setClosingIds] = useState<Set<string>>(new Set());
   // Ref Map tracks pending auto-dismiss timers keyed by toast id so they can
   // be cleared immediately when a toast is manually dismissed.
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Separate timers for the exit-animation -> unmount step.
+  const exitTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const actuallyRemove = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setClosingIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    const exitTimer = exitTimers.current.get(id);
+    if (exitTimer !== undefined) {
+      clearTimeout(exitTimer);
+      exitTimers.current.delete(id);
+    }
+  }, []);
 
   const removeToast = useCallback((id: string) => {
-    // Clear any pending timer to prevent double-removal attempts.
+    // Clear any pending auto-dismiss timer so it doesn't double-fire.
     const timer = timers.current.get(id);
     if (timer !== undefined) {
       clearTimeout(timer);
       timers.current.delete(id);
     }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+    // If already closing, no-op (avoid resetting the exit animation).
+    if (exitTimers.current.has(id)) return;
+    // Begin exit animation phase, then unmount after the animation completes.
+    setClosingIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    const exitTimer = setTimeout(() => actuallyRemove(id), EXIT_ANIMATION_MS);
+    exitTimers.current.set(id, exitTimer);
+  }, [actuallyRemove]);
 
   const addToast = useCallback(
     (type: ToastType, title: string, message?: string, opts?: { action?: ToastAction; duration?: number }) => {
@@ -104,11 +136,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   function ToastItem({ t, isError }: { t: Toast; isError: boolean }) {
     const Icon = icons[t.type];
+    const isClosing = closingIds.has(t.id);
     return (
       <div
         className={cn(
-          "pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm premium-shadow animate-slide-up",
-          "animate-in slide-in-from-right-5 fade-in duration-300",
+          "pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm premium-shadow",
+          // Entrance vs exit animation — swap classes when the toast is dismissed
+          // so the DOM stays mounted for the ~200ms exit animation.
+          isClosing
+            ? "animate-out slide-out-to-right-5 fade-out duration-200"
+            : "animate-in slide-in-from-right-5 fade-in duration-300 animate-slide-up",
           "min-w-[320px] max-w-[420px]",
           styles[t.type]
         )}
