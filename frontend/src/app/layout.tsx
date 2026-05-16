@@ -13,9 +13,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
-  title: "TMIAB-RAF - HCC Coding & Risk Adjustment",
-  description:
-    "Healthcare RAF score dashboard for patient HCC codes, RAF scores, suspect conditions, and MEAT compliance",
+  title: { default: "RAF Intelligence", template: "%s | RAF Intelligence" },
+  description: "HCC coding and risk adjustment intelligence",
 };
 
 export default function RootLayout({

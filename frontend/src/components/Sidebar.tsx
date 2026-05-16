@@ -79,6 +79,10 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    // TODO(nav-batch-10): ANALYSIS group has 10 items, violating Miller's Law (7±2).
+    // Convert to a collapsible group: persist `collapsed` state in localStorage,
+    // show first 4 items by default with a "+6 more" expander. Skipped here to
+    // keep this change minimal — see follow-up ticket.
     title: "ANALYSIS",
     items: [
       { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
