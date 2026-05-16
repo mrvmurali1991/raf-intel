@@ -262,7 +262,6 @@ export default function HccGapDrilldownModal(props: HccGapDrilldownModalProps) {
               style={{
                 flex: 1,
                 border: "none",
-                outline: "none",
                 fontSize: 13,
                 background: "transparent",
                 color: C.text,

@@ -1202,7 +1202,6 @@ export default function PatientsPage() {
                     letterSpacing: "0.01em",
                     cursor: "pointer",
                     padding: "0 18px 0 2px",
-                    outline: "none",
                     backgroundImage:
                       "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='%230F766E'><path d='M5 8l5 5 5-5H5z'/></svg>\")",
                     backgroundRepeat: "no-repeat",
@@ -1248,7 +1247,6 @@ export default function PatientsPage() {
                 paddingLeft: 38, paddingRight: 14,
                 fontSize: 13, color: C.text,
                 fontFamily: FONT_SYS,
-                outline: "none",
                 transition: "border-color 0.15s, box-shadow 0.15s",
               }}
               onFocus={(e) => {
@@ -1799,13 +1797,14 @@ export default function PatientsPage() {
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <select
                 title="Filter by sex"
+                aria-label="Filter by sex"
                 value={colFilters.sex}
                 onChange={(e) => { setColFilters((f) => ({ ...f, sex: e.target.value as typeof f.sex })); setPage(0); }}
                 style={{
-                  width: 52, height: 26, fontSize: 11, borderRadius: 6,
+                  width: 52, height: 32, fontSize: 11, borderRadius: 6,
                   border: colFilters.sex !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
                   backgroundColor: colFilters.sex !== "all" ? C.brandSoft : "#fff",
-                  color: C.textMuted, padding: "0 4px", outline: "none", cursor: "pointer",
+                  color: C.textMuted, padding: "0 4px", cursor: "pointer",
                   fontFamily: FONT_SYS,
                 }}
               >
@@ -1815,24 +1814,26 @@ export default function PatientsPage() {
               </select>
               <input
                 title="Minimum age" placeholder="Age≥"
+                aria-label="Minimum age"
                 value={colFilters.ageMin}
                 onChange={(e) => { setColFilters((f) => ({ ...f, ageMin: e.target.value })); setPage(0); }}
                 style={{
-                  width: 44, height: 26, fontSize: 11, borderRadius: 6,
+                  width: 44, height: 32, fontSize: 11, borderRadius: 6,
                   border: colFilters.ageMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", outline: "none", textAlign: "center",
+                  padding: "0 4px", textAlign: "center",
                   fontVariantNumeric: "tabular-nums",
                 }}
                 type="number"
               />
               <input
                 title="Maximum age" placeholder="Age≤"
+                aria-label="Maximum age"
                 value={colFilters.ageMax}
                 onChange={(e) => { setColFilters((f) => ({ ...f, ageMax: e.target.value })); setPage(0); }}
                 style={{
-                  width: 44, height: 26, fontSize: 11, borderRadius: 6,
+                  width: 44, height: 32, fontSize: 11, borderRadius: 6,
                   border: colFilters.ageMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", outline: "none", textAlign: "center",
+                  padding: "0 4px", textAlign: "center",
                   fontVariantNumeric: "tabular-nums",
                 }}
                 type="number"
@@ -1846,24 +1847,26 @@ export default function PatientsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <input
                 title="Minimum RAF score" placeholder="Min"
+                aria-label="Minimum RAF score"
                 value={colFilters.rafMin}
                 onChange={(e) => { setColFilters((f) => ({ ...f, rafMin: e.target.value })); setPage(0); }}
                 style={{
-                  width: "100%", height: 22, fontSize: 11, borderRadius: 4,
+                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
                   border: colFilters.rafMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", outline: "none", textAlign: "center",
+                  padding: "0 4px", textAlign: "center",
                   fontVariantNumeric: "tabular-nums",
                 }}
                 type="number" step="0.1"
               />
               <input
                 title="Maximum RAF score" placeholder="Max"
+                aria-label="Maximum RAF score"
                 value={colFilters.rafMax}
                 onChange={(e) => { setColFilters((f) => ({ ...f, rafMax: e.target.value })); setPage(0); }}
                 style={{
-                  width: "100%", height: 22, fontSize: 11, borderRadius: 4,
+                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
                   border: colFilters.rafMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", outline: "none", textAlign: "center",
+                  padding: "0 4px", textAlign: "center",
                   fontVariantNumeric: "tabular-nums",
                 }}
                 type="number" step="0.1"
@@ -1873,16 +1876,16 @@ export default function PatientsPage() {
             {/* Risk Factors col — demo/disease/interact filters */}
             <div style={{ display: "flex", gap: 4 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min demographic score" placeholder="Demo≥" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max demographic score" placeholder="Demo≤" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Min demographic score" aria-label="Min demographic score" placeholder="Demo≥" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max demographic score" aria-label="Max demographic score" placeholder="Demo≤" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min disease score" placeholder="Dis≥" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max disease score" placeholder="Dis≤" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Min disease score" aria-label="Min disease score" placeholder="Dis≥" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max disease score" aria-label="Max disease score" placeholder="Dis≤" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min interaction score" placeholder="Int≥" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max interaction score" placeholder="Int≤" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 20, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Min interaction score" aria-label="Min interaction score" placeholder="Int≥" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+                <input title="Max interaction score" aria-label="Max interaction score" placeholder="Int≤" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
               </div>
             </div>
 
@@ -1890,24 +1893,26 @@ export default function PatientsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <input
                 title="Minimum HCC count" placeholder="Min"
+                aria-label="Minimum HCC count"
                 value={colFilters.hccMin}
                 onChange={(e) => { setColFilters((f) => ({ ...f, hccMin: e.target.value })); setPage(0); }}
                 style={{
-                  width: "100%", height: 22, fontSize: 11, borderRadius: 4,
+                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
                   border: colFilters.hccMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", outline: "none", textAlign: "center",
+                  padding: "0 4px", textAlign: "center",
                   fontVariantNumeric: "tabular-nums",
                 }}
                 type="number"
               />
               <input
                 title="Maximum HCC count" placeholder="Max"
+                aria-label="Maximum HCC count"
                 value={colFilters.hccMax}
                 onChange={(e) => { setColFilters((f) => ({ ...f, hccMax: e.target.value })); setPage(0); }}
                 style={{
-                  width: "100%", height: 22, fontSize: 11, borderRadius: 4,
+                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
                   border: colFilters.hccMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", outline: "none", textAlign: "center",
+                  padding: "0 4px", textAlign: "center",
                   fontVariantNumeric: "tabular-nums",
                 }}
                 type="number"
@@ -1917,13 +1922,14 @@ export default function PatientsPage() {
             {/* Status col */}
             <select
               title="Filter by analysis status"
+              aria-label="Filter by analysis status"
               value={colFilters.status}
               onChange={(e) => { setColFilters((f) => ({ ...f, status: e.target.value as typeof f.status })); setPage(0); }}
               style={{
-                width: "100%", height: 26, fontSize: 11, borderRadius: 6,
+                width: "100%", height: 32, fontSize: 11, borderRadius: 6,
                 border: colFilters.status !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
                 backgroundColor: colFilters.status !== "all" ? C.brandSoft : "#fff",
-                color: C.textMuted, padding: "0 4px", outline: "none", cursor: "pointer",
+                color: C.textMuted, padding: "0 4px", cursor: "pointer",
                 fontFamily: FONT_SYS,
               }}
             >
@@ -2062,7 +2068,6 @@ export default function PatientsPage() {
                 cursor: "pointer",
                 transition: "background-color 0.15s ease",
                 gap: WORKLIST_GAP,
-                outline: "none",
                 animation: `fadeSlideIn 0.25s ease-out ${Math.min(rowIndex, 12) * 0.025}s both`,
               }}
               onFocus={(e) => { e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.brandSoft}`; }}

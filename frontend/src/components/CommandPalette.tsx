@@ -380,7 +380,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               flex: 1,
               background: "none",
               border: "none",
-              outline: "none",
               fontSize: 15,
               color: TEXT_PRIMARY,
               caretColor: ACCENT,

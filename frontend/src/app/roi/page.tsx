@@ -754,7 +754,6 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   color: tokens.slate800,
   background: tokens.white,
-  outline: "none",
   boxSizing: "border-box",
   transition: "border-color 0.15s, box-shadow 0.15s",
 };

@@ -532,7 +532,6 @@ export function DateRangeSelector({ value, onChange, customStart, customEnd, onC
               onClick={() => handleClick(opt.key)}
               style={{
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
                 padding: "6px 14px",
                 fontSize: 12,
@@ -560,7 +559,6 @@ export function DateRangeSelector({ value, onChange, customStart, customEnd, onC
               borderRadius: 6,
               border: `1px solid ${colors.gray200}`,
               color: colors.slate900,
-              outline: "none",
             }}
           />
           <span style={{ fontSize: 12, color: colors.slate400 }}>to</span>
@@ -574,7 +572,6 @@ export function DateRangeSelector({ value, onChange, customStart, customEnd, onC
               borderRadius: 6,
               border: `1px solid ${colors.gray200}`,
               color: colors.slate900,
-              outline: "none",
             }}
           />
         </div>
@@ -602,7 +599,6 @@ export function ExportButton({ onExport, label = "Export" }: ExportButtonProps) 
         aria-label={label}
         style={{
           border: "none",
-          outline: "none",
           cursor: "pointer",
           width: 32,
           height: 32,

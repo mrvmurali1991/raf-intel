@@ -755,7 +755,6 @@ function FileItemRow({ item, patients, onUpdate, onRemove }: FileItemRowProps) {
                           borderRadius: 6,
                           padding: "6px 8px",
                           fontSize: 12,
-                          outline: "none",
                           boxSizing: "border-box",
                         }}
                       />
@@ -814,7 +813,6 @@ function FileItemRow({ item, patients, onUpdate, onRemove }: FileItemRowProps) {
                   fontSize: 12,
                   color: c.slate900,
                   cursor: "pointer",
-                  outline: "none",
                 }}
                 aria-label="Document type"
               >
@@ -835,7 +833,6 @@ function FileItemRow({ item, patients, onUpdate, onRemove }: FileItemRowProps) {
                   background: c.white,
                   fontSize: 12,
                   color: c.slate900,
-                  outline: "none",
                 }}
                 aria-label="Encounter date"
               />
@@ -1921,7 +1918,6 @@ export default function DocumentsPage() {
               border: `1px solid ${c.slate200}`,
               fontSize: 13,
               color: c.slate900,
-              outline: "none",
               boxSizing: "border-box",
             }}
           />
@@ -1940,7 +1936,6 @@ export default function DocumentsPage() {
             color: statusFilter ? c.slate900 : c.slate400,
             background: c.white,
             cursor: "pointer",
-            outline: "none",
           }}
         >
           <option value="">All Statuses</option>
@@ -1964,7 +1959,6 @@ export default function DocumentsPage() {
             color: typeFilter ? c.slate900 : c.slate400,
             background: c.white,
             cursor: "pointer",
-            outline: "none",
           }}
         >
           <option value="">All Types</option>
@@ -1986,7 +1980,6 @@ export default function DocumentsPage() {
               border: `1px solid ${c.slate200}`,
               fontSize: 13,
               color: c.slate900,
-              outline: "none",
             }}
           />
           <span style={{ fontSize: 12, color: c.slate400 }}>to</span>
@@ -2001,7 +1994,6 @@ export default function DocumentsPage() {
               border: `1px solid ${c.slate200}`,
               fontSize: 13,
               color: c.slate900,
-              outline: "none",
             }}
           />
         </div>
@@ -2400,7 +2392,7 @@ function OpenEMRDocumentsPanel() {
           value={patientIdFilter}
           onChange={(e) => setPatientIdFilter(e.target.value)}
           style={{
-            flex: 1, border: "none", outline: "none", fontSize: 14,
+            flex: 1, border: "none", fontSize: 14,
             color: c.slate900, background: "transparent",
           }}
         />

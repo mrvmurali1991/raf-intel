@@ -661,7 +661,6 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
               fontSize: 13,
               border: `1px solid ${C.border}`,
               borderRadius: 8,
-              outline: "none",
               background: C.white,
             }}
           />
@@ -1729,7 +1728,6 @@ function ScheduledReportsTab() {
     fontSize: 13,
     border: `1px solid ${C.border}`,
     borderRadius: 8,
-    outline: "none",
     background: C.white,
     color: C.text,
     boxSizing: "border-box" as const,

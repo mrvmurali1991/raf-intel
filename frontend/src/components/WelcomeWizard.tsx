@@ -540,8 +540,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                             placeholder={f.placeholder}
                             style={{
                               width: "100%", padding: "10px 12px 10px 34px", border: `1px solid ${BORDER}`,
-                              borderRadius: 8, fontSize: 14, color: TEXT, background: BG_SUBTLE,
-                              outline: "none", boxSizing: "border-box",
+                              borderRadius: 8, fontSize: 14, color: TEXT, background: BG_SUBTLE, boxSizing: "border-box",
                             }}
                           />
                         </div>
@@ -558,8 +557,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                           placeholder="OAuth2 Client Secret"
                           style={{
                             width: "100%", padding: "10px 12px 10px 34px", border: `1px solid ${BORDER}`,
-                            borderRadius: 8, fontSize: 14, color: TEXT, background: BG_SUBTLE,
-                            outline: "none", boxSizing: "border-box",
+                            borderRadius: 8, fontSize: 14, color: TEXT, background: BG_SUBTLE, boxSizing: "border-box",
                           }}
                         />
                       </div>

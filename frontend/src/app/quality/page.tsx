@@ -589,7 +589,6 @@ function MeasuresTab({ measures }: { measures: QualityMeasure[] }) {
               fontSize: 13,
               background: C.card,
               color: C.text,
-              outline: "none",
               boxSizing: "border-box",
             }}
           />

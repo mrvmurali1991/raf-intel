@@ -507,7 +507,6 @@ function Input({
         border: `1px solid ${C.slate200}`,
         fontSize: 13, color: C.slate900,
         background: disabled ? C.slate50 : C.white,
-        outline: "none",
         transition: "border-color 200ms, box-shadow 200ms",
       }}
     />
@@ -534,7 +533,6 @@ function Select({
         border: `1px solid ${C.slate200}`,
         fontSize: 13, color: C.slate900,
         background: disabled ? C.slate50 : C.white,
-        outline: "none",
         transition: "border-color 200ms, box-shadow 200ms",
       }}
     >

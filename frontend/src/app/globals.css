@@ -108,6 +108,14 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ---- WCAG 2.1 AA: global focus-visible fallback ---- */
+*:focus-visible {
+  outline: 2px solid var(--ring, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Allow inline style overrides only when the element provides its own focus-visible state */
+
 :root {
   --background: 216 25% 96%;
   --foreground: 220 25% 10%;

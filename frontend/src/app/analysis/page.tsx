@@ -241,7 +241,7 @@ function PatientDropdown({
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           disabled={loading}
-          style={{ width: "100%", padding: "10px 12px 10px 38px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, outline: "none", background: tokens.white, transition: "border-color 0.2s, box-shadow 0.2s" }}
+          style={{ width: "100%", padding: "10px 12px 10px 38px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, background: tokens.white, transition: "border-color 0.2s, box-shadow 0.2s" }}
         />
       </div>
       {open && filtered.length > 0 && (
@@ -479,7 +479,7 @@ export default function AnalysisPage() {
                     onChange={(e) => setPastePatientId(e.target.value)}
                     placeholder="e.g. 1"
                     className="focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                    style={{ width: "100%", padding: "9px 12px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, outline: "none", transition: "border-color 0.2s, box-shadow 0.2s" }}
+                    style={{ width: "100%", padding: "9px 12px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, transition: "border-color 0.2s, box-shadow 0.2s" }}
                   />
                 </div>
               </div>
@@ -534,7 +534,6 @@ export default function AnalysisPage() {
                     lineHeight: "22.1px",
                     border: "none",
                     background: tokens.slate50,
-                    outline: "none",
                     resize: "vertical",
                   }}
                 />

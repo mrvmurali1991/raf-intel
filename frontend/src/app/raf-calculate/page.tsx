@@ -145,7 +145,7 @@ const ps: Record<string, React.CSSProperties> = {
   input: {
     width: "100%", height: 44, borderRadius: 10,
     border: `1.5px solid ${tokens.slate200}`, padding: "0 16px",
-    fontSize: 14, color: tokens.slate900, outline: "none",
+    fontSize: 14, color: tokens.slate900,
     background: tokens.white, boxSizing: "border-box",
   },
   dropdown: {
