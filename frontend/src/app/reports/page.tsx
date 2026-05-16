@@ -314,12 +314,11 @@ export default function ReportsPage() {
       {/* ── Print-only header ─────────────────────────────────────────────── */}
       <div
         id="report-print-header"
-        className="print-header"
-        style={{ display: "none", borderBottom: "2px solid #000", paddingBottom: 12, marginBottom: 20 }}
+        className="print-header hidden border-b-2 border-foreground pb-3 mb-5"
       >
-        <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>RAF Intelligence</div>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Analytics &amp; Reports — {activeTab}</div>
-        <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>
+        <div className="text-[10px] text-muted-foreground mb-1">RAF Intelligence</div>
+        <div className="text-lg font-bold">Analytics &amp; Reports — {activeTab}</div>
+        <div className="text-[11px] text-muted-foreground mt-1">
           Year: {year} &nbsp;|&nbsp; Printed: {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </div>
       </div>
@@ -563,12 +562,12 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
                       <div style={{
                         width: 30, height: 30, borderRadius: "50%",
                         background: avatarColors[i % avatarColors.length],
-                        color: "#fff", fontSize: 11, fontWeight: 600,
+                        color: tokens.white, fontSize: 11, fontWeight: 600,
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         {initials(p.name)}
                       </div>
-                      <span style={{ fontWeight: 500 }}>{p.name}</span>
+                      <span className="font-medium">{p.name}</span>
                     </div>
                   </td>
                   <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>{fmtN(p.billing_raf)}</td>
@@ -719,12 +718,12 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
                       <div style={{
                         width: 28, height: 28, borderRadius: "50%",
                         background: avatarColors[i % avatarColors.length],
-                        color: "#fff", fontSize: 10, fontWeight: 600,
+                        color: tokens.white, fontSize: 10, fontWeight: 600,
                         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                       }}>
                         {initials(p.name)}
                       </div>
-                      <span style={{ fontWeight: 500, fontSize: 13 }}>{p.name}</span>
+                      <span className="font-medium text-[13px]">{p.name}</span>
                     </div>
                   </td>
                   <td style={{ ...tdStyle, textAlign: "center" }}>{p.age ?? "—"}</td>
@@ -739,9 +738,9 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
                   <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace" }}>{p.hcc_count_ai}</td>
                   <td style={{ ...tdStyle, textAlign: "center" }}>
                     {p.analyzed ? (
-                      <span style={{ color: C.emerald, fontWeight: 600, fontSize: 15 }}>✓</span>
+                      <span className="text-emerald-600 font-semibold text-[15px]">✓</span>
                     ) : (
-                      <span style={{ color: C.red, fontWeight: 600, fontSize: 15 }}>✗</span>
+                      <span className="text-destructive font-semibold text-[15px]">✗</span>
                     )}
                   </td>
                 </tr>
@@ -1068,8 +1067,8 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
             <div key={dt.key} className="hover-lift" style={{ ...cardStyle, padding: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 20 }}>{dt.icon}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{dt.label}</span>
+                  <span className="text-xl">{dt.icon}</span>
+                  <span className="text-[13px] font-semibold">{dt.label}</span>
                 </div>
                 <span style={{
                   fontSize: 12,
@@ -1178,15 +1177,15 @@ function LongitudinalTrendsTab({ revenue }: { revenue: QueryResult<RevenueOpport
           <div style={{ display: "flex", gap: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 24, height: 3, background: C.primary, borderRadius: 2 }} />
-              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>Your Population</span>
+              <span className="text-xs text-muted-foreground font-medium">Your Population</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 24, height: 0, borderTop: `2px dashed ${C.gray400}` }} />
-              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>CMS National Avg</span>
+              <span className="text-xs text-muted-foreground font-medium">CMS National Avg</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 14, height: 14, background: "rgba(16,185,129,0.2)", border: `1px solid ${tokens.success}`, borderRadius: 3 }} />
-              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>Above Benchmark</span>
+              <span className="text-xs text-muted-foreground font-medium">Above Benchmark</span>
             </div>
           </div>
         </div>
@@ -1305,7 +1304,7 @@ function LongitudinalTrendsTab({ revenue }: { revenue: QueryResult<RevenueOpport
                           {deltaUp ? "▲" : "▼"} {Math.abs(row.delta ?? 0).toFixed(3)}
                         </span>
                       ) : (
-                        <span style={{ color: C.textSub }}>—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -1401,7 +1400,7 @@ function CmsBenchmarksTab({ revenue }: { revenue: QueryResult<RevenueOpportunity
                 <p style={{ margin: "0 0 16px", fontSize: 12, color: C.textMuted }}>{b.desc}</p>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 0", color: C.textSub }}>
                   <div style={{ textAlign: "center" }}>
-                    <p style={{ fontSize: 14, fontWeight: 600 }}>Data not available</p>
+                    <p className="text-sm font-semibold">Data not available</p>
                     <p style={{ fontSize: 11, marginTop: 4 }}>Benchmark: {b.benchmarkValue}{b.unit} ({b.benchmarkLabel})</p>
                   </div>
                 </div>
@@ -1438,8 +1437,8 @@ function CmsBenchmarksTab({ revenue }: { revenue: QueryResult<RevenueOpportunity
                   <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>Your population</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: C.textMuted }}>{displayBench}</div>
-                  <div style={{ fontSize: 11, color: C.textSub }}>{b.benchmarkLabel}</div>
+                  <div className="text-lg font-semibold text-muted-foreground">{displayBench}</div>
+                  <div className="text-[11px] text-muted-foreground">{b.benchmarkLabel}</div>
                 </div>
               </div>
 
@@ -1569,8 +1568,8 @@ function SettlementProjectionTab({ revenue }: { revenue: QueryResult<RevenueOppo
         <h4 style={{ margin: "0 0 20px", fontSize: 14, fontWeight: 600 }}>Gap Closure Simulator</h4>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <label style={{ fontSize: 13, fontWeight: 500, color: C.textMuted }}>Gap Closure Target</label>
-          <span style={{ fontSize: 20, fontWeight: 700, color: C.primary }}>{gapClosurePct}%</span>
+          <label className="text-[13px] font-medium text-muted-foreground">Gap Closure Target</label>
+          <span className="text-xl font-bold text-primary">{gapClosurePct}%</span>
         </div>
 
         <input

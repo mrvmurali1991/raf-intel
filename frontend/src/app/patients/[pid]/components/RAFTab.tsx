@@ -143,7 +143,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
         {/* Demographic base */}
         <div style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.slate100}` }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.slate700 }}>Demographic Base</div>
+            <div className="text-[13px] font-semibold text-slate-700">Demographic Base</div>
             <div style={{ fontSize: 11, color: C.slate400, marginTop: 1 }}>Age/sex coefficient</div>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -210,7 +210,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
           ))
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: `1px solid ${C.slate100}` }}>
-            <span style={{ fontSize: 13, color: C.slate400 }}>No qualifying HCC combinations \u2014 interaction score is 0</span>
+            <span className="text-[13px] text-muted-foreground">No qualifying HCC combinations \u2014 interaction score is 0</span>
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 15, fontFamily: "monospace", fontWeight: 700, color: C.slate400 }}>0.000</span>
             <span style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600, color: C.slate400, minWidth: 70, textAlign: "right" }}>$0</span>
@@ -278,13 +278,13 @@ function LLMInputPanel({ llmInput }: { llmInput: LLMInput }) {
         <div style={{ padding: "14px 16px", fontSize: 12, background: C.white }}>
           {/* Model & Config */}
           <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "5px 12px", marginBottom: 12 }}>
-            <span style={{ color: C.slate400, fontWeight: 600 }}>Patient Age</span>
-            <span style={{ color: C.slate700 }}>{llmInput.patient_age ?? "N/A"}</span>
-            <span style={{ color: C.slate400, fontWeight: 600 }}>Patient Sex</span>
-            <span style={{ color: C.slate700 }}>{llmInput.patient_sex ?? "N/A"}</span>
-            <span style={{ color: C.slate400, fontWeight: 600 }}>Note Length</span>
-            <span style={{ color: C.slate700 }}>{llmInput.clinical_note_chars?.toLocaleString()} characters</span>
-            <span style={{ color: C.slate400, fontWeight: 600 }}>Temperature</span>
+            <span className="text-muted-foreground font-semibold">Patient Age</span>
+            <span className="text-slate-700">{llmInput.patient_age ?? "N/A"}</span>
+            <span className="text-muted-foreground font-semibold">Patient Sex</span>
+            <span className="text-slate-700">{llmInput.patient_sex ?? "N/A"}</span>
+            <span className="text-muted-foreground font-semibold">Note Length</span>
+            <span className="text-slate-700">{llmInput.clinical_note_chars?.toLocaleString()} characters</span>
+            <span className="text-muted-foreground font-semibold">Temperature</span>
             <span style={{ fontFamily: "monospace", color: C.slate700 }}>{llmInput.temperature}</span>
           </div>
 
@@ -339,7 +339,7 @@ function LLMInputPanel({ llmInput }: { llmInput: LLMInput }) {
               <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "2px 8px", fontSize: 11, fontFamily: "monospace", color: C.slate600 }}>
                 {Object.entries(llmInput.latest_vitals).map(([k, v]) => (
                   <React.Fragment key={k}>
-                    <span style={{ color: C.slate400 }}>{k}</span>
+                    <span className="text-muted-foreground">{k}</span>
                     <span>{String(v)}</span>
                   </React.Fragment>
                 ))}
@@ -382,18 +382,18 @@ function LLMInputPanel({ llmInput }: { llmInput: LLMInput }) {
             <div style={{ marginBottom: 10 }}>
               <div style={{ color: C.slate500, fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>AI Processing Summary</div>
               <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: "4px 12px", fontSize: 11, color: C.slate600 }}>
-                <span style={{ color: C.slate400 }}>Total Tool Calls</span>
-                <span style={{ fontWeight: 600 }}>{llmInput.tool_calls_summary.total}</span>
-                <span style={{ color: C.slate400 }}>Conversation Turns</span>
-                <span style={{ fontWeight: 600 }}>{llmInput.tool_calls_summary.turns}</span>
-                <span style={{ color: C.slate400 }}>Processing Time</span>
-                <span style={{ fontWeight: 600 }}>{llmInput.tool_calls_summary.total_time?.toFixed(1)}s</span>
-                <span style={{ color: C.slate400 }}>ICD-10 Validations</span>
-                <span style={{ fontWeight: 600 }}>{llmInput.tool_calls_summary.icd_validated}</span>
-                <span style={{ color: C.slate400 }}>HCC Lookups</span>
-                <span style={{ fontWeight: 600 }}>{llmInput.tool_calls_summary.hcc_lookups}</span>
-                <span style={{ color: C.slate400 }}>Medication Checks</span>
-                <span style={{ fontWeight: 600 }}>{llmInput.tool_calls_summary.med_checks}</span>
+                <span className="text-muted-foreground">Total Tool Calls</span>
+                <span className="font-semibold">{llmInput.tool_calls_summary.total}</span>
+                <span className="text-muted-foreground">Conversation Turns</span>
+                <span className="font-semibold">{llmInput.tool_calls_summary.turns}</span>
+                <span className="text-muted-foreground">Processing Time</span>
+                <span className="font-semibold">{llmInput.tool_calls_summary.total_time?.toFixed(1)}s</span>
+                <span className="text-muted-foreground">ICD-10 Validations</span>
+                <span className="font-semibold">{llmInput.tool_calls_summary.icd_validated}</span>
+                <span className="text-muted-foreground">HCC Lookups</span>
+                <span className="font-semibold">{llmInput.tool_calls_summary.hcc_lookups}</span>
+                <span className="text-muted-foreground">Medication Checks</span>
+                <span className="font-semibold">{llmInput.tool_calls_summary.med_checks}</span>
               </div>
             </div>
           )}
@@ -478,15 +478,15 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
               {stepHeader(1, "Exact Data Sent to Calculation Engine", C.blue600)}
               <div style={{ marginLeft: 30, marginBottom: 20, padding: "14px 16px", borderRadius: 8, background: C.slate100, border: `1px solid ${C.slate200}` }}>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "6px 12px", fontSize: 12 }}>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Age</span>
-                  <span style={{ color: C.slate700, fontWeight: 600 }}>{String(engineInput.age ?? "")}</span>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Sex</span>
-                  <span style={{ color: C.slate700, fontWeight: 600 }}>{String(engineInput.sex ?? "")}</span>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Model Segment</span>
-                  <span style={{ color: C.slate700, fontWeight: 600 }}>{String(engineInput.model_segment ?? "")} ({String(engineInput.prefix_override ?? "")})</span>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>MACI Factor</span>
+                  <span className="text-muted-foreground font-semibold">Age</span>
+                  <span className="text-slate-700 font-semibold">{String(engineInput.age ?? "")}</span>
+                  <span className="text-muted-foreground font-semibold">Sex</span>
+                  <span className="text-slate-700 font-semibold">{String(engineInput.sex ?? "")}</span>
+                  <span className="text-muted-foreground font-semibold">Model Segment</span>
+                  <span className="text-slate-700 font-semibold">{String(engineInput.model_segment ?? "")} ({String(engineInput.prefix_override ?? "")})</span>
+                  <span className="text-muted-foreground font-semibold">MACI Factor</span>
                   <span style={{ fontFamily: "monospace", color: C.slate700 }}>{String(engineInput.maci ?? "")}</span>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Norm Factor</span>
+                  <span className="text-muted-foreground font-semibold">Norm Factor</span>
                   <span style={{ fontFamily: "monospace", color: C.slate700 }}>{String(engineInput.norm_factor ?? "")}</span>
                 </div>
                 <div style={{ marginTop: 10, borderTop: `1px solid ${C.slate200}`, paddingTop: 10 }}>
@@ -505,11 +505,11 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
               {stepHeader(2, "Exact Data Received from Engine", C.emerald600)}
               <div style={{ marginLeft: 30, marginBottom: 20, padding: "14px 16px", borderRadius: 8, background: C.emerald50, border: `1px solid ${C.emerald100}` }}>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "6px 12px", fontSize: 12 }}>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Raw Score</span>
+                  <span className="text-muted-foreground font-semibold">Raw Score</span>
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.slate700 }}>{String(engineOutput?.risk_score_raw ?? "")}</span>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Payment Score</span>
+                  <span className="text-muted-foreground font-semibold">Payment Score</span>
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.blue600 }}>{(engineOutput?.risk_score_payment as number | undefined)?.toFixed(3)}</span>
-                  <span style={{ color: C.slate400, fontWeight: 600 }}>Demographics</span>
+                  <span className="text-muted-foreground font-semibold">Demographics</span>
                   <span style={{ fontFamily: "monospace", color: C.slate700 }}>{String(engineOutput?.risk_score_demographics ?? "")}</span>
                 </div>
                 <div style={{ marginTop: 10, borderTop: `1px solid ${C.emerald100}`, paddingTop: 10 }}>
@@ -531,7 +531,7 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: "2px 8px", fontSize: 11, fontFamily: "monospace" }}>
                       {Object.entries(engineOutput?.all_coefficients ?? {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
                         <React.Fragment key={k}>
-                          <span style={{ color: C.slate600 }}>{k}</span>
+                          <span className="text-slate-600">{k}</span>
                           <span style={{ textAlign: "right", fontWeight: 600, color: C.slate700 }}>{v.toFixed(3)}</span>
                         </React.Fragment>
                       ))}
@@ -553,11 +553,11 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
                   return (
                     <div key={h.hcc_code || h.code || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", borderBottom: i < hccContribs.length - 1 ? `1px solid ${C.slate100}` : "none", fontSize: 11 }}>
                       <span style={{ fontFamily: "monospace", color: C.emerald600, fontWeight: 700, minWidth: 55 }}>HCC {hccCode}</span>
-                      <span style={{ color: C.slate400 }}>{"\u2190"}</span>
+                      <span className="text-muted-foreground">{"\u2190"}</span>
                       <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
                         {icds.length > 0 ? icds.map(c => (
                           <span key={c} style={{ padding: "1px 5px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, background: C.blue50, color: C.blue600 }}>{c}</span>
-                        )) : <span style={{ color: C.slate400 }}>-</span>}
+                        )) : <span className="text-muted-foreground">-</span>}
                       </div>
                       <span style={{ marginLeft: "auto", fontFamily: "monospace", fontWeight: 600, color: C.slate700 }}>{(h.coefficient || 0).toFixed(3)}</span>
                     </div>
@@ -676,10 +676,10 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.slate400 }}>Current RAF</div>
             <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "monospace", color: C.slate700 }}>{currentRaf.toFixed(3)}</div>
-            <div style={{ fontSize: 12, color: C.slate400 }}>${Math.round(currentRaf * MA_PAYMENT_PER_RAF).toLocaleString()}/yr</div>
+            <div className="text-xs text-muted-foreground">${Math.round(currentRaf * MA_PAYMENT_PER_RAF).toLocaleString()}/yr</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <span style={{ fontSize: 20, color: C.blue600 }}>{"\u2192"}</span>
+            <span className="text-xl text-teal-700">{"\u2192"}</span>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace", color: C.emerald600, background: C.emerald50, padding: "2px 8px", borderRadius: 6, border: `1px solid ${C.emerald100}` }}>
               +{extraCoeffSum.toFixed(3)}
             </span>
@@ -687,7 +687,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.emerald600 }}>Projected RAF</div>
             <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "monospace", color: C.emerald600 }}>{projectedRaf.toFixed(3)}</div>
-            <div style={{ fontSize: 12, color: C.emerald600 }}>
+            <div className="text-xs text-emerald-600">
               ${Math.round(projectedRaf * MA_PAYMENT_PER_RAF).toLocaleString()}/yr
               <span style={{ fontWeight: 700, marginLeft: 4 }}>(+${Math.round(extraCoeffSum * MA_PAYMENT_PER_RAF).toLocaleString()})</span>
             </div>
@@ -700,7 +700,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.slate100}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.slate800 }}>ICD-10 to HCC Crosswalk</div>
+              <div className="text-[15px] font-bold text-slate-800">ICD-10 to HCC Crosswalk</div>
               <div style={{ fontSize: 12, color: C.slate400, marginTop: 2 }}>{patientCodes.length} active codes {hasExtras && `+ ${results.filter(r => isExtra(r.icd10_code)).length} what-if`}</div>
             </div>
           </div>
@@ -738,9 +738,9 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
         {/* Results table */}
         {hasSearched && results.length > 0 && (
           <>
-            <div style={{
+            <div className="bg-teal-50" style={{
               display: "grid", gridTemplateColumns: "36px minmax(70px,1fr) 70px 70px 70px 2.5fr",
-              padding: "8px 20px", gap: 4, borderBottom: `1px solid ${C.slate200}`, background: "#f0fdfa",
+              padding: "8px 20px", gap: 4, borderBottom: `1px solid ${C.slate200}`,
             }}>
               {["#", "ICD-10", "V24", "V28", "RxHCC", "Description"].map((h, i) => (
                 <span key={h} style={{
@@ -785,7 +785,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
       {suspectSuggestions.length > 0 && (
         <Card noPadding>
           <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.slate100}` }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.slate800 }}>Codes to Consider</div>
+            <div className="text-sm font-bold text-slate-800">Codes to Consider</div>
             <div style={{ fontSize: 12, color: C.slate400, marginTop: 1 }}>AI-detected conditions not yet coded \u2014 click to add to what-if analysis</div>
           </div>
           {suspectSuggestions.map((s, i: number) => {
@@ -1046,7 +1046,7 @@ export function RAFTab({
                       {gap.hcc_code || gap.hcc || "\u2014"}
                     </span>
                   </span>
-                  <span style={{ fontSize: 13, color: C.slate500 }}>
+                  <span className="text-[13px] text-muted-foreground">
                     {gap.prior_year || gap.last_captured_year || "\u2014"}
                   </span>
                   <span

@@ -258,7 +258,7 @@ function captureBg(rate: number | null): string {
 
 // ── Capture Rate Badge ────────────────────────────────────────────────────────
 function CaptureBadge({ rate }: { rate: number | null }) {
-  if (rate == null) return <span style={{ color: C.gray400, fontSize: 12 }}>--</span>;
+  if (rate == null) return <span className="text-gray-400 text-xs">--</span>;
   return (
     <span
       style={{
@@ -621,7 +621,7 @@ function AddProviderDialog({
               placeholder="Jane"
             />
             {errors.first_name && (
-              <span style={{ fontSize: 11, color: C.red }}>{errors.first_name}</span>
+              <span className="text-[11px] text-destructive">{errors.first_name}</span>
             )}
           </Field>
           <Field label="Last Name" required>
@@ -632,7 +632,7 @@ function AddProviderDialog({
               placeholder="Smith"
             />
             {errors.last_name && (
-              <span style={{ fontSize: 11, color: C.red }}>{errors.last_name}</span>
+              <span className="text-[11px] text-destructive">{errors.last_name}</span>
             )}
           </Field>
           <Field label="Credential">
@@ -663,7 +663,7 @@ function AddProviderDialog({
               placeholder="Internal Medicine"
             />
             {errors.specialty && (
-              <span style={{ fontSize: 11, color: C.red }}>{errors.specialty}</span>
+              <span className="text-[11px] text-destructive">{errors.specialty}</span>
             )}
           </Field>
           <Field label="Category">
@@ -875,7 +875,7 @@ function AutoDiscoverDialog({
               animation: "spin 0.8s linear infinite",
             }}
           />
-          <p style={{ fontSize: 14, color: C.textMuted }}>
+          <p className="text-sm text-muted-foreground">
             Scanning OpenEMR for provider users...
           </p>
         </div>
@@ -886,7 +886,7 @@ function AutoDiscoverDialog({
           {discovered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "32px 0" }}>
               <CheckCircle size={40} color={C.emerald} style={{ margin: "0 auto 12px", display: "block" }} />
-              <p style={{ fontSize: 14, color: C.textMuted }}>
+              <p className="text-sm text-muted-foreground">
                 No new providers found in OpenEMR (all may already be imported).
               </p>
             </div>
@@ -900,8 +900,8 @@ function AutoDiscoverDialog({
                   marginBottom: 14,
                 }}
               >
-                <span style={{ fontSize: 14, color: C.textMuted }}>
-                  Found <strong style={{ color: C.text }}>{discovered.length}</strong> providers
+                <span className="text-sm text-muted-foreground">
+                  Found <strong className="text-foreground">{discovered.length}</strong> providers
                 </span>
                 <button
                   onClick={() =>
@@ -970,10 +970,10 @@ function AutoDiscoverDialog({
                       {((p.first_name || "").trim()[0] || (p.last_name || "").trim()[0] || "\u2022").toUpperCase()}{(p.first_name && p.last_name ? (p.last_name || "").trim()[0] : "").toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                      <div className="text-sm font-semibold text-foreground">
                         {p.first_name} {p.last_name}
                       </div>
-                      <div style={{ fontSize: 12, color: C.textMuted }}>
+                      <div className="text-xs text-muted-foreground">
                         @{p.username}{p.specialty ? ` · ${p.specialty}` : ""}
                       </div>
                     </div>
@@ -1270,7 +1270,7 @@ function ProviderDetailPanel({
                   alignItems: "center",
                 }}
               >
-                <span style={{ fontSize: 12, color: C.textMuted }}>{item.label}</span>
+                <span className="text-xs text-muted-foreground">{item.label}</span>
                 <span
                   style={{
                     fontSize: 13,
@@ -1308,8 +1308,8 @@ function ProviderDetailPanel({
                   fontSize: 12,
                 }}
               >
-                <span style={{ color: C.textMuted }}>{item.label}</span>
-                <span style={{ color: C.text, fontWeight: 600 }}>{item.value}</span>
+                <span className="text-muted-foreground">{item.label}</span>
+                <span className="text-foreground font-semibold">{item.value}</span>
               </div>
             ))}
           </div>
@@ -1358,7 +1358,7 @@ function ProviderDetailPanel({
                         >
                           {alert.type}
                         </div>
-                        <div style={{ fontSize: 13, color: C.text }}>{alert.message}</div>
+                        <div className="text-[13px] text-foreground">{alert.message}</div>
                       </div>
                       <button
                         onClick={() => ackMutation.mutate(alert.alert_id)}
@@ -2359,7 +2359,7 @@ export default function ProvidersPage() {
                               </div>
                             </div>
                           ) : (
-                            <span style={{ color: C.gray400, fontSize: 12 }}>--</span>
+                            <span className="text-gray-400 text-xs">--</span>
                           )}
                         </td>
                         {/* Revenue Opportunity */}
