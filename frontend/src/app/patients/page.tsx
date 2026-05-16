@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, useTransition } from "react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { FocusTrap } from "@/components/ui/focus-trap";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1029,6 +1029,8 @@ export default function PatientsPage() {
     };
   }, [apiResult]);
 
+  const [, startTransition] = useTransition();
+
   const handleSort = useCallback((key: SortKey) => {
     setSort((prev) => ({
       key,
@@ -1679,7 +1681,7 @@ export default function PatientsPage() {
             return (
               <button
                 key={key}
-                onClick={() => { setRiskFilter(key); setPage(0); }}
+                onClick={() => startTransition(() => { setRiskFilter(key); setPage(0); })}
                 className="rci-filter-pill"
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
@@ -1819,7 +1821,9 @@ export default function PatientsPage() {
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Level</span>
-          <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
+          <span title="Risk Adjustment Factor (RAF): CMS-HCC V28 score. 1.0 = average cost. Higher = more complex patient.">
+            <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
+          </span>
           <span className="risk-factors-cell" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.08em", color: tokens.slate500,

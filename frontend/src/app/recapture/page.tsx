@@ -232,7 +232,7 @@ export default function RecapturePage() {
       <div className="animate-fade-in">
         <PageHeader
           title="Recapture Gaps"
-          subtitle="Chronic conditions from prior years requiring annual recapture for RAF optimization"
+          subtitle="Chronic conditions documented in prior years that must be re-coded annually to maintain RAF score accuracy and revenue"
           icon={<RefreshCw size={22} />}
           actions={
             <select
@@ -501,6 +501,11 @@ export default function RecapturePage() {
                       <td className="tabular-nums" style={{ ...tdStyle, fontWeight: 600 }}>{g.days}</td>
                       <td style={tdStyle}>
                         <span
+                          title={
+                            g.priority.label === "High" ? "High priority: condition uncoded for >365 days" :
+                            g.priority.label === "Medium" ? "Medium priority: condition uncoded 180–365 days" :
+                            "Low priority: condition uncoded <180 days"
+                          }
                           style={{
                             display: "inline-block",
                             padding: "3px 10px",
@@ -509,6 +514,7 @@ export default function RecapturePage() {
                             fontWeight: 600,
                             color: g.priority.color,
                             backgroundColor: `${g.priority.color}1A`,
+                            cursor: "help",
                           }}
                         >
                           {g.priority.label}

@@ -860,6 +860,7 @@ export default function LoginPage() {
               </div>
               <button
                 type="button"
+                aria-describedby="demo-hint"
                 onClick={() => {
                   setEmail("admin@raf.health");
                   setPassword("Admin@123");
@@ -871,7 +872,7 @@ export default function LoginPage() {
                 <Zap className="h-4 w-4" />
                 Demo Login — Fill Credentials
               </button>
-              <p className="text-[11px] text-center text-slate-600 dark:text-slate-400 mt-1.5">
+              <p id="demo-hint" className="text-[11px] text-center text-slate-600 dark:text-slate-400 mt-1.5">
                 Fills demo credentials — click &quot;Secure Sign In&quot; to continue
               </p>
             </>
