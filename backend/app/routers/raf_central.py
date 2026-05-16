@@ -295,7 +295,11 @@ def _fetch_patient_hcc_id(patient_id: int, year: int, hcc_code: str, tenant_id: 
             )
             row = cur.fetchone()
             return int(row["id"]) if row else None
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "patient_hcc_id lookup failed pid=%s year=%s hcc=%s: %s",
+            patient_id, year, hcc_code, e, exc_info=True,
+        )
         return None
 
 
@@ -324,8 +328,8 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
             r = cur.fetchone()
             if r:
                 prior_raf = float(r["final_raf"] or 0) or None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("prior-year raf lookup failed: %s", e, exc_info=True)
 
     current_raf = float(breakdown.get("raf_score") or breakdown.get("final_raf") or 0.0)
     delta = round(current_raf - prior_raf, 4) if prior_raf is not None else None
@@ -506,9 +510,12 @@ def get_raf_central(
     if cached is not None:
         try:
             return RAFCentralPayload(**cached)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "raf-central cache deserialise failed pid=%s: %s",
+                pid, e, exc_info=True,
+            )
             # Cache shape drift — fall through and rebuild.
-            pass
 
     # --- Cheap patient existence check ------------------------------------
     try:
@@ -557,8 +564,8 @@ def get_raf_central(
 
     try:
         cache_set(cache_key, payload.model_dump(), ttl=_PANEL_CACHE_TTL_SEC)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("raf-central cache_set failed pid=%s: %s", pid, e, exc_info=True)
 
     return payload
 
@@ -611,8 +618,11 @@ def _invalidate_panel_cache(pid: int, tenant_id: str) -> None:
     try:
         cache_delete_pattern(f"raf-central:{tenant_id}:*:{pid}:*")
         cache_delete_pattern(f"raf:breakdown:{pid}:*")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "raf-central cache invalidation failed pid=%s: %s",
+            pid, e, exc_info=True,
+        )
 
 
 # Action response models (must be defined before the route decorators that reference them)
@@ -1127,8 +1137,11 @@ def action_order_lab(
                 reason="no emr configured",
                 suggested_lab_code=lab_code,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "order-lab emr precheck failed pid=%s: %s",
+                pid, e, exc_info=True,
+            )
         raise HTTPException(
             status_code=500,
             detail="order-lab write failed (procedure_order insert returned no id)",
@@ -1198,7 +1211,11 @@ def _decompose_evidence_detail(
     if isinstance(raw, str):
         try:
             raw = _json.loads(raw)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "evidence_detail JSON decode failed: %s",
+                e, exc_info=True,
+            )
             return [ContributingSignal(source="other", label=raw[:200])]
 
     signals: list[ContributingSignal] = []
