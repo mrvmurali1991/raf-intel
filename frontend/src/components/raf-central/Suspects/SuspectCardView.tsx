@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, XCircle, HelpCircle } from "lucide-react";
+import { Loader2, Check, XCircle, HelpCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import {
   useAcceptSuspectCentral,
@@ -137,6 +137,23 @@ export function SuspectCardView({
     );
   };
 
+  // Lightweight feedback affordance — closes the model-trust loop. Real
+  // backend wiring is a follow-up ticket; for now we log + toast so usage
+  // signals show up in browser logs and the user gets immediate ack.
+  const sendFeedback = (helpful: boolean) => {
+    const event = {
+      suspect_id: suspect.id,
+      hcc: suspect.hcc,
+      icd10: suspect.icd10,
+      helpful,
+      ts: new Date().toISOString(),
+    };
+    // eslint-disable-next-line no-console
+    console.info("[suspect-feedback]", event);
+    // TODO: POST /api/suspects/${suspect.id}/feedback once endpoint exists.
+    toast.success("Feedback noted", helpful ? "Marked as helpful" : "Marked as incorrect");
+  };
+
   const confPct = Math.round(suspect.confidence * 100);
   const gaugeColor = confidenceTier(confPct).color;
 
@@ -184,6 +201,33 @@ export function SuspectCardView({
             >
               <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
             </Button>
+            {/* Feedback affordance — thin scaffold; backend wiring is a follow-up ticket. */}
+            <div
+              className="ml-auto flex items-center gap-0.5"
+              role="group"
+              aria-label="Suggestion feedback"
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => sendFeedback(true)}
+                disabled={busy !== null}
+                aria-label="Suggestion was helpful"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600"
+              >
+                <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => sendFeedback(false)}
+                disabled={busy !== null}
+                aria-label="Suggestion was incorrect"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600"
+              >
+                <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
