@@ -98,14 +98,16 @@ function SortLabel({
   align?: "left" | "right";
 }) {
   const active = sort.key === col;
-  const ariaSort: "ascending" | "descending" | "none" = active
-    ? sort.dir === "asc" ? "ascending" : "descending"
-    : "none";
+  // `aria-sort` is only allowed on elements with role="columnheader" or
+  // role="rowheader". The worklist wrapper is now a plain region (not a
+  // role="table"/"grid"), so we communicate sort state via aria-label
+  // suffix instead, and let assistive tech announce the updated label.
+  const sortSuffix = active
+    ? sort.dir === "asc" ? ", sorted ascending" : ", sorted descending"
+    : "";
   return (
     <button
-      role="columnheader"
-      aria-sort={ariaSort}
-      aria-label={`Sort by ${label}`}
+      aria-label={`Sort by ${label}${sortSuffix}`}
       onClick={() => onSort(col)}
       style={{
         display: "inline-flex",
@@ -1190,8 +1192,11 @@ export default function PatientsPage() {
               }}>
                 Patient Population
               </h1>
-              {/* Auto-sync live indicator */}
+              {/* Auto-sync live indicator. role="status" both permits the
+                  `aria-label` (axe disallows it on a plain <div>) and lets
+                  assistive tech announce sync state changes politely. */}
               <div
+                role="status"
                 title={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting…"}
                 aria-label={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting"}
                 style={{
@@ -1452,7 +1457,11 @@ export default function PatientsPage() {
             return (
               <>
                 <div
-                  role="img"
+                  // role="img" with focusable button descendants triggers
+                  // axe's nested-interactive rule. role="group" lets the
+                  // child filter buttons remain focusable and preserves
+                  // the aria-label as a labelled grouping.
+                  role="group"
                   aria-label={`Risk distribution: ${stats.high} high, ${stats.medium} medium, ${stats.low} low, ${stats.unscored} unscored`}
                   style={{
                     display: "flex",
@@ -1620,7 +1629,10 @@ export default function PatientsPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <TrendingUp size={16} color={tokens.riskHigh} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {/* Use the darker base text colour rather than `textSubtle`
+                — when the card switches to the red-50 background for high
+                risk, slate-500 only hits 4.35:1 (below WCAG AA 4.5:1). */}
+            <span style={{ fontSize: 12, fontWeight: 600, color: stats.high > 0 ? tokens.slate700 : C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Need Review
             </span>
           </div>
@@ -1636,7 +1648,7 @@ export default function PatientsPage() {
           >
             {stats.high}
           </div>
-          <div style={{ fontSize: 12, color: C.textSubtle, display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{ fontSize: 12, color: stats.high > 0 ? tokens.slate700 : C.textSubtle, display: "flex", alignItems: "center", gap: 4 }}>
             High-risk patients
             {stats.high > 0 && <ChevronRight size={12} color={tokens.riskHigh} />}
           </div>
@@ -1694,7 +1706,10 @@ export default function PatientsPage() {
                 {label}
                 <span style={{
                   fontSize: 11, fontWeight: 700,
-                  color: active ? "rgba(255,255,255,0.65)" : C.label,
+                  // slate-400 (C.label) renders at 2.56:1 on white — below
+                  // WCAG AA. textMuted (slate-600) clears 4.5:1 while still
+                  // reading as a secondary count.
+                  color: active ? "rgba(255,255,255,0.65)" : C.textMuted,
                   fontVariantNumeric: "tabular-nums",
                   marginLeft: -2,
                 }}>
@@ -1771,9 +1786,13 @@ export default function PatientsPage() {
       {/* Worklist                                                     */}
       {/* ============================================================ */}
       <div
-        role="table"
+        // Was role="table" but the wrapper also contains pagination
+        // controls — axe flagged those as disallowed children of a
+        // role="table" (only role="row" is permitted). Using role="region"
+        // keeps the labelled landmark intact without imposing table
+        // child-role requirements.
+        role="region"
         aria-label="Patient worklist"
-        aria-rowcount={rows.length}
         aria-busy={isLoading}
         aria-live="polite"
         style={{
@@ -1784,8 +1803,9 @@ export default function PatientsPage() {
           boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04)",
         }}
       >
-        {/* Column header */}
-        <div role="row" className="worklist-grid" style={{
+        {/* Column header (presentational — the parent wrapper is now
+            role="region", so ARIA-table child roles no longer apply). */}
+        <div className="worklist-grid" style={{
           display: "grid",
           ...WORKLIST_GRID_VARS,
           alignItems: "center",
@@ -1795,21 +1815,21 @@ export default function PatientsPage() {
           gap: WORKLIST_GAP,
         }}>
           <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
-          <span role="columnheader" style={{
+          <span style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Level</span>
           <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
-          <span role="columnheader" className="risk-factors-cell" style={{
+          <span className="risk-factors-cell" style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.08em", color: tokens.slate500,
           }}>Risk Factors</span>
           <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
-          <span role="columnheader" style={{
+          <span style={{
             fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
             letterSpacing: "0.08em", color: tokens.slate500, paddingLeft: 8,
           }}>Status</span>
-          <span role="columnheader" aria-label="Open patient detail" />
+          <span aria-hidden="true" />
         </div>
 
         {/* ---- Column Filter Row ---- */}
@@ -2070,12 +2090,26 @@ export default function PatientsPage() {
           const isHovered = hoveredRow === pid;
           const accent = riskAccentColor(scored ? score : null);
           const tone = riskTone(scored ? score : null);
+          // AA-compliant darker foreground for the risk-tone badges.
+          // The base tone.fg colours (riskHigh #DC2626, riskMedium #D97706,
+          // riskLow #059669) only hit 3.07–4.41:1 on their soft backgrounds,
+          // which axe flags as serious contrast violations. The 700-step
+          // tints clear 4.5:1 on the same soft backgrounds.
+          const toneFgAA =
+            tone.label === "High" ? "#B91C1C" :
+            tone.label === "Medium" ? "#B45309" :
+            tone.label === "Low" ? "#047857" :
+            tone.fg;
           const location = formatLocation(p);
 
           return (
             <div
               key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
-              role="row"
+              // role="button" instead of "row" — this element behaves as a
+              // single clickable card (Enter/Space navigates to the patient
+              // detail), not a grid row. Using `row` required ARIA-grid
+              // children semantics on every cell which axe rightly flagged.
+              role="button"
               tabIndex={0}
               aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
               onClick={() => router.push(`/patients/${pid}`)}
@@ -2167,7 +2201,7 @@ export default function PatientsPage() {
                     height: 24, padding: "0 10px",
                     borderRadius: 999,
                     backgroundColor: tone.bg,
-                    color: tone.fg,
+                    color: toneFgAA,
                     fontSize: 11.5, fontWeight: 700,
                     whiteSpace: "nowrap",
                   }}>
@@ -2320,8 +2354,11 @@ export default function PatientsPage() {
                   }`,
                   fontSize: 11.5, fontWeight: 600,
                   color:
-                    !scored ? C.label :
-                    tone.label === "High" ? tokens.dangerStrong :
+                    // dangerStrong (#DC2626) on highSoft (#FEF2F2) hits only
+                    // 4.41:1 — below WCAG AA 4.5:1. red-700 (#B91C1C) clears
+                    // 6.0:1 on the same background.
+                    !scored ? tokens.slate600 :
+                    tone.label === "High" ? "#B91C1C" :
                     tokens.successDark,
                   whiteSpace: "nowrap",
                   letterSpacing: "-0.005em",

@@ -832,7 +832,7 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 mt-2 rounded-xl font-semibold text-base bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20 hover:shadow-lg hover:shadow-teal-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-200 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:scale-100"
+                  className="w-full h-12 mt-2 rounded-xl font-semibold text-base bg-teal-700 hover:bg-teal-800 text-white shadow-md shadow-teal-700/20 hover:shadow-lg hover:shadow-teal-700/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-200 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:scale-100"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
@@ -855,7 +855,7 @@ export default function LoginPage() {
                   <div className="w-full border-t border-slate-200 dark:border-slate-700" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-white dark:bg-slate-900 px-3 text-slate-400">or</span>
+                  <span className="bg-white dark:bg-slate-900 px-3 text-slate-600 dark:text-slate-400">or</span>
                 </div>
               </div>
               <button
@@ -871,7 +871,7 @@ export default function LoginPage() {
                 <Zap className="h-4 w-4" />
                 Demo Login — Fill Credentials
               </button>
-              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mt-1.5">
+              <p className="text-[11px] text-center text-slate-600 dark:text-slate-400 mt-1.5">
                 Fills demo credentials — click &quot;Secure Sign In&quot; to continue
               </p>
             </>

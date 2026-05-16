@@ -196,8 +196,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {/* Error toast container — assertive so screen readers interrupt immediately */}
+      {/* Error toast container — assertive so screen readers interrupt immediately.
+       * `role="region"` is required so the `aria-label` is permitted (axe
+       * flags `aria-label` on a plain <div> with no role). */}
       <div
+        role="region"
         aria-live="assertive"
         aria-label="Error notifications"
         className="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2 pointer-events-none"
@@ -206,8 +209,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <ToastItem key={t.id} t={t} isError={true} />
         ))}
       </div>
-      {/* Non-error toast container — polite so screen readers finish current speech */}
+      {/* Non-error toast container — polite so screen readers finish current speech.
+       * See note on the assertive container above re: `role="region"`. */}
       <div
+        role="region"
         aria-live="polite"
         aria-label="Notifications"
         className="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2 pointer-events-none"

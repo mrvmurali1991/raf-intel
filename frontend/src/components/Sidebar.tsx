@@ -1008,7 +1008,11 @@ export function Sidebar() {
         />
       )}
 
-      {/* Mobile sidebar */}
+      {/* Mobile sidebar.
+       * Use the `inert` attribute when closed so focusable descendants
+       * (close button, nav links, sign-out) are removed from the tab
+       * order AND hidden from assistive tech. `aria-hidden` alone left
+       * those descendants focusable, which axe rightly flagged. */}
       <aside
         id="mobile-sidebar"
         className="fixed left-0 top-0 z-50 lg:hidden transition-transform duration-300 ease-out"
@@ -1018,7 +1022,7 @@ export function Sidebar() {
           transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
         }}
         aria-label="Mobile navigation"
-        aria-hidden={!mobileOpen}
+        inert={!mobileOpen}
       >
         {/* Close button */}
         <div style={{ position: "absolute", right: 10, top: 10, zIndex: 10 }}>
