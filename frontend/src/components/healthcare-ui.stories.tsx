@@ -21,7 +21,7 @@ export const Default: StatStory = {
     value: "1,234",
     subtitle: "+12% from last month",
     icon: <Users className="h-5 w-5" />,
-    color: "#0f766e",
+    accentClassName: "text-primary bg-primary/10",
   },
 };
 
@@ -31,7 +31,7 @@ export const WithTrend: StatStory = {
     value: "1.247",
     icon: <Activity className="h-5 w-5" />,
     trend: { value: 8.2, label: "vs last quarter" },
-    color: "#2563EB",
+    accentClassName: "text-primary bg-primary/10",
   },
 };
 
@@ -49,7 +49,7 @@ export const WithLink: StatStory = {
     value: "42",
     icon: <FileText className="h-5 w-5" />,
     href: "/documents",
-    color: "#d97706",
+    accentClassName: "text-warning bg-warning/15",
   },
 };
 
