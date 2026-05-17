@@ -41,6 +41,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,7 @@ import { RAFGauge } from "./raf-central/RAFGauge";
 import { SparklineTrend } from "./raf-central/SparklineTrend";
 import { NextBestActionBanner } from "./raf-central/NextBestAction";
 import { Section } from "./raf-central/common/Section";
+import { RecentActivitySection } from "./raf-central/common/ActivitySection";
 import { MEATSection } from "./raf-central/MEATGaps";
 import { SuspectsSection } from "./raf-central/Suspects";
 import { RecaptureSection } from "./raf-central/Recapture";
@@ -656,6 +658,16 @@ export function RAFCentralPanel({
         >
           <AuditSection audit={data.audit_readiness} />
         </Section>
+
+        {/* Key by patientId so switching patients resets the "hidden on 404"
+            state — a different patient's request may succeed even if a
+            previous one raced a deploy of the activity endpoint. */}
+        <RecentActivitySection
+          key={`activity-${patientId}`}
+          patientId={patientId}
+          icon={<Activity className="h-4 w-4 text-slate-500" />}
+        />
+        {/* RecentActivitySection self-hides when the endpoint 404s. */}
 
         <Section
           title="Financial Impact"
