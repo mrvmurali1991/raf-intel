@@ -136,6 +136,7 @@ from app.routers import smart_fhir as smart_fhir_router
 from app.routers import suspect_feedback as suspect_feedback_router
 from app.routers import pre_submission as pre_submission_router
 from app.routers import tenant_branding as tenant_branding_router
+from app.routers import encryption_admin as encryption_admin_router
 
 
 # ---------------------------------------------------------------------------
@@ -378,3 +379,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Tenant co-branding (per-tenant color + logo text)
     _mount(app, tenant_branding_router.router)
+
+    # Encryption key management (KMS BYOK)
+    _mount(app, encryption_admin_router.router)
