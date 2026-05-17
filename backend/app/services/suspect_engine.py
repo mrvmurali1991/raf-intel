@@ -279,6 +279,12 @@ _EVIDENCE_TYPE_MAP = {
     "historical_hcc": "historical",
     "nlp": "referral",
     "note_vs_billing": "referral",
+    # Live Gemini NLP scan over encounter notes. Stored under the existing
+    # ``referral`` ENUM bucket because that is the closest match in the live
+    # evidence_type ENUM (medication | lab | imaging | referral | historical).
+    # The frontend discriminator for "note NLP" is the presence of
+    # evidence_detail.nlp_evidence_sentence in the JSON detail blob.
+    "note_nlp": "referral",
     "imaging": "imaging",
     "referral": "referral",
 }
@@ -873,6 +879,116 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
 
 
 # ---------------------------------------------------------------------------
+# Scan 5 – Live NLP suspect mining over the last N encounter notes
+# ---------------------------------------------------------------------------
+
+def scan_note_nlp(
+    patient_id: int,
+    year: int | None = None,
+    *,
+    max_encounters: int = 5,
+) -> list[dict[str, Any]]:
+    """
+    Run live Gemini-powered NLP suspect extraction over the patient's most
+    recent encounter notes (default: last 5).
+
+    Differs from :func:`scan_note_vs_billing` (Scan 4):
+      - Scan 4 reads PRE-COMPUTED ``raf_nlp_jobs`` results.
+      - This scan calls :func:`extract_hcc_suspects_from_note` LIVE on each
+        SOAP/clinical note pulled from ``form_encounter`` so brand-new
+        documentation produces suspects immediately, without waiting for the
+        async NLP job worker.
+
+    The function is best-effort: LLM/EMR failures are logged and produce an
+    empty list rather than aborting the whole patient scan.
+    """
+    from app.services.nlp_suspect_extractor import extract_hcc_suspects_from_note
+
+    coded_icds = _coded_icd_set(patient_id, year=year)
+    coded_hccs = _coded_hcc_set(patient_id, year=year)
+
+    try:
+        encounters = emr.get_encounters(patient_id)
+    except Exception as exc:
+        logger.warning("scan_note_nlp: get_encounters failed pid=%s: %s", patient_id, exc)
+        return []
+
+    if not encounters:
+        return []
+
+    encounters_with_notes = [
+        e for e in encounters
+        if isinstance(e.get("notes"), str) and e["notes"].strip()
+    ]
+    encounters_with_notes = encounters_with_notes[:max_encounters]
+    if not encounters_with_notes:
+        return []
+
+    suspects: list[dict[str, Any]] = []
+    measurement_year = year or date.today().year
+    existing_codes = sorted(coded_icds)
+
+    for enc in encounters_with_notes:
+        note_text = enc["notes"]
+        enc_id = enc.get("encounter_id") or enc.get("id")
+        enc_date = enc.get("date")
+        enc_date_str = (
+            enc_date.isoformat()
+            if hasattr(enc_date, "isoformat")
+            else str(enc_date or "")
+        )
+
+        try:
+            nlp_findings = extract_hcc_suspects_from_note(
+                note_text=note_text,
+                existing_codes=existing_codes,
+                measurement_year=measurement_year,
+            )
+        except Exception as exc:
+            logger.warning(
+                "scan_note_nlp: extractor failed pid=%s enc=%s: %s",
+                patient_id, enc_id, exc,
+            )
+            continue
+
+        for finding in nlp_findings:
+            icd_normalised = finding.icd10.replace(".", "").strip().upper()
+            hcc_normalised = (finding.hcc_code or "").strip().upper()
+
+            if icd_normalised and icd_normalised in coded_icds:
+                continue
+            if hcc_normalised and hcc_normalised in coded_hccs:
+                continue
+
+            fp = _suspect_fingerprint(patient_id, "note_nlp", icd_normalised or hcc_normalised)
+            suspects.append({
+                "patient_id": patient_id,
+                "fingerprint": fp,
+                "source": "note_nlp",
+                "suspected_icd": icd_normalised,
+                "suspected_hcc": hcc_normalised,
+                "description": finding.evidence_sentence[:500],
+                "confidence": float(finding.confidence),
+                "measurement_year": measurement_year,
+                "evidence": {
+                    "encounter_id": enc_id,
+                    "encounter_date": enc_date_str,
+                    "nlp_evidence_sentence": finding.evidence_sentence,
+                    "nlp_evidence_start": finding.evidence_start,
+                    "nlp_evidence_end": finding.evidence_end,
+                    "model_version": finding.model_version,
+                    "source": "note_nlp",
+                },
+            })
+
+    logger.info(
+        "scan_note_nlp pid=%s encounters=%d → %d suspects",
+        patient_id, len(encounters_with_notes), len(suspects),
+    )
+    return suspects
+
+
+# ---------------------------------------------------------------------------
 # Full scan
 # ---------------------------------------------------------------------------
 
@@ -882,9 +998,20 @@ def run_full_suspect_scan(
     tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Execute all four scans, deduplicate on fingerprint (keeping highest
-    confidence when same fingerprint appears in multiple scans), persist
-    each suspect to raf_suspect_conditions, and return the stored list.
+    Execute all scans, deduplicate on fingerprint (keeping highest confidence
+    when same fingerprint appears in multiple scans), persist each suspect to
+    ``raf_suspect_conditions``, and return the stored list.
+
+    Scans run in order:
+        1. Medication signals (rule-based)
+        2. Lab signals (rule-based)
+        3. Historical HCC gap (claim history)
+        4. Note vs billing (pre-computed NLP jobs)
+        5. Live NLP suspect mining (Gemini over last 5 encounter notes)
+
+    Suspects from scan 5 are merged here and persisted with
+    ``evidence_type='referral'`` and ``evidence_detail.nlp_evidence_*`` JSON
+    fields used by the frontend to render the underlined evidence snippet.
 
     *tenant_id* must be supplied so that stored rows carry the correct tenant
     scope; without it the suspects will not be visible in any tenant-filtered
@@ -895,6 +1022,15 @@ def run_full_suspect_scan(
     all_suspects.extend(scan_labs(patient_id, year=year))
     all_suspects.extend(scan_historical_hccs(patient_id, current_year=year))
     all_suspects.extend(scan_note_vs_billing(patient_id, year=year))
+    try:
+        all_suspects.extend(scan_note_nlp(patient_id, year=year))
+    except Exception as exc:
+        # Live NLP is a best-effort enhancement — never let it abort the
+        # rest of the scan pipeline.
+        logger.warning(
+            "run_full_suspect_scan: scan_note_nlp failed pid=%s: %s",
+            patient_id, exc,
+        )
 
     # Deduplicate within this batch by fingerprint
     seen: dict[str, dict[str, Any]] = {}
