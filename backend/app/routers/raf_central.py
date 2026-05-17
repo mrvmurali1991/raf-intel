@@ -927,6 +927,12 @@ class RefreshMEATResponse(BaseModel):
     job_id: str
 
 
+class EnrichSuspectsResponse(BaseModel):
+    ok: bool
+    enriched: int
+    measurement_year: int
+
+
 @router.post("/{pid}/actions/accept-suspect", response_model=AcceptSuspectResponse)
 def action_accept_suspect(
     pid: int,
@@ -1219,6 +1225,55 @@ def action_recalculate(
         raf_score=float(result.get("raf_score") or 0.0),
         hcc_count=int(result.get("hcc_count") or 0),
         model_segment=result.get("model_segment"),
+        measurement_year=measurement_year,
+    )
+
+
+@router.post(
+    "/{pid}/actions/enrich-suspects",
+    response_model=EnrichSuspectsResponse,
+)
+def action_enrich_suspects(
+    pid: int,
+    year: int | None = None,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("raf", "write")),
+) -> EnrichSuspectsResponse:
+    """Recompute and persist ``meat_completeness`` and ``trumped_by_hcc``
+    onto every open suspect row for this patient.
+
+    Necessary because the suspect engine writes rows before the MEAT
+    extractor has populated ``raf_meat_evidence`` for the year, which
+    leaves the panel's MEAT-aware sort and trumped-badge unlit on
+    production data. The scan hook in
+    :func:`run_full_suspect_scan` already calls the same service, but
+    this endpoint exists for manual re-enrichment (e.g. after a MEAT
+    refresh or hierarchy-rules update without re-running the full scan).
+    """
+    tenant_id = current_user.get("tenant_id")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
+
+    measurement_year = year or date.today().year
+
+    from app.services.suspect_enrichment import enrich_suspects_for_patient
+
+    try:
+        n = enrich_suspects_for_patient(pid, tenant_id, year=measurement_year)
+    except Exception as exc:
+        logger.exception("enrich-suspects failed pid=%s tenant=%s", pid, tenant_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Suspect enrichment failed: {exc}",
+        )
+
+    # Invalidate the panel cache so the very next GET /api/raf-central/{pid}
+    # reads the freshly-enriched evidence_detail. Without this the UI would
+    # keep showing "Net-new" until the cache TTL expired.
+    _invalidate_panel_cache(pid, tenant_id)
+
+    return EnrichSuspectsResponse(
+        ok=True,
+        enriched=n,
         measurement_year=measurement_year,
     )
 
