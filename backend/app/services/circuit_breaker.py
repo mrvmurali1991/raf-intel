@@ -146,3 +146,51 @@ sftp_breaker = CircuitBreaker(
     failure_threshold=3,
     recovery_timeout=180.0,
 )
+
+
+# ---------------------------------------------------------------------------
+# Per-key registry — so we get one circuit per (tenant_id, ehr_base_url)
+# instead of a single global CB that taking down one tenant trips for all.
+# ---------------------------------------------------------------------------
+
+_keyed_breakers: dict[str, CircuitBreaker] = {}
+_keyed_lock = threading.Lock()
+
+
+def get_breaker(
+    key: str,
+    *,
+    failure_threshold: int = 5,
+    recovery_timeout: float = 60.0,
+) -> CircuitBreaker:
+    """Get-or-create a CircuitBreaker for a stable key (e.g. f'fhir:{tenant}:{url}').
+    All callers with the same key share the same breaker state."""
+    with _keyed_lock:
+        cb = _keyed_breakers.get(key)
+        if cb is None:
+            cb = CircuitBreaker(
+                key, failure_threshold=failure_threshold,
+                recovery_timeout=recovery_timeout,
+            )
+            _keyed_breakers[key] = cb
+        return cb
+
+
+def all_breakers_status() -> list[dict]:
+    """Snapshot all keyed circuit-breakers for health probes."""
+    with _keyed_lock:
+        items = list(_keyed_breakers.items())
+    out: list[dict] = []
+    for key, cb in items:
+        elapsed = time.time() - cb._last_failure_time if cb._last_failure_time else 0
+        next_attempt: float | None = None
+        if cb._state == CircuitState.OPEN:
+            next_attempt = max(0.0, cb.recovery_timeout - elapsed)
+        out.append({
+            "key": key,
+            "state": cb._state.value,
+            "consecutive_failures": cb._failure_count,
+            "last_failure_time": cb._last_failure_time or None,
+            "next_attempt_in_seconds": next_attempt,
+        })
+    return out

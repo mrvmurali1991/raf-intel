@@ -58,7 +58,10 @@ VERIFICATION_STATUS_SYSTEM = (
 )
 CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-category"
 
-_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+import os
+
+_FHIR_TIMEOUT_SECONDS = float(os.getenv("FHIR_TIMEOUT_SECONDS", "5.0"))
+_TIMEOUT = httpx.Timeout(_FHIR_TIMEOUT_SECONDS, connect=min(2.0, _FHIR_TIMEOUT_SECONDS))
 _BROWSER_UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -421,6 +424,14 @@ def push_problem_list_condition(
 
     url = f"{adapter.base_url}/Condition"
 
+    # Per-tenant circuit breaker — one open tenant doesn't trip another.
+    from app.services.circuit_breaker import (
+        CircuitBreakerError,
+        get_breaker,
+    )
+    _cb_key = f"fhir:{tenant_id}:{adapter.base_url}"
+    _breaker = get_breaker(_cb_key, failure_threshold=5, recovery_timeout=60.0)
+
     @_fhir_post_retry
     def _do_post(headers: dict[str, str]) -> httpx.Response:
         with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
@@ -430,7 +441,25 @@ def push_problem_list_condition(
             return resp
 
     headers = {**adapter._auth_headers(), "Content-Type": "application/fhir+json"}
-    resp = _do_post(headers)
+    try:
+        resp = _breaker(_do_post)(headers)
+    except CircuitBreakerError as cb_err:
+        # Circuit open — fail fast without hitting the EHR.
+        try:
+            from app.services.immutable_audit import append_audit_entry
+            append_audit_entry(
+                action="FHIR_CIRCUIT_OPEN",
+                resource_type="fhir",
+                resource_id=str(tenant_id),
+                details=f"circuit_open retry_after={cb_err.retry_after:.0f}s",
+                tenant_id=str(tenant_id),
+            )
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"FHIR write-back unavailable (circuit open). Retry in "
+            f"{cb_err.retry_after:.0f} seconds."
+        ) from cb_err
 
     # Some OpenEMR builds return 401 with a stale token — refresh and retry once.
     if resp.status_code == 401:
@@ -634,6 +663,13 @@ def reverse_problem_list_condition(
 
     url = f"{adapter.base_url}/Condition/{condition_id}"
 
+    from app.services.circuit_breaker import (
+        CircuitBreakerError,
+        get_breaker,
+    )
+    _cb_key = f"fhir:{tenant_id}:{adapter.base_url}"
+    _breaker = get_breaker(_cb_key, failure_threshold=5, recovery_timeout=60.0)
+
     @_fhir_post_retry
     def _do_put(headers: dict[str, str]) -> httpx.Response:
         with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
@@ -643,7 +679,24 @@ def reverse_problem_list_condition(
             return resp
 
     headers = {**adapter._auth_headers(), "Content-Type": "application/fhir+json"}
-    resp = _do_put(headers)
+    try:
+        resp = _breaker(_do_put)(headers)
+    except CircuitBreakerError as cb_err:
+        try:
+            from app.services.immutable_audit import append_audit_entry
+            append_audit_entry(
+                action="FHIR_CIRCUIT_OPEN",
+                resource_type="fhir",
+                resource_id=str(tenant_id),
+                details=f"circuit_open reversal retry_after={cb_err.retry_after:.0f}s",
+                tenant_id=str(tenant_id),
+            )
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"FHIR reversal unavailable (circuit open). Retry in "
+            f"{cb_err.retry_after:.0f} seconds."
+        ) from cb_err
 
     if resp.status_code == 401:
         logger.warning("FHIR PUT Condition reversal -> 401, forcing token refresh")
