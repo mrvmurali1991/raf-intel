@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # /api/radv audit-trail / MEAT-compliance endpoints in radv_audit.py.
 router = APIRouter(prefix="/api/radv", tags=["radv-audit-runs"])
 
-SampleMethodLit = Literal["random", "stratified_hcc", "high_risk_first"]
+SampleMethodLit = Literal["random", "stratified_hcc", "stratified_raf_decile", "high_risk_first"]
 EvidenceStatusLit = Literal["pending", "complete", "missing_meat", "chart_requested"]
 DecisionLit = Literal["pending", "defensible", "undefensible", "needs_remediation"]
 
@@ -48,9 +48,14 @@ DecisionLit = Literal["pending", "defensible", "undefensible", "needs_remediatio
 class CreateRunIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     payment_year: int = Field(..., ge=2015, le=2099)
-    sample_size: int = Field(..., ge=1, le=5000)
-    sample_method: SampleMethodLit = "random"
+    sample_size: int = Field(201, ge=1, le=5000)
+    sample_method: SampleMethodLit = "stratified_raf_decile"
     notes: Optional[str] = Field(None, max_length=4000)
+    # FFS Adjuster extrapolation fields (CMS 2023 Final Rule).
+    # When members_enrolled is supplied, exposure uses ffs_adjuster_v1 methodology.
+    # Without it, the run falls back to legacy 55x (methodology: legacy_v1).
+    members_enrolled: Optional[int] = Field(None, gt=0, description="Contract enrollment for FFS Adjuster extrapolation")
+    ffs_adjuster: Optional[float] = Field(None, gt=0.0, le=1.0, description="CMS FFS Adjuster (default 0.97)")
 
 
 class UpdateRecordIn(BaseModel):
@@ -109,6 +114,8 @@ def create_run(
             sample_method=body.sample_method,
             created_by_user_id=int(current_user["id"]),
             notes=body.notes,
+            members_enrolled=body.members_enrolled,
+            ffs_adjuster=body.ffs_adjuster,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
