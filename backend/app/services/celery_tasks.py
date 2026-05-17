@@ -190,6 +190,14 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=15),
         "options": {"queue": "default", "priority": 3},
     },
+    # RFC 3161 batch timestamping of the audit chain head every 15 minutes.
+    # Purely additive — does not block audit writes.  No-ops gracefully when
+    # the TSA is unreachable (logs WARNING, does not corrupt the chain).
+    "rfc3161-timestamp-every-15m": {
+        "task": "raf.audit.rfc3161_timestamp",
+        "schedule": crontab(minute="*/15"),
+        "options": {"queue": "default", "priority": 2},
+    },
     # Check every 60 s which EMR connections are due for a sync and fan out
     # individual raf.sync_emr_connection tasks for each one.
     "check-due-emr-syncs-every-60s": {
@@ -1889,3 +1897,115 @@ def task_archive_audit_log_hourly(self) -> dict:
     except Exception as exc:
         task_logger.error("archive_audit_log_hourly failed: %s", exc, exc_info=True)
         raise self.retry(exc=exc)
+
+
+# ---------------------------------------------------------------------------
+# Task: RFC 3161 batch timestamping of the immutable audit chain head
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="raf.audit.rfc3161_timestamp",
+    queue="default",
+    max_retries=3,
+    default_retry_delay=60,
+    bind=True,
+)
+def task_rfc3161_timestamp(self) -> dict:
+    """Stamp the current audit chain head with an RFC 3161 TimeStampToken.
+
+    Pulls the highest contiguous sequence of DB entries not yet covered by a
+    token, POSTs the chain-head hash to the configured TSA (default FreeTSA.org),
+    and stores the resulting token in ``audit_timestamp_tokens``.
+
+    This task is purely additive — it never modifies the audit chain itself.
+    On failure the task logs WARNING and retries (up to max_retries) but will
+    never corrupt the chain or block normal audit appends.
+    """
+    try:
+        from app.db import raf_cursor
+        from app.services.audit_rfc3161 import get_timestamp_for_hash
+        import os
+
+        # 1. Find the entry-ID range not yet covered by any token.
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(MAX(covers_entry_id_end), 0) FROM audit_timestamp_tokens"
+            )
+            row = cur.fetchone()
+            last_covered_id: int = int(list(row.values())[0]) if row else 0
+
+            cur.execute(
+                "SELECT MIN(id) AS id_start, MAX(id) AS id_end, "
+                "       (SELECT hash_self FROM immutable_audit_log ORDER BY id DESC LIMIT 1) AS head_hash "
+                "FROM immutable_audit_log WHERE id > %s",
+                (last_covered_id,),
+            )
+            range_row = cur.fetchone()
+
+        if not range_row or not range_row.get("head_hash"):
+            task_logger.info("rfc3161_timestamp: no new audit entries since last token — skipping")
+            return {"skipped": True, "reason": "no_new_entries"}
+
+        id_start: int = int(range_row["id_start"] or 0)
+        id_end: int = int(range_row["id_end"] or 0)
+        head_hash: str = range_row["head_hash"]
+
+        if id_start == 0 or id_end == 0:
+            task_logger.info("rfc3161_timestamp: empty range — skipping")
+            return {"skipped": True, "reason": "empty_range"}
+
+        # 2. Request a timestamp token from the TSA.
+        tsa_url: str = os.getenv("RFC3161_TSA_URL", "https://freetsa.org/tsr")
+        token_bytes: bytes = get_timestamp_for_hash(head_hash, tsa_url=tsa_url)
+
+        if not token_bytes:
+            task_logger.warning(
+                "rfc3161_timestamp: TSA returned no token for head %s — "
+                "will retry.  Audit chain is unaffected.",
+                head_hash[:16],
+            )
+            raise self.retry(
+                exc=RuntimeError("TSA returned no token"),
+                countdown=60 * (self.request.retries + 1),
+            )
+
+        # 3. Persist the token to the DB.
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO audit_timestamp_tokens
+                    (chain_head_hash, covers_entry_id_start, covers_entry_id_end,
+                     tsa_url, token_bytes)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (head_hash, id_start, id_end, tsa_url, token_bytes),
+            )
+            token_id: int = cur.lastrowid
+
+        task_logger.info(
+            "rfc3161_timestamp: token id=%d stored for entries %d..%d head=%s tsa=%s",
+            token_id, id_start, id_end, head_hash[:16], tsa_url,
+        )
+        return {
+            "token_id": token_id,
+            "chain_head_hash": head_hash,
+            "covers_entry_id_start": id_start,
+            "covers_entry_id_end": id_end,
+            "tsa_url": tsa_url,
+            "token_bytes_len": len(token_bytes),
+        }
+
+    except Exception as exc:
+        # Do NOT propagate in a way that corrupts the chain.
+        if self.request.retries >= self.max_retries:
+            task_logger.error(
+                "rfc3161_timestamp: max retries exhausted, giving up: %s", exc,
+                exc_info=True,
+            )
+            return {"error": str(exc), "retries_exhausted": True}
+        task_logger.warning(
+            "rfc3161_timestamp: attempt %d failed: %s — retrying",
+            self.request.retries + 1, exc,
+        )
+        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

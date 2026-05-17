@@ -1,12 +1,13 @@
 """
-Audit router — RADV-ready PDF audit packages.
+Audit router — RADV-ready PDF audit packages + RFC 3161 token verification.
 
 Routes
 ------
-POST /api/audit/generate/{pid}   Generate a PDF audit package for a patient
-GET  /api/audit/packages         List previously generated packages
-GET  /api/audit/download/{fname} Download a PDF by filename
-GET  /api/audit/summary          Action counts grouped by type + top-10 users (admin/auditor)
+POST /api/audit/generate/{pid}                      Generate a PDF audit package for a patient
+GET  /api/audit/packages                             List previously generated packages
+GET  /api/audit/download/{fname}                     Download a PDF by filename
+GET  /api/audit/summary                              Action counts grouped by type + top-10 users (admin/auditor)
+GET  /api/admin/audit/timestamp/{token_id}/verify    Re-verify an RFC 3161 timestamp token (admin-only)
 """
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
@@ -1416,4 +1417,128 @@ def get_audit_summary(
         "resource_type": resource_type,
         "by_action": [_norm(r) for r in by_action_rows],
         "top_actors": [_norm(r) for r in top_actor_rows],
+    }
+
+
+# ---------------------------------------------------------------------------
+# RFC 3161 timestamp-token verification endpoint (admin-only)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/admin/audit/timestamp/{token_id}/verify",
+    summary="Re-verify an RFC 3161 timestamp token",
+    tags=["admin", "audit"],
+)
+def verify_timestamp_token_endpoint(
+    token_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Re-verify an RFC 3161 timestamp token stored in ``audit_timestamp_tokens``.
+
+    Steps
+    -----
+    1. Load the token row from the DB.
+    2. Re-walk the immutable_audit_log hash chain over the covered entry-ID
+       range and confirm the chain-head hash matches what was stamped.
+    3. Re-verify the TimeStampToken cryptographically via ``audit_rfc3161``.
+
+    Returns
+    -------
+    JSON with keys: valid, tsa_url, generated_at, covers_entries [start, end],
+    chain_head.  ``valid`` is False if any step fails.
+
+    Access
+    ------
+    Admin role required.
+    """
+    require_role(current_user, "admin")
+
+    # 1. Load token row.
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, chain_head_hash, covers_entry_id_start, covers_entry_id_end, "
+                "       tsa_url, token_bytes, token_generated_at "
+                "FROM audit_timestamp_tokens WHERE id = %s",
+                (token_id,),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.error("verify_timestamp_token: DB error: %s", exc)
+        raise HTTPException(status_code=500, detail="DB error") from exc
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Token {token_id} not found")
+
+    stored_head_hash: str = row["chain_head_hash"]
+    id_start: int = int(row["covers_entry_id_start"])
+    id_end: int = int(row["covers_entry_id_end"])
+    tsa_url: str = row["tsa_url"]
+    token_bytes: bytes = bytes(row["token_bytes"])
+    generated_at = row["token_generated_at"]
+
+    # 2. Re-walk the chain over [id_start, id_end] and find the head hash.
+    chain_ok = False
+    computed_head_hash: str | None = None
+    chain_errors: list[str] = []
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, hash_prev, hash_self "
+                "FROM immutable_audit_log "
+                "WHERE id BETWEEN %s AND %s ORDER BY id ASC",
+                (id_start, id_end),
+            )
+            entries = cur.fetchall()
+
+        if not entries:
+            chain_errors.append(f"No audit entries found in range [{id_start}, {id_end}]")
+        else:
+            # Walk forward verifying the chain link by link.
+            for i, entry in enumerate(entries):
+                if i > 0:
+                    expected_prev = entries[i - 1]["hash_self"]
+                    if entry.get("hash_prev") != expected_prev:
+                        chain_errors.append(
+                            f"Chain break at entry id={entry['id']}: "
+                            f"expected prev {expected_prev[:16]}... "
+                            f"got {(entry.get('hash_prev') or '')[:16]}..."
+                        )
+                        break
+            computed_head_hash = entries[-1]["hash_self"] if entries else None
+
+        if computed_head_hash and computed_head_hash == stored_head_hash and not chain_errors:
+            chain_ok = True
+        elif computed_head_hash != stored_head_hash:
+            chain_errors.append(
+                f"Chain-head mismatch: stored={stored_head_hash[:16]}... "
+                f"computed={str(computed_head_hash)[:16]}..."
+            )
+    except Exception as exc:
+        logger.error("verify_timestamp_token: chain-walk error: %s", exc)
+        chain_errors.append(f"Chain walk failed: {exc}")
+
+    # 3. Cryptographic token verification.
+    token_valid = False
+    try:
+        from app.services.audit_rfc3161 import verify_timestamp_token
+        token_valid = verify_timestamp_token(token_bytes, stored_head_hash)
+    except Exception as exc:
+        logger.warning("verify_timestamp_token: token verify error: %s", exc)
+        chain_errors.append(f"Token crypto verification error: {exc}")
+
+    overall_valid = chain_ok and token_valid
+
+    return {
+        "valid": overall_valid,
+        "token_id": token_id,
+        "tsa_url": tsa_url,
+        "generated_at": generated_at.isoformat() if hasattr(generated_at, "isoformat") else str(generated_at),
+        "covers_entries": [id_start, id_end],
+        "chain_head": stored_head_hash,
+        "chain_ok": chain_ok,
+        "token_crypto_ok": token_valid,
+        "errors": chain_errors,
     }
