@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import {
   FileUp,
   FileText,
@@ -15,6 +16,7 @@ import {
   Stethoscope,
   ClipboardList,
   TrendingUp,
+  Columns2,
 } from "lucide-react";
 import type { MEATEvidence } from "@/types";
 import api from "@/lib/api";
@@ -375,6 +377,20 @@ export function DocumentsTab({
                         >
                           <FileText size={13} /> View
                         </button>
+                        <Link
+                          href={`/documents/${docId}/viewer`}
+                          className="btn-press"
+                          data-testid={`view-with-extracts-${docId}`}
+                          title="Open split viewer with extracted HCCs side-by-side"
+                          style={{
+                            padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.blue600}`,
+                            background: C.blue50, color: C.blue600, fontSize: 12, fontWeight: 600,
+                            cursor: "pointer", display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
+                            textDecoration: "none",
+                          }}
+                        >
+                          <Columns2 size={13} /> View with extracts
+                        </Link>
                         {doc.status === "analyzed" && (
                           <>
                             <button

@@ -115,6 +115,33 @@ class OpenEMRDocumentListResponse(BaseModel):
     warning: str | None = None
 
 
+class DocumentExtractItem(BaseModel):
+    """A single extracted finding pinned to a page of the source document.
+
+    Used by the split-viewer UI (/documents/{id}/viewer). Each extract is the
+    coder-facing summary of one suspect HCC condition: clicking it on the
+    right pane jumps the PDF on the left to ``page_number``.
+    """
+
+    id: str
+    label: str
+    page_number: int
+    snippet: str
+    hcc_code: str | None = None
+    icd10_code: str | None = None
+    confidence: float | None = None
+
+
+class DocumentExtractsResponse(BaseModel):
+    document_id: str
+    count: int
+    extracts: list[DocumentExtractItem]
+    # Indicates whether extracts were derived from real
+    # ``raf_suspect_conditions`` rows or returned as mock stubs so the UI
+    # can still be exercised end-to-end on dev data.
+    source: str
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -778,6 +805,153 @@ def view_document_file(
             filename=display_name,
             headers={"Content-Disposition": f'inline; filename="{display_name}"'},
         )
+
+
+@router.get(
+    "/{document_id}/extracts",
+    summary="List extracts (HCCs) attached to a document",
+    description=(
+        "Return the coder-facing extract list for the split-viewer UI. Each "
+        "extract is a suspect HCC pinned to a page of the source PDF. We try "
+        "to derive extracts from ``raf_suspect_conditions`` rows for the "
+        "document's patient that reference this document via "
+        "``evidence_detail.source_document_id``. If none are found, we fall "
+        "back to 3 mock extracts so the UI is exercisable on dev seed data."
+    ),
+    response_model=DocumentExtractsResponse,
+)
+def list_document_extracts(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("documents", "read")),
+) -> dict[str, Any]:
+    doc = get_document(document_id)
+    if not doc:
+        raise _doc_not_found(document_id)
+
+    patient_id = doc.get("patient_id")
+    extracts: list[dict[str, Any]] = []
+    source = "raf_suspect_conditions"
+
+    if patient_id:
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, suspect_hcc, suspect_icd10, evidence_detail,
+                           confidence_score, status
+                    FROM raf_suspect_conditions
+                    WHERE patient_id = %s
+                    ORDER BY confidence_score DESC, id ASC
+                    LIMIT 50
+                    """,
+                    (patient_id,),
+                )
+                suspect_rows = cur.fetchall()
+        except Exception as exc:
+            logger.warning("extracts: suspect lookup failed for %s: %s", document_id, exc)
+            suspect_rows = []
+
+        for row in suspect_rows:
+            ed_raw = row.get("evidence_detail")
+            ed: dict[str, Any] = {}
+            if isinstance(ed_raw, dict):
+                ed = ed_raw
+            elif isinstance(ed_raw, (str, bytes)):
+                try:
+                    ed = _json.loads(
+                        ed_raw if isinstance(ed_raw, str) else ed_raw.decode("utf-8")
+                    )
+                    if not isinstance(ed, dict):
+                        ed = {}
+                except Exception:
+                    ed = {}
+
+            src_doc_id = ed.get("source_document_id")
+            # Only include if this suspect is linked to the document we're
+            # serving. We compare as strings to avoid type mismatch
+            # (document_id is a UUID string, ed values may be either).
+            if src_doc_id is not None and str(src_doc_id) != str(document_id):
+                continue
+            # If no source_document_id is set on any rows for this patient,
+            # we'll fall through to the mock path below.
+            if src_doc_id is None:
+                continue
+
+            page_number = int(ed.get("page_number") or ed.get("page") or 1)
+            snippet = str(
+                ed.get("snippet")
+                or ed.get("evidence_text")
+                or ed.get("note")
+                or ""
+            )
+            hcc = row.get("suspect_hcc")
+            icd = row.get("suspect_icd10") or ""
+            extracts.append(
+                {
+                    "id": f"suspect-{row['id']}",
+                    "label": f"{icd}{' — ' if icd else ''}HCC {hcc}".strip(" —"),
+                    "page_number": max(1, page_number),
+                    "snippet": snippet[:400],
+                    "hcc_code": str(hcc) if hcc is not None else None,
+                    "icd10_code": icd or None,
+                    "confidence": float(row["confidence_score"])
+                    if row.get("confidence_score") is not None
+                    else None,
+                }
+            )
+
+    if not extracts:
+        # Fallback: derive 3 mock extracts so the split-viewer UI is
+        # immediately exercisable on dev data (where suspects often have no
+        # source_document_id wired up yet).
+        source = "mock"
+        doc_name = doc.get("document_name") or doc.get("filename") or "this document"
+        extracts = [
+            {
+                "id": f"mock-{document_id}-1",
+                "label": "E11.9 — HCC 19 (Diabetes w/o complications)",
+                "page_number": 1,
+                "snippet": (
+                    f"Mock extract derived from {doc_name}. Patient noted to "
+                    "have type 2 diabetes, on metformin 500 mg BID."
+                ),
+                "hcc_code": "19",
+                "icd10_code": "E11.9",
+                "confidence": 0.82,
+            },
+            {
+                "id": f"mock-{document_id}-2",
+                "label": "I10 — HCC supports (Essential hypertension)",
+                "page_number": 1,
+                "snippet": (
+                    "BP 148/92 mmHg recorded. Continue lisinopril 10 mg daily."
+                ),
+                "hcc_code": None,
+                "icd10_code": "I10",
+                "confidence": 0.74,
+            },
+            {
+                "id": f"mock-{document_id}-3",
+                "label": "N18.3 — HCC 138 (CKD stage 3)",
+                "page_number": 2,
+                "snippet": (
+                    "Most recent eGFR 47 mL/min/1.73m^2. Discussed renal-"
+                    "protective measures and avoidance of NSAIDs."
+                ),
+                "hcc_code": "138",
+                "icd10_code": "N18.3",
+                "confidence": 0.68,
+            },
+        ]
+
+    return {
+        "document_id": document_id,
+        "count": len(extracts),
+        "extracts": extracts,
+        "source": source,
+    }
 
 
 @router.delete(
