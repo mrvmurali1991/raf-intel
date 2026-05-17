@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_role
 from app.db import raf_cursor
+from app.services.immutable_audit import emit_audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -190,5 +191,31 @@ def put_tenant_branding(
     except Exception as exc:
         logger.error("tenant_branding.put failed tenant=%s: %s", tenant_id, exc)
         raise HTTPException(status_code=500, detail="Failed to update tenant branding.")
+
+    # Immutable audit trail — branding changes are visible to every user in
+    # the tenant and a malicious swap (e.g. phishing logo) must be
+    # traceable to a specific actor + diff.
+    try:
+        before = {
+            "display_name": existing.get("display_name"),
+            "brand_primary": existing.get("brand_primary"),
+            "brand_secondary": existing.get("brand_secondary"),
+            "logo_text": existing.get("logo_text"),
+        }
+        diff = {
+            k: {"before": before.get(k), "after": merged.get(k)}
+            for k in merged
+            if before.get(k) != merged.get(k)
+        }
+        emit_audit_event(
+            "TENANT_BRANDING_UPDATED",
+            tenant_id=tenant_id,
+            actor_user_id=int(current_user.get("id") or 0),
+            subject_type="tenant_branding",
+            subject_id=tenant_id,
+            payload={"diff": diff, "after": merged},
+        )
+    except Exception as exc:  # noqa: BLE001 — audit failures must not 500
+        logger.warning("tenant_branding audit emit failed: %s", exc)
 
     return {"tenant_id": tenant_id, **merged}

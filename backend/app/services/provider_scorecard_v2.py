@@ -199,16 +199,37 @@ def _aggregate_provider_metrics(
                 prior_hccs = int(prior_row.get("prior_hccs") or 0)
 
                 if prior_hccs > 0:
-                    leakage_rate = min(1.0, max(0.0, open_gaps / prior_hccs))
-                    recapture_rate_pct = round((1.0 - leakage_rate) * 100.0, 1)
+                    raw_leakage = open_gaps / prior_hccs
+                    # Don't clamp silently — if leakage > 1, the open-gap
+                    # query is counting more rows than the prior-year HCC
+                    # set (e.g. cohort expanded mid-year). Flag the row so
+                    # the UI can render an em-dash + tooltip instead of a
+                    # misleading 0% recapture.
+                    if raw_leakage > 1.0:
+                        recapture_rate_pct = 0.0
+                        data_quality_flag = "leakage_exceeds_prior_hcc_count"
+                    else:
+                        recapture_rate_pct = round(
+                            (1.0 - max(0.0, raw_leakage)) * 100.0, 1
+                        )
+                        data_quality_flag = None
                 else:
                     # No prior-year HCCs to recapture → trivially 100%.
                     recapture_rate_pct = 100.0
+                    data_quality_flag = None
 
                 # 3) meat_compliance_pct
                 #    For each HCC in raf_patient_hcc for these panel patients
                 #    in ``year``, MEAT score = (M+E+A+T present) / 4.
                 #    Then compliance = sum(meat_score) / total_hccs.
+                # INNER JOIN to raf_meat_evidence so HCCs with no scored
+                # evidence row do not enter the denominator. Without this
+                # filter every un-scored HCC counted as 0/4 and dragged the
+                # provider's score toward zero — a provider with 10 scored
+                # HCCs and 5 unscored HCCs would show 67% even when every
+                # scored row was 4/4. We now report two metrics:
+                #   meat_compliance_pct → average MEAT score on SCORED rows
+                #   meat_coverage_pct   → % of HCCs that have been scored
                 cur.execute(
                     f"""
                     SELECT
@@ -216,17 +237,28 @@ def _aggregate_provider_metrics(
                         SUM(CASE WHEN me.meat_e_present = 1 THEN 1 ELSE 0 END) AS sum_e,
                         SUM(CASE WHEN me.meat_a_present = 1 THEN 1 ELSE 0 END) AS sum_a,
                         SUM(CASE WHEN me.meat_t_present = 1 THEN 1 ELSE 0 END) AS sum_t,
-                        COUNT(*)                                                AS total_hccs
+                        COUNT(*)                                                AS scored_hccs
                     FROM raf_patient_hcc ph
-                    LEFT JOIN raf_meat_evidence me ON me.patient_hcc_id = ph.id
+                    JOIN raf_meat_evidence me ON me.patient_hcc_id = ph.id
                     WHERE ph.measurement_year = %s
                       AND ph.patient_id IN ({placeholders})
                     """,
                     tuple([yr] + panel),
                 )
                 m_row = cur.fetchone() or {}
-                total_hccs = int(m_row.get("total_hccs") or 0)
-                if total_hccs > 0:
+                scored_hccs = int(m_row.get("scored_hccs") or 0)
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*) AS total_hccs
+                    FROM raf_patient_hcc ph
+                    WHERE ph.measurement_year = %s
+                      AND ph.patient_id IN ({placeholders})
+                    """,
+                    tuple([yr] + panel),
+                )
+                t_row = cur.fetchone() or {}
+                total_hccs = int(t_row.get("total_hccs") or 0)
+                if scored_hccs > 0:
                     sum_present = (
                         int(m_row.get("sum_m") or 0)
                         + int(m_row.get("sum_e") or 0)
@@ -234,10 +266,17 @@ def _aggregate_provider_metrics(
                         + int(m_row.get("sum_t") or 0)
                     )
                     meat_compliance_pct = round(
-                        sum_present / (4.0 * total_hccs) * 100.0, 1
+                        sum_present / (4.0 * scored_hccs) * 100.0, 1
                     )
                 else:
-                    meat_compliance_pct = 0.0
+                    # No HCCs scored yet — surface as None so the UI can
+                    # render an em-dash instead of misleading 0.0%.
+                    meat_compliance_pct = None  # type: ignore[assignment]
+                meat_coverage_pct = (
+                    round(scored_hccs / total_hccs * 100.0, 1)
+                    if total_hccs > 0
+                    else None
+                )
 
         rows.append(
             {
@@ -249,13 +288,18 @@ def _aggregate_provider_metrics(
                 "avg_raf":              avg_raf,
                 "recapture_rate_pct":   recapture_rate_pct,
                 "meat_compliance_pct":  meat_compliance_pct,
+                "meat_coverage_pct":    meat_coverage_pct,
+                "data_quality_flag":    data_quality_flag,
             }
         )
 
     # Tenant averages computed across providers WITH a non-empty panel
     # (excluding empty-panel rows keeps the peer benchmark from being
-    # dragged toward zero by inactive providers).
+    # dragged toward zero by inactive providers). MEAT compliance is
+    # averaged only over providers with non-None values to avoid
+    # confounding "metric not computed" with "metric is zero".
     active = [r for r in rows if r["panel_size"] > 0]
+    meat_vals = [r["meat_compliance_pct"] for r in active if r["meat_compliance_pct"] is not None]
     tenant_averages = {
         "tenant_avg_raf": round(
             _safe_mean([r["avg_raf"] for r in active]), 4
@@ -263,8 +307,8 @@ def _aggregate_provider_metrics(
         "tenant_avg_recapture_rate": round(
             _safe_mean([r["recapture_rate_pct"] for r in active]), 1
         ),
-        "tenant_avg_meat_compliance": round(
-            _safe_mean([r["meat_compliance_pct"] for r in active]), 1
+        "tenant_avg_meat_compliance": (
+            round(_safe_mean(meat_vals), 1) if meat_vals else None
         ),
     }
 

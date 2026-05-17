@@ -107,8 +107,8 @@ def _aggregate_heatmap(tenant_id: str, measurement_year: int) -> list[dict[str, 
                 SELECT
                     p.zip                                                       AS zip_code,
                     COUNT(DISTINCT p.id)                                        AS patient_count,
-                    AVG(rs.raf_score)                                           AS avg_raf,
-                    SUM(CASE WHEN rs.raf_score >= %s THEN 1 ELSE 0 END)         AS high_risk_count
+                    AVG(rs.final_raf)                                           AS avg_raf,
+                    SUM(CASE WHEN rs.final_raf >= %s THEN 1 ELSE 0 END)         AS high_risk_count
                 FROM patients p
                 JOIN raf_scores rs ON rs.patient_id = p.id
                 WHERE p.is_active = 1

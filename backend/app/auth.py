@@ -132,6 +132,75 @@ async def _resolve_user(request: Request) -> dict[str, Any] | None:
     active_override = getattr(request.state, "active_tenant_id", None)
     if active_override:
         user["tenant_id"] = active_override
+        # SECURITY (cross-tenant privilege escalation fix):
+        # The user's GLOBAL role on `users.role` is irrelevant once we pivot
+        # into a different tenant — only their PER-TENANT role decides what
+        # they may do there. Without this, a user who is admin in tenant A
+        # but viewer in tenant B could mutate tenant B's data simply by
+        # sending `X-Active-Tenant: B`, because `require_role("admin")`
+        # reads the global role.
+        #
+        # We re-resolve the role from `_load_accessible_tenants` (the same
+        # source used by /api/auth/me and ActiveTenantMiddleware) and
+        # overwrite `user["role"]` (and `token_role`) for the duration of
+        # this request only — the DB row is never touched. Result cached
+        # on `request.state` so dependencies that re-resolve the user (the
+        # tenant guard middleware, `get_tenant_id`, etc.) don't pay
+        # repeated DB hits.
+        try:
+            accessible = getattr(request.state, "_accessible_tenants_cache", None)
+            if accessible is None:
+                # Lazy import — `_load_accessible_tenants` lives in the auth
+                # router module and importing it at module load creates a
+                # circular import (routers depend on this module).
+                from app.routers.auth import _load_accessible_tenants
+
+                accessible = await run_in_db_executor(
+                    _load_accessible_tenants, int(user["id"])
+                )
+                request.state._accessible_tenants_cache = accessible
+
+            target = str(active_override)
+            per_tenant_role: str | None = None
+            for entry in accessible or []:
+                if str(entry.get("id")) == target:
+                    raw = entry.get("role")
+                    per_tenant_role = (str(raw).strip() or None) if raw else None
+                    break
+
+            if per_tenant_role:
+                # Replace BOTH `role` and `token_role` so any downstream code
+                # inspecting either field (notably `require_role`) sees the
+                # tenant-scoped privilege rather than the global one.
+                user["role"] = per_tenant_role
+                user["token_role"] = per_tenant_role
+            else:
+                # Active tenant set but no per-tenant role found. Fail
+                # closed: down-rank to "viewer" so the user cannot retain
+                # global admin privileges in a tenant they were not
+                # explicitly granted any role in.
+                logger.warning(
+                    "Active tenant %s applied for user %s but no per-tenant "
+                    "role found; defaulting to viewer.",
+                    target,
+                    user.get("id"),
+                )
+                user["role"] = "viewer"
+                user["token_role"] = "viewer"
+        except Exception as exc:
+            # Never fail the request because of a role-lookup hiccup —
+            # fall back to viewer (least privilege) and log loudly. This
+            # protects against a DB error silently re-escalating a viewer
+            # to admin.
+            logger.error(
+                "Per-tenant role lookup failed for user %s tenant %s: %s. "
+                "Falling back to viewer role.",
+                user.get("id"),
+                active_override,
+                exc,
+            )
+            user["role"] = "viewer"
+            user["token_role"] = "viewer"
     return user
 
 

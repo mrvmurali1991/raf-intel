@@ -41,6 +41,8 @@ codebase uses ad-hoc DDL for new feature tables.
 from __future__ import annotations
 
 import logging
+import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Any, Optional
 
@@ -51,6 +53,76 @@ from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor
 from app.services.immutable_audit import emit_audit_event
 from app.services.raf.calculator import calculate_raf_score
+
+# Per-actor rate limit — 10 bulk ops / minute / user across all 3 endpoints.
+# Use the actor id (not source IP) so a shared kiosk does not get throttled
+# by another user's burst.
+_BULK_RATE_WINDOW_SEC = 60
+_BULK_RATE_LIMIT = 10
+_bulk_rate_state: dict[int, list[float]] = defaultdict(list)
+
+# Confirmation token gate for batches > 50 ids. Prevents fat-finger bulk
+# mutations on the entire worklist while keeping the typical selection
+# (≤ 50) friction-free.
+_BULK_CONFIRM_THRESHOLD = 50
+
+
+def _enforce_actor_rate_limit(actor_id: int) -> None:
+    now = time.time()
+    cutoff = now - _BULK_RATE_WINDOW_SEC
+    history = [t for t in _bulk_rate_state[actor_id] if t > cutoff]
+    if len(history) >= _BULK_RATE_LIMIT:
+        retry_after = max(1, int(_BULK_RATE_WINDOW_SEC - (now - history[0])))
+        _bulk_rate_state[actor_id] = history
+        raise HTTPException(
+            status_code=429,
+            detail=f"bulk-actions rate limit ({_BULK_RATE_LIMIT}/min) exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+    history.append(now)
+    _bulk_rate_state[actor_id] = history
+
+
+def _filter_owned_patient_ids(
+    candidate_ids: list[int], tenant_id: str
+) -> tuple[list[int], list[int]]:
+    """Return (accepted_ids_owned_by_tenant, rejected_unknown_or_cross_tenant).
+
+    The accepted list preserves caller order. The rejected list contains
+    every id NOT in the active tenant's patient table or not active.
+    """
+    if not candidate_ids:
+        return [], []
+    placeholders = ",".join(["%s"] * len(candidate_ids))
+    sql = (
+        f"SELECT id FROM patients "
+        f"WHERE id IN ({placeholders}) AND tenant_id = %s "
+        f"AND COALESCE(is_active, 1) = 1"
+    )
+    params = list(candidate_ids) + [tenant_id]
+    with raf_cursor() as cur:
+        cur.execute(sql, tuple(params))
+        owned = {int(r["id"]) for r in cur.fetchall() or []}
+    accepted = [pid for pid in candidate_ids if pid in owned]
+    rejected = [pid for pid in candidate_ids if pid not in owned]
+    return accepted, rejected
+
+
+def _check_confirm_token(
+    patient_ids: list[int], confirm_token: str | None
+) -> None:
+    if len(patient_ids) <= _BULK_CONFIRM_THRESHOLD:
+        return
+    expected = f"BULK-{len(patient_ids)}"
+    if confirm_token != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Batch of {len(patient_ids)} requires confirm_token={expected!r}"
+                " (anti-fat-finger gate for batches > "
+                f"{_BULK_CONFIRM_THRESHOLD})"
+            ),
+        )
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +171,13 @@ class ReassignIn(BaseModel):
     assignee_user_id: int = Field(
         ..., gt=0, description="User id that will own these patients."
     )
+    confirm_token: Optional[str] = Field(
+        None,
+        description=(
+            f"Required when patient_ids count > {_BULK_CONFIRM_THRESHOLD}. "
+            "Must equal 'BULK-<n>' where n is the count."
+        ),
+    )
 
     @field_validator("patient_ids")
     @classmethod
@@ -110,6 +189,7 @@ class RecalculateRafIn(BaseModel):
     patient_ids: list[int] = Field(
         ..., description="Patient ids to recompute (max 200)."
     )
+    confirm_token: Optional[str] = Field(None)
 
     @field_validator("patient_ids")
     @classmethod
@@ -126,6 +206,7 @@ class MarkReviewedIn(BaseModel):
         max_length=2000,
         description="Optional free-text note attached to every audit event.",
     )
+    confirm_token: Optional[str] = Field(None)
 
     @field_validator("patient_ids")
     @classmethod
@@ -230,14 +311,22 @@ def reassign_patients(
     for this MVP; audit history lives in ``audit_log``.
     """
     _enforce_bulk_cap(body.patient_ids)
-
+    _check_confirm_token(body.patient_ids, body.confirm_token)
     actor_id = int(current_user["id"])
+    _enforce_actor_rate_limit(actor_id)
+    accepted_ids, rejected_ids = _filter_owned_patient_ids(
+        body.patient_ids, tenant_id
+    )
+
     now = datetime.utcnow()
     upserted = 0
-    errors: list[BulkError] = []
+    errors: list[BulkError] = [
+        BulkError(patient_id=pid, error="not-found-or-cross-tenant")
+        for pid in rejected_ids
+    ]
 
     with raf_cursor() as cur:
-        for pid in body.patient_ids:
+        for pid in accepted_ids:
             try:
                 cur.execute(
                     """
@@ -311,12 +400,21 @@ def recalculate_raf_bulk(
     so a single bad pid does not abort the rest of the batch.
     """
     _enforce_bulk_cap(body.patient_ids)
+    _check_confirm_token(body.patient_ids, body.confirm_token)
+    actor_id = int(current_user["id"])
+    _enforce_actor_rate_limit(actor_id)
+    accepted_ids, rejected_ids = _filter_owned_patient_ids(
+        body.patient_ids, tenant_id
+    )
 
     current_year = datetime.utcnow().year
     succeeded = 0
-    errors: list[BulkError] = []
+    errors: list[BulkError] = [
+        BulkError(patient_id=pid, error="not-found-or-cross-tenant")
+        for pid in rejected_ids
+    ]
 
-    for pid in body.patient_ids:
+    for pid in accepted_ids:
         try:
             calculate_raf_score(
                 pid,
@@ -378,16 +476,24 @@ def mark_reviewed_bulk(
     consistently for any pid in the batch.
     """
     _enforce_bulk_cap(body.patient_ids)
-
+    _check_confirm_token(body.patient_ids, body.confirm_token)
     actor_id = int(current_user["id"])
+    _enforce_actor_rate_limit(actor_id)
+    accepted_ids, rejected_ids = _filter_owned_patient_ids(
+        body.patient_ids, tenant_id
+    )
+
     audited = 0
-    errors: list[BulkError] = []
+    errors: list[BulkError] = [
+        BulkError(patient_id=pid, error="not-found-or-cross-tenant")
+        for pid in rejected_ids
+    ]
 
     payload_base: dict[str, Any] = {"bulk": True}
     if body.note:
         payload_base["note"] = body.note
 
-    for pid in body.patient_ids:
+    for pid in accepted_ids:
         try:
             emit_audit_event(
                 "PATIENT_BULK_REVIEWED",

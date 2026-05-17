@@ -55,14 +55,20 @@ class ProviderScorecardV2(BaseModel):
     panel_size: int = Field(..., ge=0)
     avg_raf: float
     recapture_rate_pct: float
-    meat_compliance_pct: float
+    # meat_compliance_pct is None when no HCCs have been MEAT-scored yet —
+    # surfaces an em-dash in the UI rather than a misleading 0.0%.
+    meat_compliance_pct: Optional[float] = None
+    meat_coverage_pct: Optional[float] = None
+    # Set when the underlying counts indicate a data-quality anomaly
+    # (e.g. leakage rate > 1 because open-gaps query expanded mid-year).
+    data_quality_flag: Optional[str] = None
 
     # Peer (tenant) averages — same for every row in a list response but
     # included on every row so the frontend can render delta-vs-peer
     # without juggling two shapes.
     tenant_avg_raf: float
     tenant_avg_recapture_rate: float
-    tenant_avg_meat_compliance: float
+    tenant_avg_meat_compliance: Optional[float] = None
 
     year: int
 
@@ -72,7 +78,7 @@ class ProviderScorecardListResponse(BaseModel):
     providers: List[ProviderScorecardV2]
     tenant_avg_raf: float
     tenant_avg_recapture_rate: float
-    tenant_avg_meat_compliance: float
+    tenant_avg_meat_compliance: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------
