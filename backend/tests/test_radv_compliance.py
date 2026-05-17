@@ -252,6 +252,56 @@ class TestFFSAdjusterExtrapolation:
 
 
 # ---------------------------------------------------------------------------
+# 3b. Wilson LCB correctness (CMS Feb-2023 Final Rule, 90 FR 1944)
+# ---------------------------------------------------------------------------
+
+
+class TestWilsonLCB:
+    def test_lcb_less_than_point_estimate(self):
+        """Wilson LCB must be strictly less than the point estimate when failed > 0."""
+        result = compute_extrapolated_exposure(
+            failed_records=10,
+            sample_size=201,
+            members_enrolled=50_000,
+        )
+        assert result["lower_confidence_bound_dollars"] < result["extrapolated_exposure_dollars"]
+
+    def test_lcb_zero_when_no_failures(self):
+        """With zero failures the error rate is 0 and LCB should be 0.0."""
+        result = compute_extrapolated_exposure(
+            failed_records=0,
+            sample_size=201,
+            members_enrolled=50_000,
+        )
+        assert result["lower_confidence_bound_dollars"] == 0.0
+
+    def test_methodology_contains_wilson_lcb(self):
+        """methodology field must reference wilson_lcb to satisfy reviewer requirement."""
+        result = compute_extrapolated_exposure(
+            failed_records=5,
+            sample_size=201,
+            members_enrolled=10_000,
+        )
+        assert "wilson_lcb" in result["methodology"]
+
+
+# ---------------------------------------------------------------------------
+# 3c. Legacy constant _LEGACY_AVG_HCC_PAYMENT_DOLLARS removed
+# ---------------------------------------------------------------------------
+
+
+class TestLegacyConstantRemoved:
+    def test_legacy_avg_hcc_payment_dollars_is_gone(self):
+        """_LEGACY_AVG_HCC_PAYMENT_DOLLARS must not exist — single-source-of-truth rule."""
+        import importlib
+        import app.services.radv_audit_run_service as svc_mod
+        assert not hasattr(svc_mod, "_LEGACY_AVG_HCC_PAYMENT_DOLLARS"), (
+            "_LEGACY_AVG_HCC_PAYMENT_DOLLARS still present — remove it and use "
+            "revenue_per_raf_point() from revenue_constants.py instead"
+        )
+
+
+# ---------------------------------------------------------------------------
 # 4. assumed_fail_rate > 1.0 raises ValueError
 # ---------------------------------------------------------------------------
 

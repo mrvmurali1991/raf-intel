@@ -214,6 +214,31 @@ test.describe("WCAG 2.2 AA — round-2 a11y fixes", () => {
     ).toHaveLength(0);
   });
 
+  // ---- Round-3: contrast sweep pages ----
+  test("/cohorts/builder — no contrast, heading-order, or label violations", async () => {
+    const page = await openPage("/cohorts/builder");
+    const violations = await runAxe(page, ["color-contrast", "heading-order", "label"]);
+    await page.close();
+
+    expect(
+      violations,
+      `/cohorts/builder axe violations:${formatViolations(violations)}`,
+    ).toHaveLength(0);
+  });
+
+  test("/ (AdminDashboard) — no contrast, heading-order, or label violations", async () => {
+    const page = await openPage("/");
+    // Wait for dashboard data panels to render
+    await page.waitForTimeout(2000);
+    const violations = await runAxe(page, ["color-contrast", "heading-order", "label"]);
+    await page.close();
+
+    expect(
+      violations,
+      `AdminDashboard axe violations:${formatViolations(violations)}`,
+    ).toHaveLength(0);
+  });
+
   // ---- Dialog-specific: RADV create-run focus trap ----
   test("/radv create-run dialog — first input receives focus on open", async () => {
     const page = await openPage("/radv");

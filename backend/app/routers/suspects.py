@@ -840,7 +840,7 @@ def dismiss_suspect_endpoint(
 # ---------------------------------------------------------------------------
 
 _MIN_REVERSAL_REASON_LEN = 30
-_REVERSAL_ALLOWED_ROLES = frozenset({"coder", "admin"})
+_REVERSAL_ALLOWED_ROLES = frozenset({"coder", "admin", "physician"})
 
 
 class ReverseWritebackRequest(BaseModel):

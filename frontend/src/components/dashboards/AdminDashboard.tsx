@@ -1193,7 +1193,7 @@ export function AdminDashboard() {
                   <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>
                     {tiers.total > 0 ? `${Math.round((t.count / tiers.total) * 100)}%` : "0%"} of population
                   </div>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{t.desc}</div>
+                  <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>{t.desc}</div>
                 </div>
                 </Link>
               ))}
@@ -1222,7 +1222,7 @@ export function AdminDashboard() {
               }
             />
             {suspectsCount === 0 ? (
-              <div style={{ color: "#94A3B8", fontSize: 14, padding: "24px 0", textAlign: "center" }}>
+              <div style={{ color: "#64748B", fontSize: 14, padding: "24px 0", textAlign: "center" }}>
                 No suspect conditions found. Run clinical analysis to identify gaps.
               </div>
             ) : (
@@ -1316,7 +1316,7 @@ export function AdminDashboard() {
               }
             />
             {topOpps.length === 0 ? (
-              <div style={{ color: "#94A3B8", fontSize: 14, padding: "32px 0", textAlign: "center" }}>
+              <div style={{ color: "#64748B", fontSize: 14, padding: "32px 0", textAlign: "center" }}>
                 <Calculator size={32} color="#CBD5E1" style={{ marginBottom: 8 }} />
                 <div>Run clinical analysis to identify revenue gaps.</div>
               </div>
@@ -1326,11 +1326,11 @@ export function AdminDashboard() {
               <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 360 }}>
                 {/* Table header */}
                 <div style={{ display: "flex", alignItems: "center", padding: "0 8px 10px", borderBottom: "1px solid #E5E7EB" }}>
-                  <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient</span>
-                  <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Billing RAF</span>
-                  <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>TMIAB RAF</span>
-                  <span style={{ width: 60, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Gap</span>
-                  <span style={{ width: 80, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Revenue</span>
+                  <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient</span>
+                  <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Billing RAF</span>
+                  <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>TMIAB RAF</span>
+                  <span style={{ width: 60, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Gap</span>
+                  <span style={{ width: 80, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Revenue</span>
                   <span style={{ width: 20 }} />
                 </div>
                 {topOpps.map((p, i: number) => {
@@ -1367,7 +1367,7 @@ export function AdminDashboard() {
                               justifyContent: "center",
                               fontSize: 11,
                               fontWeight: 700,
-                              color: i < 3 ? "#2563EB" : "#94A3B8",
+                              color: i < 3 ? "#2563EB" : "#64748B",
                               flexShrink: 0,
                             }}
                           >
@@ -1438,7 +1438,7 @@ export function AdminDashboard() {
               icon={<BarChart3 size={18} />}
             />
             {waterfallData.length === 0 ? (
-              <div style={{ color: "#94A3B8", fontSize: 14, padding: "32px 0", textAlign: "center" }}>
+              <div style={{ color: "#64748B", fontSize: 14, padding: "32px 0", textAlign: "center" }}>
                 No HCC data available. Run analysis first.
               </div>
             ) : (
@@ -1448,7 +1448,7 @@ export function AdminDashboard() {
                   totalLabel="Total Opportunity"
                   height={36}
                 />
-                <div style={{ marginTop: 16, fontSize: 11, color: "#94A3B8", lineHeight: 1.5 }}>
+                <div style={{ marginTop: 16, fontSize: 11, color: "#64748B", lineHeight: 1.5 }}>
                   Revenue estimated as patient count x coefficient x $12,000 base rate per condition category.
                 </div>
               </div>
@@ -1504,7 +1504,7 @@ export function AdminDashboard() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{prov.name}</div>
-                    <div style={{ fontSize: 11, color: "#94A3B8" }}>{prov.specialty}</div>
+                    <div style={{ fontSize: 11, color: "#64748B" }}>{prov.specialty}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1753,7 +1753,7 @@ export function AdminDashboard() {
                         padding: "10px 12px",
                         fontSize: 11,
                         fontWeight: 700,
-                        color: "#94A3B8",
+                        color: "#64748B",
                         textTransform: "uppercase",
                         letterSpacing: "0.05em",
                         borderBottom: "2px solid #E5E7EB",
@@ -1785,7 +1785,7 @@ export function AdminDashboard() {
                       onClick={() => router.push(`/patients/${p.pid}`)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/patients/${p.pid}`); } }}
                     >
-                      <td style={{ padding: "12px", fontSize: 12, fontWeight: 600, color: "#94A3B8", borderBottom: "1px solid #F1F5F9" }}>{idx + 1}</td>
+                      <td style={{ padding: "12px", fontSize: 12, fontWeight: 600, color: "#64748B", borderBottom: "1px solid #F1F5F9" }}>{idx + 1}</td>
                       <td style={{ padding: "12px", borderBottom: "1px solid #F1F5F9" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{p.name as string}</span>

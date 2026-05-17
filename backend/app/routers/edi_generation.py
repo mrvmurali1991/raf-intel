@@ -226,6 +226,12 @@ def generate_837(
                         "per override request (len(patient_ids) must be 1)"
                     ),
                 )
+            # 4-eyes: submitter and reviewer must be different users
+            if body.reviewer_user_id == user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Reviewer must be different from submitter (4-eyes rule)",
+                )
             # Validate reviewer role
             reviewer = _load_user(body.reviewer_user_id)
             if reviewer is None or reviewer.get("role") not in _SUPERVISOR_ROLES:
