@@ -10,7 +10,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // ---------------------------------------------------------------------------
+<<<<<<< HEAD
 // Auth helper — inlined to avoid helpers.ts BASE_URL dep
+=======
+// Auth helper
+>>>>>>> fix/round2-pcp-workflow
 // ---------------------------------------------------------------------------
 
 const ADMIN_EMAIL = "admin@raf.health";
@@ -39,24 +43,42 @@ test.describe("HEDIS strip co-located with HCC suspects", () => {
     await page.waitForSelector('[role="tabpanel"]', { timeout: 20_000 });
 
     // The HEDIS strip section should be visible — identified by its aria-label
+<<<<<<< HEAD
     // or the "HEDIS Quality Gaps" heading text
+=======
+>>>>>>> fix/round2-pcp-workflow
     const hedisStrip = page.getByRole("region", { name: /HEDIS quality gaps/i });
 
     // Allow up to 10s for the HEDIS query to resolve
     await expect(hedisStrip).toBeVisible({ timeout: 10_000 });
   });
 
+<<<<<<< HEAD
   test("HEDIS strip shows measure badges (BCS/CCS/HBD/CBP/FUM) or 'All met'", async ({ page }) => {
+=======
+  test("HEDIS strip shows measure badges or 'All met'", async ({ page }) => {
+>>>>>>> fix/round2-pcp-workflow
     await login(page);
     await page.goto("/patients/1?tab=suspects");
     await page.waitForSelector('[role="tabpanel"]', { timeout: 20_000 });
 
+<<<<<<< HEAD
     // Wait for HEDIS section to appear
+=======
+>>>>>>> fix/round2-pcp-workflow
     const hedisSection = page.getByRole("region", { name: /HEDIS quality gaps/i });
     await expect(hedisSection).toBeVisible({ timeout: 10_000 });
 
     // Either some measure badges appear or an "All met" badge
+<<<<<<< HEAD
     const hasGaps = await hedisSection.getByText(/Gap open|All met|BCS|CCS|HBD|CBP|FUM/).first().isVisible().catch(() => false);
+=======
+    const hasGaps = await hedisSection
+      .getByText(/Gap open|All met|BCS|CCS|HBD|CBP|FUM/)
+      .first()
+      .isVisible()
+      .catch(() => false);
+>>>>>>> fix/round2-pcp-workflow
     expect(hasGaps).toBe(true);
   });
 });
@@ -81,7 +103,13 @@ test.describe("Keyboard shortcuts on /suspects list", () => {
     await page.keyboard.press("a");
 
     // Expect a success toast to appear (accept or error feedback)
+<<<<<<< HEAD
     const toast = page.locator('[role="status"], [role="alert"]').filter({ hasText: /accepted|error/i });
+=======
+    const toast = page
+      .locator('[role="status"], [role="alert"]')
+      .filter({ hasText: /accepted|error/i });
+>>>>>>> fix/round2-pcp-workflow
     await expect(toast).toBeVisible({ timeout: 8_000 });
   });
 
@@ -96,7 +124,13 @@ test.describe("Keyboard shortcuts on /suspects list", () => {
 
     await page.keyboard.press("d");
 
+<<<<<<< HEAD
     const toast = page.locator('[role="status"], [role="alert"]').filter({ hasText: /dismissed|error/i });
+=======
+    const toast = page
+      .locator('[role="status"], [role="alert"]')
+      .filter({ hasText: /dismissed|error/i });
+>>>>>>> fix/round2-pcp-workflow
     await expect(toast).toBeVisible({ timeout: 8_000 });
   });
 
@@ -112,10 +146,15 @@ test.describe("Keyboard shortcuts on /suspects list", () => {
     // Arrow down
     await page.keyboard.press("ArrowDown");
 
+<<<<<<< HEAD
     // Second row should now have an outline (focused ring) — check via
     // the focusedRowIdx styling: border: 2px solid brand color
     const secondRow = page.locator('[role="row"]').nth(1);
     // At minimum the row should be focusable and have outline
+=======
+    // Second row should now be focusable and visible
+    const secondRow = page.locator('[role="row"]').nth(1);
+>>>>>>> fix/round2-pcp-workflow
     await expect(secondRow).toBeVisible();
   });
 
@@ -141,6 +180,7 @@ test.describe("Confidence band labels are signal-strength words, not percentages
     await page.waitForSelector('[role="row"]', { timeout: 20_000 });
 
     // These old percentage-implied labels must NOT appear
+<<<<<<< HEAD
     const oldHighLabel = page.getByText(">85%");
     const oldMedLabel = page.getByText("65-85%");
     const oldLowLabel = page.getByText("<65%");
@@ -148,6 +188,11 @@ test.describe("Confidence band labels are signal-strength words, not percentages
     await expect(oldHighLabel).not.toBeVisible();
     await expect(oldMedLabel).not.toBeVisible();
     await expect(oldLowLabel).not.toBeVisible();
+=======
+    await expect(page.getByText(">85%")).not.toBeVisible();
+    await expect(page.getByText("65-85%")).not.toBeVisible();
+    await expect(page.getByText("<65%")).not.toBeVisible();
+>>>>>>> fix/round2-pcp-workflow
   });
 
   test("filter chips show 'Strong signal', 'Moderate signal', 'Weak signal'", async ({ page }) => {

@@ -1349,6 +1349,7 @@ export default function SuspectsPage() {
           const rationale = rationaleText(s);
 
           const isExpanded = expandedId === s.id;
+          const isFocused = focusedRowIdx === idx;
 
           const isFocused = focusedRowIdx === idx;
 
