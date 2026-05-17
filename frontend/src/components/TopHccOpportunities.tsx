@@ -28,7 +28,7 @@ const T = {
   slate900: "#0F172A",
   slate700: "#334155",
   slate500: "#64748B",
-  slate400: "#94A3B8",
+  slate400: "#64748B",
   slate300: "#CBD5E1",
   slate200: "#E2E8F0",
   slate100: "#F1F5F9",

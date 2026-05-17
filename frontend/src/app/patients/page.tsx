@@ -1567,7 +1567,7 @@ export default function PatientsPage() {
         <button
           onClick={() => setSyncToast(null)}
           aria-label="Dismiss notification"
-          style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: 2, display: "flex" }}
+          style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: 2, display: "flex" }}
         >
           <X size={14} />
         </button>

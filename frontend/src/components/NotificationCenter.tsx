@@ -182,7 +182,7 @@ function NotificationRow({ notification, onClick, onDismiss }: NotificationRowPr
         >
           {notification.description}
         </div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>
           {relativeTime(notification.createdAt)}
         </div>
       </div>
@@ -208,7 +208,7 @@ function NotificationRow({ notification, onClick, onDismiss }: NotificationRowPr
           style={{
             position: "absolute", top: 8, right: 8,
             background: "none", border: "none", cursor: "pointer",
-            padding: 3, borderRadius: 4, display: "flex", color: "#94a3b8",
+            padding: 3, borderRadius: 4, display: "flex", color: "#64748b",
           }}
         >
           <X size={13} />
@@ -481,7 +481,7 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
                   Mark all read
                 </button>
               )}
-              <button onClick={() => setOpen(false)} aria-label="Close notifications" style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", padding: 3, borderRadius: 4 }}>
+              <button onClick={() => setOpen(false)} aria-label="Close notifications" style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", padding: 3, borderRadius: 4 }}>
                 <X size={15} aria-hidden />
               </button>
             </div>
@@ -496,7 +496,7 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>No notifications yet</div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>Activity from analysis, sync, and submissions will appear here.</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>Activity from analysis, sync, and submissions will appear here.</div>
                 </div>
               </div>
             ) : (
@@ -514,7 +514,7 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
               <button onClick={() => { setOpen(false); router.push("/activity"); }} style={{ fontSize: 12, fontWeight: 500, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 View all activity
               </button>
-              <button onClick={handleClearAll} style={{ fontSize: 12, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: 0 }} aria-label="Clear all notifications">
+              <button onClick={handleClearAll} style={{ fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: 0 }} aria-label="Clear all notifications">
                 Clear all
               </button>
             </div>

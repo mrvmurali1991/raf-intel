@@ -276,7 +276,7 @@ function ConfidenceBreakdown({ factors }: { factors: ConfidenceFactors }) {
         {segments.map((s, i) => (
           <span key={s.key}>
             <span style={{ color: s.color, fontWeight: 700 }}>{s.value.toFixed(2)}</span>
-            <span style={{ color: "#94A3B8" }}> {s.label}</span>
+            <span style={{ color: "#64748B" }}> {s.label}</span>
             {i < segments.length - 1 ? (
               <span style={{ margin: "0 6px", color: "#CBD5E1" }}>×</span>
             ) : null}

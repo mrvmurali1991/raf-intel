@@ -69,7 +69,7 @@ export function ReadinessScoreBadge({
           padding: "2px 8px",
           fontSize: 11,
           fontWeight: 600,
-          color: "#94A3B8",
+          color: "#64748B",
           background: "#F1F5F9",
           borderRadius: 999,
           border: "1px solid #E2E8F0",

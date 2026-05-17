@@ -879,7 +879,7 @@ export default function ROICalculatorPage() {
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.08em;
-          color: #94A3B8;
+          color: #64748B;
           margin-bottom: 12px;
         }
         .section-flow-label::after {

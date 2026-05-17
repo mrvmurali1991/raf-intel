@@ -174,7 +174,7 @@ function LeaderboardRow({
       <Td>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{row.name}</div>
         {row.email && row.email !== row.name && (
-          <div style={{ fontSize: 11, color: "#94A3B8" }}>{row.email}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{row.email}</div>
         )}
       </Td>
       <Td align="right">
@@ -242,7 +242,7 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
         fontWeight: 600,
         textTransform: "uppercase",
         letterSpacing: "0.06em",
-        color: "#94A3B8",
+        color: "#64748B",
         textAlign: align,
         borderBottom: "2px solid #E2E8F0",
         background: "#F8FAFC",

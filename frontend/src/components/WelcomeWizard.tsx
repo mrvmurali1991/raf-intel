@@ -94,7 +94,7 @@ const BG_ACCENT = "#F0F9FF";
 const BORDER = "#E2E8F0";
 const TEXT = "#0F172A";
 const TEXT_SEC = "#64748B";
-const TEXT_MUTED = "#94A3B8";
+const TEXT_MUTED = "#64748B";
 const PRIMARY = "#2563EB";
 const PRIMARY_LIGHT = "#DBEAFE";
 const SUCCESS = "#10B981";
@@ -300,7 +300,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
             <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #3B82F6, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Zap size={16} color="#FFF" />
             </div>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#94A3B8" }}>RAF Intelligence Setup</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#64748B" }}>RAF Intelligence Setup</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {[1, 2, 3, 4].map((s) => (

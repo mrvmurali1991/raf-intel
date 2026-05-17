@@ -122,7 +122,7 @@ export default function CloseHistoryTimeline({ year, limit = 25 }: Props) {
                     MEAT · {item.meat_element}
                   </span>
                 )}
-                <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: "auto" }}>
+                <span style={{ fontSize: 11, color: "#64748B", marginLeft: "auto" }}>
                   {item.resolved_at ? formatRelative(item.resolved_at) : ""}
                 </span>
               </div>
@@ -146,7 +146,7 @@ export default function CloseHistoryTimeline({ year, limit = 25 }: Props) {
               )}
 
               {item.icd10_code && (
-                <div style={{ marginTop: 6, fontSize: 11, color: "#94A3B8", display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ marginTop: 6, fontSize: 11, color: "#64748B", display: "flex", alignItems: "center", gap: 6 }}>
                   <FileText size={11} /> ICD-10 {item.icd10_code}
                 </div>
               )}

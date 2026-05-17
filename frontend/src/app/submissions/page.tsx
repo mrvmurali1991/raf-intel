@@ -52,7 +52,7 @@ const LazyBatchDetailPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 48, gap: 10, color: "#94A3B8" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 48, gap: 10, color: "#64748B" }}>
         <div style={{ width: 20, height: 20, border: "3px solid #E2E8F0", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
         <span style={{ fontSize: 14 }}>Loading detail…</span>
       </div>

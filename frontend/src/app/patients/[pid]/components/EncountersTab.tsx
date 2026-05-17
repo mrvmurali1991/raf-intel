@@ -70,7 +70,7 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
     return (
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 16px", borderBottom: `1px solid #e2e8f0` }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
           <button
             onClick={() => setYearFilter("all")}
             style={{
@@ -111,7 +111,7 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Year filter */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
         <button
           onClick={() => setYearFilter("all")}
           style={{

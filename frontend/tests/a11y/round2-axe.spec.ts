@@ -158,6 +158,28 @@ test.describe("WCAG 2.2 AA — round-2 a11y fixes", () => {
     ).toHaveLength(0);
   });
 
+  test("/audit — no contrast, heading-order, or label violations", async () => {
+    const page = await openPage("/audit");
+    const violations = await runAxe(page, ["color-contrast"]);
+    await page.close();
+
+    expect(
+      violations,
+      `Axe violations on /audit:${formatViolations(violations)}`,
+    ).toHaveLength(0);
+  });
+
+  test("/submissions — no contrast, heading-order, or label violations", async () => {
+    const page = await openPage("/submissions");
+    const violations = await runAxe(page, ["color-contrast"]);
+    await page.close();
+
+    expect(
+      violations,
+      `Axe violations on /submissions:${formatViolations(violations)}`,
+    ).toHaveLength(0);
+  });
+
   test("/coder-analytics — no contrast, heading-order, or label violations", async () => {
     const page = await openPage("/coder-analytics");
     const violations = await runAxe(page);
