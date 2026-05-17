@@ -73,6 +73,7 @@ tags_metadata = [
     {"name": "reports", "description": "Analytics and reporting"},
     {"name": "audit", "description": "Compliance and audit packages"},
     {"name": "radv", "description": "RADV (Risk Adjustment Data Validation) audit trail, MEAT compliance checks, and population-level readiness reports"},
+    {"name": "radv-audit-runs", "description": "RADV Audit Defense Workflow — sampling, evidence packaging, MAO-004 re-submission, exposure simulator, evidence export"},
     {"name": "bi_export", "description": "BI Tools Export — Tableau, PowerBI, Looker, Metabase, OData, CSV/JSON/Excel"},
     {"name": "health", "description": "Health checks and system status"},
     {"name": "icd10", "description": "ICD-10-CM code lookup and validation"},
