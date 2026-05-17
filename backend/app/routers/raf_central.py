@@ -1451,6 +1451,9 @@ def action_accept_suspect(
         suspect_label = _hcc_label(str(result.get("suspect_hcc") or ""))
         if suspect_icd:
             # --- FHIR write (preferred) ---
+            _meat_signed = bool(body.meat_signed) if hasattr(body, "meat_signed") else False
+            _user_role = current_user.get("role")
+            _user_id = current_user.get("id") or current_user.get("user_id")
             try:
                 fhir_condition_id = push_problem_list_condition(
                     patient_emr_pid=str(pid),
@@ -1461,6 +1464,9 @@ def action_accept_suspect(
                         "source": audit_source,
                     },
                     tenant_id=tenant_id,
+                    meat_signed=_meat_signed,
+                    user_role=_user_role,
+                    user_id=_user_id,
                 )
                 pushed = True
                 push_method = "fhir"
@@ -1482,6 +1488,9 @@ def action_accept_suspect(
                             "source": audit_source,
                         },
                         tenant_id=tenant_id,
+                        meat_signed=_meat_signed,
+                        user_role=_user_role,
+                        user_id=_user_id,
                     )
                     pushed = True
                     push_method = "fhir"
