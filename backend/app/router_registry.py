@@ -63,6 +63,7 @@ from app.routers import clinical_queries as clinical_queries_router
 from app.routers import cohorts_v2 as cohorts_v2_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
+from app.routers import edi_generation as edi_generation_router
 from app.routers import edps_feedback as edps_feedback_router
 from app.routers import feature_flags as feature_flags_router
 from app.routers import forecast as forecast_router
@@ -223,6 +224,8 @@ def register_routers(app: FastAPI) -> None:
     # Integrations
     _mount(app, fhir.router)
     _mount(app, smart_fhir_router.router)
+    # Public SMART 2.0 launch sequence (issuer-side) — mounted at /smart, no /api prefix.
+    _mount(app, smart_fhir_router.public_router)
     _mount(app, emr.router)
     _mount(app, adt.router)
     _mount(app, webhooks.router)
