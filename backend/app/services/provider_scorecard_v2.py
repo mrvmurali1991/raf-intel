@@ -139,7 +139,9 @@ def _aggregate_provider_metrics(
 
         avg_raf = 0.0
         recapture_rate_pct = 0.0
-        meat_compliance_pct = 0.0
+        meat_compliance_pct: float | None = 0.0
+        meat_coverage_pct: float | None = None
+        data_quality_flag: str | None = None
 
         if panel:
             placeholders = ", ".join(["%s"] * len(panel))

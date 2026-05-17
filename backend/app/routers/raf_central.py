@@ -508,6 +508,25 @@ def _build_suspects(pid: int, year: int, tenant_id: str) -> list[SuspectCard]:
 
     try:
         rows = get_suspects_for_patient(pid, year=year, tenant_id=tenant_id) or []
+
+        # Auto-enrich pre-existing suspect rows whose meat_completeness /
+        # trumped_by_hcc was never populated (rows created before A6 wiring
+        # landed). This is a one-shot lazy back-fill so the panel never
+        # ships a "Confirmed" badge with null MEAT.
+        needs_enrich = False
+        for _r in rows:
+            _ed = _r.get("evidence_detail")
+            if isinstance(_ed, dict):
+                if _ed.get("meat_completeness") is None and _ed.get("trumped_by_hcc") is None:
+                    needs_enrich = True
+                    break
+        if needs_enrich:
+            try:
+                from app.services.suspect_enrichment import enrich_suspects_for_patient
+                enrich_suspects_for_patient(pid, tenant_id, year=year)
+                rows = get_suspects_for_patient(pid, year=year, tenant_id=tenant_id) or []
+            except Exception as _enr_exc:
+                logger.warning("lazy suspect enrichment failed pid=%s: %s", pid, _enr_exc)
     except Exception as exc:
         logger.error("raf-central: suspects fetch failed pid=%s: %s", pid, exc)
         return []
@@ -863,6 +882,23 @@ class AcceptSuspectRequest(BaseModel):
         default=True,
         description="If true, insert the accepted diagnosis into OpenEMR `lists`",
     )
+    # Force-accept path: bypass the MEAT gate ONLY when the coder
+    # explicitly attests they understand the RADV exposure. The frontend
+    # collects MRN re-entry + a 20-char reason via AcceptConfirmDialog.
+    # Both must be present and valid or the server rejects with 403.
+    force_no_meat: bool = Field(
+        default=False,
+        description="True iff the coder accepted via the Force-Accept (RADV risk) path",
+    )
+    mrn_confirmation: str | None = Field(
+        default=None,
+        description="Patient MRN (or last 4 digits) typed by the coder to confirm intent",
+    )
+    override_reason: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Free-text RADV-risk reason (>= 20 non-whitespace chars)",
+    )
 
 
 class DismissSuspectRequest(BaseModel):
@@ -996,7 +1032,7 @@ def action_accept_suspect(
 
     Supports Idempotency-Key header (24h replay window).
     """
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = str(current_user.get("tenant_id") or "")
     _require_patient_access(pid, tenant_id, current_user=current_user)
 
     # Safety guard: if a clinical-documentation query is still pending on
@@ -1036,6 +1072,103 @@ def action_accept_suspect(
     _uid = current_user.get("id")
     reviewer_user_id: int | None = int(_uid) if _uid is not None else None
     reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
+
+    # Server-side MEAT gate — UI cannot be trusted. Fetch the suspect's
+    # current meat_status / meat_completeness from raf_suspect_conditions
+    # and reject the accept unless one of:
+    #   (a) MEAT is present (status != 'missing' AND meat_completeness > 0),
+    #   (b) the suspect has an attestation signed already, or
+    #   (c) the coder explicitly took the force-accept path with a valid
+    #       MRN re-entry + >=20 char reason.
+    suspect_meat_ok = False
+    suspect_mrn_last4 = None
+    suspect_mrn_full = None
+    try:
+        with raf_cursor() as _meat_cur:
+            _meat_cur.execute(
+                """
+                SELECT sc.evidence_detail, sc.attestation_signed_at,
+                       p.pubpid AS mrn
+                  FROM raf_suspect_conditions sc
+                  JOIN patients p ON p.id = sc.patient_id
+                 WHERE sc.id = %s
+                   AND sc.patient_id = %s
+                """,
+                (body.suspect_id, pid),
+            )
+            _suspect_row = _meat_cur.fetchone()
+        if _suspect_row:
+            import json as _json
+            _ed = _suspect_row.get("evidence_detail")
+            if isinstance(_ed, (bytes, bytearray)):
+                _ed = _ed.decode("utf-8", errors="ignore")
+            if isinstance(_ed, str):
+                try:
+                    _ed = _json.loads(_ed)
+                except Exception:
+                    _ed = {}
+            _meat_completeness = (_ed or {}).get("meat_completeness") if isinstance(_ed, dict) else None
+            _meat_status = (_ed or {}).get("meat_status") if isinstance(_ed, dict) else None
+            _attested = _suspect_row.get("attestation_signed_at") is not None
+            _mrn = str(_suspect_row.get("mrn") or "").strip()
+            suspect_mrn_full = _mrn
+            suspect_mrn_last4 = _mrn[-4:] if _mrn else None
+            suspect_meat_ok = bool(
+                _attested
+                or (_meat_completeness is not None and float(_meat_completeness or 0) > 0)
+                or (_meat_status and str(_meat_status).lower() not in {"missing", "none", "empty"})
+            )
+    except Exception as _meat_exc:
+        # Fail closed: if we can't determine MEAT status, block the accept
+        # unless force_no_meat path was used. This prevents a transient DB
+        # error from becoming a billing/RADV escape.
+        logger.warning("MEAT gate lookup failed for suspect %s: %s", body.suspect_id, _meat_exc)
+        suspect_meat_ok = False
+
+    if not suspect_meat_ok:
+        if not body.force_no_meat:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "MEAT evidence missing — use the Force Accept path "
+                    "(force_no_meat=true) with mrn_confirmation and "
+                    "override_reason (>=20 chars) to attest RADV risk."
+                ),
+            )
+        # Validate the force-accept attestation.
+        _reason = (body.override_reason or "").strip()
+        if len(_reason) < 20:
+            raise HTTPException(
+                status_code=422,
+                detail="override_reason must be at least 20 non-whitespace characters",
+            )
+        _mrn_in = (body.mrn_confirmation or "").strip()
+        if not _mrn_in or (
+            _mrn_in != suspect_mrn_full and _mrn_in != suspect_mrn_last4
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="mrn_confirmation does not match the patient's MRN (or last-4)",
+            )
+        # Emit the force-accept audit BEFORE the mutation so a downstream
+        # write failure still leaves the attestation visible in the log.
+        try:
+            from app.services.immutable_audit import emit_audit_event
+            emit_audit_event(
+                "SUSPECT_FORCE_ACCEPTED_NO_MEAT",
+                tenant_id=tenant_id,
+                actor_user_id=reviewer_user_id,
+                subject_type="suspect",
+                subject_id=str(body.suspect_id),
+                payload={
+                    "patient_id": pid,
+                    "override_reason": _reason,
+                    "mrn_confirmation_hash": __import__("hashlib").sha256(_mrn_in.encode()).hexdigest()[:16],
+                },
+            )
+        except Exception as _audit_exc:
+            logger.error("force-accept audit emit failed: %s", _audit_exc)
+
     result = accept_suspect(body.suspect_id, reviewed_by=reviewer, tenant_id=tenant_id,
                             reviewed_by_user_id=reviewer_user_id)
 

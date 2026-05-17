@@ -33,10 +33,14 @@ interface ProviderScorecardV2 {
   panel_size: number;
   avg_raf: number;
   recapture_rate_pct: number;
-  meat_compliance_pct: number;
+  // null when no HCCs have been MEAT-scored yet — render em-dash.
+  meat_compliance_pct: number | null;
+  meat_coverage_pct: number | null;
+  // Set when computed leakage > 1 (data-quality anomaly).
+  data_quality_flag: string | null;
   tenant_avg_raf: number;
   tenant_avg_recapture_rate: number;
-  tenant_avg_meat_compliance: number;
+  tenant_avg_meat_compliance: number | null;
   year: number;
 }
 
@@ -45,7 +49,7 @@ interface ProviderScorecardListResponse {
   providers: ProviderScorecardV2[];
   tenant_avg_raf: number;
   tenant_avg_recapture_rate: number;
-  tenant_avg_meat_compliance: number;
+  tenant_avg_meat_compliance: number | null;
 }
 
 type SortKey =
@@ -310,7 +314,7 @@ export default function ProviderScorecardsPage() {
           {[
             { label: "Tenant Avg RAF", value: data.tenant_avg_raf.toFixed(3) },
             { label: "Tenant Avg Recapture %", value: `${data.tenant_avg_recapture_rate.toFixed(1)}%` },
-            { label: "Tenant Avg MEAT %", value: `${data.tenant_avg_meat_compliance.toFixed(1)}%` },
+            { label: "Tenant Avg MEAT %", value: data.tenant_avg_meat_compliance === null ? "—" : `${data.tenant_avg_meat_compliance.toFixed(1)}%` },
           ].map((kpi) => (
             <div
               key={kpi.label}
@@ -372,7 +376,14 @@ export default function ProviderScorecardsPage() {
               {sortedRows.map((r, idx) => {
                 const rafDelta = r.avg_raf - r.tenant_avg_raf;
                 const recDelta = r.recapture_rate_pct - r.tenant_avg_recapture_rate;
-                const meatDelta = r.meat_compliance_pct - r.tenant_avg_meat_compliance;
+                const meatDelta =
+                  r.meat_compliance_pct !== null && r.tenant_avg_meat_compliance !== null
+                    ? r.meat_compliance_pct - r.tenant_avg_meat_compliance
+                    : null;
+                const recTooltip =
+                  r.data_quality_flag === "leakage_exceeds_prior_hcc_count"
+                    ? "Open gaps exceed prior-year HCC count — leakage > 100% (likely cohort expansion mid-year)"
+                    : undefined;
                 const stripe = idx % 2 === 0 ? tokens.white : tokens.slate50;
                 return (
                   <tr key={r.provider_id} style={{ background: stripe }}>
@@ -393,13 +404,30 @@ export default function ProviderScorecardsPage() {
                       <span style={{ fontWeight: 600 }}>{r.avg_raf.toFixed(3)}</span>
                       <DeltaBadge delta={rafDelta} decimals={3} epsilon={0.01} />
                     </td>
-                    <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}>
-                      <span style={{ fontWeight: 600 }}>{r.recapture_rate_pct.toFixed(1)}%</span>
-                      <DeltaBadge delta={recDelta} decimals={1} suffix="pp" epsilon={0.1} />
+                    <td
+                      style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}
+                      title={recTooltip}
+                    >
+                      {r.data_quality_flag === "leakage_exceeds_prior_hcc_count" ? (
+                        <span style={{ fontWeight: 600, color: tokens.slate400 }} aria-label="Metric not yet computed — data quality anomaly">—</span>
+                      ) : (
+                        <>
+                          <span style={{ fontWeight: 600 }}>{r.recapture_rate_pct.toFixed(1)}%</span>
+                          <DeltaBadge delta={recDelta} decimals={1} suffix="pp" epsilon={0.1} />
+                        </>
+                      )}
                     </td>
                     <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}>
-                      <span style={{ fontWeight: 600 }}>{r.meat_compliance_pct.toFixed(1)}%</span>
-                      <DeltaBadge delta={meatDelta} decimals={1} suffix="pp" epsilon={0.1} />
+                      {r.meat_compliance_pct === null ? (
+                        <span style={{ fontWeight: 600, color: tokens.slate400 }} title="No HCCs MEAT-scored yet for this provider's panel">—</span>
+                      ) : (
+                        <>
+                          <span style={{ fontWeight: 600 }}>{r.meat_compliance_pct.toFixed(1)}%</span>
+                          {meatDelta !== null && (
+                            <DeltaBadge delta={meatDelta} decimals={1} suffix="pp" epsilon={0.1} />
+                          )}
+                        </>
+                      )}
                     </td>
                   </tr>
                 );

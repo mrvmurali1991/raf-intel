@@ -1,0 +1,43 @@
+{
+  "cookies": [
+    {
+      "name": "raf_refresh_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwic2Vzc2lvbl9pZCI6ImZjZGU2YzBhLTlkMDktNDFjYi1iNTRkLTQ3YzVmYWQ3MGZlZSIsImlhdCI6MTc3ODkxMjI4NiwiZXhwIjoxNzc5NTE3MDg2LCJ0eXBlIjoicmVmcmVzaCJ9.fv1HBBiSZLIMW6JFWdnbwiLbSirnMSy0z5QVpTjTYP4",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1779517086.910581,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "raf_authenticated",
+      "value": "true",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1778941086.922149,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Strict"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3444",
+      "localStorage": [
+        {
+          "name": "raf-theme",
+          "value": "light"
+        },
+        {
+          "name": "raf_payment_year",
+          "value": "2026"
+        },
+        {
+          "name": "raf_onboarding_complete",
+          "value": "true"
+        }
+      ]
+    }
+  ]
+}

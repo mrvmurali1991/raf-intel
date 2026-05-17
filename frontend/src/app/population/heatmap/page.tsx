@@ -480,6 +480,7 @@ export default function PopulationHeatmapPage() {
                       }}
                     >
                       <div
+                        role="img"
                         aria-label={`ZIP ${row.zip_code}: ${row.patient_count} patients, avg RAF ${row.avg_raf.toFixed(2)}, ${tier} risk`}
                         style={{
                           width: `${Math.max(pct, 2)}%`,
@@ -496,7 +497,7 @@ export default function PopulationHeatmapPage() {
                           fontWeight: 600,
                         }}
                       >
-                        {row.patient_count}
+                        <span aria-hidden="true">{row.patient_count}</span>
                       </div>
                     </div>
 

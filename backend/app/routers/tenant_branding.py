@@ -207,6 +207,10 @@ def put_tenant_branding(
             for k in merged
             if before.get(k) != merged.get(k)
         }
+        if not diff:
+            # No-op PUT (idempotent retry) — skip the audit emit so the
+            # immutable log doesn't fill with noisy empty-diff entries.
+            return {"tenant_id": tenant_id, **merged}
         emit_audit_event(
             "TENANT_BRANDING_UPDATED",
             tenant_id=tenant_id,

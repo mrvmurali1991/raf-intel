@@ -243,17 +243,28 @@ export default function CohortBuilderPage() {
   }, []);
 
   // ---- Save flow -----------------------------------------------------------
-  const handleSave = useCallback(async () => {
-    const name = window.prompt("Name this cohort:");
-    if (!name || !name.trim()) return;
+  // Accessible, brand-styled save: a controlled inline name input replaces
+  // window.prompt() (which is inaccessible to screen readers, unstyleable,
+  // and blocked in some embedded contexts).
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const handleSave = useCallback(() => {
+    setSavedMessage(null);
+    setSaveOpen(true);
+  }, []);
+  const handleConfirmSave = useCallback(async () => {
+    const name = saveName.trim();
+    if (!name) return;
     const valid = definitionPayload.clauses.filter(
       (c) => c.value !== "" && c.value !== null && c.value !== undefined,
     );
     setSaving(true);
     setSavedMessage(null);
     try {
-      const res = await saveCohort(name.trim(), { operator: definitionPayload.operator, clauses: valid });
-      setSavedMessage(`Saved cohort #${res.id}: ${name.trim()}`);
+      const res = await saveCohort(name, { operator: definitionPayload.operator, clauses: valid });
+      setSavedMessage(`Saved cohort #${res.id}: ${name}`);
+      setSaveOpen(false);
+      setSaveName("");
     } catch (err) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
@@ -263,7 +274,7 @@ export default function CohortBuilderPage() {
     } finally {
       setSaving(false);
     }
-  }, [definitionPayload]);
+  }, [definitionPayload, saveName]);
 
   // ---- Render --------------------------------------------------------------
   return (
@@ -574,6 +585,89 @@ export default function CohortBuilderPage() {
               {saving ? "Saving..." : "Save cohort"}
             </button>
           </div>
+
+          {/* Inline save dialog — replaces window.prompt() for a11y. */}
+          {saveOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cohort-save-title"
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                border: "1px solid #cbd5e1",
+                borderRadius: 6,
+                background: "#f8fafc",
+              }}
+            >
+              <label
+                id="cohort-save-title"
+                htmlFor="cohort-name-input"
+                style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#0f172a" }}
+              >
+                Name this cohort
+              </label>
+              <input
+                id="cohort-name-input"
+                type="text"
+                autoFocus
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && saveName.trim()) {
+                    e.preventDefault();
+                    void handleConfirmSave();
+                  } else if (e.key === "Escape") {
+                    setSaveOpen(false);
+                    setSaveName("");
+                  }
+                }}
+                maxLength={120}
+                placeholder="e.g. 65+ diabetics not seen in 6 months"
+                style={{
+                  width: "100%",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: 4,
+                  border: "1px solid #cbd5e1",
+                  fontSize: 13,
+                }}
+              />
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => { setSaveOpen(false); setSaveName(""); }}
+                  style={{
+                    padding: "0.4rem 0.8rem",
+                    fontSize: 12,
+                    borderRadius: 4,
+                    border: "1px solid #cbd5e1",
+                    background: "#fff",
+                    color: "#475569",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSave}
+                  disabled={!saveName.trim() || saving}
+                  style={{
+                    padding: "0.4rem 0.8rem",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: "none",
+                    background: !saveName.trim() || saving ? "#94a3b8" : "#2563eb",
+                    color: "#fff",
+                    cursor: !saveName.trim() || saving ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* -------------- Right: live preview -------------- */}

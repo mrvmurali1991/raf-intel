@@ -681,12 +681,8 @@ export function RAFCentralPanel({
               {...buildReconciliationProps(
                 data.financial_impact,
                 data.measurement_year,
-                // Backend ships current_raf; submitted_raf + accepted_raf
-                // wait for an EDPS feedback ingest. Until then the card
-                // gracefully shows "matches submission" + "waiting for
-                // EDPS feedback" callouts.
-                null,
-                null,
+                data.financial_impact.submitted_raf ?? null,
+                data.financial_impact.accepted_raf ?? null,
               )}
             />
             <div className="mt-4">
