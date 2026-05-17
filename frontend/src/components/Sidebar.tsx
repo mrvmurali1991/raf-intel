@@ -37,6 +37,7 @@ import {
   Activity,
   Upload,
   Stethoscope,
+  MapPin,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -89,6 +90,7 @@ const navGroups: NavGroup[] = [
       { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
       { href: "/batch", label: "Batch Analysis", icon: Layers },
       { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
+      { href: "/population/heatmap", label: "Population", icon: MapPin },
       { href: "/documents", label: "Documents", icon: FileImage },
       { href: "/claims", label: "Claims", icon: FileText },
       { href: "/demo", label: "Pipeline Demo", icon: Workflow },

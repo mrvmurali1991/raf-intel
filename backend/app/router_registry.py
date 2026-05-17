@@ -77,6 +77,7 @@ from app.routers import top_hcc_opportunities as top_hcc_opportunities_router
 from app.routers import consent as consent_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import data_quality as data_quality_router
+from app.routers import population_heatmap as population_heatmap_router
 from app.routers import health as health_router
 from app.routers import icd10 as icd10_router
 from app.routers import insights as insights_router
@@ -271,6 +272,9 @@ def register_routers(app: FastAPI) -> None:
 
     # Population health cohort analysis
     _mount(app, cohorts.router)
+
+    # Population geographic heat-map (per-ZIP risk + gap clusters)
+    _mount(app, population_heatmap_router.router)
 
     # Operations and compliance
     _mount(app, jobs.router)
