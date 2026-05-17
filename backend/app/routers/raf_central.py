@@ -41,6 +41,7 @@ from app.db import openemr_cursor, raf_cursor
 from app.rate_limit import limiter
 from app.services.cache_strategy import get_active_connection_id
 from app.services.celery_tasks import task_refresh_meat_for_patient
+from app.services.edps_ingest import get_accepted_raf
 from app.services.openemr_connector import (
     get_patient,
     push_medical_problem,
@@ -187,6 +188,10 @@ class AuditReadiness(BaseModel):
 class FinancialImpact(BaseModel):
     current_raf: float
     projected_raf: float
+    # CMS-accepted RAF from the most recent MAO-004 EDPS response, when
+    # available. ``None`` means "still waiting for EDPS feedback" — the
+    # RAF Reconciliation card renders a distinct placeholder in that case.
+    accepted_raf: float | None = None
     current_annual: float
     projected_annual: float
     pmpm_delta: float
@@ -691,13 +696,24 @@ def _build_audit(raf_bar: LiveRAFBar, meat_gaps: list[MEATGap]) -> AuditReadines
     )
 
 
-def _build_financial(raf_bar: LiveRAFBar, suspects: list[SuspectCard], recapture: list[RecaptureCard]) -> FinancialImpact:
+def _build_financial(
+    raf_bar: LiveRAFBar,
+    suspects: list[SuspectCard],
+    recapture: list[RecaptureCard],
+    accepted_raf: float | None = None,
+) -> FinancialImpact:
     """Projected RAF = current + sum(confidence × expected_coef) for open
     suspects + sum of recapture RAF impact. We don't have per-suspect
     coefficients on this endpoint, so we approximate using a conservative
     0.150 per-suspect lift weighted by confidence — matches the V28 median
     coefficient for demographic-adjacent disease categories. Recapture
     revenue is already a dollar figure.
+
+    ``accepted_raf`` is the CMS-acknowledged RAF from the latest MAO-004
+    EDPS response (see :mod:`app.services.edps_ingest`). It flows through
+    as-is so the RAF Reconciliation card can render a real value instead
+    of the "waiting for EDPS feedback" placeholder. ``None`` means CMS
+    has not yet replied for this pid + measurement_year.
     """
     rev_per_raf = float(settings.cms_revenue_per_raf_point or 11015.04)
 
@@ -714,6 +730,7 @@ def _build_financial(raf_bar: LiveRAFBar, suspects: list[SuspectCard], recapture
     return FinancialImpact(
         current_raf=raf_bar.current,
         projected_raf=projected,
+        accepted_raf=accepted_raf,
         current_annual=current_annual,
         projected_annual=projected_annual,
         pmpm_delta=round((projected_annual - current_annual) / 12.0, 2),
@@ -789,7 +806,19 @@ def get_raf_central(
         recapture = _panel_futures["recapture"].result()
 
     audit = _build_audit(raf_bar, meat_gaps)
-    financial = _build_financial(raf_bar, suspects, recapture)
+    # Pull the CMS-accepted RAF (if any) from raf_edps_feedback so the
+    # RAF Reconciliation card can render a real value instead of the
+    # "waiting for EDPS feedback" placeholder. Failures degrade to None.
+    try:
+        accepted_raf = get_accepted_raf(
+            patient_id=pid,
+            measurement_year=measurement_year,
+            tenant_id=str(tenant_id or ""),
+        )
+    except Exception as exc:  # noqa: BLE001 — never block panel render
+        logger.warning("raf-central: EDPS lookup failed pid=%s: %s", pid, exc)
+        accepted_raf = None
+    financial = _build_financial(raf_bar, suspects, recapture, accepted_raf=accepted_raf)
 
     payload = RAFCentralPayload(
         patient_id=pid,

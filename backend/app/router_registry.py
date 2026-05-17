@@ -60,6 +60,7 @@ from app.routers import auth as auth_router
 from app.routers import clinical_queries as clinical_queries_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
+from app.routers import edps_feedback as edps_feedback_router
 from app.routers import feature_flags as feature_flags_router
 from app.routers import forecast as forecast_router
 from app.routers import hcc_gap_drilldown as hcc_gap_drilldown_router
@@ -183,6 +184,9 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, forecast_router.router)
     _mount(app, hcc_removal_router.router)
     _mount(app, disputes_router.router)
+    # CMS MAO-004 / EDPS response ingest — feeds accepted_raf into the
+    # RAF Central financial_impact block consumed by RAFReconciliationCard.
+    _mount(app, edps_feedback_router.router)
     _mount(app, clinical_queries_router.router)
     _mount(app, analysis.router)
     _mount(app, suspects.router)
