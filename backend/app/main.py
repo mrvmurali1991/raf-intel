@@ -511,3 +511,20 @@ app.add_middleware(_MetricsAuthMiddleware)
 
 # Register all routers
 register_routers(app)
+
+# ---------------------------------------------------------------------------
+# EDI generation router (Gap #7).  Registered here so it is independent of
+# router_registry.py — that file is under heavy churn from other branches.
+# ---------------------------------------------------------------------------
+try:
+    import copy as _copy_for_edi
+
+    from app.routers import edi_generation as _edi_gen
+
+    app.include_router(_edi_gen.router, include_in_schema=False)
+    _edi_v1 = _copy_for_edi.copy(_edi_gen.router)
+    if _edi_v1.prefix.startswith("/api/"):
+        _edi_v1.prefix = "/api/v1/" + _edi_v1.prefix[len("/api/"):]
+    app.include_router(_edi_v1)
+except Exception as _edi_exc:  # pragma: no cover
+    logger.warning("EDI router registration failed: %s", _edi_exc)
