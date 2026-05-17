@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Literal
 
 from app.db import raf_cursor
+from app.services.raf.revenue_constants import revenue_per_raf_point
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,8 @@ logger = logging.getLogger(__name__)
 # New runs should supply members_enrolled and use compute_extrapolated_exposure.
 # ---------------------------------------------------------------------------
 _LEGACY_EXTRAPOLATION_MULTIPLIER = 55.0
-_LEGACY_AVG_HCC_PAYMENT_DOLLARS = 11_000.0
+# NOTE: _LEGACY_AVG_HCC_PAYMENT_DOLLARS has been removed.
+# Use revenue_per_raf_point(year) from revenue_constants.py instead.
 
 # CMS 2023 Final Rule FFS Adjuster default
 CMS_FFS_ADJUSTER_DEFAULT = 0.97
@@ -69,6 +71,7 @@ def compute_extrapolated_exposure(
     avg_per_member_per_month_dollars: float = CMS_PMPM_BENCHMARK,
     audit_period_months: int = 12,
     ffs_adjuster: float = CMS_FFS_ADJUSTER_DEFAULT,
+    confidence_level: float = 0.99,  # one-sided 99% per CMS Feb-2023
 ) -> dict[str, Any]:
     """Compute extrapolated dollar exposure using FFS Adjuster methodology.
 
@@ -76,14 +79,20 @@ def compute_extrapolated_exposure(
     methodology — not an official CMS extrapolation.  Results should be
     reviewed by a certified coder before use in audit defense.
 
-    Formula
-    -------
+    Formula (point estimate)
+    ------------------------
     extrapolation_factor       = members_enrolled / sample_size
     base_exposure_per_failure  = avg_per_member_per_month * audit_period_months
     projected_dollar_exposure  = failed_records
                                  * extrapolation_factor
                                  * base_exposure_per_failure
                                  * ffs_adjuster
+
+    Lower Confidence Bound (LCB)
+    ----------------------------
+    One-sided 99% Wilson score LCB on the binomial error rate, projected to
+    contract enrollment.  This is what a RADV defense attorney needs per the
+    CMS Feb-2023 Final Rule (90 FR 1944).
 
     Parameters
     ----------
@@ -100,6 +109,8 @@ def compute_extrapolated_exposure(
         Length of the audit period in months (default: 12).
     ffs_adjuster:
         CMS FFS Adjuster value (default: 0.97 per Feb 2023 Final Rule).
+    confidence_level:
+        One-sided confidence level for the Wilson score LCB (default: 0.99).
     """
     if sample_size <= 0:
         raise ValueError("sample_size must be > 0")
@@ -108,12 +119,30 @@ def compute_extrapolated_exposure(
     if not (0.0 < ffs_adjuster <= 1.0):
         raise ValueError("ffs_adjuster must be in (0, 1]")
 
+    # --- point estimate ---
+    error_rate = failed_records / sample_size
     extrapolation_factor = members_enrolled / sample_size
     base_per_failure = avg_per_member_per_month_dollars * audit_period_months
     projected = failed_records * extrapolation_factor * base_per_failure * ffs_adjuster
 
+    # --- one-sided 99% Wilson score LCB on the binomial error rate ---
+    # z = 2.326 for one-sided 99% (Φ^{-1}(0.99))
+    z = 2.326
+    p = error_rate
+    n = sample_size
+    wilson_lower = (
+        (p + z**2 / (2 * n) - z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)))
+        / (1 + z**2 / n)
+    )
+    wilson_lower = max(0.0, wilson_lower)
+
+    lcb_failures = wilson_lower * members_enrolled
+    lcb_exposure = lcb_failures * base_per_failure * ffs_adjuster
+
     return {
         "extrapolated_exposure_dollars": round(projected, 2),
+        "lower_confidence_bound_dollars": round(lcb_exposure, 2),
+        "confidence_level": confidence_level,
         "extrapolation_factor": round(extrapolation_factor, 4),
         "ffs_adjuster": ffs_adjuster,
         "failed_records": failed_records,
@@ -121,10 +150,13 @@ def compute_extrapolated_exposure(
         "members_enrolled": members_enrolled,
         "avg_per_member_per_month_dollars": avg_per_member_per_month_dollars,
         "audit_period_months": audit_period_months,
-        "methodology": "ffs_adjuster_v1",
+        "methodology": "ffs_adjuster_with_wilson_lcb_v1",
         "methodology_note": (
-            "Internal heuristic informed by CMS FFS Adjuster methodology "
-            "(Feb 2023 Final Rule) — not an official CMS extrapolation."
+            "Internal heuristic informed by CMS Feb-2023 Final Rule (90 FR 1944) "
+            "FFS Adjuster methodology. The lower_confidence_bound_dollars represents "
+            "the one-sided 99% Wilson score LCB on the binomial error rate "
+            "projected to contract enrollment. This is a planning estimate, "
+            "not an official CMS extrapolation."
         ),
     }
 
@@ -346,7 +378,7 @@ def create_audit_run(
                 created_by_user_id, notes,
                 members_enrolled,
                 ffs_adjuster if ffs_adjuster is not None else CMS_FFS_ADJUSTER_DEFAULT,
-                "ffs_adjuster_v1" if members_enrolled else "legacy_v1",
+                "ffs_adjuster_with_wilson_lcb_v1" if members_enrolled else "legacy_v1",
             ),
         )
         run_id = cur.lastrowid
@@ -537,7 +569,7 @@ def update_record(
                 DeprecationWarning,
                 stacklevel=2,
             )
-            exposure_dollars = _LEGACY_AVG_HCC_PAYMENT_DOLLARS * _LEGACY_EXTRAPOLATION_MULTIPLIER
+            exposure_dollars = revenue_per_raf_point() * _LEGACY_EXTRAPOLATION_MULTIPLIER
 
     with raf_cursor() as cur:
         sets: list[str] = ["reviewer_user_id = %s"]
@@ -678,7 +710,7 @@ def simulate_exposure(
             ffs_adjuster=ffs_adj,
         )
         simulated_exposure = exp_result["extrapolated_exposure_dollars"]
-        methodology = "ffs_adjuster_v1"
+        methodology = exp_result["methodology"]
         methodology_note = exp_result["methodology_note"]
     else:
         logger.warning(
@@ -688,7 +720,7 @@ def simulate_exposure(
         )
         simulated_exposure = (
             simulated_failures
-            * _LEGACY_AVG_HCC_PAYMENT_DOLLARS
+            * revenue_per_raf_point()
             * _LEGACY_EXTRAPOLATION_MULTIPLIER
         )
         methodology = "legacy_v1"
