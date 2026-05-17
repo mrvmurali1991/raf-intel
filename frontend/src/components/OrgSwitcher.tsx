@@ -19,7 +19,7 @@
  * ``user.accessible_tenants`` (populated by /api/auth/me).
  */
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useId } from "react";
 import { Building2, ChevronDown, Check } from "lucide-react";
 import { useAuth, type AccessibleTenant } from "@/contexts/auth-context";
 import { ACTIVE_TENANT_STORAGE_KEY } from "@/lib/api";
@@ -45,7 +45,10 @@ function persistActiveTenant(id: string) {
 export function OrgSwitcher() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const listboxRef = useRef<HTMLUListElement>(null);
+  const listboxId = useId();
 
   // The list of tenants we render. Falls back to an empty array so the
   // hook ordering stays stable while the user is loading.
@@ -81,7 +84,12 @@ export function OrgSwitcher() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  // Close on Escape
+  // Reset activeIndex when closed
+  useEffect(() => {
+    if (!open) setActiveIndex(-1);
+  }, [open]);
+
+  // Close on Escape (global)
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
@@ -108,6 +116,50 @@ export function OrgSwitcher() {
     }
   }
 
+  // Keyboard nav on the listbox — defined after handlePick so the closure resolves.
+  function handleListboxKey(e: React.KeyboardEvent<HTMLUListElement>) {
+    const count = tenants.length;
+    if (count === 0) return;
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setActiveIndex((i) => (i + 1) % count);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setActiveIndex((i) => (i <= 0 ? count - 1 : i - 1));
+        break;
+      case "Home":
+        e.preventDefault();
+        setActiveIndex(0);
+        break;
+      case "End":
+        e.preventDefault();
+        setActiveIndex(count - 1);
+        break;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < count) {
+          handlePick(tenants[activeIndex].id);
+        }
+        break;
+      case "Escape":
+        setOpen(false);
+        break;
+      default: {
+        // Type-ahead: single letter jumps to first matching option
+        if (e.key.length === 1) {
+          const letter = e.key.toLowerCase();
+          const idx = tenants.findIndex((t) =>
+            t.display_name.toLowerCase().startsWith(letter),
+          );
+          if (idx !== -1) setActiveIndex(idx);
+        }
+      }
+    }
+  }
+
   return (
     <div
       ref={wrapperRef}
@@ -116,7 +168,16 @@ export function OrgSwitcher() {
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v;
+            if (next) {
+              // Focus listbox after it mounts
+              setTimeout(() => listboxRef.current?.focus(), 0);
+            }
+            return next;
+          });
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Active organization: ${activeTenant.display_name}. Click to switch organization.`}
@@ -173,8 +234,13 @@ export function OrgSwitcher() {
 
       {open && (
         <ul
+          ref={listboxRef}
           role="listbox"
+          id={listboxId}
           aria-label="Available organizations"
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+          tabIndex={0}
+          onKeyDown={handleListboxKey}
           style={{
             position: "absolute",
             top: "calc(100% + 6px)",
@@ -189,6 +255,7 @@ export function OrgSwitcher() {
             background: "var(--card, #ffffff)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
             overflow: "hidden",
+            outline: "none",
           }}
         >
           <li
@@ -204,15 +271,18 @@ export function OrgSwitcher() {
           >
             Switch Organization
           </li>
-          {tenants.map((t) => {
+          {tenants.map((t, idx) => {
             const active = t.id === activeId;
+            const isFocused = activeIndex === idx;
             return (
               <li key={t.id} role="presentation">
                 <button
                   type="button"
+                  id={`${listboxId}-option-${idx}`}
                   role="option"
                   aria-selected={active}
                   onClick={() => handlePick(t.id)}
+                  onMouseEnter={() => setActiveIndex(idx)}
                   data-testid={`org-switcher-option-${t.id}`}
                   style={{
                     width: "100%",
@@ -221,7 +291,9 @@ export function OrgSwitcher() {
                     gap: 8,
                     padding: "8px 12px",
                     border: "none",
-                    background: active
+                    background: isFocused
+                      ? "var(--accent, rgba(148,163,184,0.18))"
+                      : active
                       ? "rgba(15,118,110,0.08)"
                       : "transparent",
                     cursor: active ? "default" : "pointer",
@@ -230,16 +302,8 @@ export function OrgSwitcher() {
                     fontWeight: active ? 600 : 400,
                     textAlign: "left",
                     transition: "background 120ms",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active)
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "var(--accent, rgba(148,163,184,0.1))";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active)
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "transparent";
+                    outline: isFocused ? "2px solid var(--ring, #2563eb)" : "none",
+                    outlineOffset: -2,
                   }}
                 >
                   <Building2

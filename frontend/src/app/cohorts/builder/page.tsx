@@ -208,7 +208,7 @@ export default function CohortBuilderPage() {
 
   // ---- Drag-and-drop handlers ---------------------------------------------
   const onPaletteDragStart = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, field: FieldName) => {
+    (e: React.DragEvent<HTMLElement>, field: FieldName) => {
       e.dataTransfer.setData("application/x-cohort-field", field);
       e.dataTransfer.effectAllowed = "copy";
     },
@@ -297,16 +297,19 @@ export default function CohortBuilderPage() {
             Filter fields
           </h3>
           <p style={{ margin: "0 0 0.75rem", fontSize: 12, color: "#64748b" }}>
-            Drag a chip onto the canvas (or click +) to add a clause.
+            Drag a chip onto the canvas or click <strong>Add filter</strong> to add a clause.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {FIELDS.map((spec) => {
               const Icon = spec.icon;
               return (
-                <div
+                <button
                   key={spec.field}
+                  type="button"
                   draggable
                   onDragStart={(e) => onPaletteDragStart(e, spec.field)}
+                  onClick={() => addClauseByClick(spec.field)}
+                  aria-label={`Add ${spec.label} filter clause`}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -317,28 +320,29 @@ export default function CohortBuilderPage() {
                     padding: "0.5rem 0.75rem",
                     cursor: "grab",
                     fontSize: 14,
+                    textAlign: "left",
+                    width: "100%",
                   }}
                   data-testid={`palette-chip-${spec.field}`}
                 >
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <Icon size={16} />
+                    <Icon size={16} aria-hidden="true" />
                     {spec.label}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => addClauseByClick(spec.field)}
-                    aria-label={`Add ${spec.label} clause`}
+                  <span
+                    aria-hidden="true"
                     style={{
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 4,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 11,
                       color: "#475569",
                     }}
                   >
-                    <Plus size={14} />
-                  </button>
-                </div>
+                    <Plus size={13} />
+                    Add filter
+                  </span>
+                </button>
               );
             })}
           </div>

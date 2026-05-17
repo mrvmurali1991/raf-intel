@@ -624,10 +624,11 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
             </p>
             <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${tokens.slate200}` }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <caption className="sr-only">CSV preview — first 5 rows</caption>
                 <thead>
                   <tr style={{ backgroundColor: tokens.slate50 }}>
                     {headers.map((h) => (
-                      <th key={h} style={{
+                      <th key={h} scope="col" style={{
                         padding: "8px 12px", textAlign: "left",
                         fontWeight: 600, color: tokens.slate500,
                         borderBottom: `1px solid ${tokens.slate200}`,
@@ -2144,10 +2145,18 @@ export default function PatientsPage() {
             de-select-all action, and the available batch actions. We keep
             the action set deliberately narrow until the matching backend
             endpoints exist; the count + clear is meaningful on its own. */}
+        {/* Always-mounted aria-live region so screen readers hear selection changes even when chip bar is hidden */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {selectedPids.size > 0 ? `${selectedPids.size} patient${selectedPids.size === 1 ? "" : "s"} selected` : ""}
+        </div>
         {selectedPids.size > 0 && (
           <div
             role="region"
-            aria-label="Bulk action bar"
+            aria-label="Bulk actions"
             style={{
               display: "flex",
               alignItems: "center",

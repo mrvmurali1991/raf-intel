@@ -274,9 +274,9 @@ export default function QAReviewPage() {
 }
 
 function emptyHintFor(k: "pending" | "escalated" | "closed"): string {
-  if (k === "pending") return "No reviews waiting on a secondary rater.";
-  if (k === "escalated") return "No disagreements — nice work.";
-  return "Nothing closed today yet.";
+  if (k === "pending") return "No cases in Pending — all caught up.";
+  if (k === "escalated") return "No cases in Escalated — no disagreements.";
+  return "No cases in Closed (today) — nothing resolved yet today.";
 }
 
 // ---------------------------------------------------------------------------
@@ -299,6 +299,7 @@ function Column(props: {
   const { Icon } = props;
   return (
     <section
+      role="region"
       aria-label={props.label}
       style={{
         background: T.slate50,
@@ -419,7 +420,15 @@ function Card(props: {
       </div>
 
       <div style={{ marginTop: 6, fontSize: 12, color: T.slate800, fontWeight: 600 }}>
-        {target}
+        {r.patient_id != null ? (
+          <a
+            href={`/patients/${r.patient_id}`}
+            style={{ color: T.blue600, textDecoration: "none" }}
+            aria-label={`View patient ${r.patient_name ?? r.patient_id} — ${target}`}
+          >
+            {target}
+          </a>
+        ) : target}
       </div>
       {r.patient_name && (
         <div style={{ marginTop: 2, fontSize: 11, color: T.slate500 }}>{r.patient_name}</div>
@@ -442,8 +451,9 @@ function Card(props: {
           onAccept={() => props.onSecondary("accept")}
           onReject={() => props.onSecondary("reject")}
           onUnclear={() => props.onSecondary("unclear")}
-          acceptLabel="Confirm"
-          rejectLabel="Dispute"
+          acceptLabel="Confirm accept"
+          rejectLabel="Confirm reject"
+          unclearLabel="Confirm escalate"
         />
       )}
       {props.actionsKind === "escalated" && (
@@ -537,6 +547,7 @@ function ActionRow(props: {
   onUnclear: () => void;
   acceptLabel: string;
   rejectLabel: string;
+  unclearLabel?: string;
 }) {
   return (
     <div
@@ -566,7 +577,7 @@ function ActionRow(props: {
         bg={T.amber50}
         fg={T.amber600}
         icon={<HelpCircle size={12} />}
-        label="Unclear"
+        label={props.unclearLabel ?? "Unclear"}
       />
     </div>
   );

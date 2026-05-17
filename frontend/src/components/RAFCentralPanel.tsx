@@ -144,7 +144,7 @@ function SubmissionCountdownBanner({ measurementYear }: { measurementYear: numbe
     : "bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950/40 dark:border-sky-900 dark:text-sky-200";
   return (
     <div
-      role="status"
+      role={days <= 7 ? "alert" : "status"}
       aria-label="CMS submission countdown"
       className={`flex items-center justify-between gap-3 border-b px-4 py-1.5 text-[11px] font-medium ${tone}`}
     >

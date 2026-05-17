@@ -15,7 +15,7 @@
  * The page handles loading (skeleton), empty (no ZIPs), and error states.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MapPin, AlertTriangle, Users, Activity } from "lucide-react";
 
@@ -101,6 +101,8 @@ function HeatmapSkeleton() {
 
 export default function PopulationHeatmapPage() {
   const [year, setYear] = useState(new Date().getFullYear());
+  const [viewAsTable, setViewAsTable] = useState(false);
+  const tableToggleId = useId();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["population-heatmap", year],
@@ -323,9 +325,77 @@ export default function PopulationHeatmapPage() {
                   (green low → red very high).
                 </p>
               </div>
-              <RafLegend />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <RafLegend />
+                <button
+                  id={tableToggleId}
+                  type="button"
+                  aria-pressed={viewAsTable}
+                  onClick={() => setViewAsTable((v) => !v)}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 8,
+                    border: `1px solid ${tokens.slate200}`,
+                    background: viewAsTable ? tokens.primary : tokens.white,
+                    color: viewAsTable ? tokens.white : tokens.slate700,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {viewAsTable ? "View as chart" : "View as table"}
+                </button>
+              </div>
             </div>
 
+            {/* ── Table view ────────────────────────────────────────── */}
+            {viewAsTable ? (
+              <div style={{ padding: "16px 22px", overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <caption className="sr-only">Top ZIP codes by patient count — {year}</caption>
+                  <thead>
+                    <tr style={{
+                      fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+                      letterSpacing: "0.06em", color: tokens.slate500,
+                      borderBottom: `1px solid ${tokens.slate200}`,
+                    }}>
+                      <th scope="col" style={{ padding: "8px 12px 8px 0", textAlign: "left" }}>ZIP</th>
+                      <th scope="col" style={{ padding: "8px 12px", textAlign: "left" }}>Risk tier</th>
+                      <th scope="col" style={{ padding: "8px 12px", textAlign: "right" }}>Patients</th>
+                      <th scope="col" style={{ padding: "8px 12px", textAlign: "right" }}>Avg RAF</th>
+                      <th scope="col" style={{ padding: "8px 12px", textAlign: "right" }}>Open gaps</th>
+                      <th scope="col" style={{ padding: "8px 12px", textAlign: "right" }}>High risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {top20.map((row) => {
+                      const color = rafColor(row.avg_raf);
+                      const tier = rafLabel(row.avg_raf);
+                      return (
+                        <tr key={row.zip_code} style={{ borderBottom: `1px solid ${tokens.slate100}` }}>
+                          <td style={{ padding: "8px 12px 8px 0", fontFamily: "monospace", fontWeight: 700, color: tokens.slate900 }}>{row.zip_code}</td>
+                          <td style={{ padding: "8px 12px" }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 6,
+                              fontSize: 12, fontWeight: 600, color,
+                            }}>
+                              <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} aria-hidden="true" />
+                              {tier}
+                            </span>
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: tokens.slate900 }}>{row.patient_count.toLocaleString()}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color }}>{row.avg_raf.toFixed(2)}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: row.total_open_gaps > 0 ? tokens.warningText : tokens.slate500, fontWeight: row.total_open_gaps > 0 ? 600 : 400 }}>{row.total_open_gaps}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: row.high_risk_count > 0 ? tokens.riskHigh : tokens.slate500, fontWeight: row.high_risk_count > 0 ? 600 : 400 }}>{row.high_risk_count}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+            /* ── Bar chart view ───────────────────────────────────── */
             <div
               role="table"
               aria-label="Top ZIP codes by patient count"
@@ -335,8 +405,7 @@ export default function PopulationHeatmapPage() {
                 role="row"
                 style={{
                   display: "grid",
-                  gridTemplateColumns:
-                    "80px 1fr 70px 90px 90px",
+                  gridTemplateColumns: "80px 120px 1fr 70px 90px 90px",
                   gap: 12,
                   alignItems: "center",
                   paddingBottom: 8,
@@ -350,6 +419,7 @@ export default function PopulationHeatmapPage() {
                 }}
               >
                 <div role="columnheader">ZIP</div>
+                <div role="columnheader">Risk tier</div>
                 <div role="columnheader">Patient distribution</div>
                 <div role="columnheader" style={{ textAlign: "right" }}>
                   Avg RAF
@@ -365,14 +435,14 @@ export default function PopulationHeatmapPage() {
               {top20.map((row) => {
                 const pct = (row.patient_count / maxPatients) * 100;
                 const color = rafColor(row.avg_raf);
+                const tier = rafLabel(row.avg_raf);
                 return (
                   <div
                     role="row"
                     key={row.zip_code}
                     style={{
                       display: "grid",
-                      gridTemplateColumns:
-                        "80px 1fr 70px 90px 90px",
+                      gridTemplateColumns: "80px 120px 1fr 70px 90px 90px",
                       gap: 12,
                       alignItems: "center",
                       padding: "8px 0",
@@ -393,6 +463,14 @@ export default function PopulationHeatmapPage() {
 
                     <div
                       role="cell"
+                      style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color }}
+                    >
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} aria-hidden="true" />
+                      {tier}
+                    </div>
+
+                    <div
+                      role="cell"
                       style={{
                         position: "relative",
                         height: 26,
@@ -400,11 +478,9 @@ export default function PopulationHeatmapPage() {
                         borderRadius: 6,
                         overflow: "hidden",
                       }}
-                      title={`${row.patient_count} patients • avg RAF ${row.avg_raf.toFixed(
-                        2,
-                      )} (${rafLabel(row.avg_raf)})`}
                     >
                       <div
+                        aria-label={`ZIP ${row.zip_code}: ${row.patient_count} patients, avg RAF ${row.avg_raf.toFixed(2)}, ${tier} risk`}
                         style={{
                           width: `${Math.max(pct, 2)}%`,
                           height: "100%",
@@ -470,6 +546,7 @@ export default function PopulationHeatmapPage() {
                 );
               })}
             </div>
+            )}
           </div>
         </>
       )}
