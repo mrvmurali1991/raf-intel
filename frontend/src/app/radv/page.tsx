@@ -11,7 +11,7 @@
  * Backend contract: see backend/app/routers/radv_audit_runs.py.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import {
   ShieldCheck,
@@ -123,6 +123,7 @@ export default function RadvPage() {
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const newRunTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   // Hydrate `run` query param on mount and when navigating.
   useEffect(() => {
@@ -187,6 +188,7 @@ export default function RadvPage() {
           </div>
           {!selectedRunId && (
             <button
+              ref={newRunTriggerRef}
               onClick={() => setCreating(true)}
               data-testid="radv-new-run"
               style={{
@@ -208,6 +210,7 @@ export default function RadvPage() {
 
         {creating && (
           <CreateRunDialog
+            triggerRef={newRunTriggerRef}
             onClose={() => setCreating(false)}
             onCreated={(id) => {
               setCreating(false);
@@ -310,13 +313,68 @@ function StatusBadge({ status }: { status: RunStatus }) {
 // Create dialog
 // ---------------------------------------------------------------------------
 
-function CreateRunDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
+function CreateRunDialog({
+  onClose,
+  onCreated,
+  triggerRef,
+}: {
+  onClose: () => void;
+  onCreated: (id: number) => void;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
+}) {
   const [name, setName] = useState(`Q${Math.floor((new Date().getMonth() + 3) / 3)} ${CURRENT_YEAR} mock`);
   const [paymentYear, setPaymentYear] = useState(CURRENT_YEAR - 1);
   const [sampleSize, setSampleSize] = useState(50);
   const [sampleMethod, setSampleMethod] = useState<SampleMethod>("random");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Focus first input on mount
+  useEffect(() => {
+    firstInputRef.current?.focus();
+  }, []);
+
+  // Return focus to trigger on unmount
+  useEffect(() => {
+    return () => {
+      triggerRef?.current?.focus();
+    };
+  }, [triggerRef]);
+
+  // Focus trap + Escape handler
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   async function submit() {
     setSubmitting(true);
@@ -334,12 +392,21 @@ function CreateRunDialog({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Create audit run"
-      style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-      <div style={{ backgroundColor: "#fff", borderRadius: 12, padding: 24, width: 460, boxShadow: "0 12px 40px rgba(0,0,0,0.15)" }}>
-        <h2 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>New RADV audit run</h2>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="radv-dialog-title"
+      style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        style={{ backgroundColor: "#fff", borderRadius: 12, padding: 24, width: 460, boxShadow: "0 12px 40px rgba(0,0,0,0.15)" }}
+      >
+        <h2 id="radv-dialog-title" style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>New RADV audit run</h2>
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)}
+          <input ref={firstInputRef} value={name} onChange={(e) => setName(e.target.value)}
             style={inputStyle} />
         </Field>
         <Field label="Payment year">
@@ -358,7 +425,7 @@ function CreateRunDialog({ onClose, onCreated }: { onClose: () => void; onCreate
             <option value="high_risk_first">High-risk-first</option>
           </select>
         </Field>
-        {err && <div style={{ color: DANGER, fontSize: 12, marginBottom: 10 }}>{err}</div>}
+        {err && <div role="alert" style={{ color: DANGER, fontSize: 12, marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button onClick={onClose}
             style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #E2E8F0", backgroundColor: "#fff", cursor: "pointer" }}>

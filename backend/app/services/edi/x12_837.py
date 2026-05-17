@@ -26,8 +26,19 @@ The output is plain text; the caller is responsible for byte-level transport
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
+
+# ---------------------------------------------------------------------------
+# MBI validation (CMS format: 11 chars, specific character-set per position)
+# ---------------------------------------------------------------------------
+
+_MBI_RE = re.compile(
+    r"^[1-9][AC-HJ-NP-RTVWXY][AC-HJ-NP-RTVWXY0-9]\d"
+    r"[AC-HJ-NP-RTVWXY][AC-HJ-NP-RTVWXY0-9]\d"
+    r"[AC-HJ-NP-RTVWXY]{2}\d{2}$"
+)
 
 from app.services.edi import common as x12
 from app.services.edi.common import (
@@ -126,9 +137,10 @@ def _load_patient_mbi(patient_id: int) -> str:
 
 
 def _load_encounter(encounter_id: int | None, patient_id: int) -> dict[str, Any]:
-    """Return encounter info (date_of_service, npi, place_of_service).
+    """Return encounter info (date_of_service, npi, place_of_service, procedure_code).
 
     If encounter_id is None, fall back to the latest encounter for the patient.
+    Tries to pull a real procedure_code from form_encounter / claims_records.
     """
     try:
         from app.db import raf_cursor
@@ -137,10 +149,15 @@ def _load_encounter(encounter_id: int | None, patient_id: int) -> dict[str, Any]
             if encounter_id is not None:
                 cur.execute(
                     """
-                    SELECT id, patient_id, encounter_date, provider_npi,
-                           place_of_service, encounter_type
-                    FROM encounters
-                    WHERE id = %s AND patient_id = %s
+                    SELECT e.id, e.patient_id, e.encounter_date, e.provider_npi,
+                           e.place_of_service, e.encounter_type,
+                           COALESCE(e.procedure_code,
+                               (SELECT cr.procedure_code FROM claims_records cr
+                                WHERE cr.encounter_id = e.id AND cr.procedure_code IS NOT NULL
+                                ORDER BY cr.id LIMIT 1),
+                               NULL) AS procedure_code
+                    FROM encounters e
+                    WHERE e.id = %s AND e.patient_id = %s
                     LIMIT 1
                     """,
                     (encounter_id, patient_id),
@@ -148,11 +165,16 @@ def _load_encounter(encounter_id: int | None, patient_id: int) -> dict[str, Any]
             else:
                 cur.execute(
                     """
-                    SELECT id, patient_id, encounter_date, provider_npi,
-                           place_of_service, encounter_type
-                    FROM encounters
-                    WHERE patient_id = %s
-                    ORDER BY encounter_date DESC
+                    SELECT e.id, e.patient_id, e.encounter_date, e.provider_npi,
+                           e.place_of_service, e.encounter_type,
+                           COALESCE(e.procedure_code,
+                               (SELECT cr.procedure_code FROM claims_records cr
+                                WHERE cr.encounter_id = e.id AND cr.procedure_code IS NOT NULL
+                                ORDER BY cr.id LIMIT 1),
+                               NULL) AS procedure_code
+                    FROM encounters e
+                    WHERE e.patient_id = %s
+                    ORDER BY e.encounter_date DESC
                     LIMIT 1
                     """,
                     (patient_id,),
@@ -304,17 +326,43 @@ def _billing_provider_loop(s: dict, hl_id: int) -> list[str]:
     return seg
 
 
+def _validate_mbi(mbi: str, patient_id: Any) -> str:
+    """Return mbi if it matches the CMS MBI format.  Raises ValueError otherwise.
+
+    A spoofed placeholder (e.g. 'PID123') is never allowed — clearinghouses
+    reject any non-conformant MBI and EDPS will deny the encounter.
+    """
+    if not mbi or not _MBI_RE.match(mbi.upper()):
+        raise ValueError(
+            f"Patient {patient_id} has invalid/missing MBI — "
+            "cannot build 5010-conformant 837"
+        )
+    return mbi.upper()
+
+
 def _subscriber_loop(
     *,
     hl_id: int,
     parent_hl_id: int,
     patient: dict,
     mbi: str,
+    claim_filing_indicator: str = "MA",
 ) -> list[str]:
-    """2000B — Subscriber.  In Medicare Advantage the patient IS the subscriber."""
+    """2000B — Subscriber.  In Medicare Advantage the patient IS the subscriber.
+
+    Parameters
+    ----------
+    claim_filing_indicator : str
+        SBR09 — use 'MA' for Medicare Advantage / EDPS encounters (default),
+        '16' for traditional Medicare fee-for-service, 'MB' only when explicitly
+        targeting a Part B clearinghouse (not CMS EDPS).
+    """
+    patient_id = patient.get("id", "UNKNOWN")
+    validated_mbi = _validate_mbi(mbi, patient_id)
+
     return [
         segment("HL", str(hl_id), str(parent_hl_id), "22", "0"),
-        segment("SBR", "P", "18", "", "", "", "", "", "", "MB"),  # MB = Medicare Part B
+        segment("SBR", "P", "18", "", "", "", "", "", "", claim_filing_indicator),
         segment(
             "NM1",
             "IL",                                       # insured/subscriber
@@ -324,7 +372,7 @@ def _subscriber_loop(
             upper(patient.get("middle_name", ""), 25),
             "", "",
             "MI",                                       # member identification number
-            clean(mbi, 80) or f"PID{patient.get('id','UNKNOWN')}",
+            validated_mbi,
         ),
         segment(
             "N3",
@@ -380,29 +428,53 @@ def _clm_and_diagnosis_segments(
     return segs
 
 
-def _service_line(*, line_no: int, encounter: dict) -> list[str]:
+def _service_line(*, line_no: int, encounter: dict, icd10_codes: list[str]) -> list[str]:
     """2400 — Service Line.
 
-    For encounter (non-billable) submissions we use a placeholder HCPCS
-    (99499 — unlisted E/M) and $0 charge.  Trading partners that mandate
-    real CPT codes will override this layer.
+    Pulls the real procedure code from the encounter when available.
+    Falls back to 99499 (unlisted E/M) with a WARNING when no code is found.
+
+    The SV1 DPS (diagnosis-pointer composite) is built from the positions of
+    each ICD-10 in the HI segment.  Without it, EDPS will not credit any HCC
+    because it cannot link the service line to its diagnoses.
+
+    Pointers reference HI segment positions:
+        position 1 = ABK (principal), 2..N = ABF secondary codes.
     """
     eos = encounter.get("encounter_date")
     npi = x12.digits_only(encounter.get("provider_npi", ""), 10)
+
+    # Resolve CPT/HCPCS from the encounter; fall back gracefully
+    proc_code = clean(encounter.get("procedure_code", "")) or ""
+    if not proc_code:
+        logger.warning(
+            "No procedure_code on encounter %s — using fallback 99499 (unlisted E/M)",
+            encounter.get("id"),
+        )
+        proc_code = "99499"
+
+    pos = clean(encounter.get("place_of_service", "11")) or "11"
+
+    # Build diagnosis-pointer composite: "1:2:3..." for each HI position
+    # HI position numbering is 1-based; max 8 pointers per SV1 in 5010
+    pointer_count = min(len(icd10_codes), 8)
+    if pointer_count == 0:
+        # No diagnoses — emit pointer "1" as a best-effort placeholder
+        dps_composite: list[str] = ["1"]
+    else:
+        dps_composite = [str(i) for i in range(1, pointer_count + 1)]
+
     segs = [
-        segment(
-            "LX",
-            str(line_no),
-        ),
+        segment("LX", str(line_no)),
         segment(
             "SV1",
-            ["HC", "99499"],
+            ["HC", proc_code],
             "0.00",
             "UN",
             "1",
-            clean(encounter.get("place_of_service", "11")),
+            pos,
             "",
-            "1",
+            dps_composite,
         ),
         segment("DTP", "472", "D8", ccyymmdd(eos)),
     ]
@@ -421,6 +493,36 @@ def _service_line(*, line_no: int, encounter: dict) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Pre-flight EDI lint
+# ---------------------------------------------------------------------------
+
+_EDPS_RECEIVER_IDS = {"CMSEDPS", "CMS EDPS", "EDPS"}
+
+
+def _preflight_lint(
+    *,
+    patient_id: int,
+    mbi: str,
+    icd10_codes: list[str],
+) -> list[str]:
+    """Return a list of error strings for this patient's transaction.
+
+    An empty list means the transaction is ready to submit.
+    Called before assembling each ST..SE block.
+    """
+    errors: list[str] = []
+    if not mbi or not _MBI_RE.match(mbi.upper()):
+        errors.append(
+            f"Patient {patient_id}: MBI '{mbi}' is missing or not CMS-conformant"
+        )
+    if not icd10_codes:
+        errors.append(
+            f"Patient {patient_id}: no ICD-10 codes — CLM will have no HI segment"
+        )
+    return errors
+
+
+# ---------------------------------------------------------------------------
 # Top-level entry points
 # ---------------------------------------------------------------------------
 
@@ -433,10 +535,17 @@ def _build_transaction_set(
     st_idx: int,
     hl_starting_id: int = 1,
     claim_id: str | None = None,
+    claim_filing_indicator: str = "MA",
 ) -> tuple[str, int]:
     """Build ONE ST..SE block for a single patient/encounter.
 
     Returns (st_text, next_hl_id).
+
+    Parameters
+    ----------
+    claim_filing_indicator : str
+        SBR09 value.  Auto-derived from submitter receiver_id when not passed:
+        'MA' for CMS EDPS (Medicare Advantage), '16' for other Medicare.
     """
     st_ctrl = new_st_control_number(st_idx)
 
@@ -450,14 +559,26 @@ def _build_transaction_set(
     cleaned_icd10 = [normalize_icd10(c) for c in icd10_codes if c]
     cleaned_icd10 = [c for c in cleaned_icd10 if c]
     if not cleaned_icd10:
-        # We still emit a syntactically valid claim so it can be inspected,
-        # but flag this in the logs — most trading partners will reject it.
         logger.warning(
             "837 transaction set has no valid ICD-10 codes "
             "(patient_id=%s, encounter_id=%s)",
             patient_id,
             encounter_id,
         )
+
+    # Pre-flight lint — raises ValueError on MBI failure (stops bad submissions)
+    lint_errors = _preflight_lint(
+        patient_id=patient_id,
+        mbi=mbi,
+        icd10_codes=cleaned_icd10,
+    )
+    if lint_errors:
+        # MBI error is fatal; no-ICD10 is already logged above — keep going but warn
+        mbi_errors = [e for e in lint_errors if "MBI" in e]
+        if mbi_errors:
+            raise ValueError(mbi_errors[0])
+        for e in lint_errors:
+            logger.warning("preflight lint: %s", e)
 
     claim_id_final = claim_id or f"CLM{patient_id}-{encounter.get('id', 0)}-{st_idx:04d}"
 
@@ -478,6 +599,7 @@ def _build_transaction_set(
             parent_hl_id=parent_hl,
             patient=patient,
             mbi=mbi,
+            claim_filing_indicator=claim_filing_indicator,
         )
     )
     hl_id += 1
@@ -489,13 +611,28 @@ def _build_transaction_set(
             claim_id=claim_id_final,
         )
     )
-    body_segments.extend(_service_line(line_no=1, encounter=encounter))
+    body_segments.extend(_service_line(line_no=1, encounter=encounter, icd10_codes=cleaned_icd10))
 
     body_text = join_segments(body_segments)
     seg_count = count_segments(body_text) + 1   # +1 for SE itself
     body_text += se_segment(segment_count=seg_count, control_number=st_ctrl) + "\n"
 
     return body_text, hl_id
+
+
+def _claim_filing_indicator_for_submitter(submitter: dict) -> str:
+    """Derive SBR09 from the submitter receiver_id.
+
+    CMS EDPS targets → 'MA' (Medicare Advantage encounter).
+    All other targets default to '16' (Medicare fee-for-service).
+    Pass claim_filing_indicator explicitly in submitter_info to override.
+    """
+    if "claim_filing_indicator" in submitter:
+        return str(submitter["claim_filing_indicator"]).upper()
+    receiver = upper(submitter.get("receiver_id", ""))
+    if any(r in receiver for r in ("CMSEDPS", "EDPS")):
+        return "MA"
+    return "16"
 
 
 def generate_837_encounter(
@@ -517,6 +654,7 @@ def generate_837_encounter(
         loaded from raf_patient_hcc.
     submitter_info : dict | None
         Overrides for submitter / receiver / billing-provider defaults.
+        Pass ``claim_filing_indicator`` key to override SBR09 explicitly.
 
     Returns
     -------
@@ -528,6 +666,8 @@ def generate_837_encounter(
     icd10s = [c for c in icd10s if c]
     if not icd10s:
         icd10s = _load_hcc_icd10s_for_patient(patient_id)
+
+    cfi = _claim_filing_indicator_for_submitter(submitter)
 
     isa_ctrl = new_isa_control_number()
     gs_ctrl = new_gs_control_number()
@@ -555,6 +695,7 @@ def generate_837_encounter(
         icd10_codes=icd10s,
         submitter=submitter,
         st_idx=1,
+        claim_filing_indicator=cfi,
     )
 
     ge = ge_segment(num_transactions=1, control_number=gs_ctrl)
@@ -583,6 +724,7 @@ def generate_837_batch(
     """
     submitter = _merge_submitter(submitter_info)
     overrides = patient_icd10_overrides or {}
+    cfi = _claim_filing_indicator_for_submitter(submitter)
 
     isa_ctrl = new_isa_control_number()
     gs_ctrl = new_gs_control_number()
@@ -617,6 +759,7 @@ def generate_837_batch(
             icd10_codes=icd10s,
             submitter=submitter,
             st_idx=txn_count,
+            claim_filing_indicator=cfi,
         )
         st_chunks.append(st_text.rstrip("\n"))
 

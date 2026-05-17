@@ -10,7 +10,7 @@ import path from "path";
  */
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/e2e/**/*.spec.ts", "**/visual/**/*.spec.ts", "**/demo/**/*.spec.ts", "*.spec.ts"],
+  testMatch: ["**/e2e/**/*.spec.ts", "**/visual/**/*.spec.ts", "**/demo/**/*.spec.ts", "**/a11y/**/*.spec.ts", "*.spec.ts"],
 
   // Maximum time for one full test (pipeline can take up to 2 minutes).
   timeout: 180_000,
@@ -60,7 +60,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testMatch: ["**/e2e/**/*.spec.ts", "**/demo/**/*.spec.ts", "*.spec.ts"],
+      testMatch: ["**/e2e/**/*.spec.ts", "**/demo/**/*.spec.ts", "**/a11y/**/*.spec.ts", "*.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         // Wide viewport so the full dashboard layout is visible.

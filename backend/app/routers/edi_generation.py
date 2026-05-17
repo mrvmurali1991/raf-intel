@@ -19,6 +19,7 @@ the caller explicitly passes `confirm_override=true` and a non-empty
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -37,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/edi", tags=["edi"])
 
+# Roles that are allowed to act as the second reviewer on an override
+_SUPERVISOR_ROLES = {"billing_supervisor", "admin", "manager"}
+
 
 # ---------------------------------------------------------------------------
 # Request / response models
@@ -51,11 +55,23 @@ class Generate837Request(BaseModel):
     )
     confirm_override: bool = Field(
         default=False,
-        description="Set true to bypass HIGH-severity gate.  Requires override_reason.",
+        description="Set true to bypass HIGH-severity gate.  Requires override_reason and reviewer_user_id.",
     )
     override_reason: str | None = Field(
-        default=None, max_length=500,
-        description="Required when confirm_override=true",
+        default=None,
+        min_length=30,
+        max_length=500,
+        description=(
+            "Required when confirm_override=true.  "
+            "Must be at least 30 characters with clinical justification."
+        ),
+    )
+    reviewer_user_id: int | None = Field(
+        default=None,
+        description=(
+            "Required when confirm_override=true.  "
+            "Must be a user with billing_supervisor, admin, or manager role."
+        ),
     )
     submitter_info: dict[str, Any] | None = None
 
@@ -96,6 +112,55 @@ def _emit(event_type: str, *, tenant_id: str, user_id: Any, payload: dict[str, A
         )
     except Exception as exc:
         logger.warning("EDI audit emit failed (%s): %s", event_type, exc)
+
+
+def _load_user(user_id: int) -> dict[str, Any] | None:
+    """Load a user row (id, role) from the RAF DB for role validation."""
+    try:
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id, role FROM users WHERE id = %s LIMIT 1",
+                (user_id,),
+            )
+            return cur.fetchone() or None
+    except Exception as exc:
+        logger.warning("_load_user(%s) failed: %s", user_id, exc)
+        return None
+
+
+def _persist_override_signature(
+    *,
+    tenant_id: str,
+    patient_id: int,
+    submitter_user_id: Any,
+    reviewer_user_id: int,
+    override_reason: str,
+) -> None:
+    """Write an immutable row to edi_override_signatures."""
+    try:
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO edi_override_signatures
+                    (tenant_id, patient_id, submitter_user_id, reviewer_user_id,
+                     override_reason, signed_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    tenant_id,
+                    patient_id,
+                    submitter_user_id,
+                    reviewer_user_id,
+                    override_reason,
+                    datetime.now(timezone.utc),
+                ),
+            )
+    except Exception as exc:
+        logger.error("_persist_override_signature failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -142,20 +207,54 @@ def generate_837(
             )
 
         if failed_ids and body.confirm_override:
-            if not body.override_reason or not body.override_reason.strip():
+            # --- Co-signer gate ---
+            if not body.override_reason or len(body.override_reason.strip()) < 30:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="override_reason is required when confirm_override=true",
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="override_reason must be at least 30 characters",
                 )
+            if body.reviewer_user_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="reviewer_user_id is required when confirm_override=true",
+                )
+            if len(body.patient_ids) > 1:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        "Batch overrides are not permitted — submit one patient "
+                        "per override request (len(patient_ids) must be 1)"
+                    ),
+                )
+            # Validate reviewer role
+            reviewer = _load_user(body.reviewer_user_id)
+            if reviewer is None or reviewer.get("role") not in _SUPERVISOR_ROLES:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"reviewer_user_id {body.reviewer_user_id} does not have "
+                        "billing_supervisor, admin, or manager role"
+                    ),
+                )
+
             override_applied = True
+            _persist_override_signature(
+                tenant_id=tenant_id,
+                patient_id=body.patient_ids[0],
+                submitter_user_id=user_id,
+                reviewer_user_id=body.reviewer_user_id,
+                override_reason=body.override_reason.strip(),
+            )
             _emit(
-                "EDI_837_OVERRIDE_HIGH_SEVERITY",
+                "EDI_OVERRIDE_SIGNED",
                 tenant_id=tenant_id,
                 user_id=user_id,
                 payload={
                     "failed_patient_ids": failed_ids,
                     "reason": body.override_reason.strip(),
                     "high_severity_total": report["high_severity_total"],
+                    "submitter_user_id": user_id,
+                    "reviewer_user_id": body.reviewer_user_id,
                 },
             )
             eligible_ids = list(body.patient_ids)

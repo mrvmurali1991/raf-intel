@@ -108,6 +108,34 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ---- WCAG 2.2 AA: sr-only utility for screen-reader-only content ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ---- B5: V28 KPI grid — 2-col at tablet (≤1024px), 1-col at mobile (≤640px) ---- */
+.kpi-grid {
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+}
+@media (max-width: 1024px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* ---- WCAG 2.1 AA: global focus-visible fallback ---- */
 *:focus-visible {
   outline: 2px solid var(--ring, #3b82f6);

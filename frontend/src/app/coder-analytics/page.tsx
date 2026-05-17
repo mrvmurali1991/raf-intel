@@ -92,14 +92,14 @@ function StatTile({
       <div style={{ marginTop: 6, fontSize: 26, fontWeight: 700, color: accent, lineHeight: 1.1 }}>
         {value}
       </div>
-      {subtitle && <div style={{ marginTop: 4, fontSize: 12, color: "#94A3B8" }}>{subtitle}</div>}
+      {subtitle && <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>{subtitle}</div>}
     </div>
   );
 }
 
 function Sparkline({ values, width = 320, height = 56 }: { values: number[]; width?: number; height?: number }) {
   if (!values.length) {
-    return <div style={{ fontSize: 12, color: "#94A3B8" }}>No data in window</div>;
+    return <div style={{ fontSize: 12, color: "#64748b" }}>No data in window</div>;
   }
   const max = Math.max(...values, 1);
   const stepX = values.length > 1 ? width / (values.length - 1) : 0;
@@ -126,7 +126,7 @@ function HccTable({ title, rows, accent }: { title: string; rows: HccTop[]; acce
         {title}
       </div>
       {rows.length === 0 ? (
-        <div style={{ padding: "16px 14px", fontSize: 12, color: "#94A3B8" }}>No activity in window</div>
+        <div style={{ padding: "16px 14px", fontSize: 12, color: "#64748b" }}>No activity in window</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <tbody>
@@ -220,7 +220,7 @@ export default function CoderAnalyticsPage() {
         </div>
       </div>
 
-      {loading && <div style={{ padding: 40, color: "#94A3B8" }}>Loading…</div>}
+      {loading && <div style={{ padding: 40, color: "#64748b" }}>Loading…</div>}
       {err && (
         <div style={{ padding: 16, border: "1px solid #FCA5A5", background: "#FEF2F2", color: "#991B1B", borderRadius: 8 }}>
           {err}
@@ -404,7 +404,7 @@ function TeamView({
               <tr key={r.coder_user_id} style={{ borderTop: "1px solid #F1F5F9" }}>
                 <td style={{ padding: "8px 14px" }}>
                   <div style={{ fontWeight: 500 }}>{r.coder_name ?? `Coder ${r.coder_user_id}`}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>{r.coder_email ?? ""}</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>{r.coder_email ?? ""}</div>
                 </td>
                 <td style={{ padding: "8px 14px", textAlign: "right" }}>{r.charts_reviewed}</td>
                 <td style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600 }}>{r.charts_per_hour}</td>
@@ -417,7 +417,7 @@ function TeamView({
             ))}
             {sortedRows.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: "16px 14px", color: "#94A3B8", textAlign: "center" }}>
+                <td colSpan={6} style={{ padding: "16px 14px", color: "#64748b", textAlign: "center" }}>
                   No coder activity in window.
                 </td>
               </tr>

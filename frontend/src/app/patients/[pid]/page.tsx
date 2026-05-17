@@ -87,6 +87,7 @@ import { ActivityTab } from "./components/ActivityTab";
 import { DocumentsTab } from "./components/DocumentsTab";
 import { RAFCentralTab } from "./components/RAFCentralTab";
 import { PatientV28ImpactPanel } from "./components/PatientV28ImpactPanel";
+import { PatientHedisStrip } from "./components/PatientHedisStrip";
 
 // ===========================================================================
 // MAIN PAGE COMPONENT
@@ -1354,12 +1355,16 @@ export default function PatientDetailPage({
           />
         )}
         {activeTab === "suspects" && (
-          <SuspectsTab
-            suspects={suspectsQ.data}
-            suspectsLoading={suspectsQ.isLoading}
-            acceptMutation={acceptMutation}
-            dismissMutation={dismissMutation}
-          />
+          <>
+            <SuspectsTab
+              suspects={suspectsQ.data}
+              suspectsLoading={suspectsQ.isLoading}
+              acceptMutation={acceptMutation}
+              dismissMutation={dismissMutation}
+            />
+            {/* HEDIS strip co-located with HCC suspects — PCP sees both during visit */}
+            <PatientHedisStrip pid={pid} year={selectedYear} />
+          </>
         )}
         {activeTab === "documents" && (
           <DocumentsTab

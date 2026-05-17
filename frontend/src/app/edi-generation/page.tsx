@@ -160,7 +160,27 @@ export default function EdiGenerationPage(): JSX.Element {
           ))}
         </div>
 
-        {tab === "837" ? <Generate837 /> : <Generate834 />}
+        {tab === "837" ? (
+          <section aria-labelledby="edi-837-heading">
+            <h2
+              id="edi-837-heading"
+              style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: "0 0 16px" }}
+            >
+              837 Encounter Generation
+            </h2>
+            <Generate837 />
+          </section>
+        ) : (
+          <section aria-labelledby="edi-834-heading">
+            <h2
+              id="edi-834-heading"
+              style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: "0 0 16px" }}
+            >
+              834 Enrollment Generation
+            </h2>
+            <Generate834 />
+          </section>
+        )}
       </div>
     </div>
   );
