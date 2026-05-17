@@ -108,6 +108,75 @@ def opt_out(
             "consent": "opted_out"}
 
 
+@router.get("/health", summary="Outreach pipeline health (SRE probe)")
+def health(
+    tenant_id: str = Depends(get_tenant_id),
+    _user: dict = Depends(get_current_user),
+):
+    return orch.outreach_health(tenant_id)
+
+
+@router.post("/replay/{message_id}", summary="Replay a failed outreach message")
+def replay_one(
+    message_id: int,
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("reports", "write")),
+):
+    role = (current_user.get("role") or "").lower()
+    if role not in {"admin", "manager"}:
+        raise HTTPException(status_code=403,
+                            detail="Only admin/manager may replay outreach messages")
+    user_id = int(current_user.get("id") or current_user.get("user_id") or 0)
+    return orch.replay_message(tenant_id, message_id, user_id)
+
+
+class ReplayBatchRequest(BaseModel):
+    message_ids: list[int] = Field(..., max_length=1000)
+    dry_run: bool = False
+
+
+@router.post("/replay-batch", summary="Replay up to 1000 failed messages")
+def replay_batch(
+    body: ReplayBatchRequest,
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("reports", "write")),
+):
+    role = (current_user.get("role") or "").lower()
+    if role not in {"admin", "manager"}:
+        raise HTTPException(status_code=403,
+                            detail="Only admin/manager may replay outreach messages")
+    user_id = int(current_user.get("id") or current_user.get("user_id") or 0)
+
+    if body.dry_run:
+        replayable = sum(
+            1 for mid in body.message_ids
+            if orch.get_message_for_replay(tenant_id, mid) is not None
+        )
+        return {
+            "dry_run": True,
+            "requested": len(body.message_ids),
+            "replayable": replayable,
+            "would_skip": len(body.message_ids) - replayable,
+        }
+
+    results = {"replayed": 0, "still_failed": 0,
+              "skipped_opted_out": 0, "not_replayable": 0}
+    for mid in body.message_ids:
+        r = orch.replay_message(tenant_id, mid, user_id)
+        st = r.get("status")
+        if st == "sent":
+            results["replayed"] += 1
+        elif st == "opted_out":
+            results["skipped_opted_out"] += 1
+        elif st == "not_replayable":
+            results["not_replayable"] += 1
+        else:
+            results["still_failed"] += 1
+    return results
+
+
 @router.get("/funnel", summary="Outreach funnel counts")
 def funnel(
     campaign_id: int | None = Query(default=None),

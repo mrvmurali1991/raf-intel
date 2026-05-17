@@ -1,8 +1,11 @@
 """Multi-channel patient outreach orchestrator.
 
-Lazy-imports Twilio / SendGrid so the test suite doesn't need them. Falls
-back to a `pending_provider` status when env vars are missing — the
-message stays in the queue for later replay once credentials are wired.
+Lazy-imports Twilio / SendGrid so the test suite doesn't need them. When
+provider credentials are missing the message is recorded with
+status='failed' and a distinctive failure_reason so SRE can grep and the
+funnel shows a real failure instead of silently hiding messages in 'queued'.
+Use POST /api/outreach/replay/{message_id} to re-attempt after credentials
+are wired.
 """
 from __future__ import annotations
 
@@ -270,7 +273,7 @@ def enqueue_outreach(
             except Exception as e:
                 status, failure_reason = "failed", str(e)[:500]
         else:
-            failure_reason = "twilio_unconfigured"
+            status, failure_reason = "failed", "twilio_unconfigured"
     elif channel == "email":
         cl = _sendgrid_client()
         if cl:
@@ -288,7 +291,7 @@ def enqueue_outreach(
             except Exception as e:
                 status, failure_reason = "failed", str(e)[:500]
         else:
-            failure_reason = "sendgrid_unconfigured"
+            status, failure_reason = "failed", "sendgrid_unconfigured"
     elif channel == "voice":
         # TwiML voice — same Twilio client
         cl = _twilio_client()
@@ -304,7 +307,7 @@ def enqueue_outreach(
             except Exception as e:
                 status, failure_reason = "failed", str(e)[:500]
         else:
-            failure_reason = "twilio_unconfigured"
+            status, failure_reason = "failed", "twilio_unconfigured"
     elif channel == "letter":
         # Queue for batch print; mark as 'queued' (printer worker picks up)
         status = "queued"
@@ -398,3 +401,142 @@ def update_status_by_provider_id(
             (new_status, when, provider_id),
         )
         return cur.rowcount > 0
+
+
+# ---------- Replay + health (DLQ surface) ----------
+
+def get_message_for_replay(tenant_id: str, message_id: int) -> dict | None:
+    """Fetch a single message row for replay. Returns None if not found
+    or not in a replayable state."""
+    with raf_cursor() as cur:
+        cur.execute(
+            """SELECT id, tenant_id, patient_id, measure_id, channel, language,
+                      template_id, to_address, status, failure_reason,
+                      campaign_id
+               FROM outreach_messages
+               WHERE id=%s AND tenant_id=%s""",
+            (message_id, tenant_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        rec = dict(row) if isinstance(row, dict) else {
+            "id": row[0], "tenant_id": row[1], "patient_id": row[2],
+            "measure_id": row[3], "channel": row[4], "language": row[5],
+            "template_id": row[6], "to_address": row[7], "status": row[8],
+            "failure_reason": row[9], "campaign_id": row[10],
+        }
+        if rec.get("status") not in ("failed", "queued"):
+            return None
+        return rec
+
+
+def replay_message(
+    tenant_id: str,
+    message_id: int,
+    actor_user_id: int,
+    first_name: str = "",
+    clinic: str = "your clinic",
+    phone_callback: str = "",
+    schedule_url: str = "",
+    unsubscribe_url: str = "",
+) -> dict:
+    """Re-attempt a failed message via the orchestrator. Re-runs consent +
+    cap checks; updates the SAME row (status + failure_reason)."""
+    rec = get_message_for_replay(tenant_id, message_id)
+    if not rec:
+        return {"message_id": message_id, "status": "not_replayable",
+                "reason": "row not found or not in failed/queued state"}
+
+    result = enqueue_outreach(
+        tenant_id=tenant_id,
+        patient_id=int(rec["patient_id"]),
+        measure_id=str(rec["measure_id"]),
+        channel=str(rec["channel"]),
+        language=str(rec.get("language") or "en"),
+        to_address=str(rec["to_address"]),
+        first_name=first_name,
+        clinic=clinic,
+        phone_callback=phone_callback,
+        schedule_url=schedule_url,
+        unsubscribe_url=unsubscribe_url,
+        campaign_id=rec.get("campaign_id"),
+        actor_user_id=actor_user_id,
+    )
+    # enqueue_outreach inserts a NEW row. Mark the OLD row as superseded.
+    with raf_cursor() as cur:
+        cur.execute(
+            """UPDATE outreach_messages
+               SET failure_reason = CONCAT(COALESCE(failure_reason,''),' | replayed_as=', %s)
+               WHERE id=%s AND tenant_id=%s""",
+            (str(result.get("message_id", "")), message_id, tenant_id),
+        )
+    return {
+        "original_message_id": message_id,
+        "replayed_message_id": result.get("message_id"),
+        "status": result.get("status"),
+    }
+
+
+def outreach_health(tenant_id: str) -> dict:
+    """SRE / status-page surface for outreach pipeline health."""
+    import os
+    twilio = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
+    sendgrid = bool(os.getenv("SENDGRID_API_KEY"))
+
+    failed_unconfigured_24h = 0
+    failed_unconfigured_total = 0
+    failed_other_24h = 0
+    queued_oldest_minutes: float | None = None
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """SELECT COUNT(*) AS n FROM outreach_messages
+               WHERE tenant_id=%s AND status='failed'
+                 AND failure_reason IN ('twilio_unconfigured','sendgrid_unconfigured')
+                 AND queued_at > NOW() - INTERVAL 24 HOUR""",
+            (tenant_id,),
+        )
+        r = cur.fetchone()
+        failed_unconfigured_24h = int(r["n"] if isinstance(r, dict) else r[0]) if r else 0
+
+        cur.execute(
+            """SELECT COUNT(*) AS n FROM outreach_messages
+               WHERE tenant_id=%s AND status='failed'
+                 AND failure_reason IN ('twilio_unconfigured','sendgrid_unconfigured')""",
+            (tenant_id,),
+        )
+        r = cur.fetchone()
+        failed_unconfigured_total = int(r["n"] if isinstance(r, dict) else r[0]) if r else 0
+
+        cur.execute(
+            """SELECT COUNT(*) AS n FROM outreach_messages
+               WHERE tenant_id=%s AND status='failed'
+                 AND (failure_reason IS NULL OR failure_reason NOT IN
+                      ('twilio_unconfigured','sendgrid_unconfigured'))
+                 AND queued_at > NOW() - INTERVAL 24 HOUR""",
+            (tenant_id,),
+        )
+        r = cur.fetchone()
+        failed_other_24h = int(r["n"] if isinstance(r, dict) else r[0]) if r else 0
+
+        cur.execute(
+            """SELECT TIMESTAMPDIFF(MINUTE, MIN(queued_at), NOW()) AS m
+               FROM outreach_messages
+               WHERE tenant_id=%s AND status='queued'""",
+            (tenant_id,),
+        )
+        r = cur.fetchone()
+        if r:
+            v = r["m"] if isinstance(r, dict) else r[0]
+            queued_oldest_minutes = float(v) if v is not None else None
+
+    return {
+        "tenant_id": tenant_id,
+        "twilio_configured": twilio,
+        "sendgrid_configured": sendgrid,
+        "failed_provider_unconfigured_24h": failed_unconfigured_24h,
+        "failed_provider_unconfigured_total": failed_unconfigured_total,
+        "failed_other_24h": failed_other_24h,
+        "queued_age_oldest_minutes": queued_oldest_minutes,
+    }
