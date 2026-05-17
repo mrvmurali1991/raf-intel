@@ -113,6 +113,7 @@ const navGroups: NavGroup[] = [
       { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
       { href: "/prospective", label: "Prospective", icon: Target },
       { href: "/providers", label: "Provider Performance", icon: UserCheck },
+      { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
     ],
   },
 ];
