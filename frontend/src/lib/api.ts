@@ -2068,6 +2068,49 @@ export async function getAuditPackages(
   return data;
 }
 
+// ---------------------------------------------------------------------------
+// Per-patient activity feed (PCP review #8 carry-over)
+// ---------------------------------------------------------------------------
+
+/** One row in the per-patient activity feed. */
+export interface PatientActivityEntry {
+  id: string;
+  action: string;
+  actor_email: string | null;
+  actor_display_name: string | null;
+  created_at: string;
+  metadata: Record<string, unknown>;
+  resource_type: string | null;
+  resource_id: string | null;
+}
+
+export interface PatientActivityResponse {
+  patient_id: number;
+  total: number;
+  items: PatientActivityEntry[];
+}
+
+/**
+ * Fetch the audit-log timeline for a single patient.
+ *
+ * Backed by ``GET /api/patients/{pid}/activity`` which UNIONs ``audit_log``
+ * and ``immutable_audit_log`` so PHI accesses, clinical-query creation,
+ * suspect accept/dismiss, and audit-package generation all appear in one
+ * chronological list.  The endpoint is tenant-scoped server-side.
+ */
+export async function getPatientActivity(
+  pid: string | number,
+  options?: { limit?: number; since?: string }
+): Promise<PatientActivityResponse> {
+  const params: Record<string, string | number> = {};
+  if (options?.limit !== undefined) params.limit = options.limit;
+  if (options?.since) params.since = options.since;
+  const { data } = await api.get(`/api/patients/${pid}/activity`, {
+    params: Object.keys(params).length ? params : undefined,
+  });
+  return data;
+}
+
 export async function generateAudit(
   pid: number,
   options?: {

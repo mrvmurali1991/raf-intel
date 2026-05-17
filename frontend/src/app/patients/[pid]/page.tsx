@@ -221,13 +221,6 @@ export default function PatientDetailPage({
     queryFn: () => getPatientSuspects(pid, "open", selectedYear),
   });
 
-  // All suspects (including accepted/dismissed) for timeline
-  const allSuspectsQ = useQuery<PatientSuspectsResponse>({
-    queryKey: ["patient-suspects-all", pid, selectedYear],
-    queryFn: () => getPatientSuspects(pid, "all", selectedYear),
-    enabled: activeTab === "activity",
-  });
-
   // ---- Tab-specific queries ----
   const medsQ = useQuery({
     queryKey: ["patient-meds", pid, selectedYear],
@@ -286,7 +279,7 @@ export default function PatientDetailPage({
   const auditsQ = useQuery({
     queryKey: ["patient-audits", pid],
     queryFn: () => getAuditPackages(Number(pid)),
-    enabled: activeTab === "audit" || activeTab === "activity",
+    enabled: activeTab === "audit",
   });
 
   const documentsQ = useQuery({
@@ -1281,18 +1274,7 @@ export default function PatientDetailPage({
             selectedYear={selectedYear}
           />
         )}
-        {activeTab === "activity" && (
-          <ActivityTab
-            encounters={encountersQ.data}
-            encountersLoading={encountersQ.isLoading}
-            suspects={allSuspectsQ.data ?? suspectsQ.data}
-            suspectsLoading={allSuspectsQ.isLoading}
-            rafHistory={rafHistoryQ.data}
-            rafHistoryLoading={rafHistoryQ.isLoading}
-            audits={auditsQ.data}
-            auditsLoading={auditsQ.isLoading}
-          />
-        )}
+        {activeTab === "activity" && <ActivityTab pid={pid} />}
       </div>
     </div>
   );
