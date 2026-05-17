@@ -84,6 +84,7 @@ from app.routers import health as health_router
 from app.routers import icd10 as icd10_router
 from app.routers import insights as insights_router
 from app.routers import meat as meat_router
+from app.routers import meat_evidence as meat_evidence_router
 from app.routers import patient_activity as patient_activity_router
 from app.routers import pipeline as pipeline_router
 from app.routers import pipeline_settings as pipeline_settings_router
@@ -336,6 +337,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, retention.router)
     _mount(app, admin.router)
     _mount(app, meat_router.router)
+    _mount(app, meat_evidence_router.router)
     _mount(app, radv_audit_router.router)
     # RADV packet PDF export (per-patient, per-payment-year audit bundle).
     # Shares the /api/radv prefix with radv_audit but owns distinct paths.

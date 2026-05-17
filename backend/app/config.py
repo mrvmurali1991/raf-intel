@@ -272,6 +272,16 @@ class Settings:
         "USE_CLINICAL_BILLING_GATE", "true"
     ).lower() in ("1", "true", "yes")
 
+    # Gap #12 — lazily run the LLM MEAT evidence-snippet extractor at
+    # raf-central load time when an HCC has no recorded evidence text.
+    # Disabled by default because each call spends Gemini tokens; flip to
+    # ``true`` in environments where extraction cost is acceptable.
+    # The explicit POST /api/meat-evidence/extract endpoint is always
+    # available regardless of this flag.
+    lazy_meat_extraction: bool = os.getenv(
+        "LAZY_MEAT_EXTRACTION", "false"
+    ).lower() in ("1", "true", "yes")
+
     # Shared HMAC secret used by OpenEMR (or any embedding host) to mint a
     # short-lived JWT that /api/auth/embed/exchange will accept in lieu of
     # username/password. Required in production — RAF Central refuses embed

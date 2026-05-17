@@ -140,6 +140,12 @@ class MEATGap(BaseModel):
     coefficient: float
     status: Literal["COMPLETE", "PARTIAL", "MISSING", "NOT_COMPLIANT"]
     gaps: dict[str, bool]
+    # Gap #12 — sentence-level MEAT evidence so the UI can render the
+    # exact proving sentence under each M/E/A/T chip (RAAPID / Keebler /
+    # Reveleer EVE parity).  Populated by the LLM extractor in
+    # ``app.services.meat_evidence_extractor``; ``None`` when no
+    # evidence has been captured yet.
+    evidence: dict[str, Any] | None = None
 
 
 class SuspectCard(BaseModel):
@@ -248,53 +254,234 @@ def _meat_status_to_gaps(status: str) -> tuple[str, dict[str, bool]]:
 
 def _fetch_meat_letters(
     patient_id: int, year: int, tenant_id: str
-) -> tuple[dict[str, dict[str, bool]], dict[str, int | None]]:
-    """Return per-HCC letter-level MEAT coverage and patient_hcc_id map in ONE query.
+) -> tuple[
+    dict[str, dict[str, bool]],
+    dict[str, int | None],
+    dict[str, dict[str, Any]],
+]:
+    """Return per-HCC MEAT coverage + patient_hcc_id map + evidence snippets.
 
-    Previously two separate queries were issued: one for MEAT letters
-    (joining raf_meat_evidence) and one ``_fetch_patient_hcc_id`` call **per
-    HCC** (N+1).  This function eliminates the N+1 by returning both datasets
-    from a single JOIN so callers never need ``_fetch_patient_hcc_id`` in a loop.
+    Three-tuple return:
+      * ``letter_map``    — ``{hcc_code: {monitor, evaluate, assess, treat}}``
+      * ``hcc_id_map``    — ``{hcc_code: patient_hcc_id | None}``
+      * ``evidence_map``  — ``{hcc_code: {<letter>_text, <letter>_offsets,
+                                          source_encounter_id, source_date,
+                                          icd10}}``  (Gap #12)
 
-    Returns
-    -------
-    (letter_map, hcc_id_map) where:
-      letter_map  — ``{hcc_code: {monitor, evaluate, assess, treat}}``
-      hcc_id_map  — ``{hcc_code: patient_hcc_id | None}``
+    Single JOIN query selects the most-recent ``raf_meat_evidence`` row per
+    patient_hcc row alongside the aggregated presence booleans, so the
+    frontend can render evidence sentences under each MEAT chip without
+    issuing a follow-up request.
 
-    Missing → empty dicts. Non-existent table → empty dicts.
+    If the new offset columns (Alembic 030) are not yet present the query
+    falls back to selecting only the text columns — the offsets default
+    to ``None`` in that case.
     """
     letter_map: dict[str, dict[str, bool]] = {}
     hcc_id_map: dict[str, int | None] = {}
+    evidence_map: dict[str, dict[str, Any]] = {}
+
+    # Detect presence of Alembic-030 columns up front so a stale schema
+    # doesn't trip the query.
+    _have_offsets = False
+    _have_source_enc = False
     try:
         with raf_cursor() as cur:
             cur.execute(
                 """
-                SELECT ph.id          AS patient_hcc_id,
-                       ph.hcc_code,
-                       MAX(COALESCE(ev.meat_m_present, CASE WHEN ev.meat_m IS NOT NULL AND ev.meat_m != '' THEN 1 ELSE 0 END)) AS m,
-                       MAX(COALESCE(ev.meat_e_present, CASE WHEN ev.meat_e IS NOT NULL AND ev.meat_e != '' THEN 1 ELSE 0 END)) AS e,
-                       MAX(COALESCE(ev.meat_a_present, CASE WHEN ev.meat_a IS NOT NULL AND ev.meat_a != '' THEN 1 ELSE 0 END)) AS a,
-                       MAX(COALESCE(ev.meat_t_present, CASE WHEN ev.meat_t IS NOT NULL AND ev.meat_t != '' THEN 1 ELSE 0 END)) AS t
-                FROM raf_patient_hcc ph
-                LEFT JOIN raf_meat_evidence ev ON ev.patient_hcc_id = ph.id
-                WHERE ph.patient_id = %s AND ph.measurement_year = %s AND ph.tenant_id = %s
-                GROUP BY ph.id, ph.hcc_code
-                """,
-                (patient_id, year, tenant_id),
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name   = 'raf_meat_evidence'
+                """
             )
-            for row in cur.fetchall():
-                code = str(row["hcc_code"])
-                letter_map[code] = {
-                    "monitor": bool(row.get("m")),
-                    "evaluate": bool(row.get("e")),
-                    "assess":   bool(row.get("a")),
-                    "treat":    bool(row.get("t")),
-                }
-                hcc_id_map[code] = int(row["patient_hcc_id"]) if row.get("patient_hcc_id") is not None else None
+            cols = {str(r["column_name"]).lower() for r in cur.fetchall() or []}
+        _have_offsets = "meat_m_offsets" in cols
+        _have_source_enc = "source_encounter_id" in cols
+    except Exception:
+        pass
+
+    # Build the optional column lists. The latest_id sub-query gives us
+    # the most-recent evidence row per patient_hcc id; we LEFT-JOIN back
+    # to that row to pull text snippets / offsets in one shot.
+    extra_select_parts: list[str] = []
+    extra_group_parts: list[str] = []
+    if _have_offsets:
+        for c in ("meat_m_offsets", "meat_e_offsets", "meat_a_offsets", "meat_t_offsets"):
+            extra_select_parts.append(f"lev.{c}")
+            extra_group_parts.append(f"lev.{c}")
+    if _have_source_enc:
+        extra_select_parts.append("lev.source_encounter_id")
+        extra_group_parts.append("lev.source_encounter_id")
+
+    extra_select_sql = (", " + ", ".join(extra_select_parts)) if extra_select_parts else ""
+    extra_group_sql = (", " + ", ".join(extra_group_parts)) if extra_group_parts else ""
+
+    sql = f"""
+        SELECT ph.id          AS patient_hcc_id,
+               ph.hcc_code,
+               ph.icd10_codes,
+               MAX(COALESCE(ev.meat_m_present, CASE WHEN ev.meat_m IS NOT NULL AND ev.meat_m != '' THEN 1 ELSE 0 END)) AS m,
+               MAX(COALESCE(ev.meat_e_present, CASE WHEN ev.meat_e IS NOT NULL AND ev.meat_e != '' THEN 1 ELSE 0 END)) AS e,
+               MAX(COALESCE(ev.meat_a_present, CASE WHEN ev.meat_a IS NOT NULL AND ev.meat_a != '' THEN 1 ELSE 0 END)) AS a,
+               MAX(COALESCE(ev.meat_t_present, CASE WHEN ev.meat_t IS NOT NULL AND ev.meat_t != '' THEN 1 ELSE 0 END)) AS t,
+               lev.meat_m AS meat_m_text,
+               lev.meat_e AS meat_e_text,
+               lev.meat_a AS meat_a_text,
+               lev.meat_t AS meat_t_text,
+               lev.encounter_id  AS evidence_encounter_id,
+               lev.encounter_date AS evidence_encounter_date
+               {extra_select_sql}
+        FROM raf_patient_hcc ph
+        LEFT JOIN raf_meat_evidence ev ON ev.patient_hcc_id = ph.id
+        LEFT JOIN (
+            SELECT me.*
+            FROM raf_meat_evidence me
+            JOIN (
+                SELECT patient_hcc_id, MAX(id) AS max_id
+                FROM raf_meat_evidence
+                GROUP BY patient_hcc_id
+            ) latest ON latest.max_id = me.id
+        ) lev ON lev.patient_hcc_id = ph.id
+        WHERE ph.patient_id = %s AND ph.measurement_year = %s AND ph.tenant_id = %s
+        GROUP BY ph.id, ph.hcc_code, ph.icd10_codes,
+                 lev.meat_m, lev.meat_e, lev.meat_a, lev.meat_t,
+                 lev.encounter_id, lev.encounter_date
+                 {extra_group_sql}
+    """
+
+    rows: list[dict[str, Any]] = []
+    try:
+        with raf_cursor() as cur:
+            cur.execute(sql, (patient_id, year, tenant_id))
+            rows = cur.fetchall() or []
     except Exception as exc:
         logger.debug("meat letter fetch failed pid=%s: %s", patient_id, exc)
-    return letter_map, hcc_id_map
+
+    # ---- HCCs needing lazy LLM extraction (no evidence text yet AND at
+    # least one note in the year).  We extract opportunistically so the
+    # UI gets sentences on subsequent loads; the heavy lifting is gated
+    # behind a feature flag because Gemini calls cost real money.
+    needs_extract: list[tuple[int, str, str]] = []  # (phcc_id, hcc_code, icd10)
+
+    for row in rows:
+        code = str(row["hcc_code"])
+        phcc_id = int(row["patient_hcc_id"]) if row.get("patient_hcc_id") is not None else None
+        letter_map[code] = {
+            "monitor": bool(row.get("m")),
+            "evaluate": bool(row.get("e")),
+            "assess":   bool(row.get("a")),
+            "treat":    bool(row.get("t")),
+        }
+        hcc_id_map[code] = phcc_id
+
+        # Decode JSON-typed offset columns if present.
+        def _decode_offset(val: Any) -> list[int] | None:
+            if val is None:
+                return None
+            if isinstance(val, list):
+                return val
+            try:
+                import json as _json
+                parsed = _json.loads(val)
+                return parsed if isinstance(parsed, list) else None
+            except Exception:
+                return None
+
+        # Parse icd10_codes — JSON array or comma string.
+        raw_icds = row.get("icd10_codes")
+        icd_list: list[str] = []
+        if isinstance(raw_icds, list):
+            icd_list = [str(x).strip() for x in raw_icds if x]
+        elif isinstance(raw_icds, str):
+            s = raw_icds.strip()
+            if s.startswith("["):
+                import json as _json
+                try:
+                    parsed = _json.loads(s)
+                    if isinstance(parsed, list):
+                        icd_list = [str(x).strip() for x in parsed if x]
+                except Exception:
+                    pass
+            if not icd_list:
+                icd_list = [c.strip() for c in s.split(",") if c.strip()]
+
+        ev_text = {
+            "monitor": row.get("meat_m_text"),
+            "evaluate": row.get("meat_e_text"),
+            "assess":  row.get("meat_a_text"),
+            "treat":   row.get("meat_t_text"),
+        }
+        any_text = any(v for v in ev_text.values())
+        if any_text or row.get("evidence_encounter_id") is not None:
+            evidence_map[code] = {
+                "monitor_text":  ev_text["monitor"],
+                "evaluate_text": ev_text["evaluate"],
+                "assess_text":   ev_text["assess"],
+                "treat_text":    ev_text["treat"],
+                "monitor_offsets":  _decode_offset(row.get("meat_m_offsets")) if _have_offsets else None,
+                "evaluate_offsets": _decode_offset(row.get("meat_e_offsets")) if _have_offsets else None,
+                "assess_offsets":   _decode_offset(row.get("meat_a_offsets")) if _have_offsets else None,
+                "treat_offsets":    _decode_offset(row.get("meat_t_offsets")) if _have_offsets else None,
+                "source_encounter_id": (
+                    int(row["source_encounter_id"])
+                    if _have_source_enc and row.get("source_encounter_id") is not None
+                    else (int(row["evidence_encounter_id"])
+                          if row.get("evidence_encounter_id") is not None else None)
+                ),
+                "source_date": (
+                    row["evidence_encounter_date"].isoformat()
+                    if hasattr(row.get("evidence_encounter_date"), "isoformat")
+                    else (str(row["evidence_encounter_date"])
+                          if row.get("evidence_encounter_date") else None)
+                ),
+                "icd10": icd_list[0] if icd_list else "",
+            }
+
+        # Queue for lazy extraction when (a) there's no evidence text AND
+        # (b) we have a patient_hcc_id AND (c) the patient is documented
+        # (skip empty HCC rows). We don't *know* there are notes here —
+        # the extractor itself handles the empty-notes case gracefully.
+        if phcc_id and not any_text and icd_list:
+            needs_extract.append((phcc_id, code, icd_list[0]))
+
+    # ------------------------------------------------------------------
+    # Lazy LLM extraction — fire-and-forget for HCCs that are missing
+    # evidence text. Gated by ``settings.lazy_meat_extraction`` so we
+    # never blow up the dashboard latency budget during a demo.
+    # ------------------------------------------------------------------
+    if needs_extract:
+        try:
+            from app.config import settings as _settings
+            _enabled = bool(getattr(_settings, "lazy_meat_extraction", False))
+        except Exception:
+            _enabled = False
+        if _enabled:
+            try:
+                from app.services.meat_evidence_extractor import (
+                    extract_meat_evidence_for_hcc,
+                    persist_meat_evidence,
+                )
+                for phcc_id, code, icd in needs_extract[:3]:  # cap per request
+                    try:
+                        ev = extract_meat_evidence_for_hcc(
+                            patient_id=patient_id,
+                            hcc_code=code,
+                            icd10=icd,
+                            measurement_year=year,
+                            tenant_id=tenant_id,
+                        )
+                        if ev.letters_present() > 0:
+                            persist_meat_evidence(
+                                patient_hcc_id=phcc_id,
+                                evidence=ev,
+                                measurement_year=year,
+                            )
+                    except Exception as _exc:
+                        logger.debug("lazy meat extract failed phcc=%s: %s", phcc_id, _exc)
+            except Exception as exc:
+                logger.debug("lazy meat extraction unavailable: %s", exc)
+
+    return letter_map, hcc_id_map, evidence_map
 
 
 def _fetch_patient_hcc_id(patient_id: int, year: int, hcc_code: str, tenant_id: str) -> int | None:
@@ -370,7 +557,7 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
     # MEAT gaps — one card per HCC in the breakdown.
     # Single JOIN query returns both letter-level MEAT coverage AND patient_hcc_id,
     # eliminating the N+1 pattern from calling _fetch_patient_hcc_id per HCC.
-    letter_map, hcc_id_map = _fetch_meat_letters(pid, year, tenant_id)
+    letter_map, hcc_id_map, evidence_map = _fetch_meat_letters(pid, year, tenant_id)
     meat_gaps: list[MEATGap] = []
     for hcc in breakdown.get("hcc_details") or []:
         code = str(hcc.get("hcc_code") or hcc.get("hcc") or "")
@@ -407,6 +594,7 @@ def _build_raf_section(pid: int, year: int, tenant_id: str) -> tuple[LiveRAFBar,
                 coefficient=float(hcc.get("coefficient") or 0.0),
                 status=actual_status if actual_status != "MISSING" else "NOT_COMPLIANT",
                 gaps=letters,
+                evidence=evidence_map.get(code) or None,
             )
         )
 
