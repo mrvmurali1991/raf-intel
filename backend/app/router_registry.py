@@ -57,6 +57,7 @@ from app.routers import (
     webhooks,
 )
 from app.routers import auth as auth_router
+from app.routers import bulk_actions as bulk_actions_router
 from app.routers import clinical_queries as clinical_queries_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
@@ -275,6 +276,9 @@ def register_routers(app: FastAPI) -> None:
     # Coder worklist / review queue
     _mount(app, coder_worklist.router)
     _mount(app, review_router.router)
+
+    # Worklist bulk-select chip bar actions
+    _mount(app, bulk_actions_router.router)
 
     # Provider worklist — prioritized patient lists and action items
     _mount(app, provider_worklist_router.router)
