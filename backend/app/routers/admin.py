@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.auth import require_role
+from app.auth import require_role, get_current_user
 from app.rate_limit import limiter
 from app.services.backup_service import (
     _backup_dir,
@@ -37,7 +37,7 @@ from app.services.backup_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(get_current_user)])
 
 # ---------------------------------------------------------------------------
 # Request / response models

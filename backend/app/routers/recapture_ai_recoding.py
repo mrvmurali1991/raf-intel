@@ -11,13 +11,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import Depends, APIRouter, Header, HTTPException, Query
 
 from app.services import recapture_ai_recoding as svc
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/recapture", tags=["recapture-ai"])
+router = APIRouter(prefix="/api/recapture", tags=["recapture-ai"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

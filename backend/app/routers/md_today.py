@@ -29,11 +29,10 @@ router = APIRouter(prefix="/api/md", tags=["md"])
 def _resolve_provider_id(current_user: dict, override: int | None) -> int:
     """Resolve which provider's schedule to fetch.
 
-    Priority:
-      1. Explicit ?provider_id= query param (admin/manager only — physicians
-         must view their own schedule).
-      2. JWT-derived provider_id when the users table carries one (future).
-      3. Demo default = 1 so the page renders for any tenant out of the box.
+    Why: NEVER fall back to a hard-coded provider_id. Doing so silently leaks
+    another provider's PHI to any caller without a provider mapping (e.g.
+    admin users with no clinical role). Either the caller has a mapping or
+    they don't — no implicit defaults.
     """
     role = (current_user.get("role") or "").lower()
     if override is not None:
@@ -46,7 +45,14 @@ def _resolve_provider_id(current_user: dict, override: int | None) -> int:
     pid = current_user.get("provider_id")
     if pid:
         return int(pid)
-    return 1
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "No provider_id mapping for this user. Ask an admin to link your "
+            "account to a clinical provider (admin/manager can pass "
+            "?provider_id= explicitly)."
+        ),
+    )
 
 
 @router.get(

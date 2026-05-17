@@ -15,16 +15,17 @@ import logging
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 
 from app.services.provider_revenue_breakdown import compute_breakdown
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
 # Note: shares the /api/providers prefix with routers/providers.py.  FastAPI
 # allows multiple routers under the same prefix as long as the full paths
 # are distinct, so we mount this one alongside (router_registry).
-router = APIRouter(prefix="/api/providers", tags=["providers"])
+router = APIRouter(prefix="/api/providers", tags=["providers"], dependencies=[Depends(get_current_user)])
 
 
 @router.get(

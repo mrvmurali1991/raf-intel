@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth import require_role
+from app.auth import require_role, get_current_user
 from app.services.data_retention import (
     DEFAULT_POLICIES,
     get_retention_status,
@@ -26,7 +26,7 @@ from app.services.data_retention import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/admin/retention", tags=["admin"])
+router = APIRouter(prefix="/api/admin/retention", tags=["admin"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

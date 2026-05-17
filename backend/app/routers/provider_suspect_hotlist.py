@@ -16,13 +16,14 @@ import logging
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import Depends, APIRouter, HTTPException, Path, Query
 
 from app.services.provider_suspect_hotlist import get_hotlist
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/providers", tags=["providers", "suspects"])
+router = APIRouter(prefix="/api/providers", tags=["providers", "suspects"], dependencies=[Depends(get_current_user)])
 
 
 @router.get(

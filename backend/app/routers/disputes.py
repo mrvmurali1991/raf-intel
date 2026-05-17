@@ -26,10 +26,11 @@ from pydantic import BaseModel, Field
 
 from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services import dispute_service as svc
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["disputes"])
+router = APIRouter(prefix="/api", tags=["disputes"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

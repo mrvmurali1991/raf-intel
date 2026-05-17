@@ -13,14 +13,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.knowledge_graph import loinc_service
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/kg/labs", tags=["knowledge_graph", "loinc"])
+router = APIRouter(prefix="/api/kg/labs", tags=["knowledge_graph", "loinc"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

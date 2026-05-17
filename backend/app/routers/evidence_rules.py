@@ -11,9 +11,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.auth import get_current_user
 from app.services.knowledge_graph.evidence_rules_engine import (
     evaluate_evidence,
     get_rule,
@@ -24,7 +25,7 @@ from app.services.knowledge_graph.evidence_rules_engine import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/kg/evidence-rules", tags=["knowledge-graph"])
+router = APIRouter(prefix="/api/kg/evidence-rules", tags=["knowledge-graph"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

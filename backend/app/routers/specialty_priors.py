@@ -19,9 +19,10 @@ All endpoints are read-only.  Writes happen via the seed script.
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import Depends, APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
+from app.auth import get_current_user
 from app.services.knowledge_graph.specialty_priors_service import (
     apply_specialty_prior,
     canonicalize,
@@ -32,7 +33,7 @@ from app.services.knowledge_graph.specialty_priors_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/kg/specialty", tags=["knowledge-graph"])
+router = APIRouter(prefix="/api/kg/specialty", tags=["knowledge-graph"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

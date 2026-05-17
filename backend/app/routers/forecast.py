@@ -16,9 +16,10 @@ import logging
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 
 from app.services.openemr_connector import get_patient
+from app.auth import get_current_user
 from app.services.raf_forecast import (
     calculate_patient_forecast,
     calculate_provider_forecast,
@@ -27,7 +28,7 @@ from app.services.raf_forecast import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/forecast", tags=["forecast"])
+router = APIRouter(prefix="/api/forecast", tags=["forecast"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

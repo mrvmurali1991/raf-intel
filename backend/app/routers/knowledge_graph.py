@@ -27,6 +27,7 @@ from typing import Any, Callable
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.auth import get_current_user
 from app.services.knowledge_graph import kg_repository as repo
 from app.services.knowledge_graph.kg_schema import (
     EDGE_TYPES,
@@ -37,7 +38,7 @@ from app.services.knowledge_graph.kg_schema import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/kg", tags=["knowledge_graph"])
+router = APIRouter(prefix="/api/kg", tags=["knowledge_graph"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

@@ -32,16 +32,17 @@ same shape used by the patients/analysis routers.
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import Depends, APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services import hcc_removal_engine
 from app.services.audit_logger import log_phi_access
 from app.services.openemr_connector import get_patient
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/raf", tags=["hcc-removal"])
+router = APIRouter(prefix="/api/raf", tags=["hcc-removal"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

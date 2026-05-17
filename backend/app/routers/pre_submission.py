@@ -24,13 +24,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.auth import require_permission
+from app.auth import require_permission, get_current_user
 from app.db import raf_cursor
 from app.services import pre_submission_validator as svc
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/pre-submission", tags=["pre-submission"])
+router = APIRouter(prefix="/api/pre-submission", tags=["pre-submission"], dependencies=[Depends(get_current_user)])
 
 # Cap the payload so a fresh tenant with millions of issues doesn't crush
 # the browser; the KPI counters still reflect the full totals.

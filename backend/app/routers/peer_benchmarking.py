@@ -22,8 +22,9 @@ import logging
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 
+from app.auth import get_current_user
 from app.services.peer_benchmarking import (
     compute_percentiles,
     specialty_benchmarks,
@@ -32,7 +33,7 @@ from app.services.peer_benchmarking import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/providers", tags=["providers", "benchmarking"])
+router = APIRouter(prefix="/api/providers", tags=["providers", "benchmarking"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------

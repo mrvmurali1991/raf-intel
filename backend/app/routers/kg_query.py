@@ -16,14 +16,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.knowledge_graph import kg_lookup_service as kg
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/kg/query", tags=["knowledge-graph"])
+router = APIRouter(prefix="/api/kg/query", tags=["knowledge-graph"], dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------
