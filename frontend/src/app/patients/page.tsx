@@ -34,6 +34,12 @@ import {
 import { downloadCSV } from "@/lib/csv-export";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials, riskAccentColor, riskTone } from "@/lib/ui-utils";
 import { tokens } from "@/styles/tokens";
+import {
+  usePatientActivity,
+  formatActionLabel,
+  formatRelativeTime,
+  ActivityEndpointMissingError,
+} from "@/components/raf-central/common/ActivityFeed";
 
 // ---------------------------------------------------------------------------
 // Constants & Types
@@ -745,6 +751,118 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
         </div>
       </div>
       </FocusTrap>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WorklistRowHoverActivity
+// ---------------------------------------------------------------------------
+// Lazily fetches the last 3 audit_log rows for the row's patient when
+// the user dwells on a row for >600ms. Renders an absolutely-positioned
+// tooltip anchored to the row (the row sets `position: relative`).
+// Degrades to nothing on 404 so the worklist doesn't flicker an empty
+// card while the backend endpoint (built by agent A4) lands.
+//
+// Implementation:
+//   - A single setTimeout (per hover-enter) flips `dwelled` to true.
+//   - `usePatientActivity` is invoked with `enabled: dwelled`, so React
+//     Query starts the request after the dwell threshold and dedupes
+//     across rows/cells. The same cache entry is reused by the panel.
+const HOVER_DWELL_MS = 600;
+
+function WorklistRowHoverActivity({
+  patientId,
+  isHovered,
+}: {
+  patientId: number | null | undefined;
+  isHovered: boolean;
+}) {
+  const [dwelled, setDwelled] = useState(false);
+  useEffect(() => {
+    if (!isHovered || patientId == null) {
+      // Hover-out — reset dwell flag so the next hover restarts the timer.
+      // setDwelled(false) here is the only setState in this effect body
+      // and it is the documented "reset on input change" use-case for
+      // the react-hooks/set-state-in-effect rule.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDwelled(false);
+      return;
+    }
+    const t = setTimeout(() => setDwelled(true), HOVER_DWELL_MS);
+    return () => clearTimeout(t);
+  }, [isHovered, patientId]);
+
+  const { data, isLoading, isError, error } = usePatientActivity(
+    patientId,
+    3,
+    dwelled,
+  );
+
+  if (!dwelled) return null;
+  // Endpoint not deployed yet — render nothing rather than flash an
+  // empty tooltip the user will quickly learn to ignore.
+  if (isError && error instanceof ActivityEndpointMissingError) return null;
+
+  return (
+    <div
+      role="tooltip"
+      aria-label="Recent activity for this patient"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        position: "absolute",
+        top: "calc(100% - 4px)",
+        right: 16,
+        zIndex: 40,
+        minWidth: 260,
+        maxWidth: 320,
+        padding: "10px 12px",
+        borderRadius: 8,
+        backgroundColor: tokens.white,
+        border: `1px solid ${C.border}`,
+        boxShadow: "0 8px 24px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08)",
+        fontSize: 12,
+        color: C.text,
+        pointerEvents: "auto",
+      }}
+    >
+      <div style={{
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        color: C.textMuted,
+        marginBottom: 6,
+      }}>
+        Recent activity
+      </div>
+      {isLoading && (
+        <div style={{ color: C.textMuted, fontSize: 11 }}>Loading…</div>
+      )}
+      {isError && !(error instanceof ActivityEndpointMissingError) && (
+        <div style={{ color: C.textMuted, fontSize: 11 }}>Unable to load activity.</div>
+      )}
+      {!isLoading && !isError && (!data || data.length === 0) && (
+        <div style={{ color: C.textMuted, fontSize: 11 }}>No activity recorded yet.</div>
+      )}
+      {data && data.length > 0 && (
+        <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          {data.map((it) => (
+            <li key={it.id} style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
+                {formatActionLabel(it.action)}
+              </span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>
+                {it.actor_email || "system"}
+                <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>
+                <span title={new Date(it.created_at).toLocaleString()}>
+                  {formatRelativeTime(it.created_at)}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
@@ -2301,10 +2419,15 @@ export default function PatientsPage() {
                 display: "grid",
                 ...WORKLIST_GRID_VARS,
                 alignItems: "center",
+                // overflow: visible so the absolutely-positioned hover-card
+                // (activity tooltip) can extend below the row. The fixed
+                // row height + flex content already prevents intrinsic
+                // overflow from inflating the row.
+                position: "relative",
                 height: ROW_HEIGHT,
                 minHeight: ROW_HEIGHT,
                 maxHeight: ROW_HEIGHT,
-                overflow: "hidden",
+                overflow: "visible",
                 padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
                 borderBottom: `1px solid ${C.rowDivider}`,
                 borderLeft: `3px solid ${accent}`,
@@ -2589,6 +2712,11 @@ export default function PatientsPage() {
                   transition: "transform 0.15s ease, color 0.15s ease",
                 }}
               />
+
+              {/* Recent-activity hover card — appears after 600ms dwell */}
+              {typeof pid === "number" && (
+                <WorklistRowHoverActivity patientId={pid} isHovered={isHovered} />
+              )}
             </div>
           );
         })}
