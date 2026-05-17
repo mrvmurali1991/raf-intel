@@ -142,6 +142,31 @@ api.interceptors.request.use((config) => {
 });
 
 // ---------------------------------------------------------------------------
+// Multi-tenant org switcher — X-Active-Tenant header
+//
+// The OrgSwitcher dropdown writes the selected tenant id to
+// ``localStorage.active_tenant_id``. We forward it on every API request so
+// the backend's ActiveTenantMiddleware can swap it into the user dict for
+// the duration of the request. Storage access is wrapped in try/catch so
+// the interceptor never throws (Safari private mode, blocked storage, SSR).
+// ---------------------------------------------------------------------------
+
+export const ACTIVE_TENANT_STORAGE_KEY = "active_tenant_id";
+
+api.interceptors.request.use((config) => {
+  if (typeof window === "undefined") return config;
+  try {
+    const activeTenant = window.localStorage.getItem(ACTIVE_TENANT_STORAGE_KEY);
+    if (activeTenant) {
+      config.headers["X-Active-Tenant"] = activeTenant;
+    }
+  } catch {
+    /* storage unavailable — fall through without the header */
+  }
+  return config;
+});
+
+// ---------------------------------------------------------------------------
 // Logging interceptors (always active)
 // ---------------------------------------------------------------------------
 

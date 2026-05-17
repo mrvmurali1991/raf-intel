@@ -45,6 +45,12 @@ interface JwtPayload {
   aud?: string | string[];
 }
 
+export interface AccessibleTenant {
+  id: string;
+  display_name: string;
+  role: string;
+}
+
 export interface User {
   id: string | number;
   email: string;
@@ -60,6 +66,8 @@ export interface User {
   mfa_enabled?: boolean;
   must_change_password?: boolean;
   onboarding_complete?: boolean;
+  /** Tenants this user may pivot into via the org switcher. */
+  accessible_tenants?: AccessibleTenant[];
 }
 
 interface AuthContextType {
@@ -121,6 +129,19 @@ export const authApi = axios.create({
 authApi.interceptors.request.use((config) => {
   if (_accessToken) {
     config.headers["Authorization"] = `Bearer ${_accessToken}`;
+  }
+  // Forward the org-switcher selection so /api/auth/me reflects the active
+  // tenant context (e.g. onboarding_complete is computed per-tenant). Mirrors
+  // the interceptor on the main api instance in lib/api.ts.
+  if (typeof window !== "undefined") {
+    try {
+      const activeTenant = window.localStorage.getItem("active_tenant_id");
+      if (activeTenant) {
+        config.headers["X-Active-Tenant"] = activeTenant;
+      }
+    } catch {
+      /* storage unavailable — fall through */
+    }
   }
   return config;
 });

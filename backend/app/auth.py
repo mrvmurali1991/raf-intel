@@ -123,6 +123,15 @@ async def _resolve_user(request: Request) -> dict[str, Any] | None:
             user_id,
         )
         return None
+
+    # Org switcher: ActiveTenantMiddleware has already validated that the
+    # X-Active-Tenant header (if present) is in the user's accessible-tenant
+    # list. Swap it in here so every downstream dependency that calls
+    # _resolve_user (incl. get_tenant_id and TenantGuardMiddleware) sees
+    # the chosen tenant. The validated value lives on request.state.
+    active_override = getattr(request.state, "active_tenant_id", None)
+    if active_override:
+        user["tenant_id"] = active_override
     return user
 
 

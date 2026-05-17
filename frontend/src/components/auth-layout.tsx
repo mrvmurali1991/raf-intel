@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { TenantPYChip } from "@/components/TenantPYChip";
 import { TenantAccessBanner } from "@/components/TenantAccessBanner";
+import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/Toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -146,6 +147,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           aria-label="App top bar"
         >
           <TenantAccessBanner />
+          <OrgSwitcher />
           <TenantPYChip />
         </div>
 
@@ -158,6 +160,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           aria-label="App tablet top bar"
         >
           <TenantAccessBanner />
+          <OrgSwitcher />
           <TenantPYChip />
         </div>
 

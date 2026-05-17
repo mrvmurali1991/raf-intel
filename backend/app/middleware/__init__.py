@@ -30,6 +30,7 @@ from app.middleware.request_logging import (
     RequestIDMiddleware,
     StructuredLoggingMiddleware,
 )
+from app.middleware.active_tenant import ActiveTenantMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.tenant_guard import TenantGuardMiddleware
 from app.middleware.timing import (
@@ -114,6 +115,14 @@ def setup_middleware(app: FastAPI) -> list[str]:
     # Tenant isolation guard — rejects requests without valid tenant_id
     app.add_middleware(TenantGuardMiddleware)
 
+    # Active-tenant override — reads X-Active-Tenant header and (after
+    # validating it against the user's accessible_tenants list) stashes the
+    # value on request.state so downstream _resolve_user calls can swap it
+    # into the user dict. Registered AFTER TenantGuardMiddleware so it runs
+    # FIRST in the request path (FastAPI middleware is LIFO), ensuring the
+    # state is set before TenantGuard re-resolves the user.
+    app.add_middleware(ActiveTenantMiddleware)
+
     # HIPAA security headers
     app.add_middleware(SecurityHeadersMiddleware)
 
@@ -139,6 +148,7 @@ def setup_middleware(app: FastAPI) -> list[str]:
             # Custom request headers sent by the frontend
             "X-Request-ID",
             "X-Tenant-ID",
+            "X-Active-Tenant",
         ],
         expose_headers=[
             # Custom response headers the browser is allowed to read

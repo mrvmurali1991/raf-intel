@@ -210,6 +210,18 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class AccessibleTenantItem(BaseModel):
+    """A tenant the current user is allowed to switch into.
+
+    ``id`` is a string so the same shape works whether tenant_id is a numeric
+    primary key or an opaque string identifier across deployments.
+    """
+
+    id: str
+    display_name: str
+    role: str
+
+
 class UserProfileResponse(BaseModel):
     id: int
     email: str
@@ -221,6 +233,7 @@ class UserProfileResponse(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     onboarding_complete: bool = False
+    accessible_tenants: list[AccessibleTenantItem] = []
 
 
 class UserDetailResponse(BaseModel):
@@ -887,6 +900,91 @@ def logout(
     return JSONResponse(content={"message": "Logged out successfully."})
 
 
+# Demo seed used when the user_tenant_access table doesn't exist yet.
+# Matches the Edifecs multi-payer/multi-LoB pattern: each row is one
+# tenant the active session may pivot into, with the role that user
+# holds within that tenant. Order matters — first item is the default.
+_DEMO_ACCESSIBLE_TENANTS: list[dict[str, str]] = [
+    {"id": "1", "display_name": "Acme Health", "role": "admin"},
+    {"id": "2", "display_name": "Beta Care", "role": "viewer"},
+]
+
+
+@lru_cache(maxsize=1)
+def _user_tenant_access_table_exists() -> bool:
+    """Return True when the optional user_tenant_access table is present.
+
+    Cached per-process so we don't run information_schema on every /me hit.
+    Falls back to False (demo path) on any DB error — the switcher must
+    never break login.
+    """
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM information_schema.tables "
+                "WHERE table_schema = DATABASE() AND table_name = 'user_tenant_access'"
+            )
+            row = cur.fetchone() or {}
+            return int(row.get("cnt") or 0) > 0
+    except Exception as exc:
+        logger.warning("user_tenant_access existence probe failed: %s", exc)
+        return False
+
+
+def _load_accessible_tenants(user_id: int) -> list[dict[str, str]]:
+    """Return the list of tenants this user may switch into.
+
+    Resolution order:
+      1. If the ``user_tenant_access`` table exists, read live mappings from it.
+         Schema expected:
+             user_id (FK -> users.id)
+             tenant_id (string/int)
+             display_name (optional; joined or denormalised)
+             role (per-tenant role)
+      2. Otherwise return the canonical demo seed used by the design partners.
+    """
+    if not _user_tenant_access_table_exists():
+        return list(_DEMO_ACCESSIBLE_TENANTS)
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    uta.tenant_id AS id,
+                    COALESCE(
+                        uta.display_name,
+                        ec.display_name,
+                        CONCAT('Tenant ', uta.tenant_id)
+                    ) AS display_name,
+                    COALESCE(uta.role, 'viewer') AS role
+                FROM user_tenant_access uta
+                LEFT JOIN emr_connections ec
+                    ON ec.tenant_id = uta.tenant_id AND ec.is_active = 1
+                WHERE uta.user_id = %s
+                ORDER BY uta.tenant_id
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall() or []
+    except Exception as exc:
+        # Table exists but the query failed (likely schema drift). Don't
+        # 500 — fall back to the demo seed so the switcher still renders.
+        logger.warning(
+            "user_tenant_access query failed for user_id=%s: %s", user_id, exc
+        )
+        return list(_DEMO_ACCESSIBLE_TENANTS)
+
+    return [
+        {
+            "id": str(r["id"]),
+            "display_name": str(r["display_name"]),
+            "role": str(r["role"]),
+        }
+        for r in rows
+    ] or list(_DEMO_ACCESSIBLE_TENANTS)
+
+
 @router.get(
     "/me",
     summary="Get current user profile",
@@ -934,6 +1032,16 @@ def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileRespons
             onboarding_complete = False
 
     row["onboarding_complete"] = onboarding_complete
+
+    # Accessible tenants — for the org switcher in the header. Always present
+    # (at minimum the current tenant, via the demo seed) so the frontend can
+    # render the dropdown without an extra round-trip.
+    try:
+        row["accessible_tenants"] = _load_accessible_tenants(int(user["id"]))
+    except Exception as exc:
+        logger.warning("Failed to load accessible_tenants for user %s: %s", user["id"], exc)
+        row["accessible_tenants"] = list(_DEMO_ACCESSIBLE_TENANTS)
+
     return UserProfileResponse(**row)
 
 
