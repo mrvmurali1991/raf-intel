@@ -1351,8 +1351,6 @@ export default function SuspectsPage() {
           const isExpanded = expandedId === s.id;
           const isFocused = focusedRowIdx === idx;
 
-          const isFocused = focusedRowIdx === idx;
-
           return (
             <div
               key={s.id}
@@ -2306,10 +2304,13 @@ function SuspectDrawer({
           >
             <div>
               <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-                Confidence
+                Signal
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: cConf, fontVariantNumeric: "tabular-nums" }}>
-                {(conf * 100).toFixed(0)}%
+              <div
+                style={{ fontSize: 16, fontWeight: 700, color: cConf }}
+                title={`Internal signal score: ${(conf * 100).toFixed(0)}% (not a calibrated probability)`}
+              >
+                {conf >= 0.85 ? "Strong" : conf >= 0.65 ? "Moderate" : "Weak"}
               </div>
             </div>
             <div>

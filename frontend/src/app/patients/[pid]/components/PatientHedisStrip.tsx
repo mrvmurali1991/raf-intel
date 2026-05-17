@@ -9,11 +9,7 @@
  * routes to /hedis filtered to this patient.
  *
  * Usage (inside patients/[pid]/page.tsx):
-<<<<<<< HEAD
  *   <PatientHedisStrip pid={pid} year={selectedYear} onGoto={handleTabChange} />
-=======
- *   <PatientHedisStrip pid={pid} year={selectedYear} />
->>>>>>> fix/round2-pcp-workflow
  */
 
 import React from "react";
