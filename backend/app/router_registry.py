@@ -80,6 +80,7 @@ from app.routers import health as health_router
 from app.routers import icd10 as icd10_router
 from app.routers import insights as insights_router
 from app.routers import meat as meat_router
+from app.routers import patient_activity as patient_activity_router
 from app.routers import pipeline as pipeline_router
 from app.routers import pipeline_settings as pipeline_settings_router
 from app.routers import provider_suspect_hotlist as provider_suspect_hotlist_router
@@ -180,6 +181,10 @@ def register_routers(app: FastAPI) -> None:
 
     # Core clinical entities
     _mount(app, patients.router)
+    # Per-patient activity feed (PCP review #8 carry-over). Mounted under
+    # the same /api/patients prefix as patients.router but owns the distinct
+    # ``/{pid}/activity`` sub-path so there is no route collision.
+    _mount(app, patient_activity_router.router)
     _mount(app, raf.router)
     _mount(app, raf_central_router.router)
     _mount(app, forecast_router.router)
