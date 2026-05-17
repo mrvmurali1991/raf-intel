@@ -1,39 +1,36 @@
 "use client";
 
 /**
- * KeyboardShortcuts — Global sequential keyboard shortcuts + help modal.
+ * KeyboardShortcuts — Global keyboard shortcuts + help modal.
  *
- * Shortcuts:
- *   g h  → Dashboard
- *   g p  → Patients
- *   g a  → Clinical Analysis
- *   g s  → Review Queue (Suspects)
- *   g r  → Analytics (Reports)
- *   g e  → EMR Config
- *   ?    → Show this help modal
+ * Catalog of every shortcut lives in `@/lib/keyboard-shortcuts.ts`
+ * (SHORTCUT_CATALOG).  This component owns:
  *
- * Usage (already wired in auth-layout.tsx):
- *   <KeyboardShortcuts />
+ *   * The single global `keydown` listener.
+ *   * Navigation dispatch via Next.js's `useRouter()`.
+ *   * Forwarding context-sensitive shortcuts (A / D / R / ← / → / Esc)
+ *     to per-page handlers registered through `registerContextShortcut`.
+ *   * The `?` help overlay.
  *
- * Other components can check whether the user has ever used a shortcut via:
- *   localStorage.getItem("raf_kb_used") === "1"
+ * Components that want their own behaviour for A / D / R / arrows / Esc
+ * import `registerContextShortcut` from "@/lib/keyboard-shortcuts" and
+ * push a handler on mount / focus.
  */
 
 import { useEffect, useState, useRef, CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { X, Keyboard } from "lucide-react";
+import {
+  SHORTCUT_CATALOG,
+  dispatchContextShortcut,
+  dispatchEscape,
+  focusPatientSearch,
+  type ShortcutCategory,
+} from "@/lib/keyboard-shortcuts";
 
 // ---------------------------------------------------------------------------
-// Types
+// localStorage flag — set the first time any shortcut fires
 // ---------------------------------------------------------------------------
-
-interface Shortcut {
-  key: string;       // e.g. "g h"
-  description: string;
-  action: () => void;
-}
-
-// localStorage flag set once the user fires any shortcut
 const KB_USED_KEY = "raf_kb_used";
 
 export function markKeyboardShortcutUsed() {
@@ -41,11 +38,10 @@ export function markKeyboardShortcutUsed() {
     const alreadySet = localStorage.getItem(KB_USED_KEY) === "1";
     localStorage.setItem(KB_USED_KEY, "1");
     if (!alreadySet) {
-      // Notify same-tab listeners (e.g. Sidebar) immediately
       window.dispatchEvent(new CustomEvent("raf-kb-used"));
     }
   } catch {
-    // ignore
+    /* ignore */
   }
 }
 
@@ -58,7 +54,7 @@ export function hasUsedKeyboardShortcuts(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Design tokens (matching CommandPalette / Sidebar dark-first palette)
+// Design tokens
 // ---------------------------------------------------------------------------
 const BG_OVERLAY = "rgba(0,0,0,0.7)";
 const BG_MODAL = "#0F172A";
@@ -77,91 +73,104 @@ const ACCENT_GREEN = "#2dd4bf";
 export function KeyboardShortcuts() {
   const router = useRouter();
   const [showHelp, setShowHelp] = useState(false);
-  // Stores the first key of a pending sequence, e.g. "g"
-  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const pendingKeyRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const SHORTCUTS: Shortcut[] = [
-    { key: "g h", description: "Go to Dashboard",       action: () => router.push("/") },
-    { key: "g p", description: "Go to Patients",        action: () => router.push("/patients") },
-    { key: "g a", description: "Go to Clinical Analysis", action: () => router.push("/analysis") },
-    { key: "g s", description: "Go to Review Queue",    action: () => router.push("/suspects") },
-    { key: "g r", description: "Go to Analytics",       action: () => router.push("/reports") },
-    { key: "g e", description: "Go to EMR Config",      action: () => router.push("/emr-config") },
-    { key: "?",   description: "Show keyboard shortcuts", action: () => setShowHelp(true) },
-  ];
+  // ----- Navigation handler (g <letter>) -----------------------------------
+  function handleNavSequence(sequence: string): boolean {
+    switch (sequence) {
+      case "g h": router.push("/"); return true;
+      case "g p": router.push("/patients"); return true;
+      case "g w": router.push("/worklist"); return true;
+      case "g a": router.push("/analysis"); return true;
+      case "g s": router.push("/review-queue"); return true;
+      case "g r": router.push("/reports"); return true;
+      case "g e": router.push("/emr-config"); return true;
+      default: return false;
+    }
+  }
 
+  // ----- Single-key handler ------------------------------------------------
+  function handleSingleKey(key: string): boolean {
+    if (key === "?") { setShowHelp(true); return true; }
+    if (key === "/") { focusPatientSearch(); return true; }
+    if (key === "A" || key === "a") {
+      return dispatchContextShortcut("accept-focused-suspect");
+    }
+    if (key === "D" || key === "d") {
+      return dispatchContextShortcut("dismiss-focused-suspect");
+    }
+    if (key === "R" || key === "r") {
+      return dispatchContextShortcut("mark-meat-reviewed");
+    }
+    if (key === "ArrowLeft")  return dispatchContextShortcut("prev-patient");
+    if (key === "ArrowRight") return dispatchContextShortcut("next-patient");
+    if (key === "Escape") {
+      if (showHelp) { setShowHelp(false); return true; }
+      dispatchEscape();
+      return true;
+    }
+    return false;
+  }
+
+  // ----- Listener ----------------------------------------------------------
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Never fire when typing in a focusable input element
-      const tag = (e.target as HTMLElement).tagName;
-      const isEditable = (e.target as HTMLElement).isContentEditable;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || isEditable) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName ?? "";
+      const isEditable = target?.isContentEditable === true;
+      const isInInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || isEditable;
+      // `?` and `Escape` work even when typing — they're universal.
+      const universal = e.key === "?" || e.key === "Escape";
+      if (isInInput && !universal) return;
 
-      // Ignore modifier-key combos (e.g. Cmd+K is handled elsewhere)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const key = e.key;
+      const pending = pendingKeyRef.current;
 
-      setPendingKey((currentPendingKey) => {
-        if (currentPendingKey) {
-          // We have a first key — check if "pendingKey + ' ' + key" matches a shortcut
-          const sequence = `${currentPendingKey} ${key}`;
-          const match = SHORTCUTS.find((s) => s.key === sequence);
-          if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
-
-          if (match) {
-            e.preventDefault();
-            markKeyboardShortcutUsed();
-            match.action();
-          }
-          return null;
-        }
-
-        // Single-key shortcut (e.g. "?")
-        const singleMatch = SHORTCUTS.find(
-          (s) => s.key === key && !s.key.includes(" ")
-        );
-        if (singleMatch) {
+      // Two-key sequence first.
+      if (pending) {
+        const sequence = `${pending} ${key}`;
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        pendingKeyRef.current = null;
+        if (handleNavSequence(sequence)) {
           e.preventDefault();
           markKeyboardShortcutUsed();
-          singleMatch.action();
-          return null;
+          return;
         }
+      }
 
-        // Check if this key is a valid first key of any sequence shortcut
-        const isSequenceStart = SHORTCUTS.some(
-          (s) => s.key.includes(" ") && s.key.split(" ")[0] === key
-        );
-        if (isSequenceStart) {
-          // Clear pending state after 500 ms if no second key arrives
-          if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
-          pendingTimerRef.current = setTimeout(() => setPendingKey(null), 500);
-          return key;
-        }
+      // Single-key dispatch.
+      if (handleSingleKey(key)) {
+        e.preventDefault();
+        markKeyboardShortcutUsed();
+        return;
+      }
 
-        return null;
-      });
+      // Begin a new "g" sequence?
+      if (key === "g") {
+        pendingKeyRef.current = "g";
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = setTimeout(() => {
+          pendingKeyRef.current = null;
+        }, 650);
+      }
     }
 
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  });
-
-  // Close modal on Escape
-  useEffect(() => {
-    if (!showHelp) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowHelp(false);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showHelp]);
 
   if (!showHelp) return null;
 
   return (
     <div
+      data-testid="shortcut-help-overlay"
       style={{
         position: "fixed",
         inset: 0,
@@ -181,18 +190,18 @@ export function KeyboardShortcuts() {
       <div
         style={{
           width: "100%",
-          maxWidth: 520,
+          maxWidth: 640,
+          maxHeight: "85vh",
+          overflowY: "auto",
           backgroundColor: BG_MODAL,
           border: `1px solid ${BORDER}`,
           borderRadius: 14,
-          overflow: "hidden",
           boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -200,13 +209,14 @@ export function KeyboardShortcuts() {
             justifyContent: "space-between",
             padding: "16px 20px",
             borderBottom: `1px solid ${BORDER}`,
+            position: "sticky",
+            top: 0,
+            backgroundColor: BG_MODAL,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Keyboard style={{ width: 18, height: 18, color: ACCENT }} aria-hidden />
-            <span
-              style={{ fontSize: 15, fontWeight: 600, color: TEXT_PRIMARY }}
-            >
+            <span style={{ fontSize: 15, fontWeight: 600, color: TEXT_PRIMARY }}>
               Keyboard Shortcuts
             </span>
           </div>
@@ -227,32 +237,21 @@ export function KeyboardShortcuts() {
           </button>
         </div>
 
-        {/* Shortcut grid */}
         <div style={{ padding: "16px 20px 20px" }}>
-          {/* Navigation section */}
-          <SectionHeading label="Navigation" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
-            {SHORTCUTS.filter((s) => s.key !== "?").map((s) => (
-              <ShortcutRow key={s.key} shortcut={s} />
-            ))}
-          </div>
-
-          {/* General section */}
-          <SectionHeading label="General" style={{ marginTop: 20 }} />
-          <div>
-            {SHORTCUTS.filter((s) => s.key === "?").map((s) => (
-              <ShortcutRow key={s.key} shortcut={s} />
-            ))}
-            <ShortcutRow
-              shortcut={{ key: "⌘ K", description: "Open command palette", action: () => {} }}
-            />
-            <ShortcutRow
-              shortcut={{ key: "Esc", description: "Close modals / dialogs", action: () => {} }}
-            />
-          </div>
+          {(["Navigation", "Patient & Worklist", "Review Actions", "General"] as ShortcutCategory[]).map(
+            (cat, i) => (
+              <div key={cat}>
+                <SectionHeading label={cat} style={{ marginTop: i === 0 ? 0 : 18 }} />
+                <div>
+                  {SHORTCUT_CATALOG.filter((s) => s.category === cat).map((s) => (
+                    <ShortcutRow key={s.key} shortcut={s} />
+                  ))}
+                </div>
+              </div>
+            ),
+          )}
         </div>
 
-        {/* Footer */}
         <div
           style={{
             padding: "10px 20px",
@@ -278,13 +277,7 @@ export function KeyboardShortcuts() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function SectionHeading({
-  label,
-  style,
-}: {
-  label: string;
-  style?: CSSProperties;
-}) {
+function SectionHeading({ label, style }: { label: string; style?: CSSProperties }) {
   return (
     <div
       style={{
@@ -302,7 +295,7 @@ function SectionHeading({
   );
 }
 
-function ShortcutRow({ shortcut }: { shortcut: Omit<Shortcut, "action"> & { action?: () => void } }) {
+function ShortcutRow({ shortcut }: { shortcut: { key: string; description: string } }) {
   const keys = shortcut.key.split(" ");
   return (
     <div
