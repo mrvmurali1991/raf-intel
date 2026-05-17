@@ -129,13 +129,69 @@ def _coerce_note_date(raw: Any) -> date | None:
     return None
 
 
-def _fetch_year_notes(patient_id: int, year: int) -> list[dict[str, Any]]:
+def _resolve_encounter_id(n: dict[str, Any], patient_id: int) -> int | None:
+    """Resolve the encounter_id for a note dict returned by the connector.
+
+    OpenEMR returns the ``encounter`` field as an integer PK from
+    ``form_encounter``.  When the field is 0 or missing we attempt a
+    secondary lookup by ``(pid, date)`` before giving up.  Returns
+    ``None`` — rather than 0 — when no encounter can be associated,
+    so callers can apply strict_encounter_attribution safely.
+    """
+    raw_enc = n.get("encounter")
+    try:
+        enc_int = int(raw_enc)
+    except (TypeError, ValueError):
+        enc_int = 0
+
+    if enc_int > 0:
+        return enc_int
+
+    # Secondary lookup: form_encounter keyed on pid + date.
+    nd = _coerce_note_date(n.get("date"))
+    if nd is None:
+        return None
+    try:
+        from app.services.openemr_connector import get_openemr_db_cursor
+        with get_openemr_db_cursor() as cur:
+            cur.execute(
+                "SELECT encounter FROM form_encounter "
+                "WHERE pid = %s AND DATE(date) = %s "
+                "ORDER BY encounter DESC LIMIT 1",
+                (patient_id, nd.isoformat()),
+            )
+            row = cur.fetchone()
+            if row:
+                return int(row.get("encounter") or 0) or None
+    except Exception as exc:
+        logger.debug(
+            "meat_extractor: encounter lookup fallback failed pid=%s date=%s: %s",
+            patient_id, nd, exc,
+        )
+    return None
+
+
+def _fetch_year_notes(
+    patient_id: int,
+    year: int,
+    *,
+    strict_encounter_attribution: bool = True,
+) -> list[dict[str, Any]]:
     """Return clinical notes for *patient_id* whose date is in *year*.
 
     Uses the existing ``openemr_connector.get_all_clinical_notes_for_patient``
     helper which already merges OpenEMR ``form_soap`` rows with
     ingested ``clinical_notes`` rows.  Notes outside the measurement
     year are filtered out so we don't burn LLM tokens on old chart data.
+
+    Parameters
+    ----------
+    strict_encounter_attribution:
+        When ``True`` (default, RADV mode), any note whose encounter_id
+        cannot be resolved is **skipped** — persisting evidence without a
+        page/encounter-level citation would fail RADV review.  When
+        ``False``, a WARNING is logged and the note is included anyway
+        (useful for bulk back-fills where exact attribution is advisory).
     """
     try:
         from app.services.openemr_connector import get_all_clinical_notes_for_patient
@@ -155,8 +211,26 @@ def _fetch_year_notes(patient_id: int, year: int) -> list[dict[str, Any]]:
         nd = _coerce_note_date(n.get("date"))
         if nd is None or nd.year != year:
             continue
+
+        enc_id = _resolve_encounter_id(n, patient_id)
+
+        if enc_id is None:
+            if strict_encounter_attribution:
+                logger.debug(
+                    "meat_extractor: skipping note pid=%s date=%s — "
+                    "encounter_id unresolvable (strict_encounter_attribution=True)",
+                    patient_id, nd,
+                )
+                continue
+            else:
+                logger.warning(
+                    "meat_extractor: note pid=%s date=%s has no encounter_id; "
+                    "including anyway (strict_encounter_attribution=False)",
+                    patient_id, nd,
+                )
+
         kept.append({
-            "encounter_id": int(n.get("encounter") or 0) or None,
+            "encounter_id": enc_id,
             "date": nd,
             "text": text,
         })
@@ -284,26 +358,51 @@ def _llm_extract_one_note(
 
 
 def _validate_offsets(note_text: str, sentence: str | None, start: Any, end: Any) -> list[int] | None:
-    """Sanity-check the offsets returned by the LLM.
+    """Sanity-check the offsets returned by the LLM and locate the span.
 
-    If they are missing / non-integer / point at the wrong slice we try to
-    relocate the sentence ourselves via ``str.find``.  Returns ``[start, end]``
-    or ``None`` if we cannot verify the sentence appears in the note at all.
+    If the LLM-reported offsets are correct, return them directly.
+    Otherwise search ALL occurrences of the sentence in the note and:
+      - If the LLM supplied a plausible offset hint, pick the occurrence
+        whose start is closest to that hint (Manhattan distance).
+      - If no LLM offset hint is available, pick the LAST occurrence —
+        the assessment/plan section appears later in the note and is the
+        clinically authoritative location, not the chief-complaint mention.
+    When the sentence does not appear at all, return ``None`` so the caller
+    drops it rather than persisting wrong offsets.
     """
     if not sentence:
         return None
+
+    # Parse the LLM-supplied offset hint (may be absent / non-integer).
+    llm_hint: int | None = None
     try:
         s = int(start)
         e = int(end)
+        if 0 <= s < e <= len(note_text):
+            llm_hint = s
+            if note_text[s:e].strip() == sentence.strip():
+                return [s, e]
     except (TypeError, ValueError):
-        s = e = -1
-    if 0 <= s < e <= len(note_text) and note_text[s:e].strip() == sentence.strip():
-        return [s, e]
-    # Try to relocate.
-    idx = note_text.find(sentence)
-    if idx >= 0:
+        pass
+
+    # Find every occurrence of the sentence in the note.
+    occurrences = [m.start() for m in re.finditer(re.escape(sentence), note_text)]
+    if not occurrences:
+        # No exact match — sentence may be hallucinated; skip.
+        return None
+
+    if len(occurrences) == 1:
+        idx = occurrences[0]
         return [idx, idx + len(sentence)]
-    return None
+
+    # Multiple occurrences: pick by LLM hint or fall back to last occurrence.
+    if llm_hint is not None:
+        idx = min(occurrences, key=lambda pos: abs(pos - llm_hint))
+    else:
+        # Last occurrence is most likely in the assessment/plan section.
+        idx = occurrences[-1]
+
+    return [idx, idx + len(sentence)]
 
 
 # ---------------------------------------------------------------------------
@@ -430,6 +529,22 @@ def extract_meat_evidence_for_hcc(
 # Persistence — write the extracted evidence into raf_meat_evidence.
 # ---------------------------------------------------------------------------
 
+def _mean_present_confidences(confidence: dict[str, float]) -> float:
+    """Return the mean confidence over letters that are actually present.
+
+    The confidence dict uses keys ``"m"``, ``"e"``, ``"a"``, ``"t"`` and
+    stores -1.0 as the sentinel for "not found".  We exclude sentinels
+    (values <= 0) so that a patient with only M and E present does not
+    have their confidence halved by dividing by 4 instead of 2.
+
+    Returns 0.0 when no letter has a positive confidence.
+    """
+    values = [v for v in confidence.values() if v is not None and v > 0.0]
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
 def _ensure_offset_columns() -> None:
     """Idempotently ensure the new JSON / source_encounter_id columns exist.
 
@@ -515,7 +630,7 @@ def persist_meat_evidence(
             meat_treatment=evidence.meat_t_text,
             raw_note_excerpt=excerpt,
             nlp_model="gemini-2.0-flash:meat_extractor",
-            confidence=sum(evidence.confidence.values()) / 4.0,
+            confidence=_mean_present_confidences(evidence.confidence),
             measurement_year=measurement_year,
         )
     except Exception as exc:

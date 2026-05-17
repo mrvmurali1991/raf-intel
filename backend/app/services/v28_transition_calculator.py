@@ -52,7 +52,9 @@ from typing import Any
 from app.cache import cache_delete_pattern, cache_get, cache_set
 from app.config import settings
 from app.db import raf_cursor
+from app.services.hcc_hierarchy import V24_HIERARCHY_CHAINS, V28_HIERARCHY_CHAINS, _build_lookup
 from app.services.raf.calculator import calculate_raf_score_multi_model
+from app.services.raf.revenue_constants import revenue_per_raf_point as _revenue_lookup
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +63,61 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# Revenue conversion: $/RAF point/year. Sourced from settings so it tracks the
-# annual CMS base-rate update without code edits.
-def _revenue_per_raf_point() -> float:
-    return float(getattr(settings, "cms_revenue_per_raf_point", 11015.04))
+# Revenue conversion: $/RAF point/year.
+# Sourced from revenue_constants.py (year-aware table) and falls back to the
+# settings override so operators can pin a custom rate without a code deploy.
+def _revenue_per_raf_point(year: int | None = None) -> float:
+    override = getattr(settings, "cms_revenue_per_raf_point", None)
+    if override is not None:
+        return float(override)
+    return _revenue_lookup(year)
+
+
+# ---------------------------------------------------------------------------
+# HCC hierarchy helpers — applied per model-version before set-diff
+# ---------------------------------------------------------------------------
+
+_V24_TRUMPED_BY = _build_lookup(V24_HIERARCHY_CHAINS)
+_V28_TRUMPED_BY = _build_lookup(V28_HIERARCHY_CHAINS)
+
+
+def _filter_hierarchy(hcc_codes: list[str], model_version: str) -> list[str]:
+    """Return *hcc_codes* with model-version-appropriate trumped HCCs removed.
+
+    A trumped HCC (e.g. HCC 18 when HCC 17 is present under V24 diabetes rules)
+    is excluded from the resulting list so that set-diffs between the V24 and
+    V28 sides reflect genuine code-mapping changes, not phantom drops caused
+    by a more-severe HCC suppressing a less-severe one on only one side.
+
+    Parameters
+    ----------
+    hcc_codes:
+        Raw HCC list from the multi-model engine (strings like "18", "HCC18").
+    model_version:
+        "V24" or "V28".
+    """
+    trumped_by = _V24_TRUMPED_BY if model_version.upper() == "V24" else _V28_TRUMPED_BY
+    # Normalise to ints for lookup; keep originals for output.
+    present_ints: set[int] = set()
+    for code in hcc_codes:
+        try:
+            present_ints.add(int(str(code).replace("HCC", "").strip()))
+        except (TypeError, ValueError):
+            pass
+
+    filtered: list[str] = []
+    for code in hcc_codes:
+        try:
+            hcc_int = int(str(code).replace("HCC", "").strip())
+        except (TypeError, ValueError):
+            filtered.append(code)
+            continue
+        trumpers = trumped_by.get(hcc_int, [])
+        if any(t in present_ints for t in trumpers):
+            # This HCC is dominated by a more-severe sibling on this model side.
+            continue
+        filtered.append(code)
+    return filtered
 
 
 _PATIENT_CACHE_TTL = 60          # 1 minute — per-patient deltas refresh fast
@@ -202,9 +255,30 @@ def score_delta_v24_to_v28(
     v28_raf = float(v28.get("payment_raf") or v28.get("raw_raf") or 0.0)
     raf_delta = round(v28_raf - v24_raf, 4)
     raf_delta_pct = round((raf_delta / v24_raf * 100.0), 2) if v24_raf else 0.0
-    revenue_delta = round(raf_delta * _revenue_per_raf_point(), 2)
+    revenue_delta = round(raf_delta * _revenue_per_raf_point(year), 2)
 
     comp = res.get("hcc_comparison") or {}
+
+    # Apply model-version-appropriate hierarchy trump before set-diff.
+    # Without this pass, an HCC that is trumped on ONE side (e.g. HCC 18
+    # suppressed by HCC 17 in V24 diabetes hierarchy) would appear in the
+    # v24_only set even though it was never genuinely "lost" in V28 — it was
+    # simply superseded on the V24 side.
+    raw_v24_only = list(comp.get("v24_only") or [])
+    raw_v28_only = list(comp.get("v28_only") or [])
+    raw_in_both  = list(comp.get("in_both")  or [])
+
+    # Reconstruct each model's full HCC set, apply hierarchy, then re-diff.
+    v24_all_hccs = raw_v24_only + raw_in_both
+    v28_all_hccs = raw_v28_only + raw_in_both
+
+    v24_active = set(_filter_hierarchy(v24_all_hccs, "V24"))
+    v28_active = set(_filter_hierarchy(v28_all_hccs, "V28"))
+
+    dropped_hccs = sorted(v24_active - v28_active)
+    gained_hccs  = sorted(v28_active - v24_active)
+    common_hccs  = sorted(v24_active & v28_active)
+
     out = {
         "patient_id":           int(patient_id),
         "measurement_year":     int(year),
@@ -213,9 +287,9 @@ def score_delta_v24_to_v28(
         "raf_delta":            raf_delta,
         "raf_delta_pct":        raf_delta_pct,
         "revenue_delta_annual": revenue_delta,
-        "dropped_hccs":         list(comp.get("v24_only") or []),
-        "gained_hccs":          list(comp.get("v28_only") or []),
-        "common_hccs":          list(comp.get("in_both") or []),
+        "dropped_hccs":         dropped_hccs,
+        "gained_hccs":          gained_hccs,
+        "common_hccs":          common_hccs,
         "icd_count":            len(res.get("icd_codes") or []),
         "model_segment":        res.get("model_segment"),
         "_disclaimer":          (
