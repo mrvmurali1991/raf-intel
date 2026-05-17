@@ -157,6 +157,13 @@ class SuspectCard(BaseModel):
     # coefficient (patient-safety review #6, #7).
     trumped_by_hcc: int | None = None
     meat_completeness: float | None = None
+    # Canonical specialty bucket (cardiology / nephrology / endocrinology /
+    # pulmonology / oncology / behavioral / general) derived from the HCC
+    # code via app.services.specialty_routing. The UI uses this to filter
+    # suspects to whatever the viewing clinician owns — a nephrologist sees
+    # CKD-related suspects first, a cardiologist sees CHF first, etc.
+    # ("ForeSee" specialty-aware routing pattern.)
+    specialty: str = "general"
 
 
 class RecaptureCard(BaseModel):
@@ -497,6 +504,7 @@ def _build_suspects(pid: int, year: int, tenant_id: str) -> list[SuspectCard]:
         get_description as _icd_desc,
         get_hcc_mapping as _icd_to_hcc,
     )
+    from app.services.specialty_routing import specialty_for_hcc
 
     try:
         rows = get_suspects_for_patient(pid, year=year, tenant_id=tenant_id) or []
@@ -578,6 +586,7 @@ def _build_suspects(pid: int, year: int, tenant_id: str) -> list[SuspectCard]:
                 status=str(r.get("status") or "open"),
                 trumped_by_hcc=trumped_map.get(hcc_int),
                 meat_completeness=meat_pct,
+                specialty=specialty_for_hcc(hcc_int),
             )
         )
     return out
