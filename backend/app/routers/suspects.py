@@ -833,3 +833,137 @@ def dismiss_suspect_endpoint(
         reason=body.reason,
         record=updated,
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/suspects/{suspect_id}/reverse-writeback
+# ---------------------------------------------------------------------------
+
+_MIN_REVERSAL_REASON_LEN = 30
+_REVERSAL_ALLOWED_ROLES = frozenset({"coder", "admin"})
+
+
+class ReverseWritebackRequest(BaseModel):
+    reversal_reason: str = Field(
+        ...,
+        min_length=_MIN_REVERSAL_REASON_LEN,
+        max_length=4000,
+        description=(
+            "Clinical or administrative reason for reversing the FHIR write-back "
+            "(minimum 30 characters). This is recorded in the immutable audit log."
+        ),
+    )
+
+
+class ReverseWritebackResponse(BaseModel):
+    suspect_id: int
+    condition_id: str
+    reversed: bool
+    reversal_reason: str
+
+
+@router.post(
+    "/{suspect_id}/reverse-writeback",
+    summary="Reverse a previously written FHIR Condition (mark entered-in-error)",
+    response_model=ReverseWritebackResponse,
+)
+@limiter.limit("10/minute")
+def reverse_writeback_endpoint(
+    request: Request,
+    suspect_id: int,
+    body: ReverseWritebackRequest,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("suspects", "write")),
+) -> ReverseWritebackResponse:
+    """
+    Mark the FHIR Condition previously pushed for *suspect_id* as
+    ``entered-in-error`` in OpenEMR.
+
+    This provides the reversal path required for Patient Safety compliance
+    when an AI-suggested condition is accepted in error.
+
+    * Requires ``reversal_reason`` of at least 30 characters.
+    * Requires the caller's role to be ``coder`` or ``admin``.
+    * Emits ``SUSPECT_WRITEBACK_REVERSED`` to the immutable audit log.
+    * Updates ``raf_suspect_conditions.fhir_writeback_reversed_at`` and
+      ``.fhir_writeback_reversal_reason``.
+    """
+    user_role: str = (current_user.get("role") or "").lower()
+    if user_role not in _REVERSAL_ALLOWED_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Role '{user_role}' is not permitted to reverse FHIR write-backs. "
+                "Required: coder or admin."
+            ),
+        )
+
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    # Look up the condition_id stored on the suspect row
+    condition_id: str | None = None
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT fhir_condition_id
+                FROM   raf_suspect_conditions
+                WHERE  id        = %s
+                  AND  tenant_id = %s
+                LIMIT  1
+                """,
+                (suspect_id, tenant_id),
+            )
+            row = cur.fetchone()
+        if row:
+            condition_id = (row.get("fhir_condition_id") or "").strip() or None
+    except Exception as exc:
+        logger.exception(
+            "reverse_writeback_endpoint: DB lookup failed for suspect=%s: %s",
+            suspect_id, exc,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    if not condition_id:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No FHIR condition_id found for suspect {suspect_id}. "
+                "Either the write-back was never performed or the condition id was not recorded."
+            ),
+        )
+
+    from app.services.fhir_problem_list import reverse_problem_list_condition
+
+    try:
+        result = reverse_problem_list_condition(
+            condition_id=condition_id,
+            reversal_reason=body.reversal_reason,
+            tenant_id=tenant_id,
+            user_id=reviewer_user_id or 0,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        logger.exception(
+            "reverse_writeback_endpoint: FHIR reversal failed suspect=%s condition=%s: %s",
+            suspect_id, condition_id, exc,
+        )
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        logger.exception(
+            "reverse_writeback_endpoint: unexpected error suspect=%s: %s",
+            suspect_id, exc,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return ReverseWritebackResponse(
+        suspect_id=suspect_id,
+        condition_id=condition_id,
+        reversed=result.get("success", False),
+        reversal_reason=body.reversal_reason,
+    )

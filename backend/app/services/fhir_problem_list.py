@@ -65,6 +65,9 @@ _BROWSER_UA = (
 )
 _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
+# Roles that are considered credentialed for the purposes of "confirmed" status
+_CREDENTIALED_ROLES = frozenset({"coder", "admin", "physician"})
+
 
 def _retryable(exc: BaseException) -> bool:
     if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout)):
@@ -84,7 +87,93 @@ _fhir_post_retry = retry(
 
 
 # ---------------------------------------------------------------------------
-# Body builder (pure, so the unit test can assert against it)
+# MEAT evidence helpers
+# ---------------------------------------------------------------------------
+
+
+def _fetch_meat_notes(suspect_id: int | str) -> list[dict[str, Any]]:
+    """Return FHIR note entries built from raf_meat_evidence rows for suspect_id.
+
+    Each note entry: ``{authorString, time, text}``
+
+    Returns an empty list when there is no MEAT evidence or the DB query fails.
+    This function never raises — callers must not be blocked by missing MEAT data.
+    """
+    try:
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT meat_m, meat_e, meat_a, meat_t,
+                       meat_m_text, meat_e_text, meat_a_text, meat_t_text,
+                       created_at, reviewed_by
+                FROM   raf_meat_evidence
+                WHERE  suspect_id = %s
+                ORDER  BY created_at DESC
+                LIMIT  1
+                """,
+                (int(suspect_id),),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.warning(
+            "_fetch_meat_notes: DB query failed for suspect_id=%s: %s",
+            suspect_id, exc,
+        )
+        return []
+
+    if not row:
+        return []
+
+    notes: list[dict[str, Any]] = []
+    letter_map = [
+        ("M", "meat_m", "meat_m_text"),
+        ("E", "meat_e", "meat_e_text"),
+        ("A", "meat_a", "meat_a_text"),
+        ("T", "meat_t", "meat_t_text"),
+    ]
+    ts = (row.get("created_at") or datetime.now(tz=timezone.utc))
+    ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+    author = row.get("reviewed_by") or "raf_intelligence"
+
+    for letter, flag_col, text_col in letter_map:
+        flag = row.get(flag_col)
+        text = (row.get(text_col) or "").strip()
+        if flag or text:
+            label = {"M": "Monitoring", "E": "Evaluation", "A": "Assessment", "T": "Treatment"}[letter]
+            body_text = text if text else f"{label} evidence present (no verbatim snippet)"
+            notes.append({
+                "authorString": author,
+                "time": ts_str,
+                "text": f"[{letter}] {label}: {body_text}",
+            })
+
+    return notes
+
+
+def _fetch_user_npi(user_id: int | None) -> str | None:
+    """Return the NPI string for user_id from users.npi, or None if absent."""
+    if user_id is None:
+        return None
+    try:
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            cur.execute("SELECT npi FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+        if row:
+            npi = (row.get("npi") or "").strip()
+            return npi if npi else None
+    except Exception as exc:
+        logger.warning(
+            "_fetch_user_npi: DB query failed for user_id=%s: %s", user_id, exc
+        )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Body builder (pure-ish — DB lookups are isolated to helper functions above)
 # ---------------------------------------------------------------------------
 
 
@@ -97,11 +186,33 @@ def build_condition_body(
     verification_status: str = "confirmed",
     recorded_date: str | None = None,
     source: dict | None = None,
+    # Safety-gate kwargs — default to backward-compatible behaviour
+    meat_signed: bool = False,
+    force_accepted: bool = False,
+    user_role: str | None = None,
+    user_npi: str | None = None,
+    meat_notes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return the FHIR ``Condition`` resource body as a dict.
 
     Parameters mirror :func:`push_problem_list_condition` so callers can
     inspect what *would* be posted without hitting the network.
+
+    Safety logic (CMS RADV + Patient Safety review round-2):
+
+    * ``verification_status`` is automatically downgraded to ``"provisional"``
+      when MEAT is absent OR the accepting user is not credentialed
+      (role not in coder/admin/physician).  Pass ``verification_status``
+      explicitly only if you want to override the computed value.
+
+    * ``note[]`` is populated from MEAT evidence sentences when ``meat_notes``
+      is provided.  Pull these via :func:`_fetch_meat_notes`.
+
+    * ``evidence[]`` points to the source clinical encounter when
+      ``source.source_encounter_id`` is set.
+
+    * ``recorder`` is set to ``Practitioner/{user_npi}`` when ``user_npi``
+      is non-null.
     """
     if not recorded_date:
         recorded_date = date.today().isoformat()
@@ -109,6 +220,24 @@ def build_condition_body(
     source = source or {}
     suspect_id = source.get("suspect_id")
     source_label = source.get("source") or "raf_intelligence"
+    source_encounter_id = source.get("source_encounter_id")
+
+    # ------------------------------------------------------------------
+    # Compute verification_status from safety signals (round-2 fix)
+    # ------------------------------------------------------------------
+    credentialed = (user_role or "").lower() in _CREDENTIALED_ROLES
+    if meat_signed and credentialed:
+        resolved_verification_status = "confirmed"
+    else:
+        # NLP-suggested, force-accepted-without-MEAT, or non-credentialed user
+        resolved_verification_status = "provisional"
+
+    # Allow callers that explicitly pass a non-default value to keep it
+    # (backward-compat for direct callers that set verification_status='active'
+    # or similar intentional override).  The default "confirmed" is the only
+    # value we replace — it was the unsafe default.
+    if verification_status != "confirmed":
+        resolved_verification_status = verification_status
 
     extensions: list[dict[str, Any]] = [
         {
@@ -141,8 +270,8 @@ def build_condition_body(
             "coding": [
                 {
                     "system": VERIFICATION_STATUS_SYSTEM,
-                    "code": verification_status,
-                    "display": verification_status.title(),
+                    "code": resolved_verification_status,
+                    "display": resolved_verification_status.replace("-", " ").title(),
                 }
             ]
         },
@@ -171,6 +300,39 @@ def build_condition_body(
         "recordedDate": recorded_date,
         "extension": extensions,
     }
+
+    # ------------------------------------------------------------------
+    # note[] — MEAT evidence sentences (RADV audit requirement)
+    # ------------------------------------------------------------------
+    if meat_notes:
+        body["note"] = [
+            {
+                "authorString": n.get("authorString", "raf_intelligence"),
+                "time": n.get("time", recorded_date),
+                "text": n.get("text", ""),
+            }
+            for n in meat_notes
+            if n.get("text")
+        ]
+
+    # ------------------------------------------------------------------
+    # evidence[] — source clinical encounter reference
+    # ------------------------------------------------------------------
+    if source_encounter_id:
+        body["evidence"] = [
+            {
+                "detail": [
+                    {"reference": f"DocumentReference/{source_encounter_id}"}
+                ]
+            }
+        ]
+
+    # ------------------------------------------------------------------
+    # recorder — credentialed user's NPI (FHIR R4 Practitioner reference)
+    # ------------------------------------------------------------------
+    if user_npi:
+        body["recorder"] = {"reference": f"Practitioner/{user_npi}"}
+
     return body
 
 
@@ -215,6 +377,11 @@ def push_problem_list_condition(
     source: dict | None = None,
     tenant_id: str | None = None,
     adapter: OpenEMRFhirAdapter | None = None,
+    # Safety-gate kwargs
+    meat_signed: bool = False,
+    force_accepted: bool = False,
+    user_role: str | None = None,
+    user_id: int | None = None,
 ) -> str:
     """POST a FHIR ``Condition`` resource for *patient_emr_pid*.
 
@@ -230,6 +397,13 @@ def push_problem_list_condition(
     if adapter is None:
         adapter = _get_fhir_adapter(tenant_id=tenant_id)
 
+    # Pull MEAT notes and user NPI for body enrichment
+    suspect_id = (source or {}).get("suspect_id")
+    meat_notes: list[dict[str, Any]] = (
+        _fetch_meat_notes(suspect_id) if suspect_id is not None else []
+    )
+    user_npi = _fetch_user_npi(user_id)
+
     body = build_condition_body(
         str(patient_emr_pid),
         icd10_code,
@@ -238,6 +412,11 @@ def push_problem_list_condition(
         verification_status=verification_status,
         recorded_date=recorded_date,
         source=source,
+        meat_signed=meat_signed,
+        force_accepted=force_accepted,
+        user_role=user_role,
+        user_npi=user_npi,
+        meat_notes=meat_notes,
     )
 
     url = f"{adapter.base_url}/Condition"
@@ -398,3 +577,148 @@ def push_and_reconcile(
         patient_emr_pid, icd10_code, tenant_id=tenant_id, adapter=adapter
     )
     return {"condition_id": condition_id, "reconciled": reconciled}
+
+
+# ---------------------------------------------------------------------------
+# Reversal — mark AI-written condition as entered-in-error (Patient Safety fix)
+# ---------------------------------------------------------------------------
+
+
+def reverse_problem_list_condition(
+    condition_id: str,
+    reversal_reason: str,
+    tenant_id: str,
+    user_id: int,
+    *,
+    adapter: OpenEMRFhirAdapter | None = None,
+) -> dict[str, Any]:
+    """Mark a previously-written FHIR Condition as ``entered-in-error``.
+
+    Steps:
+    1. PUT Condition/{condition_id} with verificationStatus="entered-in-error"
+       to OpenEMR FHIR.
+    2. Emit immutable audit event ``SUSPECT_WRITEBACK_REVERSED``.
+    3. Update ``raf_suspect_conditions`` reversal columns.
+
+    Returns ``{"success": True, "condition_id": condition_id}`` or raises
+    ``RuntimeError`` on FHIR failure.
+
+    The DB update (step 3) is attempted after the FHIR call.  A DB failure
+    is logged as ERROR but does not cause the function to raise — the FHIR
+    state is the authoritative record.
+    """
+    if not condition_id:
+        raise ValueError("condition_id is required")
+    if not reversal_reason or len(reversal_reason.strip()) < 30:
+        raise ValueError("reversal_reason must be at least 30 characters")
+
+    if adapter is None:
+        adapter = _get_fhir_adapter(tenant_id=tenant_id)
+
+    # ------------------------------------------------------------------
+    # Build minimal update body — entered-in-error
+    # ------------------------------------------------------------------
+    reversal_body: dict[str, Any] = {
+        "resourceType": "Condition",
+        "id": condition_id,
+        "verificationStatus": {
+            "coding": [
+                {
+                    "system": VERIFICATION_STATUS_SYSTEM,
+                    "code": "entered-in-error",
+                    "display": "Entered In Error",
+                }
+            ]
+        },
+    }
+
+    url = f"{adapter.base_url}/Condition/{condition_id}"
+
+    @_fhir_post_retry
+    def _do_put(headers: dict[str, str]) -> httpx.Response:
+        with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
+            resp = client.put(url, headers=headers, json=reversal_body)
+            if resp.status_code in _RETRYABLE_STATUS:
+                resp.raise_for_status()
+            return resp
+
+    headers = {**adapter._auth_headers(), "Content-Type": "application/fhir+json"}
+    resp = _do_put(headers)
+
+    if resp.status_code == 401:
+        logger.warning("FHIR PUT Condition reversal -> 401, forcing token refresh")
+        adapter._force_refresh()
+        headers = {**adapter._auth_headers(), "Content-Type": "application/fhir+json"}
+        resp = _do_put(headers)
+
+    if resp.status_code not in (200, 201):
+        logger.error(
+            "FHIR PUT Condition reversal failed: %s body=%s",
+            resp.status_code,
+            resp.text[:400],
+        )
+        raise RuntimeError(
+            f"FHIR Condition reversal failed: HTTP {resp.status_code} "
+            f"body={resp.text[:200]}"
+        )
+
+    logger.info(
+        "Reversed FHIR Condition id=%s (entered-in-error) user_id=%s",
+        condition_id,
+        user_id,
+    )
+
+    # ------------------------------------------------------------------
+    # Immutable audit event
+    # ------------------------------------------------------------------
+    try:
+        from app.services.immutable_audit import emit_audit_event
+
+        emit_audit_event(
+            "SUSPECT_WRITEBACK_REVERSED",
+            tenant_id=tenant_id,
+            actor_user_id=user_id,
+            subject_type="condition",
+            subject_id=condition_id,
+            payload={
+                "reversal_reason": reversal_reason.strip(),
+                "condition_id": condition_id,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "reverse_problem_list_condition: audit emit failed condition_id=%s: %s",
+            condition_id, exc,
+        )
+
+    # ------------------------------------------------------------------
+    # DB update — graceful degradation if migration 031 not applied yet
+    # ------------------------------------------------------------------
+    reversed_at = datetime.now(tz=timezone.utc)
+    try:
+        from app.db import raf_cursor
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE raf_suspect_conditions
+                SET    fhir_writeback_reversed_at     = %s,
+                       fhir_writeback_reversal_reason = %s
+                WHERE  fhir_condition_id = %s
+                  AND  tenant_id         = %s
+                """,
+                (
+                    reversed_at,
+                    reversal_reason.strip()[:2000],
+                    condition_id,
+                    tenant_id,
+                ),
+            )
+    except Exception as exc:
+        logger.error(
+            "reverse_problem_list_condition: DB update failed condition_id=%s: %s "
+            "(migration 031 may not be applied yet)",
+            condition_id, exc,
+        )
+
+    return {"success": True, "condition_id": condition_id}
