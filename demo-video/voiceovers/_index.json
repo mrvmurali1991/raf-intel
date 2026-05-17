@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-05-17T04:52:01.821Z",
+  "total_duration_s": 783.274332,
+  "scenes": {
+    "01-intro": 32.667868,
+    "02-dashboard": 35.19415,
+    "03-worklist": 57.902608,
+    "04-patient-overview": 36.337528,
+    "05-raf-central": 41.843379,
+    "06-meat-gaps": 40.089728,
+    "07-suspects-and-meat-gate": 80.813696,
+    "08-whatif-simulator": 35.539683,
+    "09-reconciliation": 49.835828,
+    "10-activity-feed": 33.480884,
+    "11-pre-submission": 42.326553,
+    "12-provider-scorecard": 39.675624,
+    "13-heatmap": 35.960136,
+    "14-cohort-builder": 48.66356,
+    "15-qa-kanban": 44.140499,
+    "16-tenant-branding": 63.988209,
+    "17-closing": 64.814399
+  }
+}

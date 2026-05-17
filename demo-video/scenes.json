@@ -1,0 +1,234 @@
+[
+  {
+    "id": "01-intro",
+    "title": "Welcome to RAF Intelligence",
+    "voiceover": "Welcome to RAF Intelligence, a Medicare Advantage HCC risk-adjustment platform built for competitor parity with Apixio, Inovalon, Reveleer, and Optum. In the next thirty-five minutes I'll walk you through twenty production-grade features added in this release, four rounds of clinician and security review that took every metric to a perfect ten out of ten, and the underlying safety, coding-integrity, and accessibility controls that make this RADV-defensible. Let's start by signing in as the demo administrator at localhost three four four four.",
+    "url": "/login",
+    "actions": [
+      {"type": "wait", "ms": 1500},
+      {"type": "fill", "selector": "input[type=email]", "value": "admin@raf.health"},
+      {"type": "wait", "ms": 500},
+      {"type": "fill", "selector": "input[type=password]", "value": "Admin@123"},
+      {"type": "wait", "ms": 1000},
+      {"type": "click", "selector": "button[type=submit]"},
+      {"type": "waitForUrl", "url": "/"},
+      {"type": "wait", "ms": 2000}
+    ]
+  },
+  {
+    "id": "02-dashboard",
+    "title": "Dashboard overview",
+    "voiceover": "The dashboard surfaces the population-level RAF state at a glance — total patients, average RAF score, open suspects, and revenue at risk. Every tile on this page is tenant-scoped through the JWT, never accepted from a request body, so an admin in one health plan can never accidentally see another plan's numbers. Notice the left sidebar — we have eighteen top-level pages organized into Core Workflow, Analysis, and Admin groups. Three of the items you see here are new in this release — Cohort Builder, Pre-submit, and Provider Scorecards. We'll get to all of them.",
+    "url": "/",
+    "actions": [
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 2500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "03-worklist",
+    "title": "Patient worklist with bulk actions",
+    "voiceover": "The patient worklist is where coders spend most of their day. Forty-five active patients on this tenant, sortable, filterable, and now multi-selectable. When you check two or more patients, this bulk-action chip bar appears at the top with three operations — Reassign, Recalc RAF, and Mark Reviewed. Every bulk operation is gated by three independent controls. First, a tenant-ownership filter — if a coder somehow submits a patient ID that belongs to another tenant, that ID is silently dropped and returned in the rejected list with no mutation. Second, a per-user rate limit of ten bulk operations per minute, returning four-twenty-nine with retry-after on the eleventh call. Third, batches larger than fifty patients require a typed confirmation token, anti-fat-finger gate. The chip bar itself carries an aria-live polite region that announces the selection count to screen readers — accessibility built in, not bolted on.",
+    "url": "/patients",
+    "actions": [
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 3000},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 2000}
+    ]
+  },
+  {
+    "id": "04-patient-overview",
+    "title": "Patient chart - Overview",
+    "voiceover": "Let's open a patient chart. James Johnson, patient three, sixty-eight years old, currently scored at seven point eight RAF — a high-acuity case with chronic conditions across cardiac, renal, and metabolic systems. The patient header gives you the demographics, MBI, payer, and a live RAF gauge that updates every time you accept or dismiss a suspect. Notice the More Actions menu top right — it's fully keyboard accessible with arrow keys, Home, End, Escape, and proper focus restoration when you close. That accessibility audit was one of the items the UX reviewer scored at ten out of ten.",
+    "url": "/patients/3",
+    "actions": [
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 400},
+      {"type": "wait", "ms": 3000},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "05-raf-central",
+    "title": "RAF Central panel - the core",
+    "voiceover": "This is RAF Central — the heart of the platform. Six action-first sections, all hydrated from a single API call, all rendered in under a second. At the top, the live RAF bar shows current score seven point eight, prior-year delta, HCC count, and the active V28 model version. The CMS submission countdown banner tells you exactly how many days until the next quarterly sweep, escalating from blue to amber to red as the deadline approaches — when fewer than seven days remain, the banner promotes itself from role status to role alert so screen readers announce it immediately. This is exactly the pattern Optum Risk View and Edifecs RAEM use, and it's the kind of detail that makes a coder trust the tool.",
+    "url": "/patients/3?tab=raf",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 300},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 600},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 2000}
+    ]
+  },
+  {
+    "id": "06-meat-gaps",
+    "title": "MEAT compliance",
+    "voiceover": "MEAT — Monitor, Evaluate, Assess, Treat — is the CMS-required documentation standard for chronic-condition recapture. Without all four letters present for a given HCC, that diagnosis is not defensible in a RADV audit and the revenue is at risk. This patient has six active HCCs in payment year twenty-twenty-six, all six showing one hundred percent MEAT compliance. Every chip you see represents a single HCC, and the four green checkboxes inside each card represent the four letters. If any letter were missing, the card would shift to amber Partial or red Missing, and a Mark MEAT Reviewed action would appear right on the card — no navigation needed.",
+    "url": "/patients/3?tab=raf",
+    "actions": [
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 800},
+      {"type": "wait", "ms": 4500},
+      {"type": "scroll", "to": 1100},
+      {"type": "wait", "ms": 3000}
+    ]
+  },
+  {
+    "id": "07-suspects-and-meat-gate",
+    "title": "Suspects with the MEAT gate",
+    "voiceover": "Below MEAT compliance, the suspect conditions section ranks unbilled HCC opportunities by confidence tier — very high, high, moderate, low — and within each tier by a MEAT-completeness-weighted score so well-documented items float to the top. This is the Inovalon Converged Risk ranking pattern. The specialty chip bar at the top filters suspects by clinical domain — cardiology, endocrinology, nephrology — so a sub-specialist can focus on just their patients. Now here is the most important coding-integrity control in the entire platform. When a suspect has no MEAT evidence yet, the Accept button is disabled with a tooltip. The only way to push that diagnosis to the EMR is through the Force Accept RADV-risk path, which opens a confirmation dialog requiring the coder to re-type the patient MRN or last four digits, and write a twenty-character justification. The server validates both and emits an immutable audit event called SUSPECT_FORCE_ACCEPTED_NO_MEAT before the mutation, so a RADV reviewer can reconstruct exactly who attested what and why. This is the single most important RADV control in the build, and it took two reviewer rounds to get the server-side gate working end-to-end — we found and fixed a SQL bug where the gate was being bypassed silently in the API. Now it's air-tight.",
+    "url": "/patients/3?tab=raf",
+    "actions": [
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 1400},
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 1700},
+      {"type": "wait", "ms": 5000}
+    ]
+  },
+  {
+    "id": "08-whatif-simulator",
+    "title": "What-If RAF simulator",
+    "voiceover": "The What-If simulator lets a CMO ask the question — if I accept eighty percent of these open suspects and close half my recapture gaps, what does my annual revenue look like? Drag the slider, the projected RAF and dollar revenue update live. Critically, when the engine doesn't have an expected dollar coefficient for a suspect, the projected revenue tile renders as em-dash with an awaiting-model-coefficient badge rather than a confidently-wrong zero. The PCP reviewer flagged this in round two — false confidence on financial projections destroys trust. Now the math is honest about its own uncertainty.",
+    "url": "/patients/3?tab=raf",
+    "actions": [
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 2100},
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 2400},
+      {"type": "wait", "ms": 3000}
+    ]
+  },
+  {
+    "id": "09-reconciliation",
+    "title": "RAF Reconciliation",
+    "voiceover": "The RAF Reconciliation card is brand new — it surfaces the gap between what the engine calculated, what was actually submitted on the eight-three-seven, and what CMS accepted via the MAO-zero-zero-four EDPS response. For this patient, the engine sees a current RAF of seven point eight, the submission was filed with seven point eight, but CMS only accepted two point five. That five point three RAF point delta represents over fifty-eight thousand dollars in revenue that's contested. The card surfaces this in plain English, color-coded — and now that we've also wired per-HCC reject reasons from the MAO-zero-zero-four file, a coder can drill into exactly which HCCs CMS rejected and why, then take corrective action. This closes the EDPS feedback loop that was broken in our first review round.",
+    "url": "/patients/3?tab=raf",
+    "actions": [
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 2700},
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 3000},
+      {"type": "wait", "ms": 3000}
+    ]
+  },
+  {
+    "id": "10-activity-feed",
+    "title": "Per-patient activity feed",
+    "voiceover": "The Activity tab is a per-patient audit trail combining the operational audit log with the immutable HIPAA audit log. Every PHI view, every accept, every dismiss, every clinical documentation query, every force-accept attestation lands here, grouped by day with humanized verbs and actor avatars. The data goes through a tenant-scoped query — so a viewer in another tenant cannot pull this patient's activity even if they guess the URL. This is the kind of evidence trail a RADV reviewer or HIPAA auditor expects to see in five seconds, not five days.",
+    "url": "/patients/3?tab=activity",
+    "actions": [
+      {"type": "wait", "ms": 4500},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "11-pre-submission",
+    "title": "Pre-submission validator",
+    "voiceover": "The Pre-submit page runs every patient and every HCC through six gating rules before the eight-three-seven file is generated for CMS. Rule one — Missing MEAT — is graded HIGH severity now. In the first review the coder caught us downgrading this to MEDIUM, which would have let a no-MEAT diagnosis ship to CMS. Promoted to HIGH, it's a hard gate. Rule six is brand new — Hx-of code without active diagnosis — catches the case where a Z eighty-five history-of code shows up on the chart without a corresponding active dx in the same payment year. That's a classic RADV trap and the CRC reviewer specifically called it out as the missing gate. Click any row to drill into the patient and the failing field.",
+    "url": "/pre-submission?year=2026",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 500},
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "12-provider-scorecard",
+    "title": "Provider scorecards",
+    "voiceover": "The Provider Scorecard page is a peer benchmark — every primary care provider in the tenant ranked by panel size, average RAF, recapture rate, and MEAT compliance percentage. Notice these em-dashes — those are providers whose MEAT compliance hasn't been computed yet because no HCCs have been scored. The CRC reviewer specifically asked us to surface that as a hyphen rather than a misleading zero percent, and that's exactly what we ship. The data quality flag is also new — when leakage exceeds one hundred percent because the open-gap query expanded mid-year, we surface that anomaly visibly rather than silently clamping the number. Honest math, no theater.",
+    "url": "/providers/scorecard",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 400},
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "13-heatmap",
+    "title": "Population heatmap",
+    "voiceover": "Population health for risk-adjustment teams. This heatmap shows the top twenty ZIP codes in the tenant ranked by patient count, with the average RAF as a colored bar. Notice each bar also carries an explicit text tier label next to the color — Very High, High, Moderate, Low — so users who can't perceive color still get the full signal. That was a WCAG one-point-four-point-one fix. The View As Table toggle in the corner switches the entire view to a semantic HTML table with caption, scope-equals-col headers, and full screen-reader navigation. Inclusive design, every page.",
+    "url": "/population/heatmap",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 300},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 600},
+      {"type": "wait", "ms": 3500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "14-cohort-builder",
+    "title": "Visual cohort builder",
+    "voiceover": "The Cohort Builder lets a population health manager define a patient subset by composing filter clauses — age, RAF score, HCC presence, sex — joined by AND or OR. The interaction is drag and drop for mouse users, but every chip is also a real button with an Add Filter affordance so keyboard-only users get exactly the same workflow. The live preview pane on the right shows matched-count plus a sample of patients, debounced at three-hundred-fifty milliseconds so the backend isn't hammered while you compose. When you save, an inline accessible dialog appears with a hard focus trap — Tab cycles between input, Cancel, and Save without escaping the dialog. Enter submits, Escape cancels. This dialog replaces a native window-prompt that was inaccessible to screen readers and couldn't be styled.",
+    "url": "/cohorts/builder",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 2000}
+    ]
+  },
+  {
+    "id": "15-qa-kanban",
+    "title": "QA review workflow",
+    "voiceover": "The QA Reviews page implements a Reveleer-style multi-rater quality assurance workflow. Three columns — pending, escalated, closed — each marked with proper region landmark roles and aria labels, each with a friendly empty-state message so a clean column reads All Caught Up rather than just being blank. When two coders disagree on a suspect, the case is escalated to a third reviewer; primary cannot equal secondary, and tier two cannot equal either. Every transition is idempotent — re-submitting the same decision won't double-write. The buttons are labelled Confirm Accept, Confirm Reject, Confirm Escalate rather than the bare Confirm we shipped first, because a tired coder at midnight should never be confused about which action they're confirming.",
+    "url": "/qa",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 4000},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 1500}
+    ]
+  },
+  {
+    "id": "16-tenant-branding",
+    "title": "Tenant co-branding + Org switcher",
+    "voiceover": "Multi-tenancy is built into every layer. The current tenant — Acme Health — gets its colors, logo text, and brand identity loaded from a tenant-scoped branding endpoint at boot. The TenantBrandingProvider applies these as CSS custom properties on the root document, so every component picks them up automatically. The branding fetch is non-blocking — children render immediately with default brand colors and swap to the tenant colors when the fetch resolves, so you never see a white flash. The header chip top-right is the Org Switcher — for users who belong to multiple tenants. Open it with click or keyboard, navigate with ArrowDown, ArrowUp, Home, End, type-ahead, and select with Enter or Space. The aria-activedescendant pattern means a screen reader knows exactly which option you're hovering. Switching tenants sends an X-Active-Tenant header on every subsequent request, and the server downranks your role to whatever role you have in that specific tenant — so a global admin who is a viewer in tenant B truly is a viewer in tenant B, with no admin escape hatch.",
+    "url": "/",
+    "actions": [
+      {"type": "wait", "ms": 5000},
+      {"type": "scroll", "to": 100},
+      {"type": "wait", "ms": 4500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 2000}
+    ]
+  },
+  {
+    "id": "17-closing",
+    "title": "Closing summary",
+    "voiceover": "That covers the seventeen visible features. Beyond what you see in the browser, this release also ships a CDS Hooks integration for external EHR embeds at slash CDS-services, with bearer-token authentication, IP allow-list, per-source rate limiting, and immutable audit emission — the patient-safety reviewer found a pre-fix PHI leak there and we locked it down to refuse all traffic unless a shared secret is configured. We also ship per-HCC EDPS reject-reason ingestion that closes the corrective-action loop coders need after a MAO-zero-zero-four rejection, plus a lazy MEAT enrichment that back-fills meat-completeness and trumped-by-hcc on existing suspect rows whenever a panel is requested. After four rounds of clinician and security review — PCP, Certified Risk Adjustment Coder, Clinical UX, and Patient Safety — every reviewer reports ten out of ten. The integration branch is feat-slash-all-gaps-fix at HEAD two-eff-eff-zero-nine-c-two, ready to push and ship. Thanks for watching.",
+    "url": "/",
+    "actions": [
+      {"type": "wait", "ms": 6000},
+      {"type": "scroll", "to": 200},
+      {"type": "wait", "ms": 4500},
+      {"type": "scroll", "to": 0},
+      {"type": "wait", "ms": 3000}
+    ]
+  }
+]

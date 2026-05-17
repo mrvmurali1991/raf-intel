@@ -4273,3 +4273,123 @@ export async function getRecaptureSlowMovers(
   );
   return data;
 }
+
+
+// ---------------------------------------------------------------------------
+// HEDIS / Star Ratings + Health Equity Index (HEI)
+// ---------------------------------------------------------------------------
+
+export interface HedisMeasureMeta {
+  measure_id: string;
+  name: string;
+  description: string;
+  age_min: number | null;
+  age_max: number | null;
+  sex_restriction: string | null;
+  higher_is_better: boolean;
+  star_cutoffs_pct: number[];
+  ncqa_spec: string;
+}
+
+export interface HedisMeasureScore {
+  measure_id: string;
+  name: string;
+  denominator: number;
+  numerator: number;
+  rate_pct: number;
+  stars: number;
+  star_cutoffs_pct: number[];
+  sub_rates?: Record<
+    string,
+    { numerator: number; rate_pct: number; stars: number }
+  >;
+}
+
+export interface HedisScoresResponse {
+  measurement_year: number;
+  tenant_id: number;
+  patient_population: number;
+  measures: HedisMeasureScore[];
+}
+
+export interface HedisSegmentRate {
+  segment: "dual" | "lis" | "disability" | "other";
+  denominator: number;
+  numerator: number;
+  rate_pct: number;
+  stars: number;
+}
+
+export interface HedisMeasureBySegment {
+  measure_id: string;
+  name: string;
+  by_segment: HedisSegmentRate[];
+  disparity_gap_pct: number;
+}
+
+export interface HedisSegmentResponse {
+  measurement_year: number;
+  tenant_id: number;
+  segment_population: Record<string, number>;
+  measures: HedisMeasureBySegment[];
+  segments: string[];
+}
+
+export interface HedisFailingPatient {
+  patient_id: number;
+  first_name: string | null;
+  last_name: string | null;
+  dob: string | null;
+  sex: string | null;
+  hei_segment: "dual" | "lis" | "disability" | "other";
+  evidence: string[];
+  exclusions: string[];
+}
+
+export interface HedisFailingResponse {
+  measure_id: string;
+  measurement_year: number;
+  tenant_id: number;
+  total: number;
+  limit: number;
+  offset: number;
+  patients: HedisFailingPatient[];
+}
+
+export async function getHedisMeasures(year?: number) {
+  const { data } = await api.get<{
+    measurement_year: number;
+    measures: HedisMeasureMeta[];
+    star_cutoffs: Record<string, number[]>;
+    licensing_notice: string;
+  }>("/api/hedis/measures", { params: year ? { year } : undefined });
+  return data;
+}
+
+export async function getHedisScores(year?: number) {
+  const { data } = await api.get<HedisScoresResponse>("/api/hedis/scores", {
+    params: year ? { year } : undefined,
+  });
+  return data;
+}
+
+export async function getHedisScoresBySegment(year?: number) {
+  const { data } = await api.get<HedisSegmentResponse>(
+    "/api/hedis/scores/by-segment",
+    { params: year ? { year } : undefined },
+  );
+  return data;
+}
+
+export async function getHedisPatientsFailing(
+  measureId: string,
+  year?: number,
+  limit = 200,
+  offset = 0,
+) {
+  const { data } = await api.get<HedisFailingResponse>(
+    `/api/hedis/patients-failing/${encodeURIComponent(measureId)}`,
+    { params: { year, limit, offset } },
+  );
+  return data;
+}

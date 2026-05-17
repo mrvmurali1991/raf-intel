@@ -104,6 +104,7 @@ const navGroups: NavGroup[] = [
       { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
       { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
       { href: "/cohorts/builder", label: "Cohort Builder", icon: Filter },
+      { href: "/hedis", label: "HEDIS + Stars", icon: Star },
     ],
   },
   {

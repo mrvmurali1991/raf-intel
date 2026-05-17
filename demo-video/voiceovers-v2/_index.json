@@ -1,0 +1,28 @@
+{
+  "total": 798.818277,
+  "scenes": {
+    "00-cold-open": 37.2061,
+    "01-worklist-baseline": 23.555125,
+    "05-sync-toast": 37.638163,
+    "06-new-chart": 29.335782,
+    "07-bulk-actions": 29.505215,
+    "08-patient-overview": 30.433492,
+    "09-raf-central": 37.272018,
+    "10-meat-grid": 49.951497,
+    "11-suspects-tiered": 36.983946,
+    "12-meat-gate": 38.654444,
+    "13-meat-gate-curl": 20.187619,
+    "14-whatif": 23.931156,
+    "15-reconciliation": 43.500091,
+    "16-activity-audit": 36.002086,
+    "17-pre-submission": 43.741565,
+    "18-provider-scorecard": 31.192948,
+    "19-heatmap": 29.381633,
+    "20-cohort-builder": 36.398367,
+    "21-qa-kanban": 36.450567,
+    "22-tenant-org": 34.439524,
+    "23-axe-wcag": 20.106712,
+    "24-closing": 40.48093,
+    "02-emr-magic-moment": 52.469297
+  }
+}

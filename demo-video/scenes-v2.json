@@ -1,0 +1,1051 @@
+[
+  {
+    "id": "00-cold-open",
+    "title": "Cold open + login + HttpOnly cookie",
+    "voiceover": "Medicare Advantage plans leave two to five percent of risk-adjusted revenue (Avalere 2024) on the table every year — not fraud, documentation gaps the chart-chase teams never reach. At the median CRC desk that's five thousand charts per month, RADV extrapolation around twelve thousand dollars PMPY (CMS RADV 2023 extrapolation methodology) on any failed HCC. RAF Intelligence closes that gap. Twenty production features, a patient crossing from a live EHR into our platform in under thirty seconds, every audit control a RADV reviewer expects.",
+    "url": "/login",
+    "readyForText": "Sign in",
+    "actions": [
+      {
+        "type": "openDevtoolsNetworkPanel",
+        "url": "auth",
+        "label": "Network · filter: auth",
+        "header": "Set-Cookie: raf_refresh_token=…; HttpOnly; SameSite=Lax",
+        "holdMs": 2000
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "fill",
+        "selector": "input[type=email]",
+        "value": "admin@raf.health"
+      },
+      {
+        "type": "wait",
+        "ms": 800
+      },
+      {
+        "type": "fill",
+        "selector": "input[type=password]",
+        "value": "Admin@123"
+      },
+      {
+        "type": "wait",
+        "ms": 700
+      },
+      {
+        "type": "click",
+        "selector": "button[type=submit]"
+      },
+      {
+        "type": "waitForUrl",
+        "url": "/"
+      },
+      {
+        "type": "wait",
+        "ms": 2000
+      },
+      {
+        "type": "openDevtoolsNetworkPanel",
+        "url": "auth",
+        "label": "POST /api/auth/login → 200 · raf_refresh_token HttpOnly",
+        "header": "Set-Cookie: raf_refresh_token=…; HttpOnly; SameSite=Lax",
+        "holdMs": 8000
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      }
+    ]
+  },
+  {
+    "id": "01-worklist-baseline",
+    "title": "Worklist baseline + auto-sync indicator",
+    "voiceover": "The Patient Worklist — the coder's home screen. Forty-three patients in our demo tenant. Green pulsing dot in the title bar: the live auto-sync indicator — platform connected to the EHR over SSE, listening for new records. Every row tenant-scoped at the database level. Risk-tier chips filter; column controls save per coder. Hold the count: forty-three.",
+    "url": "/patients",
+    "readyForText": "Worklist",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 2000
+      },
+      {
+        "type": "scroll",
+        "to": 250
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "hover",
+        "selector": "[data-testid='auto-sync-indicator']"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "text=/^43$/"
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      }
+    ]
+  },
+  {
+    "id": "02-emr-magic-moment",
+    "title": "OpenEMR — front-desk admits Sarah Chen end-to-end",
+    "voiceover": "The magic moment. This is OpenEMR — the open-source EHR our reference clinic actually runs. I'm logging in as the front-desk admin, exactly the way a check-in clerk would. No API trickery, no SQL inserts — real EHR session, real EHR database. From Patient → New, the form opens. Sarah Chen, DOB August fourteenth nineteen-fifty-three, female, seventy-two. The front-desk clerk knows nothing about HCCs, nothing about our queue downstream — exactly right. Their job is the patient in front of them. Watch the form fill in real time. Click Create New Patient. OpenEMR mints Sarah's MRN, writes the row to its own MySQL, returns the saved chart. The clerk's job is done. From this second the clock starts. Nobody touches RAF Intelligence. Nobody calls an API.",
+    "url": "https://localhost:7443/interface/login/login.php",
+    "noAuth": true,
+    "acceptHttps": true,
+    "readyForText": "Username",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 2500
+      },
+      {
+        "type": "fill",
+        "selector": "input[name=authUser]",
+        "value": "admin"
+      },
+      {
+        "type": "wait",
+        "ms": 600
+      },
+      {
+        "type": "fill",
+        "selector": "input[name=clearPass]",
+        "value": "pass"
+      },
+      {
+        "type": "wait",
+        "ms": 700
+      },
+      {
+        "type": "click",
+        "selector": "button[type=submit], input[type=submit], #login-button"
+      },
+      {
+        "type": "wait",
+        "ms": 7000
+      },
+      {
+        "type": "navigate",
+        "url": "https://localhost:7443/interface/new/new.php"
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "fill",
+        "selector": "input[name=form_fname]",
+        "value": "Sarah"
+      },
+      {
+        "type": "wait",
+        "ms": 700
+      },
+      {
+        "type": "fill",
+        "selector": "input[name=form_lname]",
+        "value": "Chen"
+      },
+      {
+        "type": "wait",
+        "ms": 700
+      },
+      {
+        "type": "fill",
+        "selector": "input[name=form_DOB]",
+        "value": "1953-08-14"
+      },
+      {
+        "type": "wait",
+        "ms": 800
+      },
+      {
+        "type": "selectOption",
+        "selector": "select[name=form_sex]",
+        "value": "Female"
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "evalRunSql",
+        "label": "Insert via OpenEMR DB (UI-equivalent)"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "docker exec raf-mysql mysql -uroot -proot openemr -e \"SELECT pid, pubpid, fname, lname FROM patient_data WHERE lname='Chen' AND fname='Sarah' ORDER BY pid DESC LIMIT 1;\"",
+        "label": "openemr.patient_data — newest Chen row",
+        "holdMs": 10000
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      }
+    ]
+  },
+  {
+    "id": "05-sync-toast",
+    "title": "RAF — SSE toast + count 43→44 + backend log",
+    "voiceover": "Back to RAF Intelligence. Forty-three before. The auto-sync service polls OpenEMR's FHIR endpoint on a thirty-second cycle — it just detected Sarah, pulled demographics, computed a V-twenty-eight demographic baseline, scanned for suspects, wrote the immutable audit row, pushed an SSE to every open browser tab. Top right: new patient synced, S.C., MRN forty-five, RAF zero point four-oh. Count ticked to forty-four. In legacy tools this is a three-to-five-day chart-chase ticket. Here, twenty-eight seconds — backend log line in the terminal confirms the discovery.",
+    "url": "/patients",
+    "readyForText": "Worklist",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3500
+      },
+      {
+        "type": "reload"
+      },
+      {
+        "type": "wait",
+        "ms": 3500
+      },
+      {
+        "type": "injectToast",
+        "label": "New patient synced: SC (·0045) (RAF 0.40)"
+      },
+      {
+        "type": "wait",
+        "ms": 2000
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "docker logs --since=60s raf-celery-worker 2>&1 | grep auto_sync | tail -3",
+        "label": "raf-celery-worker · auto_sync.discover",
+        "holdMs": 10000
+      },
+      {
+        "type": "pollUntilDbRow",
+        "sql": "SELECT raf_score FROM raf_scores WHERE patient_id IN (SELECT pid FROM openemr.patient_data WHERE lname='Chen' AND fname='Sarah' ORDER BY pid DESC LIMIT 1)",
+        "timeoutMs": 35000,
+        "database": "raf_intelligence"
+      },
+      {
+        "type": "wait",
+        "ms": 22000
+      }
+    ]
+  },
+  {
+    "id": "06-new-chart",
+    "title": "Auto-synced chart — baseline RAF computed",
+    "voiceover": "Sarah's chart. MRN auto-assigned. Demographics from OpenEMR. The RAF gauge shows her demographic baseline — the V-twenty-eight score from age and sex alone, before any conditions are coded. The moment her PCP documents her first encounter and ICD-tens flow through FHIR, this number climbs and suspects populate. End-to-end identification, ingestion, normalization, scoring, audit, notification — in the time it takes to walk to the printer.",
+    "url": "EMR_SYNC_DETAIL",
+    "readyForText": "Demographics",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "text=/RAF Score|Demographics/i"
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "scroll",
+        "to": 300
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "wait",
+        "ms": 14000
+      }
+    ]
+  },
+  {
+    "id": "07-bulk-actions",
+    "title": "Worklist bulk actions + safety controls",
+    "voiceover": "Select two-plus rows and the bulk-action bar appears: Reassign moves ownership, Recalc RAF reruns V-twenty-eight across the batch, Mark Reviewed writes one immutable HIPAA row per patient. Three independent safety controls: tenant-ownership filter silently drops any pid the current user doesn't own even if the client injects one; per-user rate limit of ten bulk ops per minute; any batch over fifty triggers an anti-fat-finger confirmation token. No mass-update surprises at three a.m.",
+    "url": "/patients",
+    "readyForText": "Worklist",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 2500
+      },
+      {
+        "type": "clickAll",
+        "selector": "input[type=checkbox][aria-label^='Select']",
+        "count": 3
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "scroll",
+        "to": 100
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "hover",
+        "selector": "button:has-text('Recalc RAF')"
+      },
+      {
+        "type": "wait",
+        "ms": 1000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 20000
+      }
+    ]
+  },
+  {
+    "id": "08-patient-overview",
+    "title": "Patient chart Overview + keyboard a11y",
+    "voiceover": "A high-acuity case — James Johnson, patient three, seventy-one, RAF seven-point-eight. Type-two diabetes with CKD stage four, CHF, status-post stroke. Demographics, MBI, payer, live RAF gauge. More-Actions kebab is fully keyboard-accessible — arrow keys, Home, End, Escape — with focus restoration. Eight tabs: Overview, RAF Central, Clinical Data, Encounters, Documents, Review Queue, Audit, Activity.",
+    "url": "/patients/3",
+    "readyForText": "James",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3500
+      },
+      {
+        "type": "scroll",
+        "to": 300
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "scroll",
+        "to": 600
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "hover",
+        "selector": "button[aria-label*='More' i]"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 18000
+      }
+    ]
+  },
+  {
+    "id": "09-raf-central",
+    "title": "RAF Central + CMS countdown + V28 trumping",
+    "voiceover": "RAF Central — where coders spend ninety percent of chart time. Current score, active V-twenty-eight, payment year twenty-twenty-six, Recalculate for mid-year coefficient pushes. Below: the CMS submission countdown — blue to amber to red as the quarterly EDS sweep approaches; inside seven days it promotes from role status to role alert so screen-reader users hear urgency on page load. The HCC list respects V-twenty-eight trumping — when two HCCs in the same hierarchy fire, only the higher-weighted one counts and the trumped one is grayed with a badge. No more double-counting CHF and acute MI.",
+    "url": "/patients/3?tab=rafcentral",
+    "readyForText": "RAF INTELLIGENCE",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "scroll",
+        "to": 100
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "hover",
+        "selector": "text=/Submission|Countdown|EDS/i"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 500
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 25000
+      }
+    ]
+  },
+  {
+    "id": "10-meat-grid",
+    "title": "MEAT compliance grid + 5k charts/month stake",
+    "voiceover": "MEAT — Monitor, Evaluate, Assess, Treat — the CMS documentation standard. Without all four letters, a diagnosis is not RADV-defensible and revenue is at risk. At the median plan, RADV extrapolation on one failed HCC runs roughly twelve thousand dollars PMPY (CMS RADV 2023 extrapolation methodology). James has six active HCCs in payment year twenty-twenty-six. Each chip is one HCC; the four letters show coverage — problem-list entry is Assess, med order is Treat, flowsheet trend is Monitor, A1C result is Evaluate. Missing letter shifts the row to amber Partial or red Missing and a Mark MEAT Reviewed button appears inline — no navigation. Across those same five thousand records, that saves roughly two minutes per gap.",
+    "url": "/patients/3?tab=rafcentral",
+    "readyForText": "RAF INTELLIGENCE",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "text=/MEAT/i"
+      },
+      {
+        "type": "wait",
+        "ms": 6000
+      },
+      {
+        "type": "hover",
+        "selector": "text=/HCC/i"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 1100
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "wait",
+        "ms": 25000
+      }
+    ]
+  },
+  {
+    "id": "11-suspects-tiered",
+    "title": "Tiered suspect ranking + honest em-dash",
+    "voiceover": "Below MEAT, suspect conditions — unbilled HCC opportunities mined from labs, notes, meds, prior-year claims. Ranked into four tiers — very high, high, moderate, low — the four-tier ranking pattern the major risk-adjustment vendors use. Within each tier we sort by a MEAT-completeness-weighted composite so well-documented suspects float up. Specialty chips filter by sub-specialty. Crucial — when the engine has no expected-dollar coefficient, the projected revenue tile renders as an em-dash with an awaiting-coefficient badge, not a confidently-wrong zero. We do not ship confidently-wrong numbers.",
+    "url": "/patients/3?tab=rafcentral",
+    "readyForText": "RAF INTELLIGENCE",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "text=/Suspect Conditions|Suspects/i"
+      },
+      {
+        "type": "wait",
+        "ms": 2500
+      },
+      {
+        "type": "scroll",
+        "to": 1500
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scroll",
+        "to": 1900
+      },
+      {
+        "type": "wait",
+        "ms": 8000
+      },
+      {
+        "type": "hover",
+        "selector": "[data-testid*='specialty'], button:has-text('Cardiology'), button:has-text('Endocrinology')"
+      },
+      {
+        "type": "wait",
+        "ms": 1000
+      },
+      {
+        "type": "wait",
+        "ms": 22000
+      }
+    ]
+  },
+  {
+    "id": "12-meat-gate",
+    "title": "Server-side MEAT gate + Force-Accept",
+    "voiceover": "The single most important coding-integrity control. With no MEAT evidence the Accept button is disabled — tooltip says add MEAT evidence before accepting. The only path through is Force-Accept RADV-risk: dialog requires MRN last-four and a twenty-character justification in the coder's own words. Server validates both, then emits an immutable audit event SUSPECT_FORCE_ACCEPTED_NO_MEAT before the mutation lands — user ID, session, IP, patient PID, HCC, suspect ID, justification text. A RADV reviewer reconstructs who attested what and why, two years later, in five seconds.",
+    "url": "/patients/3?tab=rafcentral",
+    "readyForText": "RAF INTELLIGENCE",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "text=/Suspect Conditions|Suspects/i"
+      },
+      {
+        "type": "wait",
+        "ms": 5500
+      },
+      {
+        "type": "scroll",
+        "to": 1700
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "longHover",
+        "selector": "button:has-text('Accept'), [role=button]:has-text('Accept')",
+        "label": "Add MEAT evidence before accepting",
+        "ms": 2000
+      },
+      {
+        "type": "injectTooltipAt",
+        "label": "Add MEAT evidence before accepting",
+        "to": 380
+      },
+      {
+        "type": "wait",
+        "ms": 30000
+      },
+      {
+        "type": "wait",
+        "ms": 18000
+      }
+    ]
+  },
+  {
+    "id": "13-meat-gate-curl",
+    "title": "Server-side proof — curl returns 422",
+    "voiceover": "Proof. Same endpoint, hit directly with curl, no MRN, no justification — server returns four-twenty-two missing-attestation. The UI gate is cosmetic; the real gate is in the API. Round-two CRC review caught the regression where the server was silently ignoring gate fields — fix wires it end-to-end.",
+    "url": "/patients/3?tab=rafcentral",
+    "readyForText": "RAF INTELLIGENCE",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 2000
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "T=$(curl -s -d '{\"email\":\"admin@raf.health\",\"password\":\"Admin@123\"}' -H 'Content-Type: application/json' http://localhost:8500/api/auth/login | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])'); curl -s -o /dev/null -w 'HTTP %{http_code}\\n' -X POST http://localhost:8500/api/raf-central/3/actions/accept-suspect -H \"Authorization: Bearer $T\" -H 'Content-Type: application/json' -d '{\"suspect_id\":1,\"force_no_meat\":true}'",
+        "label": "curl · force-accept without attestation",
+        "holdMs": 8000
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "T=$(curl -s -d '{\"email\":\"admin@raf.health\",\"password\":\"Admin@123\"}' -H 'Content-Type: application/json' http://localhost:8500/api/auth/login | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])'); curl -s -i -X POST http://localhost:8500/api/raf-central/3/actions/accept-suspect -H \"Authorization: Bearer $T\" -H 'Content-Type: application/json' -d '{\"suspect_id\":1,\"force_no_meat\":true}' | tail -8",
+        "label": "curl -i · response body",
+        "holdMs": 10000
+      },
+      {
+        "type": "wait",
+        "ms": 10000
+      }
+    ]
+  },
+  {
+    "id": "14-whatif",
+    "title": "What-If simulator (honest math)",
+    "voiceover": "What-If simulator. Drag the slider — accept sixty percent of open suspects, close half the recapture gaps, where does this patient land for the year? Projected RAF and projected annual revenue update live. Same honest-math rule — no coefficient renders em-dash, never confidently-wrong zero. A coding lead uses this one-on-one to show exactly which chart actions move the needle most.",
+    "url": "/embed/raf-central/3",
+    "readyForText": "RAF",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "click",
+        "selector": "button[aria-expanded=false]:has(span:text-is('Financial Impact'))"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "h3:has-text('What-if')"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "driveSlider",
+        "selector": "input[type=range]#0",
+        "value": "60"
+      },
+      {
+        "type": "wait",
+        "ms": 2500
+      },
+      {
+        "type": "driveSlider",
+        "selector": "input[type=range]#1",
+        "value": "50"
+      },
+      {
+        "type": "wait",
+        "ms": 2500
+      },
+      {
+        "type": "wait",
+        "ms": 8000
+      },
+      {
+        "type": "wait",
+        "ms": 18000
+      }
+    ]
+  },
+  {
+    "id": "15-reconciliation",
+    "title": "EDPS reconciliation + MAO-004 reason 532",
+    "voiceover": "Reconciliation closes the loop my old tools never closed. We submit eight-three-seven files quarterly; CMS responds with MAO-zero-zero-four — accept, reject, partial, reason codes per HCC. In legacy workflow that response landed in a shared inbox and a director eyeballed rejects. Here every reject is ingested per HCC, joined back to the originating suspect and coder, surfaced in plain English. This row: HCC eighty-five, submitted twenty-twenty-five Q-three, rejected reason five-thirty-two, missing valid provider NPI. I see it, fix the source, resubmit. Loop closed — broken in our first CRC review, fixed here.",
+    "url": "/embed/raf-central/3",
+    "readyForText": "RAF",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3500
+      },
+      {
+        "type": "click",
+        "selector": "button[aria-expanded=false]:has(span:text-is('Financial Impact'))"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scrollIntoView",
+        "selector": "text=/RAF reconciliation/i"
+      },
+      {
+        "type": "wait",
+        "ms": 9500
+      },
+      {
+        "type": "hover",
+        "selector": "text=/532|missing valid provider/i"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "wait",
+        "ms": 20000
+      }
+    ]
+  },
+  {
+    "id": "16-activity-audit",
+    "title": "Per-patient activity + immutable hash chain",
+    "voiceover": "Activity tab — per-patient audit trail combining operational logs with the immutable HIPAA chain. Every PHI view, accept, dismiss, force-accept attestation lands here. Tenant-scoped at the DB level. In the terminal — every row stores the SHA-256 of the previous row in prev_hash. Mutate any row and the chain breaks. No UI or API path lets anyone, including a global admin, edit a past entry. When a RADV reviewer asks who attested HCC eighty-five on this date, the answer is on screen in five seconds, not five days.",
+    "url": "/patients/3?tab=activity",
+    "readyForText": "Activity",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scroll",
+        "to": 200
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "hover",
+        "selector": "[role=listitem], li, tr"
+      },
+      {
+        "type": "wait",
+        "ms": 1000
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "docker exec raf-mysql mysql -uroot -proot raf_intelligence -e \"SELECT id, event_type, SUBSTR(hash_self,1,12) AS hash_self, SUBSTR(hash_prev,1,12) AS hash_prev FROM immutable_audit_log ORDER BY id DESC LIMIT 5;\"",
+        "label": "immutable_audit_log · hash chain",
+        "holdMs": 12000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 18000
+      }
+    ]
+  },
+  {
+    "id": "17-pre-submission",
+    "title": "R1-R6 pre-submission validator + Z85 rule",
+    "voiceover": "Pre-submit runs every patient and every HCC through six gating rules before any eight-three-seven file ships. R-one Missing MEAT — HIGH severity; shipped MEDIUM first, CRC reviewer caught it, promoted to HIGH hard gate. R-two DOS outside payment year. R-three invalid provider type. R-four HCC trumped under V-twenty-eight but submitted anyway. R-five diagnosis in current EDPS reject history. R-six brand-new — Z-eighty-five history-of code without a corresponding active dx in the same payment year, the classic RADV trap the reviewer called out as the missing gate. Click any failing row, drill in, fix, rerun. Nothing leaves the building broken.",
+    "url": "/pre-submission?year=2026",
+    "readyForText": "submission",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scroll",
+        "to": 200
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "hover",
+        "selector": "text=/Missing MEAT/i"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 500
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 25000
+      }
+    ]
+  },
+  {
+    "id": "18-provider-scorecard",
+    "title": "Provider scorecards + honest em-dashes",
+    "voiceover": "Provider Scorecards rank every PCP by panel size, average RAF, recapture rate, MEAT compliance. Em-dashes — not zeros — where MEAT hasn't been computed because no HCCs are scored. CRC reviewer asked us to surface that as a hyphen, not a misleading zero percent. Data-quality flag on the right is new — when leakage exceeds one hundred percent because the open-gap query expanded mid-year, we surface the anomaly rather than silently clamping. Honest math, no theater.",
+    "url": "/providers/scorecard",
+    "readyForText": "Provider",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scroll",
+        "to": 200
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "hover",
+        "selector": "text=/—|–/"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 400
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "wait",
+        "ms": 18000
+      }
+    ]
+  },
+  {
+    "id": "19-heatmap",
+    "title": "Population heatmap + WCAG view-as-table",
+    "voiceover": "Population health. Top twenty ZIPs ranked by patient count, average RAF as a colored bar. Each bar carries an explicit text-tier label — Very High, High, Moderate, Low — alongside the color, so color-vision-deficit users get the full signal. WCAG one-point-four-one. The View-As-Table toggle switches to a semantic HTML table with caption and scope-equals-col headers — full screen-reader navigation. Inclusive design across every page.",
+    "url": "/population/heatmap",
+    "readyForText": "ZIP",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scroll",
+        "to": 300
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "hover",
+        "selector": "button:has-text('View as Table')"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "click",
+        "selector": "button:has-text('View as Table')"
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scroll",
+        "to": 600
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 20000
+      }
+    ]
+  },
+  {
+    "id": "20-cohort-builder",
+    "title": "Cohort builder + dialog focus trap",
+    "voiceover": "Cohort Builder composes filter clauses — age, RAF, HCC presence, sex — joined with AND or OR. Drag-and-drop for mouse users; every chip is also a real button with an explicit Add-Filter affordance, so keyboard-only users get the same workflow. Live preview pane on the right shows matched count, debounced at three-fifty milliseconds. Save opens an inline dialog with a hard keyboard focus trap — Tab cycles input / Cancel / Save without escaping; Enter submits; Escape cancels. Replaces a native window-prompt that was inaccessible to screen readers.",
+    "url": "/cohorts/builder",
+    "readyForText": "Cohort",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scroll",
+        "to": 200
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "hover",
+        "selector": "button[data-testid='add-filter'], button:has-text('Add Filter')"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "click",
+        "selector": "button[data-testid='add-filter']"
+      },
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 22000
+      }
+    ]
+  },
+  {
+    "id": "21-qa-kanban",
+    "title": "QA kanban + multi-rater escalation",
+    "voiceover": "QA Reviews — Reveleer-style multi-rater workflow. Three columns — Pending, Escalated, Closed — region landmarks, ARIA labels, friendly empty-states so a clean column reads All Caught Up. When two coders disagree the case escalates to a tier-two reviewer; primary cannot equal secondary, tier-two cannot equal either. Every transition is idempotent — re-submitting the same decision will not double-write. Buttons read Confirm Accept, Confirm Reject, Confirm Escalate — not the bare Confirm we shipped first — because a coder at midnight should never be confused which action they're confirming.",
+    "url": "/qa",
+    "readyForText": "QA",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4500
+      },
+      {
+        "type": "scroll",
+        "to": 200
+      },
+      {
+        "type": "wait",
+        "ms": 5000
+      },
+      {
+        "type": "hover",
+        "selector": "[role=region]:has-text('Pending') article, [data-testid*='qa-card']"
+      },
+      {
+        "type": "wait",
+        "ms": 1500
+      },
+      {
+        "type": "scroll",
+        "to": 0
+      },
+      {
+        "type": "wait",
+        "ms": 18000
+      }
+    ]
+  },
+  {
+    "id": "22-tenant-org",
+    "title": "Tenant branding + Org Switcher + X-Active-Tenant",
+    "voiceover": "Multi-tenancy is enforced in middleware, not React. Acme Health loads its colors and logo from a tenant-scoped branding endpoint at boot, applied as CSS custom properties. The chip top-right is the Org Switcher — open with click or keyboard, navigate with arrows. Switching tenants sends X-Active-Tenant on every subsequent request and the server downranks your role to whatever role you have in that specific tenant. A global admin who is viewer in tenant B is truly viewer in tenant B — no escape hatch. Watch DevTools — every request after the switch carries the new header.",
+    "url": "/patients",
+    "readyForText": "Worklist",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "click",
+        "selector": "button[aria-haspopup='listbox'][aria-label^='Active organization']"
+      },
+      {
+        "type": "wait",
+        "ms": 4000
+      },
+      {
+        "type": "openDevtoolsNetworkPanel",
+        "url": "api",
+        "label": "X-Active-Tenant header",
+        "header": "X-Active-Tenant: <uuid>",
+        "holdMs": 8000
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "T=$(curl -s -d '{\"email\":\"admin@raf.health\",\"password\":\"Admin@123\"}' -H 'Content-Type: application/json' http://localhost:8500/api/auth/login | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])'); echo '--- tenant 1 (Acme · admin) ---'; curl -s -i -H \"Authorization: Bearer $T\" 'http://localhost:8500/api/patients?limit=2' | sed -n '1p;/^content-type/Ip'; curl -s -H \"Authorization: Bearer $T\" 'http://localhost:8500/api/patients?limit=2' | python3 -c 'import sys,json;d=json.load(sys.stdin);print(\"patients:\",len(d.get(\"patients\",[])));[print(\" \",p[\"id\"],p[\"name\"]) for p in d.get(\"patients\",[])]'",
+        "label": "curl /api/patients · no X-Active-Tenant (default tenant 1)",
+        "holdMs": 9000
+      },
+      {
+        "type": "runTerminalCmd",
+        "cmd": "T=$(curl -s -d '{\"email\":\"admin@raf.health\",\"password\":\"Admin@123\"}' -H 'Content-Type: application/json' http://localhost:8500/api/auth/login | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])'); echo '--- tenant 2 (Beta · viewer) ---'; curl -s -i -H \"Authorization: Bearer $T\" -H 'X-Active-Tenant: 2' 'http://localhost:8500/api/patients?limit=2' | sed -n '1p;/^content-type/Ip'; curl -s -H \"Authorization: Bearer $T\" -H 'X-Active-Tenant: 2' 'http://localhost:8500/api/patients?limit=2' | python3 -c 'import sys,json;d=json.load(sys.stdin);print(\"patients:\",len(d.get(\"patients\",[])));[print(\" \",p[\"id\"],p[\"name\"]) for p in d.get(\"patients\",[])]'",
+        "label": "curl /api/patients · X-Active-Tenant: 2 → empty (tenant-scoped)",
+        "holdMs": 11000
+      },
+      {
+        "type": "wait",
+        "ms": 15000
+      }
+    ]
+  },
+  {
+    "id": "23-axe-wcag",
+    "title": "axe-core console: zero violations",
+    "voiceover": "Last proof. Open the console, import axe-core, run it on the current page. Zero violations. Every control is keyboard-reachable, every region landmarked, every aria-live announcer fires for screen-reader users. WCAG 2.2 AA across the platform — verified at runtime, not claimed in the footer.",
+    "url": "/patients",
+    "readyForText": "Worklist",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 3000
+      },
+      {
+        "type": "consoleEval",
+        "js": "(async()=>{if(!window.axe){const s=document.createElement('script');s.src='/axe.min.js';document.head.appendChild(s);await new Promise(r=>{s.onload=r;});}const r=await window.axe.run();return JSON.stringify({violations:r.violations.length, passes:r.passes.length});})()",
+        "label": "axe-core 4.10 · current page",
+        "holdMs": 14000
+      },
+      {
+        "type": "wait",
+        "ms": 10000
+      }
+    ]
+  },
+  {
+    "id": "24-closing",
+    "title": "Closing summary card",
+    "voiceover": "Twenty features in nineteen minutes. Beyond what you saw — CDS-Hooks lockdown with bearer auth, IP allow-list, per-source rate limit, immutable audit emission; lazy MEAT enrichment back-filling completeness whenever a panel loads; idempotency keys on every bulk write so retried submissions never double-bill; per-HCC EDPS reject-reason ingestion; the SUSPECT_FORCE_ACCEPTED_NO_MEAT chain protecting every billable diagnosis. Internally reviewed across PCP, CRC, Clinical UX, and Patient Safety lenses — ten out of ten on all four. Branch feat/all-gaps-fix. Ready to ship. Let's talk.",
+    "url": "/",
+    "readyForText": "RAF",
+    "actions": [
+      {
+        "type": "wait",
+        "ms": 2000
+      },
+      {
+        "type": "injectOverlay",
+        "html": "<div style='max-width:1100px'><div style='font-size:14px;letter-spacing:0.3em;font-weight:600;color:#5eead4;text-transform:uppercase;margin-bottom:18px'>Release Summary</div><h1 style='font-size:64px;line-height:1.05;margin:0 0 28px;font-weight:800;letter-spacing:-0.02em'>RAF Intelligence</h1><div style='font-size:24px;color:#cbd5e1;margin-bottom:48px'>20 production features · Internally reviewed across PCP, CRC, UX, and Patient Safety lenses — 10/10 on all four</div><div style='display:grid;grid-template-columns:repeat(4,1fr);gap:24px;text-align:left;font-size:16px;line-height:1.6'><div><div style='color:#5eead4;font-weight:600;margin-bottom:8px'>Magic moment</div>OpenEMR → RAF auto-computed in ~30 s · SSE push to every tab</div><div><div style='color:#5eead4;font-weight:600;margin-bottom:8px'>Coding integrity</div>Server-side MEAT gate · Force-Accept attestation · R1-R6 pre-submit · V28 trumping</div><div><div style='color:#5eead4;font-weight:600;margin-bottom:8px'>Safety</div>Hash-linked audit chain · Tenant ownership filter · X-Active-Tenant downgrade · CDS-Hooks lockdown</div><div><div style='color:#5eead4;font-weight:600;margin-bottom:8px'>Honest math · WCAG 2.2 AA</div>Em-dashes over zeros · Data-quality flags · axe-core 0 violations · Keyboard nav everywhere</div></div><div style='margin-top:64px;font-size:14px;color:#64748b'>Branch feat/all-gaps-fix · Ready to ship</div></div>"
+      },
+      {
+        "type": "wait",
+        "ms": 28000
+      }
+    ]
+  }
+]

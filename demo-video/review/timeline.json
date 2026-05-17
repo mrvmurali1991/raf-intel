@@ -1,0 +1,236 @@
+{
+  "video": "/Users/murali/Desktop/raf-intelligence/demo-video/final/raf-demo-v2.mp4",
+  "total_s": 798.82,
+  "scenes": [
+    {
+      "seq": "01",
+      "id": "00-cold-open",
+      "title": "Cold open + login + HttpOnly cookie",
+      "start_s": 0,
+      "end_s": 37.21,
+      "snapshot_at_s": 31.63,
+      "snapshot_jpg": "review/01-00-cold-open.jpg",
+      "voiceover_excerpt": "Medicare Advantage plans leave two to five percent of risk-adjusted revenue (Avalere 2024) on the table every year — not fraud, documentation gaps the chart-chase teams never reach. At the median CRC desk that's five tho..."
+    },
+    {
+      "seq": "02",
+      "id": "01-worklist-baseline",
+      "title": "Worklist baseline + auto-sync indicator",
+      "start_s": 37.21,
+      "end_s": 60.76,
+      "snapshot_at_s": 57.23,
+      "snapshot_jpg": "review/02-01-worklist-baseline.jpg",
+      "voiceover_excerpt": "The Patient Worklist — the coder's home screen. Forty-three patients in our demo tenant. Green pulsing dot in the title bar: the live auto-sync indicator — platform connected to the EHR over SSE, listening for new record..."
+    },
+    {
+      "seq": "03",
+      "id": "02-emr-magic-moment",
+      "title": "OpenEMR — front-desk admits Sarah Chen end-to-end",
+      "start_s": 60.76,
+      "end_s": 113.23,
+      "snapshot_at_s": 105.36,
+      "snapshot_jpg": "review/03-02-emr-magic-moment.jpg",
+      "voiceover_excerpt": "The magic moment. This is OpenEMR — the open-source EHR our reference clinic actually runs. I'm logging in as the front-desk admin, exactly the way a check-in clerk would. No API trickery, no SQL inserts — real EHR sessi..."
+    },
+    {
+      "seq": "04",
+      "id": "05-sync-toast",
+      "title": "RAF — SSE toast + count 43→44 + backend log",
+      "start_s": 113.23,
+      "end_s": 150.87,
+      "snapshot_at_s": 145.22,
+      "snapshot_jpg": "review/04-05-sync-toast.jpg",
+      "voiceover_excerpt": "Back to RAF Intelligence. Forty-three before. The auto-sync service polls OpenEMR's FHIR endpoint on a thirty-second cycle — it just detected Sarah, pulled demographics, computed a V-twenty-eight demographic baseline, sc..."
+    },
+    {
+      "seq": "05",
+      "id": "06-new-chart",
+      "title": "Auto-synced chart — baseline RAF computed",
+      "start_s": 150.87,
+      "end_s": 180.2,
+      "snapshot_at_s": 175.8,
+      "snapshot_jpg": "review/05-06-new-chart.jpg",
+      "voiceover_excerpt": "Sarah's chart. MRN auto-assigned. Demographics from OpenEMR. The RAF gauge shows her demographic baseline — the V-twenty-eight score from age and sex alone, before any conditions are coded. The moment her PCP documents h..."
+    },
+    {
+      "seq": "06",
+      "id": "07-bulk-actions",
+      "title": "Worklist bulk actions + safety controls",
+      "start_s": 180.2,
+      "end_s": 209.71,
+      "snapshot_at_s": 205.28,
+      "snapshot_jpg": "review/06-07-bulk-actions.jpg",
+      "voiceover_excerpt": "Select two-plus rows and the bulk-action bar appears: Reassign moves ownership, Recalc RAF reruns V-twenty-eight across the batch, Mark Reviewed writes one immutable HIPAA row per patient. Three independent safety contro..."
+    },
+    {
+      "seq": "07",
+      "id": "08-patient-overview",
+      "title": "Patient chart Overview + keyboard a11y",
+      "start_s": 209.71,
+      "end_s": 240.14,
+      "snapshot_at_s": 235.58,
+      "snapshot_jpg": "review/07-08-patient-overview.jpg",
+      "voiceover_excerpt": "A high-acuity case — James Johnson, patient three, seventy-one, RAF seven-point-eight. Type-two diabetes with CKD stage four, CHF, status-post stroke. Demographics, MBI, payer, live RAF gauge. More-Actions kebab is fully..."
+    },
+    {
+      "seq": "08",
+      "id": "09-raf-central",
+      "title": "RAF Central + CMS countdown + V28 trumping",
+      "start_s": 240.14,
+      "end_s": 277.42,
+      "snapshot_at_s": 271.82,
+      "snapshot_jpg": "review/08-09-raf-central.jpg",
+      "voiceover_excerpt": "RAF Central — where coders spend ninety percent of chart time. Current score, active V-twenty-eight, payment year twenty-twenty-six, Recalculate for mid-year coefficient pushes. Below: the CMS submission countdown — blue..."
+    },
+    {
+      "seq": "09",
+      "id": "10-meat-grid",
+      "title": "MEAT compliance grid + 5k charts/month stake",
+      "start_s": 277.42,
+      "end_s": 327.37,
+      "snapshot_at_s": 319.87,
+      "snapshot_jpg": "review/09-10-meat-grid.jpg",
+      "voiceover_excerpt": "MEAT — Monitor, Evaluate, Assess, Treat — the CMS documentation standard. Without all four letters, a diagnosis is not RADV-defensible and revenue is at risk. At the median plan, RADV extrapolation on one failed HCC runs..."
+    },
+    {
+      "seq": "10",
+      "id": "11-suspects-tiered",
+      "title": "Tiered suspect ranking + honest em-dash",
+      "start_s": 327.37,
+      "end_s": 364.35,
+      "snapshot_at_s": 358.8,
+      "snapshot_jpg": "review/10-11-suspects-tiered.jpg",
+      "voiceover_excerpt": "Below MEAT, suspect conditions — unbilled HCC opportunities mined from labs, notes, meds, prior-year claims. Ranked into four tiers — very high, high, moderate, low — the four-tier ranking pattern the major risk-adjustme..."
+    },
+    {
+      "seq": "11",
+      "id": "12-meat-gate",
+      "title": "Server-side MEAT gate + Force-Accept",
+      "start_s": 364.35,
+      "end_s": 403.01,
+      "snapshot_at_s": 397.21,
+      "snapshot_jpg": "review/11-12-meat-gate.jpg",
+      "voiceover_excerpt": "The single most important coding-integrity control. With no MEAT evidence the Accept button is disabled — tooltip says add MEAT evidence before accepting. The only path through is Force-Accept RADV-risk: dialog requires ..."
+    },
+    {
+      "seq": "12",
+      "id": "13-meat-gate-curl",
+      "title": "Server-side proof — curl returns 422",
+      "start_s": 403.01,
+      "end_s": 423.19,
+      "snapshot_at_s": 420.16,
+      "snapshot_jpg": "review/12-13-meat-gate-curl.jpg",
+      "voiceover_excerpt": "Proof. Same endpoint, hit directly with curl, no MRN, no justification — server returns four-twenty-two missing-attestation. The UI gate is cosmetic; the real gate is in the API. Round-two CRC review caught the regressio..."
+    },
+    {
+      "seq": "13",
+      "id": "14-whatif",
+      "title": "What-If simulator (honest math)",
+      "start_s": 423.19,
+      "end_s": 447.12,
+      "snapshot_at_s": 443.53,
+      "snapshot_jpg": "review/13-14-whatif.jpg",
+      "voiceover_excerpt": "What-If simulator. Drag the slider — accept sixty percent of open suspects, close half the recapture gaps, where does this patient land for the year? Projected RAF and projected annual revenue update live. Same honest-ma..."
+    },
+    {
+      "seq": "14",
+      "id": "15-reconciliation",
+      "title": "EDPS reconciliation + MAO-004 reason 532",
+      "start_s": 447.12,
+      "end_s": 490.62,
+      "snapshot_at_s": 484.1,
+      "snapshot_jpg": "review/14-15-reconciliation.jpg",
+      "voiceover_excerpt": "Reconciliation closes the loop my old tools never closed. We submit eight-three-seven files quarterly; CMS responds with MAO-zero-zero-four — accept, reject, partial, reason codes per HCC. In legacy workflow that respons..."
+    },
+    {
+      "seq": "15",
+      "id": "16-activity-audit",
+      "title": "Per-patient activity + immutable hash chain",
+      "start_s": 490.62,
+      "end_s": 526.63,
+      "snapshot_at_s": 521.23,
+      "snapshot_jpg": "review/15-16-activity-audit.jpg",
+      "voiceover_excerpt": "Activity tab — per-patient audit trail combining operational logs with the immutable HIPAA chain. Every PHI view, accept, dismiss, force-accept attestation lands here. Tenant-scoped at the DB level. In the terminal — eve..."
+    },
+    {
+      "seq": "16",
+      "id": "17-pre-submission",
+      "title": "R1-R6 pre-submission validator + Z85 rule",
+      "start_s": 526.63,
+      "end_s": 570.37,
+      "snapshot_at_s": 563.81,
+      "snapshot_jpg": "review/16-17-pre-submission.jpg",
+      "voiceover_excerpt": "Pre-submit runs every patient and every HCC through six gating rules before any eight-three-seven file ships. R-one Missing MEAT — HIGH severity; shipped MEDIUM first, CRC reviewer caught it, promoted to HIGH hard gate. ..."
+    },
+    {
+      "seq": "17",
+      "id": "18-provider-scorecard",
+      "title": "Provider scorecards + honest em-dashes",
+      "start_s": 570.37,
+      "end_s": 601.56,
+      "snapshot_at_s": 596.88,
+      "snapshot_jpg": "review/17-18-provider-scorecard.jpg",
+      "voiceover_excerpt": "Provider Scorecards rank every PCP by panel size, average RAF, recapture rate, MEAT compliance. Em-dashes — not zeros — where MEAT hasn't been computed because no HCCs are scored. CRC reviewer asked us to surface that as..."
+    },
+    {
+      "seq": "18",
+      "id": "19-heatmap",
+      "title": "Population heatmap + WCAG view-as-table",
+      "start_s": 601.56,
+      "end_s": 630.94,
+      "snapshot_at_s": 626.53,
+      "snapshot_jpg": "review/18-19-heatmap.jpg",
+      "voiceover_excerpt": "Population health. Top twenty ZIPs ranked by patient count, average RAF as a colored bar. Each bar carries an explicit text-tier label — Very High, High, Moderate, Low — alongside the color, so color-vision-deficit users..."
+    },
+    {
+      "seq": "19",
+      "id": "20-cohort-builder",
+      "title": "Cohort builder + dialog focus trap",
+      "start_s": 630.94,
+      "end_s": 667.34,
+      "snapshot_at_s": 661.88,
+      "snapshot_jpg": "review/19-20-cohort-builder.jpg",
+      "voiceover_excerpt": "Cohort Builder composes filter clauses — age, RAF, HCC presence, sex — joined with AND or OR. Drag-and-drop for mouse users; every chip is also a real button with an explicit Add-Filter affordance, so keyboard-only users..."
+    },
+    {
+      "seq": "20",
+      "id": "21-qa-kanban",
+      "title": "QA kanban + multi-rater escalation",
+      "start_s": 667.34,
+      "end_s": 703.79,
+      "snapshot_at_s": 698.32,
+      "snapshot_jpg": "review/20-21-qa-kanban.jpg",
+      "voiceover_excerpt": "QA Reviews — Reveleer-style multi-rater workflow. Three columns — Pending, Escalated, Closed — region landmarks, ARIA labels, friendly empty-states so a clean column reads All Caught Up. When two coders disagree the case..."
+    },
+    {
+      "seq": "21",
+      "id": "22-tenant-org",
+      "title": "Tenant branding + Org Switcher + X-Active-Tenant",
+      "start_s": 703.79,
+      "end_s": 738.23,
+      "snapshot_at_s": 733.06,
+      "snapshot_jpg": "review/21-22-tenant-org.jpg",
+      "voiceover_excerpt": "Multi-tenancy is enforced in middleware, not React. Acme Health loads its colors and logo from a tenant-scoped branding endpoint at boot, applied as CSS custom properties. The chip top-right is the Org Switcher — open wi..."
+    },
+    {
+      "seq": "22",
+      "id": "23-axe-wcag",
+      "title": "axe-core console: zero violations",
+      "start_s": 738.23,
+      "end_s": 758.34,
+      "snapshot_at_s": 755.32,
+      "snapshot_jpg": "review/22-23-axe-wcag.jpg",
+      "voiceover_excerpt": "Last proof. Open the console, import axe-core, run it on the current page. Zero violations. Every control is keyboard-reachable, every region landmarked, every aria-live announcer fires for screen-reader users. WCAG 2.2 ..."
+    },
+    {
+      "seq": "23",
+      "id": "24-closing",
+      "title": "Closing summary card",
+      "start_s": 758.34,
+      "end_s": 798.82,
+      "snapshot_at_s": 792.75,
+      "snapshot_jpg": "review/23-24-closing.jpg",
+      "voiceover_excerpt": "Twenty features in nineteen minutes. Beyond what you saw — CDS-Hooks lockdown with bearer auth, IP allow-list, per-source rate limit, immutable audit emission; lazy MEAT enrichment back-filling completeness whenever a pa..."
+    }
+  ]
+}
