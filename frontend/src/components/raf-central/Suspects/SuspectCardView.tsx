@@ -9,6 +9,7 @@ import {
   useAcceptSuspectCentral,
   useDismissSuspectCentral,
   useRestoreSuspectCentral,
+  useForceAcceptSuspect,
 } from "@/hooks/mutations/useRAFCentralMutations";
 import ExplainPanel from "@/components/ExplainPanel";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,10 @@ export function SuspectCardView({
   const [showExplain, setShowExplain] = useState(false);
   const [showDismissDialog, setShowDismissDialog] = useState(false);
   const [showAcceptGate, setShowAcceptGate] = useState(false);
+  const [showForceAcceptDialog, setShowForceAcceptDialog] = useState(false);
+  const [forceAcceptMrn, setForceAcceptMrn] = useState("");
+  const [forceAcceptReason, setForceAcceptReason] = useState("");
+  const [forceAcceptSubmitting, setForceAcceptSubmitting] = useState(false);
   const [queryDialogOpen, setQueryDialogOpen] = useState(false);
   const [queryText, setQueryText] = useState("");
   const [querySubmitting, setQuerySubmitting] = useState(false);
@@ -145,6 +150,7 @@ export function SuspectCardView({
   const acceptMut = useAcceptSuspectCentral(patientId);
   const dismissMut = useDismissSuspectCentral(patientId);
   const restoreMut = useRestoreSuspectCentral(patientId);
+  const forceAcceptMut = useForceAcceptSuspect(patientId);
 
   // busy mirrors the pending state of whichever mutation is in-flight
   const busy: "accept" | "dismiss" | null = acceptMut.isPending
@@ -163,17 +169,43 @@ export function SuspectCardView({
     onChange();
   };
 
-  // Entry-point for the Accept button — gate is ALWAYS shown so every
-  // accept gets a model-version disclosure and an explicit "writes to
-  // billing record" attestation. Patient-safety review #2 / #A flagged
-  // that high-confidence suspects were one-click-to-EMR with no
-  // attestation, no model-version surfacing, and no audit prompt — a
-  // billing-without-MEAT trail-of-breadcrumbs problem for RADV. The
-  // ``needsAcceptGate`` helper is retained for analytics on which risk
-  // bucket a suspect falls into, but no longer changes the UX.
+  // Whether MEAT is fully absent — Accept must be blocked in this case.
+  // "missing" status OR null/undefined meat_completeness (engine never ran)
+  // both count. A signed attestation lifts the block regardless.
+  const isMeatMissing =
+    suspect.attestation_signed_at == null &&
+    (suspect.meat_status === "missing" || suspect.meat_completeness == null);
+
+  // Entry-point for the Accept button — blocked entirely when MEAT is missing
+  // so the clinician must either add MEAT evidence or use Force Accept with an
+  // explicit audit trail. Otherwise the gate is always shown for model-version
+  // disclosure + RADV attestation. Patient-safety review #2/#A.
   const handleAcceptClick = () => {
-    void needsAcceptGate; // intentionally noop — see comment above
+    if (isMeatMissing) return; // button is disabled; guard for safety
     setShowAcceptGate(true);
+  };
+
+  // Force-accept handler — writes SUSPECT_FORCE_ACCEPTED_NO_MEAT audit event.
+  const handleForceAccept = async () => {
+    if (forceAcceptReason.trim().length < 20) return;
+    setForceAcceptSubmitting(true);
+    try {
+      await forceAcceptMut.mutateAsync({
+        suspect_id: suspect.id,
+        mrn_confirmation: forceAcceptMrn.trim(),
+        force_reason: forceAcceptReason.trim(),
+      });
+      setShowForceAcceptDialog(false);
+      setForceAcceptMrn("");
+      setForceAcceptReason("");
+      onChange();
+      toast.success("Force-accepted", `${suspect.label} accepted with RADV-risk audit logged.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Force accept failed.";
+      toast.error("Force accept failed", msg);
+    } finally {
+      setForceAcceptSubmitting(false);
+    }
   };
 
   const handleAcceptConfirmed = async (payload: AcceptOverridePayload) => {
@@ -272,7 +304,12 @@ export function SuspectCardView({
     const ev = (suspect.evidence_type || "").toLowerCase();
     if (ev.startsWith("hist") || ev.startsWith("recap")) return "audit" as const;
     const ruleOk = !suspect.clinical_rule_violation;
-    if (meat >= 0.75 && conf >= 0.80 && ruleOk) return "confirmed" as const;
+    // "confirmed" requires claim_history evidence OR a signed attestation so
+    // that MEAT-guessed completeness alone cannot promote a suspect to
+    // "Confirmed". Safety review round-N+1 #2 + Fix 1 taxonomy requirement.
+    const evidenceConfirmed =
+      ev === "claim_history" || suspect.attestation_signed_at != null;
+    if (meat >= 0.75 && conf >= 0.80 && ruleOk && evidenceConfirmed) return "confirmed" as const;
     return "new" as const;
   })();
   const taxonomyMeta = {
@@ -321,12 +358,15 @@ export function SuspectCardView({
             <Button
               size="sm"
               onClick={handleAcceptClick}
-              disabled={busy !== null || isTrumped}
+              disabled={busy !== null || isTrumped || isMeatMissing}
               title={
                 isTrumped
                   ? `Accept disabled — HCC ${trumpedBy} already covers this hierarchy in V28.`
+                  : isMeatMissing
+                  ? "Add MEAT evidence before accepting."
                   : undefined
               }
+              aria-disabled={isMeatMissing || isTrumped || busy !== null}
             >
               {busy === "accept" ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -334,6 +374,18 @@ export function SuspectCardView({
                 <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept</>
               )}
             </Button>
+            {isMeatMissing && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowForceAcceptDialog(true)}
+                disabled={busy !== null}
+                title="Force-accept despite missing MEAT — logs a RADV-risk audit event"
+                className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 px-2"
+              >
+                Force accept (RADV risk)
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -523,6 +575,131 @@ export function SuspectCardView({
                 disabled={queryText.trim().length < 10 || querySubmitting}
               >
                 {querySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send query"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Force-accept dialog — shown only when MEAT is missing and the user
+          clicks "Force accept (RADV risk)". Requires MRN confirmation + a
+          minimum-20-char reason before submitting. Writes audit event
+          SUSPECT_FORCE_ACCEPTED_NO_MEAT via the forceAcceptMut mutation. */}
+      {showForceAcceptDialog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="force-accept-title"
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+          onClick={() => !forceAcceptSubmitting && setShowForceAcceptDialog(false)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-lg shadow-2xl w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-bold shrink-0"
+                aria-hidden="true"
+              >
+                !
+              </span>
+              <h3 id="force-accept-title" className="text-base font-bold text-red-700 dark:text-red-400">
+                Force accept — RADV risk
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              {suspect.label} · HCC {suspect.hcc} · {suspect.icd10}
+            </p>
+            <div
+              className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-900 dark:text-red-200 mb-4"
+              role="alert"
+            >
+              Accepting without MEAT documentation creates a RADV audit
+              exposure. This action will be logged as{" "}
+              <strong>SUSPECT_FORCE_ACCEPTED_NO_MEAT</strong> and may be
+              reviewed during a CMS audit.
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="force-accept-mrn"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Confirm patient MRN (or last 4 digits)
+                  <span className="text-destructive ml-1" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="force-accept-mrn"
+                  type="text"
+                  value={forceAcceptMrn}
+                  onChange={(e) => setForceAcceptMrn(e.target.value)}
+                  placeholder="e.g. 1234"
+                  autoFocus
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Patient MRN confirmation"
+                  disabled={forceAcceptSubmitting}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="force-accept-reason"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Clinical reason for override
+                  <span className="text-destructive ml-1" aria-hidden="true">*</span>
+                </label>
+                <textarea
+                  id="force-accept-reason"
+                  value={forceAcceptReason}
+                  onChange={(e) => setForceAcceptReason(e.target.value)}
+                  placeholder="Explain why this suspect should be accepted despite missing MEAT documentation…"
+                  rows={3}
+                  className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Force accept reason"
+                  aria-describedby="force-reason-hint"
+                  disabled={forceAcceptSubmitting}
+                />
+                <p
+                  id="force-reason-hint"
+                  className={`mt-0.5 text-xs ${
+                    forceAcceptReason.trim().length >= 20
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {forceAcceptReason.trim().length >= 20
+                    ? "Minimum length met."
+                    : `${20 - forceAcceptReason.trim().length} more character${20 - forceAcceptReason.trim().length === 1 ? "" : "s"} required`}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowForceAcceptDialog(false);
+                  setForceAcceptMrn("");
+                  setForceAcceptReason("");
+                }}
+                disabled={forceAcceptSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleForceAccept}
+                disabled={
+                  forceAcceptSubmitting ||
+                  forceAcceptMrn.trim().length === 0 ||
+                  forceAcceptReason.trim().length < 20
+                }
+                aria-label="Confirm force accept with RADV risk acknowledged"
+              >
+                {forceAcceptSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Accept anyway — log audit"
+                )}
               </Button>
             </div>
           </div>

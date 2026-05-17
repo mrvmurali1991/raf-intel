@@ -68,13 +68,23 @@ export function WhatIfSimulator({
   const [suspectPct, setSuspectPct] = useState<number>(0);
   const [recapturePct, setRecapturePct] = useState<number>(0);
 
+  // Count suspects that have no expected_dollar_impact from the model.
+  // Used to render the "Awaiting model coefficient" badge in the slider row.
+  const missingDollarCount = useMemo(
+    () => openSuspects.filter((s) => s.expected_dollar_impact == null).length,
+    [openSuspects],
+  );
+
   // Derive per-card RAF deltas client-side. Suspects ship dollar impact
   // (not raw coefficient) so we invert through revenue_per_raf_point.
+  // Suspects with null/undefined expected_dollar_impact are excluded from
+  // the sum rather than treated as $0 — we render "—" for those rows.
   // Guard against zero to avoid NaN when the constant isn't supplied yet.
   const sumSuspectCoefficients = useMemo(() => {
     if (!revenuePerRafPoint || revenuePerRafPoint <= 0) return 0;
     return openSuspects.reduce((acc, s) => {
-      const dollar = Number(s.expected_dollar_impact ?? 0);
+      if (s.expected_dollar_impact == null) return acc; // excluded, not $0
+      const dollar = Number(s.expected_dollar_impact);
       return acc + (dollar > 0 ? dollar / revenuePerRafPoint : 0);
     }, 0);
   }, [openSuspects, revenuePerRafPoint]);
@@ -167,13 +177,15 @@ export function WhatIfSimulator({
             sumSuspectCoefficients > 0
               ? `Lift if 100% accepted: +${fmtRaf(sumSuspectCoefficients)} RAF · ${fmtUsd(
                   sumSuspectCoefficients * revenuePerRafPoint,
-                )}`
+                )}${missingDollarCount > 0 ? ` (${missingDollarCount} suspect${missingDollarCount === 1 ? "" : "s"} awaiting model coefficient)` : ""}`
+              : missingDollarCount > 0
+              ? `${missingDollarCount} suspect${missingDollarCount === 1 ? "" : "s"} awaiting model coefficient — slider shows % accepted only`
               : "No open suspects with dollar impact"
           }
           value={suspectPct}
           onChange={setSuspectPct}
           ariaValueText={suspectAriaValueText}
-          disabled={sumSuspectCoefficients <= 0}
+          disabled={sumSuspectCoefficients <= 0 && missingDollarCount === 0}
           tone="amber"
         />
         <SliderRow
@@ -212,32 +224,47 @@ export function WhatIfSimulator({
         />
         <ResultTile
           label="Projected annual revenue"
-          primary={fmtUsd(projectedAnnualRevenue)}
+          primary={
+            sumSuspectCoefficients <= 0 && missingDollarCount > 0 && suspectPct > 0
+              ? "—"
+              : fmtUsd(projectedAnnualRevenue)
+          }
           subtitle={
-            bandHalfWidthRaf > 0
+            sumSuspectCoefficients <= 0 && missingDollarCount > 0 && suspectPct > 0
+              ? "Awaiting model coefficient"
+              : bandHalfWidthRaf > 0
               ? `Band: ${fmtUsd(bandLowRevenue)} – ${fmtUsd(bandHighRevenue)} · ${revenueDelta >= 0 ? "+" : ""}${fmtUsd(revenueDelta)} vs current`
               : `${revenueDelta >= 0 ? "+" : ""}${fmtUsd(revenueDelta)} vs current ${fmtUsd(currentAnnualRevenue)}`
           }
           tone={revenueDelta > 0 ? "emerald" : "muted"}
+          awaiting={sumSuspectCoefficients <= 0 && missingDollarCount > 0 && suspectPct > 0}
         />
       </div>
 
-      <footer className="mt-3 flex items-center justify-between gap-2">
-        <p className="text-[10px] text-muted-foreground">
-          Band scales with mean suspect confidence (
-          {(meanSuspectConfidence * 100).toFixed(0)}%) — higher confidence
-          → narrower band.
-        </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={reset}
-          disabled={!isDirty}
-          aria-label="Reset what-if sliders to zero"
+      <footer className="mt-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] text-muted-foreground">
+            Band scales with mean suspect confidence (
+            {(meanSuspectConfidence * 100).toFixed(0)}%) — higher confidence
+            → narrower band.
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={reset}
+            disabled={!isDirty}
+            aria-label="Reset what-if sliders to zero"
+          >
+            <RefreshCcw className="h-3 w-3 mr-1.5" aria-hidden />
+            Reset
+          </Button>
+        </div>
+        <p
+          className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-[10px] text-amber-800 dark:text-amber-300"
+          role="note"
         >
-          <RefreshCcw className="h-3 w-3 mr-1.5" aria-hidden />
-          Reset
-        </Button>
+          AI suggestions are decision aids — verify against the chart before accepting.
+        </p>
       </footer>
     </section>
   );
@@ -318,11 +345,14 @@ function ResultTile({
   primary,
   subtitle,
   tone = "muted",
+  awaiting = false,
 }: {
   label: string;
   primary: string;
   subtitle: string;
   tone?: "muted" | "emerald";
+  /** When true, renders an "Awaiting model coefficient" badge next to the value. */
+  awaiting?: boolean;
 }) {
   const toneClass =
     tone === "emerald"
@@ -333,8 +363,15 @@ function ResultTile({
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 text-base font-bold tabular-nums leading-none text-foreground">
-        {primary}
+      <div className="mt-1 flex items-center gap-2">
+        <span className="text-base font-bold tabular-nums leading-none text-foreground">
+          {primary}
+        </span>
+        {awaiting && (
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold border border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+            Awaiting model coefficient
+          </span>
+        )}
       </div>
       <div className="mt-1 text-[11px] text-muted-foreground">{subtitle}</div>
     </div>

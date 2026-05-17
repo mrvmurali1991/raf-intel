@@ -55,6 +55,10 @@ export interface SuspectCard {
   clinical_rule_violation?: boolean | string | null;
   /** Expected revenue impact of accepting this suspect — added by Agent-N. */
   expected_dollar_impact?: number | null;
+  /** ISO timestamp when a MEAT attestation was signed for this suspect.
+   *  When non-null, the suspect is considered MEAT-complete for taxonomy
+   *  and accept-gate purposes even if meat_status is still "partial". */
+  attestation_signed_at?: string | null;
   /** When set, V28 will trump this HCC at scoring time — accepting it is
    *  wasted effort. Surfaced by raf_central.py:_fetch_trumped_map. */
   trumped_by_hcc?: number | null;

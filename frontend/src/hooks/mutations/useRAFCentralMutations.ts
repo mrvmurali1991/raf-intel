@@ -126,6 +126,38 @@ export function useRestoreSuspectCentral(pid: number, year?: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Force-accept suspect without MEAT (writes SUSPECT_FORCE_ACCEPTED_NO_MEAT audit)
+// ---------------------------------------------------------------------------
+
+interface ForceAcceptSuspectArgs {
+  suspect_id: number;
+  mrn_confirmation: string;
+  force_reason: string;
+}
+
+export function useForceAcceptSuspect(pid: number, year?: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: ForceAcceptSuspectArgs) =>
+      api
+        .post(`/api/raf-central/${pid}/actions/accept-suspect`, {
+          suspect_id: args.suspect_id,
+          push_to_emr: true,
+          force_no_meat: true,
+          mrn_confirmation: args.mrn_confirmation,
+          override_reason: args.force_reason,
+          audit_action: "SUSPECT_FORCE_ACCEPTED_NO_MEAT",
+        })
+        .then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: RAF_CENTRAL_QUERY_KEY(pid, year),
+      });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // MEAT attestation
 // ---------------------------------------------------------------------------
 
