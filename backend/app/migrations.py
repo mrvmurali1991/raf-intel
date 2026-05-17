@@ -334,6 +334,23 @@ def _cohorts_tables() -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    # Visual cohort builder (v2) — independent from legacy `cohorts` table.
+    # Stores a JSON definition (operator + clauses) that the v2 preview/save
+    # endpoints compile into a SQL WHERE clause at evaluation time.
+    _execute(
+        """
+        CREATE TABLE IF NOT EXISTS raf_cohorts (
+            id                 BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tenant_id          VARCHAR(64) NOT NULL,
+            name               VARCHAR(255) NOT NULL,
+            definition_json    JSON NOT NULL,
+            created_by_user_id INT NOT NULL,
+            created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
 
 
 @register("care_gap_tasks")
