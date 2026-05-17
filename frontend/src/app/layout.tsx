@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/providers/theme-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { AuthedFeatureFlagProvider } from "@/components/FeatureFlagContext";
+import { TenantBrandingProvider } from "@/lib/TenantBrandingProvider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
@@ -51,13 +52,20 @@ export default function RootLayout({
           <QueryProvider>
             <AuthProvider>
               <AuthedFeatureFlagProvider>
-                <PaymentYearProvider>
-                  <AuthLayout>
-                    <ErrorBoundary>
-                      {children}
-                    </ErrorBoundary>
-                  </AuthLayout>
-                </PaymentYearProvider>
+                {/* TenantBrandingProvider must sit inside AuthProvider so
+                    the GET /api/tenant/branding fetch has a session token.
+                    It gates rendering on the first response so widgets
+                    never flash the default colors before the tenant
+                    palette is applied. */}
+                <TenantBrandingProvider>
+                  <PaymentYearProvider>
+                    <AuthLayout>
+                      <ErrorBoundary>
+                        {children}
+                      </ErrorBoundary>
+                    </AuthLayout>
+                  </PaymentYearProvider>
+                </TenantBrandingProvider>
               </AuthedFeatureFlagProvider>
             </AuthProvider>
           </QueryProvider>

@@ -42,6 +42,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
 import { useAuth } from "@/contexts/auth-context";
 import api, { getEmrStatus } from "@/lib/api";
+import { useTenantBranding } from "@/lib/useTenantBranding";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { hasUsedKeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { Building2, ChevronDown } from "lucide-react";
@@ -308,7 +309,10 @@ export function Sidebar() {
   const router = useRouter();
   const { theme, toggle } = useTheme();
   const { user, logout, isAuthenticated } = useAuth();
-  
+  // Tenant co-branding — falls back to "RAF Intelligence" defaults when the
+  // tenant has not customized anything (or when the user is unauthenticated).
+  const { branding } = useTenantBranding();
+
   const { data: emrStatus, isLoading: emrLoading } = useQuery({
     queryKey: ["emr-status"],
     queryFn: () => getEmrStatus(),
@@ -590,15 +594,22 @@ export function Sidebar() {
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 17, fontWeight: 800, color: TEXT_ACTIVE, letterSpacing: "-0.02em" }}>
-                  RAF
-                </span>
-                <span style={{ fontSize: 17, fontWeight: 800, color: ACCENT_LIGHT, letterSpacing: "-0.02em" }}>
-                  Intelligence
+                {/* Tenant logo text — driven by useTenantBranding().
+                    Defaults to "RAF Intel" when no row exists for the tenant. */}
+                <span
+                  data-testid="sidebar-logo-text"
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 800,
+                    color: TEXT_ACTIVE,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {branding.logo_text || "RAF Intelligence"}
                 </span>
               </div>
               <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 600, marginTop: -2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Clinical Intelligence
+                {branding.display_name || "Clinical Intelligence"}
               </div>
             </div>
           </div>

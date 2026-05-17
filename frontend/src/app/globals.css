@@ -117,6 +117,16 @@
 /* Allow inline style overrides only when the element provides its own focus-visible state */
 
 :root {
+  /* ---- Tenant co-branding defaults ----
+   * Overridden at runtime by useTenantBranding() once the
+   * GET /api/tenant/branding response lands.  Components that want
+   * tenant-aware coloring read var(--brand-primary) /
+   * var(--brand-secondary).  The logo text is exposed both as a
+   * CSS variable (for ::before content) and via the hook for React. */
+  --brand-primary: #0F766E;
+  --brand-secondary: #134E4A;
+  --logo-text: "RAF Intel";
+
   --background: 216 25% 96%;
   --foreground: 220 25% 10%;
   --card: 0 0% 100%;
@@ -262,6 +272,12 @@
 }
 
 /* ===== Design System Utility Classes ===== */
+
+/* Tenant-aware brand color — used by any widget that wants to follow the
+ * per-tenant primary color set by useTenantBranding(). */
+.use-tenant-brand {
+  color: var(--brand-primary);
+}
 
 /* Premium card base */
 .premium-card {
