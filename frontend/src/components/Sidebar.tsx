@@ -95,6 +95,7 @@ const navGroups: NavGroup[] = [
       { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
       { href: "/roi", label: "ROI Calculator", icon: Calculator },
       { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
+      { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
       { href: "/hedis", label: "HEDIS + Stars", icon: Star },
     ],
   },

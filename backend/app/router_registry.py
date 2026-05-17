@@ -60,6 +60,7 @@ from app.routers import auth as auth_router
 from app.routers import clinical_queries as clinical_queries_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
+from app.routers import edi_generation as edi_generation_router
 from app.routers import feature_flags as feature_flags_router
 from app.routers import forecast as forecast_router
 from app.routers import hcc_gap_drilldown as hcc_gap_drilldown_router
@@ -200,6 +201,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, submissions.router)
     _mount(app, bundles.router)
     _mount(app, cms_transmission.router)
+    _mount(app, edi_generation_router.router)
 
     # Integrations
     _mount(app, fhir.router)
