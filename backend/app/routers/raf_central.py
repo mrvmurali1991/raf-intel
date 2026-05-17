@@ -200,6 +200,9 @@ class FinancialImpact(BaseModel):
     # available. ``None`` means "still waiting for EDPS feedback" — the
     # RAF Reconciliation card renders a distinct placeholder in that case.
     accepted_raf: float | None = None
+    # RAF value that was on the 837 / EDPS submission when CMS replied.
+    # ``None`` means CMS has not replied yet for this pid + PY.
+    submitted_raf: float | None = None
     current_annual: float
     projected_annual: float
     pmpm_delta: float
@@ -730,6 +733,7 @@ def _build_financial(
     suspects: list[SuspectCard],
     recapture: list[RecaptureCard],
     accepted_raf: float | None = None,
+    submitted_raf: float | None = None,
 ) -> FinancialImpact:
     """Projected RAF = current + sum(confidence × expected_coef) for open
     suspects + sum of recapture RAF impact. We don't have per-suspect
@@ -760,6 +764,11 @@ def _build_financial(
         current_raf=raf_bar.current,
         projected_raf=projected,
         accepted_raf=accepted_raf,
+        # If CMS replied with accepted_raf but we never tracked the exact
+        # value-at-submission, fall back to current_raf as the best
+        # available proxy for what was sent. Reconciliation card renders
+        # "engine X vs CMS Y" using these two numbers.
+        submitted_raf=(submitted_raf if submitted_raf is not None else (raf_bar.current if accepted_raf is not None else None)),
         current_annual=current_annual,
         projected_annual=projected_annual,
         pmpm_delta=round((projected_annual - current_annual) / 12.0, 2),

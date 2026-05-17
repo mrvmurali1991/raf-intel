@@ -586,12 +586,31 @@ export default function CohortBuilderPage() {
             </button>
           </div>
 
-          {/* Inline save dialog — replaces window.prompt() for a11y. */}
+          {/* Inline save dialog — replaces window.prompt() for a11y.
+              Focus is trapped inside the dialog: Tab/Shift+Tab cycle
+              between input → Cancel → Save → input. Heading is a
+              dedicated <h3> so the label association doesn't overload
+              with the dialog name. */}
           {saveOpen && (
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="cohort-save-title"
+              onKeyDown={(e) => {
+                if (e.key !== "Tab") return;
+                const ids = ["cohort-name-input", "cohort-save-cancel", "cohort-save-confirm"];
+                const focusables = ids
+                  .map((id) => document.getElementById(id))
+                  .filter((el): el is HTMLElement => !!el && !(el as HTMLButtonElement).disabled);
+                if (focusables.length === 0) return;
+                const idx = focusables.indexOf(document.activeElement as HTMLElement);
+                const last = focusables.length - 1;
+                if (e.shiftKey) {
+                  if (idx <= 0) { e.preventDefault(); focusables[last].focus(); }
+                } else {
+                  if (idx === -1 || idx === last) { e.preventDefault(); focusables[0].focus(); }
+                }
+              }}
               style={{
                 marginTop: "0.75rem",
                 padding: "0.75rem",
@@ -600,12 +619,17 @@ export default function CohortBuilderPage() {
                 background: "#f8fafc",
               }}
             >
-              <label
+              <h3
                 id="cohort-save-title"
-                htmlFor="cohort-name-input"
                 style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#0f172a" }}
               >
                 Name this cohort
+              </h3>
+              <label
+                htmlFor="cohort-name-input"
+                className="sr-only"
+              >
+                Cohort name
               </label>
               <input
                 id="cohort-name-input"
@@ -634,6 +658,7 @@ export default function CohortBuilderPage() {
               />
               <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end", gap: 6 }}>
                 <button
+                  id="cohort-save-cancel"
                   type="button"
                   onClick={() => { setSaveOpen(false); setSaveName(""); }}
                   style={{
@@ -649,6 +674,7 @@ export default function CohortBuilderPage() {
                   Cancel
                 </button>
                 <button
+                  id="cohort-save-confirm"
                   type="button"
                   onClick={handleConfirmSave}
                   disabled={!saveName.trim() || saving}
