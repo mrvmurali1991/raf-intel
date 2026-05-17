@@ -57,7 +57,7 @@ def get_cursor() -> Generator[Any, None, None]:
 # ---------------------------------------------------------------------------
 
 class FindingModel(BaseModel):
-    rule_id: str = Field(..., description="R1..R5")
+    rule_id: str = Field(..., description="R1..R6")
     severity: str = Field(..., description="HIGH | MEDIUM | LOW")
     hcc_id: int = Field(..., description="raf_patient_hcc.id")
     hcc_code: int | None = Field(None, description="HCC code (None when unmapped)")
@@ -70,9 +70,9 @@ class ValidateResponse(BaseModel):
     year: int
     tenant_id: int
     total: int = Field(..., description="Total findings before truncation")
-    rule_counts: dict[str, int] = Field(..., description="Count per rule_id (R1..R5)")
+    rule_counts: dict[str, int] = Field(..., description="Count per rule_id (R1..R6)")
     severity_counts: dict[str, int] = Field(..., description="HIGH/MEDIUM/LOW totals")
-    rule_descriptions: dict[str, str] = Field(..., description="Static R1..R5 labels")
+    rule_descriptions: dict[str, str] = Field(..., description="Static R1..R6 labels")
     items: list[FindingModel] = Field(..., description=f"Top {ITEM_LIMIT} findings, severity desc")
 
 

@@ -1658,6 +1658,32 @@ def _raf_scores_tenant_id() -> None:
 
 
 
+@register("raf_patient_hcc_last_edps_reason")
+def _raf_patient_hcc_last_edps_reason() -> None:
+    """Add ``last_edps_reason`` to ``raf_patient_hcc`` for per-HCC EDPS rejects.
+
+    NOTE: This module is deprecated — the authoritative DDL now lives in the
+    Alembic migration ``029_edps_per_hcc_reject_reasons.py``. The block here
+    is kept only so the registry stays in sync with the column list and so
+    legacy callers that still import the function name do not crash.
+
+    Set by ``edps_ingest`` when the MAO-004 CSV carries the optional
+    ``rejected_hcc_details_json`` column. Surfaced in the GET endpoint at
+    ``/api/edps/feedback`` so coders can see the CMS reason text without
+    leaving the RAF Reconciliation card.
+    """
+    _add_column_if_missing(
+        "raf_patient_hcc",
+        "last_edps_reason",
+        "VARCHAR(255) NULL",
+    )
+    _add_column_if_missing(
+        "raf_edps_feedback",
+        "rejected_hcc_details",
+        "JSON NULL",
+    )
+
+
 @register("password_history")
 def _password_history_table() -> None:
     _execute(

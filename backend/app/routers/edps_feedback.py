@@ -79,8 +79,38 @@ class EDPSFeedback(BaseModel):
     )
     accepted_hcc_codes: list[int] = Field(default_factory=list)
     rejected_hcc_codes: list[int] = Field(default_factory=list)
+    rejected_hcc_details: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Per-HCC reject detail when the CSV carried "
+            "``rejected_hcc_details_json``. Each entry has keys "
+            "hcc_code, reason_code, reason_text, encounter_id."
+        ),
+    )
     response_received_at: Optional[str] = None
     ingested_at: Optional[str] = None
+
+
+class EDPSFeedbackListItem(BaseModel):
+    """One submission row in the aggregate ``GET /api/edps/feedback`` list."""
+
+    id: int
+    patient_id: int
+    measurement_year: int
+    tenant_id: str
+    accepted_raf: Optional[float] = None
+    accepted_hcc_codes: list[int] = Field(default_factory=list)
+    rejected_hcc_codes: list[int] = Field(default_factory=list)
+    rejected_hcc_details: list[dict[str, Any]] = Field(default_factory=list)
+    response_received_at: Optional[str] = None
+    ingested_at: Optional[str] = None
+
+
+class EDPSFeedbackListResponse(BaseModel):
+    year: int
+    tenant_id: str
+    total: int
+    items: list[EDPSFeedbackListItem] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +132,7 @@ async def upload_feedback(
             "CSV file with header: "
             "patient_id,measurement_year,accepted_raf,"
             "accepted_hcc_codes,rejected_hcc_codes,response_received_at"
+            "[,rejected_hcc_details_json]"
         ),
     ),
     current_user: dict = Depends(get_current_user),
@@ -156,6 +187,85 @@ async def upload_feedback(
         rows_upserted=result.rows_upserted,
         rows_failed=result.rows_failed,
         errors=result.errors[:50],
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET / (aggregate listing) — must be declared BEFORE the path-param route
+# below so FastAPI does not match "" against /{patient_id}.
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "",
+    response_model=EDPSFeedbackListResponse,
+    summary="List all EDPS feedback submissions for the caller's tenant + year",
+)
+@limiter.limit("60/minute")
+def list_feedback(
+    request: Request,
+    year: Optional[int] = None,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("raf", "read")),
+) -> EDPSFeedbackListResponse:
+    """Return every EDPS submission for the caller's tenant in *year*.
+
+    Includes the new ``rejected_hcc_details`` per row when the CSV carried
+    it. Backward compatible: rows ingested without the optional column
+    return an empty list for that field instead of failing.
+    """
+    from app.db import raf_cursor as _raf_cursor
+
+    import json as _json
+
+    measurement_year = year or date.today().year
+    tenant_id = get_tenant_id(current_user)
+
+    items: list[EDPSFeedbackListItem] = []
+    with _raf_cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, patient_id, measurement_year, tenant_id,
+                   accepted_raf, accepted_hcc_codes, rejected_hcc_codes,
+                   rejected_hcc_details,
+                   response_received_at, ingested_at
+              FROM raf_edps_feedback
+             WHERE tenant_id = %s
+               AND measurement_year = %s
+             ORDER BY COALESCE(response_received_at, ingested_at) DESC, id DESC
+            """,
+            (str(tenant_id), int(measurement_year)),
+        )
+        rows = cur.fetchall() or []
+
+    for row in rows:
+        out = dict(row)
+        if out.get("accepted_raf") is not None:
+            try:
+                out["accepted_raf"] = float(out["accepted_raf"])
+            except (TypeError, ValueError):
+                out["accepted_raf"] = None
+        for col in ("accepted_hcc_codes", "rejected_hcc_codes", "rejected_hcc_details"):
+            val = out.get(col)
+            if isinstance(val, (bytes, bytearray)):
+                val = val.decode("utf-8")
+            if isinstance(val, str):
+                try:
+                    out[col] = _json.loads(val)
+                except _json.JSONDecodeError:
+                    out[col] = []
+            elif val is None:
+                out[col] = []
+        for col in ("response_received_at", "ingested_at"):
+            if hasattr(out.get(col), "isoformat"):
+                out[col] = out[col].isoformat()
+        items.append(EDPSFeedbackListItem(**out))
+
+    return EDPSFeedbackListResponse(
+        year=measurement_year,
+        tenant_id=str(tenant_id),
+        total=len(items),
+        items=items,
     )
 
 

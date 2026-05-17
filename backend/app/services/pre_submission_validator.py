@@ -5,11 +5,12 @@ Runs a battery of validation rules over every ``raf_patient_hcc`` row for a
 given tenant + measurement year and surfaces violations BEFORE an 837/EDPS
 file ever ships. Catches things that, once submitted, would cost real money:
 
-    R1  MEAT missing       — meat_status='missing' AND is_trumped=0 (MEDIUM)
+    R1  MEAT missing       — meat_status='missing' AND is_trumped=0 (HIGH)
     R2  Trumped but live   — is_trumped=1, would be invalid in the file (MEDIUM)
     R3  Invalid ICD-10     — icd10 not in simple_icd_10_cm (HIGH)
     R4  Unmapped HCC       — hcc_code IS NULL or 0 (HIGH)
     R5  Stale source       — created_at < NOW() - INTERVAL 18 MONTH (LOW)
+    R6  Hx-of orphan       — Z85./Z86./Z87. with no active dx code in same PY (MEDIUM)
 
 The validator is read-only — it never mutates raf_patient_hcc, never queues
 work, and never blocks submission. It returns a structured list of findings
@@ -44,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 class Finding(TypedDict):
     """One coding-rule violation surfaced to the pre-submit dashboard."""
-    rule_id: str          # "R1" .. "R5"
+    rule_id: str          # "R1" .. "R6"
     severity: str         # "HIGH" | "MEDIUM" | "LOW"
     hcc_id: int           # raf_patient_hcc.id
     hcc_code: int | None  # raf_patient_hcc.hcc_code (None when unmapped)
@@ -61,6 +62,7 @@ RULE_DESCRIPTIONS: dict[str, str] = {
     "R3": "Invalid ICD-10 — code not found in simple_icd_10_cm (CMS would reject).",
     "R4": "Unmapped HCC — hcc_code is 0/NULL, no risk weight will be paid.",
     "R5": "Stale source — supporting encounter is older than 18 months.",
+    "R6": "Hx-of Z-code present without an active diagnosis for the same condition.",
 }
 
 
@@ -151,6 +153,25 @@ def validate(cursor: Any, tenant_id: int, measurement_year: int) -> list[Finding
         # hide real outages and the dashboard would falsely show "All clear".
         raise RuntimeError(f"Pre-submission query failed: {exc}") from exc
 
+    # ---- R6 prep: build per-patient set of non-Z ("active dx") codes ------
+    # We treat ANY non-Z code on a non-trumped row in the same measurement
+    # year as evidence that the patient also has an "active" diagnosis for
+    # the underlying condition. This is intentionally a coarse approximation
+    # (R6 is a MEDIUM gate, not a clinical engine) — a follow-up can refine
+    # by mapping Z85.* -> related neoplasm codes once we have that table.
+    active_dx_by_patient: dict[int, set[str]] = {}
+    for row in rows:
+        if int(row.get("is_trumped") or 0) == 1:
+            continue
+        pid = int(row["patient_id"])
+        for code in _parse_icd_list(row.get("icd10_codes")):
+            c = code.strip().upper()
+            if not c:
+                continue
+            if c.startswith(("Z85.", "Z86.", "Z87.")):
+                continue
+            active_dx_by_patient.setdefault(pid, set()).add(c)
+
     for row in rows:
         hcc_id = int(row["hcc_id"])
         patient_id = int(row["patient_id"])
@@ -163,10 +184,14 @@ def validate(cursor: Any, tenant_id: int, measurement_year: int) -> list[Finding
         primary_icd = icd_codes[0] if icd_codes else None
 
         # ----- R1: missing MEAT (skip if trumped — R2 already covers that) -
+        # HIGH severity: a missing MEAT trail is the #1 RADV-reversal cause.
+        # The CMS RADV protocol explicitly requires Monitor/Evaluate/Assess/
+        # Treat evidence on the supporting note — a row that ships without
+        # MEAT is a guaranteed take-back on audit.
         if meat_status == "missing" and is_trumped == 0:
             findings.append(Finding(
                 rule_id="R1",
-                severity="MEDIUM",
+                severity="HIGH",
                 hcc_id=hcc_id,
                 hcc_code=hcc_code,
                 icd10=primary_icd,
@@ -254,6 +279,40 @@ def validate(cursor: Any, tenant_id: int, measurement_year: int) -> list[Finding
                     "questioned in audit."
                 ),
             ))
+
+        # ----- R6: Hx-of (Z85./Z86./Z87.) without an active dx in same PY -
+        # Hx-of Z-codes report a personal history, not an active disease, so
+        # they should never be the sole driver of a HCC for the year. If
+        # there is no companion non-Z code for the same patient in the same
+        # measurement year, flag the row so the coder can either add the
+        # active dx or drop the Z-code before the 837 ships.
+        hx_codes = [
+            c for c in icd_codes
+            if c.strip().upper().startswith(("Z85.", "Z86.", "Z87."))
+        ]
+        if hx_codes:
+            active_codes = active_dx_by_patient.get(patient_id, set())
+            if not active_codes:
+                # Report one finding per Hx-of code so the coder sees exactly
+                # which Z-code needs a companion active diagnosis.
+                for z in hx_codes:
+                    findings.append(Finding(
+                        rule_id="R6",
+                        severity="MEDIUM",
+                        hcc_id=hcc_id,
+                        hcc_code=hcc_code,
+                        icd10=z,
+                        patient_id=patient_id,
+                        message=(
+                            f"Hx-of code {z!r} on HCC {hcc_code or '?'} "
+                            f"for patient {patient_id} has no companion "
+                            f"active diagnosis in measurement year "
+                            f"{measurement_year}. Either add an active "
+                            "diagnosis code or drop the Z-code before "
+                            "submission — Hx-of codes alone do not support "
+                            "an active HCC."
+                        ),
+                    ))
 
     # Deterministic ordering: HIGH first, then MEDIUM, then LOW, ties by hcc_id
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), f["hcc_id"]))

@@ -47,6 +47,15 @@ EDPS_CSV_COLUMNS: tuple[str, ...] = (
     "response_received_at",
 )
 
+# Optional MAO-004 CSV columns. ``rejected_hcc_details_json`` carries a JSON
+# array of ``{hcc_code, reason_code, reason_text, encounter_id}`` objects so
+# coders see exactly why CMS rejected each HCC without re-deriving from the
+# flat ``rejected_hcc_codes`` list. Backward compatible: rows that ship the
+# old header without this column are still ingested unchanged.
+EDPS_CSV_OPTIONAL_COLUMNS: tuple[str, ...] = (
+    "rejected_hcc_details_json",
+)
+
 
 @dataclass
 class EDPSIngestResult:
@@ -100,6 +109,50 @@ def _split_hcc_list(raw: str | None) -> list[int]:
             continue
         seen.add(code)
         out.append(code)
+    return out
+
+
+def _parse_rejected_details(raw: str | None) -> list[dict[str, Any]]:
+    """Parse the optional ``rejected_hcc_details_json`` CSV cell.
+
+    Returns a list of normalized dicts with keys
+    ``hcc_code, reason_code, reason_text, encounter_id``. Bad/missing input
+    returns ``[]`` (never raises) so a malformed cell never aborts the row.
+
+    The HCC code is coerced to int when possible so it joins cleanly to
+    ``raf_patient_hcc.hcc_code``; reason text is truncated to 255 chars to
+    fit the ``last_edps_reason`` column.
+    """
+    if not raw:
+        return []
+    s = str(raw).strip()
+    if not s or s in ("[]", "null", "None"):
+        return []
+    try:
+        parsed = json.loads(s)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        logger.debug("edps_ingest: could not parse rejected_hcc_details_json=%r", raw)
+        return []
+    if not isinstance(parsed, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for entry in parsed:
+        if not isinstance(entry, dict):
+            continue
+        hcc_raw = entry.get("hcc_code")
+        try:
+            hcc_code: int | None = int(float(hcc_raw)) if hcc_raw is not None else None
+        except (TypeError, ValueError):
+            hcc_code = None
+        reason_text = entry.get("reason_text")
+        if reason_text is not None:
+            reason_text = str(reason_text)[:255]
+        out.append({
+            "hcc_code": hcc_code,
+            "reason_code": (str(entry["reason_code"]) if entry.get("reason_code") is not None else None),
+            "reason_text": reason_text,
+            "encounter_id": (str(entry["encounter_id"]) if entry.get("encounter_id") is not None else None),
+        })
     return out
 
 
@@ -201,6 +254,12 @@ def parse_mao004_csv(content: bytes | str) -> list[dict[str, Any]]:
                 "response_received_at": _parse_response_dt(
                     norm.get("response_received_at")
                 ),
+                # Optional rich detail: present only when the CSV carries the
+                # new ``rejected_hcc_details_json`` column. When absent we
+                # store [] so downstream code never has to special-case None.
+                "rejected_hcc_details": _parse_rejected_details(
+                    norm.get("rejected_hcc_details_json")
+                ),
             }
         )
     return rows
@@ -225,14 +284,28 @@ def upsert_edps_rows(
     sql = (
         "INSERT INTO raf_edps_feedback "
         "(patient_id, measurement_year, tenant_id, accepted_raf, "
-        " accepted_hcc_codes, rejected_hcc_codes, response_received_at) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        " accepted_hcc_codes, rejected_hcc_codes, response_received_at, "
+        " rejected_hcc_details) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    )
+    # Per-HCC reason write — only fires when the CSV carried structured
+    # detail. Scoped to the patient + HCC + tenant so it never touches a
+    # row that belongs to a different tenant even on a pid collision.
+    fanout_sql = (
+        "UPDATE raf_patient_hcc h "
+        "JOIN patients p ON p.id = h.patient_id "
+        "   SET h.last_edps_reason = %s "
+        " WHERE h.patient_id = %s "
+        "   AND h.measurement_year = %s "
+        "   AND h.hcc_code = %s "
+        "   AND p.tenant_id = %s"
     )
 
     with raf_cursor() as cur:
         for row in rows:
             result.rows_total += 1
             try:
+                details = row.get("rejected_hcc_details") or []
                 cur.execute(
                     sql,
                     (
@@ -245,8 +318,39 @@ def upsert_edps_rows(
                         json.dumps(row.get("accepted_hcc_codes") or []),
                         json.dumps(row.get("rejected_hcc_codes") or []),
                         row.get("response_received_at"),
+                        # Store [] (not NULL) when the CSV omitted the
+                        # column so the GET endpoint always returns a list.
+                        json.dumps(details),
                     ),
                 )
+                # Fan out the per-HCC reason text to raf_patient_hcc so the
+                # patient detail UI can show CMS's exact rejection wording
+                # without re-joining to raf_edps_feedback every render.
+                for entry in details:
+                    hcc_code = entry.get("hcc_code")
+                    reason_text = entry.get("reason_text") or entry.get("reason_code")
+                    if hcc_code is None or not reason_text:
+                        continue
+                    try:
+                        cur.execute(
+                            fanout_sql,
+                            (
+                                str(reason_text)[:255],
+                                int(row["patient_id"]),
+                                int(row["measurement_year"]),
+                                int(hcc_code),
+                                str(tenant_id),
+                            ),
+                        )
+                    except Exception as fan_exc:  # noqa: BLE001 — soft fail
+                        logger.warning(
+                            "edps_ingest: last_edps_reason fanout failed "
+                            "pid=%s year=%s hcc=%s err=%s",
+                            row.get("patient_id"),
+                            row.get("measurement_year"),
+                            hcc_code,
+                            fan_exc,
+                        )
                 result.rows_upserted += 1
             except Exception as exc:  # noqa: BLE001 — row-level isolation
                 result.rows_failed += 1
@@ -279,6 +383,7 @@ def get_latest_feedback(
             """
             SELECT id, patient_id, measurement_year, tenant_id,
                    accepted_raf, accepted_hcc_codes, rejected_hcc_codes,
+                   rejected_hcc_details,
                    response_received_at, ingested_at
               FROM raf_edps_feedback
              WHERE patient_id = %s
@@ -302,7 +407,9 @@ def get_latest_feedback(
         except (TypeError, ValueError):
             out["accepted_raf"] = None
 
-    for col in ("accepted_hcc_codes", "rejected_hcc_codes"):
+    # accepted_hcc_codes + rejected_hcc_codes are flat int lists; the new
+    # rejected_hcc_details column is a list[dict] preserved verbatim.
+    for col in ("accepted_hcc_codes", "rejected_hcc_codes", "rejected_hcc_details"):
         val = out.get(col)
         if isinstance(val, (bytes, bytearray)):
             val = val.decode("utf-8")
