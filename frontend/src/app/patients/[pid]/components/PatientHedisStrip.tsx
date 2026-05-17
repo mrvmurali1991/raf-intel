@@ -240,16 +240,18 @@ export function PatientHedisStrip({ pid, year }: PatientHedisStripProps) {
             </svg>
           </div>
           <div>
-            <span
+            <h3
               style={{
                 fontSize: 13,
                 fontWeight: 700,
                 color: C.slate800,
                 letterSpacing: "-0.01em",
+                margin: 0,
+                display: "inline",
               }}
             >
               HEDIS Quality Gaps
-            </span>
+            </h3>
             {!isLoading && (
               <span
                 style={{
