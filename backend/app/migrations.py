@@ -20,13 +20,12 @@ from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
-_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+from app.services.sql_safety import safe_ident as _validate_ident
 
 
 def _safe_ident(name: str) -> str:
-    if not _IDENT.match(name):
-        raise ValueError(f"unsafe SQL identifier: {name!r}")
-    return f"`{name}`"
+    """Local wrapper: validate via canonical helper, return backticked form."""
+    return f"`{_validate_ident(name)}`"
 
 _DEPRECATION_MESSAGE = (
     "app.migrations auto-DDL is deprecated; use Alembic migrations in "

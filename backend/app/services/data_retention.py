@@ -25,14 +25,7 @@ from app.db import raf_cursor
 # SQL identifier validation
 # ---------------------------------------------------------------------------
 
-_SAFE_IDENTIFIER = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]{0,63}$')
-
-
-def _safe_id(name: str) -> str:
-    """Validate that *name* is a safe SQL identifier (no injection risk)."""
-    if not _SAFE_IDENTIFIER.match(name):
-        raise ValueError(f"Invalid SQL identifier: {name!r}")
-    return name
+from app.services.sql_safety import safe_ident as _safe_id  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

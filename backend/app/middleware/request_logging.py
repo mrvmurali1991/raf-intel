@@ -84,8 +84,16 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                 try:
                     payload = decode_token(auth_header[len("Bearer "):])
                     user_id = int(payload.get("sub", 0)) or None
-                except (jwt.PyJWTError, Exception):
+                except jwt.PyJWTError:
+                    # Expected when token is malformed/expired — already
+                    # returned 401 upstream. Leave user_id=None and continue.
                     pass
+                except Exception:
+                    # Unexpected error (DB/key fetch). Let it surface to
+                    # Sentry/Datadog rather than silently swallowing.
+                    logger.exception(
+                        "Unexpected error decoding bearer token in audit middleware"
+                    )
 
             forwarded = request.headers.get("X-Forwarded-For")
             ip = (
