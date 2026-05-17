@@ -272,10 +272,10 @@ def _fetch_meat_letters(
                 """
                 SELECT ph.id          AS patient_hcc_id,
                        ph.hcc_code,
-                       MAX(CASE WHEN ev.meat_monitoring IS NOT NULL AND ev.meat_monitoring != '' THEN 1 ELSE 0 END) AS m,
-                       MAX(CASE WHEN ev.meat_evaluation IS NOT NULL AND ev.meat_evaluation != '' THEN 1 ELSE 0 END) AS e,
-                       MAX(CASE WHEN ev.meat_assessment IS NOT NULL AND ev.meat_assessment != '' THEN 1 ELSE 0 END) AS a,
-                       MAX(CASE WHEN ev.meat_treatment  IS NOT NULL AND ev.meat_treatment  != '' THEN 1 ELSE 0 END) AS t
+                       MAX(COALESCE(ev.meat_m_present, CASE WHEN ev.meat_m IS NOT NULL AND ev.meat_m != '' THEN 1 ELSE 0 END)) AS m,
+                       MAX(COALESCE(ev.meat_e_present, CASE WHEN ev.meat_e IS NOT NULL AND ev.meat_e != '' THEN 1 ELSE 0 END)) AS e,
+                       MAX(COALESCE(ev.meat_a_present, CASE WHEN ev.meat_a IS NOT NULL AND ev.meat_a != '' THEN 1 ELSE 0 END)) AS a,
+                       MAX(COALESCE(ev.meat_t_present, CASE WHEN ev.meat_t IS NOT NULL AND ev.meat_t != '' THEN 1 ELSE 0 END)) AS t
                 FROM raf_patient_hcc ph
                 LEFT JOIN raf_meat_evidence ev ON ev.patient_hcc_id = ph.id
                 WHERE ph.patient_id = %s AND ph.measurement_year = %s AND ph.tenant_id = %s

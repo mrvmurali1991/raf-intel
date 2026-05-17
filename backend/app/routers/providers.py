@@ -504,11 +504,14 @@ def get_scorecard(
             # Frontend type HccPerformance uses (description, patients_at_risk,
             # coded, uncoded, capture_pct, revenue_at_stake). Keep the richer
             # backend names alongside so API consumers have both.
+            # Drop rows with no real HCC mapping ("HCC 0" / blank) — they
+            # are artifacts of un-mapped ICD codes and shouldn't pollute the
+            # provider's performance summary. PCP review round 4 #3.
             "hcc_performance": [
                 {
-                    "hcc_code": h.get("hcc_code", ""),
-                    "hcc_label": h.get("hcc_label", ""),
-                    "description": h.get("hcc_label", ""),
+                    "hcc_code": str(h.get("hcc_code") or ""),
+                    "hcc_label": h.get("hcc_label") or f"HCC {h.get('hcc_code')}",
+                    "description": h.get("hcc_label") or f"HCC {h.get('hcc_code')}",
                     "coded_patients": h.get("coded_patients", 0),
                     "open_suspects": h.get("open_suspects", 0),
                     "coded": h.get("coded_patients", 0),
@@ -520,6 +523,7 @@ def get_scorecard(
                     "revenue_at_stake": h.get("revenue_impact", 0),
                 }
                 for h in hcc_perf[:10]
+                if str(h.get("hcc_code") or "").strip() not in {"", "0"}
             ],
             "alerts": [
                 {

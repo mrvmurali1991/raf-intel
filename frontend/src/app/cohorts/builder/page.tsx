@@ -598,10 +598,13 @@ export default function CohortBuilderPage() {
               aria-labelledby="cohort-save-title"
               onKeyDown={(e) => {
                 if (e.key !== "Tab") return;
+                // Keep disabled buttons in the focus cycle so a keyboard
+                // user can discover the "name required" constraint via
+                // aria-describedby instead of being silently routed past.
                 const ids = ["cohort-name-input", "cohort-save-cancel", "cohort-save-confirm"];
                 const focusables = ids
                   .map((id) => document.getElementById(id))
-                  .filter((el): el is HTMLElement => !!el && !(el as HTMLButtonElement).disabled);
+                  .filter((el): el is HTMLElement => !!el);
                 if (focusables.length === 0) return;
                 const idx = focusables.indexOf(document.activeElement as HTMLElement);
                 const last = focusables.length - 1;
@@ -678,6 +681,7 @@ export default function CohortBuilderPage() {
                   type="button"
                   onClick={handleConfirmSave}
                   disabled={!saveName.trim() || saving}
+                  aria-describedby="cohort-save-hint"
                   style={{
                     padding: "0.4rem 0.8rem",
                     fontSize: 12,
@@ -692,6 +696,9 @@ export default function CohortBuilderPage() {
                   {saving ? "Saving..." : "Save"}
                 </button>
               </div>
+              <span id="cohort-save-hint" className="sr-only">
+                {!saveName.trim() ? "Enter a cohort name to enable Save." : "Save the cohort."}
+              </span>
             </div>
           )}
         </section>
