@@ -32,7 +32,7 @@ import api from "@/lib/api";
 const tok = {
   slate200: "#f1f5f9",
   slate600: "#475569",
-  slate400: "#94A3B8",
+  slate400: "#64748B",
   amber500: "#d97706",
   amber100: "#fef3c7",
   amber300: "#fcd34d",

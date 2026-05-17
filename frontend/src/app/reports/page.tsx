@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 const ReportsHeavyTabs = dynamic(() => import("./ReportsHeavyTabs"), {
   ssr: false,
   loading: () => (
-    <div style={{ padding: "60px 24px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+    <div style={{ padding: "60px 24px", textAlign: "center", color: "#64748B", fontSize: 13 }}>
       <div style={{ width: 32, height: 32, border: "3px solid #E2E8F0", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
       Loading...
     </div>

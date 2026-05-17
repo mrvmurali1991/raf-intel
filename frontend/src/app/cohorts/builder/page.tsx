@@ -432,7 +432,7 @@ export default function CohortBuilderPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#94a3b8",
+                  color: "#64748b",
                   fontSize: 14,
                   textAlign: "center",
                 }}
@@ -526,7 +526,7 @@ export default function CohortBuilderPage() {
                         />
                       )}
                       {spec.hint && (
-                        <span style={{ fontSize: 11, color: "#94a3b8" }}>{spec.hint}</span>
+                        <span style={{ fontSize: 11, color: "#64748b" }}>{spec.hint}</span>
                       )}
                       <button
                         type="button"
@@ -789,13 +789,13 @@ export default function CohortBuilderPage() {
                   <span>
                     {p.first_name} {p.last_name}
                   </span>
-                  <span style={{ color: "#94a3b8", fontSize: 11 }}>
+                  <span style={{ color: "#64748b", fontSize: 11 }}>
                     {p.mrn || `id ${p.id}`}
                   </span>
                 </li>
               ))}
               {!previewLoading && (preview?.sample_patients?.length ?? 0) === 0 && (
-                <li style={{ color: "#94a3b8", padding: "0.5rem", fontStyle: "italic" }}>
+                <li style={{ color: "#64748b", padding: "0.5rem", fontStyle: "italic" }}>
                   No patients match yet.
                 </li>
               )}

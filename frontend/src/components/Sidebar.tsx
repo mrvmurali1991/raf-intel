@@ -266,7 +266,7 @@ function TenantSwitcher({ isDark }: { isDark: boolean }) {
             overflow: "hidden",
           }}
         >
-          <div style={{ padding: "8px 10px 4px", fontSize: 10, fontWeight: 600, color: isDark ? "#64748b" : "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          <div style={{ padding: "8px 10px 4px", fontSize: 10, fontWeight: 600, color: isDark ? "#64748b" : "#64748b", textTransform: "uppercase", letterSpacing: 0.5 }}>
             Switch Tenant
           </div>
           {tenants.map((t) => (
@@ -345,7 +345,7 @@ export function Sidebar() {
   const TEXT_DEFAULT = isDark ? "#94a3b8" : "#64748b";
   const TEXT_ACTIVE = isDark ? "#ffffff" : "#0f766e";
   const TEXT_SECTION = isDark ? "#64748b" : "#cbd5e1";
-  const TEXT_SUBTLE = isDark ? "#64748b" : "#94a3b8";
+  const TEXT_SUBTLE = isDark ? "#64748b" : "#64748b";
   const ACCENT = isDark ? "#0f766e" : "#0d9488";
   const ACCENT_LIGHT = isDark ? "#2dd4bf" : "#0f766e";
   const BORDER_COLOR = isDark ? "#1e293b" : "#f1f5f9";
@@ -497,7 +497,7 @@ export function Sidebar() {
                       fontSize: 10,
                       fontWeight: 600,
                       fontFamily: "inherit",
-                      color: isDark ? "#64748b" : "#94a3b8",
+                      color: isDark ? "#64748b" : "#64748b",
                       backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
                       border: `1px solid ${BORDER_COLOR}`,
                       borderRadius: 3,
@@ -767,7 +767,7 @@ export function Sidebar() {
             marginTop: "auto",
             padding: "6px 14px 4px",
             fontSize: 11,
-            color: isDark ? "#475569" : "#94a3b8",
+            color: isDark ? "#475569" : "#64748b",
             display: "flex",
             alignItems: "center",
             gap: 4,

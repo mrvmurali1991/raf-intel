@@ -254,7 +254,7 @@ export function TenantPYChip() {
                   fontWeight: 700,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: "var(--muted-foreground, #94a3b8)",
+                  color: "var(--muted-foreground, #64748b)",
                 }}
               >
                 Tenant
@@ -334,7 +334,7 @@ export function TenantPYChip() {
                 fontWeight: 700,
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "var(--muted-foreground, #94a3b8)",
+                color: "var(--muted-foreground, #64748b)",
               }}
             >
               Payment Year

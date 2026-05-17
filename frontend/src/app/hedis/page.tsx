@@ -165,7 +165,7 @@ function GapList({ measureId }: { measureId: string }) {
             {data.patients.map((p) => (
               <tr key={p.patient_id} style={{ borderTop: "1px solid #e2e8f0" }}>
                 <td style={td}>
-                  {p.last_name ?? ""}, {p.first_name ?? ""} <span style={{ color: "#94a3b8" }}>#{p.patient_id}</span>
+                  {p.last_name ?? ""}, {p.first_name ?? ""} <span style={{ color: "#64748b" }}>#{p.patient_id}</span>
                 </td>
                 <td style={td}>{p.dob ?? "—"}</td>
                 <td style={td}>{p.sex ?? "—"}</td>
@@ -351,7 +351,7 @@ export default function HedisPage() {
         )}
       </div>
 
-      <div style={{ marginTop: 24, fontSize: 11, color: "#94a3b8" }}>
+      <div style={{ marginTop: 24, fontSize: 11, color: "#64748b" }}>
         HEDIS measure specifications © NCQA. This MVP uses simplified
         deterministic logic for demo purposes; production deployment requires
         an NCQA license — see https://www.ncqa.org/hedis/measures/.

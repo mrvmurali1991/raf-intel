@@ -97,7 +97,7 @@ function MeatCheckRow({
               fontSize: 11,
               fontWeight: 600,
               background: isOn ? "#D1FAE5" : "#F1F5F9",
-              color: isOn ? "#065F46" : "#94A3B8",
+              color: isOn ? "#065F46" : "#64748B",
               border: `1px solid ${isOn ? "#10B981" : "#E2E8F0"}`,
             }}
           >

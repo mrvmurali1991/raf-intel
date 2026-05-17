@@ -146,7 +146,7 @@ export function PatientV28ImpactPanel({
         )}
       </Section>
 
-      <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4 }}>
+      <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
         Disclaimer: estimates produced by hccinfhir (third-party CMS-HCC
         implementation). Not validated by CMS — cross-check against the
         official CMS HCC Software before contract / payment use.
@@ -245,7 +245,7 @@ function ChipRow({ chips, color, bg }: { chips: string[]; color: string; bg: str
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{children}</div>;
+  return <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>{children}</div>;
 }
 
 export default PatientV28ImpactPanel;

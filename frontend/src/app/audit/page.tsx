@@ -102,7 +102,7 @@ function PatientSelect({
           border: open ? "2px solid #2563EB" : "1px solid #E2E8F0",
           backgroundColor: "#fff",
           fontSize: 14,
-          color: selectedLabel ? "#0F172A" : "#94A3B8",
+          color: selectedLabel ? "#0F172A" : "#64748B",
           cursor: "pointer",
         }}
       >
@@ -150,7 +150,7 @@ function PatientSelect({
           </div>
           <div style={{ maxHeight: 200, overflowY: "auto" }}>
             {filtered.length === 0 ? (
-              <div style={{ padding: "24px 12px", textAlign: "center", fontSize: 14, color: "#94A3B8" }}>No patients found</div>
+              <div style={{ padding: "24px 12px", textAlign: "center", fontSize: 14, color: "#64748B" }}>No patients found</div>
             ) : (
               filtered.map((p: any) => {
                 const label = `${p.first_name ?? p.fname} ${p.last_name ?? p.lname}`;
@@ -176,7 +176,7 @@ function PatientSelect({
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
                     <span style={{ fontWeight: 500, color: "#0F172A" }}>{label}</span>
-                    <span style={{ fontSize: 12, color: "#94A3B8", fontFamily: "monospace" }}>PID {Math.round(Number(p.pid))}</span>
+                    <span style={{ fontSize: 12, color: "#64748B", fontFamily: "monospace" }}>PID {Math.round(Number(p.pid))}</span>
                   </button>
                 );
               })
@@ -437,7 +437,7 @@ export default function AuditPage() {
                         textAlign: h === "Download" ? "right" : "left",
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "#64748B",
                         textTransform: "uppercase",
                         letterSpacing: 0.5,
                       }}
@@ -456,7 +456,7 @@ export default function AuditPage() {
 
                   return (
                     <tr key={pkg.id} style={{ borderBottom: idx < packages.length - 1 ? "1px solid #F8FAFC" : "none" }}>
-                      <td style={{ padding: "12px 16px", color: "#94A3B8", fontFamily: "monospace", fontSize: 13 }}>
+                      <td style={{ padding: "12px 16px", color: "#64748B", fontFamily: "monospace", fontSize: 13 }}>
                         {pkg.id}
                       </td>
                       <td style={{ padding: "12px 16px", fontWeight: 500, color: "#0F172A" }}>

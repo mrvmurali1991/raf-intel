@@ -48,7 +48,7 @@ export function CoderEarningsCard({ coderId, coderName, year }: CoderEarningsCar
     <div className="premium-card" style={{ padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748B" }}>
             Your Bonus · {data.year}
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", marginTop: 2 }}>
@@ -138,7 +138,7 @@ export function CoderEarningsCard({ coderId, coderName, year }: CoderEarningsCar
               key={m.month}
               style={{
                 fontSize: 10,
-                color: m.month === data.current_month ? "#1D4ED8" : "#94A3B8",
+                color: m.month === data.current_month ? "#1D4ED8" : "#64748B",
                 fontWeight: m.month === data.current_month ? 700 : 500,
                 textAlign: "center",
               }}
@@ -182,7 +182,7 @@ function Stat({
         {value}
       </div>
       {sub && (
-        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 1 }}>{sub}</div>
+        <div style={{ fontSize: 10, color: "#64748B", marginTop: 1 }}>{sub}</div>
       )}
     </div>
   );

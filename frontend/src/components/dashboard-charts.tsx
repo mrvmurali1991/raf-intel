@@ -9,7 +9,7 @@ const colors = {
   primary: "#0f766e",
   slate900: "#0F172A",
   slate600: "#475569",
-  slate400: "#94A3B8",
+  slate400: "#64748B",
   slate200: "#F1F5F9",
   white: "#FFFFFF",
   red: "#EF4444",

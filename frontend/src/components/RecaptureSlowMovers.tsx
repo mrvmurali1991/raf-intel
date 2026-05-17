@@ -153,7 +153,7 @@ function SlowMoverRow({ idx, row }: RowProps) {
         style={{
           fontSize: 11,
           fontWeight: 700,
-          color: "#94A3B8",
+          color: "#64748B",
           textAlign: "center",
         }}
       >

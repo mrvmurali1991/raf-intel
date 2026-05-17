@@ -266,7 +266,7 @@ export function OrgSwitcher() {
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--muted-foreground, #94a3b8)",
+              color: "var(--muted-foreground, #64748b)",
             }}
           >
             Switch Organization

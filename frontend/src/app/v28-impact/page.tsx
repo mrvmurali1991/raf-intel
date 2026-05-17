@@ -540,7 +540,7 @@ function DeltaHistogram({ buckets }: { buckets: Histogram[] }) {
                 aria-hidden="true"
                 style={{
                   fontSize: 9,
-                  color: "#94a3b8",
+                  color: "#64748b",
                   textAlign: "center",
                   whiteSpace: "nowrap",
                   transform: "rotate(-30deg)",

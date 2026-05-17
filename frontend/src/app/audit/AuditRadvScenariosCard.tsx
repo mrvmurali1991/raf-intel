@@ -50,7 +50,7 @@ export default function AuditRadvScenariosCard() {
         </div>
         <div>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0F172A" }}>RADV Scenarios</h2>
-          <span style={{ fontSize: 12, color: "#94A3B8" }}>Select a scenario to scope your audit package</span>
+          <span style={{ fontSize: 12, color: "#64748B" }}>Select a scenario to scope your audit package</span>
         </div>
       </div>
 

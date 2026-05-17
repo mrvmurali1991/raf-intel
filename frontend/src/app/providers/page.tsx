@@ -21,7 +21,7 @@ const LazyProviderDetailPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div style={{ padding: 32, textAlign: "center", fontSize: 13, color: "#94A3B8" }}>
+      <div style={{ padding: 32, textAlign: "center", fontSize: 13, color: "#64748B" }}>
         <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #E2E8F0", borderTopColor: "#2563EB", animation: "spin 0.8s linear infinite", margin: "0 auto 10px" }} />
         Loading scorecard...
       </div>

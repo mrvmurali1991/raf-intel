@@ -40,7 +40,7 @@ const C = {
   borderLight: "#F1F5F9",
   text: "#0F172A",
   textMuted: "#64748B",
-  textSub: "#94A3B8",
+  textSub: "#64748B",
   primary: "#2563EB",
   primaryLight: "#DBEAFE",
   primaryDark: "#1D4ED8",
