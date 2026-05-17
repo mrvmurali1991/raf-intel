@@ -1,0 +1,172 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [server, feat/all-gaps-fix]
+  push:
+    branches: [server, feat/all-gaps-fix]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  FRONTEND_DIR: frontend
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Lint: ESLint
+  # ─────────────────────────────────────────────
+  lint:
+    name: Lint (ESLint)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: ESLint
+        run: npm run lint
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+  # ─────────────────────────────────────────────
+  # Type-check: tsc --noEmit
+  # ─────────────────────────────────────────────
+  typecheck:
+    name: TypeScript Type Check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: Type check
+        # Prefer a dedicated 'typecheck' script; fall back to tsc --noEmit
+        run: |
+          if npm run --silent typecheck 2>/dev/null; then
+            npm run typecheck
+          else
+            npx tsc --noEmit
+          fi
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+  # ─────────────────────────────────────────────
+  # Unit tests: Vitest (or Jest) — no browser
+  # TODO: add 'test:unit' script to package.json once Vitest/Jest is wired
+  # ─────────────────────────────────────────────
+  unit-test:
+    name: Unit Tests (Vitest/Jest)
+    runs-on: ubuntu-22.04
+    # Soft-gate: unit test runner is not yet configured in package.json
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: Run unit tests
+        # --run = non-interactive / CI mode for Vitest
+        run: npm run test:unit -- --run
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+  # ─────────────────────────────────────────────
+  # Build: Next.js production build to catch compile errors
+  # ─────────────────────────────────────────────
+  build:
+    name: Next.js Build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: Build
+        run: npm run build
+        working-directory: ${{ env.FRONTEND_DIR }}
+        env:
+          # Use a stub API URL so Next.js static analysis doesn't fail
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+
+  # ─────────────────────────────────────────────
+  # E2E: Playwright against Next.js dev + backend (docker-compose)
+  # TODO: requires docker-compose.yml with backend + mysql services wired;
+  #       NEXT_PUBLIC_API_URL pointing at the compose backend.
+  # ─────────────────────────────────────────────
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-22.04
+    needs: build
+    # Allowed to fail until docker-compose CI wiring is complete
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install dependencies + Playwright browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: Start backend (docker-compose)
+        # TODO: point to a real docker-compose-ci.yml once infra is provisioned
+        run: |
+          if [ -f docker-compose-ci.yml ]; then
+            docker compose -f docker-compose-ci.yml up -d --wait
+          else
+            echo "::warning::No docker-compose-ci.yml found — backend not started; E2E tests may fail"
+          fi
+        working-directory: .
+
+      - name: Run Playwright tests
+        run: npm run test:e2e -- --reporter=html
+        working-directory: ${{ env.FRONTEND_DIR }}
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          CI: true
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: ${{ env.FRONTEND_DIR }}/playwright-report/
+          retention-days: 14

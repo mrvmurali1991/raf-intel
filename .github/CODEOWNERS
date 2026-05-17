@@ -1,0 +1,10 @@
+# Global owner — every file requires review from @mrvmurali1991
+* @mrvmurali1991
+
+# Workflow files have an extra gate to prevent unauthorized pipeline changes
+.github/workflows/ @mrvmurali1991
+
+# Security-sensitive directories
+backend/app/routers/ @mrvmurali1991
+backend/app/services/ @mrvmurali1991
+docs/security/ @mrvmurali1991

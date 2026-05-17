@@ -15,6 +15,31 @@
 - [ ] `backend/.venv/bin/python scripts/verify_raf_drift.py` passes locally.
 - [ ] For UI changes: walked the golden path + one edge case in the browser.
 
+## CI checklist (required checks for merge)
+
+- [ ] **lint** job green (`ruff check backend/` + `mypy backend/app --ignore-missing-imports`)
+- [ ] **unit-test** job green (or `continue-on-error` acknowledged and tracked as issue)
+- [ ] **security-scan** job green (`bandit` + `pip-audit` clean)
+- [ ] **docker-build** job green (image builds + Trivy HIGH/CRITICAL = 0)
+
+## PHI / Privacy
+
+- [ ] No PHI appears in logs, error messages, or client-side state
+- [ ] New API endpoints returning patient data are behind `require_auth` + tenant scope
+- [ ] New PHI columns documented in the data dictionary
+
+## Auth / Security
+
+- [ ] New routes require authentication
+- [ ] No secrets committed — all via environment variables / GitHub secrets
+- [ ] `bandit -r backend/app/ -ll -ii` passes locally
+
+## Database Migrations
+
+- [ ] Migration is backward-compatible (additive, nullable or with DEFAULT)
+- [ ] Rollback is safe without data loss
+- [ ] No DROP COLUMN / TRUNCATE without explicit sign-off
+
 ## Risk / rollout
 
 <!-- What breaks if this is wrong? Is there a feature flag? How do we roll back? -->
