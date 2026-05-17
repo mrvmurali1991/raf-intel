@@ -80,6 +80,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
       { href: "/worklist", label: "Today's worklist", icon: Stethoscope, shortcut: "g w" },
+      { href: "/md/today", label: "Pre-visit Huddle", icon: HeartPulse, shortcut: "g m" },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
       { href: "/review-queue", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
       { href: "/qa", label: "QA Review Queue", icon: ShieldCheck },

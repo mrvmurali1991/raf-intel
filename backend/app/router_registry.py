@@ -74,6 +74,7 @@ from app.routers import hedis as hedis_router
 from app.routers import meat_audit_risk as meat_audit_risk_router
 from app.routers import peer_benchmarking as peer_benchmarking_router
 from app.routers import previsit_briefing as previsit_briefing_router
+from app.routers import md_today as md_today_router
 from app.routers import provider_pdf_report as provider_pdf_report_router
 from app.routers import provider_revenue_breakdown as provider_revenue_breakdown_router
 from app.routers import provider_scorecards as provider_scorecards_router
@@ -251,6 +252,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, meat_audit_risk_router.router)
     _mount(app, hcc_gap_drilldown_router.router)
     _mount(app, previsit_briefing_router.router)
+    _mount(app, md_today_router.router)
     _mount(app, provider_pdf_report_router.router)
     _mount(app, provider_scorecards_router.router)
     _mount(app, feature_flags_router.router)
