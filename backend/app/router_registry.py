@@ -64,6 +64,7 @@ from app.routers import feature_flags as feature_flags_router
 from app.routers import forecast as forecast_router
 from app.routers import hcc_gap_drilldown as hcc_gap_drilldown_router
 from app.routers import hcc_removal as hcc_removal_router
+from app.routers import hedis as hedis_router
 from app.routers import meat_audit_risk as meat_audit_risk_router
 from app.routers import peer_benchmarking as peer_benchmarking_router
 from app.routers import previsit_briefing as previsit_briefing_router
@@ -84,6 +85,7 @@ from app.routers import provider_suspect_hotlist as provider_suspect_hotlist_rou
 from app.routers import provider_worklist as provider_worklist_router
 from app.routers import radv as radv_router
 from app.routers import radv_audit as radv_audit_router
+from app.routers import radv_audit_runs as radv_audit_runs_router
 from app.routers import raf_central as raf_central_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
 from app.routers import realtime as realtime_router
@@ -224,6 +226,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, provider_pdf_report_router.router)
     _mount(app, feature_flags_router.router)
     _mount(app, quality.router)
+    _mount(app, hedis_router.router)
     _mount(app, prospective.router)
     _mount(app, benchmarks.router)
     _mount(app, care_gaps.router)
@@ -297,6 +300,10 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, admin.router)
     _mount(app, meat_router.router)
     _mount(app, radv_audit_router.router)
+    # RADV mock-audit defense workflow (Gap #3) — sampler, decisions,
+    # exposure simulator, MAO-004 re-submission batch, evidence export.
+    # Shares /api/radv prefix with radv_audit but owns /audit-runs/* paths.
+    _mount(app, radv_audit_runs_router.router)
     # RADV packet PDF export (per-patient, per-payment-year audit bundle).
     # Shares the /api/radv prefix with radv_audit but owns distinct paths.
     _mount(app, radv_router.router)
