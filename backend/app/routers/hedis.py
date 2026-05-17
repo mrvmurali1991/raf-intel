@@ -291,3 +291,101 @@ def patients_failing(
         "offset": offset,
         "patients": page,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /patient/{patient_id}/gaps
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/patient/{patient_id}/gaps",
+    summary="Open HEDIS gaps for a single patient (co-located with HCC suspects)",
+)
+def patient_gaps(
+    patient_id: int = Path(..., description="Patient primary key"),
+    year: int = Query(None, description="Measurement year (defaults to current)"),
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
+) -> dict[str, Any]:
+    """Return all HEDIS measures where *patient_id* is in the denominator but
+    NOT in the numerator (i.e. the gap is open).  Designed for inline display
+    alongside HCC suspects on the patient-detail page so a PCP sees co-located
+    HCC + HEDIS gaps during a single visit.
+    """
+    yr = _measurement_year(year)
+    tid = int(tenant_id)
+
+    # Verify patient belongs to this tenant
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT id, first_name, last_name, dob, sex FROM patients "
+            "WHERE id = %s AND tenant_id = %s AND is_active = 1",
+            (patient_id, tid),
+        )
+        patient_row = cur.fetchone()
+
+    if not patient_row:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    log_phi_access(
+        action="HEDIS_PATIENT_GAPS_VIEWED",
+        resource="hedis_patient_gaps",
+        patient_id=patient_id,
+        user=str(current_user.get("email") or current_user.get("id") or "system"),
+        details=f"patient_id={patient_id} year={yr}",
+        tenant_id=tid,
+    )
+
+    open_gaps: list[dict[str, Any]] = []
+    for mid, measure in MEASURES.items():
+        try:
+            result = measure.compute(patient_id, yr, tenant_id=tid)
+        except Exception:
+            logger.exception("HEDIS compute failed for measure %s patient %s", mid, patient_id)
+            continue
+
+        if not result["in_denominator"]:
+            continue
+
+        # Build a human-readable "last value" from evidence when available
+        evidence_list = result.get("evidence") or []
+        last_value: str | None = None
+        due_date: str | None = None
+        if evidence_list:
+            ev = evidence_list[-1] if isinstance(evidence_list, list) else None
+            if ev and isinstance(ev, dict):
+                last_value = ev.get("value") or ev.get("result") or ev.get("date")
+                due_date = ev.get("due_date") or ev.get("next_due")
+
+        if not result["met"]:
+            open_gaps.append(
+                {
+                    "measure_id": mid,
+                    "name": measure.name,
+                    "status": "open",
+                    "last_value": last_value,
+                    "due_date": due_date,
+                    "evidence": evidence_list,
+                    "exclusions": result.get("exclusions") or [],
+                }
+            )
+        else:
+            open_gaps.append(
+                {
+                    "measure_id": mid,
+                    "name": measure.name,
+                    "status": "met",
+                    "last_value": last_value,
+                    "due_date": due_date,
+                    "evidence": evidence_list,
+                    "exclusions": result.get("exclusions") or [],
+                }
+            )
+
+    return {
+        "patient_id": patient_id,
+        "measurement_year": yr,
+        "open_gaps": [g for g in open_gaps if g["status"] == "open"],
+        "all_gaps": open_gaps,
+    }
