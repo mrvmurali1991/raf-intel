@@ -120,7 +120,14 @@ export default function PatientDetailPage({
   // Overflow menu open state for More Actions button
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = React.useRef<HTMLDivElement>(null);
+  const moreMenuTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const moreMenuItemsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
+  // Track whether the previous close was triggered by the keyboard so we
+  // know to return focus to the trigger (mouse close should not steal focus).
+  const moreMenuKeyboardCloseRef = React.useRef(false);
 
+  // Close on outside click (mouse). Does not restore focus — pointer users
+  // typically don't expect their focus to teleport back to the trigger.
   useEffect(() => {
     if (!moreMenuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -131,6 +138,70 @@ export default function PatientDetailPage({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [moreMenuOpen]);
+
+  // When the menu opens, focus the first item so keyboard users land inside.
+  // When it closes via the keyboard (Escape / Tab-out), restore focus to the
+  // trigger button. The keyboard-close flag is set by the keydown handler so
+  // we don't fight click-outside (mouse) which intentionally leaves focus alone.
+  useEffect(() => {
+    if (moreMenuOpen) {
+      const first = moreMenuItemsRef.current.find((b) => b && !b.disabled);
+      first?.focus();
+    } else if (moreMenuKeyboardCloseRef.current) {
+      moreMenuKeyboardCloseRef.current = false;
+      moreMenuTriggerRef.current?.focus();
+    }
+  }, [moreMenuOpen]);
+
+  // Roving-style focus + standard menu keyboard semantics.
+  // ArrowDown/ArrowUp cycle through items, Home/End jump to ends,
+  // Escape closes & restores focus, Tab closes (focus falls through naturally).
+  const handleMoreMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = moreMenuItemsRef.current.filter(
+      (b): b is HTMLButtonElement => !!b && !b.disabled
+    );
+    if (items.length === 0) return;
+    const activeIdx = items.findIndex((b) => b === document.activeElement);
+    switch (e.key) {
+      case "ArrowDown": {
+        e.preventDefault();
+        const next = activeIdx < 0 ? 0 : (activeIdx + 1) % items.length;
+        items[next]?.focus();
+        break;
+      }
+      case "ArrowUp": {
+        e.preventDefault();
+        const prev = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
+        items[prev]?.focus();
+        break;
+      }
+      case "Home": {
+        e.preventDefault();
+        items[0]?.focus();
+        break;
+      }
+      case "End": {
+        e.preventDefault();
+        items[items.length - 1]?.focus();
+        break;
+      }
+      case "Escape": {
+        e.preventDefault();
+        moreMenuKeyboardCloseRef.current = true;
+        setMoreMenuOpen(false);
+        break;
+      }
+      case "Tab": {
+        // Tab out of the menu closes it but lets default focus movement proceed.
+        // We do NOT restore focus to the trigger here — the user is leaving on
+        // purpose and expects to land on the next/previous tabbable element.
+        setMoreMenuOpen(false);
+        break;
+      }
+      default:
+        break;
+    }
+  };
 
   // Write-through: keep ?tab= in sync without adding browser history entries.
   // The tab-content swap is wrapped in startTransition so React can keep
@@ -755,9 +826,12 @@ export default function PatientDetailPage({
               {/* More Actions overflow menu */}
               <div ref={moreMenuRef} style={{ position: "relative" }}>
                 <button
+                  ref={moreMenuTriggerRef}
                   onClick={() => setMoreMenuOpen((v) => !v)}
                   aria-label="More actions"
+                  aria-haspopup="menu"
                   aria-expanded={moreMenuOpen}
+                  aria-controls="patient-more-actions-menu"
                   style={{
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     width: 40, height: 40, borderRadius: 8,
@@ -772,6 +846,7 @@ export default function PatientDetailPage({
                 </button>
                 {moreMenuOpen && (
                   <div
+                    id="patient-more-actions-menu"
                     style={{
                       position: "absolute", top: "calc(100% + 4px)", right: 0,
                       background: C.white, border: `1px solid ${C.slate200}`,
@@ -779,9 +854,14 @@ export default function PatientDetailPage({
                       minWidth: 200, zIndex: 100, overflow: "hidden",
                     }}
                     role="menu"
+                    aria-orientation="vertical"
+                    aria-label="More patient actions"
+                    onKeyDown={handleMoreMenuKeyDown}
                   >
                     <button
                       role="menuitem"
+                      ref={(el) => { moreMenuItemsRef.current[0] = el; }}
+                      tabIndex={moreMenuOpen ? 0 : -1}
                       onClick={() => { auditMutation.mutate(selectedYear); setMoreMenuOpen(false); }}
                       disabled={auditMutation.isPending}
                       style={{
@@ -800,6 +880,8 @@ export default function PatientDetailPage({
                     </button>
                     <button
                       role="menuitem"
+                      ref={(el) => { moreMenuItemsRef.current[1] = el; }}
+                      tabIndex={moreMenuOpen ? 0 : -1}
                       onClick={() => { radvPacketMutation.mutate(selectedYear); setMoreMenuOpen(false); }}
                       disabled={radvPacketMutation.isPending}
                       aria-label={`Download RADV packet for payment year ${selectedYear}`}
@@ -820,6 +902,8 @@ export default function PatientDetailPage({
                     </button>
                     <button
                       role="menuitem"
+                      ref={(el) => { moreMenuItemsRef.current[2] = el; }}
+                      tabIndex={moreMenuOpen ? 0 : -1}
                       onClick={() => {
                         // Cotiviti-style hand-off: pre-fill a dispute draft
                         // with the patient + measurement year and route the
@@ -849,6 +933,8 @@ export default function PatientDetailPage({
                     </button>
                     <button
                       role="menuitem"
+                      ref={(el) => { moreMenuItemsRef.current[3] = el; }}
+                      tabIndex={moreMenuOpen ? 0 : -1}
                       onClick={() => { window.print(); setMoreMenuOpen(false); }}
                       className="no-print"
                       aria-label="Print patient record"
