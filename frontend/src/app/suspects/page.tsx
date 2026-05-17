@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  registerContextShortcut,
+} from "@/lib/keyboard-shortcuts";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import { tokens } from "@/styles/tokens";
 import {
@@ -93,11 +96,16 @@ const EVIDENCE_FILTERS: { value: EvidenceFilter; label: string }[] = [
   { value: "historical", label: "Historical" },
 ];
 
+// Confidence band labels: "Strong / Moderate / Weak signal" instead of ">85% / 65-85% / <65%"
+// Rationale: backend/app/services/nlp_suspect_extractor.py openly notes the scores are
+// relative ranking signals only — NOT calibrated probabilities. Using % labels implies
+// probabilistic meaning that the model does not support. Numeric score remains visible
+// via tooltip on the confidence bar in each row.
 const CONFIDENCE_OPTIONS: { value: ConfidenceBand; label: string; color: string }[] = [
   { value: "all", label: "Any", color: C.textSubtle },
-  { value: "high", label: "High >85%", color: C.low },
-  { value: "medium", label: "Med 65-85%", color: C.medium },
-  { value: "low", label: "Low <65%", color: C.high },
+  { value: "high", label: "Strong signal", color: C.low },
+  { value: "medium", label: "Moderate signal", color: C.medium },
+  { value: "low", label: "Weak signal", color: C.high },
 ];
 
 /* ================================================================== */
@@ -256,6 +264,10 @@ export default function SuspectsPage() {
   const [sortField, setSortField] = useState<SortField>((searchParams.get("sort") as SortField) || "confidence");
   const [page, setPage] = useState(0);
 
+  // Keyboard navigation — track focused row for A/D/R shortcut dispatch
+  const [focusedRowIdx, setFocusedRowIdx] = useState(0);
+  const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
+
   // Sync filter state to URL (no history pollution)
   useEffect(() => {
     const params = new URLSearchParams();
@@ -409,6 +421,81 @@ export default function SuspectsPage() {
       toast.error("Error", "Bulk update failed.");
     },
   });
+
+  /* --- Keyboard shortcuts: A/D/R on focused row -------------------- */
+
+  // Reset focus index when filtered data changes so it doesn't point past end
+  useEffect(() => {
+    setFocusedRowIdx(0);
+  }, [filteredSorted.length, page]);
+
+  // Register A/D/R context shortcuts that operate on the focused row.
+  // Guards: skip when focus is inside a typing surface (search box etc.)
+  useEffect(() => {
+    function isTyping(): boolean {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable === true;
+    }
+
+    const unregAccept = registerContextShortcut("accept-focused-suspect", () => {
+      if (isTyping()) return;
+      const row = pagedSuspects[focusedRowIdx];
+      if (row && (row.status || "open") === "open") {
+        acceptMut.mutate(row.id);
+      }
+    });
+
+    const unregDismiss = registerContextShortcut("dismiss-focused-suspect", () => {
+      if (isTyping()) return;
+      const row = pagedSuspects[focusedRowIdx];
+      if (row && (row.status || "open") === "open") {
+        dismissMut.mutate(row.id);
+      }
+    });
+
+    const unregReview = registerContextShortcut("mark-meat-reviewed", () => {
+      if (isTyping()) return;
+      const row = pagedSuspects[focusedRowIdx];
+      if (row) {
+        router.push(`/patients/${row.patient_id}?tab=suspects`);
+      }
+    });
+
+    return () => {
+      unregAccept();
+      unregDismiss();
+      unregReview();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedRowIdx, pagedSuspects]);
+
+  // Arrow / J / K key navigation across rows — only when not typing
+  const handleListKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const el = e.target as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable) return;
+
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        setFocusedRowIdx((i) => {
+          const next = Math.min(i + 1, pagedSuspects.length - 1);
+          rowRefs.current[next]?.focus();
+          return next;
+        });
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setFocusedRowIdx((i) => {
+          const prev = Math.max(i - 1, 0);
+          rowRefs.current[prev]?.focus();
+          return prev;
+        });
+      }
+    },
+    [pagedSuspects.length],
+  );
 
   /* --- Selection --------------------------------------------------- */
 
@@ -1082,7 +1169,56 @@ export default function SuspectsPage() {
       {/* ============================================================ */}
       {/* Worklist                                                     */}
       {/* ============================================================ */}
+      {/* Keyboard hint footer — surface A/D/R affordance */}
       <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          marginBottom: 8,
+          fontSize: 11,
+          color: "#64748B",
+          flexWrap: "wrap",
+        }}
+        aria-label="Keyboard shortcuts: use Up/Down or J/K to navigate rows, then A to accept, D to dismiss, R to open chart"
+      >
+        <span style={{ fontWeight: 600, color: "#475569" }}>Keyboard shortcuts:</span>
+        {(
+          [
+            ["Up/Down", "Navigate rows"],
+            ["A", "Accept focused"],
+            ["D", "Dismiss focused"],
+            ["R", "Open chart"],
+          ] as [string, string][]
+        ).map(([key, desc]) => (
+          <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <kbd
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 22,
+                height: 20,
+                padding: "0 5px",
+                borderRadius: 4,
+                border: "1px solid #CBD5E1",
+                background: "#F8FAFC",
+                fontFamily: "monospace",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#334155",
+                boxShadow: "0 1px 1px rgba(0,0,0,0.06)",
+              }}
+            >
+              {key}
+            </kbd>
+            <span>{desc}</span>
+          </span>
+        ))}
+      </div>
+
+      <div
+        onKeyDown={handleListKeyDown}
         style={{
           backgroundColor: C.bgCard,
           border: `1px solid ${C.border}`,
@@ -1214,19 +1350,29 @@ export default function SuspectsPage() {
 
           const isExpanded = expandedId === s.id;
 
+          const isFocused = focusedRowIdx === idx;
+
           return (
             <div
               key={s.id}
               style={{
                 borderBottom: idx < pagedSuspects.length - 1 ? `1px solid ${C.rowDivider}` : "none",
                 backgroundColor: isExpanded ? C.bgBand : isSelected ? C.brandSoft : C.bgCard,
+                outline: isFocused ? `2px solid ${C.brand}` : "none",
+                outlineOffset: -2,
+                borderRadius: isFocused ? 4 : 0,
               }}
             >
             <div
               role="row"
               tabIndex={0}
+              ref={(el) => { rowRefs.current[idx] = el; }}
               className="suspect-row"
-              onClick={() => setExpandedId((cur) => (cur === s.id ? null : s.id))}
+              onClick={() => {
+                setFocusedRowIdx(idx);
+                setExpandedId((cur) => (cur === s.id ? null : s.id));
+              }}
+              onFocus={() => setFocusedRowIdx(idx)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -1410,8 +1556,11 @@ export default function SuspectsPage() {
                 </span>
               </div>
 
-              {/* Confidence bar */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+              {/* Confidence bar — numeric score shown as tooltip; label uses signal-strength words */}
+              <div
+                title={`Internal signal score: ${(conf * 100).toFixed(0)}% (not a calibrated probability — relative ranking only)`}
+                style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}
+              >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div
                     style={{
@@ -1434,16 +1583,18 @@ export default function SuspectsPage() {
                     />
                   </div>
                   <span
+                    title={`Internal signal score: ${(conf * 100).toFixed(0)}% (not a calibrated probability)`}
                     style={{
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 700,
                       color: cConf,
                       fontVariantNumeric: "tabular-nums",
-                      minWidth: 32,
+                      minWidth: 56,
                       textAlign: "right",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {(conf * 100).toFixed(0)}%
+                    {conf >= 0.85 ? "Strong" : conf >= 0.65 ? "Moderate" : "Weak"}
                   </span>
                 </div>
                 {/* Calibrated chip — shown when Platt scaling has been applied */}

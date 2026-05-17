@@ -22,6 +22,7 @@ import {
 import { SemiGauge } from "./SemiGauge";
 import { DismissReasonDialog } from "./DismissReasonDialog";
 import { registerContextShortcut } from "@/lib/keyboard-shortcuts";
+import { KeyHint } from "@/components/ui/key-hint";
 
 // ---------------------------------------------------------------------------
 // Compact MEAT chip — 4 coloured squares, no external MEATBadge dependency
@@ -416,7 +417,7 @@ export function SuspectCardView({
               {busy === "accept" ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
-                <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept</>
+                <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept<KeyHint>A</KeyHint></>
               )}
             </Button>
             {isMeatMissing && (
@@ -440,7 +441,7 @@ export function SuspectCardView({
               {busy === "dismiss" ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
-                <><XCircle className="h-3 w-3 mr-1" aria-hidden /> Dismiss</>
+                <><XCircle className="h-3 w-3 mr-1" aria-hidden /> Dismiss<KeyHint>D</KeyHint></>
               )}
             </Button>
             <Button
@@ -451,7 +452,7 @@ export function SuspectCardView({
               aria-label="Why was this flagged?"
               className="text-muted-foreground hover:text-foreground px-2"
             >
-              <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?
+              <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?<KeyHint>R</KeyHint>
             </Button>
             <Button
               size="sm"

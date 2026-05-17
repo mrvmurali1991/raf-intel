@@ -4393,3 +4393,35 @@ export async function getHedisPatientsFailing(
   );
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Per-patient HEDIS gaps — co-located with HCC suspects on patient detail page
+// ---------------------------------------------------------------------------
+
+export interface PatientHedisGap {
+  measure_id: string;
+  name: string;
+  status: "open" | "met";
+  last_value: string | null;
+  due_date: string | null;
+  evidence: unknown[];
+  exclusions: string[];
+}
+
+export interface PatientHedisGapsResponse {
+  patient_id: number;
+  measurement_year: number;
+  open_gaps: PatientHedisGap[];
+  all_gaps: PatientHedisGap[];
+}
+
+export async function getPatientHedisGaps(
+  pid: string | number,
+  year?: number,
+): Promise<PatientHedisGapsResponse> {
+  const { data } = await api.get<PatientHedisGapsResponse>(
+    `/api/hedis/patient/${pid}/gaps`,
+    { params: year ? { year } : undefined },
+  );
+  return data;
+}

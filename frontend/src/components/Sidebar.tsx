@@ -760,6 +760,39 @@ export function Sidebar() {
         {navGroups.map((group, i) => renderNavGroup(group, i))}
       </nav>
 
+      {/* Keyboard shortcut affordance hint — shown only when sidebar is expanded */}
+      {!collapsed && (
+        <div
+          style={{
+            marginTop: "auto",
+            padding: "6px 14px 4px",
+            fontSize: 11,
+            color: isDark ? "#475569" : "#94a3b8",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+          aria-label="Press ? to open keyboard shortcuts"
+        >
+          Press{" "}
+          <kbd
+            style={{
+              display: "inline-block",
+              padding: "1px 5px",
+              border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}`,
+              borderRadius: 4,
+              fontSize: 11,
+              fontFamily: "monospace",
+              background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+              color: isDark ? "#64748b" : "#64748b",
+            }}
+          >
+            ?
+          </kbd>{" "}
+          for shortcuts
+        </div>
+      )}
+
       {/* Bottom section: theme toggle + user profile + version */}
       <div
         style={{

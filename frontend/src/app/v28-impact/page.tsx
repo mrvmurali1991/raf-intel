@@ -196,6 +196,7 @@ export default function V28ImpactPage() {
           {/* Top KPIs */}
           <section
             aria-label="Portfolio KPIs"
+            className="kpi-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(4, minmax(180px, 1fr))",
@@ -279,7 +280,7 @@ export default function V28ImpactPage() {
                 Top-eroded patients ({data.top_eroded_patients.length})
               </div>
               {data.top_eroded_patients.length === 0 ? (
-                <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
+                <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>
                   No patients show negative V28 erosion in the current panel.
                 </div>
               ) : (
@@ -316,7 +317,7 @@ export default function V28ImpactPage() {
                         </Td>
                         <Td>
                           {row.dropped_hccs.length === 0 ? (
-                            <span style={{ color: "#94a3b8", fontStyle: "italic" }}>—</span>
+                            <span aria-label="none" style={{ color: "#64748b", fontStyle: "italic" }}>—</span>
                           ) : (
                             <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
                               {row.dropped_hccs.map((h) => (
@@ -362,44 +363,69 @@ export default function V28ImpactPage() {
                 HCCs most-frequently dropped across the panel.
               </div>
               {Object.keys(data.hcc_erosion_breakdown).length === 0 ? (
-                <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
+                <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>
                   No HCCs dropped — the entire panel rolls cleanly to V28.
                 </div>
               ) : (
-                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 6 }}>
-                  {Object.entries(data.hcc_erosion_breakdown).map(([hcc, count]) => {
-                    const max = Math.max(...Object.values(data.hcc_erosion_breakdown));
-                    const pct = Math.round((count / max) * 100);
-                    return (
-                      <li key={hcc} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ minWidth: 56, fontSize: 11, color: "#475569", fontWeight: 600 }}>
-                          HCC {hcc}
-                        </span>
-                        <div
-                          style={{
-                            flex: 1,
-                            height: 8,
-                            background: "#fef2f2",
-                            borderRadius: 4,
-                            overflow: "hidden",
-                          }}
-                        >
+                <>
+                  {/* Visual bar chart */}
+                  <ol
+                    aria-label="HCC erosion bar chart"
+                    style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 6 }}
+                  >
+                    {Object.entries(data.hcc_erosion_breakdown).map(([hcc, count]) => {
+                      const max = Math.max(...Object.values(data.hcc_erosion_breakdown));
+                      const pct = Math.round((count / max) * 100);
+                      return (
+                        <li key={hcc} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ minWidth: 56, fontSize: 11, color: "#475569", fontWeight: 600 }}>
+                            HCC {hcc}
+                          </span>
                           <div
-                            style={{ width: `${pct}%`, height: "100%", background: "#dc2626" }}
-                          />
-                        </div>
-                        <span style={{ minWidth: 32, fontSize: 11, color: "#475569", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                          {count}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
+                            aria-hidden="true"
+                            style={{
+                              flex: 1,
+                              height: 8,
+                              background: "#fef2f2",
+                              borderRadius: 4,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{ width: `${pct}%`, height: "100%", background: "#dc2626" }}
+                            />
+                          </div>
+                          <span style={{ minWidth: 32, fontSize: 11, color: "#475569", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                            {count}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  {/* SR-only data table: accessible alternative to HCC erosion bars */}
+                  <table className="sr-only">
+                    <caption>HCC codes most frequently dropped across the panel</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">HCC code</th>
+                        <th scope="col">Patients affected</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(data.hcc_erosion_breakdown).map(([hcc, count]) => (
+                        <tr key={hcc}>
+                          <th scope="row">HCC {hcc}</th>
+                          <td>{count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
             </section>
           </div>
 
-          <footer style={{ marginTop: 16, fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
+          <footer style={{ marginTop: 16, fontSize: 11, color: "#64748b", lineHeight: 1.5 }}>
             Computed {data.generated_at} · ${data.revenue_per_raf_point.toLocaleString()} per RAF
             point ·{" "}
             {isRefetching && <span style={{ marginLeft: 4 }}>Refreshing…</span>}
@@ -467,52 +493,86 @@ function KPI({
 function DeltaHistogram({ buckets }: { buckets: Histogram[] }) {
   const max = Math.max(1, ...buckets.map((b) => b.count));
   const height = 120;
+
+  // Build a concise aria-label summarising the top non-zero buckets (up to 5).
+  const topBuckets = [...buckets]
+    .filter((b) => b.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  const ariaLabel =
+    topBuckets.length === 0
+      ? "Distribution of patients by revenue delta: no data"
+      : `Distribution of patients by revenue delta: ${topBuckets
+          .map((b) => `${b.count} in ${b.bucket_label}`)
+          .join(", ")}`;
+
   return (
-    <div
-      role="img"
-      aria-label={`Histogram with ${buckets.length} buckets`}
-      style={{ display: "flex", alignItems: "flex-end", gap: 6, height: height + 36 }}
-    >
-      {buckets.map((b) => {
-        const h = (b.count / max) * height;
-        const negative = b.hi <= 0;
-        const positive = b.lo >= 0;
-        const color = negative ? "#dc2626" : positive ? "#059669" : "#475569";
-        return (
-          <div
-            key={b.bucket_label}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
-            title={`${b.bucket_label}: ${b.count} patients`}
-          >
-            <div style={{ fontSize: 11, color: "#475569", fontVariantNumeric: "tabular-nums" }}>
-              {b.count}
-            </div>
+    <div>
+      <div
+        role="img"
+        aria-label={ariaLabel}
+        style={{ display: "flex", alignItems: "flex-end", gap: 6, height: height + 36 }}
+      >
+        {buckets.map((b) => {
+          const h = (b.count / max) * height;
+          const negative = b.hi <= 0;
+          const positive = b.lo >= 0;
+          const color = negative ? "#dc2626" : positive ? "#059669" : "#475569";
+          return (
             <div
-              style={{
-                width: "100%",
-                height: Math.max(2, h),
-                background: color,
-                borderRadius: 4,
-                opacity: b.count === 0 ? 0.15 : 1,
-              }}
-            />
-            <div
-              style={{
-                fontSize: 9,
-                color: "#94a3b8",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-                transform: "rotate(-30deg)",
-                transformOrigin: "left top",
-                marginTop: 8,
-                width: 60,
-              }}
+              key={b.bucket_label}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
+              title={`${b.bucket_label}: ${b.count} patients`}
             >
-              {b.bucket_label}
+              <div style={{ fontSize: 11, color: "#475569", fontVariantNumeric: "tabular-nums" }}>
+                {b.count}
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: Math.max(2, h),
+                  background: color,
+                  borderRadius: 4,
+                  opacity: b.count === 0 ? 0.15 : 1,
+                }}
+              />
+              <div
+                aria-hidden="true"
+                style={{
+                  fontSize: 9,
+                  color: "#94a3b8",
+                  textAlign: "center",
+                  whiteSpace: "nowrap",
+                  transform: "rotate(-30deg)",
+                  transformOrigin: "left top",
+                  marginTop: 8,
+                  width: 60,
+                }}
+              >
+                {b.bucket_label}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {/* SR-only data table: provides accessible alternative to the visual histogram */}
+      <table className="sr-only">
+        <caption>Distribution of patients by revenue delta</caption>
+        <thead>
+          <tr>
+            <th scope="col">Revenue bucket</th>
+            <th scope="col">Patient count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {buckets.map((b) => (
+            <tr key={b.bucket_label}>
+              <th scope="row">{b.bucket_label}</th>
+              <td>{b.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
