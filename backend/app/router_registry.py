@@ -79,6 +79,7 @@ from app.routers import provider_scorecards as provider_scorecards_router
 from app.routers import provider_trends as provider_trends_router
 from app.routers import top_hcc_opportunities as top_hcc_opportunities_router
 from app.routers import coder_analytics as coder_analytics_router
+from app.routers import v28_impact as v28_impact_router
 from app.routers import consent as consent_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import data_quality as data_quality_router
@@ -244,6 +245,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, provider_trends_router.router)  # /api/providers/trend-aggregate before /{id}/trend
     _mount(app, providers.router)
     _mount(app, top_hcc_opportunities_router.router)
+    _mount(app, v28_impact_router.router)
     _mount(app, provider_revenue_breakdown_router.router)
     _mount(app, meat_audit_risk_router.router)
     _mount(app, hcc_gap_drilldown_router.router)
