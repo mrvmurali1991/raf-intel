@@ -121,6 +121,7 @@ from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import suspect_feedback as suspect_feedback_router
 from app.routers import pre_submission as pre_submission_router
+from app.routers import tenant_branding as tenant_branding_router
 
 
 # ---------------------------------------------------------------------------
@@ -327,3 +328,6 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, radv_router.router)
     _mount(app, data_quality_router.router)
     _mount(app, raf_inbox_admin_router.router)
+
+    # Tenant co-branding (per-tenant color + logo text)
+    _mount(app, tenant_branding_router.router)
