@@ -114,7 +114,7 @@ export function SuspectsSection({
   if (!suspects.length)
     return (
       <EmptyState
-        variant="default"
+        variant="neutral"
         title="No open suspects"
         subtitle="The engine has not flagged any unbilled HCC opportunities for this patient at the moment."
       />

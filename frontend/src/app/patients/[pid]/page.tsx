@@ -671,7 +671,7 @@ export default function PatientDetailPage({
       </div>
       {/* PATIENT HEADER (sticky) */}
       <header
-        className="premium-card animate-fade-in"
+        className="premium-card animate-fade-in patient-sticky-header"
         style={{
           position: "sticky",
           top: 0,
@@ -683,6 +683,7 @@ export default function PatientDetailPage({
         }}
       >
         <div
+          className="patient-sticky-inner"
           style={{
             width: "100%",
             padding: "12px 16px",
@@ -737,7 +738,7 @@ export default function PatientDetailPage({
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <h1 className="gradient-text" style={{ margin: 0, fontSize: 24, fontWeight: 700, color: C.slate800, lineHeight: 1.2 }}>
+                <h1 className="gradient-text patient-name-h1" style={{ margin: 0, fontSize: 24, fontWeight: 700, color: C.slate800, lineHeight: 1.2 }}>
                   {(() => {
                     if (!privacyMode) return patientName;
                     // Privacy-masked: keep first initial + last initial,
@@ -791,18 +792,18 @@ export default function PatientDetailPage({
           </div>
 
           {/* Right: demographics + actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: C.slate500, flexWrap: "wrap" }}>
-              {age !== null && <span>{age} yrs</span>}
-              {sex && <span style={{ textTransform: "capitalize" }}>{sex}</span>}
-              {dob && <span>{formatDate(dob)}</span>}
+          <div className="patient-header-actions" style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+            <div className="patient-demographics-row" style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: C.slate500, flexWrap: "wrap" }}>
+              {age !== null && <span className="demo-essential">{age} yrs</span>}
+              {sex && <span className="demo-essential" style={{ textTransform: "capitalize" }}>{sex}</span>}
+              {dob && <span className="demo-essential">{formatDate(dob)}</span>}
             </div>
             <div style={{ width: 1, height: 32, background: C.slate200 }} className="hidden sm:block" />
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button
                 onClick={() => batchMutation.mutate()}
                 disabled={batchMutation.isPending || batchStatus === "running"}
-                className="hover-lift"
+                className="hover-lift patient-recalc-btn"
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 8,
                   padding: "10px 18px", borderRadius: 12, border: "none",
@@ -811,6 +812,7 @@ export default function PatientDetailPage({
                   boxShadow: "0 4px 10px rgba(15, 118, 110, 0.2)",
                   opacity: batchMutation.isPending || batchStatus === "running" ? 0.6 : 1,
                   transition: "opacity 0.15s, transform 0.2s, box-shadow 0.2s",
+                  minHeight: 44,
                 }}
               >
                 {(batchMutation.isPending || batchStatus === "running") && <Spinner size={14} />}
@@ -825,9 +827,10 @@ export default function PatientDetailPage({
                   aria-haspopup="menu"
                   aria-expanded={moreMenuOpen}
                   aria-controls="patient-more-actions-menu"
+                  className="patient-more-btn"
                   style={{
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    width: 40, height: 40, borderRadius: 8,
+                    width: 44, height: 44, borderRadius: 8,
                     border: `1px solid ${C.slate200}`, background: C.white,
                     color: C.slate600, cursor: "pointer",
                     transition: "background 0.15s",

@@ -43,7 +43,7 @@ export function MEATSection({
   if (!gaps.length)
     return (
       <EmptyState
-        variant="default"
+        variant="neutral"
         title="No HCCs require MEAT documentation"
         subtitle="Either this patient has no risk-adjusted conditions for the selected year, or the panel is still loading. Switch year filter if expected HCCs are missing."
       />

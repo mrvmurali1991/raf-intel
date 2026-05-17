@@ -1324,3 +1324,97 @@ select.appearance-none {
     padding-top: 32px !important;
   }
 }
+
+/* =============================================================
+ * Patient-detail point-of-care (mobile / tablet) — ForeSee pattern
+ * Optimised for 768px iPad landscape and 414px phone.
+ *
+ * Rules apply only on /patients/[pid] via opt-in class hooks so we
+ * don't disturb desktop layout or other pages. Breakpoints:
+ *   - <= 1024px  tablet
+ *   - <= 640px   phone
+ * ============================================================= */
+
+/* Tab list — momentum scroll for touch devices regardless of size.
+ * The desktop has overflowX:auto already; we add iOS momentum + hide
+ * the scrollbar so the tab strip reads as a true horizontal carousel
+ * on a phone/tablet. */
+.raf-tabbar-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 16px;
+}
+.raf-tabbar-scroll > div > button {
+  scroll-snap-align: start;
+}
+
+/* Tablet (<= 1024px) — iPad landscape is 1024×768. */
+@media (max-width: 1024px) {
+  /* Tab bar gets tighter padding so more tabs fit before scroll kicks in. */
+  .raf-tabbar-scroll > div > button {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+  /* Header gutter shrinks slightly. */
+  .patient-sticky-inner {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* Phone (<= 640px) — 414px iPhone-class. */
+@media (max-width: 640px) {
+  /* H1 24 → 18 under 640px (per spec). */
+  .patient-name-h1 {
+    font-size: 18px !important;
+    line-height: 1.25 !important;
+  }
+  /* Sticky header reduces from py-5 (≈12px here) to py-2 (~8px). */
+  .patient-sticky-header {
+    min-height: 0 !important;
+  }
+  .patient-sticky-inner {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    min-height: 0 !important;
+    gap: 8px !important;
+  }
+  /* Hide non-essential demographic chips — keep age + sex + dob (the three
+   * .demo-essential spans). Any ARP-type chip rendered into this row is
+   * suppressed at phone size. */
+  .patient-demographics-row > *:not(.demo-essential) {
+    display: none !important;
+  }
+  .demo-arp-chip,
+  .arp-type-chip {
+    display: none !important;
+  }
+  /* Action buttons (Recalculate, More, Back) gain min 44×44 tap target.
+   * The Back link and More button are already 44; ensure Recalculate too. */
+  .patient-recalc-btn {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+  }
+  .patient-more-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  /* Tab list horizontal-scroll feel: tighten gaps + hide scrollbar so the
+   * UI reads as a swipeable rail rather than a desktop-style overflow box. */
+  .raf-tabbar-scroll {
+    padding-bottom: 2px;
+  }
+  .raf-tabbar-scroll::-webkit-scrollbar {
+    height: 2px;
+  }
+  .raf-tabbar-scroll > div > button {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    font-size: 12px !important;
+  }
+  /* Year selector — give buttons a min-tap-target for one-thumb operation. */
+}

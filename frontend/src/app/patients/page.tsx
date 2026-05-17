@@ -2154,7 +2154,7 @@ export default function PatientsPage() {
               gap: 12,
               padding: "8px 16px",
               borderBottom: `1px solid ${C.borderSoft}`,
-              background: tokens.brandSoft,
+              background: C.brandSoft,
               fontSize: 13,
               fontWeight: 500,
               color: C.text,
