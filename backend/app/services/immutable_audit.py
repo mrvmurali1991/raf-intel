@@ -58,6 +58,20 @@ _last_hash_loaded = False
 _GENESIS_HASH = "0" * 64  # SHA-256 of "nothing" — anchor for the first entry
 
 
+# ---------------------------------------------------------------------------
+# Custom exception — Patient Safety round-2 fix.
+# ---------------------------------------------------------------------------
+
+
+class AuditChainTamperError(RuntimeError):
+    """Raised when the JSONL last-hash diverges from the DB last-hash.
+
+    This indicates the JSONL was modified or replaced externally.  The
+    exception is caught in the route layer and returned as HTTP 500 with
+    a generic message so internal hash values are not leaked to callers.
+    """
+
+
 def _ensure_dir() -> None:
     _AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -89,6 +103,45 @@ def _load_last_hash() -> str:
     except Exception:
         logger.warning("Could not read last audit hash; starting new chain segment")
         return _GENESIS_HASH
+
+
+def _last_hash_from_jsonl() -> str | None:
+    """Return the ``current_hash`` of the last line in the JSONL file, or None."""
+    if not _AUDIT_FILE.exists():
+        return None
+    try:
+        with open(_AUDIT_FILE, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size == 0:
+                return None
+            f.seek(max(0, size - 4096))
+            lines = f.read().decode("utf-8", errors="replace").strip().splitlines()
+        if not lines:
+            return None
+        last = json.loads(lines[-1])
+        return last.get("current_hash")
+    except Exception:
+        return None
+
+
+def _db_last_hash() -> str | None:
+    """Return the most-recent ``hash_self`` from immutable_audit_log, or None.
+
+    Returns None on any DB error so callers can handle gracefully.
+    """
+    try:
+        from app.db import raf_cursor  # local import to avoid circular deps at module load
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT hash_self FROM immutable_audit_log ORDER BY id DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+        if row:
+            return row.get("hash_self") or row.get("current_hash")
+        return None
+    except Exception:
+        return None
 
 
 def _db_insert(entry: dict) -> None:
@@ -156,6 +209,16 @@ def append_audit_entry(
         if not _last_hash_loaded:
             _last_hash = _load_last_hash()
             _last_hash_loaded = True
+
+        # Cross-check: if DB has a last hash and JSONL's last hash diverges,
+        # the file was tampered — refuse to append.  Patient Safety round-2 fix.
+        _db_h = _db_last_hash()
+        _jsonl_h = _last_hash_from_jsonl()
+        if _db_h is not None and _jsonl_h is not None and _db_h != _jsonl_h:
+            raise AuditChainTamperError(
+                "Audit chain integrity failure: DB last-hash does not match "
+                "JSONL last-hash. JSONL may have been modified externally."
+            )
 
         previous_hash = _last_hash or _GENESIS_HASH
 
@@ -243,6 +306,131 @@ def emit_audit_event(
         action=event_type,
         details=details or None,
     )
+
+
+def verify_chain_on_boot() -> None:
+    """Boot-time integrity check — refuse to start if chain was tampered.
+
+    Two conditions are checked:
+
+    1. DB has a last-hash entry but the JSONL file is missing: this means the
+       file was deleted (or never persisted) after events were committed to DB.
+       This is a FATAL condition — raise RuntimeError so the caller can abort
+       startup.
+
+    2. JSONL exists but DB is empty: recoverable (e.g. DB was wiped and
+       re-created).  Log a WARNING and continue — auditing continues into DB
+       from this point.
+
+    This function executes a single DB query so it is fast enough to run
+    synchronously during the FastAPI lifespan startup hook.
+    """
+    db_h = _db_last_hash()
+    jsonl_exists = _AUDIT_FILE.exists()
+
+    if db_h is not None and not jsonl_exists:
+        raise RuntimeError(
+            f"FATAL: audit chain tampered — DB has hash {db_h[:16]}... "
+            "but JSONL file is missing. "
+            f"Expected file: {_AUDIT_FILE}"
+        )
+
+    if db_h is None and jsonl_exists:
+        logger.warning(
+            "verify_chain_on_boot: audit JSONL exists at %s but DB table is "
+            "empty — continuing in DB-only mode from this point",
+            _AUDIT_FILE,
+        )
+
+
+def archive_audit_jsonl_to_s3(
+    bucket: str | None = None,
+    prefix: str = "audit/",
+    object_lock_mode: str = "COMPLIANCE",
+    retention_days: int = 2555,
+) -> dict:
+    """Upload the current JSONL to S3 with Object Lock COMPLIANCE mode.
+
+    Returns a dict with keys: bucket, key, version_id, retention_until.
+
+    Gated by env vars:
+        AUDIT_S3_BUCKET   — required; if absent the function no-ops.
+        AUDIT_S3_PREFIX   — optional override of ``prefix`` argument.
+        AUDIT_S3_ROLE_ARN — optional IAM role to assume before upload.
+
+    boto3 is imported lazily so it is NOT a hard dependency.  If boto3 is
+    not installed the function logs an error and returns an empty dict.
+    """
+    _bucket = bucket or os.getenv("AUDIT_S3_BUCKET")
+    if not _bucket:
+        logger.info("archive_audit_jsonl_to_s3: AUDIT_S3_BUCKET not set — skipping")
+        return {}
+
+    if not _AUDIT_FILE.exists():
+        logger.info("archive_audit_jsonl_to_s3: JSONL file not found — nothing to archive")
+        return {}
+
+    _prefix = os.getenv("AUDIT_S3_PREFIX", prefix)
+    _role_arn = os.getenv("AUDIT_S3_ROLE_ARN")
+
+    try:
+        import boto3  # lazy import — not a hard dependency
+        from datetime import timedelta
+    except ImportError:
+        logger.error(
+            "archive_audit_jsonl_to_s3: boto3 is not installed — "
+            "cannot archive audit log to S3"
+        )
+        return {}
+
+    try:
+        ts = datetime.now(tz=timezone.utc)
+        key = f"{_prefix}{ts.strftime('%Y/%m/%d/%H%M%S')}_immutable_audit.jsonl"
+        retention_until = ts + timedelta(days=retention_days)
+
+        # Optionally assume a role for cross-account uploads.
+        if _role_arn:
+            sts = boto3.client("sts")
+            creds = sts.assume_role(
+                RoleArn=_role_arn,
+                RoleSessionName="audit-archive",
+            )["Credentials"]
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=creds["AccessKeyId"],
+                aws_secret_access_key=creds["SecretAccessKey"],
+                aws_session_token=creds["SessionToken"],
+            )
+        else:
+            s3 = boto3.client("s3")
+
+        with open(_AUDIT_FILE, "rb") as f:
+            resp = s3.put_object(
+                Bucket=_bucket,
+                Key=key,
+                Body=f,
+                ContentType="application/x-ndjson",
+                ObjectLockMode=object_lock_mode,
+                ObjectLockRetainUntilDate=retention_until,
+            )
+
+        version_id = resp.get("VersionId", "")
+        logger.info(
+            "archive_audit_jsonl_to_s3: archived to s3://%s/%s (version=%s, "
+            "retain_until=%s)",
+            _bucket, key, version_id, retention_until.isoformat(),
+        )
+        return {
+            "bucket": _bucket,
+            "key": key,
+            "version_id": version_id,
+            "retention_until": retention_until.isoformat(),
+        }
+    except Exception:
+        logger.error(
+            "archive_audit_jsonl_to_s3: upload failed", exc_info=True
+        )
+        return {}
 
 
 def verify_audit_chain(path: str | Path | None = None) -> tuple[bool, list[str]]:
