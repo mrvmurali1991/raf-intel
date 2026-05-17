@@ -86,6 +86,7 @@ import { AuditTab } from "./components/AuditTab";
 import { ActivityTab } from "./components/ActivityTab";
 import { DocumentsTab } from "./components/DocumentsTab";
 import { RAFCentralTab } from "./components/RAFCentralTab";
+import { PatientV28ImpactPanel } from "./components/PatientV28ImpactPanel";
 
 // ===========================================================================
 // MAIN PAGE COMPONENT
@@ -103,17 +104,26 @@ export default function PatientDetailPage({
   const searchParams = useSearchParams();
   // Initialise from URL so refresh / shared links restore the correct tab.
   // Sub-pill state for the merged "RAF" tab (item B8)
-  const [rafSubTab, setRafSubTab] = useState<"central" | "details" | "comparison">(() => {
+  const [rafSubTab, setRafSubTab] = useState<"central" | "details" | "comparison" | "v28-impact">(() => {
     const t = searchParams.get("tab");
     if (t === "rafdetails" || t === "raf") return "details";
     if (t === "modelcomparison" || t === "models") return "comparison";
+    if (t === "v28-impact" || t === "v28impact") return "v28-impact";
     return "central";
   });
 
   const [activeTab, setActiveTab] = useState(() => {
     const t = searchParams.get("tab");
     // Legacy aliases → new "raf" tab
-    if (t === "rafcentral" || t === "rafdetails" || t === "modelcomparison") return "raf";
+    if (
+      t === "rafcentral" ||
+      t === "rafdetails" ||
+      t === "modelcomparison" ||
+      t === "v28-impact" ||
+      t === "v28impact"
+    ) {
+      return "raf";
+    }
     return t ?? "raf";
   });
 
@@ -1181,6 +1191,7 @@ export default function PatientDetailPage({
                 { id: "central" as const, label: "Central" },
                 { id: "details" as const, label: "Details" },
                 { id: "comparison" as const, label: "Comparison" },
+                { id: "v28-impact" as const, label: "V28 Impact" },
               ]).map((pill) => (
                 <button
                   key={pill.id}
@@ -1217,6 +1228,11 @@ export default function PatientDetailPage({
             {rafSubTab === "comparison" && (
               <div style={{ maxWidth: 1100 }}>
                 <ModelComparison pid={pid} year={selectedYear} />
+              </div>
+            )}
+            {rafSubTab === "v28-impact" && (
+              <div style={{ maxWidth: 1100 }}>
+                <PatientV28ImpactPanel pid={pid} year={selectedYear} />
               </div>
             )}
           </div>

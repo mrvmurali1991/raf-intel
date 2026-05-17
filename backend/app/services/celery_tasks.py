@@ -127,6 +127,7 @@ celery_app.conf.task_routes = {
     "raf.analyze_document":              {"queue": "heavy",    "priority": 5},
     "raf.scan_suspects_all":             {"queue": "heavy",    "priority": 4},
     "raf.calculate_provider_scorecards": {"queue": "heavy",    "priority": 4},
+    "raf.refresh_v28_portfolio":         {"queue": "heavy",    "priority": 4},
     # Pipeline chain event steps
     "raf.cleanup_stale_runs":            {"queue": "pipeline", "priority": 6},
     # Per-patient MEAT refresh (user-triggered, short-lived)
@@ -1774,3 +1775,74 @@ def discover_loop_task() -> dict[str, Any]:
         "auto_sync.discover: dispatched %d new patient sync tasks", len(dispatched)
     )
     return {"dispatched": len(dispatched), "pids": dispatched}
+
+
+# ---------------------------------------------------------------------------
+# V28 Transition Impact — daily portfolio refresh
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.refresh_v28_portfolio",
+    queue="heavy",
+    max_retries=2,
+    default_retry_delay=120,
+    soft_time_limit=600,   # 10 min — 44 patients × ~1 s = ~45 s typical
+    time_limit=900,
+)
+def task_refresh_v28_portfolio(
+    self,
+    tenant_id: str,
+    year: int | None = None,
+) -> dict[str, Any]:
+    """Force-recompute the tenant V28 transition portfolio cache.
+
+    Triggered by:
+      - POST /api/v28-impact/run-analysis  (user-initiated)
+      - Beat schedule (daily, ~03:30 UTC — see beat_schedule below)
+
+    Writes results into Redis under `v28:portfolio:{tenant_id}:{year}` with a
+    24-hour TTL so the GET /portfolio endpoint is always cheap.
+    """
+    if not tenant_id:
+        raise ValueError(
+            "task_refresh_v28_portfolio: tenant_id is required "
+            "(HIPAA multi-tenant isolation)"
+        )
+
+    job_id = self.request.id
+    _mark_started(
+        self,
+        "raf.refresh_v28_portfolio",
+        {"tenant_id": tenant_id, "year": year},
+    )
+    _audit(
+        "job_started",
+        job_id,
+        f"refresh_v28_portfolio tenant={tenant_id} year={year}",
+    )
+
+    try:
+        from app.services.v28_transition_calculator import refresh_portfolio_cache
+        payload = refresh_portfolio_cache(tenant_id=tenant_id, year=year)
+        summary = {
+            "tenant_id":            tenant_id,
+            "year":                 payload.get("measurement_year"),
+            "patient_count":        payload.get("patient_count"),
+            "computed_patient_count": payload.get("computed_patient_count"),
+            "total_raf_delta":      payload.get("total_raf_delta"),
+            "total_revenue_delta":  payload.get("total_revenue_delta"),
+            "raf_erosion_pct":      payload.get("raf_erosion_pct"),
+        }
+        _mark_success(self, summary)
+        _audit("job_completed", job_id, f"refresh_v28_portfolio {summary}")
+        task_logger.info("refresh_v28_portfolio: %s", summary)
+        return summary
+    except Exception as exc:
+        _mark_failure(self, exc)
+        _audit("job_failed", job_id, str(exc)[:500])
+        task_logger.error(
+            "refresh_v28_portfolio failed tenant=%s: %s", tenant_id, exc, exc_info=True
+        )
+        raise self.retry(exc=exc, countdown=120 * (self.request.retries + 1))

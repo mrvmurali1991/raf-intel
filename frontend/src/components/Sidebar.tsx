@@ -37,6 +37,7 @@ import {
   Activity,
   Upload,
   Stethoscope,
+  TrendingDown,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -93,6 +94,7 @@ const navGroups: NavGroup[] = [
       { href: "/demo", label: "Pipeline Demo", icon: Workflow },
       { href: "/crosswalk", label: "RAF Score Calculator", icon: ArrowLeftRight },
       { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
+      { href: "/v28-impact", label: "V28 Impact", icon: TrendingDown },
       { href: "/roi", label: "ROI Calculator", icon: Calculator },
       { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
     ],
