@@ -13,12 +13,25 @@ trail / MEAT compliance) — this module owns the *run* concept:
   - export evidence bundle
 
 All SQL goes through ``raf_cursor`` — no ORM (project convention).
+
+Compliance notes (2024/2025 CMS Final Rules)
+--------------------------------------------
+- CMS RADV requires stratification by enrollee/HCC-risk decile, with a
+  fixed 201-record sample per contract.  The ``stratified_raf_decile``
+  method implements this.
+- CMS extrapolation uses the FFS Adjuster and contract
+  enrollment-weighted projection (Feb 2023 Final Rule).
+  ``compute_extrapolated_exposure`` implements this; the legacy 55×
+  multiplier is retained for backward compatibility with runs created
+  before members_enrolled was captured, flagged as ``methodology: legacy_v1``.
 """
 from __future__ import annotations
 
 import json
 import logging
+import math
 import random
+import warnings
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Iterable, Literal
@@ -28,20 +41,92 @@ from app.db import raf_cursor
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# CMS RADV extrapolation constants
+# Legacy extrapolation constants — kept for backward compatibility only.
+# New runs should supply members_enrolled and use compute_extrapolated_exposure.
 # ---------------------------------------------------------------------------
-# CMS extrapolates each sampled error across the contract's enrolled
-# population.  Public guidance places the contract-level extrapolation
-# multiplier in the 50-60× range depending on payment year and sample
-# methodology — the codebase uses 55× as the canonical mid-point.  Held
-# in ONE place so the simulator + record persistence agree.
-CMS_EXTRAPOLATION_MULTIPLIER = 55.0
+_LEGACY_EXTRAPOLATION_MULTIPLIER = 55.0
+_LEGACY_AVG_HCC_PAYMENT_DOLLARS = 11_000.0
 
-# Average per-HCC payment used when a record is undefensible.  This is the
-# CY-2026 commonly cited $11K-per-HCC midpoint.  Adjust here, not per-call.
-AVG_HCC_PAYMENT_DOLLARS = 11_000.0
+# CMS 2023 Final Rule FFS Adjuster default
+CMS_FFS_ADJUSTER_DEFAULT = 0.97
 
-SampleMethod = Literal["random", "stratified_hcc", "high_risk_first"]
+# Per-member-per-month benchmark (PMPM) used in FFS Adjuster methodology.
+# This is an internal heuristic; adjust per contract if needed.
+CMS_PMPM_BENCHMARK = 1_100.0
+
+SampleMethod = Literal["random", "stratified_hcc", "stratified_raf_decile", "high_risk_first"]
+
+
+# ---------------------------------------------------------------------------
+# FFS Adjuster extrapolation (CMS 2023 Final Rule methodology)
+# ---------------------------------------------------------------------------
+
+
+def compute_extrapolated_exposure(
+    failed_records: int,
+    sample_size: int,
+    members_enrolled: int,
+    avg_per_member_per_month_dollars: float = CMS_PMPM_BENCHMARK,
+    audit_period_months: int = 12,
+    ffs_adjuster: float = CMS_FFS_ADJUSTER_DEFAULT,
+) -> dict[str, Any]:
+    """Compute extrapolated dollar exposure using FFS Adjuster methodology.
+
+    IMPORTANT: This is an internal heuristic informed by CMS FFS Adjuster
+    methodology — not an official CMS extrapolation.  Results should be
+    reviewed by a certified coder before use in audit defense.
+
+    Formula
+    -------
+    extrapolation_factor       = members_enrolled / sample_size
+    base_exposure_per_failure  = avg_per_member_per_month * audit_period_months
+    projected_dollar_exposure  = failed_records
+                                 * extrapolation_factor
+                                 * base_exposure_per_failure
+                                 * ffs_adjuster
+
+    Parameters
+    ----------
+    failed_records:
+        Number of sampled records adjudicated as undefensible.
+    sample_size:
+        Actual number of records in the sample (denominator for
+        extrapolation_factor).  Must be > 0.
+    members_enrolled:
+        Total contract enrollment for the audit period.
+    avg_per_member_per_month_dollars:
+        PMPM benchmark (default: $1,100 internal heuristic).
+    audit_period_months:
+        Length of the audit period in months (default: 12).
+    ffs_adjuster:
+        CMS FFS Adjuster value (default: 0.97 per Feb 2023 Final Rule).
+    """
+    if sample_size <= 0:
+        raise ValueError("sample_size must be > 0")
+    if members_enrolled <= 0:
+        raise ValueError("members_enrolled must be > 0")
+    if not (0.0 < ffs_adjuster <= 1.0):
+        raise ValueError("ffs_adjuster must be in (0, 1]")
+
+    extrapolation_factor = members_enrolled / sample_size
+    base_per_failure = avg_per_member_per_month_dollars * audit_period_months
+    projected = failed_records * extrapolation_factor * base_per_failure * ffs_adjuster
+
+    return {
+        "extrapolated_exposure_dollars": round(projected, 2),
+        "extrapolation_factor": round(extrapolation_factor, 4),
+        "ffs_adjuster": ffs_adjuster,
+        "failed_records": failed_records,
+        "sample_size": sample_size,
+        "members_enrolled": members_enrolled,
+        "avg_per_member_per_month_dollars": avg_per_member_per_month_dollars,
+        "audit_period_months": audit_period_months,
+        "methodology": "ffs_adjuster_v1",
+        "methodology_note": (
+            "Internal heuristic informed by CMS FFS Adjuster methodology "
+            "(Feb 2023 Final Rule) — not an official CMS extrapolation."
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -52,11 +137,13 @@ SampleMethod = Literal["random", "stratified_hcc", "high_risk_first"]
 def _candidate_patients(
     *, tenant_id: str, payment_year: int
 ) -> list[dict[str, Any]]:
-    """Return all (patient_id, [hcc_codes], raw_raf_score) tuples for the
-    tenant + payment year combination.
+    """Return all (patient_id, [hcc_codes], raf_score, highest_raf_hcc) tuples
+    for the tenant + payment year combination.
 
     A "candidate" is any patient with at least one HCC submitted in the
     payment year (raf_patient_hcc.measurement_year = payment_year).
+    highest_raf_hcc is the HCC code with the maximum raf_value for this
+    patient/year; used by stratified_hcc for CMS-compliant stratification.
     """
     with raf_cursor() as cur:
         cur.execute(
@@ -80,20 +167,91 @@ def _candidate_patients(
         )
         rows = cur.fetchall() or []
 
+        # Fetch highest-RAF-value HCC per patient for this year.
+        cur.execute(
+            """
+            SELECT
+                rph.patient_id,
+                rph.hcc_code,
+                rph.raf_value
+            FROM raf_patient_hcc rph
+            JOIN patients p ON p.id = rph.patient_id
+            WHERE p.tenant_id = %s
+              AND rph.measurement_year = %s
+              AND p.is_active = 1
+            ORDER BY rph.patient_id, rph.raf_value DESC
+            """,
+            (tenant_id, payment_year),
+        )
+        hcc_rows = cur.fetchall() or []
+
+    # Build highest-RAF HCC lookup per patient.
+    highest_raf_hcc: dict[int, str] = {}
+    for hr in hcc_rows:
+        pid = int(hr["patient_id"])
+        if pid not in highest_raf_hcc:
+            highest_raf_hcc[pid] = hr["hcc_code"]
+
     candidates: list[dict[str, Any]] = []
     for r in rows:
         csv = (r.get("hcc_codes_csv") or "").strip()
         hcc_codes = sorted({c.strip() for c in csv.split(",") if c.strip()}) if csv else []
         if not hcc_codes:
             continue
+        pid = int(r["patient_id"])
         candidates.append(
             {
-                "patient_id": int(r["patient_id"]),
-                "hcc_codes":  hcc_codes,
-                "raf_score":  float(r.get("raf_score") or 0.0),
+                "patient_id":      pid,
+                "hcc_codes":       hcc_codes,
+                "raf_score":       float(r.get("raf_score") or 0.0),
+                "highest_raf_hcc": highest_raf_hcc.get(pid, hcc_codes[0]),
             }
         )
     return candidates
+
+
+def _sample_stratified_raf_decile(patients: list[dict], n: int) -> list[dict]:
+    """CMS-compliant RAF-decile stratified sampling.
+
+    Sorts patients by raf_score, divides into 10 equal deciles (ranked 0..9),
+    then allocates quota across deciles.  For n=201, the top decile (decile 9)
+    receives the extra record.  Hard cap: never returns more than n records.
+
+    Parameters
+    ----------
+    patients:
+        Full candidate list (must have 'raf_score' field).
+    n:
+        Target sample size (CMS default: 201).
+    """
+    if not patients:
+        return []
+    if n >= len(patients):
+        return list(patients)[:n]
+
+    sorted_pts = sorted(patients, key=lambda c: c["raf_score"])
+    total = len(sorted_pts)
+    num_deciles = 10
+
+    # Assign decile index (0 = lowest RAF, 9 = highest RAF).
+    deciles: list[list[dict]] = [[] for _ in range(num_deciles)]
+    for i, p in enumerate(sorted_pts):
+        decile_idx = min(int(i * num_deciles / total), num_deciles - 1)
+        deciles[decile_idx].append(p)
+
+    base_quota = n // num_deciles        # e.g. 201 // 10 = 20
+    remainder = n - base_quota * num_deciles  # e.g. 201 - 200 = 1
+
+    picked: list[dict] = []
+    for idx, bucket in enumerate(deciles):
+        # Extra record(s) go to the top decile(s) (highest risk, CMS priority).
+        quota = base_quota + (1 if idx >= num_deciles - remainder else 0)
+        quota = min(quota, len(bucket))
+        random.shuffle(bucket)
+        picked.extend(bucket[:quota])
+
+    random.shuffle(picked)
+    return picked[:n]  # hard cap
 
 
 def _sample(
@@ -104,24 +262,31 @@ def _sample(
 ) -> list[dict[str, Any]]:
     """Apply the requested sampling strategy.
 
-    - random:           shuffle, take N
-    - stratified_hcc:   bucket by primary HCC, draw proportionally
-    - high_risk_first:  sort by raf_score desc, take N
+    - random:                  shuffle, take N
+    - stratified_hcc:          bucket by highest-RAF HCC, draw proportionally
+    - stratified_raf_decile:   CMS-compliant RAF-decile stratification
+    - high_risk_first:         sort by raf_score desc, take N
+
+    All paths enforce a hard cap of sample_size via return sample[:n].
     """
     if not candidates:
         return []
     if sample_size >= len(candidates):
-        return list(candidates)
+        return list(candidates)[:sample_size]
 
     if method == "high_risk_first":
-        return sorted(candidates, key=lambda c: -c["raf_score"])[:sample_size]
+        result = sorted(candidates, key=lambda c: -c["raf_score"])[:sample_size]
+        return result[:sample_size]
+
+    if method == "stratified_raf_decile":
+        return _sample_stratified_raf_decile(candidates, sample_size)
 
     if method == "stratified_hcc":
+        # Stratify by highest-RAF HCC (not alphabetically-first HCC).
         buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for c in candidates:
-            primary = c["hcc_codes"][0] if c["hcc_codes"] else "_unknown_"
+            primary = c.get("highest_raf_hcc") or (c["hcc_codes"][0] if c["hcc_codes"] else "_unknown_")
             buckets[primary].append(c)
-        # proportional allocation
         total = len(candidates)
         picked: list[dict[str, Any]] = []
         for hcc, bucket in buckets.items():
@@ -129,10 +294,11 @@ def _sample(
             random.shuffle(bucket)
             picked.extend(bucket[:quota])
         random.shuffle(picked)
-        return picked[:sample_size]
+        return picked[:sample_size]  # hard cap
 
     # default: random
-    return random.sample(candidates, sample_size)
+    result = random.sample(candidates, sample_size)
+    return result[:sample_size]  # hard cap
 
 
 # ---------------------------------------------------------------------------
@@ -145,12 +311,19 @@ def create_audit_run(
     tenant_id: str,
     name: str,
     payment_year: int,
-    sample_size: int,
+    sample_size: int = 201,
     sample_method: SampleMethod,
     created_by_user_id: int,
     notes: str | None = None,
+    members_enrolled: int | None = None,
+    ffs_adjuster: float | None = None,
 ) -> dict[str, Any]:
-    """Create a new audit run and seed it with sampled records."""
+    """Create a new audit run and seed it with sampled records.
+
+    Default sample_size is 201 per CMS RADV 2024 Final Rule.
+    members_enrolled and ffs_adjuster are used for FFS Adjuster extrapolation;
+    if absent the run falls back to legacy 55x math (methodology: legacy_v1).
+    """
     if sample_size <= 0:
         raise ValueError("sample_size must be > 0")
     if sample_size > 5_000:
@@ -164,11 +337,17 @@ def create_audit_run(
             """
             INSERT INTO raf_radv_audit_runs
                 (tenant_id, name, payment_year, sample_size, sample_method,
-                 status, created_by, notes)
-            VALUES (%s, %s, %s, %s, %s, 'prep', %s, %s)
+                 status, created_by, notes, members_enrolled, ffs_adjuster,
+                 extrapolation_methodology)
+            VALUES (%s, %s, %s, %s, %s, 'prep', %s, %s, %s, %s, %s)
             """,
-            (tenant_id, name, payment_year, sample_size, sample_method,
-             created_by_user_id, notes),
+            (
+                tenant_id, name, payment_year, sample_size, sample_method,
+                created_by_user_id, notes,
+                members_enrolled,
+                ffs_adjuster if ffs_adjuster is not None else CMS_FFS_ADJUSTER_DEFAULT,
+                "ffs_adjuster_v1" if members_enrolled else "legacy_v1",
+            ),
         )
         run_id = cur.lastrowid
 
@@ -203,6 +382,7 @@ def list_audit_runs(*, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]
                 r.id, r.name, r.payment_year, r.sample_size,
                 r.sample_method, r.status, r.created_by,
                 r.assumed_fail_rate, r.notes, r.created_at, r.updated_at,
+                r.members_enrolled, r.ffs_adjuster, r.extrapolation_methodology,
                 COUNT(rec.id)                                           AS record_count,
                 SUM(rec.final_decision = 'defensible')                  AS defensible_count,
                 SUM(rec.final_decision = 'undefensible')                AS undefensible_count,
@@ -298,7 +478,17 @@ def update_record(
     final_decision: str | None = None,
     reviewer_notes: str | None = None,
 ) -> dict[str, Any]:
-    """Coder-side update of a single record.  Recomputes exposure $."""
+    """Coder-side update of a single record.  Recomputes exposure $.
+
+    Exposure is computed using FFS Adjuster methodology when the parent run
+    has members_enrolled set; otherwise falls back to legacy 55x with a
+    deprecation warning.
+
+    needs_remediation records are treated the same as undefensible for
+    exposure computation — the distinction is that the coder believes the HCC
+    may still be salvageable via corrective action; the financial exposure is
+    identical until resolved.
+    """
     allowed_evidence = {"pending", "complete", "missing_meat", "chart_requested"}
     allowed_decision = {"pending", "defensible", "undefensible", "needs_remediation"}
     if evidence_status and evidence_status not in allowed_evidence:
@@ -306,28 +496,50 @@ def update_record(
     if final_decision and final_decision not in allowed_decision:
         raise ValueError(f"invalid final_decision: {final_decision}")
 
-    # Compute exposure: only undefensible records contribute.
-    # Per CMS extrapolation: each error × multiplier × avg payment.
-    exposure_dollars: float = 0.0
-    if final_decision == "undefensible":
-        exposure_dollars = AVG_HCC_PAYMENT_DOLLARS * CMS_EXTRAPOLATION_MULTIPLIER
-    elif final_decision == "needs_remediation":
-        # half-weight — coder hasn't given up yet
-        exposure_dollars = (AVG_HCC_PAYMENT_DOLLARS * CMS_EXTRAPOLATION_MULTIPLIER) / 2
-
     with raf_cursor() as cur:
-        # Verify record is in this run + tenant.
+        # Fetch run metadata for exposure computation.
         cur.execute(
             """
-            SELECT rec.id FROM raf_radv_audit_records rec
-            JOIN raf_radv_audit_runs r ON r.id = rec.audit_run_id
+            SELECT r.members_enrolled, r.ffs_adjuster, r.sample_size,
+                   r.extrapolation_methodology
+            FROM raf_radv_audit_runs r
+            JOIN raf_radv_audit_records rec ON rec.audit_run_id = r.id
             WHERE rec.id = %s AND rec.audit_run_id = %s AND r.tenant_id = %s
             """,
             (record_id, run_id, tenant_id),
         )
-        if not cur.fetchone():
+        run_meta = cur.fetchone()
+        if not run_meta:
             raise ValueError("record not found in this run/tenant")
 
+    # Compute per-record exposure.
+    # Both 'undefensible' and 'needs_remediation' count as failed — no half-weight.
+    # needs_remediation means the coder hasn't resolved it yet; CMS would
+    # treat it identically to undefensible until corrective action is verified.
+    exposure_dollars: float = 0.0
+    if final_decision in ("undefensible", "needs_remediation"):
+        members_enrolled = run_meta.get("members_enrolled")
+        sample_size = int(run_meta.get("sample_size") or 1)
+        if members_enrolled:
+            ffs_adj = float(run_meta.get("ffs_adjuster") or CMS_FFS_ADJUSTER_DEFAULT)
+            result = compute_extrapolated_exposure(
+                failed_records=1,
+                sample_size=sample_size,
+                members_enrolled=int(members_enrolled),
+                ffs_adjuster=ffs_adj,
+            )
+            exposure_dollars = result["extrapolated_exposure_dollars"]
+        else:
+            warnings.warn(
+                f"audit run {run_id} has no members_enrolled; "
+                "falling back to legacy 55x extrapolation (methodology: legacy_v1). "
+                "Set members_enrolled on the run for CMS-grade FFS Adjuster math.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            exposure_dollars = _LEGACY_AVG_HCC_PAYMENT_DOLLARS * _LEGACY_EXTRAPOLATION_MULTIPLIER
+
+    with raf_cursor() as cur:
         sets: list[str] = ["reviewer_user_id = %s"]
         params: list[Any] = [reviewer_user_id]
         if evidence_status is not None:
@@ -394,13 +606,18 @@ def simulate_exposure(
 ) -> dict[str, Any]:
     """Run the CMS extrapolation simulator.
 
-    `assumed_fail_rate` is a coder-supplied 0..1 probability that any
-    record in the sample would fail.  The simulator returns:
+    ``assumed_fail_rate`` is a coder-supplied 0..1 probability that any
+    record in the sample would fail.
 
-      - observed_exposure_dollars  — sum of persisted record decisions
-        (undefensible × full multiplier).  This is the floor.
-      - simulated_exposure_dollars — what TOTAL exposure would be if the
-        assumed fail rate applied to every sampled record.
+    Uses FFS Adjuster methodology when members_enrolled is set on the run;
+    falls back to legacy 55x with methodology: legacy_v1 and a log warning.
+
+    Returns
+    -------
+    - observed_exposure_dollars  — sum of persisted record decisions
+    - simulated_exposure_dollars — projected total if assumed_fail_rate
+      applied to every sampled record
+    - simulated_failures         — total * assumed_fail_rate (always <= total)
     """
     if not (0.0 <= assumed_fail_rate <= 1.0):
         raise ValueError("assumed_fail_rate must be in [0,1]")
@@ -408,7 +625,9 @@ def simulate_exposure(
     with raf_cursor() as cur:
         cur.execute(
             """
-            SELECT sample_size, payment_year FROM raf_radv_audit_runs
+            SELECT sample_size, payment_year, members_enrolled,
+                   ffs_adjuster, extrapolation_methodology
+            FROM raf_radv_audit_runs
             WHERE id = %s AND tenant_id = %s
             """,
             (run_id, tenant_id),
@@ -432,7 +651,6 @@ def simulate_exposure(
         )
         agg = cur.fetchone() or {}
 
-        # Persist the last assumed rate so reload shows the same value.
         cur.execute(
             """
             UPDATE raf_radv_audit_runs SET assumed_fail_rate = %s
@@ -445,30 +663,53 @@ def simulate_exposure(
     undefensible = int(agg.get("undefensible") or 0)
     observed_exposure = float(agg.get("observed_dollars") or 0.0)
 
-    simulated_failures = total * assumed_fail_rate
-    simulated_exposure = (
-        simulated_failures
-        * AVG_HCC_PAYMENT_DOLLARS
-        * CMS_EXTRAPOLATION_MULTIPLIER
-    )
+    # Clamp simulated_failures to total to satisfy assertion simulated_failures <= total.
+    simulated_failures = min(total * assumed_fail_rate, total)
+
+    members_enrolled = run.get("members_enrolled")
+    sample_size = int(run.get("sample_size") or 1)
+
+    if members_enrolled and int(members_enrolled) > 0:
+        ffs_adj = float(run.get("ffs_adjuster") or CMS_FFS_ADJUSTER_DEFAULT)
+        exp_result = compute_extrapolated_exposure(
+            failed_records=int(round(simulated_failures)),
+            sample_size=sample_size,
+            members_enrolled=int(members_enrolled),
+            ffs_adjuster=ffs_adj,
+        )
+        simulated_exposure = exp_result["extrapolated_exposure_dollars"]
+        methodology = "ffs_adjuster_v1"
+        methodology_note = exp_result["methodology_note"]
+    else:
+        logger.warning(
+            "radv simulate_exposure: run %s has no members_enrolled; "
+            "using legacy 55x extrapolation (methodology: legacy_v1).",
+            run_id,
+        )
+        simulated_exposure = (
+            simulated_failures
+            * _LEGACY_AVG_HCC_PAYMENT_DOLLARS
+            * _LEGACY_EXTRAPOLATION_MULTIPLIER
+        )
+        methodology = "legacy_v1"
+        methodology_note = (
+            "DEPRECATED: legacy 55x multiplier. Set members_enrolled on the "
+            "run to use CMS FFS Adjuster methodology."
+        )
 
     return {
         "run_id": run_id,
         "payment_year": run["payment_year"],
-        "sample_size": run["sample_size"],
+        "sample_size": sample_size,
         "total_records": total,
         "observed_undefensible": undefensible,
         "observed_exposure_dollars": round(observed_exposure, 2),
         "assumed_fail_rate": assumed_fail_rate,
         "simulated_failures": round(simulated_failures, 2),
         "simulated_exposure_dollars": round(simulated_exposure, 2),
-        "extrapolation_multiplier": CMS_EXTRAPOLATION_MULTIPLIER,
-        "avg_hcc_payment_dollars": AVG_HCC_PAYMENT_DOLLARS,
-        "methodology_note": (
-            "CMS extrapolates each sampled error across the contract; "
-            f"the {CMS_EXTRAPOLATION_MULTIPLIER:.0f}× midpoint reflects "
-            "contract-level enrolment scaling."
-        ),
+        "members_enrolled": members_enrolled,
+        "methodology": methodology,
+        "methodology_note": methodology_note,
     }
 
 
@@ -560,8 +801,6 @@ def export_run(*, run_id: int, tenant_id: str) -> dict[str, Any]:
         "run_id": run_id,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "record_count": len(rows),
-        # In a real deploy this would be an S3 presigned URL; for MVP we
-        # emit a synthetic path that the FE can show as a download.
         "evidence_package_url": f"/api/radv/audit-runs/{run_id}/manifest.json",
     }
     return manifest
