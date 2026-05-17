@@ -69,6 +69,7 @@ from app.routers import peer_benchmarking as peer_benchmarking_router
 from app.routers import previsit_briefing as previsit_briefing_router
 from app.routers import provider_pdf_report as provider_pdf_report_router
 from app.routers import provider_revenue_breakdown as provider_revenue_breakdown_router
+from app.routers import provider_scorecards as provider_scorecards_router
 from app.routers import provider_trends as provider_trends_router
 from app.routers import top_hcc_opportunities as top_hcc_opportunities_router
 from app.routers import consent as consent_router
@@ -222,6 +223,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, hcc_gap_drilldown_router.router)
     _mount(app, previsit_briefing_router.router)
     _mount(app, provider_pdf_report_router.router)
+    _mount(app, provider_scorecards_router.router)
     _mount(app, feature_flags_router.router)
     _mount(app, quality.router)
     _mount(app, prospective.router)
