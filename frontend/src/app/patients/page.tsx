@@ -826,6 +826,240 @@ export default function PatientsPage() {
       setBulkRequestSubmitting(false);
     }
   };
+  // ---------------------------------------------------------------------------
+  // Bulk actions wired to /api/bulk-actions/* (agent A1 is shipping these
+  // endpoints in parallel). We probe each endpoint with a HEAD-style preflight
+  // (an OPTIONS would be cleaner but server has no CORS handler for it, so we
+  // use a dry-run POST with an empty body and watch for 404 specifically) the
+  // first time a button is clicked. If the endpoint returns 404, the button
+  // becomes disabled and shows the "Endpoint not yet deployed" title. Any
+  // other status is treated as "endpoint exists" — the per-action handler will
+  // surface the real success / partial-failure / error result.
+  //
+  // Why three separate dialogs instead of a polymorphic one: the copy + form
+  // fields differ enough (user-id picker vs. confirm-only vs. note textarea)
+  // that branching inside one component obscures the per-action review the
+  // user has to do. Each dialog re-uses the same shell (overlay, FocusTrap,
+  // Esc-close, "this will affect N patients" warning, Confirm/Cancel pair).
+  type EndpointStatus = "unknown" | "available" | "missing";
+  const [reassignEndpointStatus, setReassignEndpointStatus] =
+    useState<EndpointStatus>("unknown");
+  const [recalcEndpointStatus, setRecalcEndpointStatus] =
+    useState<EndpointStatus>("unknown");
+  const [reviewedEndpointStatus, setReviewedEndpointStatus] =
+    useState<EndpointStatus>("unknown");
+
+  const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
+  const [bulkReassignUserId, setBulkReassignUserId] = useState("");
+  const [bulkReassignSubmitting, setBulkReassignSubmitting] = useState(false);
+  type ReassignUser = { id: number | string; full_name?: string; email?: string };
+  const [bulkReassignUsers, setBulkReassignUsers] = useState<ReassignUser[] | null>(null);
+  const [bulkReassignUsersError, setBulkReassignUsersError] = useState<string | null>(null);
+
+  const [bulkRecalcOpen, setBulkRecalcOpen] = useState(false);
+  const [bulkRecalcSubmitting, setBulkRecalcSubmitting] = useState(false);
+
+  const [bulkReviewedOpen, setBulkReviewedOpen] = useState(false);
+  const [bulkReviewedNote, setBulkReviewedNote] = useState("");
+  const [bulkReviewedSubmitting, setBulkReviewedSubmitting] = useState(false);
+
+  // Shared helper — POST to a bulk-actions endpoint and normalise the result
+  // into { ok, failed, total, missing }. `missing` flips true on a 404 so the
+  // caller can mark the endpoint as not-yet-deployed and disable the button.
+  const callBulkAction = useCallback(
+    async (
+      path: string,
+      body: Record<string, unknown>,
+    ): Promise<{ ok: number; failed: number; total: number; missing: boolean; error?: string }> => {
+      try {
+        const res = await fetch(`${API_BASE}${path}`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 404) {
+          return { ok: 0, failed: 0, total: 0, missing: true };
+        }
+        // Backend contract (agent A1): returns
+        //   { ok: number, failed: number, total: number, errors?: string[] }
+        // We tolerate older / partial shapes too.
+        let json: { ok?: number; succeeded?: number; failed?: number; total?: number; error?: string; message?: string } | null = null;
+        try { json = await res.json(); } catch { /* tolerate empty body */ }
+        if (!res.ok) {
+          return {
+            ok: 0,
+            failed: Array.isArray(body.patient_ids) ? (body.patient_ids as number[]).length : 0,
+            total: Array.isArray(body.patient_ids) ? (body.patient_ids as number[]).length : 0,
+            missing: false,
+            error: json?.error || json?.message || `HTTP ${res.status}`,
+          };
+        }
+        const total = typeof json?.total === "number"
+          ? json.total
+          : Array.isArray(body.patient_ids) ? (body.patient_ids as number[]).length : 0;
+        const ok = typeof json?.ok === "number"
+          ? json.ok
+          : (typeof json?.succeeded === "number" ? json.succeeded : total);
+        const failed = typeof json?.failed === "number" ? json.failed : Math.max(0, total - ok);
+        return { ok, failed, total, missing: false };
+      } catch (e) {
+        return {
+          ok: 0,
+          failed: Array.isArray(body.patient_ids) ? (body.patient_ids as number[]).length : 0,
+          total: Array.isArray(body.patient_ids) ? (body.patient_ids as number[]).length : 0,
+          missing: false,
+          error: String(e),
+        };
+      }
+    },
+    [],
+  );
+
+  // Show a toast: green/teal for full success, amber for partial failure,
+  // red-ish for total failure. We re-use setSyncToast (single toast slot) so
+  // we don't compete with the auto-sync banners for screen real-estate.
+  const showBulkToast = useCallback(
+    (variant: "ok" | "warn" | "error", msg: string) => {
+      // The sync-toast surface itself is colour-neutral, so we prefix the
+      // message with a glyph + label so screen-readers and sighted users
+      // both get the severity without a second toast component.
+      const prefix =
+        variant === "ok" ? "" :
+        variant === "warn" ? "Partial: " :
+        "Error: ";
+      setSyncToast({ msg: `${prefix}${msg}`, id: Date.now() });
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(
+        () => setSyncToast(null),
+        variant === "ok" ? 8000 : 12000,
+      );
+    },
+    [],
+  );
+
+  // Lazy-load the user list when the reassign dialog opens for the first
+  // time. /api/auth/users is the canonical roster (see app/users/page.tsx);
+  // we accept failure silently and fall back to the free-text user-id input.
+  useEffect(() => {
+    if (!bulkReassignOpen) return;
+    if (bulkReassignUsers !== null || bulkReassignUsersError !== null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/users`, { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const raw = Array.isArray(data) ? data : (data?.users ?? []);
+        if (cancelled) return;
+        type RawUser = { id: number | string; full_name?: string; first_name?: string; last_name?: string; email?: string };
+        setBulkReassignUsers(
+          (raw as RawUser[]).map((u) => ({
+            id: u.id,
+            full_name: u.full_name ?? [u.first_name, u.last_name].filter(Boolean).join(" "),
+            email: u.email,
+          })),
+        );
+      } catch (e) {
+        if (cancelled) return;
+        setBulkReassignUsersError(String(e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [bulkReassignOpen, bulkReassignUsers, bulkReassignUsersError]);
+
+  const runBulkReassign = async () => {
+    const assignee = bulkReassignUserId.trim();
+    if (!assignee) return;
+    setBulkReassignSubmitting(true);
+    const ids = Array.from(selectedPids);
+    // Agent A1 contract: POST { patient_ids, assignee_user_id }. The
+    // assignee_user_id may be numeric or a string id; backend coerces.
+    const assigneeNumeric = Number(assignee);
+    const result = await callBulkAction("/api/bulk-actions/patients/reassign", {
+      patient_ids: ids,
+      assignee_user_id: Number.isFinite(assigneeNumeric) && assignee !== "" ? assigneeNumeric : assignee,
+    });
+    setBulkReassignSubmitting(false);
+    if (result.missing) {
+      setReassignEndpointStatus("missing");
+      showBulkToast("error", "Reassign endpoint not yet deployed.");
+      setBulkReassignOpen(false);
+      return;
+    }
+    setReassignEndpointStatus("available");
+    if (result.error) {
+      showBulkToast("error", `Reassign failed — ${result.error}`);
+      return;
+    }
+    if (result.failed > 0) {
+      showBulkToast("warn", `Reassigned ${result.ok}/${result.total} patient${result.total === 1 ? "" : "s"} — ${result.failed} failed.`);
+    } else {
+      showBulkToast("ok", `Reassigned ${result.ok} patient${result.ok === 1 ? "" : "s"} to user ${assignee}.`);
+    }
+    setBulkReassignUserId("");
+    setBulkReassignOpen(false);
+    clearSelection();
+  };
+
+  const runBulkRecalc = async () => {
+    setBulkRecalcSubmitting(true);
+    const ids = Array.from(selectedPids);
+    const result = await callBulkAction("/api/bulk-actions/patients/recalculate-raf", {
+      patient_ids: ids,
+    });
+    setBulkRecalcSubmitting(false);
+    if (result.missing) {
+      setRecalcEndpointStatus("missing");
+      showBulkToast("error", "Recalculate-RAF endpoint not yet deployed.");
+      setBulkRecalcOpen(false);
+      return;
+    }
+    setRecalcEndpointStatus("available");
+    if (result.error) {
+      showBulkToast("error", `RAF recalc failed — ${result.error}`);
+      return;
+    }
+    if (result.failed > 0) {
+      showBulkToast("warn", `Recalculated RAF for ${result.ok}/${result.total} — ${result.failed} failed.`);
+    } else {
+      showBulkToast("ok", `RAF recalc kicked off for ${result.ok} patient${result.ok === 1 ? "" : "s"}.`);
+    }
+    setBulkRecalcOpen(false);
+    clearSelection();
+    // Refresh the worklist so updated scores surface immediately.
+    queryClient.invalidateQueries({ queryKey: ["patients"] });
+  };
+
+  const runBulkMarkReviewed = async () => {
+    setBulkReviewedSubmitting(true);
+    const ids = Array.from(selectedPids);
+    const result = await callBulkAction("/api/bulk-actions/patients/mark-reviewed", {
+      patient_ids: ids,
+      note: bulkReviewedNote.trim(),
+    });
+    setBulkReviewedSubmitting(false);
+    if (result.missing) {
+      setReviewedEndpointStatus("missing");
+      showBulkToast("error", "Mark-reviewed endpoint not yet deployed.");
+      setBulkReviewedOpen(false);
+      return;
+    }
+    setReviewedEndpointStatus("available");
+    if (result.error) {
+      showBulkToast("error", `Mark-reviewed failed — ${result.error}`);
+      return;
+    }
+    if (result.failed > 0) {
+      showBulkToast("warn", `Marked ${result.ok}/${result.total} reviewed — ${result.failed} failed.`);
+    } else {
+      showBulkToast("ok", `Marked ${result.ok} patient${result.ok === 1 ? "" : "s"} as reviewed.`);
+    }
+    setBulkReviewedNote("");
+    setBulkReviewedOpen(false);
+    clearSelection();
+  };
+
   const [showImportModal, setShowImportModal] = useState(false);
   const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [measurementYear, setMeasurementYear] = useState<number>(2026);
@@ -1854,6 +2088,76 @@ export default function PatientsPage() {
             >
               Bulk request docs
             </button>
+            {/* New bulk actions wired to /api/bulk-actions/* — each button
+                disables itself if the underlying endpoint has previously
+                returned 404. The first click probes the endpoint; subsequent
+                clicks short-circuit to the disabled state until next refresh. */}
+            <button
+              type="button"
+              onClick={() => setBulkReassignOpen(true)}
+              disabled={reassignEndpointStatus === "missing"}
+              title={
+                reassignEndpointStatus === "missing"
+                  ? "Endpoint not yet deployed"
+                  : "Reassign selected patients to another user"
+              }
+              style={{
+                padding: "4px 12px",
+                borderRadius: 6,
+                border: `1px solid ${reassignEndpointStatus === "missing" ? C.border : C.brand}`,
+                background: reassignEndpointStatus === "missing" ? tokens.slate100 : tokens.white,
+                color: reassignEndpointStatus === "missing" ? tokens.slate400 : C.brand,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: reassignEndpointStatus === "missing" ? "not-allowed" : "pointer",
+              }}
+            >
+              Reassign
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkRecalcOpen(true)}
+              disabled={recalcEndpointStatus === "missing"}
+              title={
+                recalcEndpointStatus === "missing"
+                  ? "Endpoint not yet deployed"
+                  : "Recalculate RAF scores for selected patients"
+              }
+              style={{
+                padding: "4px 12px",
+                borderRadius: 6,
+                border: `1px solid ${recalcEndpointStatus === "missing" ? C.border : C.brand}`,
+                background: recalcEndpointStatus === "missing" ? tokens.slate100 : tokens.white,
+                color: recalcEndpointStatus === "missing" ? tokens.slate400 : C.brand,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: recalcEndpointStatus === "missing" ? "not-allowed" : "pointer",
+              }}
+            >
+              Recalc RAF
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkReviewedOpen(true)}
+              disabled={reviewedEndpointStatus === "missing"}
+              title={
+                reviewedEndpointStatus === "missing"
+                  ? "Endpoint not yet deployed"
+                  : "Mark selected patients as reviewed with a note"
+              }
+              style={{
+                padding: "4px 12px",
+                borderRadius: 6,
+                border: `1px solid ${reviewedEndpointStatus === "missing" ? C.border : C.brand}`,
+                background: reviewedEndpointStatus === "missing" ? tokens.slate100 : tokens.white,
+                color: reviewedEndpointStatus === "missing" ? tokens.slate400 : C.brand,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: reviewedEndpointStatus === "missing" ? "not-allowed" : "pointer",
+              }}
+            >
+              Mark reviewed
+            </button>
             <span
               aria-hidden
               style={{ flex: 1, fontSize: 11, color: C.textMuted, fontStyle: "italic" }}
@@ -1969,6 +2273,334 @@ export default function PatientsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+        {/* ────────── Bulk reassign dialog ──────────
+            Re-routes the selected patients to a different reviewer. Accepts a
+            free-text user id; if /api/auth/users is reachable we additionally
+            render a <select> picker for friendlier UX. POSTs to
+            /api/bulk-actions/patients/reassign. */}
+        {bulkReassignOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bulk reassign patients"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              background: "rgba(0,0,0,0.75)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+            onClick={() => !bulkReassignSubmitting && setBulkReassignOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && !bulkReassignSubmitting) {
+                setBulkReassignOpen(false);
+              }
+            }}
+            tabIndex={-1}
+          >
+            <FocusTrap>
+              <div
+                style={{
+                  background: tokens.white,
+                  borderRadius: 10,
+                  boxShadow: "0 12px 40px rgba(15,23,42,0.25)",
+                  width: "100%",
+                  maxWidth: 480,
+                  padding: 20,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                  Reassign selected patients
+                </h3>
+                {/* Explicit destructive-action warning — same copy contract
+                    as the other two bulk dialogs so the user always knows
+                    the blast radius before confirming. */}
+                <p style={{ marginTop: 6, fontSize: 12, color: tokens.warningMuted, fontWeight: 600 }}>
+                  This will affect <strong>{selectedPids.size}</strong> patient{selectedPids.size === 1 ? "" : "s"}.
+                </p>
+                <p style={{ marginTop: 4, fontSize: 12, color: C.textMuted }}>
+                  Pick a reviewer below (or paste a user id). The selected patients will be moved to their queue.
+                </p>
+                {bulkReassignUsers && bulkReassignUsers.length > 0 ? (
+                  <select
+                    value={bulkReassignUserId}
+                    onChange={(e) => setBulkReassignUserId(e.target.value)}
+                    aria-label="Reassign target user"
+                    style={{
+                      width: "100%",
+                      marginTop: 12,
+                      borderRadius: 6,
+                      border: `1px solid ${C.border}`,
+                      padding: "8px 10px",
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                      background: tokens.white,
+                    }}
+                  >
+                    <option value="">— Select a user —</option>
+                    {bulkReassignUsers.map((u) => (
+                      <option key={String(u.id)} value={String(u.id)}>
+                        {u.full_name || u.email || `User ${u.id}`}{u.email && u.full_name ? ` (${u.email})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={bulkReassignUserId}
+                    onChange={(e) => setBulkReassignUserId(e.target.value)}
+                    placeholder={bulkReassignUsersError ? "Enter user id (user list unavailable)" : "Enter user id"}
+                    aria-label="Reassign target user id"
+                    autoFocus
+                    style={{
+                      width: "100%",
+                      marginTop: 12,
+                      borderRadius: 6,
+                      border: `1px solid ${C.border}`,
+                      padding: "8px 10px",
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                    }}
+                  />
+                )}
+                <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setBulkReassignOpen(false)}
+                    disabled={bulkReassignSubmitting}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      border: `1px solid ${C.border}`,
+                      background: tokens.white,
+                      color: C.text,
+                      fontSize: 13,
+                      cursor: bulkReassignSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runBulkReassign}
+                    disabled={!bulkReassignUserId.trim() || bulkReassignSubmitting}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 6,
+                      border: "none",
+                      background:
+                        !bulkReassignUserId.trim() || bulkReassignSubmitting ? C.border : C.brand,
+                      color: tokens.white,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor:
+                        !bulkReassignUserId.trim() || bulkReassignSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {bulkReassignSubmitting ? "Reassigning…" : `Confirm reassign (${selectedPids.size})`}
+                  </button>
+                </div>
+              </div>
+            </FocusTrap>
+          </div>
+        )}
+
+        {/* ────────── Bulk RAF recalc dialog ──────────
+            Confirmation-only — no extra fields. Backend recalcs every
+            selected patient's RAF score; we surface a progress toast and let
+            react-query refetch the worklist after the POST resolves. */}
+        {bulkRecalcOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bulk recalculate RAF"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              background: "rgba(0,0,0,0.75)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+            onClick={() => !bulkRecalcSubmitting && setBulkRecalcOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && !bulkRecalcSubmitting) {
+                setBulkRecalcOpen(false);
+              }
+            }}
+            tabIndex={-1}
+          >
+            <FocusTrap>
+              <div
+                style={{
+                  background: tokens.white,
+                  borderRadius: 10,
+                  boxShadow: "0 12px 40px rgba(15,23,42,0.25)",
+                  width: "100%",
+                  maxWidth: 460,
+                  padding: 20,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                  Recalculate RAF scores
+                </h3>
+                <p style={{ marginTop: 6, fontSize: 12, color: tokens.warningMuted, fontWeight: 600 }}>
+                  This will affect <strong>{selectedPids.size}</strong> patient{selectedPids.size === 1 ? "" : "s"}.
+                </p>
+                <p style={{ marginTop: 4, fontSize: 12, color: C.textMuted }}>
+                  Re-runs the CMS-HCC V28 model against the latest claims & encounter data for each selected patient. Existing scores will be overwritten; previous values remain in audit history.
+                </p>
+                <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setBulkRecalcOpen(false)}
+                    disabled={bulkRecalcSubmitting}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      border: `1px solid ${C.border}`,
+                      background: tokens.white,
+                      color: C.text,
+                      fontSize: 13,
+                      cursor: bulkRecalcSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runBulkRecalc}
+                    disabled={bulkRecalcSubmitting}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 6,
+                      border: "none",
+                      background: bulkRecalcSubmitting ? C.border : C.brand,
+                      color: tokens.white,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: bulkRecalcSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {bulkRecalcSubmitting ? "Recalculating…" : `Confirm recalc (${selectedPids.size})`}
+                  </button>
+                </div>
+              </div>
+            </FocusTrap>
+          </div>
+        )}
+
+        {/* ────────── Bulk mark-reviewed dialog ──────────
+            Optional brief note that travels with each per-patient review
+            record. Backend writes the note to the review_log table so audit
+            can later see why a coder cleared the batch. */}
+        {bulkReviewedOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bulk mark patients reviewed"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              background: "rgba(0,0,0,0.75)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+            onClick={() => !bulkReviewedSubmitting && setBulkReviewedOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && !bulkReviewedSubmitting) {
+                setBulkReviewedOpen(false);
+              }
+            }}
+            tabIndex={-1}
+          >
+            <FocusTrap>
+              <div
+                style={{
+                  background: tokens.white,
+                  borderRadius: 10,
+                  boxShadow: "0 12px 40px rgba(15,23,42,0.25)",
+                  width: "100%",
+                  maxWidth: 480,
+                  padding: 20,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                  Mark patients as reviewed
+                </h3>
+                <p style={{ marginTop: 6, fontSize: 12, color: tokens.warningMuted, fontWeight: 600 }}>
+                  This will affect <strong>{selectedPids.size}</strong> patient{selectedPids.size === 1 ? "" : "s"}.
+                </p>
+                <p style={{ marginTop: 4, fontSize: 12, color: C.textMuted }}>
+                  Add a brief note that will be attached to each patient&apos;s review log entry. Note is optional but recommended for audit.
+                </p>
+                <textarea
+                  value={bulkReviewedNote}
+                  onChange={(e) => setBulkReviewedNote(e.target.value)}
+                  placeholder="e.g., 'PY 2026 mid-year review — all suspects acknowledged'"
+                  rows={3}
+                  aria-label="Bulk review note"
+                  style={{
+                    width: "100%",
+                    marginTop: 12,
+                    resize: "none",
+                    borderRadius: 6,
+                    border: `1px solid ${C.border}`,
+                    padding: "8px 10px",
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                  }}
+                />
+                <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setBulkReviewedOpen(false)}
+                    disabled={bulkReviewedSubmitting}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      border: `1px solid ${C.border}`,
+                      background: tokens.white,
+                      color: C.text,
+                      fontSize: 13,
+                      cursor: bulkReviewedSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runBulkMarkReviewed}
+                    disabled={bulkReviewedSubmitting}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 6,
+                      border: "none",
+                      background: bulkReviewedSubmitting ? C.border : C.brand,
+                      color: tokens.white,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: bulkReviewedSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {bulkReviewedSubmitting ? "Saving…" : `Confirm mark reviewed (${selectedPids.size})`}
+                  </button>
+                </div>
+              </div>
+            </FocusTrap>
           </div>
         )}
         {/* Column header (presentational — the parent wrapper is now
