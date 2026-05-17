@@ -114,6 +114,7 @@ from app.routers import recapture_recurring as recapture_recurring_router
 from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import suspect_feedback as suspect_feedback_router
+from app.routers import pre_submission as pre_submission_router
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +197,7 @@ def register_routers(app: FastAPI) -> None:
     # Payer / claims workflows
     _mount(app, claims.router)
     _mount(app, submissions.router)
+    _mount(app, pre_submission_router.router)
     _mount(app, bundles.router)
     _mount(app, cms_transmission.router)
 

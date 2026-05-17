@@ -103,6 +103,7 @@ const navGroups: NavGroup[] = [
       { href: "/users", label: "Users", icon: UsersRound },
       { href: "/system", label: "System Health", icon: Activity },
       { href: "/developer", label: "Developer", icon: Code },
+      { href: "/pre-submission", label: "Pre-submit", icon: ShieldCheck },
       { href: "/submissions", label: "CMS Submissions", icon: Send },
       { href: "/quality", label: "Quality & STARS", icon: Star },
       { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
