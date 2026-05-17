@@ -131,6 +131,6 @@ def md_today_mark_reviewed(
         action="MD_HUDDLE_REVIEWED",
         resource="previsit_briefing",
         patient_id=patient_id,
-        user_id=user_id,
+        user=str(user_id),
     )
     return {"patient_id": patient_id, "reviewed": True}
