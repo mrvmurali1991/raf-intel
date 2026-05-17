@@ -86,6 +86,7 @@ from app.routers import health as health_router
 from app.routers import icd10 as icd10_router
 from app.routers import insights as insights_router
 from app.routers import meat as meat_router
+from app.routers import nlp_extract as nlp_extract_router
 from app.routers import patient_activity as patient_activity_router
 from app.routers import pipeline as pipeline_router
 from app.routers import pipeline_settings as pipeline_settings_router
@@ -277,6 +278,8 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, kg_query_router.router)
     _mount(app, suspect_kg_router.router)
     _mount(app, recapture_ai_recoding_router.router)
+    # NLP-based HCC suspect extractor (Gemini, single-note synchronous API)
+    _mount(app, nlp_extract_router.router)
     _mount(app, awv.router)
 
     # Visual cohort builder v2 (drag-and-drop UI) — independent table & API.
