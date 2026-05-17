@@ -76,6 +76,7 @@ const navGroups: NavGroup[] = [
       { href: "/worklist", label: "Today's worklist", icon: Stethoscope, shortcut: "g w" },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
       { href: "/review-queue", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
+      { href: "/qa", label: "QA Review Queue", icon: ShieldCheck },
     ],
   },
   {

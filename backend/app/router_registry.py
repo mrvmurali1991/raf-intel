@@ -111,6 +111,7 @@ from app.routers import recapture_outreach as recapture_outreach_router
 from app.routers import recapture_provider_benchmark as recapture_provider_benchmark_router
 from app.routers import recapture_readiness as recapture_readiness_router
 from app.routers import recapture_recurring as recapture_recurring_router
+from app.routers import qa_reviews as qa_reviews_router
 from app.routers import review as review_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import suspect_feedback as suspect_feedback_router
@@ -275,6 +276,9 @@ def register_routers(app: FastAPI) -> None:
     # Coder worklist / review queue
     _mount(app, coder_worklist.router)
     _mount(app, review_router.router)
+
+    # Multi-rater QA review workflow (Reveleer-style dual review)
+    _mount(app, qa_reviews_router.router)
 
     # Provider worklist — prioritized patient lists and action items
     _mount(app, provider_worklist_router.router)
