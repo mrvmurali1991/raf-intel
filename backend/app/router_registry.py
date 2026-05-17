@@ -60,6 +60,7 @@ from app.routers import auth as auth_router
 from app.routers import bulk_actions as bulk_actions_router
 from app.routers import cds_hooks as cds_hooks_router
 from app.routers import clinical_queries as clinical_queries_router
+from app.routers import cohorts_v2 as cohorts_v2_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
 from app.routers import edps_feedback as edps_feedback_router
@@ -272,7 +273,12 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, recapture_ai_recoding_router.router)
     _mount(app, awv.router)
 
-    # Population health cohort analysis
+    # Visual cohort builder v2 (drag-and-drop UI) — independent table & API.
+    # Must mount BEFORE legacy cohorts router because /api/cohorts/{cohort_id}
+    # in the legacy router would otherwise shadow /api/cohorts/v2 (FastAPI
+    # matches in registration order — first match wins).
+    _mount(app, cohorts_v2_router.router)
+    # Population health cohort analysis (legacy)
     _mount(app, cohorts.router)
 
     # Population geographic heat-map (per-ZIP risk + gap clusters)
