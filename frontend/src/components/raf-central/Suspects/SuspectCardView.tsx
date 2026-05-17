@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, XCircle, HelpCircle, ThumbsUp, ThumbsDown, MessageSquareWarning } from "lucide-react";
@@ -21,6 +21,7 @@ import {
 } from "@/components/AcceptConfirmDialog";
 import { SemiGauge } from "./SemiGauge";
 import { DismissReasonDialog } from "./DismissReasonDialog";
+import { registerContextShortcut } from "@/lib/keyboard-shortcuts";
 
 // ---------------------------------------------------------------------------
 // Compact MEAT chip — 4 coloured squares, no external MEATBadge dependency
@@ -324,8 +325,52 @@ export function SuspectCardView({
   const trumpedBy = suspect.trumped_by_hcc;
   const isTrumped = trumpedBy != null && trumpedBy > 0;
 
+  // ----- Keyboard shortcuts: A / D / R fire on the focused card -----------
+  // Register handlers only while a child of this card has focus; the global
+  // shortcut layer keeps a LIFO stack so the most-recently-focused card
+  // wins.  Without this, Tab-navigating through a list of suspects would
+  // ambiguously dispatch shortcuts.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  useEffect(() => {
+    if (!isFocused) return;
+    const offAccept = registerContextShortcut("accept-focused-suspect", () => {
+      if (busy || isTrumped) return;
+      handleAcceptClick();
+    });
+    const offDismiss = registerContextShortcut("dismiss-focused-suspect", () => {
+      if (busy) return;
+      setShowDismissDialog(true);
+    });
+    // "R = mark MEAT reviewed" — sends a positive feedback signal (the
+    // closest existing API affordance) until a dedicated meat-reviewed
+    // endpoint ships.
+    const offMeat = registerContextShortcut("mark-meat-reviewed", () => {
+      if (feedbackSent) return;
+      void sendFeedback("helpful");
+    });
+    return () => {
+      offAccept();
+      offDismiss();
+      offMeat();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, busy, isTrumped, feedbackSent]);
+
   return (
-    <Card className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20">
+    <Card
+      ref={cardRef as unknown as React.Ref<HTMLDivElement>}
+      tabIndex={0}
+      data-suspect-card={suspect.id}
+      onFocus={() => setIsFocused(true)}
+      onBlur={(e: React.FocusEvent<HTMLDivElement>) => {
+        // Only mark "blurred" once focus truly leaves the card subtree
+        if (!cardRef.current?.contains(e.relatedTarget as Node | null)) {
+          setIsFocused(false);
+        }
+      }}
+      className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
+    >
       <div className="flex items-start gap-3">
         {/* Semicircle confidence gauge */}
         <SemiGauge value={confPct} color={gaugeColor} />

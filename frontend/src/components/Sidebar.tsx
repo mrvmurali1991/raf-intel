@@ -61,6 +61,8 @@ interface NavItem {
   badge?: string | number;
   /** Keyboard shortcut hint, e.g. "g h". Shown when sidebar is expanded and user has used shortcuts before. */
   shortcut?: string;
+  /** When set, the item is only shown to users whose `role` matches one of these values. */
+  visibleToRoles?: string[];
 }
 
 interface NavGroup {
@@ -94,6 +96,8 @@ const navGroups: NavGroup[] = [
       { href: "/batch", label: "Batch Analysis", icon: Layers },
       { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
       { href: "/population/heatmap", label: "Population", icon: MapPin },
+      { href: "/coder-analytics", label: "My Productivity", icon: BarChart3 },
+      { href: "/coder-analytics?view=team", label: "Team Analytics", icon: UsersRound, visibleToRoles: ["admin", "manager"] },
       { href: "/documents", label: "Documents", icon: FileImage },
       { href: "/claims", label: "Claims", icon: FileText },
       { href: "/demo", label: "Pipeline Demo", icon: Workflow },
@@ -566,7 +570,13 @@ export function Sidebar() {
             </div>
           )
         )}
-        {group.items.map(renderNavItem)}
+        {group.items
+          .filter((it) => {
+            if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
+            const role = (user as { role?: string } | null)?.role ?? "";
+            return it.visibleToRoles.includes(role);
+          })
+          .map(renderNavItem)}
       </div>
     );
   }
