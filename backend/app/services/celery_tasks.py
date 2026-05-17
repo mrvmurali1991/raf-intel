@@ -127,6 +127,7 @@ celery_app.conf.task_routes = {
     "raf.analyze_document":              {"queue": "heavy",    "priority": 5},
     "raf.scan_suspects_all":             {"queue": "heavy",    "priority": 4},
     "raf.calculate_provider_scorecards": {"queue": "heavy",    "priority": 4},
+    "raf.bulk_ingest.run":               {"queue": "heavy",    "priority": 6},
     # Pipeline chain event steps
     "raf.cleanup_stale_runs":            {"queue": "pipeline", "priority": 6},
     # Per-patient MEAT refresh (user-triggered, short-lived)
@@ -1774,3 +1775,11 @@ def discover_loop_task() -> dict[str, Any]:
         "auto_sync.discover: dispatched %d new patient sync tasks", len(dispatched)
     )
     return {"dispatched": len(dispatched), "pids": dispatched}
+
+
+# ---------------------------------------------------------------------------
+# Bulk FHIR ingest task — imported so the Celery worker auto-discovers it.
+# The task body lives in app.services.bulk_ingest_task to keep this module
+# at a manageable size.
+# ---------------------------------------------------------------------------
+from app.services.bulk_ingest_task import task_run_bulk_ingest  # noqa: F401, E402

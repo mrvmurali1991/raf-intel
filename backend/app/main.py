@@ -78,6 +78,7 @@ tags_metadata = [
     {"name": "icd10", "description": "ICD-10-CM code lookup and validation"},
     {"name": "compliance", "description": "HIPAA compliance status"},
     {"name": "admin", "description": "Administrative operations: data retention, purge"},
+    {"name": "bulk_ingest", "description": "Bulk FHIR ingest — panel onboarding via $export or NDJSON upload"},
     {"name": "worklist", "description": "Coder worklist / review queue and productivity metrics"},
     {"name": "qa-review", "description": "Multi-rater QA review workflow — primary/secondary/tier-2 adjudication of accepted suspects"},
     {"name": "realtime", "description": "Real-time dashboard: SSE stream, WebSocket, alerts, KPI, dashboard configs"},
