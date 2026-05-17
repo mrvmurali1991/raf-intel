@@ -58,6 +58,7 @@ from app.routers import (
 )
 from app.routers import auth as auth_router
 from app.routers import bulk_actions as bulk_actions_router
+from app.routers import bulk_ingest as bulk_ingest_router
 from app.routers import cds_hooks as cds_hooks_router
 from app.routers import clinical_queries as clinical_queries_router
 from app.routers import cohorts_v2 as cohorts_v2_router
@@ -316,6 +317,9 @@ def register_routers(app: FastAPI) -> None:
 
     # Worklist bulk-select chip bar actions
     _mount(app, bulk_actions_router.router)
+
+    # Bulk FHIR ingest (panel onboarding from $export or NDJSON upload)
+    _mount(app, bulk_ingest_router.router)
 
     # Multi-rater QA review workflow (Reveleer-style dual review)
     _mount(app, qa_reviews_router.router)
