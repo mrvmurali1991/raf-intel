@@ -76,6 +76,7 @@ import { AuditSection } from "./raf-central/Performance/PerformanceCard";
 import { FinancialSection } from "./raf-central/Performance/FinancialCard";
 import { HCCRecaptureCard } from "./raf-central/Performance/HCCRecaptureCard";
 import { RAFReconciliationCard, buildReconciliationProps } from "./raf-central/Performance/RAFReconciliationCard";
+import { WhatIfSimulator } from "./raf-central/WhatIfSimulator";
 
 // ---------------------------------------------------------------------------
 // LiveRAFSection — top strip with score + delta (panel layout only)
@@ -676,6 +677,14 @@ export function RAFCentralPanel({
                 null,
               )}
             />
+            <div className="mt-4">
+              <WhatIfSimulator
+                currentRaf={data.financial_impact.current_raf}
+                openSuspects={openSuspects}
+                openRecaptures={recaptureList}
+                revenuePerRafPoint={data.financial_impact.revenue_per_raf_point}
+              />
+            </div>
           </div>
         </Section>
       </div>
