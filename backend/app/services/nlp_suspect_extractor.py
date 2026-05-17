@@ -52,6 +52,21 @@ MODEL_VERSION = "gemini-2.0-flash::nlp-suspect-v1"
 # Gemini 2.0 Flash's input window with room for the few-shot prompt header.
 _MAX_NOTE_CHARS = 32_000
 
+# ---------------------------------------------------------------------------
+# Safety thresholds — Patient Safety review round-2 fix.
+#
+# NLP_MIN_CONFIDENCE_SURFACED:  LLM suspects below this are silently dropped
+#   before they ever reach the coder queue.  Prevents low-quality hallucinated
+#   suspects from polluting the worklist.
+#
+# NLP_MIN_CONFIDENCE_WRITEBACK: suspects below this value require an explicit
+#   clinician attestation (meat_signed=true) before they can be written back
+#   to OpenEMR's Problem List.  Enforced server-side in the accept handler in
+#   raf_central.py so the UI cannot bypass it.
+# ---------------------------------------------------------------------------
+NLP_MIN_CONFIDENCE_SURFACED: float = 0.70
+NLP_MIN_CONFIDENCE_WRITEBACK: float = 0.85
+
 
 # ---------------------------------------------------------------------------
 # Public schema
@@ -378,6 +393,7 @@ def extract_hcc_suspects_from_note(
 
     out: list[NLPSuspect] = []
     seen: set[tuple[str, str]] = set()
+    _dropped_low_conf: int = 0
     for item in raw_suspects:
         if not isinstance(item, dict):
             continue
@@ -410,6 +426,17 @@ def extract_hcc_suspects_from_note(
             )
             continue
 
+        # Confidence floor — Patient Safety round-2 fix.
+        # Suspects below NLP_MIN_CONFIDENCE_SURFACED never reach the coder.
+        if confidence < NLP_MIN_CONFIDENCE_SURFACED:
+            _dropped_low_conf += 1
+            logger.info(
+                "nlp_suspect: dropping %s/%s — confidence %.4f below surfacing "
+                "threshold %.2f",
+                hcc, icd, confidence, NLP_MIN_CONFIDENCE_SURFACED,
+            )
+            continue
+
         key = (hcc, icd)
         if key in seen:
             continue
@@ -430,8 +457,14 @@ def extract_hcc_suspects_from_note(
     out = _apply_v28_hierarchy(out)
     out.sort(key=lambda s: s.confidence, reverse=True)
 
+    if _dropped_low_conf:
+        logger.warning(
+            "nlp_suspect: dropped %d suspect(s) below confidence floor %.2f",
+            _dropped_low_conf, NLP_MIN_CONFIDENCE_SURFACED,
+        )
     logger.info(
-        "nlp_suspect: extracted %d suspect(s) (note_chars=%d, existing_codes=%d)",
-        len(out), len(note_text), len(coded_icds),
+        "nlp_suspect: extracted %d suspect(s) (note_chars=%d, existing_codes=%d, "
+        "dropped_low_conf=%d)",
+        len(out), len(note_text), len(coded_icds), _dropped_low_conf,
     )
     return out

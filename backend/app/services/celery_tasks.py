@@ -142,6 +142,7 @@ celery_app.conf.task_routes = {
     "raf.process_claims_batch":          {"queue": "default",  "priority": 5},
     "raf.sync_fhir":                     {"queue": "default",  "priority": 5},
     "raf.fhir_sync":                     {"queue": "default",  "priority": 5},
+    "raf.archive_audit_log_hourly":      {"queue": "default",  "priority": 3},
 }
 
 # Enforce JSON serialization (safer than default which allows pickle).
@@ -181,6 +182,13 @@ celery_app.conf.beat_schedule = {
         "task": "raf.verify_audit_chain",
         "schedule": crontab(hour=3, minute=0),
         "options": {"queue": "default"},
+    },
+    # Hourly S3 WORM archive of the immutable audit JSONL — Patient Safety round-2 fix.
+    # Runs at :15 past each hour.  No-ops when AUDIT_S3_BUCKET env var is not set.
+    "archive-audit-log-hourly": {
+        "task": "raf.archive_audit_log_hourly",
+        "schedule": crontab(minute=15),
+        "options": {"queue": "default", "priority": 3},
     },
     # Check every 60 s which EMR connections are due for a sync and fan out
     # individual raf.sync_emr_connection tasks for each one.
@@ -1846,3 +1854,38 @@ def task_refresh_v28_portfolio(
             "refresh_v28_portfolio failed tenant=%s: %s", tenant_id, exc, exc_info=True
         )
         raise self.retry(exc=exc, countdown=120 * (self.request.retries + 1))
+
+
+# ---------------------------------------------------------------------------
+# Task: hourly S3 WORM archive of the immutable audit JSONL
+# Patient Safety round-2 fix.
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="raf.archive_audit_log_hourly",
+    queue="default",
+    max_retries=2,
+    default_retry_delay=300,
+    bind=True,
+)
+def task_archive_audit_log_hourly(self) -> dict:
+    """Upload the immutable audit JSONL to S3 with Object Lock COMPLIANCE mode.
+
+    No-ops when AUDIT_S3_BUCKET environment variable is not set.
+    Runs hourly at :15 via Beat schedule defined in this module.
+    """
+    try:
+        from app.services.immutable_audit import archive_audit_jsonl_to_s3
+        result = archive_audit_jsonl_to_s3()
+        if result:
+            task_logger.info(
+                "archive_audit_log_hourly: archived to s3://%s/%s",
+                result.get("bucket"), result.get("key"),
+            )
+        else:
+            task_logger.info("archive_audit_log_hourly: no-op (AUDIT_S3_BUCKET not set or file missing)")
+        return result or {}
+    except Exception as exc:
+        task_logger.error("archive_audit_log_hourly failed: %s", exc, exc_info=True)
+        raise self.retry(exc=exc)

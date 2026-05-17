@@ -100,6 +100,17 @@ async def lifespan(app: FastAPI):
     app.state.start_time = datetime.now(timezone.utc)
     app.state.request_count = 0
 
+    # Audit chain boot-time integrity check — Patient Safety round-2 fix.
+    # Must run before any request handler is active.  Raises RuntimeError
+    # (exit non-zero) if the JSONL was deleted after DB events were committed.
+    try:
+        from app.services.immutable_audit import verify_chain_on_boot
+        verify_chain_on_boot()
+        logger.info("Audit chain boot check: OK")
+    except RuntimeError as _audit_boot_exc:
+        logger.critical("Audit chain boot check FAILED: %s", _audit_boot_exc)
+        raise  # propagates — uvicorn/gunicorn will exit non-zero
+
     logger.info("Gemini model: %s", settings.gemini_model)
 
     db_status = check_connections()

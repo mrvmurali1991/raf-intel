@@ -1101,6 +1101,18 @@ class AcceptSuspectRequest(BaseModel):
         max_length=2000,
         description="Free-text RADV-risk reason (>= 20 non-whitespace chars)",
     )
+    # NLP write-back attestation — Patient Safety round-2 fix.
+    # When push_to_emr=true and the suspect source is 'nlp' with confidence
+    # below NLP_MIN_CONFIDENCE_WRITEBACK (0.85), this field must be true to
+    # proceed.  It signals a credentialed clinician has reviewed and attested
+    # the NLP finding before it is committed to the EMR Problem List.
+    meat_signed: bool = Field(
+        default=False,
+        description=(
+            "True iff a credentialed clinician has explicitly attested this "
+            "NLP suspect before EMR write-back (required when NLP confidence < 0.85)"
+        ),
+    )
 
 
 class DismissSuspectRequest(BaseModel):
@@ -1380,6 +1392,46 @@ def action_accept_suspect(
 
     result = accept_suspect(body.suspect_id, reviewed_by=reviewer, tenant_id=tenant_id,
                             reviewed_by_user_id=reviewer_user_id)
+
+    # NLP write-back confidence gate — Patient Safety round-2 fix.
+    # If the suspect was produced by NLP and its confidence is below
+    # NLP_MIN_CONFIDENCE_WRITEBACK (0.85), block the EMR write-back unless
+    # meat_signed=true (credentialed clinician attestation).
+    if body.push_to_emr:
+        _suspect_source = str(result.get("evidence_type") or result.get("source") or "").lower()
+        _suspect_confidence = None
+        try:
+            _suspect_confidence = float(result.get("confidence") or 1.0)
+        except (TypeError, ValueError):
+            _suspect_confidence = 1.0
+        _is_nlp_source = _suspect_source in {"nlp", "note_nlp"}
+        if _is_nlp_source:
+            from app.services.nlp_suspect_extractor import NLP_MIN_CONFIDENCE_WRITEBACK as _NLP_WB
+            if _suspect_confidence < _NLP_WB and not body.meat_signed:
+                try:
+                    from app.services.immutable_audit import emit_audit_event
+                    emit_audit_event(
+                        "NLP_WRITEBACK_BLOCKED_LOW_CONFIDENCE",
+                        tenant_id=tenant_id,
+                        actor_user_id=reviewer_user_id,
+                        subject_type="suspect",
+                        subject_id=str(body.suspect_id),
+                        payload={
+                            "suspect_id": body.suspect_id,
+                            "confidence": _suspect_confidence,
+                            "threshold": _NLP_WB,
+                            "patient_id": pid,
+                        },
+                    )
+                except Exception as _audit_exc:
+                    logger.error("NLP_WRITEBACK_BLOCKED audit emit failed: %s", _audit_exc)
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "NLP suspect below write-back confidence threshold (0.85). "
+                        "Require clinician attestation or higher-confidence evidence."
+                    ),
+                )
 
     # EMR write-back: push the accepted ICD to OpenEMR's Problem List.
     # Preferred path is FHIR (works for any R4 server including Epic/Cerner).
