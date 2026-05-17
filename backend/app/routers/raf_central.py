@@ -1332,27 +1332,34 @@ def action_mark_meat_reviewed(
             cur.execute(
                 """
                 INSERT INTO raf_meat_evidence
-                    (patient_hcc_id, encounter_date,
-                     meat_monitoring, meat_evaluation, meat_assessment, meat_treatment,
-                     reviewed_by, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    (patient_hcc_id, encounter_date, encounter_id,
+                     meat_m, meat_e, meat_a, meat_t,
+                     meat_m_present, meat_e_present, meat_a_present, meat_t_present,
+                     completeness_score)
+                VALUES (%s, %s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     body.patient_hcc_id, today,
                     body.monitor_note, body.evaluate_note, body.assess_note, body.treat_note,
-                    reviewer,
+                    1 if body.monitor_note else 0,
+                    1 if body.evaluate_note else 0,
+                    1 if body.assess_note else 0,
+                    1 if body.treat_note else 0,
+                    sum(1 for n in (body.monitor_note, body.evaluate_note, body.assess_note, body.treat_note) if n) / 4.0,
                 ),
             )
             # Roll up status from ALL evidence rows for this HCC so previously
             # documented letters (from earlier encounters) are not lost. A letter
             # is considered documented if ANY row has a non-null note for it.
+            # COALESCE handles both schema shapes (modern *_present flags + the
+            # raw text columns) so this query survives schema drift.
             cur.execute(
                 """
                 SELECT
-                    MAX(CASE WHEN meat_monitoring IS NOT NULL AND meat_monitoring <> '' THEN 1 ELSE 0 END) AS m,
-                    MAX(CASE WHEN meat_evaluation IS NOT NULL AND meat_evaluation <> '' THEN 1 ELSE 0 END) AS e,
-                    MAX(CASE WHEN meat_assessment IS NOT NULL AND meat_assessment <> '' THEN 1 ELSE 0 END) AS a,
-                    MAX(CASE WHEN meat_treatment  IS NOT NULL AND meat_treatment  <> '' THEN 1 ELSE 0 END) AS t
+                    MAX(COALESCE(meat_m_present, CASE WHEN meat_m IS NOT NULL AND meat_m <> '' THEN 1 ELSE 0 END)) AS m,
+                    MAX(COALESCE(meat_e_present, CASE WHEN meat_e IS NOT NULL AND meat_e <> '' THEN 1 ELSE 0 END)) AS e,
+                    MAX(COALESCE(meat_a_present, CASE WHEN meat_a IS NOT NULL AND meat_a <> '' THEN 1 ELSE 0 END)) AS a,
+                    MAX(COALESCE(meat_t_present, CASE WHEN meat_t IS NOT NULL AND meat_t <> '' THEN 1 ELSE 0 END)) AS t
                 FROM raf_meat_evidence
                 WHERE patient_hcc_id = %s
                 """,
