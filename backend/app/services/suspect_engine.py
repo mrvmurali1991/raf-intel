@@ -915,6 +915,23 @@ def run_full_suspect_scan(
         "run_full_suspect_scan pid=%s → %d raw, %d after dedup, %d stored",
         patient_id, len(all_suspects), len(deduped), len(stored),
     )
+
+    # Enrich the freshly-stored rows with MEAT-completeness and trumped-by
+    # signals. Without this, every suspect renders "Net-new" on the panel
+    # because the panel-builder reads these fields out of evidence_detail
+    # and the writer above never sets them. Failures are non-fatal —
+    # enrichment can be re-run via the
+    # /api/raf-central/{pid}/actions/enrich-suspects endpoint.
+    if tenant_id and stored:
+        try:
+            from app.services.suspect_enrichment import enrich_suspects_for_patient
+            enrich_suspects_for_patient(patient_id, tenant_id, year=year)
+        except Exception as exc:
+            logger.warning(
+                "post-scan enrichment failed pid=%s tenant=%s: %s",
+                patient_id, tenant_id, exc,
+            )
+
     return stored
 
 
