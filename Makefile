@@ -93,4 +93,14 @@ restore:
 	@if [ -z "$(DB)" ]; then echo "ERROR: DB is required. Usage: make restore FILE=path/to/backup.sql.gz DB=raf|openemr"; exit 1; fi
 	./scripts/restore.sh $(FILE) --$(DB)
 
-.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore
+# ---- Frontend E2E Testing ------------------------------------------------
+
+e2e:
+	@echo "Running Playwright E2E suite (spawns local dev server)..."
+	bash frontend/scripts/e2e.sh
+
+e2e-staging:
+	@echo "Running Playwright E2E suite against staging (https://raf.comercioit.com)..."
+	cd frontend && npx playwright test --project=e2e
+
+.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore e2e e2e-staging
