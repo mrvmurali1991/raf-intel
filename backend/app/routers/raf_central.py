@@ -1087,8 +1087,9 @@ def action_accept_suspect(
         with raf_cursor() as _meat_cur:
             _meat_cur.execute(
                 """
-                SELECT sc.evidence_detail, sc.attestation_signed_at,
-                       p.pubpid AS mrn
+                SELECT sc.evidence_detail,
+                       sc.reviewed_at  AS attestation_signed_at,
+                       p.mrn           AS mrn
                   FROM raf_suspect_conditions sc
                   JOIN patients p ON p.id = sc.patient_id
                  WHERE sc.id = %s
@@ -1143,15 +1144,18 @@ def action_accept_suspect(
                 detail="override_reason must be at least 20 non-whitespace characters",
             )
         _mrn_in = (body.mrn_confirmation or "").strip()
-        if not _mrn_in or (
-            _mrn_in != suspect_mrn_full and _mrn_in != suspect_mrn_last4
-        ):
+        # Accept any of: full MRN, last-4 of MRN, or the patient pid (used
+        # when MRN is blank in the underlying EMR — verified true for some
+        # seeded OpenEMR rows where patient_data.pubpid is empty).
+        _accepted_tokens = {t for t in (suspect_mrn_full, suspect_mrn_last4, str(pid)) if t}
+        if not _mrn_in or _mrn_in not in _accepted_tokens:
             raise HTTPException(
                 status_code=422,
-                detail="mrn_confirmation does not match the patient's MRN (or last-4)",
+                detail="mrn_confirmation does not match the patient's MRN, last-4, or pid",
             )
         # Emit the force-accept audit BEFORE the mutation so a downstream
         # write failure still leaves the attestation visible in the log.
+        import hashlib as _hashlib
         try:
             from app.services.immutable_audit import emit_audit_event
             emit_audit_event(
@@ -1163,7 +1167,7 @@ def action_accept_suspect(
                 payload={
                     "patient_id": pid,
                     "override_reason": _reason,
-                    "mrn_confirmation_hash": __import__("hashlib").sha256(_mrn_in.encode()).hexdigest()[:16],
+                    "mrn_confirmation_hash": _hashlib.sha256(_mrn_in.encode()).hexdigest()[:16],
                 },
             )
         except Exception as _audit_exc:
