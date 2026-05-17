@@ -42,6 +42,11 @@ from app.rate_limit import limiter
 from app.services.cache_strategy import get_active_connection_id
 from app.services.celery_tasks import task_refresh_meat_for_patient
 from app.services.edps_ingest import get_accepted_raf
+from app.services.fhir_problem_list import (
+    push_problem_list_condition,
+    reconcile_condition,
+)
+from app.services.immutable_audit import emit_audit_event
 from app.services.openemr_connector import (
     get_patient,
     push_medical_problem,
@@ -966,6 +971,9 @@ class AcceptSuspectResponse(BaseModel):
     ok: bool
     suspect: dict[str, Any]
     pushed_to_emr: bool
+    fhir_condition_id: str | None = None
+    fhir_reconciled: bool | None = None
+    push_method: str | None = None  # "fhir" | "fhir_then_mysql_fallback" | "mysql" | "none"
 
 
 class DismissSuspectResponse(BaseModel):
@@ -1185,16 +1193,153 @@ def action_accept_suspect(
     result = accept_suspect(body.suspect_id, reviewed_by=reviewer, tenant_id=tenant_id,
                             reviewed_by_user_id=reviewer_user_id)
 
-    # EMR write-back: push the accepted ICD to OpenEMR lists as a medical problem
+    # EMR write-back: push the accepted ICD to OpenEMR's Problem List.
+    # Preferred path is FHIR (works for any R4 server including Epic/Cerner).
+    # On failure, fall back to the legacy direct-MySQL ``push_medical_problem``
+    # so the demo keeps working even when the FHIR endpoint is unreachable.
     pushed = False
+    fhir_condition_id: str | None = None
+    fhir_reconciled: bool | None = None
+    push_method: str = "none"
+
+    audit_source = (
+        "raf_intelligence_force_accept" if body.force else "raf_intelligence_normal_accept"
+    )
+
     if body.push_to_emr:
         suspect_icd = str(result.get("suspect_icd10") or "")
         suspect_label = _hcc_label(str(result.get("suspect_hcc") or ""))
         if suspect_icd:
-            pushed = push_medical_problem(pid, suspect_label, suspect_icd)
+            # --- FHIR write (preferred) ---
+            try:
+                fhir_condition_id = push_problem_list_condition(
+                    patient_emr_pid=str(pid),
+                    icd10_code=suspect_icd,
+                    hcc_label=suspect_label,
+                    source={
+                        "suspect_id": body.suspect_id,
+                        "source": audit_source,
+                    },
+                    tenant_id=tenant_id,
+                )
+                pushed = True
+                push_method = "fhir"
+            except Exception as exc:
+                logger.warning(
+                    "FHIR Condition write failed for pid=%s icd=%s: %s — "
+                    "retrying once before MySQL fallback",
+                    pid,
+                    suspect_icd,
+                    exc,
+                )
+                try:
+                    fhir_condition_id = push_problem_list_condition(
+                        patient_emr_pid=str(pid),
+                        icd10_code=suspect_icd,
+                        hcc_label=suspect_label,
+                        source={
+                            "suspect_id": body.suspect_id,
+                            "source": audit_source,
+                        },
+                        tenant_id=tenant_id,
+                    )
+                    pushed = True
+                    push_method = "fhir"
+                except Exception as exc2:
+                    logger.warning(
+                        "FHIR Condition retry failed for pid=%s icd=%s: %s — "
+                        "using direct-MySQL fallback",
+                        pid,
+                        suspect_icd,
+                        exc2,
+                    )
+                    pushed = push_medical_problem(pid, suspect_label, suspect_icd)
+                    push_method = (
+                        "fhir_then_mysql_fallback" if pushed else "fhir_then_failed"
+                    )
+
+            # --- Audit + reconcile, only if we have a FHIR id ---
+            if fhir_condition_id:
+                try:
+                    emit_audit_event(
+                        "SUSPECT_PUSHED_TO_EHR_VIA_FHIR",
+                        tenant_id=tenant_id,
+                        actor_user_id=reviewer_user_id,
+                        subject_type="patient",
+                        subject_id=pid,
+                        payload={
+                            "patient_pid": pid,
+                            "icd10": suspect_icd,
+                            "hcc": str(result.get("suspect_hcc") or ""),
+                            "hcc_label": suspect_label,
+                            "fhir_condition_id": fhir_condition_id,
+                            "source": audit_source,
+                            "suspect_id": body.suspect_id,
+                        },
+                    )
+                except Exception as audit_exc:
+                    logger.warning(
+                        "SUSPECT_PUSHED_TO_EHR_VIA_FHIR audit emit failed: %s",
+                        audit_exc,
+                    )
+
+                # Reconcile: confirm the new code is now on the FHIR Problem List
+                try:
+                    fhir_reconciled = reconcile_condition(
+                        patient_emr_pid=str(pid),
+                        icd10_code=suspect_icd,
+                        tenant_id=tenant_id,
+                    )
+                except Exception as rec_exc:
+                    logger.warning(
+                        "FHIR reconcile error for pid=%s icd=%s: %s",
+                        pid,
+                        suspect_icd,
+                        rec_exc,
+                    )
+                    fhir_reconciled = False
+
+                if fhir_reconciled is False:
+                    try:
+                        emit_audit_event(
+                            "SUSPECT_FHIR_RECONCILE_MISMATCH",
+                            tenant_id=tenant_id,
+                            actor_user_id=reviewer_user_id,
+                            subject_type="patient",
+                            subject_id=pid,
+                            payload={
+                                "patient_pid": pid,
+                                "icd10": suspect_icd,
+                                "fhir_condition_id": fhir_condition_id,
+                                "source": audit_source,
+                                "suspect_id": body.suspect_id,
+                                "note": (
+                                    "Condition was POSTed successfully but a "
+                                    "follow-up GET /Condition?subject=Patient/{pid} "
+                                    "did not return the new ICD-10 code."
+                                ),
+                            },
+                        )
+                    except Exception as audit_exc2:
+                        logger.warning(
+                            "SUSPECT_FHIR_RECONCILE_MISMATCH audit emit failed: %s",
+                            audit_exc2,
+                        )
+        else:
+            logger.info(
+                "Skipping EMR write-back for suspect=%s: no ICD-10 on result",
+                body.suspect_id,
+            )
 
     _invalidate_panel_cache(pid, tenant_id)
-    accept_response = AcceptSuspectResponse(ok=True, suspect=result, pushed_to_emr=pushed)
+    accept_response = AcceptSuspectResponse(
+        ok=True,
+        suspect=result,
+        pushed_to_emr=pushed,
+        fhir_condition_id=fhir_condition_id,
+        fhir_reconciled=fhir_reconciled,
+        push_method=push_method,
+    )
     store_idempotent_response(request, response, accept_response.model_dump())
     return accept_response
 
