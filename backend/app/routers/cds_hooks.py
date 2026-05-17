@@ -242,12 +242,122 @@ def discovery() -> dict[str, Any]:
                 "hook": "patient-view",
                 "id": "raf-suspects",
                 "title": "RAF Suspects",
-                "description": "Open HCC capture opportunities",
+                "description": "Open HCC capture opportunities (read-only summary cards).",
                 "prefetch": {
                     "patient": "Patient/{{context.patientId}}",
                 },
-            }
+            },
+            {
+                "hook": "patient-view",
+                "id": "hcc-suggestions-realtime",
+                "title": "RAF HCC Suggestions (write-back)",
+                "description": (
+                    "Real-time HCC suspect cards with one-click FHIR Condition "
+                    "resources ready to apply to the Problem List."
+                ),
+                "prefetch": {
+                    "patient": "Patient/{{context.patientId}}",
+                    "conditions": "Condition?patient={{context.patientId}}",
+                },
+            },
         ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# ICD-10 display helper (best-effort, with static fallback for demo HCCs)
+# ---------------------------------------------------------------------------
+
+
+def _icd10_display(icd10: str) -> str:
+    """Return a short ICD-10 display label. Falls back to the code itself."""
+    if not icd10:
+        return ""
+    try:
+        from app.services import icd10_lookup as lk  # type: ignore
+
+        helper = getattr(lk, "get_description", None)
+        if callable(helper):
+            desc = helper(icd10)
+            if desc:
+                return str(desc)
+    except Exception:
+        pass
+    fallback = {
+        "J44.9": "Chronic obstructive pulmonary disease, unspecified",
+        "E11.9": "Type 2 diabetes mellitus without complications",
+        "E11.65": "Type 2 diabetes mellitus with hyperglycemia",
+        "I50.9": "Heart failure, unspecified",
+        "N18.3": "Chronic kidney disease, stage 3 (moderate)",
+        "F32.9": "Major depressive disorder, single episode, unspecified",
+        "I25.10": ("Atherosclerotic heart disease of native coronary artery "
+                   "without angina pectoris"),
+    }
+    return fallback.get(icd10, icd10)
+
+
+def _condition_resource(
+    *,
+    patient_fhir_id: str,
+    icd10: str,
+    hcc: str | int,
+    confidence: float,
+) -> dict[str, Any]:
+    """Build a FHIR R4 ``Condition`` resource the EHR can write directly to
+    the Problem List.  Encodes ICD-10-CM as the primary coding and tags the
+    confidence score in an extension for traceability."""
+    return {
+        "resourceType": "Condition",
+        "clinicalStatus": {
+            "coding": [
+                {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                    "code": "active",
+                    "display": "Active",
+                }
+            ]
+        },
+        "verificationStatus": {
+            "coding": [
+                {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                    "code": "provisional",
+                    "display": "Provisional",
+                }
+            ]
+        },
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                        "code": "problem-list-item",
+                        "display": "Problem List Item",
+                    }
+                ]
+            }
+        ],
+        "code": {
+            "coding": [
+                {
+                    "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                    "code": icd10,
+                    "display": _icd10_display(icd10),
+                }
+            ],
+            "text": _icd10_display(icd10),
+        },
+        "subject": {"reference": f"Patient/{patient_fhir_id}"},
+        "extension": [
+            {
+                "url": "https://raf.health/fhir/StructureDefinition/hcc-category",
+                "valueString": str(hcc),
+            },
+            {
+                "url": "https://raf.health/fhir/StructureDefinition/raf-confidence",
+                "valueDecimal": round(float(confidence), 4),
+            },
+        ],
     }
 
 
@@ -332,3 +442,134 @@ def raf_suspects(
         ],
     }
     return {"cards": [card]}
+
+
+# ---------------------------------------------------------------------------
+# POST /cds-services/hcc-suggestions-realtime — write-back-ready suggestions
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/cds-services/hcc-suggestions-realtime",
+    summary="Real-time HCC suggestion cards with FHIR write-back actions",
+)
+def hcc_suggestions_realtime(
+    req: CDSHookRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Return one CDS Hooks card per top-3 open suspect; each card carries a
+    ``suggestions`` block whose ``actions[0]`` is a ready-to-apply FHIR
+    Condition resource for the Problem List.
+
+    Response shape conforms to CDS Hooks 2.0 §4.2.1
+    (https://cds-hooks.hl7.org/2.0/#card-attributes).
+    """
+    import uuid
+
+    # 1. Refuse to serve when shared secret is not configured.
+    secret = _shared_secret()
+    if not secret:
+        logger.warning(
+            "CDS_HOOKS_SHARED_SECRET not configured — refusing CDS Hooks invocation"
+        )
+        raise HTTPException(status_code=503, detail="CDS Hooks not configured")
+
+    # 2. IP allow-list (when configured).
+    source_ip = _client_ip(request)
+    if not _ip_allowed(source_ip):
+        raise HTTPException(status_code=403, detail="Source IP not allowed")
+
+    # 3. Rate limit by source IP.
+    ok, retry_after = _rate_check(source_ip)
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # 4. Bearer-secret check (header OR fhirAuthorization.access_token).
+    presented = _extract_bearer(req, authorization)
+    if not presented or presented != secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # 5. Resolve patient.
+    fhir_patient_id = str(req.context.get("patientId") or "")
+    pid = _resolve_internal_pid(fhir_patient_id)
+    if pid is None or not _patient_exists(pid):
+        logger.info(
+            "CDS Hooks hcc-suggestions-realtime: patient not resolvable patientId=%r",
+            fhir_patient_id,
+        )
+        return {"cards": []}
+
+    suspects = _fetch_open_suspects(pid)
+    _emit_audit(
+        patient_id=pid, service_id="hcc-suggestions-realtime", source_ip=source_ip
+    )
+    if not suspects:
+        return {"cards": []}
+
+    base = _app_base_url()
+    deep_link = f"{base}/patients/{pid}"
+    top = suspects[:3]
+    cards: list[dict[str, Any]] = []
+
+    for row in top:
+        icd10 = str(row["suspect_icd10"])
+        hcc = row["suspect_hcc"]
+        confidence = float(row["confidence_score"])
+        display = _icd10_display(icd10)
+        suggestion_label = f"Add HCC {hcc} ({icd10} {display})"
+
+        cards.append(
+            {
+                "uuid": str(uuid.uuid4()),
+                "summary": f"Suspected HCC {hcc}: {icd10} {display}",
+                "detail": (
+                    f"RAF Intelligence flagged ICD-10 **{icd10} — {display}** "
+                    f"(HCC {hcc}) for this patient with confidence "
+                    f"**{confidence:.2f}** based on "
+                    f"{row.get('evidence_type', 'rule-based')} evidence.  "
+                    "Click the suggestion below to write a provisional "
+                    "Condition into the Problem List for provider review."
+                ),
+                "indicator": "info",
+                "source": {
+                    "label": "RAF Intelligence",
+                    "url": deep_link,
+                    "icon": f"{base}/favicon.ico",
+                },
+                "suggestions": [
+                    {
+                        "label": suggestion_label,
+                        "uuid": str(uuid.uuid4()),
+                        "actions": [
+                            {
+                                "type": "create",
+                                "description": (
+                                    f"Add provisional problem '{display}' "
+                                    f"({icd10}) to the patient's Problem List."
+                                ),
+                                "resource": _condition_resource(
+                                    patient_fhir_id=fhir_patient_id or str(pid),
+                                    icd10=icd10,
+                                    hcc=hcc,
+                                    confidence=confidence,
+                                ),
+                            }
+                        ],
+                    }
+                ],
+                "links": [
+                    {
+                        "label": "Review in RAF",
+                        "url": f"{deep_link}?focus_hcc={hcc}",
+                        "type": "absolute",
+                    }
+                ],
+            }
+        )
+
+    return {"cards": cards}

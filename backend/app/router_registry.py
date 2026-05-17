@@ -63,6 +63,7 @@ from app.routers import clinical_queries as clinical_queries_router
 from app.routers import cohorts_v2 as cohorts_v2_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
+from app.routers import edi_generation as edi_generation_router
 from app.routers import edps_feedback as edps_feedback_router
 from app.routers import feature_flags as feature_flags_router
 from app.routers import forecast as forecast_router
@@ -76,6 +77,7 @@ from app.routers import provider_revenue_breakdown as provider_revenue_breakdown
 from app.routers import provider_scorecards as provider_scorecards_router
 from app.routers import provider_trends as provider_trends_router
 from app.routers import top_hcc_opportunities as top_hcc_opportunities_router
+from app.routers import coder_analytics as coder_analytics_router
 from app.routers import consent as consent_router
 from app.routers import dashboard_analytics as dashboard_analytics_router
 from app.routers import data_quality as data_quality_router
@@ -91,6 +93,7 @@ from app.routers import provider_suspect_hotlist as provider_suspect_hotlist_rou
 from app.routers import provider_worklist as provider_worklist_router
 from app.routers import radv as radv_router
 from app.routers import radv_audit as radv_audit_router
+from app.routers import radv_audit_runs as radv_audit_runs_router
 from app.routers import raf_central as raf_central_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
 from app.routers import realtime as realtime_router
@@ -216,10 +219,13 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, pre_submission_router.router)
     _mount(app, bundles.router)
     _mount(app, cms_transmission.router)
+    _mount(app, edi_generation_router.router)
 
     # Integrations
     _mount(app, fhir.router)
     _mount(app, smart_fhir_router.router)
+    # Public SMART 2.0 launch sequence (issuer-side) — mounted at /smart, no /api prefix.
+    _mount(app, smart_fhir_router.public_router)
     _mount(app, emr.router)
     _mount(app, adt.router)
     _mount(app, webhooks.router)
@@ -291,6 +297,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, config_router.router)
     _mount(app, reports.router)
     _mount(app, dashboard_analytics_router.router)
+    _mount(app, coder_analytics_router.router)
     _mount(app, audit.router)
 
     # Compliance — consent management
@@ -337,6 +344,10 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, admin.router)
     _mount(app, meat_router.router)
     _mount(app, radv_audit_router.router)
+    # RADV mock-audit defense workflow (Gap #3) — sampler, decisions,
+    # exposure simulator, MAO-004 re-submission batch, evidence export.
+    # Shares /api/radv prefix with radv_audit but owns /audit-runs/* paths.
+    _mount(app, radv_audit_runs_router.router)
     # RADV packet PDF export (per-patient, per-payment-year audit bundle).
     # Shares the /api/radv prefix with radv_audit but owns distinct paths.
     _mount(app, radv_router.router)
