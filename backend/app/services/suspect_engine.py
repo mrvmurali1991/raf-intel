@@ -1489,6 +1489,88 @@ def accept_suspect(
         raise
 
 
+def restore_suspect(
+    suspect_id: int,
+    reason: str | None,
+    reviewed_by: str,
+    tenant_id: str | None = None,
+    reviewed_by_user_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Restore a previously dismissed suspect back to ``status='open'``.
+
+    The dismissed_reason is cleared so the audit trail correctly reflects that
+    the suspect is once again an active review item.  ``reviewed_at`` /
+    ``updated_at`` are refreshed so dashboards order the resurfaced suspect by
+    recent activity; ``reviewed_by`` is replaced with the actor performing the
+    restore so the audit log identifies who reopened the row (the prior
+    dismisser identity is preserved in the immutable audit chain).
+
+    Raises ``ValueError`` if the suspect does not exist for this tenant or is
+    not currently in ``dismissed`` status — only dismissed rows are restorable.
+
+    Parameters
+    ----------
+    reason:              Optional free-text justification for restoring (e.g.
+                         "new evidence in 6/15 progress note"); recorded in the
+                         immutable audit payload by the router, not on the
+                         suspect row itself.
+    reviewed_by:         Free-text identity string kept for backward compat.
+    reviewed_by_user_id: Structured numeric user.id for RBAC audit filtering.
+    """
+    if not tenant_id:
+        raise ValueError("restore_suspect requires tenant_id to prevent cross-tenant mutation")
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE raf_suspect_conditions
+                SET status              = 'open',
+                    dismissed_reason    = NULL,
+                    reviewed_at         = NOW(),
+                    updated_at          = NOW(),
+                    reviewed_by         = %s,
+                    reviewed_by_user_id = COALESCE(%s, reviewed_by_user_id)
+                WHERE id        = %s
+                  AND tenant_id = %s
+                  AND status    = 'dismissed'
+                """,
+                (reviewed_by, reviewed_by_user_id, suspect_id, tenant_id),
+            )
+            affected = cur.rowcount
+            if affected == 0:
+                # Either the row doesn't exist, belongs to a different tenant,
+                # or is not currently dismissed.  In all three cases the safe
+                # behaviour is to refuse — the router translates this into a
+                # 404 so callers cannot infer cross-tenant row existence.
+                raise ValueError(
+                    f"Suspect {suspect_id} not restorable: no dismissed row "
+                    f"matches id+tenant scope."
+                )
+            cur.execute(
+                "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
+                (suspect_id, tenant_id),
+            )
+            row = cur.fetchone()
+        if not row:
+            # Defensive — the UPDATE just succeeded so this shouldn't happen,
+            # but keeping the symmetry with accept/dismiss avoids returning
+            # None from a function typed as dict.
+            raise ValueError(f"Suspect {suspect_id} not found after restore")
+        try:
+            from app.services import raf_inbox
+            raf_inbox.mark_dirty(pid=int(row["patient_id"]), tenant_id=tenant_id, reason="suspect")
+        except Exception:
+            logger.debug("raf_inbox.mark_dirty failed — non-fatal", exc_info=True)
+        logger.info("Suspect %s restored by %s (reason=%r)", suspect_id, reviewed_by, reason)
+        return _serialize_suspect(row)
+    except ValueError:
+        raise
+    except Exception as exc:
+        logger.error("restore_suspect failed id=%s: %s", suspect_id, exc)
+        raise
+
+
 def dismiss_suspect(
     suspect_id: int,
     reason: str,

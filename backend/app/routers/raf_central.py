@@ -54,6 +54,7 @@ from app.services.suspect_engine import (
     accept_suspect,
     dismiss_suspect,
     get_suspects_for_patient,
+    restore_suspect,
 )
 
 logger = logging.getLogger(__name__)
@@ -831,6 +832,11 @@ class DismissSuspectRequest(BaseModel):
     reason: str = "dismissed via raf-central panel"
 
 
+class RestoreSuspectRequest(BaseModel):
+    suspect_id: int
+    reason: str | None = None
+
+
 class MarkMEATReviewedRequest(BaseModel):
     patient_hcc_id: int
     monitor_note: str | None = None
@@ -880,6 +886,11 @@ class AcceptSuspectResponse(BaseModel):
 
 
 class DismissSuspectResponse(BaseModel):
+    ok: bool
+    suspect: dict[str, Any]
+
+
+class RestoreSuspectResponse(BaseModel):
     ok: bool
     suspect: dict[str, Any]
 
@@ -1029,6 +1040,77 @@ def action_dismiss_suspect(
     dismiss_resp = DismissSuspectResponse(ok=True, suspect=result)
     store_idempotent_response(request, response, dismiss_resp.model_dump())
     return dismiss_resp
+
+
+@router.post("/{pid}/actions/restore-suspect", response_model=RestoreSuspectResponse)
+def action_restore_suspect(
+    pid: int,
+    body: RestoreSuspectRequest,
+    request: Request,
+    response: Response,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("suspects", "write")),
+    _idem: None = Depends(idempotency_key_dependency()),
+) -> RestoreSuspectResponse:
+    """Restore a previously dismissed suspect back to ``status='open'``.
+
+    Backs the "Restore" action button on the dismiss-success toast. Mirrors
+    the ``action_dismiss_suspect`` contract: tenant guard, patient access
+    check, panel cache invalidation, and Idempotency-Key support (24h replay
+    window).  Emits an immutable ``SUSPECT_RESTORED`` audit event so the
+    chain shows dismiss → restore as two linked operations.
+    """
+    tenant_id = current_user.get("tenant_id")
+    _require_patient_access(pid, tenant_id, current_user=current_user)
+
+    _uid = current_user.get("id")
+    reviewer_user_id: int | None = int(_uid) if _uid is not None else None
+    reviewer = current_user.get("email") or current_user.get("sub") or "raf-central"
+
+    try:
+        result = restore_suspect(
+            body.suspect_id,
+            reason=body.reason,
+            reviewed_by=reviewer,
+            tenant_id=tenant_id,
+            reviewed_by_user_id=reviewer_user_id,
+        )
+    except ValueError as exc:
+        # Either the suspect doesn't exist, belongs to another tenant, or is
+        # not currently dismissed.  Surface as 404 — never reveal whether a
+        # row exists in a different tenant scope.
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    _invalidate_panel_cache(pid, tenant_id)
+
+    # Immutable audit event — non-fatal if it fails so the user-facing
+    # restore still succeeds (consistent with the audit-emit pattern used by
+    # accept_suspect_endpoint in routers/suspects.py).
+    try:
+        from app.services.immutable_audit import emit_audit_event
+
+        emit_audit_event(
+            "SUSPECT_RESTORED",
+            tenant_id=tenant_id,
+            actor_user_id=reviewer_user_id,
+            subject_type="suspect",
+            subject_id=str(body.suspect_id),
+            payload={
+                "patient_id": pid,
+                "reason": (body.reason or "").strip() or None,
+                "actor_email": current_user.get("email") or "unknown",
+            },
+        )
+    except Exception as exc:
+        logger.warning(
+            "action_restore_suspect: immutable audit emit failed for "
+            "SUSPECT_RESTORED suspect_id=%s: %s",
+            body.suspect_id, exc,
+        )
+
+    restore_resp = RestoreSuspectResponse(ok=True, suspect=result)
+    store_idempotent_response(request, response, restore_resp.model_dump())
+    return restore_resp
 
 
 @router.post("/{pid}/actions/mark-meat-reviewed", response_model=MarkMEATReviewedResponse)
