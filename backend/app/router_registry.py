@@ -57,6 +57,7 @@ from app.routers import (
     webhooks,
 )
 from app.routers import auth as auth_router
+from app.routers import cds_hooks as cds_hooks_router
 from app.routers import clinical_queries as clinical_queries_router
 from app.routers import config as config_router
 from app.routers import disputes as disputes_router
@@ -291,6 +292,13 @@ def register_routers(app: FastAPI) -> None:
     # Health and info
     _mount(app, health_router.router)
     _mount(app, icd10_router.router)
+
+    # CDS Hooks integration (Apixio Apicare / ForeSee Vim pattern).
+    # Mounted at the app root — the CDS Hooks 2.0 spec mandates the literal
+    # /cds-services discovery path, so this router intentionally bypasses the
+    # /api/... prefix used by every other surface. Registered directly via
+    # app.include_router so the routes appear in the OpenAPI schema.
+    app.include_router(cds_hooks_router.router)
 
     # Admin
     _mount(app, retention.router)
