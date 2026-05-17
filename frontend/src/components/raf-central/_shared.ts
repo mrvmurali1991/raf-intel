@@ -71,6 +71,13 @@ export interface SuspectCard {
    *  otherwise → new.
    */
   taxonomy?: "new" | "audit" | "confirmed" | null;
+  /** Canonical specialty bucket derived from the HCC code on the backend
+   *  (see app/services/specialty_routing.py). One of: "cardiology",
+   *  "nephrology", "endocrinology", "pulmonology", "oncology",
+   *  "behavioral", "general". Drives the specialty filter-chip row above
+   *  the confidence buckets so a nephrologist sees CKD suspects first,
+   *  a cardiologist sees CHF first, etc. ("ForeSee" pattern.) */
+  specialty?: string;
 }
 
 export interface RecaptureCard {
