@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import {
   useAcceptSuspectCentral,
   useDismissSuspectCentral,
+  useRestoreSuspectCentral,
 } from "@/hooks/mutations/useRAFCentralMutations";
 import ExplainPanel from "@/components/ExplainPanel";
 import { cn } from "@/lib/utils";
@@ -143,6 +144,7 @@ export function SuspectCardView({
   // Mutations — invalidate raf-central query key on success
   const acceptMut = useAcceptSuspectCentral(patientId);
   const dismissMut = useDismissSuspectCentral(patientId);
+  const restoreMut = useRestoreSuspectCentral(patientId);
 
   // busy mirrors the pending state of whichever mutation is in-flight
   const busy: "accept" | "dismiss" | null = acceptMut.isPending
@@ -183,12 +185,33 @@ export function SuspectCardView({
     setShowDismissDialog(false);
     await dismissMut.mutateAsync({ suspect_id: suspect.id, reason });
     onChange();
-    // No action button here. The Restore endpoint has not yet shipped — the
-    // previous "Restore (coming soon)" disabled lure advertised an action
-    // the system cannot perform (patient-safety review #5 / round-4 carry-
-    // over). When `POST /api/raf-central/{pid}/actions/restore-suspect`
-    // lands, re-add an `action` to this toast that actually calls it.
-    toast.success("Suspect dismissed", suspect.label, { duration: 10_000 });
+    // Restore endpoint (POST /api/raf-central/{pid}/actions/restore-suspect)
+    // is now live — the toast action calls it, the panel cache is
+    // invalidated by the mutation's onSuccess, and onChange() re-syncs the
+    // list view so the resurfaced suspect reappears in 'open'. Patient-
+    // safety review #5 closes: no more disabled "coming soon" lure.
+    toast.success("Suspect dismissed", suspect.label, {
+      duration: 10_000,
+      action: {
+        label: "Restore",
+        onClick: () => {
+          restoreMut.mutate(
+            { suspect_id: suspect.id },
+            {
+              onSuccess: () => {
+                onChange();
+                toast.success("Suspect restored", suspect.label);
+              },
+              onError: (err: unknown) => {
+                const msg =
+                  err instanceof Error ? err.message : "Could not restore suspect.";
+                toast.error("Restore failed", msg);
+              },
+            },
+          );
+        },
+      },
+    });
   };
 
   // Send clinician sentiment to the backend and disable buttons after one click.

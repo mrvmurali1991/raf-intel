@@ -7,6 +7,7 @@
  *   - useRecalculateRAF    → POST /api/raf-central/{pid}/actions/recalculate
  *   - useAcceptSuspectCentral → POST /api/raf-central/{pid}/actions/accept-suspect
  *   - useDismissSuspectCentral → POST /api/raf-central/{pid}/actions/dismiss-suspect
+ *   - useRestoreSuspectCentral → POST /api/raf-central/{pid}/actions/restore-suspect
  *   - useMEATAttest        → POST /api/raf-central/{pid}/actions/mark-meat-reviewed
  *
  * Each mutation invalidates RAF_CENTRAL_QUERY_KEY on success.
@@ -88,6 +89,35 @@ export function useDismissSuspectCentral(pid: number, year?: number) {
         })
         .then((r) => r.data),
     onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: RAF_CENTRAL_QUERY_KEY(pid, year),
+      });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Restore suspect (RAF Central path) — undo a dismiss
+// ---------------------------------------------------------------------------
+
+interface RestoreSuspectArgs {
+  suspect_id: number;
+  reason?: string | null;
+}
+
+export function useRestoreSuspectCentral(pid: number, year?: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: RestoreSuspectArgs) =>
+      api
+        .post(`/api/raf-central/${pid}/actions/restore-suspect`, {
+          suspect_id: args.suspect_id,
+          reason: args.reason ?? null,
+        })
+        .then((r) => r.data),
+    onSuccess: () => {
+      // Same invalidation set as accept / dismiss — the suspects panel,
+      // RAF gauge, and HCC count can all shift when a row flips back to open.
       queryClient.invalidateQueries({
         queryKey: RAF_CENTRAL_QUERY_KEY(pid, year),
       });
