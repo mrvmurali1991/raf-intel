@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 # New runs should supply members_enrolled and use compute_extrapolated_exposure.
 # ---------------------------------------------------------------------------
 _LEGACY_EXTRAPOLATION_MULTIPLIER = 55.0
-_LEGACY_AVG_HCC_PAYMENT_DOLLARS = 11_000.0
+# _LEGACY_AVG_HCC_PAYMENT_DOLLARS removed — use revenue_per_raf_point() from
+# app.services.raf.revenue_constants (single source of truth).
 
 # CMS 2023 Final Rule FFS Adjuster default
 CMS_FFS_ADJUSTER_DEFAULT = 0.97
@@ -112,8 +113,24 @@ def compute_extrapolated_exposure(
     base_per_failure = avg_per_member_per_month_dollars * audit_period_months
     projected = failed_records * extrapolation_factor * base_per_failure * ffs_adjuster
 
+    # Wilson score interval lower bound (CMS Feb-2023 Final Rule, 90 FR 1944).
+    # Provides a statistically defensible floor error-rate for audit defense.
+    # z = 1.6449 corresponds to 95% one-sided confidence (5th percentile).
+    _WILSON_Z = 1.6449  # 95% one-sided
+    confidence_level = 0.95
+    n = sample_size
+    p_hat = failed_records / n if n > 0 else 0.0
+    z2 = _WILSON_Z ** 2
+    wilson_denom = 1 + z2 / n
+    wilson_centre = (p_hat + z2 / (2 * n)) / wilson_denom
+    wilson_half = (_WILSON_Z * math.sqrt(p_hat * (1 - p_hat) / n + z2 / (4 * n * n))) / wilson_denom
+    lcb_rate = max(wilson_centre - wilson_half, 0.0)
+    lcb_projected = lcb_rate * extrapolation_factor * base_per_failure * ffs_adjuster
+
     return {
         "extrapolated_exposure_dollars": round(projected, 2),
+        "lower_confidence_bound_dollars": round(lcb_projected, 2),
+        "confidence_level": confidence_level,
         "extrapolation_factor": round(extrapolation_factor, 4),
         "ffs_adjuster": ffs_adjuster,
         "failed_records": failed_records,
@@ -121,10 +138,12 @@ def compute_extrapolated_exposure(
         "members_enrolled": members_enrolled,
         "avg_per_member_per_month_dollars": avg_per_member_per_month_dollars,
         "audit_period_months": audit_period_months,
-        "methodology": "ffs_adjuster_v1",
+        "methodology": "ffs_adjuster_with_wilson_lcb_v1",
         "methodology_note": (
             "Internal heuristic informed by CMS FFS Adjuster methodology "
-            "(Feb 2023 Final Rule) — not an official CMS extrapolation."
+            "(Feb 2023 Final Rule) — not an official CMS extrapolation. "
+            "lower_confidence_bound_dollars uses Wilson score interval "
+            "(95% one-sided, z=1.6449) for audit-defense floor pricing."
         ),
     }
 
@@ -537,7 +556,8 @@ def update_record(
                 DeprecationWarning,
                 stacklevel=2,
             )
-            exposure_dollars = _LEGACY_AVG_HCC_PAYMENT_DOLLARS * _LEGACY_EXTRAPOLATION_MULTIPLIER
+            from app.services.raf.revenue_constants import revenue_per_raf_point as _rev
+            exposure_dollars = _rev() * _LEGACY_EXTRAPOLATION_MULTIPLIER
 
     with raf_cursor() as cur:
         sets: list[str] = ["reviewer_user_id = %s"]
@@ -669,6 +689,8 @@ def simulate_exposure(
     members_enrolled = run.get("members_enrolled")
     sample_size = int(run.get("sample_size") or 1)
 
+    lcb_dollars: float | None = None
+    confidence_level: float | None = None
     if members_enrolled and int(members_enrolled) > 0:
         ffs_adj = float(run.get("ffs_adjuster") or CMS_FFS_ADJUSTER_DEFAULT)
         exp_result = compute_extrapolated_exposure(
@@ -678,7 +700,9 @@ def simulate_exposure(
             ffs_adjuster=ffs_adj,
         )
         simulated_exposure = exp_result["extrapolated_exposure_dollars"]
-        methodology = "ffs_adjuster_v1"
+        lcb_dollars = exp_result.get("lower_confidence_bound_dollars")
+        confidence_level = exp_result.get("confidence_level")
+        methodology = exp_result["methodology"]
         methodology_note = exp_result["methodology_note"]
     else:
         logger.warning(
@@ -686,9 +710,10 @@ def simulate_exposure(
             "using legacy 55x extrapolation (methodology: legacy_v1).",
             run_id,
         )
+        from app.services.raf.revenue_constants import revenue_per_raf_point
         simulated_exposure = (
             simulated_failures
-            * _LEGACY_AVG_HCC_PAYMENT_DOLLARS
+            * revenue_per_raf_point()
             * _LEGACY_EXTRAPOLATION_MULTIPLIER
         )
         methodology = "legacy_v1"
@@ -696,6 +721,14 @@ def simulate_exposure(
             "DEPRECATED: legacy 55x multiplier. Set members_enrolled on the "
             "run to use CMS FFS Adjuster methodology."
         )
+
+    # Persist LCB to the audit run row whenever we have a valid LCB value.
+    if lcb_dollars is not None:
+        with raf_cursor() as cur:
+            cur.execute(
+                "UPDATE raf_radv_audit_runs SET lcb_dollars = %s WHERE id = %s AND tenant_id = %s",
+                (lcb_dollars, run_id, tenant_id),
+            )
 
     return {
         "run_id": run_id,
@@ -707,6 +740,8 @@ def simulate_exposure(
         "assumed_fail_rate": assumed_fail_rate,
         "simulated_failures": round(simulated_failures, 2),
         "simulated_exposure_dollars": round(simulated_exposure, 2),
+        "lower_confidence_bound_dollars": round(lcb_dollars, 2) if lcb_dollars is not None else None,
+        "confidence_level": confidence_level,
         "members_enrolled": members_enrolled,
         "methodology": methodology,
         "methodology_note": methodology_note,

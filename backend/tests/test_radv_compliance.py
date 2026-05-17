@@ -214,7 +214,7 @@ class TestFFSAdjusterExtrapolation:
             sample_size=201,
             members_enrolled=10_000,
         )
-        assert result["methodology"] == "ffs_adjuster_v1"
+        assert result["methodology"] == "ffs_adjuster_with_wilson_lcb_v1"
         assert "not an official CMS" in result["methodology_note"]
 
     def test_zero_failures_returns_zero(self):
@@ -315,3 +315,153 @@ class TestHardCap:
         patients = _make_patients(2000)
         result = _sample(patients, sample_size=201, method="stratified_raf_decile")
         assert len(result) == 201
+
+
+# ---------------------------------------------------------------------------
+# 6. simulate_exposure response includes LCB + DB persistence
+# ---------------------------------------------------------------------------
+
+
+class TestSimulateLCBPlumbing:
+    """Tests for Wilson LCB surfacing through simulate_exposure.
+
+    These tests operate at the service layer without a real DB.  The DB-
+    dependent paths are exercised by patching raf_cursor so we can assert on
+    what would be written to lcb_dollars without needing a live MySQL instance.
+    """
+
+    def test_simulate_response_includes_lcb(self):
+        """simulate_exposure must include lower_confidence_bound_dollars in its return dict.
+
+        We stub the DB calls so the test is self-contained.  The key assertion
+        is that the field is present and 0 <= LCB < extrapolated_exposure.
+        """
+        from unittest.mock import MagicMock, patch, call
+
+        # Stub cursor returns: run query, agg query, UPDATE assumed_fail_rate.
+        run_row = {
+            "sample_size": 201,
+            "payment_year": 2025,
+            "members_enrolled": 50_000,
+            "ffs_adjuster": 0.97,
+            "extrapolation_methodology": "ffs_adjuster_with_wilson_lcb_v1",
+        }
+        agg_row = {
+            "total": 201,
+            "undefensible": 10,
+            "defensible": 180,
+            "needs_remediation": 11,
+            "observed_dollars": 500_000.0,
+        }
+
+        mock_cur = MagicMock()
+        mock_cur.__enter__ = lambda s: s
+        mock_cur.__exit__ = MagicMock(return_value=False)
+        # fetchone returns run_row first, then agg_row.
+        mock_cur.fetchone.side_effect = [run_row, agg_row]
+
+        from app.services import radv_audit_run_service as svc_mod
+
+        # Patch raf_cursor to intercept all three with-blocks (run query, lcb UPDATE).
+        with patch.object(svc_mod, "raf_cursor", return_value=mock_cur):
+            result = svc_mod.simulate_exposure(
+                run_id=1,
+                tenant_id="test-tenant",
+                assumed_fail_rate=0.05,
+            )
+
+        assert "lower_confidence_bound_dollars" in result, (
+            "simulate_exposure must include lower_confidence_bound_dollars in response"
+        )
+        lcb = result["lower_confidence_bound_dollars"]
+        exp = result["simulated_exposure_dollars"]
+        assert lcb is not None
+        assert lcb >= 0.0
+        assert lcb < exp, f"LCB {lcb} must be < extrapolated {exp}"
+
+    def test_simulate_persists_lcb_to_db(self):
+        """simulate_exposure must issue UPDATE raf_radv_audit_runs SET lcb_dollars when LCB is non-null."""
+        from unittest.mock import MagicMock, patch
+
+        run_row = {
+            "sample_size": 201,
+            "payment_year": 2025,
+            "members_enrolled": 50_000,
+            "ffs_adjuster": 0.97,
+            "extrapolation_methodology": "ffs_adjuster_with_wilson_lcb_v1",
+        }
+        agg_row = {
+            "total": 201,
+            "undefensible": 10,
+            "defensible": 180,
+            "needs_remediation": 11,
+            "observed_dollars": 500_000.0,
+        }
+
+        mock_cur = MagicMock()
+        mock_cur.__enter__ = lambda s: s
+        mock_cur.__exit__ = MagicMock(return_value=False)
+        mock_cur.fetchone.side_effect = [run_row, agg_row]
+
+        from app.services import radv_audit_run_service as svc_mod
+
+        with patch.object(svc_mod, "raf_cursor", return_value=mock_cur):
+            result = svc_mod.simulate_exposure(
+                run_id=42,
+                tenant_id="demo-tenant",
+                assumed_fail_rate=0.05,
+            )
+
+        # Find the lcb_dollars UPDATE call among all execute() calls.
+        executed_sqls = [str(c.args[0]) for c in mock_cur.execute.call_args_list if c.args]
+        lcb_update_calls = [s for s in executed_sqls if "lcb_dollars" in s]
+        assert lcb_update_calls, (
+            "Expected at least one UPDATE ... SET lcb_dollars = ... but found none. "
+            f"Calls: {executed_sqls}"
+        )
+
+        # The persisted value must match the response value.
+        lcb_write_args = [
+            c.args[1]
+            for c in mock_cur.execute.call_args_list
+            if c.args and "lcb_dollars" in str(c.args[0])
+        ]
+        assert lcb_write_args, "Could not extract lcb_dollars UPDATE params"
+        persisted_lcb = lcb_write_args[0][0]
+        assert persisted_lcb == result["lower_confidence_bound_dollars"]
+
+    def test_simulate_legacy_v1_lcb_is_none(self):
+        """methodology=legacy_v1 (no members_enrolled) must return None for LCB."""
+        from unittest.mock import MagicMock, patch
+
+        run_row = {
+            "sample_size": 30,
+            "payment_year": 2024,
+            "members_enrolled": None,  # triggers legacy path
+            "ffs_adjuster": None,
+            "extrapolation_methodology": "legacy_v1",
+        }
+        agg_row = {
+            "total": 30,
+            "undefensible": 3,
+            "defensible": 25,
+            "needs_remediation": 2,
+            "observed_dollars": 90_000.0,
+        }
+
+        mock_cur = MagicMock()
+        mock_cur.__enter__ = lambda s: s
+        mock_cur.__exit__ = MagicMock(return_value=False)
+        mock_cur.fetchone.side_effect = [run_row, agg_row]
+
+        from app.services import radv_audit_run_service as svc_mod
+
+        with patch.object(svc_mod, "raf_cursor", return_value=mock_cur):
+            result = svc_mod.simulate_exposure(
+                run_id=99,
+                tenant_id="demo-tenant",
+                assumed_fail_rate=0.10,
+            )
+
+        assert result.get("lower_confidence_bound_dollars") is None
+        assert result["methodology"] == "legacy_v1"
