@@ -19,6 +19,28 @@ export interface LiveRAFBar {
 // MEAT-letter expansions). The four canonical keys monitor/evaluate/assess/
 // treat are always present today; derive booleans defensively in render
 // code with `gaps.monitor ?? false`.
+/**
+ * MEATEvidence — sentence-level proof of each M/E/A/T letter, populated by
+ * the LLM extractor (Gap #12, backend service `meat_evidence_extractor.py`).
+ *
+ * Offsets are `[start, end]` character positions inside the source note so
+ * the UI can highlight the proving sentence when the full note is shown.
+ * Any field may be `null` when no evidence is available for that letter.
+ */
+export interface MEATEvidence {
+  monitor_text: string | null;
+  evaluate_text: string | null;
+  assess_text: string | null;
+  treat_text: string | null;
+  monitor_offsets: number[] | null;
+  evaluate_offsets: number[] | null;
+  assess_offsets: number[] | null;
+  treat_offsets: number[] | null;
+  source_encounter_id: number | null;
+  source_date: string | null;
+  icd10: string;
+}
+
 export interface MEATGap {
   patient_hcc_id: number | null;
   hcc: string;
@@ -27,6 +49,8 @@ export interface MEATGap {
   coefficient: number;
   status: "COMPLETE" | "PARTIAL" | "MISSING" | "NOT_COMPLIANT";
   gaps: Record<string, boolean>;
+  /** Sentence-level MEAT evidence (Gap #12). Null when not yet extracted. */
+  evidence?: MEATEvidence | null;
 }
 
 export interface SuspectMeat {

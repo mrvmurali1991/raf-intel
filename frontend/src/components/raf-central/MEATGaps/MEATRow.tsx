@@ -93,13 +93,14 @@ export function MEATRow({
   return (
     <div
       className={cn(
-        "relative flex items-center gap-3 py-3 pr-3 pl-0 transition-colors",
+        "relative py-3 pr-3 pl-0 transition-colors",
         isOdd ? "bg-muted/20 dark:bg-muted/10" : "bg-card"
       )}
     >
       {/* 4px severity rail */}
       <div className={cn("absolute left-0 top-0 bottom-0 w-1 rounded-sm flex-shrink-0", railColor)} aria-hidden />
 
+      <div className="flex items-center gap-3">
       {/* MEAT dots — smaller */}
       <div className="ml-3 flex-shrink-0">
         <LetterDots gaps={gap.gaps} size="sm" />
@@ -199,6 +200,15 @@ export function MEATRow({
           </span>
         )}
       </div>
+      </div>{/* end inner flex row */}
+
+      {/* Gap #12 — sentence-level MEAT evidence panel.  When the LLM
+          extractor has populated `gap.evidence`, render the proving
+          sentence under each MEAT letter so coders / clinicians see the
+          actual text from the note that supports the chip. */}
+      {gap.evidence && (
+        <MEATEvidencePanel evidence={gap.evidence} gaps={gap.gaps} />
+      )}
 
       {/* MEAT attestation dialog — replaces window.prompt */}
       <MEATAttestationDialog
@@ -209,6 +219,86 @@ export function MEATRow({
         onCancel={() => setDialogMode(null)}
         onSubmit={submitMeat}
       />
+    </div>
+  );
+}
+
+/**
+ * MEATEvidencePanel — renders the proving sentence under each M/E/A/T
+ * letter when sentence-level evidence is available.  Mirrors the
+ * RAAPID / Keebler / Reveleer EVE "evidence drawer" UX.
+ */
+function MEATEvidencePanel({
+  evidence,
+  gaps,
+}: {
+  evidence: NonNullable<MEATGap["evidence"]>;
+  gaps: MEATGap["gaps"];
+}) {
+  const letters: Array<{
+    key: "monitor" | "evaluate" | "assess" | "treat";
+    label: string;
+    text: string | null;
+    offsets: number[] | null;
+  }> = [
+    { key: "monitor",  label: "M — Monitor",  text: evidence.monitor_text,  offsets: evidence.monitor_offsets },
+    { key: "evaluate", label: "E — Evaluate", text: evidence.evaluate_text, offsets: evidence.evaluate_offsets },
+    { key: "assess",   label: "A — Assess",   text: evidence.assess_text,   offsets: evidence.assess_offsets },
+    { key: "treat",    label: "T — Treat",    text: evidence.treat_text,    offsets: evidence.treat_offsets },
+  ];
+  const populated = letters.filter((l) => l.text);
+  if (populated.length === 0) return null;
+
+  const sourceLabel = evidence.source_date
+    ? `Source: encounter ${evidence.source_date}`
+    : evidence.source_encounter_id != null
+    ? `Source: encounter #${evidence.source_encounter_id}`
+    : null;
+
+  return (
+    <div
+      className="ml-3 mt-2 rounded-md border border-border/40 bg-muted/30 dark:bg-muted/10 p-2 space-y-1.5"
+      data-testid="meat-evidence-panel"
+    >
+      {populated.map((l) => {
+        const present = gaps[l.key] ?? false;
+        return (
+          <div key={l.key} className="text-[11px] leading-snug">
+            <div className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "font-semibold tabular-nums",
+                  present
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-muted-foreground"
+                )}
+              >
+                {l.label}
+              </span>
+              {l.offsets && (
+                <span
+                  className="text-[10px] text-muted-foreground/70 tabular-nums"
+                  title={`Characters ${l.offsets[0]}–${l.offsets[1]} in source note`}
+                  data-meat-offsets={`${l.offsets[0]},${l.offsets[1]}`}
+                >
+                  [{l.offsets[0]}–{l.offsets[1]}]
+                </span>
+              )}
+            </div>
+            <blockquote
+              className="mt-0.5 pl-2 border-l-2 border-border/60 text-foreground/85 italic"
+              title={sourceLabel ?? undefined}
+            >
+              {l.text}
+            </blockquote>
+          </div>
+        );
+      })}
+      {sourceLabel && (
+        <div className="text-[10px] text-muted-foreground/70 pt-0.5">
+          {sourceLabel}
+        </div>
+      )}
     </div>
   );
 }
