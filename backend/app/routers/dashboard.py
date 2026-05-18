@@ -16,7 +16,7 @@ from app.auth import get_current_user, get_tenant_id
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 # ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ router = APIRouter(tags=["dashboard"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/v1/dashboard/kpi-trends", summary="12-week KPI sparkline series")
+@router.get("/kpi-trends", summary="12-week KPI sparkline series")
 def dashboard_kpi_trends(
     weeks: int = Query(default=12, ge=2, le=52, description="Number of weekly buckets to return"),
     current_user: dict = Depends(get_current_user),
@@ -178,7 +178,7 @@ def dashboard_kpi_trends(
 
 
 @router.get(
-    "/api/v1/dashboard/top-opportunities",
+    "/top-opportunities",
     summary="Top 5 RAF capture opportunities closing soon",
 )
 def dashboard_top_opportunities(

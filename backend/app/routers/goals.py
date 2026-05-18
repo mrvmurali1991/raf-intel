@@ -23,7 +23,7 @@ from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/goals", tags=["goals"])
+router = APIRouter(prefix="/api/goals", tags=["goals"])
 
 # ---------------------------------------------------------------------------
 # Helpers
