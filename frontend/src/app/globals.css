@@ -551,9 +551,6 @@
   .animate-slide-up {
     animation: slide-up-fade 0.5s ease-out forwards;
   }
-
-  .stagger-1 { animation-delay: 0.05s; }
-  .stagger-2 { animation-delay: 0.1s; }
 }
 
 /* Animated gradient border for KPI cards */
@@ -1055,14 +1052,13 @@ select.appearance-none {
 }
 
 .kpi-compact-label {
-  @apply text-xs font-medium uppercase tracking-wider;
+  @apply text-xs uppercase tracking-wider;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
-  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 .kpi-compact-value {
-  @apply text-3xl font-bold tracking-tight tabular-nums;
+  @apply text-3xl tracking-tight tabular-nums;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
