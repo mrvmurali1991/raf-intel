@@ -738,13 +738,11 @@ export default function SuspectsPage() {
         style={{
           display: "flex",
           alignItems: "flex-start",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
           gap: 16,
           marginBottom: 24,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
           <div
             style={{
               width: 48,
@@ -838,79 +836,6 @@ export default function SuspectsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <Search
-              size={16}
-              style={{
-                position: "absolute",
-                left: 14,
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: C.label,
-                pointerEvents: "none",
-              }}
-            />
-            <input
-              type="text"
-              title="Search by patient, ICD, HCC, or rationale"
-              placeholder="Search suspects…"
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-              onKeyDown={(e) => e.stopPropagation()}
-              aria-label="Search suspects"
-              style={{
-                height: 40,
-                width: "min(320px, calc(100vw - 180px))",
-                borderRadius: 10,
-                border: `1px solid ${C.border}`,
-                backgroundColor: tokens.white,
-                paddingLeft: 38,
-                paddingRight: 14,
-                fontSize: 13,
-                color: C.text,
-                fontFamily: FONT_SYS,
-                transition: "border-color 0.15s, box-shadow 0.15s",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = C.brand;
-                e.currentTarget.style.boxShadow = `0 0 0 3px ${C.brandSoft}`;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = C.border;
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-          </div>
-          <button
-            onClick={exportSuspectsCSV}
-            aria-label="Export suspects as CSV"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              height: 40,
-              padding: "0 16px",
-              borderRadius: 10,
-              border: "none",
-              backgroundColor: C.brand,
-              color: tokens.white,
-              fontSize: 13,
-              fontWeight: 600,
-              fontFamily: FONT_SYS,
-              cursor: "pointer",
-              flexShrink: 0,
-              boxShadow:
-                "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
-              transition: "background-color 0.15s ease",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = tokens.teal900; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.brand; }}
-          >
-            <FileDown size={14} />
-            Export
-          </button>
-        </div>
       </div>
 
       {/* ============================================================ */}
@@ -1326,6 +1251,83 @@ export default function SuspectsPage() {
                   <X size={12} /> Clear filters
                 </button>
               )}
+
+              {/* Divider between filter-side and action-side */}
+              <div style={{ width: 1, height: 24, backgroundColor: C.border, flexShrink: 0, marginLeft: 4, marginRight: 4 }} aria-hidden="true" />
+
+              {/* Search input */}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <Search
+                  size={14}
+                  style={{
+                    position: "absolute",
+                    left: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: C.label,
+                    pointerEvents: "none",
+                  }}
+                />
+                <input
+                  type="text"
+                  title="Search by patient, ICD, HCC, or rationale"
+                  placeholder="Search suspects…"
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  aria-label="Search suspects"
+                  style={{
+                    height: 36,
+                    width: 220,
+                    borderRadius: 10,
+                    border: `1px solid ${C.border}`,
+                    backgroundColor: tokens.white,
+                    paddingLeft: 30,
+                    paddingRight: 12,
+                    fontSize: 12,
+                    color: C.text,
+                    fontFamily: FONT_SYS,
+                    transition: "border-color 0.15s, box-shadow 0.15s",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = C.brand;
+                    e.currentTarget.style.boxShadow = `0 0 0 3px ${C.brandSoft}`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = C.border;
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                />
+              </div>
+
+              {/* Export button */}
+              <button
+                onClick={exportSuspectsCSV}
+                aria-label="Export suspects as CSV"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  height: 36,
+                  padding: "0 14px",
+                  borderRadius: 10,
+                  border: "none",
+                  backgroundColor: C.brand,
+                  color: tokens.white,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: FONT_SYS,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  boxShadow: "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
+                  transition: "background-color 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = tokens.teal900; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.brand; }}
+              >
+                <FileDown size={13} />
+                Export
+              </button>
             </div>
           );
         })()}
