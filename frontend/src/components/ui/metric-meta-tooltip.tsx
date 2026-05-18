@@ -135,28 +135,23 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
   return (
     <TooltipProvider>
       <Tooltip open={open} onOpenChange={setOpen}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            role="button"
-            tabIndex={0}
-            aria-label="Show metric formula and computation details"
-            aria-expanded={open}
-            data-testid="revenue-at-risk-info"
-            onClick={toggle}
-            onKeyDown={handleKeyDown}
-            className="
-              inline-flex items-center justify-center
-              h-4 w-4 rounded-full
-              text-muted-foreground hover:text-foreground
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1
-              transition-colors duration-150
-              cursor-pointer
-              shrink-0
-            "
-          >
-            <Info size={13} aria-hidden />
-          </button>
+        <TooltipTrigger
+          aria-label="Show metric formula and computation details"
+          aria-expanded={open}
+          data-testid="metric-meta-info"
+          onClick={toggle}
+          onKeyDown={handleKeyDown}
+          className="
+            inline-flex items-center justify-center
+            h-4 w-4 rounded-full
+            text-muted-foreground hover:text-foreground
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1
+            transition-colors duration-150
+            cursor-pointer
+            shrink-0
+          "
+        >
+          <Info size={13} aria-hidden />
         </TooltipTrigger>
         <TooltipContent
           side={side}

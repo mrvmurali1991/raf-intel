@@ -79,8 +79,10 @@ async function collectRevenue(
   const dollars = parseDollar(rawText);
 
   // Check for info icon on this page.
+  // Accepts either data-testid used by StatCard ("revenue-at-risk-info")
+  // or MetricMetaTooltip ("metric-meta-info") — both satisfy the transparency proof.
   const hasInfoIcon = await page
-    .locator('[data-testid="revenue-at-risk-info"]')
+    .locator('[data-testid="revenue-at-risk-info"], [data-testid="metric-meta-info"]')
     .first()
     .isVisible()
     .catch(() => false);
@@ -140,7 +142,9 @@ test.describe("@smoke Revenue-at-Risk parity across pages", () => {
       expect(
         pagesWithInfo.length,
         "No page exposes a Revenue-at-Risk _meta info icon — transparency proof failed.\n" +
-          "Add an `info` prop (StatCard) or `meta` prop (MetricCard) to at least one Revenue-at-Risk card.",
+          "Ensure at least one Revenue-at-Risk card has either:\n" +
+          "  • data-testid=\"revenue-at-risk-info\" (StatCard `info` prop), or\n" +
+          "  • data-testid=\"metric-meta-info\" (MetricCard `meta` prop via MetricMetaTooltip).",
       ).toBeGreaterThanOrEqual(1);
     },
   );
