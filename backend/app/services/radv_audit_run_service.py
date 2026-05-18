@@ -41,6 +41,62 @@ from app.db import raf_cursor
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Schema capability probe — cached at first use.
+#
+# Migrations 033 (members_enrolled/ffs_adjuster/extrapolation_methodology)
+# and 036 (lcb_dollars) may not yet be applied in every environment.
+# _has_v2_columns() returns True only when all three v2 columns are present,
+# allowing the service to degrade gracefully on older schemas.
+# ---------------------------------------------------------------------------
+_V2_COLUMNS_PRESENT: bool | None = None  # None = not yet probed
+
+
+def _has_v2_columns() -> bool:
+    """Return True if migration 033 columns exist on raf_radv_audit_runs."""
+    global _V2_COLUMNS_PRESENT
+    if _V2_COLUMNS_PRESENT is not None:
+        return _V2_COLUMNS_PRESENT
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME   = 'raf_radv_audit_runs'
+                  AND COLUMN_NAME IN ('members_enrolled', 'ffs_adjuster',
+                                      'extrapolation_methodology')
+                """
+            )
+            row = cur.fetchone()
+            _V2_COLUMNS_PRESENT = bool(row and int(row.get("cnt") or 0) == 3)
+    except Exception as exc:
+        logger.warning("radv: v2-column probe failed (%s); assuming absent", exc)
+        _V2_COLUMNS_PRESENT = False
+    return _V2_COLUMNS_PRESENT
+
+
+def _has_lcb_column() -> bool:
+    """Return True if migration 036 lcb_dollars column exists."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME   = 'raf_radv_audit_runs'
+                  AND COLUMN_NAME  = 'lcb_dollars'
+                """
+            )
+            row = cur.fetchone()
+            return bool(row and int(row.get("cnt") or 0) == 1)
+    except Exception as exc:
+        logger.warning("radv: lcb_dollars probe failed (%s); assuming absent", exc)
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Legacy extrapolation constants — kept for backward compatibility only.
 # New runs should supply members_enrolled and use compute_extrapolated_exposure.
 # ---------------------------------------------------------------------------
@@ -352,22 +408,36 @@ def create_audit_run(
     sampled = _sample(candidates, sample_size=sample_size, method=sample_method)
 
     with raf_cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO raf_radv_audit_runs
-                (tenant_id, name, payment_year, sample_size, sample_method,
-                 status, created_by, notes, members_enrolled, ffs_adjuster,
-                 extrapolation_methodology)
-            VALUES (%s, %s, %s, %s, %s, 'prep', %s, %s, %s, %s, %s)
-            """,
-            (
-                tenant_id, name, payment_year, sample_size, sample_method,
-                created_by_user_id, notes,
-                members_enrolled,
-                ffs_adjuster if ffs_adjuster is not None else CMS_FFS_ADJUSTER_DEFAULT,
-                "ffs_adjuster_v1" if members_enrolled else "legacy_v1",
-            ),
-        )
+        if _has_v2_columns():
+            cur.execute(
+                """
+                INSERT INTO raf_radv_audit_runs
+                    (tenant_id, name, payment_year, sample_size, sample_method,
+                     status, created_by, notes, members_enrolled, ffs_adjuster,
+                     extrapolation_methodology)
+                VALUES (%s, %s, %s, %s, %s, 'prep', %s, %s, %s, %s, %s)
+                """,
+                (
+                    tenant_id, name, payment_year, sample_size, sample_method,
+                    created_by_user_id, notes,
+                    members_enrolled,
+                    ffs_adjuster if ffs_adjuster is not None else CMS_FFS_ADJUSTER_DEFAULT,
+                    "ffs_adjuster_v1" if members_enrolled else "legacy_v1",
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO raf_radv_audit_runs
+                    (tenant_id, name, payment_year, sample_size, sample_method,
+                     status, created_by, notes)
+                VALUES (%s, %s, %s, %s, %s, 'prep', %s, %s)
+                """,
+                (
+                    tenant_id, name, payment_year, sample_size, sample_method,
+                    created_by_user_id, notes,
+                ),
+            )
         run_id = cur.lastrowid
 
         if sampled:
@@ -394,14 +464,21 @@ def create_audit_run(
 
 def list_audit_runs(*, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
     """Return run headers + per-run counts for the tenant."""
+    # v2 columns (migration 033) are optional — omit them when absent so the
+    # query doesn't fail on schemas that haven't run that migration yet.
+    v2_cols = (
+        ", r.members_enrolled, r.ffs_adjuster, r.extrapolation_methodology"
+        if _has_v2_columns()
+        else ""
+    )
     with raf_cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 r.id, r.name, r.payment_year, r.sample_size,
                 r.sample_method, r.status, r.created_by,
-                r.assumed_fail_rate, r.notes, r.created_at, r.updated_at,
-                r.members_enrolled, r.ffs_adjuster, r.extrapolation_methodology,
+                r.assumed_fail_rate, r.notes, r.created_at, r.updated_at
+                {v2_cols},
                 COUNT(rec.id)                                           AS record_count,
                 SUM(rec.final_decision = 'defensible')                  AS defensible_count,
                 SUM(rec.final_decision = 'undefensible')                AS undefensible_count,
@@ -517,16 +594,29 @@ def update_record(
 
     with raf_cursor() as cur:
         # Fetch run metadata for exposure computation.
-        cur.execute(
-            """
-            SELECT r.members_enrolled, r.ffs_adjuster, r.sample_size,
-                   r.extrapolation_methodology
-            FROM raf_radv_audit_runs r
-            JOIN raf_radv_audit_records rec ON rec.audit_run_id = r.id
-            WHERE rec.id = %s AND rec.audit_run_id = %s AND r.tenant_id = %s
-            """,
-            (record_id, run_id, tenant_id),
-        )
+        # v2 columns (migration 033) are optional — fall back to sample_size only
+        # when those columns don't exist yet.
+        if _has_v2_columns():
+            cur.execute(
+                """
+                SELECT r.members_enrolled, r.ffs_adjuster, r.sample_size,
+                       r.extrapolation_methodology
+                FROM raf_radv_audit_runs r
+                JOIN raf_radv_audit_records rec ON rec.audit_run_id = r.id
+                WHERE rec.id = %s AND rec.audit_run_id = %s AND r.tenant_id = %s
+                """,
+                (record_id, run_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT r.sample_size
+                FROM raf_radv_audit_runs r
+                JOIN raf_radv_audit_records rec ON rec.audit_run_id = r.id
+                WHERE rec.id = %s AND rec.audit_run_id = %s AND r.tenant_id = %s
+                """,
+                (record_id, run_id, tenant_id),
+            )
         run_meta = cur.fetchone()
         if not run_meta:
             raise ValueError("record not found in this run/tenant")
@@ -643,15 +733,26 @@ def simulate_exposure(
         raise ValueError("assumed_fail_rate must be in [0,1]")
 
     with raf_cursor() as cur:
-        cur.execute(
-            """
-            SELECT sample_size, payment_year, members_enrolled,
-                   ffs_adjuster, extrapolation_methodology
-            FROM raf_radv_audit_runs
-            WHERE id = %s AND tenant_id = %s
-            """,
-            (run_id, tenant_id),
-        )
+        # v2 columns (migration 033) are optional — omit them when absent.
+        if _has_v2_columns():
+            cur.execute(
+                """
+                SELECT sample_size, payment_year, members_enrolled,
+                       ffs_adjuster, extrapolation_methodology
+                FROM raf_radv_audit_runs
+                WHERE id = %s AND tenant_id = %s
+                """,
+                (run_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT sample_size, payment_year
+                FROM raf_radv_audit_runs
+                WHERE id = %s AND tenant_id = %s
+                """,
+                (run_id, tenant_id),
+            )
         run = cur.fetchone()
         if not run:
             raise ValueError("run not found")
@@ -723,7 +824,8 @@ def simulate_exposure(
         )
 
     # Persist LCB to the audit run row whenever we have a valid LCB value.
-    if lcb_dollars is not None:
+    # Skip if migration 036 (lcb_dollars column) hasn't been applied yet.
+    if lcb_dollars is not None and _has_lcb_column():
         with raf_cursor() as cur:
             cur.execute(
                 "UPDATE raf_radv_audit_runs SET lcb_dollars = %s WHERE id = %s AND tenant_id = %s",

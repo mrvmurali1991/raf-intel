@@ -143,13 +143,28 @@ export default function RadvPage() {
   }, [selectedRunId]);
 
   async function loadRuns() {
+    const TIMEOUT_MS = 15_000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const res = await api.get<{ runs: RunSummary[] }>("/api/radv/audit-runs");
+      const res = await api.get<{ runs: RunSummary[] }>("/api/radv/audit-runs", {
+        signal: controller.signal,
+      });
       setRuns(res.data.runs || []);
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        || "Failed to load audit runs";
+      const axiosErr = e as { code?: string; response?: { data?: { detail?: string } } };
+      const isTimeout =
+        axiosErr?.code === "ECONNABORTED" ||
+        (e instanceof Error && e.name === "CanceledError") ||
+        (e instanceof Error && e.name === "AbortError");
+      const msg = isTimeout
+        ? "Request timed out after 15 s — the server may be unavailable. Refresh to retry."
+        : axiosErr?.response?.data?.detail || "Failed to load audit runs";
       setError(msg);
+      // Ensure spinner exits — set runs to empty array so RunList renders the error path.
+      setRuns([]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
