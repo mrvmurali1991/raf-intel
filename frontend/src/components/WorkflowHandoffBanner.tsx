@@ -39,7 +39,7 @@ export default function WorkflowHandoffBanner({
 
   if (hideWhenZero && count === 0) return null;
 
-  const displayMessage = message.replace("{count}", String(count));
+  const displayMessage = message.replaceAll("{count}", String(count));
 
   return (
     <div
