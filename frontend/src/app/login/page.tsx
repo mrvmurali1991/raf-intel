@@ -546,25 +546,29 @@ export default function LoginPage() {
   return (
     <TooltipProvider delay={200}>
     <div className="min-h-screen flex">
-      {/* Left panel - Clinical Aesthetic */}
+      {/* Left panel - Clinical Aesthetic with Aurora */}
       <div
-        className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden"
-        style={{ 
-          borderRight: "1px solid rgba(20, 184, 166, 0.1)",
+        className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden aurora-bg"
+        style={{
+          borderRight: "1px solid rgba(20, 184, 166, 0.12)",
         }}
       >
         {/* Glassmorphism gradient overlay for legibility */}
-        <div className="absolute inset-0 pointer-events-none bg-white/40 dark:bg-slate-950/70 backdrop-blur-[2px]" />
-        
-        {/* Soft clinical background accents */}
-        <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none bg-white/50 dark:bg-slate-950/60 backdrop-blur-[1px]" />
+
+        {/* Aurora orb accents — softly animated */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div
-            className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full opacity-40 dark:opacity-20 blur-[80px]"
-            style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 70%)" }}
+            className="absolute top-[-15%] left-[-10%] w-[550px] h-[550px] rounded-full opacity-35 dark:opacity-20 blur-[90px] login-orb-1"
+            style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 65%)" }}
           />
           <div
-            className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full opacity-30 dark:opacity-20 blur-[100px]"
-            style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 70%)" }}
+            className="absolute bottom-[-15%] right-[-12%] w-[650px] h-[650px] rounded-full opacity-25 dark:opacity-15 blur-[110px] login-orb-2"
+            style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 65%)" }}
+          />
+          <div
+            className="absolute top-[40%] right-[15%] w-[300px] h-[300px] rounded-full opacity-15 dark:opacity-10 blur-[70px] login-orb-3"
+            style={{ background: "radial-gradient(circle, #818cf8 0%, transparent 65%)" }}
           />
         </div>
 
@@ -661,16 +665,16 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel */}
-      <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
+      {/* Right panel — aurora background */}
+      <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 aurora-bg relative overflow-hidden">
         {/* Animated floating gradient orbs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="login-orb login-orb-1 absolute w-[400px] h-[400px] rounded-full opacity-30 dark:opacity-15 blur-[100px]"
-            style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 70%)" }} />
-          <div className="login-orb login-orb-2 absolute w-[350px] h-[350px] rounded-full opacity-25 dark:opacity-10 blur-[90px]"
-            style={{ background: "radial-gradient(circle, #818cf8 0%, transparent 70%)" }} />
-          <div className="login-orb login-orb-3 absolute w-[300px] h-[300px] rounded-full opacity-20 dark:opacity-10 blur-[80px]"
-            style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 70%)" }} />
+          <div className="login-orb login-orb-1 absolute w-[480px] h-[480px] rounded-full opacity-25 dark:opacity-12 blur-[100px]"
+            style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 65%)" }} />
+          <div className="login-orb login-orb-2 absolute w-[400px] h-[400px] rounded-full opacity-20 dark:opacity-10 blur-[90px]"
+            style={{ background: "radial-gradient(circle, #818cf8 0%, transparent 65%)" }} />
+          <div className="login-orb login-orb-3 absolute w-[350px] h-[350px] rounded-full opacity-18 dark:opacity-08 blur-[80px]"
+            style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 65%)" }} />
         </div>
 
         {/* Heartbeat line SVG decorative element */}
@@ -702,7 +706,7 @@ export default function LoginPage() {
             mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
           }`}
         >
-          <div className="space-y-8 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/50 dark:border-slate-700/50 shadow-2xl shadow-slate-300/30 dark:shadow-black/30 p-9 sm:p-11 rounded-[2rem]">
+          <div className="space-y-8 glass-frosted shadow-2xl shadow-slate-200/40 dark:shadow-black/40 p-9 sm:p-11 rounded-[2rem]">
             {/* Brand area inside card */}
             <div className="flex flex-col items-center lg:items-start gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 via-teal-400 to-blue-500 shadow-lg shadow-teal-500/25 text-white ring-4 ring-teal-500/10 lg:hidden">
