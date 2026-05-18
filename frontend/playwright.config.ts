@@ -4,13 +4,23 @@ import path from "path";
 /**
  * Playwright configuration for RAF Intelligence E2E tests.
  *
- * Base URL targets the live staging deployment at raf.comercioit.com.
- * Tests run headed by default during local development; set CI=true to run
- * headless in pipelines.
+ * Base URL targets the live staging deployment at raf.comercioit.com by
+ * default. Override with E2E_BASE_URL env var for local dev server runs.
+ *
+ * Run the new E2E suite:
+ *   cd frontend && E2E_BASE_URL=http://localhost:3001 npx playwright test --project=e2e
+ * Or use the helper script:
+ *   bash frontend/scripts/e2e.sh
  */
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/e2e/**/*.spec.ts", "**/visual/**/*.spec.ts", "**/demo/**/*.spec.ts", "**/a11y/**/*.spec.ts", "*.spec.ts"],
+  testMatch: [
+    "**/e2e/**/*.spec.ts",
+    "**/a11y/**/*.spec.ts",
+    "**/visual/**/*.spec.ts",
+    "**/demo/**/*.spec.ts",
+    "*.spec.ts",
+  ],
 
   // Maximum time for one full test (pipeline can take up to 2 minutes).
   timeout: 180_000,
@@ -21,8 +31,8 @@ export default defineConfig({
   // Retry failed tests once to guard against transient network blips.
   retries: 1,
 
-  // Run tests sequentially — the live backend has limited capacity.
-  workers: 1,
+  // Two parallel workers for the local e2e suite; 1 for live staging.
+  workers: process.env.E2E_BASE_URL ? 2 : 1,
 
   // Rich HTML report for post-run review.
   reporter: [
@@ -38,7 +48,7 @@ export default defineConfig({
   },
 
   use: {
-    baseURL: "https://raf.comercioit.com",
+    baseURL: process.env.E2E_BASE_URL ?? "https://raf.comercioit.com",
 
     // Keep browser open long enough for the 120-second pipeline calls.
     actionTimeout: 30_000,
@@ -65,6 +75,25 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         // Wide viewport so the full dashboard layout is visible.
         viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      name: "e2e",
+      testMatch: ["**/e2e/**/*.spec.ts"],
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        // E2E_BASE_URL overrides prod URL for local dev runs.
+        baseURL: process.env.E2E_BASE_URL ?? "https://raf.comercioit.com",
+      },
+    },
+    {
+      name: "a11y",
+      testMatch: ["**/a11y/**/*.spec.ts"],
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        baseURL: process.env.E2E_BASE_URL ?? "https://raf.comercioit.com",
       },
     },
     {
