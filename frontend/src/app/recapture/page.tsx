@@ -611,7 +611,7 @@ export default function RecapturePage() {
 
       {/* Action Panel — final bento row spans the full 12 columns. */}
       <div
-        className="premium-card animate-slide-up stagger-6"
+        className="premium-card animate-slide-up stagger-6 bg-gradient-to-br from-muted to-card"
         style={{
           padding: 24,
           display: "flex",
@@ -619,7 +619,6 @@ export default function RecapturePage() {
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: 16,
-          background: `linear-gradient(135deg, ${colors.slate50}, ${colors.white})`,
         }}
       >
         <div>
