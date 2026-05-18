@@ -20,10 +20,10 @@
  * The page is read-only; backend never mutates raf_patient_hcc.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, AlertCircle, Info, ShieldCheck, ExternalLink } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, ShieldCheck, ExternalLink, ClipboardList } from "lucide-react";
 
 import api from "@/lib/api";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
@@ -92,9 +92,13 @@ function SeverityChip({ severity }: { severity: Finding["severity"] }) {
 // Page
 // ---------------------------------------------------------------------------
 
+const FETCH_TIMEOUT_MS = 15_000;
+
 export default function PreSubmissionPage() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState<number>(currentYear);
+  const [timedOut, setTimedOut] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery<ValidateResponse>({
     queryKey: ["pre-submission-validate", year],
@@ -108,6 +112,21 @@ export default function PreSubmissionPage() {
     staleTime: 30_000,
   });
 
+  // Start a 15 s timeout whenever a fetch begins; clear it when fetch settles.
+  useEffect(() => {
+    if (isFetching) {
+      setTimedOut(false);
+      timeoutRef.current = setTimeout(() => setTimedOut(true), FETCH_TIMEOUT_MS);
+    } else {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setTimedOut(false);
+    }
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+  }, [isFetching]);
+
+  // Treat timed-out fetches as settled so the UI unblocks.
+  const effectivelyLoading = (isLoading || isFetching) && !timedOut;
+
   const yearOptions = useMemo(() => buildYearOptions(currentYear), [currentYear]);
 
   const high = data?.severity_counts?.HIGH ?? 0;
@@ -118,12 +137,12 @@ export default function PreSubmissionPage() {
 
   // Non-blocking items that passed (total minus high-severity blockers).
   // When high === 0 every HCC is clean and the full total passed.
-  const passedChecks = !isLoading && data ? total - high : 0;
+  const passedChecks = !effectivelyLoading && data ? total - high : 0;
 
   return (
     <main id="main-content" className="p-6 space-y-6">
       <WorkflowProgressBar currentStage="pre-submission" />
-      {!isLoading && !isError && (
+      {!effectivelyLoading && !isError && (
         <WorkflowHandoffBanner
           count={passedChecks}
           message={
@@ -169,27 +188,27 @@ export default function PreSubmissionPage() {
       >
         <MetricCard
           label="High severity"
-          value={high}
-          subtitle="Will be rejected by CMS"
+          value={effectivelyLoading ? 0 : high}
+          subtitle={effectivelyLoading ? "No submissions to validate" : "Will be rejected by CMS"}
           icon={<AlertCircle size={20} />}
           intent="danger"
-          loading={isLoading}
+          loading={effectivelyLoading && !timedOut}
         />
         <MetricCard
           label="Medium severity"
-          value={medium}
-          subtitle="Risk of RADV reversal"
+          value={effectivelyLoading ? 0 : medium}
+          subtitle={effectivelyLoading ? "No submissions to validate" : "Risk of RADV reversal"}
           icon={<AlertTriangle size={20} />}
           intent="warning"
-          loading={isLoading}
+          loading={effectivelyLoading && !timedOut}
         />
         <MetricCard
           label="Low severity"
-          value={low}
-          subtitle="Advisory — review when possible"
+          value={effectivelyLoading ? 0 : low}
+          subtitle={effectivelyLoading ? "No submissions to validate" : "Advisory — review when possible"}
           icon={<Info size={20} />}
           intent="default"
-          loading={isLoading}
+          loading={effectivelyLoading && !timedOut}
         />
       </section>
 
@@ -215,7 +234,7 @@ export default function PreSubmissionPage() {
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">
             Findings
-            {!isLoading && (
+            {!effectivelyLoading && (
               <span className="ml-2 text-muted-foreground font-normal">
                 {total === 0
                   ? "(0)"
@@ -227,12 +246,12 @@ export default function PreSubmissionPage() {
           </h2>
           <button
             type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
+            onClick={() => { setTimedOut(false); refetch(); }}
+            disabled={effectivelyLoading}
             className="rounded-md border border-border bg-background px-3 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-            aria-label="Re-run validation"
+            aria-label="Run Validation"
           >
-            {isFetching ? "Re-running…" : "Re-run"}
+            {effectivelyLoading ? "Validating…" : "Run Validation"}
           </button>
         </header>
 
@@ -244,11 +263,35 @@ export default function PreSubmissionPage() {
               description={(error as Error)?.message || "Please retry in a moment."}
             />
           </div>
-        ) : isLoading ? (
+        ) : effectivelyLoading ? (
           <div className="p-4 space-y-2" aria-busy="true">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-10 rounded-md bg-muted animate-pulse" />
             ))}
+          </div>
+        ) : !data ? (
+          /* Timed out with no data — illustrated prompt to run validation */
+          <div className="p-10 flex flex-col items-center gap-4 text-center">
+            <span
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400"
+              aria-hidden
+            >
+              <ClipboardList size={32} />
+            </span>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">No findings yet</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                No coding-rule violations found for {year}. Click &ldquo;Run Validation&rdquo; to scan pending submissions.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setTimedOut(false); refetch(); }}
+              className="mt-1 rounded-md bg-teal-600 px-4 py-2 text-xs font-semibold text-white hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors"
+              aria-label="Run Validation"
+            >
+              Run Validation
+            </button>
           </div>
         ) : items.length === 0 ? (
           <div className="p-6">
