@@ -2065,6 +2065,7 @@ export async function getWorkflowSummary(): Promise<{
   avg_confidence: number;
   last_sync_at: string | null;
   last_analysis_at: string | null;
+  open_recapture_gaps?: number;
 }> {
   const { data } = await api.get("/api/reports/workflow-summary");
   return data;
