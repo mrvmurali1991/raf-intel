@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef, useId } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +28,7 @@ import {
   Activity,
   Search,
   FileSearch,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
@@ -268,6 +269,12 @@ export default function SuspectsPage() {
   const [sortField, setSortField] = useState<SortField>((searchParams.get("sort") as SortField) || "confidence");
   const [page, setPage] = useState(0);
 
+  // "More filters" popover
+  const [moreOpen, setMoreOpen] = useState(false);
+  const morePopoverRef = useRef<HTMLDivElement | null>(null);
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const moreMenuId = useId();
+
   // Keyboard navigation — track focused row for A/D/R shortcut dispatch
   const [focusedRowIdx, setFocusedRowIdx] = useState(0);
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -288,6 +295,20 @@ export default function SuspectsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedRationale, setExpandedRationale] = useState<Set<number>>(new Set());
   const [measurementYear, setMeasurementYear] = useState<number>(2026);
+
+  // Close "More" popover on outside click
+  useEffect(() => {
+    if (!moreOpen) return;
+    function handleOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        morePopoverRef.current && !morePopoverRef.current.contains(target) &&
+        moreTriggerRef.current && !moreTriggerRef.current.contains(target)
+      ) setMoreOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [moreOpen]);
 
   /* --- Data -------------------------------------------------------- */
 
@@ -1011,230 +1032,304 @@ export default function SuspectsPage() {
           marginBottom: 14,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", overflowX: "auto", paddingBottom: 2 }}>
-          {/* Status segmented chips */}
-          <div
-            className="suspects-filter-chip-group"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              backgroundColor: tokens.white,
-              border: `1px solid ${C.border}`,
-              borderRadius: 10,
-              padding: 3,
-              gap: 2,
-              height: 36,
-            }}
-          >
-            {STATUS_TABS.map(({ value, label, dot }) => {
-              const active = statusFilter === value;
-              const count = statusCounts[value];
-              return (
-                <button
-                  key={value}
-                  onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    height: 28,
-                    padding: "0 12px",
-                    borderRadius: 7,
-                    border: "none",
-                    backgroundColor: active ? C.text : "transparent",
-                    color: active ? tokens.white : C.textMuted,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    fontFamily: FONT_SYS,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {dot && (
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: dot,
-                        boxShadow: active ? "0 0 0 1.5px rgba(255,255,255,0.25)" : "none",
-                      }}
-                    />
-                  )}
-                  {label}
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: active ? "rgba(255,255,255,0.7)" : C.label,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        {/* ── Progressive-disclosure filter strip ──────────────────── */}
+        {/* Primary (always visible): All / Open / Accepted + "More"   */}
+        {/* Collapsed into "More": Dismissed, Coded, Evidence, Signal  */}
+        {/* Always visible: Sort button                                */}
+        {(() => {
+          const PRIMARY_STATUS: StatusTab[] = ["all", "open", "accepted"];
+          const MORE_STATUS: StatusTab[] = ["dismissed", "coded"];
 
-          {/* Evidence type chips */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              backgroundColor: tokens.white,
-              border: `1px solid ${C.border}`,
-              borderRadius: 10,
-              padding: 3,
-              gap: 2,
-              height: 36,
-            }}
-          >
-            {EVIDENCE_FILTERS.map(({ value, label }) => {
-              const active = evidenceFilter === value;
-              return (
-                <button
-                  key={value}
-                  onClick={(e) => { e.stopPropagation(); setEvidenceFilter(value); setPage(0); }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    height: 28,
-                    padding: "0 10px",
-                    borderRadius: 7,
-                    border: "none",
-                    backgroundColor: active ? C.brandSoft : "transparent",
-                    color: active ? C.brand : C.textMuted,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    fontFamily: FONT_SYS,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {value !== "all" && evidenceIcon(value, 11)}
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          const moreActiveCount =
+            (MORE_STATUS.includes(statusFilter) ? 1 : 0) +
+            (evidenceFilter !== "all" ? 1 : 0) +
+            (confidenceBand !== "all" ? 1 : 0);
 
-          {/* Confidence chips */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              backgroundColor: tokens.white,
-              border: `1px solid ${C.border}`,
-              borderRadius: 10,
-              padding: 3,
-              gap: 2,
-              height: 36,
-            }}
-          >
-            {CONFIDENCE_OPTIONS.map(({ value, label, color }) => {
-              const active = confidenceBand === value;
-              return (
-                <button
-                  key={value}
-                  onClick={(e) => { e.stopPropagation(); setConfidenceBand(value); setPage(0); }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    height: 28,
-                    padding: "0 10px",
-                    borderRadius: 7,
-                    border: "none",
-                    backgroundColor: active ? `${color}14` : "transparent",
-                    color: active ? color : C.textMuted,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    fontFamily: FONT_SYS,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {value !== "all" && (
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: color,
-                      }}
-                    />
-                  )}
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          const groupStyle: React.CSSProperties = {
+            display: "inline-flex",
+            alignItems: "center",
+            backgroundColor: tokens.white,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: 3,
+            gap: 2,
+            height: 36,
+          };
 
-          {/* Sort */}
-          <button
-            onClick={() =>
-              setSortField((f) =>
-                f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence"
-              )
-            }
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              height: 36,
-              padding: "0 14px",
-              borderRadius: 10,
-              border: `1px solid ${C.border}`,
-              backgroundColor: tokens.white,
-              color: C.textMuted,
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: FONT_SYS,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-          >
-            Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
-          </button>
-
-          {hasActiveFilters && (
-            <button
-              onClick={clearAllFilters}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                height: 36,
-                padding: "0 14px",
-                borderRadius: 999,
-                border: `1px dashed ${C.border}`,
-                backgroundColor: "transparent",
-                color: C.textSubtle,
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: FONT_SYS,
-                cursor: "pointer",
-              }}
-            >
-              <X size={12} />
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        <div
-          style={{
+          const primaryChipStyle = (active: boolean): React.CSSProperties => ({
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            height: 28,
+            padding: "0 12px",
+            borderRadius: 7,
+            border: "none",
+            backgroundColor: active ? C.text : "transparent",
+            color: active ? tokens.white : C.textMuted,
             fontSize: 12,
             fontWeight: 600,
-            color: C.textSubtle,
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
+            fontFamily: FONT_SYS,
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            whiteSpace: "nowrap" as const,
+          });
+
+          const activeTagStyle = (borderColor: string, bgColor: string, color: string): React.CSSProperties => ({
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            height: 28,
+            padding: "0 10px",
+            borderRadius: 999,
+            border: `1px solid ${borderColor}`,
+            backgroundColor: bgColor,
+            color,
+            fontSize: 12,
+            fontWeight: 600,
+            fontFamily: FONT_SYS,
+            cursor: "pointer",
+          });
+
+          const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+            const items = Array.from(
+              morePopoverRef.current?.querySelectorAll<HTMLElement>("[data-menu-item]") ?? []
+            );
+            const idx = items.indexOf(e.target as HTMLElement);
+            if (e.key === "ArrowDown") { e.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+            else if (e.key === "Escape") { setMoreOpen(false); moreTriggerRef.current?.focus(); }
+          };
+
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+
+              {/* Primary status chips */}
+              <div className="suspects-filter-chip-group" style={groupStyle} role="group" aria-label="Status filter">
+                {STATUS_TABS.filter((t) => PRIMARY_STATUS.includes(t.value)).map(({ value, label, dot }) => {
+                  const active = statusFilter === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      aria-pressed={active}
+                      style={primaryChipStyle(active)}
+                    >
+                      {dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot, boxShadow: active ? "0 0 0 1.5px rgba(255,255,255,0.25)" : "none" }} />}
+                      {label}
+                      <span style={{ fontSize: 11, fontWeight: 600, color: active ? "rgba(255,255,255,0.7)" : C.label, fontVariantNumeric: "tabular-nums" }}>{statusCounts[value]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* "More filters" trigger + popover */}
+              <div style={{ position: "relative" }}>
+                <button
+                  ref={moreTriggerRef}
+                  id={`${moreMenuId}-btn`}
+                  aria-haspopup="true"
+                  aria-expanded={moreOpen}
+                  aria-controls={`${moreMenuId}-menu`}
+                  onClick={() => setMoreOpen((o) => !o)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    height: 36, padding: "0 14px", borderRadius: 10,
+                    border: `1px solid ${moreActiveCount > 0 ? C.brand : C.border}`,
+                    backgroundColor: moreActiveCount > 0 ? C.brandSoft : tokens.white,
+                    color: moreActiveCount > 0 ? C.brand : C.textMuted,
+                    fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS,
+                    cursor: "pointer", transition: "all 0.15s ease",
+                  }}
+                >
+                  More filters
+                  {moreActiveCount > 0 && (
+                    <span
+                      aria-label={`${moreActiveCount} active`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        minWidth: 18, height: 18, borderRadius: 999,
+                        backgroundColor: C.brand, color: tokens.white,
+                        fontSize: 10, fontWeight: 700, padding: "0 4px",
+                      }}
+                    >
+                      {moreActiveCount}
+                    </span>
+                  )}
+                  <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: moreOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+
+                {moreOpen && (
+                  <div
+                    ref={morePopoverRef}
+                    id={`${moreMenuId}-menu`}
+                    role="dialog"
+                    aria-label="More filters"
+                    onKeyDown={handleMenuKeyDown}
+                    style={{
+                      position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 120,
+                      backgroundColor: tokens.white, border: `1px solid ${C.border}`,
+                      borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)",
+                      padding: "14px 16px", minWidth: 280, display: "flex", flexDirection: "column", gap: 14,
+                    }}
+                  >
+                    {/* Status: Dismissed / Coded */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.label, marginBottom: 6 }}>Status</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {STATUS_TABS.filter((t) => MORE_STATUS.includes(t.value)).map(({ value, label, dot }) => {
+                          const active = statusFilter === value;
+                          return (
+                            <button
+                              key={value}
+                              data-menu-item
+                              onClick={() => { handleStatusChange(value); setMoreOpen(false); }}
+                              aria-pressed={active}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 6,
+                                height: 30, padding: "0 12px", borderRadius: 8,
+                                border: `1px solid ${active ? C.brand : C.border}`,
+                                backgroundColor: active ? C.brandSoft : "#f8fafc",
+                                color: active ? C.brand : C.textMuted,
+                                fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
+                              }}
+                            >
+                              {dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot }} />}
+                              {label}
+                              <span style={{ fontSize: 10, color: active ? C.brand : C.label, fontVariantNumeric: "tabular-nums" }}>{statusCounts[value]}</span>
+                              {active && <X size={10} onClick={(e) => { e.stopPropagation(); handleStatusChange("open"); }} aria-label={`Remove ${label} filter`} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ height: 1, backgroundColor: C.borderSoft }} />
+
+                    {/* Evidence source */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.label, marginBottom: 6 }}>Evidence source</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {EVIDENCE_FILTERS.filter((f) => f.value !== "all").map(({ value, label }) => {
+                          const active = evidenceFilter === value;
+                          return (
+                            <button
+                              key={value}
+                              data-menu-item
+                              onClick={() => { setEvidenceFilter(active ? "all" : value); setPage(0); }}
+                              aria-pressed={active}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 5,
+                                height: 30, padding: "0 10px", borderRadius: 8,
+                                border: `1px solid ${active ? C.brand : C.border}`,
+                                backgroundColor: active ? C.brandSoft : "#f8fafc",
+                                color: active ? C.brand : C.textMuted,
+                                fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
+                              }}
+                            >
+                              {evidenceIcon(value, 11)}{label}
+                              {active && <X size={10} aria-label={`Remove ${label} filter`} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ height: 1, backgroundColor: C.borderSoft }} />
+
+                    {/* Confidence signal */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.label, marginBottom: 6 }}>Confidence signal</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {CONFIDENCE_OPTIONS.filter((o) => o.value !== "all").map(({ value, label, color }) => {
+                          const active = confidenceBand === value;
+                          return (
+                            <button
+                              key={value}
+                              data-menu-item
+                              onClick={() => { setConfidenceBand(active ? "all" : value); setPage(0); }}
+                              aria-pressed={active}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 6,
+                                height: 30, padding: "0 10px", borderRadius: 8,
+                                border: `1px solid ${active ? color : C.border}`,
+                                backgroundColor: active ? `${color}14` : "#f8fafc",
+                                color: active ? color : C.textMuted,
+                                fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
+                              }}
+                            >
+                              <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+                              {label}
+                              {active && <X size={10} aria-label={`Remove ${label} filter`} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Surfaced active "More" chips — removable inline */}
+              {MORE_STATUS.includes(statusFilter) && (() => {
+                const t = STATUS_TABS.find((x) => x.value === statusFilter)!;
+                return (
+                  <button key={`active-${statusFilter}`} onClick={() => handleStatusChange("open")} aria-label={`Remove ${t.label} filter`} style={activeTagStyle(C.brand, C.brandSoft, C.brand)}>
+                    {t.dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.dot }} />}
+                    {t.label} <X size={11} />
+                  </button>
+                );
+              })()}
+
+              {evidenceFilter !== "all" && (
+                <button onClick={() => { setEvidenceFilter("all"); setPage(0); }} aria-label={`Remove evidence filter: ${evidenceFilter}`} style={activeTagStyle(C.brand, C.brandSoft, C.brand)}>
+                  {evidenceIcon(evidenceFilter, 11)}
+                  {EVIDENCE_FILTERS.find((f) => f.value === evidenceFilter)?.label}
+                  <X size={11} />
+                </button>
+              )}
+
+              {confidenceBand !== "all" && (() => {
+                const opt = CONFIDENCE_OPTIONS.find((o) => o.value === confidenceBand)!;
+                return (
+                  <button onClick={() => { setConfidenceBand("all"); setPage(0); }} aria-label={`Remove confidence filter: ${opt.label}`} style={activeTagStyle(opt.color, `${opt.color}14`, opt.color)}>
+                    <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: opt.color }} />
+                    {opt.label} <X size={11} />
+                  </button>
+                );
+              })()}
+
+              {/* Sort — always visible */}
+              <button
+                onClick={() => setSortField((f) => f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence")}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  height: 36, padding: "0 14px", borderRadius: 10,
+                  border: `1px solid ${C.border}`, backgroundColor: tokens.white,
+                  color: C.textMuted, fontSize: 12, fontWeight: 600,
+                  fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
+                }}
+              >
+                Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
+              </button>
+
+              {hasActiveFilters && (
+                <button
+                  onClick={clearAllFilters}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    height: 36, padding: "0 14px", borderRadius: 999,
+                    border: `1px dashed ${C.border}`, backgroundColor: "transparent",
+                    color: C.textSubtle, fontSize: 12, fontWeight: 600,
+                    fontFamily: FONT_SYS, cursor: "pointer",
+                  }}
+                >
+                  <X size={12} /> Clear filters
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, fontVariantNumeric: "tabular-nums" }}>
           Showing {filteredSorted.length.toLocaleString()} of {allSuspects.length.toLocaleString()}
         </div>
       </div>
