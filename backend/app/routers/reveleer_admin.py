@@ -15,7 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
 
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, get_tenant_id, require_role
 from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class SyncStatus(BaseModel):
     summary="Trigger immediate Reveleer chart pull",
 )
 def pull_now(
-    tenant_id: str = Query(..., description="RAF tenant identifier"),
+    tenant_id: str = Depends(get_tenant_id),
     since: Optional[str] = Query(None, description="ISO-8601 lower bound for chart timestamps"),
     _user=Depends(require_role("admin")),
 ) -> Any:
@@ -97,7 +97,7 @@ def pull_now(
 )
 def push_patient(
     raf_patient_id: int = Path(..., description="RAF patients.id"),
-    tenant_id: str = Query(..., description="RAF tenant identifier"),
+    tenant_id: str = Depends(get_tenant_id),
     _user=Depends(require_role("admin")),
 ) -> Any:
     """Push all open gemini_vision suspects for a patient to Reveleer immediately."""
@@ -128,7 +128,7 @@ def push_patient(
     summary="Reveleer sync status — last timestamps and counts",
 )
 def sync_status(
-    tenant_id: str = Query(..., description="RAF tenant identifier"),
+    tenant_id: str = Depends(get_tenant_id),
     _user=Depends(require_role("admin")),
 ) -> Any:
     """Return last pull/push timestamps and aggregate counts for a tenant."""

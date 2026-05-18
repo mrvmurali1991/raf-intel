@@ -105,11 +105,10 @@ def list_pulls(
             cur.execute(
                 """SELECT id, tenant_id, raf_patient_id, inovalon_pull_id,
                           submitted_at, completed_at, status,
-                          resources_returned, bundle_size_bytes, error_text,
-                          created_at
+                          resources_returned, bundle_size_bytes, error_text
                    FROM   inovalon_patient_pulls
                    WHERE  tenant_id = %s AND status = %s
-                   ORDER  BY created_at DESC
+                   ORDER  BY submitted_at DESC
                    LIMIT  %s""",
                 (tenant_id, status_filter, limit),
             )
@@ -117,11 +116,10 @@ def list_pulls(
             cur.execute(
                 """SELECT id, tenant_id, raf_patient_id, inovalon_pull_id,
                           submitted_at, completed_at, status,
-                          resources_returned, bundle_size_bytes, error_text,
-                          created_at
+                          resources_returned, bundle_size_bytes, error_text
                    FROM   inovalon_patient_pulls
                    WHERE  tenant_id = %s
-                   ORDER  BY created_at DESC
+                   ORDER  BY submitted_at DESC
                    LIMIT  %s""",
                 (tenant_id, limit),
             )
