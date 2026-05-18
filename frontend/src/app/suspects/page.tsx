@@ -1478,20 +1478,20 @@ export default function SuspectsPage() {
         {!isLoading && filteredSorted.length === 0 && (
           <div
             style={{
-              padding: "56px 24px",
+              padding: "28px 24px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 12,
+              gap: 10,
               textAlign: "center",
             }}
           >
             <div
               style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
+                width: 44,
+                height: 44,
+                borderRadius: 12,
                 backgroundColor: C.brandSoft,
                 color: C.brand,
                 display: "flex",
@@ -1499,21 +1499,17 @@ export default function SuspectsPage() {
                 justifyContent: "center",
               }}
             >
-              <FileSearch size={26} />
+              <FileSearch size={22} />
             </div>
-            <div className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>
-              No suspects match your filters
-            </div>
-            <div className="text-muted-foreground" style={{ fontSize: 13, maxWidth: 360 }}>
-              Try widening your status, evidence, or confidence filters to see more results.
+            <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700 }}>
+              No matches. {hasActiveFilters ? "Clear filters?" : "No suspect conditions found."}
             </div>
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
                 style={{
-                  marginTop: 4,
-                  height: 36,
-                  padding: "0 18px",
+                  height: 34,
+                  padding: "0 16px",
                   borderRadius: 10,
                   border: `1px solid ${C.brand}`,
                   backgroundColor: C.brandSoft,

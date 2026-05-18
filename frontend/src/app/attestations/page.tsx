@@ -373,8 +373,8 @@ export default function AttestationsPage() {
       ) : filtered.length === 0 ? (
         search || statusFilter !== "all" ? (
           <EmptyState
+            state="filtered-out"
             icon={<ClipboardCheck size={40} />}
-            title="No attestations found"
             description={
               search
                 ? "Try a different search term."
@@ -382,28 +382,12 @@ export default function AttestationsPage() {
             }
           />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-            <EmptyState
-              icon={<ClipboardCheck size={40} />}
-              title="No attestations yet"
-              description="Accepted suspects appear here once providers are assigned. Review your suspect queue to get started."
-            />
-            <a
-              href="/suspects"
-              style={{
-                display: "inline-block",
-                padding: "9px 20px",
-                borderRadius: 8,
-                background: "#2563EB",
-                color: "#fff",
-                fontWeight: 600,
-                fontSize: 13,
-                textDecoration: "none",
-              }}
-            >
-              Go to Suspects
-            </a>
-          </div>
+          <EmptyState
+            state="awaiting-action"
+            icon={<ClipboardCheck size={40} />}
+            title="No attestations yet — accepted suspects appear here"
+            cta={{ label: "Go to Suspects", href: "/suspects" }}
+          />
         )
       ) : (
         <div
