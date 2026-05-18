@@ -103,6 +103,10 @@ export interface StatCardProps {
    * rich formula tooltip (MetricMetaTooltip) next to the label.
    */
   meta?: MetricMeta;
+  /** data-testid placed on the label span — for smoke-test parity selectors */
+  labelTestId?: string;
+  /** data-testid placed on the value element — for smoke-test parity selectors */
+  valueTestId?: string;
 }
 
 /** Returns true when a value should trigger the empty-state layout. */
@@ -114,7 +118,7 @@ function isEmptyValue(value: React.ReactNode): boolean {
 }
 
 /** @deprecated Use MetricCard from @/components/ui/metric-card instead. */
-export function StatCard({ label, value, subtitle, icon, trend, accentClassName = "text-primary bg-primary/10", loading, href, info, emptyState, actionLink, sparklinePlaceholder, sparkline, meta }: StatCardProps) {
+export function StatCard({ label, value, subtitle, icon, trend, accentClassName = "text-primary bg-primary/10", loading, href, info, emptyState, actionLink, sparklinePlaceholder, sparkline, meta, labelTestId, valueTestId }: StatCardProps) {
   if (process.env.NODE_ENV !== "production") {
     // eslint-disable-next-line no-console
     console.warn(`[StatCard] "${label}" — StatCard is deprecated. Migrate to <MetricCard> from @/components/ui/metric-card.`);
@@ -143,7 +147,7 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" data-testid={labelTestId}>
             {label}
           </span>
           {meta && <MetricMetaTooltip meta={meta} />}
@@ -195,7 +199,7 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
         </div>
       ) : (
         <div>
-          <div className="tabular-nums text-[28px] font-bold text-foreground leading-tight">{value}</div>
+          <div className="tabular-nums text-[28px] font-bold text-foreground leading-tight" data-testid={valueTestId}>{value}</div>
           {subtitle && <div className="text-xs text-muted-foreground mt-1">{subtitle}</div>}
         </div>
       )}

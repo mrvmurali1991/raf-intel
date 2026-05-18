@@ -275,6 +275,13 @@ export default function RecapturePage() {
         .recapture-bento-summary > div { display: grid; }
         .recapture-bento-summary > div > div { height: 100%; }
         .recapture-bento-summary .recapture-hero-tile .tabular-nums { font-size: 40px !important; }
+
+        /* Responsive: stack both panels on narrow viewports */
+        @media (max-width: 900px) {
+          .recapture-main-row { grid-template-columns: 1fr !important; }
+          .recapture-top-conditions,
+          .recapture-worklist { grid-column: 1 / -1 !important; }
+        }
       `}</style>
       <div
         className="recapture-bento-summary"
@@ -326,7 +333,7 @@ export default function RecapturePage() {
       {/* Right column: Top Conditions chart (4 cols). Listed first in source
           but pinned to columns 9-12 by gridColumn so visual order is L->R. */}
       {(data.top_conditions ?? []).length > 0 && (
-        <div className="premium-card animate-slide-up stagger-4" style={{ padding: 24, gridColumn: "9 / span 4", minWidth: 0 }}>
+        <div className="recapture-top-conditions premium-card animate-slide-up stagger-4" style={{ padding: 24, gridColumn: "9 / span 4", minWidth: 0 }}>
           <h3 className="gradient-text" style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
             Most Common Uncaptured Conditions
           </h3>
@@ -374,8 +381,11 @@ export default function RecapturePage() {
         </div>
       )}
 
-      {/* Patient Worklist — left column of the main row (8 cols) */}
-      <div className="premium-card animate-slide-up stagger-5" style={{ padding: 24, gridColumn: "1 / span 8", minWidth: 0 }}>
+      {/* Patient Worklist — spans 8 cols when Top Conditions panel is present, full 12 cols otherwise */}
+      <div
+        className="recapture-worklist premium-card animate-slide-up stagger-5"
+        style={{ padding: 24, gridColumn: (data.top_conditions ?? []).length > 0 ? "1 / span 8" : "1 / -1", minWidth: 0 }}
+      >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
           <h3 className="gradient-text" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
             Patients Requiring Recapture

@@ -582,6 +582,19 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               </p>
               <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.emeraldDark }}>{fmt$(totalRevenue)}</p>
               <p style={{ fontSize: 12, color: C.textSub, margin: "4px 0 0" }}>@ ${REVENUE_PER_RAF.toLocaleString()} / RAF point</p>
+              {r?.last_computed_at && (() => {
+                const d = new Date(r.last_computed_at);
+                if (isNaN(d.getTime())) return null;
+                const mins = Math.floor((Date.now() - d.getTime()) / 60_000);
+                if (mins < 0) return null;
+                const rel = mins < 1 ? "<1m" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`;
+                return (
+                  <span data-testid="last-refreshed" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+                    <Clock size={11} aria-hidden />
+                    Last refreshed {rel} ago
+                  </span>
+                );
+              })()}
             </div>
             <div style={{ width: 44, height: 44, borderRadius: 10, background: C.emeraldLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.emerald} strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -988,7 +1001,7 @@ function HccTab({ hccDist }: { hccDist: QueryResult<HccDistributionRow[]> }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 4: RECAPTURE GAPS
 // ══════════════════════════════════════════════════════════════════════════════
-function RecaptureTab({ recapture, router }: { recapture: QueryResult<unknown>; router: { push: (path: string) => void } }) {
+function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryResult<unknown>; router: { push: (path: string) => void }; isHistoricalPY?: boolean }) {
   if (recapture.isLoading) return <Spinner label="Loading recapture gaps..." />;
   if (recapture.isError) return <ErrorBox message="Failed to load recapture data" onRetry={recapture.refetch} />;
 
