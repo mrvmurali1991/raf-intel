@@ -1113,6 +1113,18 @@ class AcceptSuspectRequest(BaseModel):
             "NLP suspect before EMR write-back (required when NLP confidence < 0.85)"
         ),
     )
+    # Async FHIR write-back hand-off — non-blocking accept path.
+    # When True, the FHIR Condition POST runs via Celery instead of in this
+    # request, so the coder UI gets 200 immediately and the EHR write
+    # happens out-of-band with retry + circuit-breaker semantics.
+    async_writeback: bool = Field(
+        default=False,
+        description=(
+            "If true and push_to_emr=true, hand FHIR Condition POST off to "
+            "Celery (raf.fhir.writeback_async) and return 200 immediately. "
+            "Sync write-back remains the default for backward compat."
+        ),
+    )
 
 
 class DismissSuspectRequest(BaseModel):
@@ -1454,6 +1466,38 @@ def action_accept_suspect(
             _meat_signed = bool(body.meat_signed) if hasattr(body, "meat_signed") else False
             _user_role = current_user.get("role")
             _user_id = current_user.get("id") or current_user.get("user_id")
+
+            # Async hand-off path: stamp 'pending', enqueue Celery task, return early.
+            if getattr(body, "async_writeback", False):
+                try:
+                    from app.services.fhir_writeback_async import mark_writeback_pending
+                    from app.services.celery_tasks import task_fhir_writeback_async
+                    mark_writeback_pending(
+                        tenant_id=tenant_id, suspect_id=int(body.suspect_id)
+                    )
+                    task_fhir_writeback_async.delay(
+                        suspect_id=int(body.suspect_id),
+                        tenant_id=str(tenant_id),
+                        meat_signed=_meat_signed,
+                        user_role=_user_role,
+                        user_id=_user_id,
+                    )
+                    pushed = True
+                    push_method = "fhir_async"
+                except Exception as exc:
+                    logger.warning(
+                        "Async FHIR hand-off failed pid=%s icd=%s: %s — "
+                        "falling through to sync path",
+                        pid, suspect_icd, exc,
+                    )
+                else:
+                    return {
+                        "ok": True,
+                        "suspect_id": body.suspect_id,
+                        "writeback_mode": "async",
+                        "writeback_status": "pending",
+                        "push_method": push_method,
+                    }
             try:
                 fhir_condition_id = push_problem_list_condition(
                     patient_emr_pid=str(pid),

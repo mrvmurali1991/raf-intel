@@ -2009,3 +2009,35 @@ def task_rfc3161_timestamp(self) -> dict:
             self.request.retries + 1, exc,
         )
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+
+
+# ---------------------------------------------------------------------------
+# FHIR async write-back — non-blocking Condition POST
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    name="raf.fhir.writeback_async",
+    queue="default",
+    max_retries=3,
+    default_retry_delay=60,
+)
+def task_fhir_writeback_async(
+    self,
+    suspect_id: int,
+    tenant_id: str,
+    meat_signed: bool = False,
+    user_role: str | None = None,
+    user_id: int | None = None,
+) -> dict:
+    from app.services.fhir_writeback_async import perform_writeback
+    res = perform_writeback(
+        tenant_id=tenant_id,
+        suspect_id=int(suspect_id),
+        meat_signed=bool(meat_signed),
+        user_role=user_role,
+        user_id=user_id,
+    )
+    if res.get("status") == "failed" and self.request.retries < self.max_retries:
+        raise self.retry(countdown=60 * (self.request.retries + 1))
+    return res
