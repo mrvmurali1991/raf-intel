@@ -951,6 +951,152 @@ def get_job_status_endpoint(
     )
 
 
+# ---------------------------------------------------------------------------
+# GET /api/analysis/patient/{pid}/highlights
+# ---------------------------------------------------------------------------
+
+
+class ClinicalHighlightsResponse(BaseModel):
+    patient_id: int
+    encounter_id: int | None = None
+    encounter_date: str | None = None
+    top_diagnoses: list[dict[str, Any]]
+    nlp_summary: str
+    confidence: float
+    source: str  # "cached" | "fallback"
+
+
+@router.get(
+    "/patient/{pid}/highlights",
+    summary="AI-extracted clinical highlights from the most recent analyzed encounter",
+    response_model=ClinicalHighlightsResponse,
+)
+@limiter.limit("60/minute")
+def get_patient_highlights(
+    request: Request,
+    pid: int,
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("encounters", "read")),
+) -> ClinicalHighlightsResponse:
+    """
+    Return AI-extracted highlights (top diagnoses, NLP summary, confidence) for
+    the most recent analyzed encounter of a patient. Falls back to MEAT evidence
+    joined with suspect conditions when no pipeline result is cached.
+    """
+    import json as _json
+
+    # 1. Try the latest cached encounter analysis
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT encounter_id, analysis_json, created_at
+                FROM raf_encounter_analysis
+                WHERE patient_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (pid,),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.debug("highlights: DB lookup failed pid=%s: %s", pid, exc)
+        row = None
+
+    if row and row.get("analysis_json"):
+        try:
+            result = (
+                _json.loads(row["analysis_json"])
+                if isinstance(row["analysis_json"], str)
+                else row["analysis_json"]
+            )
+            diagnoses = result.get("diagnoses") or result.get("suspect_conditions") or []
+            top_dx = [
+                {
+                    "icd10_code": d.get("icd10_code") or d.get("code") or "",
+                    "description": d.get("description") or d.get("condition") or d.get("diagnosis") or "",
+                    "hcc_code": d.get("hcc_code") or d.get("hcc") or None,
+                    "confidence": d.get("confidence") or d.get("confidence_score") or 0.0,
+                }
+                for d in (diagnoses[:5] if isinstance(diagnoses, list) else [])
+            ]
+            summary = (
+                result.get("summary")
+                or result.get("clinical_summary")
+                or result.get("assessment")
+                or (
+                    f"AI identified {len(diagnoses)} diagnosis(es) with "
+                    f"{sum(1 for d in (diagnoses if isinstance(diagnoses, list) else []) if d.get('hcc_code') or d.get('hcc'))} HCC mapping(s)."
+                    if isinstance(diagnoses, list)
+                    else "Clinical analysis completed."
+                )
+            )
+            conf_vals = [
+                float(d.get("confidence") or d.get("confidence_score") or 0)
+                for d in (diagnoses[:5] if isinstance(diagnoses, list) else [])
+                if d.get("confidence") or d.get("confidence_score")
+            ]
+            avg_conf = sum(conf_vals) / len(conf_vals) if conf_vals else 0.75
+            return ClinicalHighlightsResponse(
+                patient_id=pid,
+                encounter_id=row.get("encounter_id"),
+                encounter_date=str(row.get("created_at", ""))[:10] or None,
+                top_diagnoses=top_dx,
+                nlp_summary=summary,
+                confidence=round(avg_conf, 3),
+                source="cached",
+            )
+        except Exception as exc:
+            logger.debug("highlights: parse failed pid=%s: %s", pid, exc)
+
+    # 2. Fallback — build from raf_suspect_conditions (always available)
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT suspect_icd10, suspect_hcc, confidence_score,
+                       evidence_type, evidence_detail
+                FROM raf_suspect_conditions
+                WHERE patient_id = %s AND status = 'open'
+                ORDER BY confidence_score DESC
+                LIMIT 5
+                """,
+                (pid,),
+            )
+            suspects = cur.fetchall() or []
+    except Exception as exc:
+        logger.debug("highlights: suspect fallback failed pid=%s: %s", pid, exc)
+        suspects = []
+
+    top_dx_fallback = [
+        {
+            "icd10_code": s.get("suspect_icd10") or "",
+            "description": "",
+            "hcc_code": f"HCC {s['suspect_hcc']}" if s.get("suspect_hcc") else None,
+            "confidence": float(s.get("confidence_score") or 0),
+        }
+        for s in suspects
+    ]
+    conf_vals_fb = [float(s.get("confidence_score") or 0) for s in suspects if s.get("confidence_score")]
+    avg_conf_fb = sum(conf_vals_fb) / len(conf_vals_fb) if conf_vals_fb else 0.0
+    summary_fb = (
+        f"Suspects flagged: {len(suspects)} open condition(s) pending review. "
+        "Run encounter analysis for detailed NLP insights."
+        if suspects
+        else "No clinical analysis available yet. Run encounter analysis to extract AI insights."
+    )
+    return ClinicalHighlightsResponse(
+        patient_id=pid,
+        encounter_id=None,
+        encounter_date=None,
+        top_diagnoses=top_dx_fallback,
+        nlp_summary=summary_fb,
+        confidence=round(avg_conf_fb, 3),
+        source="fallback",
+    )
+
+
 @router.get("/jobs/{job_id}/results", summary="Retrieve completed job results", response_model=JobResultsResponse)
 def get_job_results_endpoint(
     job_id: str,

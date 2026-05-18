@@ -11,7 +11,77 @@ import { tokens } from "@/styles/tokens";
 import type { DBSuspect } from "@/types";
 import FeatureFlag from "@/components/FeatureFlag";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
-import { Check, X, FileSearch, ChevronRight } from "lucide-react";
+import { Check, X, FileSearch, ChevronRight, Sparkles, BookOpen, AlertCircle } from "lucide-react";
+
+// ── AI Evidence helpers ──
+
+/**
+ * Extract NLP-derived insight fields from evidence_detail JSON.
+ * Gracefully handles string/object/null shapes written by different pipeline engines.
+ */
+function parseAIEvidence(evidenceDetail: unknown): {
+  sourceExcerpt: string | null;
+  highlightTerm: string | null;
+  whyItMatters: string | null;
+  codingGuidance: string | null;
+} {
+  const empty = { sourceExcerpt: null, highlightTerm: null, whyItMatters: null, codingGuidance: null };
+  if (!evidenceDetail) return empty;
+  let obj: Record<string, unknown>;
+  try {
+    obj = typeof evidenceDetail === "string" && evidenceDetail.trim().startsWith("{")
+      ? JSON.parse(evidenceDetail)
+      : typeof evidenceDetail === "object" && evidenceDetail !== null
+        ? (evidenceDetail as Record<string, unknown>)
+        : null;
+    if (!obj) return empty;
+  } catch {
+    return empty;
+  }
+  const sourceExcerpt =
+    (obj.source_excerpt as string) ||
+    (obj.nlp_excerpt as string) ||
+    (obj.excerpt as string) ||
+    (obj.note_snippet as string) ||
+    null;
+  const highlightTerm =
+    (obj.highlight_term as string) ||
+    (obj.term as string) ||
+    (obj.entity as string) ||
+    null;
+  const whyItMatters =
+    (obj.why_it_matters as string) ||
+    (obj.clinical_reasoning as string) ||
+    (obj.clinical_rationale as string) ||
+    (obj.rationale as string) ||
+    (obj.summary as string) ||
+    null;
+  const codingGuidance =
+    (obj.coding_guidance as string) ||
+    (obj.icd10_note as string) ||
+    (obj.coding_note as string) ||
+    null;
+  return { sourceExcerpt, highlightTerm, whyItMatters, codingGuidance };
+}
+
+function HighlightedExcerpt({ text, term }: { text: string; term: string | null }) {
+  if (!term) {
+    return <span style={{ fontStyle: "italic", color: C.text }}>&ldquo;{text}&rdquo;</span>;
+  }
+  const idx = text.toLowerCase().indexOf(term.toLowerCase());
+  if (idx === -1) {
+    return <span style={{ fontStyle: "italic", color: C.text }}>&ldquo;{text}&rdquo;</span>;
+  }
+  return (
+    <span style={{ fontStyle: "italic", color: C.text }}>
+      &ldquo;{text.slice(0, idx)}
+      <mark style={{ background: "#FEF08A", color: "#713F12", borderRadius: 3, padding: "0 2px" }}>
+        {text.slice(idx, idx + term.length)}
+      </mark>
+      {text.slice(idx + term.length)}&rdquo;
+    </span>
+  );
+}
 
 // ── helpers (mirror of page.tsx so this chunk is self-contained) ──
 
@@ -98,6 +168,9 @@ export default function SuspectDrawer({
     // ignore malformed JSON
   }
 
+  const aiEvidence = parseAIEvidence(s.evidence_detail);
+  const hasAIEvidence = !!(aiEvidence.sourceExcerpt || aiEvidence.whyItMatters || aiEvidence.codingGuidance);
+
   return (
     <div
       onClick={(e) => e.stopPropagation()}
@@ -147,6 +220,57 @@ export default function SuspectDrawer({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* AI Evidence section */}
+        {hasAIEvidence && (
+          <div style={{ padding: "12px 14px", borderRadius: 10, backgroundColor: "#F0F9FF", border: "1px solid #BAE6FD" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <Sparkles size={13} style={{ color: "#0284C7" }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#0284C7", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                AI Evidence
+              </span>
+            </div>
+
+            {aiEvidence.sourceExcerpt && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                  Source Excerpt
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.6, padding: "8px 10px", borderRadius: 6, background: "#FFFFFF", border: "1px solid #E0F2FE" }}>
+                  <HighlightedExcerpt text={aiEvidence.sourceExcerpt} term={aiEvidence.highlightTerm} />
+                </div>
+              </div>
+            )}
+
+            {aiEvidence.whyItMatters && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                  <AlertCircle size={11} style={{ color: "#0369A1" }} />
+                  <span style={{ fontSize: 10, fontWeight: 600, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Why this matters
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55 }}>
+                  {aiEvidence.whyItMatters}
+                </div>
+              </div>
+            )}
+
+            {aiEvidence.codingGuidance && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                  <BookOpen size={11} style={{ color: "#0369A1" }} />
+                  <span style={{ fontSize: 10, fontWeight: 600, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Coding guidance
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, fontFamily: FONT_MONO }}>
+                  {aiEvidence.codingGuidance}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ClinicalHighlightsPanel } from "./ClinicalHighlightsPanel";
 import type { Patient, MEATEvidence, AIDiagnosis } from "@/types";
 import type {
   PatientProfile,
@@ -441,6 +442,9 @@ export function OverviewTab({
           )}
         </div>
       )}
+
+      {/* Clinical Highlights — AI-extracted from most recent encounter */}
+      <ClinicalHighlightsPanel pid={pid} />
 
       {/* Main Grid */}
       <div

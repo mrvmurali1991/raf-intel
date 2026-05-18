@@ -11,7 +11,7 @@
  * Backend contract: see backend/app/routers/radv_audit_runs.py.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import {
   ShieldCheck,
@@ -24,6 +24,13 @@ import {
   Send,
   ArrowLeft,
   DollarSign,
+  ClipboardList,
+  Clock,
+  CheckCheck,
+  XCircle,
+  Scale,
+  Info,
+  GitCompare,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -86,11 +93,42 @@ interface RunDetail {
 interface SimulateResult {
   observed_exposure_dollars: number;
   simulated_exposure_dollars: number;
+  direct_exposure_dollars: number;
+  extrapolated_exposure_dollars: number;
   assumed_fail_rate: number;
   extrapolation_multiplier: number;
-  avg_hcc_payment_dollars: number;
+  extrapolation_enforced: boolean;
+  extrapolation_status_note: string;
   total_records: number;
   observed_undefensible: number;
+  lower_confidence_bound_dollars?: number | null;
+  methodology?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Chart-Request types
+// ---------------------------------------------------------------------------
+
+type ChartStatus = "requested" | "received" | "coded" | "disputed" | "cleared";
+
+interface ChartRequest {
+  id: number;
+  audit_run_id: number;
+  patient_id: number;
+  requested_at: string;
+  status: ChartStatus;
+  provider_id?: number | null;
+  due_date?: string | null;
+  received_at?: string | null;
+  notes?: string | null;
+  sha256_hash: string;
+  days_outstanding: number;
+}
+
+interface ChartRequestsSummary {
+  total: number;
+  open: number;
+  overdue: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +153,83 @@ const formatUsd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 // ---------------------------------------------------------------------------
+// Extrapolation toggle — court-ruling sensitivity
+// ---------------------------------------------------------------------------
+
+function ExtrapolationToggle({
+  enforced,
+  onChange,
+}: {
+  enforced: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const [showTip, setShowTip] = useState(false);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+      <Scale size={15} color={enforced ? DANGER : SUCCESS} />
+      <span style={{ fontSize: 12, fontWeight: 600, color: SUBTLE }}>Extrapolation:</span>
+      <div
+        role="group"
+        aria-label="Extrapolation enforcement toggle"
+        style={{ display: "flex", border: "1px solid #E2E8F0", borderRadius: 6, overflow: "hidden" }}
+      >
+        <button
+          onClick={() => onChange(false)}
+          aria-pressed={!enforced}
+          style={{
+            padding: "5px 10px", fontSize: 11, fontWeight: 700, border: "none",
+            cursor: "pointer",
+            backgroundColor: !enforced ? SUCCESS : "#fff",
+            color: !enforced ? "#fff" : SUBTLE,
+          }}
+        >
+          Disabled
+        </button>
+        <button
+          onClick={() => onChange(true)}
+          aria-pressed={enforced}
+          style={{
+            padding: "5px 10px", fontSize: 11, fontWeight: 700, border: "none",
+            borderLeft: "1px solid #E2E8F0",
+            cursor: "pointer",
+            backgroundColor: enforced ? DANGER : "#fff",
+            color: enforced ? "#fff" : SUBTLE,
+          }}
+        >
+          Enforced
+        </button>
+      </div>
+      <button
+        onMouseEnter={() => setShowTip(true)}
+        onFocus={() => setShowTip(true)}
+        onMouseLeave={() => setShowTip(false)}
+        onBlur={() => setShowTip(false)}
+        aria-label="Extrapolation context"
+        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}
+      >
+        <Info size={14} color={SUBTLE} />
+      </button>
+      {showTip && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute", top: 26, right: 0, zIndex: 20,
+            backgroundColor: "#1E293B", color: "#fff", fontSize: 11,
+            padding: "8px 10px", borderRadius: 6, width: 260,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)", lineHeight: 1.5,
+          }}
+        >
+          <strong>Per Sept 2025 court ruling</strong> (N.D. Tex.), CMS RADV
+          extrapolation provisions are currently vacated. HHS appeal is pending;
+          PY2020 audits begin Feb 2026. Plans must prepare for both scenarios.
+          Use <em>Stress-test both</em> in the simulator to compare.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -123,6 +238,7 @@ export default function RadvPage() {
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extrapolationEnforced, setExtrapolationEnforced] = useState(false);
   const newRunTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   // Hydrate `run` query param on mount and when navigating.
@@ -149,6 +265,7 @@ export default function RadvPage() {
     try {
       const res = await api.get<{ runs: RunSummary[] }>("/api/radv/audit-runs", {
         signal: controller.signal,
+        params: { extrapolation_enforced: extrapolationEnforced },
       });
       setRuns(res.data.runs || []);
     } catch (e: unknown) {
@@ -170,7 +287,8 @@ export default function RadvPage() {
 
   useEffect(() => {
     void loadRuns();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extrapolationEnforced]);
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", padding: 24 }}>
@@ -201,20 +319,26 @@ export default function RadvPage() {
               </p>
             </div>
           </div>
-          {!selectedRunId && (
-            <button
-              ref={newRunTriggerRef}
-              onClick={() => setCreating(true)}
-              data-testid="radv-new-run"
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "10px 16px", borderRadius: 8, border: "none",
-                backgroundColor: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600,
-              }}
-            >
-              <Plus size={16} /> New audit run
-            </button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <ExtrapolationToggle
+              enforced={extrapolationEnforced}
+              onChange={setExtrapolationEnforced}
+            />
+            {!selectedRunId && (
+              <button
+                ref={newRunTriggerRef}
+                onClick={() => setCreating(true)}
+                data-testid="radv-new-run"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "10px 16px", borderRadius: 8, border: "none",
+                  backgroundColor: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600,
+                }}
+              >
+                <Plus size={16} /> New audit run
+              </button>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -238,7 +362,7 @@ export default function RadvPage() {
         {!selectedRunId ? (
           <RunList runs={runs} onOpen={setSelectedRunId} />
         ) : (
-          <RunDetailView runId={selectedRunId} onChanged={loadRuns} />
+          <RunDetailView runId={selectedRunId} onChanged={loadRuns} extrapolationEnforced={extrapolationEnforced} />
         )}
       </div>
     </div>
@@ -474,11 +598,12 @@ const inputStyle: React.CSSProperties = {
 // Run detail (3-column layout)
 // ---------------------------------------------------------------------------
 
-function RunDetailView({ runId, onChanged }: { runId: number; onChanged: () => void }) {
+function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: number; onChanged: () => void; extrapolationEnforced: boolean }) {
   const [run, setRun] = useState<RunDetail | null>(null);
   const [activeRecordId, setActiveRecordId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<"records" | "chart-requests">("records");
 
   async function load() {
     try {
@@ -542,18 +667,37 @@ function RunDetailView({ runId, onChanged }: { runId: number; onChanged: () => v
         <StatTile label="Total exposure" value={formatUsd(run.summary.total_exposure_dollars)} color={run.summary.total_exposure_dollars > 0 ? DANGER : "#0F172A"} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, justifyContent: "flex-end" }}>
-        <button onClick={resubmit}
-          style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", borderRadius: 6, border: `1px solid ${WARN}`, color: WARN, backgroundColor: "#fff", cursor: "pointer", fontWeight: 600 }}>
-          <Send size={14} /> MAO-004 re-submit rejected
-        </button>
-        <button onClick={exportRun}
-          style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", borderRadius: 6, border: "none", backgroundColor: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600 }}>
-          <Download size={14} /> Export evidence
-        </button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          {(["records", "chart-requests"] as const).map((t) => (
+            <button key={t} onClick={() => setActiveTab(t)} aria-selected={activeTab === t}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: "pointer",
+                border: activeTab === t ? `1px solid ${PRIMARY}` : "1px solid #E2E8F0",
+                backgroundColor: activeTab === t ? PRIMARY : "#fff",
+                color: activeTab === t ? "#fff" : SUBTLE,
+              }}
+            >
+              {t === "records" ? <><FileText size={13} /> Audit Records</> : <><ClipboardList size={13} /> Chart Requests</>}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={resubmit}
+            style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", borderRadius: 6, border: `1px solid ${WARN}`, color: WARN, backgroundColor: "#fff", cursor: "pointer", fontWeight: 600 }}>
+            <Send size={14} /> MAO-004 re-submit rejected
+          </button>
+          <button onClick={exportRun}
+            style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", borderRadius: 6, border: "none", backgroundColor: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600 }}>
+            <Download size={14} /> Export evidence
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr 320px", gap: 12, alignItems: "stretch" }}>
+      {activeTab === "chart-requests" && <ChartRequestsTab runId={runId} />}
+
+      {activeTab === "records" && <div style={{ display: "grid", gridTemplateColumns: "300px 1fr 320px", gap: 12, alignItems: "stretch" }}>
         {/* Column 1 — record list */}
         <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "auto", maxHeight: 700 }}>
           <div style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: SUBTLE, textTransform: "uppercase", borderBottom: "1px solid #F1F5F9" }}>
@@ -648,8 +792,8 @@ function RunDetailView({ runId, onChanged }: { runId: number; onChanged: () => v
         </div>
 
         {/* Column 3 — exposure simulator */}
-        <SimulatorPanel runId={runId} run={run} />
-      </div>
+        <SimulatorPanel runId={runId} run={run} extrapolationEnforced={extrapolationEnforced} />
+      </div>}
     </div>
   );
 }
@@ -690,7 +834,15 @@ function StatTile({ label, value, color }: { label: string; value: string; color
 // Simulator
 // ---------------------------------------------------------------------------
 
-function SimulatorPanel({ runId, run }: { runId: number; run: RunDetail }) {
+function SimulatorPanel({
+  runId,
+  run,
+  extrapolationEnforced,
+}: {
+  runId: number;
+  run: RunDetail;
+  extrapolationEnforced: boolean;
+}) {
   const initialRate = run.assumed_fail_rate != null
     ? Number(run.assumed_fail_rate)
     : (run.summary.total_records > 0
@@ -699,26 +851,52 @@ function SimulatorPanel({ runId, run }: { runId: number; run: RunDetail }) {
   const [rate, setRate] = useState<number>(initialRate);
   const [result, setResult] = useState<SimulateResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stressMode, setStressMode] = useState(false);
 
-  async function run_() {
-    setBusy(true);
-    try {
-      const res = await api.post<SimulateResult>(`/api/radv/audit-runs/${runId}/simulate`, {
-        assumed_fail_rate: rate,
-      });
-      setResult(res.data);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const fetchSimulate = useCallback(
+    async (enforced: boolean) => {
+      setBusy(true);
+      try {
+        const res = await api.post<SimulateResult>(`/api/radv/audit-runs/${runId}/simulate`, {
+          assumed_fail_rate: rate,
+          extrapolation_enforced: enforced,
+        });
+        setResult(res.data);
+      } finally {
+        setBusy(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [runId, rate],
+  );
 
-  useEffect(() => { void run_(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [rate, run.summary.total_records, run.summary.undefensible]);
+  useEffect(() => {
+    void fetchSimulate(extrapolationEnforced);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rate, run.summary.total_records, run.summary.undefensible, extrapolationEnforced]);
 
   return (
     <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <DollarSign size={18} color={PRIMARY} />
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Revenue exposure simulator</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <DollarSign size={18} color={PRIMARY} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Revenue exposure simulator</div>
+        </div>
+        <button
+          onClick={() => setStressMode((s) => !s)}
+          data-testid="radv-stress-test-btn"
+          title="Show side-by-side comparison: court-ordered disabled vs. CMS enforced"
+          style={{
+            display: "flex", alignItems: "center", gap: 4,
+            padding: "4px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700,
+            border: `1px solid ${stressMode ? PRIMARY : "#E2E8F0"}`,
+            backgroundColor: stressMode ? "#F0FDFA" : "#fff",
+            color: stressMode ? PRIMARY : SUBTLE,
+            cursor: "pointer",
+          }}
+        >
+          <GitCompare size={11} /> Stress-test both
+        </button>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -737,20 +915,94 @@ function SimulatorPanel({ runId, run }: { runId: number; run: RunDetail }) {
         </div>
       </div>
 
-      {busy && <div style={{ color: SUBTLE, fontSize: 12 }}><Loader2 size={12} className="spin" /> Calculating…</div>}
+      {busy && (
+        <div style={{ color: SUBTLE, fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+          <Loader2 size={12} className="spin" /> Calculating…
+        </div>
+      )}
 
-      {result && !busy && (
+      {result && !busy && !stressMode && (
         <div data-testid="radv-simulate-result">
-          <SimRow label="Observed (decided)" value={formatUsd(result.observed_exposure_dollars)} color={result.observed_exposure_dollars > 0 ? DANGER : "#0F172A"} />
-          <SimRow label="Simulated total" value={formatUsd(result.simulated_exposure_dollars)} bold color={result.simulated_exposure_dollars > 0 ? DANGER : "#0F172A"} />
-          <div style={{ marginTop: 12, padding: 8, backgroundColor: "#FEF3C7", borderRadius: 6, fontSize: 11, color: "#78350F" }}>
-            <AlertTriangle size={11} style={{ verticalAlign: "middle" }} />{" "}
-            CMS extrapolation: each error × {result.extrapolation_multiplier.toFixed(0)}× × {formatUsd(result.avg_hcc_payment_dollars)}/HCC
+          <SimRow
+            label="Observed (decided)"
+            value={formatUsd(result.observed_exposure_dollars)}
+            color={result.observed_exposure_dollars > 0 ? DANGER : "#0F172A"}
+          />
+          <SimRow
+            label={extrapolationEnforced ? "Simulated (extrapolated)" : "Simulated (sample-only)"}
+            value={formatUsd(result.simulated_exposure_dollars)}
+            bold
+            color={result.simulated_exposure_dollars > 0 ? DANGER : "#0F172A"}
+          />
+          {extrapolationEnforced ? (
+            <div style={{ marginTop: 10, padding: 8, backgroundColor: "#FEE2E2", borderRadius: 6, fontSize: 10, color: "#991B1B", lineHeight: 1.5 }}>
+              <AlertTriangle size={10} style={{ verticalAlign: "middle" }} />{" "}
+              CMS extrapolation applied — multiplier {result.extrapolation_multiplier.toFixed(1)}x. HHS appeal pending.
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, padding: 8, backgroundColor: "#DCFCE7", borderRadius: 6, fontSize: 10, color: "#166534", lineHeight: 1.5 }}>
+              <CheckCircle2 size={10} style={{ verticalAlign: "middle" }} />{" "}
+              Disabled per court order — direct sample exposure only. Toggle to &ldquo;Enforced&rdquo; to see worst-case.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stress-test: side-by-side comparison view */}
+      {result && !busy && stressMode && (
+        <div data-testid="radv-stress-test-result">
+          <div style={{ fontSize: 10, fontWeight: 700, color: SUBTLE, textTransform: "uppercase", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+            <GitCompare size={10} /> Scenario comparison
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {/* Disabled scenario */}
+            <div style={{ border: `2px solid ${SUCCESS}`, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: SUCCESS, marginBottom: 6, textTransform: "uppercase" }}>
+                Court order (disabled)
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: DANGER }}>
+                {formatUsd(result.direct_exposure_dollars)}
+              </div>
+              <div style={{ fontSize: 9, color: SUBTLE, marginTop: 2 }}>Sample-based only</div>
+            </div>
+            {/* Enforced scenario */}
+            <div style={{ border: `2px solid ${DANGER}`, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: DANGER, marginBottom: 6, textTransform: "uppercase" }}>
+                CMS enforced
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: DANGER }}>
+                {formatUsd(result.extrapolated_exposure_dollars)}
+              </div>
+              <div style={{ fontSize: 9, color: SUBTLE, marginTop: 2 }}>
+                {result.extrapolation_multiplier.toFixed(1)}x multiplier
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: 8, padding: 7, backgroundColor: "#FEF3C7", borderRadius: 6, fontSize: 9, color: "#78350F", lineHeight: 1.5 }}>
+            <AlertTriangle size={9} style={{ verticalAlign: "middle" }} />{" "}
+            Per Sept 2025 N.D. Tex. ruling, extrapolation is currently unenforceable. HHS appeal pending; PY2020 audits begin Feb 2026.
+            Plans must defend against both scenarios.
           </div>
         </div>
       )}
 
       <style>{`.spin { animation: rspin 1s linear infinite; } @keyframes rspin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chart Requests tab (stub — full implementation pending)
+// ---------------------------------------------------------------------------
+
+function ChartRequestsTab({ runId }: { runId: number }) {
+  return (
+    <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 32, textAlign: "center" }}>
+      <ClipboardList size={28} color={SUBTLE} style={{ margin: "0 auto 10px" }} />
+      <div style={{ fontWeight: 600, fontSize: 15, color: "#0F172A", marginBottom: 4 }}>Chart request tracking</div>
+      <div style={{ fontSize: 12, color: SUBTLE }}>
+        Chart request workflow for audit run #{runId} — coming soon.
+      </div>
     </div>
   );
 }

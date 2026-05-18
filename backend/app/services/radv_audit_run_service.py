@@ -713,11 +713,18 @@ def simulate_exposure(
     run_id: int,
     tenant_id: str,
     assumed_fail_rate: float,
+    extrapolation_enforced: bool = False,
 ) -> dict[str, Any]:
     """Run the CMS extrapolation simulator.
 
     ``assumed_fail_rate`` is a coder-supplied 0..1 probability that any
     record in the sample would fail.
+
+    ``extrapolation_enforced`` — when False (default per Sept 2025 N.D. Tex.
+    court ruling that vacated CMS RADV extrapolation provisions), the
+    simulated_exposure_dollars equals the direct sample-based exposure only
+    (extrapolation_multiplier = 1).  When True, the full FFS Adjuster or
+    legacy 55x extrapolation is applied.
 
     Uses FFS Adjuster methodology when members_enrolled is set on the run;
     falls back to legacy 55x with methodology: legacy_v1 and a log warning.
@@ -728,6 +735,8 @@ def simulate_exposure(
     - simulated_exposure_dollars — projected total if assumed_fail_rate
       applied to every sampled record
     - simulated_failures         — total * assumed_fail_rate (always <= total)
+    - extrapolation_enforced     — mirrors the input flag
+    - direct_exposure_dollars    — sample-only exposure (no multiplier)
     """
     if not (0.0 <= assumed_fail_rate <= 1.0):
         raise ValueError("assumed_fail_rate must be in [0,1]")
@@ -790,8 +799,19 @@ def simulate_exposure(
     members_enrolled = run.get("members_enrolled")
     sample_size = int(run.get("sample_size") or 1)
 
+    # ------------------------------------------------------------------
+    # Direct (sample-based) exposure — no extrapolation.
+    # This is the exposure when extrapolation_enforced=False, reflecting
+    # the Sept 2025 N.D. Tex. ruling that vacated CMS RADV extrapolation.
+    # ------------------------------------------------------------------
+    from app.services.raf.revenue_constants import revenue_per_raf_point
+    _avg_hcc = revenue_per_raf_point()
+    direct_exposure_dollars = round(simulated_failures * _avg_hcc, 2)
+
     lcb_dollars: float | None = None
     confidence_level: float | None = None
+    extrapolation_multiplier: float = 1.0
+
     if members_enrolled and int(members_enrolled) > 0:
         ffs_adj = float(run.get("ffs_adjuster") or CMS_FFS_ADJUSTER_DEFAULT)
         exp_result = compute_extrapolated_exposure(
@@ -800,32 +820,47 @@ def simulate_exposure(
             members_enrolled=int(members_enrolled),
             ffs_adjuster=ffs_adj,
         )
-        simulated_exposure = exp_result["extrapolated_exposure_dollars"]
+        full_extrapolated_exposure = exp_result["extrapolated_exposure_dollars"]
         lcb_dollars = exp_result.get("lower_confidence_bound_dollars")
         confidence_level = exp_result.get("confidence_level")
+        extrapolation_multiplier = float(exp_result.get("extrapolation_factor", 1.0))
         methodology = exp_result["methodology"]
         methodology_note = exp_result["methodology_note"]
     else:
-        logger.warning(
-            "radv simulate_exposure: run %s has no members_enrolled; "
-            "using legacy 55x extrapolation (methodology: legacy_v1).",
-            run_id,
+        if extrapolation_enforced:
+            logger.warning(
+                "radv simulate_exposure: run %s has no members_enrolled; "
+                "using legacy 55x extrapolation (methodology: legacy_v1).",
+                run_id,
+            )
+        full_extrapolated_exposure = round(
+            simulated_failures * _avg_hcc * _LEGACY_EXTRAPOLATION_MULTIPLIER, 2
         )
-        from app.services.raf.revenue_constants import revenue_per_raf_point
-        simulated_exposure = (
-            simulated_failures
-            * revenue_per_raf_point()
-            * _LEGACY_EXTRAPOLATION_MULTIPLIER
-        )
+        extrapolation_multiplier = _LEGACY_EXTRAPOLATION_MULTIPLIER
         methodology = "legacy_v1"
         methodology_note = (
             "DEPRECATED: legacy 55x multiplier. Set members_enrolled on the "
             "run to use CMS FFS Adjuster methodology."
         )
 
+    # Apply court-ruling switch: when not enforced, cap at direct sample exposure.
+    if extrapolation_enforced:
+        simulated_exposure = full_extrapolated_exposure
+        extrapolation_status_note = (
+            "Extrapolation enforced — full CMS FFS Adjuster (or legacy 55x) "
+            "multiplier applied."
+        )
+    else:
+        simulated_exposure = direct_exposure_dollars
+        extrapolation_status_note = (
+            "Disabled per Sept 2025 N.D. Tex. court ruling that vacated CMS RADV "
+            "extrapolation provisions (HHS appeal pending, PY2020 audits begin "
+            "Feb 2026). Showing direct sample-based exposure only."
+        )
+
     # Persist LCB to the audit run row whenever we have a valid LCB value.
     # Skip if migration 036 (lcb_dollars column) hasn't been applied yet.
-    if lcb_dollars is not None and _has_lcb_column():
+    if lcb_dollars is not None and extrapolation_enforced and _has_lcb_column():
         with raf_cursor() as cur:
             cur.execute(
                 "UPDATE raf_radv_audit_runs SET lcb_dollars = %s WHERE id = %s AND tenant_id = %s",
@@ -841,7 +876,14 @@ def simulate_exposure(
         "observed_exposure_dollars": round(observed_exposure, 2),
         "assumed_fail_rate": assumed_fail_rate,
         "simulated_failures": round(simulated_failures, 2),
+        # Primary exposure figure — depends on extrapolation_enforced flag.
         "simulated_exposure_dollars": round(simulated_exposure, 2),
+        # Always expose both scenarios for stress-test comparison view.
+        "direct_exposure_dollars": direct_exposure_dollars,
+        "extrapolated_exposure_dollars": round(full_extrapolated_exposure, 2),
+        "extrapolation_enforced": extrapolation_enforced,
+        "extrapolation_multiplier": round(extrapolation_multiplier, 2),
+        "extrapolation_status_note": extrapolation_status_note,
         "lower_confidence_bound_dollars": round(lcb_dollars, 2) if lcb_dollars is not None else None,
         "confidence_level": confidence_level,
         "members_enrolled": members_enrolled,

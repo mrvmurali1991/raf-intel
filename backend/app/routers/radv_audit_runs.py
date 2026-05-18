@@ -23,7 +23,7 @@ Audit events:
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
@@ -67,6 +67,17 @@ class UpdateRecordIn(BaseModel):
 
 class SimulateIn(BaseModel):
     assumed_fail_rate: float = Field(..., ge=0.0, le=1.0)
+    # Per Sept 2025 N.D. Tex. ruling, CMS extrapolation is currently vacated.
+    # Default is False (disabled) — plans can stress-test the enforced scenario.
+    extrapolation_enforced: bool = Field(
+        False,
+        description=(
+            "When False (default), returns sample-based direct exposure only "
+            "(extrapolation multiplier = 1). When True, applies the full "
+            "CMS extrapolation formula. Per Sept 2025 N.D. Tex. ruling, "
+            "extrapolation is currently unenforceable (HHS appeal pending)."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -145,10 +156,27 @@ def create_run(
     summary="List RADV audit runs for the tenant",
 )
 def list_runs(
+    extrapolation_enforced: bool = Query(
+        False,
+        description=(
+            "When False (default), exposure dollars reflect direct sample-based "
+            "figures only (extrapolation disabled per Sept 2025 court ruling). "
+            "When True, full CMS extrapolation applies."
+        ),
+    ),
     current_user: dict = Depends(require_permission("radv", "read")),
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict:
-    return {"runs": svc.list_audit_runs(tenant_id=tenant_id)}
+    return {
+        "runs": svc.list_audit_runs(tenant_id=tenant_id),
+        "extrapolation_enforced": extrapolation_enforced,
+        "extrapolation_note": (
+            None
+            if extrapolation_enforced
+            else "Disabled per Sept 2025 N.D. Tex. court ruling (HHS appeal pending). "
+                 "Exposure shown is direct sample-based only."
+        ),
+    }
 
 
 @router.get(
@@ -230,6 +258,7 @@ def simulate(
             run_id=run_id,
             tenant_id=tenant_id,
             assumed_fail_rate=body.assumed_fail_rate,
+            extrapolation_enforced=body.extrapolation_enforced,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

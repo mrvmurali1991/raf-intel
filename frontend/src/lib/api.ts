@@ -1387,6 +1387,30 @@ export async function getRafModels(): Promise<string[]> {
 // Analysis APIs
 // ---------------------------------------------------------------------------
 
+export interface ClinicalHighlightsResponse {
+  patient_id: number;
+  encounter_id?: number | null;
+  encounter_date?: string | null;
+  top_diagnoses: Array<{
+    icd10_code: string;
+    description: string;
+    hcc_code?: string | null;
+    confidence: number;
+  }>;
+  nlp_summary: string;
+  confidence: number;
+  source: "cached" | "fallback";
+}
+
+export async function getPatientClinicalHighlights(
+  pid: string | number
+): Promise<ClinicalHighlightsResponse> {
+  const { data } = await api.get<ClinicalHighlightsResponse>(
+    `/api/analysis/patient/${pid}/highlights`
+  );
+  return data;
+}
+
 export async function analyzeEncounter(
   encounterId: number,
   includeContext: boolean = true,
