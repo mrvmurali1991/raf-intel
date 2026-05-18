@@ -2,6 +2,32 @@
 # RAF Intelligence — Makefile
 # ---------------------------------------------------------------------------
 
+# ---- Pilot / Demo Targets ------------------------------------------------
+
+pilot-ready:
+	bash scripts/pilot-ready.sh
+
+pilot-ready-fast:
+	bash scripts/pilot-ready.sh --skip-tests
+
+pilot-teardown:
+	bash scripts/pilot-teardown.sh
+
+pilot-doctor:
+	bash scripts/pilot-doctor.sh
+
+smoke:
+	@echo "==> 5-endpoint smoke test"
+	@BACKEND=http://localhost:8500; \
+	for EP in /health /api/auth/me /api/dashboard/stats /docs /api/suspects; do \
+	  CODE=$$(curl -s -o /dev/null -w "%{http_code}" "$$BACKEND$$EP" 2>/dev/null || echo 000); \
+	  if [ "$$CODE" = "200" ] || [ "$$CODE" = "401" ] || [ "$$CODE" = "422" ]; then \
+	    printf "  \033[0;32m[OK]\033[0m  $$BACKEND$$EP  (HTTP $$CODE)\n"; \
+	  else \
+	    printf "  \033[0;31m[FAIL]\033[0m $$BACKEND$$EP  (HTTP $$CODE)\n"; \
+	  fi; \
+	done
+
 REMOTE_HOST   := ubuntu@10.1.1.66
 REMOTE_DIR    := /home/ubuntu/raf-intelligence
 SSH_OPTS      := -o StrictHostKeyChecking=accept-new
@@ -93,6 +119,13 @@ restore:
 	@if [ -z "$(DB)" ]; then echo "ERROR: DB is required. Usage: make restore FILE=path/to/backup.sql.gz DB=raf|openemr"; exit 1; fi
 	./scripts/restore.sh $(FILE) --$(DB)
 
+# ---- CI Fast Test Gate ---------------------------------------------------
+
+ci-fast:
+	@echo "Running fast unit test suite (excludes @pytest.mark.integration)..."
+	bash backend/scripts/test-fast.sh
+	@echo "ci-fast: PASSED"
+
 # ---- Frontend E2E Testing ------------------------------------------------
 
 e2e:
@@ -103,4 +136,4 @@ e2e-staging:
 	@echo "Running Playwright E2E suite against staging (https://raf.comercioit.com)..."
 	cd frontend && npx playwright test --project=e2e
 
-.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore e2e e2e-staging
+.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore e2e e2e-staging pilot-ready pilot-ready-fast pilot-teardown pilot-doctor smoke ci-fast
