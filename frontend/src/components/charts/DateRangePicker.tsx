@@ -61,10 +61,6 @@ export function presetToDates(preset: PresetKey): { from: string; to: string } {
   return { from: fmt(sub(29)), to: fmt(today) };
 }
 
-const BASE: React.CSSProperties = {
-  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-};
-
 export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
   // Local custom date state — only committed on blur/change
   const [customFrom, setCustomFrom] = useState(value.from ?? "");
@@ -99,16 +95,15 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
 
   return (
     <div
-      className={className}
-      style={{ ...BASE, display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+      className={["inline-flex items-center gap-2 flex-wrap", className].filter(Boolean).join(" ")}
       role="group"
       aria-label="Date range selector"
     >
       {/* Calendar icon */}
-      <Calendar size={15} style={{ color: "#64748B", flexShrink: 0 }} aria-hidden="true" />
+      <Calendar size={15} className="text-muted-foreground shrink-0" aria-hidden="true" />
 
       {/* Preset pills */}
-      <div style={{ display: "inline-flex", gap: 4, background: "#F1F5F9", borderRadius: 8, padding: 3 }}>
+      <div className="inline-flex gap-1 bg-secondary rounded-lg p-[3px]">
         {PRESETS.map((p) => {
           const active = value.preset === p.key;
           return (
@@ -116,18 +111,12 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
               key={p.key}
               onClick={() => selectPreset(p.key)}
               aria-pressed={active}
-              style={{
-                padding: "5px 12px",
-                fontSize: 12,
-                fontWeight: active ? 700 : 500,
-                borderRadius: 6,
-                border: "none",
-                cursor: "pointer",
-                background: active ? "#2563EB" : "transparent",
-                color: active ? "#fff" : "#475569",
-                transition: "background 0.15s, color 0.15s",
-                whiteSpace: "nowrap",
-              }}
+              className={[
+                "px-3 py-[5px] text-xs rounded-md border-none cursor-pointer transition-colors duration-150 whitespace-nowrap",
+                active
+                  ? "bg-primary text-primary-foreground font-bold"
+                  : "bg-transparent text-muted-foreground font-medium hover:bg-accent hover:text-accent-foreground",
+              ].join(" ")}
             >
               {p.label}
             </button>
@@ -137,7 +126,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
 
       {/* Custom date inputs — visible only when preset === "custom" */}
       {value.preset === "custom" && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <div className="inline-flex items-center gap-1.5">
           <input
             type="date"
             value={customFrom}
@@ -145,9 +134,9 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
             onChange={(e) => setCustomFrom(e.target.value)}
             onBlur={commitCustom}
             aria-label="Start date"
-            style={dateInputStyle}
+            className="px-[10px] py-[5px] text-xs font-medium border border-border rounded-md bg-input text-foreground outline-none cursor-pointer focus:ring-2 focus:ring-ring"
           />
-          <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>to</span>
+          <span className="text-xs text-muted-foreground font-semibold">to</span>
           <input
             type="date"
             value={customTo}
@@ -155,31 +144,19 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
             onChange={(e) => setCustomTo(e.target.value)}
             onBlur={commitCustom}
             aria-label="End date"
-            style={dateInputStyle}
+            className="px-[10px] py-[5px] text-xs font-medium border border-border rounded-md bg-input text-foreground outline-none cursor-pointer focus:ring-2 focus:ring-ring"
           />
         </div>
       )}
 
       {/* Resolved date range label (non-custom) */}
       {value.preset !== "custom" && value.from && value.to && (
-        <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 500, whiteSpace: "nowrap" }}>
+        <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap">
           {value.from} &rarr; {value.to}
         </span>
       )}
     </div>
   );
 }
-
-const dateInputStyle: React.CSSProperties = {
-  padding: "5px 10px",
-  fontSize: 12,
-  fontWeight: 500,
-  border: "1px solid #E2E8F0",
-  borderRadius: 6,
-  background: "#fff",
-  color: "#1E293B",
-  outline: "none",
-  cursor: "pointer",
-};
 
 export default DateRangePicker;
