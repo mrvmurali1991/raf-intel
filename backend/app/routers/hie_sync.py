@@ -3,19 +3,18 @@
 Routes:
   POST /api/admin/hie/sync-patient/{raf_patient_id}
        Body: {"network": "commonwell"|"carequality"}
-       Triggers a full discover → document-fetch → Gemini-extract cycle.
+       Triggers a full discover -> document-fetch -> Gemini-extract cycle.
 
   GET  /api/admin/hie/networks/status
        Connectivity probe: cert presence + last successful query timestamp.
 
 All routes require an authenticated user with admin or manager role.
 """
-# Note: do NOT use 'from __future__ import annotations' here —
+# Note: do NOT use 'from __future__ import annotations' here --
 # it breaks FastAPI/Pydantic schema generation (ForwardRef errors).
 
 import logging
 import os
-from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -117,7 +116,7 @@ def _last_successful_query(network: str) -> str | None:
     description=(
         "Discover the patient in the named HIE network, retrieve all "
         "DocumentReferences, fetch each binary, and route through "
-        "Gemini Vision HCC extraction.  Idempotent — already-processed "
+        "Gemini Vision HCC extraction.  Idempotent -- already-processed "
         "documents are skipped."
     ),
 )

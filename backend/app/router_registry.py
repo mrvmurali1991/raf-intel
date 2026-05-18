@@ -39,7 +39,6 @@ from app.routers import (
     coder_worklist,
     cohorts,
     direct_messaging,
-    direct_inbound,
     documents,
     emr,
     fhir,
@@ -137,16 +136,12 @@ from app.routers import recapture_readiness as recapture_readiness_router
 from app.routers import recapture_recurring as recapture_recurring_router
 from app.routers import qa_reviews as qa_reviews_router
 from app.routers import review as review_router
-from app.routers import fhir_bulk_export as fhir_bulk_export_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import suspect_feedback as suspect_feedback_router
 from app.routers import pre_submission as pre_submission_router
 from app.routers import tenant_branding as tenant_branding_router
 from app.routers import encryption_admin as encryption_admin_router
-from app.routers import hl7v2_mdm_receiver as hl7v2_mdm_receiver_router
 from app.routers import hie_sync as hie_sync_router
-from app.routers import tenant_doc_policy as tenant_doc_policy_router
-from app.routers import inovalon_admin as inovalon_admin_router
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +246,6 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, webhooks.router)
     _mount(app, notifications.router)
     _mount(app, direct_messaging.router)
-    _mount(app, direct_inbound.router)
     _mount(app, clearinghouse.router)
 
     # Provider and quality management
@@ -273,7 +267,6 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, chart_chase_v2_router.router)
     _mount(app, fhir_circuit_health_router.router)
     _mount(app, fhir_writeback_async_router.router)
-    _mount(app, fhir_bulk_export_router.router)
     _mount(app, soc2_evidence_router.router)
     _mount(app, hcc_evidence_router.router)
     _mount(app, openemr_doc_ingest_router.router)
@@ -400,15 +393,3 @@ def register_routers(app: FastAPI) -> None:
 
     # Encryption key management (KMS BYOK)
     _mount(app, encryption_admin_router.router)
-
-    # HL7 v2 MDM ingest — HTTP receiver for Mirth/Rhapsody/Cloverleaf sidecar
-    _mount(app, hl7v2_mdm_receiver_router.router)
-
-    # Per-tenant OCR / LLM document policy (42 CFR Part 2)
-    _mount(app, tenant_doc_policy_router.router)
-
-    # Inovalon Electronic Record On Demand — admin pull management
-    _mount(app, inovalon_admin_router.router)
-
-    # HIE (CommonWell + Carequality) sync
-    _mount(app, hie_sync_router.router)

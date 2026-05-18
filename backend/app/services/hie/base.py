@@ -128,7 +128,7 @@ class HIEAdapter(ABC):
 
         Returns a list of candidate dicts, each containing at minimum:
             hie_patient_id: str
-            confidence: float  (0.0–1.0)
+            confidence: float  (0.0-1.0)
             name: str
             dob: str
             sex: str

@@ -7,7 +7,7 @@ Flow:
   2. Run discover_patient against the named HIE network.
   3. Persist/update hie_patient_matches rows (best confidence match).
   4. list_document_references for the best-match HIE patient ID.
-  5. For each document, fetch_binary → route through Gemini vision extractor.
+  5. For each document, fetch_binary -> route through Gemini vision extractor.
   6. Insert suspects into raf_suspect_conditions via existing pipeline logic.
   7. Log every query into hie_queries_log (latency, doc count, errors).
 

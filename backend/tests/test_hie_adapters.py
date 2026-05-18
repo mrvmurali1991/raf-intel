@@ -1,4 +1,4 @@
-"""HIE adapter unit tests — CommonWell and Carequality FHIR R4 adapters.
+"""HIE adapter unit tests -- CommonWell and Carequality FHIR R4 adapters.
 
 All tests mock httpx.AsyncClient to avoid real network calls.
 The rate-limit state is reset between tests via monkeypatching.
