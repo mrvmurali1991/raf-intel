@@ -185,15 +185,17 @@ function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
 }
 
 function KPISkeleton() {
+  // Mirrors the real bento strip: 2fr hero + 3 equal tiles, 160px min-height
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} style={card}>
-          <Pulse w={100} h={14} />
-          <div style={{ height: 12 }} />
-          <Pulse w={80} h={32} />
-          <div style={{ height: 8 }} />
-          <Pulse w={120} h={12} />
+    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+      {[{ flex: true }, {}, {}, {}].map((cfg, i) => (
+        <div key={i} style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <Pulse w={cfg.flex ? 140 : 100} h={14} />
+            <div style={{ height: 14 }} />
+            <Pulse w={cfg.flex ? 120 : 80} h={cfg.flex ? 40 : 32} />
+          </div>
+          <Pulse w={cfg.flex ? 180 : 120} h={12} />
         </div>
       ))}
     </div>
@@ -212,6 +214,39 @@ function CardSkeleton({ rows = 5 }: { rows?: number }) {
             <Pulse w={40} h={14} />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** Full-page skeleton that mirrors AdminDashboard layout to eliminate CLS. */
+function DashboardSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading dashboard" role="status">
+      {/* Header bar: title block + action buttons */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <Pulse w={280} h={26} r={8} />
+          <div style={{ height: 10 }} />
+          <Pulse w={160} h={14} />
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Pulse w={120} h={36} r={10} />
+          <Pulse w={96} h={36} r={10} />
+          <Pulse w={130} h={36} r={10} />
+        </div>
+      </div>
+      {/* 4-up KPI bento strip */}
+      <KPISkeleton />
+      {/* 2-column section row mirrors row-60-40 (3fr 2fr) */}
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20, marginBottom: 24 }}>
+        <CardSkeleton rows={4} />
+        <CardSkeleton rows={3} />
+      </div>
+      {/* Second 2-column row mirrors row-55-45 (55% / 45%) */}
+      <div style={{ display: "grid", gridTemplateColumns: "55fr 45fr", gap: 20 }}>
+        <CardSkeleton rows={5} />
+        <CardSkeleton rows={4} />
       </div>
     </div>
   );
@@ -1475,7 +1510,7 @@ export function AdminDashboard() {
           onTryDemo={() => setShowDemoConfirm(true)}
         />
       ) : (statsL && !kpiTimedOut) ? (
-        <KPISkeleton />
+        <DashboardSkeleton />
       ) : (
         <div
           className="kpi-strip kpi-strip-bento"
@@ -1495,17 +1530,18 @@ export function AdminDashboard() {
             .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
           `}</style>
           {/* Hero tile — Revenue Opportunity dominates the row. */}
-          <div data-testid="revenue-at-risk-value">
-            <MetricCard
-              label="Revenue Opportunity"
-              value={revenueOpp > 0 ? `$${(revenueOpp / 1_000_000).toFixed(1)}M` : "--"}
-              subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
-              icon={<DollarSign size={20} />}
-              intent={revenueOpp > 0 ? "success" : "default"}
-              href="/reports"
-              meta={revMeta ?? undefined}
-            />
-          </div>
+          <MetricCard
+            label="Revenue Opportunity"
+            value={revenueOpp > 0 ? `$${(revenueOpp / 1_000_000).toFixed(1)}M` : "--"}
+            subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
+            icon={<DollarSign size={20} />}
+            intent={revenueOpp > 0 ? "success" : "default"}
+            href="/reports"
+            meta={revMeta ?? null}
+            freshness={rev?.last_computed_at ?? undefined}
+            labelTestId="revenue-at-risk-label"
+            valueTestId="revenue-at-risk-value"
+          />
           <MetricCard
             label="Suspects"
             value={suspectsCount.toLocaleString()}

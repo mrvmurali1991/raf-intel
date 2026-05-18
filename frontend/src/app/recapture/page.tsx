@@ -281,16 +281,17 @@ export default function RecapturePage() {
         style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gridAutoRows: "min-content", gap: 16, marginBottom: 24 }}
       >
         <div className="animate-fade-in stagger-1 recapture-hero-tile" style={{ gridColumn: "span 6", gridRow: "span 2" }}>
-          <div data-testid="revenue-at-risk-value">
-            <MetricCard
-              label="Estimated Revenue at Risk"
-              value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
-              subtitle="Unrecaptured chronic conditions x prior-year RAF dollars"
-              intent="danger"
-              icon={<ArrowUpDown size={18} />}
-              meta={revenueAtRiskMeta ?? undefined}
-            />
-          </div>
+          <MetricCard
+            label="Estimated Revenue at Risk"
+            value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
+            subtitle="Unrecaptured chronic conditions x prior-year RAF dollars"
+            intent="danger"
+            icon={<ArrowUpDown size={18} />}
+            meta={revenueAtRiskMeta ?? undefined}
+            freshness={revData?.last_computed_at ?? undefined}
+            labelTestId="revenue-at-risk-label"
+            valueTestId="revenue-at-risk-value"
+          />
         </div>
         <div className="animate-fade-in stagger-2" style={{ gridColumn: "span 3" }}>
           <MetricCard

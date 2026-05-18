@@ -19,28 +19,61 @@ interface ProviderDashboardStats {
 function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
   return (
     <div
-      style={{
-        width: w,
-        height: h,
-        borderRadius: r,
-        background: "linear-gradient(90deg, #E2E8F0 25%, #EDF2F7 50%, #E2E8F0 75%)",
-        backgroundSize: "200% 100%",
-        animation: "shimmer 1.5s ease-in-out infinite",
-      }}
+      className="shimmer"
+      style={{ width: w, height: h, borderRadius: r }}
     />
   );
 }
 
 function KPISkeleton() {
+  // Mirrors real 4-col MetricCard grid, 160px min-height to prevent CLS
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm">
-          <Pulse w={100} h={14} />
-          <div style={{ height: 12 }} />
-          <Pulse w={80} h={32} />
-        </div>
-      ))}
+    <div
+      aria-busy="true"
+      aria-label="Loading dashboard"
+      role="status"
+    >
+      {/* Header bar skeleton */}
+      <div style={{ marginBottom: 24 }}>
+        <Pulse w={220} h={26} r={8} />
+        <div style={{ height: 8 }} />
+        <Pulse w={340} h={14} />
+      </div>
+      <div style={{ paddingBottom: 24 }} />
+      {/* 4-up KPI cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm"
+            style={{ minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+          >
+            <div>
+              <Pulse w={100} h={14} />
+              <div style={{ height: 12 }} />
+              <Pulse w={80} h={32} />
+            </div>
+            <Pulse w={120} h={12} />
+          </div>
+        ))}
+      </div>
+      {/* "Where to start" action cards skeleton */}
+      <div style={{ marginBottom: 8 }}>
+        <Pulse w={140} h={18} r={6} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm" style={{ minHeight: 110 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <Pulse w={24} h={24} r={6} />
+              <Pulse w={140} h={18} />
+            </div>
+            <Pulse w="100%" h={14} />
+            <div style={{ height: 6 }} />
+            <Pulse w="80%" h={14} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -80,16 +113,18 @@ export function ProviderDashboard() {
   return (
     <div className="fade-in-up">
       <DataQualityBanner />
-      <PageHeader
-        title="Today's priorities"
-        subtitle="Patients you should see this week, gaps to close, and your RAF performance at a glance."
-      />
-
-      <div style={{ paddingBottom: 24 }} />
 
       {isLoading ? (
         <KPISkeleton />
       ) : (
+        <>
+        <PageHeader
+          title="Today's priorities"
+          subtitle="Patients you should see this week, gaps to close, and your RAF performance at a glance."
+        />
+
+        <div style={{ paddingBottom: 24 }} />
+
         <div
           style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}
           role="status"
@@ -137,44 +172,45 @@ export function ProviderDashboard() {
             delta={kpiTrends?.deltas?.avg_raf ?? undefined}
           />
         </div>
-      )}
 
-      <SectionHeader title="Where to start" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
-        {/* primary action — teal */}
-        <Link href="/worklist" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-teal-700 dark:text-teal-400 mb-2">
-            <Stethoscope size={24} />
-            <span className="font-semibold text-lg text-foreground">Today's worklist</span>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Patients prioritized for you this week — open gaps, suspect
-            conditions, and revenue at risk on a single screen.
-          </p>
-        </Link>
-        {/* urgency / warning — amber */}
-        <Link href="/recapture" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400 mb-2">
-            <FileText size={24} />
-            <span className="font-semibold text-lg text-foreground">Close recapture gaps</span>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Patients with HCCs documented last year that haven't been re-coded
-            this year — the highest-revenue lever in your worklist.
-          </p>
-        </Link>
-        {/* info — slate */}
-        <Link href="/suspects" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400 mb-2">
-            <Activity size={24} />
-            <span className="font-semibold text-lg text-foreground">Review suspect conditions</span>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            AI-suggested HCCs with KG-traced evidence chains.  Approve, reject,
-            or request more documentation in one click.
-          </p>
-        </Link>
-      </div>
+        <SectionHeader title="Where to start" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
+          {/* primary action — teal */}
+          <Link href="/worklist" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+            <div className="flex items-center gap-3 text-teal-700 dark:text-teal-400 mb-2">
+              <Stethoscope size={24} />
+              <span className="font-semibold text-lg text-foreground">Today's worklist</span>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Patients prioritized for you this week — open gaps, suspect
+              conditions, and revenue at risk on a single screen.
+            </p>
+          </Link>
+          {/* urgency / warning — amber */}
+          <Link href="/recapture" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400 mb-2">
+              <FileText size={24} />
+              <span className="font-semibold text-lg text-foreground">Close recapture gaps</span>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Patients with HCCs documented last year that haven't been re-coded
+              this year — the highest-revenue lever in your worklist.
+            </p>
+          </Link>
+          {/* info — slate */}
+          <Link href="/suspects" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+            <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400 mb-2">
+              <Activity size={24} />
+              <span className="font-semibold text-lg text-foreground">Review suspect conditions</span>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              AI-suggested HCCs with KG-traced evidence chains.  Approve, reject,
+              or request more documentation in one click.
+            </p>
+          </Link>
+        </div>
+        </>
+      )}
     </div>
   );
 }
