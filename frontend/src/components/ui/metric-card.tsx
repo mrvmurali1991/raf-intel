@@ -74,6 +74,10 @@ export interface MetricCardProps {
    * a small (i) info button in the card header that opens a formula tooltip.
    */
   meta?: MetricMeta;
+  /** data-testid placed on the label span — for smoke-test parity selectors */
+  labelTestId?: string;
+  /** data-testid placed on the value span — for smoke-test parity selectors */
+  valueTestId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +203,8 @@ export function MetricCard({
   sparklinePlaceholder,
   sparkline,
   meta,
+  labelTestId,
+  valueTestId,
 }: MetricCardProps) {
   const router = useRouter();
   if (loading) return <MetricCardSkeleton className={className} />;
@@ -235,7 +241,10 @@ export function MetricCard({
       <CardContent className="flex flex-col gap-2 min-h-[var(--kpi-card-min-h)] p-[var(--kpi-card-pad)]">
         {/* Header row: label + meta tooltip + icon badge */}
         <div className="flex items-start justify-between gap-2">
-          <span className="flex items-center gap-1 text-label leading-none">
+          <span
+            className="flex items-center gap-1 text-label leading-none"
+            data-testid={labelTestId}
+          >
             {label}
             {meta && <MetricMetaTooltip meta={meta} />}
           </span>
@@ -254,7 +263,10 @@ export function MetricCard({
 
         {/* Value row */}
         <div className="flex items-end gap-2">
-          <span className="text-metric-value leading-none text-foreground">
+          <span
+            className="text-metric-value leading-none text-foreground"
+            data-testid={valueTestId}
+          >
             {value}
           </span>
           {delta !== undefined && <DeltaBadge delta={delta} intent={intent} />}
@@ -271,8 +283,7 @@ export function MetricCard({
         ) : sparklinePlaceholder ? (
           <div
             aria-hidden="true"
-            className="mt-auto rounded-md bg-muted/40"
-            style={{ height: 32, width: "100%" }}
+            className="mt-auto rounded-md bg-muted/40 h-8 w-full"
           />
         ) : null)}
 

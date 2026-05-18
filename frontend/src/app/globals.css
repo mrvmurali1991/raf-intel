@@ -1055,7 +1055,7 @@ select.appearance-none {
 }
 
 .kpi-compact-label {
-  font-size: 11px;
+  @apply text-label;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
   text-transform: uppercase;
@@ -1063,7 +1063,7 @@ select.appearance-none {
   white-space: nowrap;
 }
 .kpi-compact-value {
-  font-size: 22px;
+  @apply text-metric-value;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
