@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { usePaymentYear } from "@/contexts/payment-year-context";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -97,7 +98,7 @@ type SortKey = "priority" | "name" | "condition";
 
 export default function RecapturePage() {
   const router = useRouter();
-  const [year, setYear] = useState(new Date().getFullYear());
+  const { paymentYear: year, setPaymentYear: setYear } = usePaymentYear();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("priority");
   const [page, setPage] = useState(1);

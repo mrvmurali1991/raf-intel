@@ -27,8 +27,14 @@ import {
 
 const LS_KEY = "raf_payment_year";
 const CURRENT_YEAR = new Date().getFullYear();
-/** Years shown in the PY selector: current year and the two prior years. */
+/**
+ * Years shown in the PY selector: next year, current year, and the two prior
+ * years — rolling window of 4 years so the list stays valid across calendar
+ * rollovers without manual updates.
+ * Today (2026): [2027, 2026, 2025, 2024]
+ */
 export const PAYMENT_YEARS: number[] = [
+  CURRENT_YEAR + 1,
   CURRENT_YEAR,
   CURRENT_YEAR - 1,
   CURRENT_YEAR - 2,

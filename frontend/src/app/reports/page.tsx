@@ -2,6 +2,7 @@
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -27,7 +28,7 @@ import {
   type HccDistributionRow,
 } from "@/lib/api";
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
-import { FileDown, Printer } from "lucide-react";
+import { FileDown, Printer, Lock } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { tokens } from "@/styles/tokens";
 import { ChartExportMenu } from "@/components/ui/chart-export-menu";
@@ -68,8 +69,6 @@ type DataQualityPayload = {
 const REVENUE_PER_RAF = 11_015.04;
 const YEARS = Array.from({length: 3}, (_, i) => new Date().getFullYear() - i);
 const CURRENT_PAYMENT_YEAR = new Date().getFullYear();
-const PAYMENT_YEARS = [2024, 2025, 2026, 2027] as const;
-type PaymentYear = typeof PAYMENT_YEARS[number];
 const TABS = [
   "Revenue",
   "Patient Scorecard",
@@ -310,7 +309,7 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 export default function ReportsPage() {
   const router = useRouter();
   const [year, setYear] = useState(new Date().getFullYear());
-  const [paymentYear, setPaymentYear] = useState<PaymentYear>(CURRENT_PAYMENT_YEAR as PaymentYear);
+  const { paymentYear, setPaymentYear } = usePaymentYear();
   const [activeTab, setActiveTab] = useState<TabKey>("Revenue");
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const { from, to } = presetToDates("30d");
@@ -334,7 +333,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="rci-page-pad-desktop" style={pageStyle}>
+    <div className="rci-page-pad-desktop" style={pageStyle} {...(isHistoricalPY ? { "data-read-only": "true" } : {})}>
       {/* ── Print-only header ─────────────────────────────────────────────── */}
       <div
         id="report-print-header"
@@ -380,7 +379,7 @@ export default function ReportsPage() {
           <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment Year</label>
           <select
             value={paymentYear}
-            onChange={(e) => setPaymentYear(Number(e.target.value) as PaymentYear)}
+            onChange={(e) => setPaymentYear(Number(e.target.value))}
             aria-label="As-of payment year"
             style={{
               padding: "8px 32px 8px 14px",
@@ -401,27 +400,6 @@ export default function ReportsPage() {
               <option key={py} value={py}>PY{py}{py === CURRENT_PAYMENT_YEAR ? " (current)" : ""}</option>
             ))}
           </select>
-          {isHistoricalPY && (
-            <span
-              aria-label={`Viewing retroactive PY${paymentYear} data`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "4px 10px",
-                borderRadius: 99,
-                background: C.amberLight,
-                color: C.amberDark,
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                whiteSpace: "nowrap" as const,
-                border: `1px solid ${C.amber}`,
-              }}
-            >
-              PY{paymentYear} view
-            </span>
-          )}
           <DateRangePicker
             value={dateRange}
             onChange={setDateRange}
@@ -449,6 +427,31 @@ export default function ReportsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Historical view banner ────────────────────────────────────── */}
+      {isHistoricalPY && (
+        <div
+          data-testid="historical-view-badge"
+          role="status"
+          aria-live="polite"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "12px 18px",
+            marginBottom: 24,
+            borderRadius: 10,
+            background: "#FFFBEB",
+            border: "1px solid #F59E0B",
+            color: "#92400E",
+            fontSize: 14,
+            fontWeight: 600,
+          }}
+        >
+          <Lock size={16} style={{ flexShrink: 0, color: "#D97706" }} />
+          Historical view — PY{paymentYear}. Data is read-only.
+        </div>
+      )}
 
       {/* ── Tab Bar (pill style) ──────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 6, marginBottom: 32, padding: 6, background: tokens.slate100, borderRadius: 14, flexWrap: "wrap" }}>
