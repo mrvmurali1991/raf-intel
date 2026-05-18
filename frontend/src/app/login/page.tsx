@@ -612,13 +612,7 @@ export default function LoginPage() {
             <h1 className="text-4xl font-bold text-slate-900 dark:text-white leading-[1.15] tracking-tight">
               Precision Risk Adjustment
               <br />
-              <span
-                style={{
-                  background: "linear-gradient(90deg, #0f766e, #1d4ed8)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
+              <span className="text-teal-600 dark:text-teal-400">
                 At Enterprise Scale
               </span>
             </h1>
