@@ -15,6 +15,45 @@
  * `style={{}}` props across ~52 files (legacy pattern).  New components must
  * use Tailwind utility classes or CSS-variable references directly instead.
  *
+ * ── COLOR DISCIPLINE RULES (enforced 2026-05-18) ────────────────────────────
+ *
+ *   TEAL    = brand / primary action ONLY.
+ *             Use for: buttons, active states, action links, focus rings,
+ *             step number badges, icon backgrounds on action cards.
+ *             Decorative pills with no action → use slate/muted instead.
+ *             Tokens: tokens.primary, tokens.teal700, tokens.tealSoft, tokens.tealRing
+ *
+ *   RED / AMBER / GREEN = status ONLY (destructive / warning / success).
+ *             Use for: error banners, warning notices (e.g. EMR not connected,
+ *             V28 hero), success confirmations, risk-tier indicators.
+ *             Never use red/amber/green decoratively.
+ *             Tokens: tokens.danger*, tokens.warning*, tokens.success*,
+ *                     tokens.riskHigh*, tokens.riskMedium*, tokens.riskLow*
+ *
+ *   BLUE / PURPLE = secondary analytics ONLY (charts, data-viz, hyperlinks).
+ *             Use for: chart series, histogram bars, sparklines, data-coverage
+ *             graphs, and in-prose/table hyperlinks.
+ *             Never use blue/purple for action buttons, badges, or card accents
+ *             on operational screens (dashboard, recapture, suspects, reports).
+ *             Tokens: tokens.infoBlue, tokens.accentPurple, tokens.violetBg/Text
+ *
+ *   SLATE / MUTED = neutral UI chrome.
+ *             Decorative pills, disabled states, secondary labels, dividers.
+ *             Tokens: tokens.slate*, tokens.bgSubtle, tokens.bgFaintCard
+ *
+ * ── GRADIENT POLICY ─────────────────────────────────────────────────────────
+ *   Login / marketing screens  → expressive gradients permitted.
+ *   Operational screens (dashboard, recapture, suspects, reports, v28-impact)
+ *     → flat or very-subtle tints only (rgba opacity <= 0.05).
+ *     → No bold gradient cards; status bars → solid single-color fills.
+ *
+ * ── EXCEPTIONS ──────────────────────────────────────────────────────────────
+ *   V28 Hero card amber border/bg             → intentional warning; keep.
+ *   Reports section-header blue→purple text   → analytics context; keep.
+ *   Reports tab active-indicator gradient     → analytics context; keep.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ *
  * Dark-mode strategy (2025-05-18 refactor):
  *   - Tokens that map 1-to-1 to a CSS variable defined in globals.css now
  *     return `var(--token-name)` strings instead of hard-coded hex values.

@@ -512,6 +512,30 @@ export function AdminDashboard() {
   const rafCaptureOpps = rafCaptureQ.data ?? [];
   const rafCaptureL = rafCaptureQ.isLoading;
 
+  // ---- Onboarding checklist auxiliary counts (best-effort) ----
+  const attestationCountQ = useQuery<{ total: number }>({
+    queryKey: ["onboarding-attestation-count"],
+    queryFn: async () => {
+      const res = await api.get<{ gaps?: unknown[]; total?: number }>("/api/recapture/gaps", {
+        params: { status: "approved", limit: 1 },
+      });
+      return { total: res.data.total ?? (res.data.gaps?.length ?? 0) };
+    },
+    staleTime: 120_000,
+    retry: 1,
+  });
+  const auditRunCountQ = useQuery<{ count: number }>({
+    queryKey: ["onboarding-audit-run-count"],
+    queryFn: async () => {
+      const res = await api.get<{ runs?: unknown[]; total?: number }>("/api/radv/audit-runs");
+      return { count: res.data.total ?? (res.data.runs?.length ?? 0) };
+    },
+    staleTime: 120_000,
+    retry: 1,
+  });
+  const onboardingAttestCount = attestationCountQ.data?.total ?? 0;
+  const onboardingAuditCount = auditRunCountQ.data?.count ?? 0;
+
   // Derived values
   const totalPop = stats?.total_patients ?? pop?.total_patients ?? 0;
   const analyzed = rev?.total_patients_analyzed ?? 0;
@@ -1050,20 +1074,23 @@ export function AdminDashboard() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ROW 1: KPI Strip — replaced by OnboardingCard when no data yet
+          ROW 1: 5-step onboarding checklist (always shown until hidden) + KPI Strip
           ══════════════════════════════════════════════════════════════════════ */}
-      <div className="fade-in-up fade-in-up-1">
-      {/* Show OnboardingCard whenever patient count is 0, even while loading flags
-          are still pending — this prevents the card from being hidden behind a
-          skeleton when the API has already settled to zero patients. */}
-      {!hasData && !statsL ? (
+      {/* Checklist is self-hiding via localStorage — persists across sessions */}
+      {!statsL && (
         <OnboardingCard
           data-testid="onboarding-card"
           emrConnected={emrConnected}
+          patientCount={totalPop}
+          analysisRunCount={workflowData?.recent_analyses_7d ?? 0}
+          attestationCount={onboardingAttestCount}
+          auditPackageCount={onboardingAuditCount}
           demoLoading={demoLoading}
           onTryDemo={() => setShowDemoConfirm(true)}
         />
-      ) : (statsL && !kpiTimedOut) ? (
+      )}
+      <div className="fade-in-up fade-in-up-1">
+      {(statsL && !kpiTimedOut) ? (
         <DashboardSkeleton />
       ) : (
         <div
@@ -1148,122 +1175,11 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          V28 HERO CARD — CMS-HCC V28 100% live PY2026, portfolio Δ revenue
-          ══════════════════════════════════════════════════════════════════════ */}
-      {(v28Summary || v28SummaryQ.isLoading) && (
-        <div
-          data-testid="v28-hero-card"
-          className="fade-in-up fade-in-up-1"
-          style={{
-            background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
-            border: "2px solid #f59e0b",
-            borderRadius: 14,
-            padding: "20px 24px",
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 24,
-            flexWrap: "wrap",
-            boxShadow: "0 2px 12px rgba(245,158,11,0.12)",
-          }}
-        >
-          {/* Icon badge */}
-          <div style={{
-            background: "rgba(245,158,11,0.15)",
-            border: "1px solid rgba(245,158,11,0.35)",
-            borderRadius: 10,
-            padding: "10px 12px",
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-          }}>
-            <TrendingUp size={24} color="#d97706" />
-          </div>
-
-          {/* Text block */}
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: "#92400e", letterSpacing: "-0.01em" }}>
-                V28 Risk Model — 100% Live (PY2026)
-              </span>
-              <span style={{
-                background: "#f59e0b",
-                color: "#fff",
-                fontSize: 10,
-                fontWeight: 700,
-                padding: "2px 7px",
-                borderRadius: 99,
-                letterSpacing: "0.03em",
-              }}>LIVE</span>
-            </div>
-            {v28SummaryQ.isLoading ? (
-              <div style={{ height: 14, width: 260, background: "rgba(217,119,6,0.15)", borderRadius: 4, marginTop: 6 }} />
-            ) : v28Summary ? (
-              <>
-                <div style={{
-                  fontSize: 28,
-                  fontWeight: 900,
-                  color: v28Summary.total_revenue_delta >= 0 ? "#059669" : "#dc2626",
-                  lineHeight: 1.1,
-                  marginTop: 2,
-                  letterSpacing: "-0.02em",
-                }}>
-                  {v28Summary.total_revenue_delta >= 0 ? "+" : "−"}
-                  {`$${(Math.abs(v28Summary.total_revenue_delta) / 1_000_000).toFixed(2)}M`}
-                </div>
-                <div style={{ fontSize: 12, color: "#78350f", marginTop: 3, fontWeight: 500 }}>
-                  {(() => {
-                    const eroded = (v28Summary.top_eroded_patients ?? []).filter((p) => p.revenue < -500);
-                    const topPt = (v28Summary.top_eroded_patients ?? [])[0];
-                    return (
-                      <>
-                        {eroded.length > 0 && (
-                          <span>
-                            {eroded.length.toLocaleString()} patient{eroded.length !== 1 ? "s" : ""} with ≥−$500 erosion
-                            {topPt ? ` · top eroded patient = −$${Math.abs(topPt.revenue).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : ""}
-                          </span>
-                        )}
-                        {eroded.length === 0 && topPt && (
-                          <span>Top eroded patient: −${Math.abs(topPt.revenue).toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
-                        )}
-                        {eroded.length === 0 && !topPt && (
-                          <span>Portfolio V24 → V28 transition impact</span>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </>
-            ) : null}
-          </div>
-
-          {/* CTA */}
-          <Link
-            href="/v28-impact"
-            style={{
-              background: "#f59e0b",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 13,
-              padding: "10px 20px",
-              borderRadius: 10,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-              boxShadow: "0 2px 8px rgba(245,158,11,0.35)",
-              transition: "opacity 0.15s",
-            }}
-            aria-label="Open V28 Impact Analysis"
-          >
-            Open V28 Impact Analysis
-            <ArrowUpRight size={14} />
-          </Link>
-        </div>
-      )}
+      {/* V28 Hero Card */}
+      <V28HeroCard
+        v28Summary={v28Summary}
+        isLoading={v28SummaryQ.isLoading}
+      />
 
       {/* Q-Progress: most-tracked active quarterly goal */}
       <div className="mb-6 max-w-sm">
@@ -1312,7 +1228,7 @@ export function AdminDashboard() {
                           style={{
                             width: "100%",
                             height: 36,
-                            background: "linear-gradient(135deg, #EF4444, #DC2626)",
+                            background: "#DC2626",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1335,7 +1251,7 @@ export function AdminDashboard() {
                           style={{
                             width: "100%",
                             height: 36,
-                            background: "linear-gradient(135deg, #F59E0B, #D97706)",
+                            background: "#D97706",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1358,7 +1274,7 @@ export function AdminDashboard() {
                           style={{
                             width: "100%",
                             height: 36,
-                            background: "linear-gradient(135deg, #10B981, #059669)",
+                            background: "#059669",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1736,13 +1652,13 @@ export function AdminDashboard() {
                       width: 34,
                       height: 34,
                       borderRadius: 10,
-                      background: ["#EFF6FF", "#F5F3FF", "#FFF7ED", "#F0FDF4"][idx % 4],
+                      background: ["#F0FDFA", "#F1F5F9", "#FFF7ED", "#F0FDF4"][idx % 4],
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontSize: 13,
                       fontWeight: 700,
-                      color: ["#2563EB", "#7C3AED", "#D97706", "#059669"][idx % 4],
+                      color: ["#0F766E", "#475569", "#D97706", "#059669"][idx % 4],
                     }}
                   >
                     {prov.name.replace("Dr. ", "").charAt(0)}
