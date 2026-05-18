@@ -2041,3 +2041,27 @@ def task_fhir_writeback_async(
     if res.get("status") == "failed" and self.request.retries < self.max_retries:
         raise self.retry(countdown=60 * (self.request.retries + 1))
     return res
+
+
+# ---------------------------------------------------------------------------
+# OpenEMR uploaded documents — Gemini vision pipeline
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    name="raf.openemr.scan_new_documents",
+    queue="default",
+    max_retries=2,
+    default_retry_delay=120,
+)
+def task_openemr_scan_new_documents(
+    self,
+    tenant_id: str,
+    limit: int = 25,
+) -> dict:
+    """Scan + vision-extract every unprocessed OpenEMR document for tenant_id.
+
+    Beat schedule: every 10 minutes per active tenant.
+    """
+    from app.services.openemr_document_ingest import scan_new_documents
+    return scan_new_documents(tenant_id, limit=int(limit))

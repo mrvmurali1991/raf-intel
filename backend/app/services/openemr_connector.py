@@ -2766,3 +2766,45 @@ def push_procedure_order(
             pid, procedure_code, exc,
         )
         return None
+
+
+# ---------------------------------------------------------------------------
+# Document bytes reader — used by gemini_document_extractor for vision input.
+# OpenEMR stores files under sites/<site>/documents/<id>/<filename>.
+# The `documents.url` column carries a sites-relative path or a file://
+# URI; either form is supported.
+# ---------------------------------------------------------------------------
+
+import os as _os_doc  # avoid shadowing in this large module
+
+
+def read_document_bytes(url: str) -> bytes:
+    """Resolve an OpenEMR `documents.url` to raw bytes.
+
+    Supports:
+      file://sites/default/documents/13/foo.pdf
+      sites/default/documents/13/foo.pdf
+      /var/www/openemr/sites/default/documents/13/foo.pdf
+
+    Returns b'' when the file cannot be read so callers can degrade
+    gracefully (the vision extractor logs + skips).
+    """
+    if not url:
+        return b""
+    path = url
+    if path.startswith("file://"):
+        path = path[len("file://"):]
+    # OpenEMR sites root — default deploy mounts /var/www/openemr in container
+    candidates = [
+        path,
+        f"/var/www/openemr/{path}" if not path.startswith("/") else path,
+        f"/var/www/localhost/htdocs/openemr/{path}" if not path.startswith("/") else path,
+    ]
+    for p in candidates:
+        try:
+            if _os_doc.path.isfile(p):
+                with open(p, "rb") as fh:
+                    return fh.read()
+        except Exception:
+            continue
+    return b""
