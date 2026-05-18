@@ -118,6 +118,7 @@ def _calculate_age(dob: Any, as_of_year: int | None = None) -> int:
 
 @router.get("/revenue-opportunity", summary="Population-level RAF gap and revenue opportunity", response_model=RevenueOpportunityResponse)
 def revenue_opportunity(year: int = Query(default=None),
+    payment_year: int = Query(default=None, description="CMS payment year for Revenue-at-Risk (retroactive close periods). Defaults to measurement year."),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read"))) -> RevenueOpportunityResponse:
@@ -127,12 +128,16 @@ def revenue_opportunity(year: int = Query(default=None),
     Returns total patients analyzed, the RAF gap between what was billed and
     what the AI found, and an estimated annual revenue opportunity based on
     the CMS per-member rate of $11,015.04 per RAF point (2026 rate).
+
+    Pass payment_year to scope Revenue-at-Risk to a retroactive CMS payment
+    year (e.g. PY2024 for retrospective close period reconciliation).
     """
     calc_year = year or date.today().year
+    rar_year = payment_year or calc_year
 
     # --- cache check ---
     _acid = _active_connection_id(tenant_id)
-    _cache_key = f"report:revenue:{calc_year}:{tenant_id}:{_acid}"
+    _cache_key = f"report:revenue:{calc_year}:{rar_year}:{tenant_id}:{_acid}"
     _cached = cache_get(_cache_key)
     if _cached is not None:
         return _cached
@@ -255,8 +260,9 @@ def revenue_opportunity(year: int = Query(default=None),
     else:
         total_gap = round(total_ai_raf - total_billing_raf, 4)
 
-    # Revenue-at-Risk: canonical single source (scope=recapture — matches /recapture page)
-    _rar = _canonical_revenue_at_risk(tenant_id, payment_year=calc_year, scope="recapture")
+    # Revenue-at-Risk: canonical single source (scope=recapture — matches /recapture page).
+    # Uses rar_year so a retroactive payment_year param cascades the rate and period.
+    _rar = _canonical_revenue_at_risk(tenant_id, payment_year=rar_year, scope="recapture")
     estimated_annual_revenue = _rar["value"]
     _revenue_meta = _rar["_meta"]
 

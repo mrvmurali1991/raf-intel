@@ -66,6 +66,9 @@ type DataQualityPayload = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 const REVENUE_PER_RAF = 11_015.04;
 const YEARS = Array.from({length: 3}, (_, i) => new Date().getFullYear() - i);
+const CURRENT_PAYMENT_YEAR = new Date().getFullYear();
+const PAYMENT_YEARS = [2024, 2025, 2026, 2027] as const;
+type PaymentYear = typeof PAYMENT_YEARS[number];
 const TABS = [
   "Revenue",
   "Patient Scorecard",
@@ -306,17 +309,20 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 export default function ReportsPage() {
   const router = useRouter();
   const [year, setYear] = useState(new Date().getFullYear());
+  const [paymentYear, setPaymentYear] = useState<PaymentYear>(CURRENT_PAYMENT_YEAR as PaymentYear);
   const [activeTab, setActiveTab] = useState<TabKey>("Revenue");
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const { from, to } = presetToDates("30d");
     return { preset: "30d", from, to };
   });
 
+  const isHistoricalPY = paymentYear !== CURRENT_PAYMENT_YEAR;
+
   // ── Data Queries ──────────────────────────────────────────────────────────
-  const revenue = useQuery({ queryKey: ["revenue", year], queryFn: () => getRevenueOpportunity(year), staleTime: 60_000 });
-  const scorecard = useQuery({ queryKey: ["scorecard", year], queryFn: () => getPatientScorecard(year), staleTime: 60_000 });
-  const hccDist = useQuery({ queryKey: ["hcc-dist", year], queryFn: () => getHccDistribution(year), staleTime: 60_000 });
-  const recapture = useQuery({ queryKey: ["recapture", year], queryFn: () => getRecaptureGapsReport(year), staleTime: 60_000 });
+  const revenue = useQuery({ queryKey: ["revenue", year, paymentYear], queryFn: () => getRevenueOpportunity(year, paymentYear), staleTime: 60_000 });
+  const scorecard = useQuery({ queryKey: ["scorecard", year, paymentYear], queryFn: () => getPatientScorecard(year, paymentYear), staleTime: 60_000 });
+  const hccDist = useQuery({ queryKey: ["hcc-dist", year, paymentYear], queryFn: () => getHccDistribution(year, paymentYear), staleTime: 60_000 });
+  const recapture = useQuery({ queryKey: ["recapture", year, paymentYear], queryFn: () => getRecaptureGapsReport(year, paymentYear), staleTime: 60_000 });
   const dataQuality = useQuery({ queryKey: ["data-quality"], queryFn: () => getDataCompleteness(), staleTime: 60_000 });
 
   const handlePrint = () => {
@@ -346,7 +352,7 @@ export default function ReportsPage() {
           <h1 className="gradient-text" style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Analytics &amp; Reports</h1>
           <p style={{ fontSize: 14, color: C.textMuted, marginTop: 6, fontWeight: 500 }}>Population health intelligence and revenue analytics</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Year</label>
           <select
             value={year}
@@ -370,6 +376,51 @@ export default function ReportsPage() {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
+          <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment Year</label>
+          <select
+            value={paymentYear}
+            onChange={(e) => setPaymentYear(Number(e.target.value) as PaymentYear)}
+            aria-label="As-of payment year"
+            style={{
+              padding: "8px 32px 8px 14px",
+              fontSize: 14,
+              fontWeight: 600,
+              border: `1px solid ${isHistoricalPY ? C.amber : C.border}`,
+              borderRadius: 8,
+              background: isHistoricalPY ? C.amberLight : C.white,
+              color: isHistoricalPY ? C.amberDark : C.text,
+              cursor: "pointer",
+              appearance: "none" as const,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 10px center",
+            }}
+          >
+            {PAYMENT_YEARS.map((py) => (
+              <option key={py} value={py}>PY{py}{py === CURRENT_PAYMENT_YEAR ? " (current)" : ""}</option>
+            ))}
+          </select>
+          {isHistoricalPY && (
+            <span
+              aria-label={`Viewing retroactive PY${paymentYear} data`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "4px 10px",
+                borderRadius: 99,
+                background: C.amberLight,
+                color: C.amberDark,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                whiteSpace: "nowrap" as const,
+                border: `1px solid ${C.amber}`,
+              }}
+            >
+              PY{paymentYear} view
+            </span>
+          )}
           <DateRangePicker
             value={dateRange}
             onChange={setDateRange}

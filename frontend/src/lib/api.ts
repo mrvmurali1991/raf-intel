@@ -1994,28 +1994,31 @@ export async function testWebhook(
 // ---------------------------------------------------------------------------
 
 export async function getRevenueOpportunity(
-  year?: number
+  year?: number,
+  paymentYear?: number
 ): Promise<RevenueOpportunityReport> {
   const { data } = await api.get("/api/reports/revenue-opportunity", {
-    params: year ? { year } : undefined,
+    params: { ...(year ? { year } : {}), ...(paymentYear ? { payment_year: paymentYear } : {}) },
   });
   return data;
 }
 
 export async function getPatientScorecard(
-  year?: number
+  year?: number,
+  paymentYear?: number
 ): Promise<PatientScorecardRow[]> {
   const { data } = await api.get("/api/reports/patient-scorecard", {
-    params: year ? { year } : undefined,
+    params: { ...(year ? { year } : {}), ...(paymentYear ? { payment_year: paymentYear } : {}) },
   });
   return data;
 }
 
 export async function getHccDistribution(
-  year?: number
+  year?: number,
+  paymentYear?: number
 ): Promise<HccDistributionRow[]> {
   const { data } = await api.get("/api/reports/hcc-distribution", {
-    params: year ? { year } : undefined,
+    params: { ...(year ? { year } : {}), ...(paymentYear ? { payment_year: paymentYear } : {}) },
   });
   return data;
 }
@@ -2071,9 +2074,9 @@ export async function getWorkflowSummary(): Promise<{
   return data;
 }
 
-export async function getRecaptureGapsReport(year?: number): Promise<{ total_gaps?: number; gaps?: Array<{ pid: number; hcc_code: string; description?: string }> }> {
+export async function getRecaptureGapsReport(year?: number, paymentYear?: number): Promise<{ total_gaps?: number; gaps?: Array<{ pid: number; hcc_code: string; description?: string }> }> {
   const { data } = await api.get("/api/reports/recapture-gaps", {
-    params: year ? { year } : undefined,
+    params: { ...(year ? { year } : {}), ...(paymentYear ? { payment_year: paymentYear } : {}) },
   });
   return data;
 }
