@@ -67,19 +67,19 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
   const campaigns = data?.campaigns ?? [];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-card shadow-sm">
-      <header className="flex items-center justify-between border-b border-slate-100 p-4">
+    <div className="rounded-xl border border-border bg-card shadow-sm">
+      <header className="flex items-center justify-between border-b border-border p-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-foreground">
             Recapture campaigns
           </h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Bulk-assign open recapture gaps to coder teams
           </p>
         </div>
         <div className="flex items-center gap-2">
           <select
-            className="rounded-md border border-slate-200 bg-background px-2 py-1.5 text-sm text-slate-700"
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-muted-foreground"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           >
@@ -93,7 +93,7 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
           <button
             type="button"
             onClick={() => refetch()}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent"
             aria-label="Refresh"
           >
             <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
@@ -109,14 +109,14 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
       </header>
 
       {isLoading ? (
-        <div className="p-8 text-center text-sm text-slate-500">Loading campaigns…</div>
+        <div className="p-8 text-center text-sm text-muted-foreground">Loading campaigns…</div>
       ) : isError ? (
         <div className="p-8 text-center text-sm text-rose-600">
           Failed to load campaigns. Please retry.
         </div>
       ) : campaigns.length === 0 ? (
         <div className="p-10 text-center">
-          <p className="text-sm text-slate-500">No campaigns yet.</p>
+          <p className="text-sm text-muted-foreground">No campaigns yet.</p>
           <button
             type="button"
             onClick={onCreateClick}
@@ -126,7 +126,7 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
           </button>
         </div>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-border">
           {campaigns.map((c) => {
             const stats = c.stats ?? {
               total_gaps: 0,
@@ -144,7 +144,7 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
             return (
               <li
                 key={c.id}
-                className="cursor-pointer p-4 hover:bg-slate-50"
+                className="cursor-pointer p-4 hover:bg-accent"
                 onClick={() => onSelect?.(c)}
                 role="button"
                 tabIndex={0}
@@ -155,7 +155,7 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="truncate text-base font-semibold text-slate-900">
+                      <h3 className="truncate text-base font-semibold text-foreground">
                         {c.name}
                       </h3>
                       <span
@@ -166,11 +166,11 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
                       </span>
                     </div>
                     {c.description ? (
-                      <p className="mt-1 line-clamp-1 text-sm text-slate-500">
+                      <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
                         {c.description}
                       </p>
                     ) : null}
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <span>
                         {stats.closed}/{stats.total_gaps} closed
                         {" · "}
@@ -190,14 +190,14 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full bg-emerald-500 transition-all"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                   </div>
-                  <ChevronRight className="mt-1 shrink-0 text-slate-400" size={18} />
+                  <ChevronRight className="mt-1 shrink-0 text-muted-foreground" size={18} />
                 </div>
               </li>
             );

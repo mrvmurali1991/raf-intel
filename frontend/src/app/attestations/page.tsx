@@ -227,17 +227,15 @@ export default function AttestationsPage() {
         <button
           onClick={handleRefresh}
           aria-label="Refresh attestations"
+          className="bg-card border border-border text-foreground"
           style={{
             display: "flex",
             alignItems: "center",
             gap: 6,
             padding: "8px 14px",
             borderRadius: 8,
-            border: "1px solid #E5E7EB",
-            background: "#fff",
             cursor: "pointer",
             fontSize: 13,
-            color: "#374151",
           }}
         >
           <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
@@ -317,7 +315,7 @@ export default function AttestationsPage() {
                 padding: "6px 14px",
                 borderRadius: 6,
                 border: "none",
-                background: statusFilter === tab.value ? "#fff" : "transparent",
+                background: statusFilter === tab.value ? "var(--card)" : "transparent",
                 boxShadow: statusFilter === tab.value ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 fontWeight: statusFilter === tab.value ? 600 : 400,
                 fontSize: 13,
@@ -405,16 +403,15 @@ export default function AttestationsPage() {
         )
       ) : (
         <div
+          className="bg-card border border-border"
           style={{
-            background: "#fff",
             borderRadius: 12,
-            border: "1px solid #E5E7EB",
             overflow: "hidden",
           }}
         >
           <table style={{ width: "100%", borderCollapse: "collapse" }} role="table">
             <thead>
-              <tr style={{ background: "#F9FAFB" }}>
+              <tr className="bg-muted">
                 {["Patient ID", "HCC", "ICD-10", "Provider NPI", "Source", "Status", "Created"].map(
                   (h) => (
                     <th
@@ -428,7 +425,7 @@ export default function AttestationsPage() {
                         color: "#6B7280",
                         textTransform: "uppercase",
                         letterSpacing: "0.05em",
-                        borderBottom: "1px solid #E5E7EB",
+                        borderBottom: "1px solid var(--border)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -444,9 +441,9 @@ export default function AttestationsPage() {
                 return (
                   <tr
                     key={row.id}
+                    className={idx % 2 === 1 ? "bg-muted/40" : "bg-card"}
                     style={{
-                      borderBottom: idx < filtered.length - 1 ? "1px solid #F3F4F6" : "none",
-                      background: idx % 2 === 0 ? "#fff" : "#FAFAFA",
+                      borderBottom: idx < filtered.length - 1 ? "1px solid var(--border)" : "none",
                     }}
                   >
                     <td style={tdStyle}>{row.patient_id}</td>
@@ -508,13 +505,13 @@ export default function AttestationsPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div
+              className="bg-muted"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "12px 16px",
-                borderTop: "1px solid #E5E7EB",
-                background: "#F9FAFB",
+                borderTop: "1px solid var(--border)",
               }}
             >
               <span style={{ fontSize: 12, color: "#6B7280" }}>
