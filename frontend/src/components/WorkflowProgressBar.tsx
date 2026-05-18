@@ -114,8 +114,8 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
                   : isFuture
                   ? "#94A3B8"
                   : "#374151",
-                cursor: isFuture ? "default" : "pointer",
-                pointerEvents: isFuture ? "none" : "auto",
+                cursor: isFuture ? "pointer" : "pointer",
+                opacity: isFuture ? 0.6 : 1,
               }}
             >
               {stage.icon}

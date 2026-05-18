@@ -15,6 +15,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { tokens } from "@/styles/tokens";
+import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import {
   FileText,
   Download,
@@ -124,6 +125,7 @@ export default function EdiGenerationPage(): React.JSX.Element {
   return (
     <div style={{ minHeight: "100vh", background: T.bg, padding: 24 }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
+        <WorkflowProgressBar currentStage="edi-generation" />
         <header style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: T.text, margin: 0 }}>
             EDI Generation
