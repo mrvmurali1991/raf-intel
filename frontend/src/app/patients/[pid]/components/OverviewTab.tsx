@@ -26,6 +26,10 @@ import {
   SectionLoader,
   Card,
   MeatDots,
+  SkeletonRows,
+  SkeletonDataRows,
+  SkeletonChecklist,
+  PanelWithTimeout,
 } from "./shared";
 import type {
   ExtendedRafBreakdown,
@@ -193,6 +197,10 @@ export function OverviewTab({
   meds,
   labSuspects,
   vitalsSuspects,
+  onRetryProblems,
+  onRetryEncounters,
+  onRetryRecapture,
+  onRetryProfile,
 }: {
   pid: string;
   patient: Patient | undefined;
@@ -224,6 +232,10 @@ export function OverviewTab({
   meds?: MedicationsResponse | Array<{ drug?: string }>;
   labSuspects?: ClinicalFindingsResponse | Array<unknown>;
   vitalsSuspects?: ClinicalFindingsResponse | Array<unknown>;
+  onRetryProblems?: () => void;
+  onRetryEncounters?: () => void;
+  onRetryRecapture?: () => void;
+  onRetryProfile?: () => void;
 }) {
   const encountersWithNotes = (encounters?.encounters || []).filter(
     (e: EncounterItem) => !!e.notes || !!e.has_notes
@@ -471,9 +483,12 @@ export function OverviewTab({
             }
           />
           <div style={{ padding: "0 0 0 0" }}>
-            {problemsLoading ? (
-              <SectionLoader />
-            ) : !problemItems.length ? (
+            <PanelWithTimeout
+              loading={problemsLoading}
+              onRetry={onRetryProblems}
+              skeleton={<SkeletonRows count={5} />}
+            >
+            {!problemItems.length ? (
               <div style={{ padding: "32px 20px", textAlign: "center" }}>
                 <svg
                   width="24"
@@ -626,6 +641,7 @@ export function OverviewTab({
                   ))}
               </div>
             )}
+            </PanelWithTimeout>
           </div>
         </Card>
 
@@ -650,9 +666,12 @@ export function OverviewTab({
             count={encounters?.encounters?.length || undefined}
           />
           <div>
-            {encountersLoading ? (
-              <SectionLoader />
-            ) : !encounters?.encounters?.length ? (
+            <PanelWithTimeout
+              loading={encountersLoading}
+              onRetry={onRetryEncounters}
+              skeleton={<SkeletonRows count={5} twoCol={false} />}
+            >
+            {!encounters?.encounters?.length ? (
               <EmptyState
                 title="No encounters found"
                 icon={
@@ -774,6 +793,7 @@ export function OverviewTab({
                 })}
               </div>
             )}
+            </PanelWithTimeout>
           </div>
         </Card>
 
@@ -797,9 +817,12 @@ export function OverviewTab({
             }
           />
           <div>
-            {recaptureLoading ? (
-              <SectionLoader />
-            ) : !recaptureItems.length ? (
+            <PanelWithTimeout
+              loading={recaptureLoading}
+              onRetry={onRetryRecapture}
+              skeleton={<SkeletonRows count={4} />}
+            >
+            {!recaptureItems.length ? (
               <EmptyState
                 title="No recapture gaps"
                 description={
@@ -871,6 +894,7 @@ export function OverviewTab({
                 )}
               </div>
             )}
+            </PanelWithTimeout>
           </div>
         </Card>
       </div>
@@ -897,9 +921,11 @@ export function OverviewTab({
               </svg>
             }
           />
-          {profileLoading ? (
-            <SectionLoader />
-          ) : (
+          <PanelWithTimeout
+            loading={profileLoading}
+            onRetry={onRetryProfile}
+            skeleton={<SkeletonDataRows count={7} />}
+          >
             <div>
               <DataRow label="Date of Birth" value={formatDate(dob)} />
               <DataRow
@@ -957,7 +983,7 @@ export function OverviewTab({
                 }
               />
             </div>
-          )}
+          </PanelWithTimeout>
         </Card>
 
         {/* Insurance */}
@@ -979,9 +1005,11 @@ export function OverviewTab({
               </svg>
             }
           />
-          {profileLoading ? (
-            <SectionLoader />
-          ) : (
+          <PanelWithTimeout
+            loading={profileLoading}
+            onRetry={onRetryProfile}
+            skeleton={<SkeletonDataRows count={4} />}
+          >
             <div>
               <DataRow
                 label="Plan Type"
@@ -1000,7 +1028,7 @@ export function OverviewTab({
                 value={formatDate((profile?.enrollment as Record<string, string> | undefined)?.enrolled_since || (profile?.enrollment as Record<string, string> | undefined)?.start_date)}
               />
             </div>
-          )}
+          </PanelWithTimeout>
         </Card>
 
         {/* Data Completeness */}
@@ -1022,9 +1050,11 @@ export function OverviewTab({
               </svg>
             }
           />
-          {profileLoading ? (
-            <SectionLoader />
-          ) : (
+          <PanelWithTimeout
+            loading={profileLoading}
+            onRetry={onRetryProfile}
+            skeleton={<SkeletonChecklist count={10} />}
+          >
             <DataCompletenessChecklist
               profile={profile}
               encounters={encounters}
@@ -1034,7 +1064,7 @@ export function OverviewTab({
               vitalsSuspects={vitalsSuspects}
               selectedYear={selectedYear}
             />
-          )}
+          </PanelWithTimeout>
         </Card>
       </div>
     </div>

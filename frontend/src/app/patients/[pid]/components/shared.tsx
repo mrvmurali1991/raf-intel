@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { MEATEvidence, DBSuspect, AnalysisResult } from "@/types";
 import type {
   PatientProfile,
@@ -378,6 +378,208 @@ export function SectionLoader({ label }: { label?: string }) {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Skeleton primitives — shimmer class from globals.css
+// ---------------------------------------------------------------------------
+
+/** A single rectangular shimmer block */
+export function SkeletonBlock({
+  width = "100%",
+  height = 14,
+  radius = 6,
+  style,
+}: {
+  width?: number | string;
+  height?: number | string;
+  radius?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className="shimmer"
+      aria-hidden="true"
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        background: C.slate200,
+        ...style,
+      }}
+    />
+  );
+}
+
+/** Skeleton for a table-like list rows (problems, encounters, care gaps) */
+export function SkeletonRows({
+  count = 5,
+  twoCol = true,
+}: {
+  count?: number;
+  twoCol?: boolean;
+}) {
+  return (
+    <div aria-label="Loading content" aria-busy="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            display: "grid",
+            gridTemplateColumns: twoCol ? "1fr 80px" : "1fr",
+            gap: 12,
+            padding: "10px 20px",
+            borderBottom: `1px solid ${C.slate100}`,
+            alignItems: "center",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <SkeletonBlock height={13} width={`${70 - i * 5}%`} />
+            <SkeletonBlock height={11} width="40%" />
+          </div>
+          {twoCol && <SkeletonBlock height={22} width={64} radius={4} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Skeleton for a demographics/insurance card — label + value rows */
+export function SkeletonDataRows({ count = 5 }: { count?: number }) {
+  return (
+    <div aria-label="Loading content" aria-busy="true" style={{ padding: "8px 0" }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "8px 20px",
+            borderBottom: `1px solid ${C.slate100}`,
+            gap: 16,
+          }}
+        >
+          <SkeletonBlock height={12} width={80} />
+          <SkeletonBlock height={12} width={`${40 + (i % 3) * 10}%`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Skeleton for a checklist (Data Completeness) — progress bar + rows */
+export function SkeletonChecklist({ count = 8 }: { count?: number }) {
+  return (
+    <div aria-label="Loading content" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 10, padding: "8px 0" }}>
+      <SkeletonBlock height={6} width="100%" radius={4} style={{ marginBottom: 8 }} />
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <SkeletonBlock height={12} width={`${50 + (i % 4) * 8}px`} />
+          <SkeletonBlock height={18} width={72} radius={4} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PanelWithTimeout — wraps any loading panel with a 12 s hard timeout
+// ---------------------------------------------------------------------------
+
+interface PanelWithTimeoutProps {
+  loading: boolean;
+  skeleton: React.ReactNode;
+  children: React.ReactNode;
+  onRetry?: () => void;
+  /** Override default 12 s timeout (ms) */
+  timeoutMs?: number;
+}
+
+export function PanelWithTimeout({
+  loading,
+  skeleton,
+  children,
+  onRetry,
+  timeoutMs = 12_000,
+}: PanelWithTimeoutProps) {
+  const [timedOut, setTimedOut] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      setTimedOut(false);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      return;
+    }
+    timerRef.current = setTimeout(() => setTimedOut(true), timeoutMs);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [loading, timeoutMs]);
+
+  if (!loading) return <>{children}</>;
+
+  if (timedOut) {
+    return (
+      <div
+        role="alert"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          padding: "32px 20px",
+          color: C.slate500,
+          textAlign: "center",
+        }}
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={C.slate400}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span style={{ fontSize: 13, color: C.slate500 }}>
+          Couldn&apos;t load this section
+        </span>
+        {onRetry && (
+          <button
+            onClick={() => {
+              setTimedOut(false);
+              onRetry();
+            }}
+            style={{
+              marginTop: 4,
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: `1px solid ${C.slate300}`,
+              background: C.white,
+              color: C.slate600,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return <>{skeleton}</>;
+}
+
 
 // ---------------------------------------------------------------------------
 // Card wrapper (inline styles)

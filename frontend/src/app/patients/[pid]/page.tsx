@@ -930,6 +930,10 @@ export default function PatientDetailPage({
             meds={medsQ.data}
             labSuspects={labSuspectsQ.data}
             vitalsSuspects={vitalsSuspectsQ.data}
+            onRetryProblems={() => queryClient.refetchQueries({ queryKey: ["patient-problems", pid, selectedYear] })}
+            onRetryEncounters={() => queryClient.refetchQueries({ queryKey: ["patient-encounters", pid] })}
+            onRetryRecapture={() => queryClient.refetchQueries({ queryKey: ["patient-recapture", pid, selectedYear] })}
+            onRetryProfile={() => queryClient.refetchQueries({ queryKey: ["patient-profile", pid] })}
           />
         )}
         {activeTab === "raf" && (
