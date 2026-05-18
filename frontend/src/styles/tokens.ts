@@ -87,24 +87,24 @@ export const tokens = {
   primarySoft:   "hsl(var(--primary) / 0.08)",
 
   // ---- Success palette ----
-  success:       "#10B981",
-  successDark:   "#047857",
-  successSoft:   "#ECFDF5",
+  success:       "hsl(var(--success-base))",
+  successDark:   "hsl(var(--success-dark))",
+  successSoft:   "hsl(var(--success-soft))",
 
   // ---- Danger / destructive palette ----
   // --destructive is defined in globals.css for both modes.
   danger:        "hsl(var(--destructive))",
-  dangerSoft:    "#FEF2F2",
-  dangerBorder:  "#FECACA",
+  dangerSoft:    "hsl(var(--danger-soft))",
+  dangerBorder:  "hsl(var(--danger-border))",
 
   // ---- Emerald palette ----
-  emerald100:    "#D1FAE5",
-  emerald300:    "#6EE7B7",
-  emerald800:    "#065F46",
+  emerald100:    "hsl(var(--emerald-100))",
+  emerald300:    "hsl(var(--emerald-300))",
+  emerald800:    "hsl(var(--emerald-800))",
 
   // ---- Info-blue and accent purple ----
-  infoBlue:      "#3B82F6",
-  accentPurple:  "#8B5CF6",
+  infoBlue:      "hsl(var(--info-blue))",
+  accentPurple:  "hsl(var(--accent-purple))",
 
   // ---- Sky / teal sub-chips ----
   skyBg:         "hsl(var(--sky-bg))",
@@ -118,8 +118,8 @@ export const tokens = {
   violetText:    "hsl(var(--violet-text))",
 
   // ---- Indigo accent ----
-  indigoText:    "#6366f1",
-  indigoBg:      "#eef2ff",
+  indigoText:    "hsl(var(--indigo-text))",
+  indigoBg:      "hsl(var(--indigo-bg))",
 
   // ---- Utility / separator ----
   // --border is defined for both modes; use var() so tables auto-adapt.
@@ -127,21 +127,21 @@ export const tokens = {
 
   // ---- Brand teal (clinical / OpenEMR) ----
   // Exposed as --brand-primary in globals.css; use that for tenant-aware contexts.
-  teal700:       "#0F766E",
-  teal900:       "#134E4A",
-  tealSoft:      "rgba(15, 118, 110, 0.06)",
-  tealRing:      "rgba(15, 118, 110, 0.18)",
+  teal700:       "hsl(var(--teal-700))",
+  teal900:       "hsl(var(--teal-900))",
+  tealSoft:      "hsl(var(--teal-soft))",
+  tealRing:      "hsl(var(--teal-ring))",
 
   // ---- Neutral hover / stripe helpers ----
-  bgFaintCard:   "#FAFBFC",
-  bgSubtle:      "#FAFAF8",
-  warningMuted:  "#92400E",
-  dangerStrong:  "#DC2626",
-  dangerMedium:  "#EF4444",
-  dangerAlt:     "#991B1B",
-  successMedium: "#059669",
-  successStrong: "#10B981",
-  amber600:      "#D97706",
+  bgFaintCard:   "hsl(var(--bg-faint-card))",
+  bgSubtle:      "hsl(var(--bg-subtle))",
+  warningMuted:  "hsl(var(--warning-muted))",
+  dangerStrong:  "hsl(var(--danger-strong))",
+  dangerMedium:  "hsl(var(--danger-medium))",
+  dangerAlt:     "hsl(var(--danger-alt))",
+  successMedium: "hsl(var(--success-medium))",
+  successStrong: "hsl(var(--success-strong))",
+  amber600:      "hsl(var(--amber-600))",
 
   // ---- Cohen's kappa IRR band colours ----
   kappaExcellent:     "hsl(var(--kappa-excellent))",

@@ -165,6 +165,47 @@
   --color-violet-border: hsl(var(--violet-border));
   --color-violet-text:   hsl(var(--violet-text));
 
+  /* Success palette */
+  --color-success-base:    hsl(var(--success-base));
+  --color-success-dark:    hsl(var(--success-dark));
+  --color-success-soft:    hsl(var(--success-soft));
+  --color-success-medium:  hsl(var(--success-medium));
+  --color-success-strong:  hsl(var(--success-strong));
+
+  /* Danger extended */
+  --color-danger-soft:     hsl(var(--danger-soft));
+  --color-danger-border:   hsl(var(--danger-border));
+  --color-danger-strong:   hsl(var(--danger-strong));
+  --color-danger-medium:   hsl(var(--danger-medium));
+  --color-danger-alt:      hsl(var(--danger-alt));
+
+  /* Emerald */
+  --color-emerald-100:     hsl(var(--emerald-100));
+  --color-emerald-300:     hsl(var(--emerald-300));
+  --color-emerald-800:     hsl(var(--emerald-800));
+
+  /* Info-blue / accent-purple */
+  --color-info-blue:       hsl(var(--info-blue));
+  --color-accent-purple:   hsl(var(--accent-purple));
+
+  /* Indigo accent */
+  --color-indigo-text:     hsl(var(--indigo-text));
+  --color-indigo-bg:       hsl(var(--indigo-bg));
+
+  /* Teal brand */
+  --color-teal-700:        hsl(var(--teal-700));
+  --color-teal-900:        hsl(var(--teal-900));
+  --color-teal-soft:       hsl(var(--teal-soft));
+  --color-teal-ring:       hsl(var(--teal-ring));
+
+  /* Neutral background helpers */
+  --color-bg-faint-card:   hsl(var(--bg-faint-card));
+  --color-bg-subtle:       hsl(var(--bg-subtle));
+
+  /* Warning muted / amber */
+  --color-warning-muted:   hsl(var(--warning-muted));
+  --color-amber-600:       hsl(var(--amber-600));
+
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -308,6 +349,47 @@
   --sidebar-accent-foreground: 220 20% 15%;
   --sidebar-border: 214 20% 92%;
   --sidebar-ring: 177 73% 26%;
+
+  /* ---- Success palette ---- */
+  --success-base:    152 69% 38%;
+  --success-dark:    162 91% 25%;
+  --success-soft:    138 100% 97%;
+  --success-medium:  153 91% 30%;
+  --success-strong:  152 69% 38%;
+
+  /* ---- Danger extended palette ---- */
+  --danger-soft:     0 100% 97%;
+  --danger-border:   0 94% 87%;
+  --danger-strong:   0 72% 51%;
+  --danger-medium:   0 85% 60%;
+  --danger-alt:      0 72% 35%;
+
+  /* ---- Emerald ---- */
+  --emerald-100:     152 76% 91%;
+  --emerald-300:     160 67% 68%;
+  --emerald-800:     161 97% 21%;
+
+  /* ---- Info-blue / accent-purple ---- */
+  --info-blue:       213 93% 59%;
+  --accent-purple:   258 90% 66%;
+
+  /* ---- Indigo accent ---- */
+  --indigo-text:     239 84% 67%;
+  --indigo-bg:       226 100% 97%;
+
+  /* ---- Teal brand ---- */
+  --teal-700:        174 83% 26%;
+  --teal-900:        176 63% 19%;
+  --teal-soft:       174 83% 26% / 0.06;
+  --teal-ring:       174 83% 26% / 0.18;
+
+  /* ---- Neutral background helpers ---- */
+  --bg-faint-card:   210 40% 99%;
+  --bg-subtle:       60 10% 98%;
+
+  /* ---- Warning muted / amber ---- */
+  --warning-muted:   20 88% 30%;
+  --amber-600:       38 90% 44%;
 }
 
 .dark {
@@ -380,6 +462,47 @@
   --sidebar-accent-foreground: 210 12% 90%;
   --sidebar-border: 225 12% 14%;
   --sidebar-ring: 177 60% 42%;
+
+  /* ---- Success palette (dark) ---- */
+  --success-base:    152 60% 48%;
+  --success-dark:    162 75% 38%;
+  --success-soft:    160 40% 12%;
+  --success-medium:  153 65% 42%;
+  --success-strong:  152 60% 48%;
+
+  /* ---- Danger extended palette (dark) ---- */
+  --danger-soft:     0 40% 13%;
+  --danger-border:   0 40% 28%;
+  --danger-strong:   0 65% 58%;
+  --danger-medium:   0 70% 62%;
+  --danger-alt:      0 50% 38%;
+
+  /* ---- Emerald (dark) ---- */
+  --emerald-100:     160 40% 18%;
+  --emerald-300:     160 45% 42%;
+  --emerald-800:     161 70% 32%;
+
+  /* ---- Info-blue / accent-purple (dark) ---- */
+  --info-blue:       213 80% 65%;
+  --accent-purple:   258 75% 72%;
+
+  /* ---- Indigo accent (dark) ---- */
+  --indigo-text:     239 72% 72%;
+  --indigo-bg:       226 40% 16%;
+
+  /* ---- Teal brand (dark) ---- */
+  --teal-700:        174 55% 42%;
+  --teal-900:        176 45% 30%;
+  --teal-soft:       174 55% 42% / 0.10;
+  --teal-ring:       174 55% 42% / 0.25;
+
+  /* ---- Neutral background helpers (dark) ---- */
+  --bg-faint-card:   225 15% 10%;
+  --bg-subtle:       225 12% 12%;
+
+  /* ---- Warning muted / amber (dark) ---- */
+  --warning-muted:   20 70% 60%;
+  --amber-600:       38 80% 55%;
 }
 
 @layer base {
