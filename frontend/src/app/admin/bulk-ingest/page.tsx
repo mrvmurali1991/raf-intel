@@ -287,7 +287,7 @@ export default function BulkIngestPage() {
             placeholder="https://payer.example.com/fhir/Group/123/$export"
             value={exportUrl}
             onChange={(e) => setExportUrl(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:border-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1"
           />
           <ResourceTypePicker selected={selectedTypes} onToggle={toggleType} />
           <button

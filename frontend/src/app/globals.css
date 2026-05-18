@@ -259,7 +259,7 @@
     font-weight: 700;
   }
 
-  /* Skip to content link for accessibility */
+  /* ---- Skip to main content — WCAG 2.4.1 bypass block ---- */
   .skip-to-content {
     position: absolute;
     top: -100%;
@@ -274,14 +274,30 @@
     text-decoration: none;
     transition: top 0.15s;
   }
-  .skip-to-content:focus {
+  /* Reveal on keyboard Tab (any focus method) */
+  .skip-to-content:focus,
+  .skip-to-content:focus-visible {
     top: 0;
   }
+  /* Explicit keyboard ring so the link is visible against any background */
+  .skip-to-content:focus-visible {
+    outline: 3px solid hsl(var(--primary-foreground));
+    outline-offset: 2px;
+  }
 
-  /* Focus visible styles for accessibility */
+  /* ---- WCAG 2.4.7 / 2.4.11: global focus-visible ring ----
+   * Uses :focus-visible so mouse clicks never trigger the ring.
+   * 2px solid ring + 2px offset satisfies WCAG 2.4.11 (enhanced).
+   * border-radius: inherit so rounded buttons/inputs get a hugging ring. */
   :focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
+    border-radius: inherit;
+  }
+  /* Fallback: plain <a> and <button> with no border-radius inherit 0,
+     give them a 4px curve so the ring looks intentional. */
+  a:focus-visible,
+  button:focus-visible {
     border-radius: 4px;
   }
 

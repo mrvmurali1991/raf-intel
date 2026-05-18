@@ -2904,7 +2904,7 @@ export default function DemoPage() {
 
             <TabsContent value="paste" className="space-y-3">
               <textarea
-                className="w-full rounded-xl border border-border bg-muted/20 p-4 font-mono text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:bg-background transition-all resize-y min-h-[200px]"
+                className="w-full rounded-xl border border-border bg-muted/20 p-4 font-mono text-sm leading-relaxed placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-teal-500 focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:bg-background transition-all resize-y min-h-[200px]"
                 rows={8}
                 placeholder={"Paste a clinical encounter note here...\n\ne.g. Patient: 72-year-old male\nHistory: Type 2 diabetes, CHF, CKD stage 3..."}
                 value={noteText}
@@ -2952,7 +2952,7 @@ export default function DemoPage() {
                   </label>
                   <div className="relative">
                     <select
-                      className="w-full appearance-none rounded-xl border border-border bg-muted/20 py-3 pl-4 pr-10 text-sm font-medium focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:bg-background transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full appearance-none rounded-xl border border-border bg-muted/20 py-3 pl-4 pr-10 text-sm font-medium focus-visible:outline-none focus-visible:border-teal-500 focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:bg-background transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       value={selectedPatientId ?? ""}
                       onChange={(e) => {
                         setSelectedPatientId(e.target.value ? Number(e.target.value) : null);
@@ -2976,7 +2976,7 @@ export default function DemoPage() {
                   </label>
                   <div className="relative">
                     <select
-                      className="w-full appearance-none rounded-xl border border-border bg-muted/20 py-3 pl-4 pr-10 text-sm font-medium focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:bg-background transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full appearance-none rounded-xl border border-border bg-muted/20 py-3 pl-4 pr-10 text-sm font-medium focus-visible:outline-none focus-visible:border-teal-500 focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:bg-background transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       value={selectedEncounterId ?? ""}
                       onChange={(e) => setSelectedEncounterId(e.target.value ? Number(e.target.value) : null)}
                       disabled={running || !selectedPatientId}

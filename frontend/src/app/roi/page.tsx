@@ -828,6 +828,11 @@ export default function ROICalculatorPage() {
           outline: none;
           transition: box-shadow 0.2s;
         }
+        .roi-slider:focus-visible {
+          outline: 2px solid #2563EB;
+          outline-offset: 3px;
+          border-radius: 4px;
+        }
         .roi-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
           width: 22px;

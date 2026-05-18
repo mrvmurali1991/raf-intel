@@ -128,7 +128,7 @@ export default function PreSubmissionPage() {
               id="presub-year"
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               aria-label="Measurement year"
             >
               {yearOptions.map((y) => (
