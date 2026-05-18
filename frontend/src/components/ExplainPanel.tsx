@@ -238,16 +238,16 @@ function SignalCard({ sig }: { sig: ContributingSignal }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="animate-pulse space-y-4" aria-hidden>
+    <div className="space-y-4" aria-hidden>
       <div className="flex gap-2">
-        <div className="h-5 w-16 rounded-full bg-muted" />
-        <div className="h-5 w-14 rounded-full bg-muted" />
+        <div className="skeleton h-5 w-16 rounded-full" />
+        <div className="skeleton h-5 w-14 rounded-full" />
       </div>
-      <div className="h-24 rounded-xl bg-muted" />
-      <div className="h-16 rounded-lg bg-muted" />
+      <div className="skeleton h-24 rounded-xl" />
+      <div className="skeleton h-16 rounded-lg" />
       <div className="space-y-2">
-        <div className="h-20 rounded-lg bg-muted" />
-        <div className="h-20 rounded-lg bg-muted" />
+        <div className="skeleton h-20 rounded-lg" />
+        <div className="skeleton h-20 rounded-lg" />
       </div>
     </div>
   );
@@ -344,13 +344,13 @@ export function ExplainPanel({
     >
       <FocusTrap enabled restoreFocus={false}>
         <div
-          className="absolute right-0 top-0 flex h-full w-full animate-in slide-in-from-right flex-col border-l bg-white dark:bg-zinc-900 shadow-2xl duration-200 sm:max-w-[460px] lg:max-w-[520px]"
+          className="absolute right-0 top-0 flex h-full w-full animate-in slide-in-from-right flex-col border-l shadow-2xl duration-200 sm:max-w-[460px] lg:max-w-[520px] glass-frosted"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-label={`Evidence for ${suspectLabel}`}
         >
-          <header className="flex-shrink-0 border-b bg-white dark:bg-zinc-900">
+          <header className="flex-shrink-0 border-b border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm">
             <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex items-center gap-1.5 text-primary">
@@ -545,7 +545,7 @@ export function ExplainPanel({
           </div>
 
           {showFooter && !error && (
-            <footer className="flex-shrink-0 border-t bg-muted px-5 py-3">
+            <footer className="flex-shrink-0 border-t border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm px-5 py-3">
               <div className="flex items-center gap-2">
                 {onRequestDismiss && (
                   <Button
