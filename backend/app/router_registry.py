@@ -141,6 +141,7 @@ from app.routers import suspect_feedback as suspect_feedback_router
 from app.routers import pre_submission as pre_submission_router
 from app.routers import tenant_branding as tenant_branding_router
 from app.routers import encryption_admin as encryption_admin_router
+from app.routers import hl7v2_mdm_receiver as hl7v2_mdm_receiver_router
 
 
 # ---------------------------------------------------------------------------
@@ -390,3 +391,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Encryption key management (KMS BYOK)
     _mount(app, encryption_admin_router.router)
+
+    # HL7 v2 MDM ingest — HTTP receiver for Mirth/Rhapsody/Cloverleaf sidecar
+    _mount(app, hl7v2_mdm_receiver_router.router)
