@@ -27,23 +27,27 @@ import type { MetricMeta } from "@/lib/api";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Never";
   try {
-    const diff = Date.now() - new Date(iso).getTime();
+    const diff = Date.now() - d.getTime();
     const s = Math.floor(diff / 1000);
     if (s < 60) return `${s} second${s !== 1 ? "s" : ""} ago`;
     const m = Math.floor(s / 60);
     if (m < 60) return `${m} minute${m !== 1 ? "s" : ""} ago`;
     const h = Math.floor(m / 60);
     if (h < 24) return `${h} hour${h !== 1 ? "s" : ""} ago`;
-    const d = Math.floor(h / 24);
-    return `${d} day${d !== 1 ? "s" : ""} ago`;
+    const days = Math.floor(h / 24);
+    return `${days} day${days !== 1 ? "s" : ""} ago`;
   } catch {
-    return iso;
+    return "Never";
   }
 }
 
-function fmtDollars(n: number): string {
+function fmtDollars(n: number | null | undefined): string {
+  if (!n) return "—";
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
@@ -52,7 +56,12 @@ function fmtDollars(n: number): string {
 // ---------------------------------------------------------------------------
 
 export interface MetricMetaTooltipProps {
-  meta: MetricMeta;
+  /**
+   * MetricMeta block from the backend. When undefined/null the (i) button still
+   * renders but shows a "Loading..." placeholder — keeps layout stable and lets
+   * Playwright always find `data-testid="metric-meta-info"`.
+   */
+  meta?: MetricMeta | null;
   /** Tooltip open side (default: "top") */
   side?: "top" | "bottom" | "left" | "right";
 }
@@ -70,33 +79,37 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
     if (e.key === "Escape") setOpen(false);
   };
 
-  const content = (
-    <div className="flex flex-col gap-2 min-w-[220px] max-w-[300px] text-left">
+  // Always render the popover content node so Playwright can find it in the
+  // portal DOM regardless of whether meta has loaded yet.
+  const content = meta ? (
+    <div
+      role="tooltip"
+      data-testid="metric-meta-tooltip-content"
+      className="flex flex-col gap-2 min-w-[220px] max-w-[300px] text-left"
+    >
       {/* Formula */}
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60 mb-0.5">
           Formula
         </p>
         <code className="block font-mono text-[11px] leading-snug bg-white/10 rounded px-1.5 py-1 break-all">
-          {meta.formula}
+          {meta.formula ?? "—"}
         </code>
       </div>
 
       {/* Payment year */}
       <div className="flex justify-between items-center">
         <span className="text-[11px] opacity-70">Payment year</span>
-        <span className="text-[11px] font-semibold tabular-nums">{meta.payment_year}</span>
+        <span className="text-[11px] font-semibold tabular-nums">{meta.payment_year ?? "—"}</span>
       </div>
 
-      {/* Revenue per RAF point */}
-      {meta.revenue_per_raf_point != null && (
-        <div className="flex justify-between items-center">
-          <span className="text-[11px] opacity-70">Revenue / RAF pt</span>
-          <span className="text-[11px] font-semibold tabular-nums">
-            {fmtDollars(meta.revenue_per_raf_point)}
-          </span>
-        </div>
-      )}
+      {/* Revenue per RAF point — always show; fmtDollars returns "—" for 0/null */}
+      <div className="flex justify-between items-center">
+        <span className="text-[11px] opacity-70">Revenue / RAF pt</span>
+        <span className="text-[11px] font-semibold tabular-nums">
+          {fmtDollars(meta.revenue_per_raf_point)}
+        </span>
+      </div>
 
       {/* Total RAF points */}
       {meta.total_raf_points != null && (
@@ -121,19 +134,31 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
         <span className="text-[10px] opacity-60">Last computed</span>
         <span
           className="text-[10px] opacity-80 tabular-nums"
-          title={meta.last_computed_at}
+          title={meta.last_computed_at ?? undefined}
         >
           {relativeTime(meta.last_computed_at)}
         </span>
       </div>
 
       {/* Version */}
-      <div className="text-[9px] opacity-40 text-right -mt-1">v{meta.version}</div>
+      {meta.version != null && (
+        <div className="text-[9px] opacity-40 text-right -mt-1">v{meta.version}</div>
+      )}
+    </div>
+  ) : (
+    <div
+      role="tooltip"
+      data-testid="metric-meta-tooltip-content"
+      className="text-[11px] opacity-70 min-w-[120px] text-left"
+    >
+      No formula metadata available yet
     </div>
   );
 
   return (
-    <TooltipProvider>
+    // delay={0} on the Provider ensures the popup opens on the very first hover
+    // without the default 600 ms grace period — critical for Playwright tests.
+    <TooltipProvider delay={0}>
       <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger
           aria-label="Show metric formula and computation details"
