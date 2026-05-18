@@ -39,6 +39,28 @@ from app.services.metrics_service import revenue_at_risk as _canonical_revenue_a
 
 logger = logging.getLogger(__name__)
 
+# HCC label lookup (hccinfhir) — same source as raf_central.py
+try:
+    from hccinfhir.defaults import labels_default as _labels_default
+except ImportError:  # pragma: no cover
+    _labels_default = {}
+
+_V28_MODEL = "CMS-HCC Model V28"
+
+
+def _hcc_label(hcc_code: str) -> str:
+    code = str(hcc_code).replace("HCC", "").strip()
+    return _labels_default.get((code, _V28_MODEL)) or f"HCC {code}"
+
+
+def _confidence_tier(score: float) -> str:
+    """Map completeness_score (0–1) to a human label for evidence quality."""
+    if score >= 0.75:
+        return "Strong"
+    if score >= 0.50:
+        return "Moderate"
+    return "Calibrated"
+
 # ---------------------------------------------------------------------------
 # Revenue assumed per open recapture gap when recapture_gaps.revenue_impact
 # is NULL or the table does not exist (used only for per-patient row estimates
@@ -48,6 +70,9 @@ _DEFAULT_REVENUE_PER_GAP: float = 3_000.00
 
 # Priority score ceiling — patients at this score go to the top of the list.
 _MAX_PRIORITY: int = 100
+
+# Default target gaps per provider for workload capacity_pct calculation.
+_DEFAULT_TARGET_CAPACITY: int = 30
 
 
 # ---------------------------------------------------------------------------
@@ -93,25 +118,64 @@ def _parse_icd10_codes(raw: Any) -> list[str]:
         return [str(raw)] if raw else []
 
 
+AWV_CPT_CODES = ("G0438", "G0439", "G0136")
+AWV_ENCOUNTER_TYPE = "AWV"
+
+# Days between AWV cycles per CMS 2026 (G0136 every 6 months; G0438/G0439 annual)
+_AWV_INTERVAL_DAYS_G0136 = 180
+_AWV_INTERVAL_DAYS_ANNUAL = 365
+
+
+def _compute_awv_status(awv_last_date: date | None) -> tuple[str, date | None]:
+    """
+    Return (awv_status, awv_due_date).
+
+    Status enum:
+      overdue   — due_date < today
+      due_soon  — 0–30 days until due
+      current   — 31–180 days until due
+      future    — >180 days until due
+      unknown   — no prior AWV
+    """
+    today = date.today()
+    if awv_last_date is None:
+        return "unknown", None
+    # Use 365-day cycle (annual wellness visit); G0136 every 180 days is additive.
+    due_date = date.fromordinal(awv_last_date.toordinal() + _AWV_INTERVAL_DAYS_ANNUAL)
+    days_until = (due_date - today).days
+    if days_until < 0:
+        status = "overdue"
+    elif days_until <= 30:
+        status = "due_soon"
+    elif days_until <= 180:
+        status = "current"
+    else:
+        status = "future"
+    return status, due_date
+
+
 def _build_priority_score(
     open_gap_count: int,
     suspected_hcc_count: int,
     total_revenue_at_risk: float,
+    awv_status: str = "unknown",
 ) -> int:
     """
-    Heuristic priority score (0–100).
+    Heuristic priority score (0–200).
 
     Weights:
       - Each open recapture gap contributes up to 15 points (max 5 gaps = 75 pts).
       - Each suspected HCC not yet in gaps contributes up to 5 points (max 3 = 15).
       - Revenue at risk above $5k adds a bonus (up to 10 pts).
+      - AWV overdue: +100 pts; AWV due_soon: +50 pts.
 
     Higher score → provider should see this patient sooner.
     """
     gap_score = min(open_gap_count * 15, 75)
     suspect_score = min(suspected_hcc_count * 5, 15)
     revenue_bonus = min(int(max(total_revenue_at_risk - 5_000, 0) / 1_000), 10)
-    return min(gap_score + suspect_score + revenue_bonus, _MAX_PRIORITY)
+    awv_bonus = 100 if awv_status == "overdue" else (50 if awv_status == "due_soon" else 0)
+    return gap_score + suspect_score + revenue_bonus + awv_bonus
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +428,87 @@ def get_provider_worklist(
         except Exception as exc:
             logger.debug("get_provider_worklist: suspects query failed: %s", exc)
 
+    # ---- MEAT evidence preview per (patient, hcc_code) ----
+    # Pulls the most-recent raf_meat_evidence row per patient_hcc_id so each
+    # HCC chip can render a hover-card without a separate round-trip.
+    # key: (patient_id, normalized_hcc_str) -> preview dict
+    evidence_preview_map: dict[tuple[int, str], dict[str, Any]] = {}
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    rph.patient_id,
+                    rph.hcc_code,
+                    rph.raf_coefficient,
+                    me.raw_note_excerpt,
+                    me.completeness_score,
+                    me.encounter_id AS source_doc_id
+                FROM raf_meat_evidence me
+                JOIN raf_patient_hcc rph ON rph.id = me.patient_hcc_id
+                WHERE rph.tenant_id      = %s
+                  AND rph.patient_id     IN ({id_placeholders})
+                  AND me.raw_note_excerpt IS NOT NULL
+                  AND me.raw_note_excerpt != ''
+                  AND me.id = (
+                      SELECT id FROM raf_meat_evidence me2
+                      WHERE  me2.patient_hcc_id = me.patient_hcc_id
+                      ORDER  BY me2.encounter_date DESC, me2.id DESC
+                      LIMIT  1
+                  )
+                """,
+                [tenant_id] + patient_ids,
+            )
+            for row in cur.fetchall():
+                pid_key = int(row["patient_id"]) if not isinstance(row["patient_id"], int) else row["patient_id"]
+                hcc_key = str(row["hcc_code"]).replace("HCC", "").strip()
+                excerpt = (row["raw_note_excerpt"] or "")[:300]
+                score = float(row["completeness_score"] or 0)
+                raf_coeff = float(row["raf_coefficient"] or 0)
+                first_clause = excerpt.split(".")[0].split(",")[0].strip()
+                highlight_term = first_clause[:40] if first_clause else excerpt[:40]
+                evidence_preview_map[(pid_key, hcc_key)] = {
+                    "hcc_code": hcc_key,
+                    "hcc_description": _hcc_label(hcc_key),
+                    "raf_lift": round(raf_coeff, 3),
+                    "estimated_revenue": round(raf_coeff * 11_000, 2),
+                    "raw_note_excerpt": excerpt,
+                    "highlight_term": highlight_term,
+                    "confidence_score": _confidence_tier(score),
+                    "source_doc_id": row["source_doc_id"],
+                }
+    except Exception as exc:
+        logger.debug("get_provider_worklist: evidence_preview query failed: %s", exc)
+
+    # ---- AWV last visit per patient ----
+    # Match encounter_type = 'AWV' OR cpt_code in (G0438, G0439, G0136)
+    awv_map: dict[int, date | None] = {pid: None for pid in patient_ids}
+    try:
+        cpt_placeholders = ", ".join(["%s"] * len(AWV_CPT_CODES))
+        with raf_cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT patient_id, MAX(encounter_date) AS awv_last
+                FROM   normalized_encounters
+                WHERE  tenant_id   = %s
+                  AND  patient_id  IN ({id_placeholders})
+                  AND  (
+                       encounter_type = %s
+                    OR cpt_code IN ({cpt_placeholders})
+                  )
+                GROUP BY patient_id
+                """,
+                [tenant_id] + patient_ids + [AWV_ENCOUNTER_TYPE] + list(AWV_CPT_CODES),
+            )
+            for row in cur.fetchall():
+                raw = row["awv_last"]
+                if raw is not None:
+                    awv_map[row["patient_id"]] = (
+                        raw if isinstance(raw, date) else date.fromisoformat(str(raw)[:10])
+                    )
+    except Exception as exc:
+        logger.debug("get_provider_worklist: AWV query failed: %s", exc)
+
     # ---- Assemble worklist items ----
     worklist: list[dict[str, Any]] = []
     for p in patients:
@@ -373,22 +518,37 @@ def get_provider_worklist(
 
         revenue_at_risk = sum(g["revenue_impact"] for g in gaps)
         estimated_raf_impact = raf_coeff_map.get(pid, 0.0)
+
+        awv_last_raw = awv_map.get(pid)
+        awv_status, awv_due_date = _compute_awv_status(awv_last_raw)
+
         priority = _build_priority_score(
             open_gap_count=len(gaps),
             suspected_hcc_count=len(suspects),
             total_revenue_at_risk=revenue_at_risk,
+            awv_status=awv_status,
         )
+
+        # Attach evidence_preview onto each gap dict (None when no MEAT evidence exists)
+        enriched_gaps = []
+        for g in gaps:
+            hcc_key = str(g["hcc_code"]).replace("HCC", "").strip()
+            preview = evidence_preview_map.get((pid, hcc_key))
+            enriched_gaps.append({**g, "evidence_preview": preview})
 
         worklist.append({
             "patient_id": pid,
             "patient_name": f"{p['last_name']}, {p['first_name']}",
             "dob": _safe_date(p["dob"]),
             "last_visit_date": last_visit_map.get(pid),
-            "open_recapture_gaps": gaps,
+            "open_recapture_gaps": enriched_gaps,
             "suspect_conditions": suspects,
             "estimated_raf_impact": round(estimated_raf_impact, 4),
             "estimated_revenue_at_risk": round(revenue_at_risk, 2),
             "priority_score": priority,
+            "awv_last_date": _safe_date(awv_last_raw),
+            "awv_due_date": _safe_date(awv_due_date),
+            "awv_status": awv_status,
         })
 
     # Sort: highest priority first; break ties by most revenue at risk.
@@ -975,3 +1135,197 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
         ]
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# 4. get_provider_workload
+# ---------------------------------------------------------------------------
+
+# Default target gaps per provider for workload capacity_pct calculation.
+_DEFAULT_TARGET_CAPACITY: int = 30
+
+
+def get_provider_workload(
+    tenant_id: str,
+    measurement_year: int,
+    target_capacity: int = _DEFAULT_TARGET_CAPACITY,
+) -> list[dict[str, Any]]:
+    """
+    Return per-provider workload data for the heatmap widget.
+
+    Each row contains:
+      provider_id      — users.id (int)
+      provider_name    — "First Last" from users table
+      open_gaps        — count of open recapture gaps for this provider
+      awv_due          — panel patients with no encounter in current year
+      suspect_count    — open suspects on this provider's patients
+      total_workload   — open_gaps + awv_due + suspect_count
+      capacity_pct     — min(total_workload / target_capacity * 100, 100)
+
+    Sorted descending by total_workload (busiest first).
+    """
+    if not tenant_id:
+        raise ValueError("get_provider_workload: tenant_id is required")
+
+    current_year = date.today().year
+    recapture_exists = _table_exists("recapture_gaps")
+    suspects_exists = _table_exists("suspects")
+
+    # Enumerate providers registered for this tenant.
+    prov_rows: list[dict[str, Any]] = []
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT pr.user_id AS provider_id,
+                       pr.npi     AS provider_npi,
+                       CONCAT(u.first_name, ' ', u.last_name) AS provider_name
+                FROM   providers pr
+                JOIN   users u ON u.id = pr.user_id
+                WHERE  pr.tenant_id = %s
+                  AND  u.tenant_id  = %s
+                  AND  u.is_active  = 1
+                ORDER  BY u.last_name, u.first_name
+                """,
+                (tenant_id, tenant_id),
+            )
+            prov_rows = list(cur.fetchall() or [])
+    except Exception as exc:
+        logger.debug("get_provider_workload: providers query failed: %s", exc)
+
+    if not prov_rows:
+        return []
+
+    results: list[dict[str, Any]] = []
+
+    for prov in prov_rows:
+        prov_id: int = int(prov["provider_id"])
+        prov_npi: str = prov["provider_npi"] or str(prov_id)
+        prov_name: str = (prov["provider_name"] or "").strip() or f"Provider {prov_id}"
+
+        # -- Open gaps --
+        open_gaps = 0
+        if recapture_exists:
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) AS cnt
+                        FROM   recapture_gaps
+                        WHERE  tenant_id    = %s
+                          AND  status       = 'open'
+                          AND  current_year = %s
+                          AND  provider_npi = %s
+                        """,
+                        (tenant_id, measurement_year, prov_npi),
+                    )
+                    row = cur.fetchone()
+                    open_gaps = int(row["cnt"] or 0) if row else 0
+            except Exception as exc:
+                logger.debug("get_provider_workload: open_gaps failed npi=%s: %s", prov_npi, exc)
+        else:
+            prior_year = measurement_year - 1
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT COUNT(DISTINCT ph.patient_id) AS cnt
+                        FROM   raf_patient_hcc ph
+                        JOIN   normalized_encounters ne
+                               ON ne.patient_id   = ph.patient_id
+                              AND ne.tenant_id    = ph.tenant_id
+                              AND ne.provider_npi = %s
+                        WHERE  ph.tenant_id        = %s
+                          AND  ph.measurement_year  = %s
+                          AND  NOT EXISTS (
+                               SELECT 1
+                               FROM   raf_patient_hcc cy
+                               WHERE  cy.patient_id       = ph.patient_id
+                                 AND  cy.hcc_code         = ph.hcc_code
+                                 AND  cy.measurement_year = %s
+                                 AND  cy.tenant_id        = %s
+                          )
+                        """,
+                        (prov_npi, tenant_id, prior_year, measurement_year, tenant_id),
+                    )
+                    row = cur.fetchone()
+                    open_gaps = int(row["cnt"] or 0) if row else 0
+            except Exception as exc:
+                logger.debug("get_provider_workload: derived open_gaps failed npi=%s: %s", prov_npi, exc)
+
+        # -- AWV due: panel patients unseen this year --
+        awv_due = 0
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT ne.patient_id) AS total_p
+                    FROM   normalized_encounters ne
+                    WHERE  ne.tenant_id    = %s
+                      AND  ne.provider_npi = %s
+                    """,
+                    (tenant_id, prov_npi),
+                )
+                r = cur.fetchone()
+                total_p = int(r["total_p"] or 0) if r else 0
+
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT ne.patient_id) AS seen_ytd
+                    FROM   normalized_encounters ne
+                    WHERE  ne.tenant_id            = %s
+                      AND  ne.provider_npi         = %s
+                      AND  YEAR(ne.encounter_date) = %s
+                    """,
+                    (tenant_id, prov_npi, current_year),
+                )
+                r2 = cur.fetchone()
+                seen_ytd = int(r2["seen_ytd"] or 0) if r2 else 0
+                awv_due = max(total_p - seen_ytd, 0)
+        except Exception as exc:
+            logger.debug("get_provider_workload: awv_due failed npi=%s: %s", prov_npi, exc)
+
+        # -- Suspect count --
+        suspect_count = 0
+        if suspects_exists:
+            try:
+                with raf_cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT COUNT(DISTINCT s.id) AS cnt
+                        FROM   suspects s
+                        WHERE  s.tenant_id  = %s
+                          AND  s.status     = 'open'
+                          AND  s.patient_id IN (
+                               SELECT DISTINCT ne.patient_id
+                               FROM   normalized_encounters ne
+                               WHERE  ne.tenant_id    = %s
+                                 AND  ne.provider_npi = %s
+                          )
+                        """,
+                        (tenant_id, tenant_id, prov_npi),
+                    )
+                    row = cur.fetchone()
+                    suspect_count = int(row["cnt"] or 0) if row else 0
+            except Exception as exc:
+                logger.debug("get_provider_workload: suspect_count failed npi=%s: %s", prov_npi, exc)
+
+        total_workload = open_gaps + awv_due + suspect_count
+        capacity_pct = (
+            min(round(total_workload / target_capacity * 100), 100)
+            if target_capacity > 0
+            else 0
+        )
+
+        results.append({
+            "provider_id": prov_id,
+            "provider_name": prov_name,
+            "open_gaps": open_gaps,
+            "awv_due": awv_due,
+            "suspect_count": suspect_count,
+            "total_workload": total_workload,
+            "capacity_pct": capacity_pct,
+        })
+
+    results.sort(key=lambda x: -x["total_workload"])
+    return results

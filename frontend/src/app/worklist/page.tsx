@@ -15,21 +15,33 @@
  * dependency so this can land alongside other api.ts edits.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronRight, FileText, Activity, Stethoscope } from "lucide-react";
+import { AlertTriangle, ChevronRight, FileText, Activity, Stethoscope, ExternalLink } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { PageHeader } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import api from "@/lib/api";
 
+interface EvidencePreview {
+  hcc_code: string;
+  hcc_description: string;
+  raf_lift: number;
+  estimated_revenue: number;
+  raw_note_excerpt: string;
+  highlight_term: string;
+  confidence_score: "Strong" | "Moderate" | "Calibrated";
+  source_doc_id: number | null;
+}
+
 interface WorklistGap {
   hcc_code: string;
   icd10_codes?: string[];
   prior_year?: number;
   revenue_impact?: number;
+  evidence_preview?: EvidencePreview | null;
 }
 
 interface WorklistSuspect {
@@ -296,6 +308,255 @@ function SummaryTile({
   );
 }
 
+// ---------------------------------------------------------------------------
+// GapChipWithPreview — HCC pill that reveals an AI evidence hover card
+// ---------------------------------------------------------------------------
+
+const CONFIDENCE_COLOR: Record<string, string> = {
+  Strong: "#16a34a",
+  Moderate: "#d97706",
+  Calibrated: "#6366f1",
+};
+
+function HighlightedExcerpt({ text, term }: { text: string; term: string }) {
+  if (!term || !text.includes(term)) {
+    return <span style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6 }}>{text}</span>;
+  }
+  const idx = text.indexOf(term);
+  return (
+    <span style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6 }}>
+      {text.slice(0, idx)}
+      <mark
+        style={{
+          background: "#fef08a",
+          color: "#713f12",
+          borderRadius: 2,
+          padding: "0 2px",
+        }}
+      >
+        {term}
+      </mark>
+      {text.slice(idx + term.length)}
+    </span>
+  );
+}
+
+function GapChipWithPreview({
+  gap,
+  patientId,
+}: {
+  gap: WorklistGap;
+  patientId: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preview = gap.evidence_preview;
+
+  const scheduleOpen = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    openTimer.current = setTimeout(() => setOpen(true), 200);
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    if (openTimer.current) clearTimeout(openTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setOpen((v) => !v);
+    }
+    if (e.key === "Escape") {
+      setOpen(false);
+    }
+  }, []);
+
+  const hccCode = String(gap.hcc_code).replace("HCC", "").trim();
+  const viewChartHref = `/patients/${patientId}?gap=HCC${hccCode}`;
+
+  return (
+    <span
+      style={{ position: "relative", display: "inline-block" }}
+      onMouseEnter={scheduleOpen}
+      onMouseLeave={scheduleClose}
+    >
+      {/* The pill chip */}
+      <span
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label={`HCC ${hccCode} evidence preview`}
+        onKeyDown={handleKeyDown}
+        onFocus={scheduleOpen}
+        onBlur={scheduleClose}
+        style={{
+          display: "inline-block",
+          padding: "2px 8px",
+          borderRadius: 999,
+          background: tokens.dangerSoft,
+          color: tokens.danger,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: preview ? "pointer" : "default",
+          outline: open ? `2px solid ${tokens.primary}` : undefined,
+          outlineOffset: 2,
+          userSelect: "none",
+        }}
+      >
+        HCC {hccCode}
+      </span>
+
+      {/* Hover card popover — only rendered when evidence exists and open */}
+      {open && preview && (
+        <div
+          role="tooltip"
+          data-testid={`evidence-preview-${hccCode}`}
+          onMouseEnter={scheduleOpen}
+          onMouseLeave={scheduleClose}
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            width: 320,
+            background: "#0f172a",
+            border: "1px solid #1e3a5f",
+            borderRadius: 10,
+            padding: "14px 16px",
+            color: "#e2e8f0",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+            pointerEvents: "auto",
+          }}
+        >
+          {/* Header: code + description */}
+          <div style={{ marginBottom: 10 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: tokens.danger,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
+              HCC {preview.hcc_code}
+            </span>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#f1f5f9",
+                marginTop: 2,
+                lineHeight: 1.35,
+              }}
+            >
+              {preview.hcc_description}
+            </div>
+          </div>
+
+          {/* RAF lift + revenue row */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              marginBottom: 10,
+            }}
+          >
+            <div
+              style={{
+                background: "#1e293b",
+                borderRadius: 6,
+                padding: "6px 10px",
+              }}
+            >
+              <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" }}>
+                RAF Lift
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>
+                {preview.raf_lift.toFixed(3)}
+              </div>
+            </div>
+            <div
+              style={{
+                background: "#1e293b",
+                borderRadius: 6,
+                padding: "6px 10px",
+              }}
+            >
+              <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" }}>
+                Est. Revenue
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>
+                ${preview.estimated_revenue.toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {/* Source excerpt */}
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius: 6,
+              padding: "8px 10px",
+              marginBottom: 10,
+              lineHeight: 1.6,
+              color: "#cbd5e1",
+            }}
+          >
+            <HighlightedExcerpt
+              text={preview.raw_note_excerpt}
+              term={preview.highlight_term}
+            />
+          </div>
+
+          {/* Confidence badge + view chart link */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: CONFIDENCE_COLOR[preview.confidence_score] ?? "#94a3b8",
+                background: `${CONFIDENCE_COLOR[preview.confidence_score] ?? "#6366f1"}22`,
+                borderRadius: 999,
+                padding: "2px 8px",
+              }}
+            >
+              {preview.confidence_score}
+            </span>
+            <Link
+              href={viewChartHref}
+              tabIndex={0}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#93c5fd",
+                textDecoration: "none",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              View full chart <ExternalLink size={11} />
+            </Link>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 function PatientCard({ item }: { item: WorklistItem }) {
   const band = priorityBand(item.priority_score);
   return (
@@ -363,21 +624,17 @@ function PatientCard({ item }: { item: WorklistItem }) {
       </div>
 
       {item.open_recapture_gaps && item.open_recapture_gaps.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        // stopPropagation so chip clicks/hover don't bubble to the card Link
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}
+          onClick={(e) => e.stopPropagation()}
+        >
           {item.open_recapture_gaps.slice(0, 4).map((g, i) => (
-            <span
+            <GapChipWithPreview
               key={`${g.hcc_code}-${i}`}
-              style={{
-                padding: "2px 8px",
-                borderRadius: 999,
-                background: tokens.dangerSoft,
-                color: tokens.danger,
-                fontSize: 11,
-                fontWeight: 600,
-              }}
-            >
-              HCC {g.hcc_code}
-            </span>
+              gap={g}
+              patientId={item.patient_id}
+            />
           ))}
           {item.open_recapture_gaps.length > 4 && (
             <span style={{ fontSize: 11, color: tokens.slate500, alignSelf: "center" }}>
