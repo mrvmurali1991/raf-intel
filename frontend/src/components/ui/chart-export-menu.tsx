@@ -53,6 +53,8 @@ export function ChartExportMenu({
   const [open, setOpen] = React.useState(false);
   const [showRaw, setShowRaw] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   // Close on outside click
   React.useEffect(() => {
@@ -66,15 +68,55 @@ export function ChartExportMenu({
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
-  // Close on Escape
+  // Auto-focus first menuitem when dropdown opens
   React.useEffect(() => {
     if (!open) return;
-    function handle(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("keydown", handle);
-    return () => document.removeEventListener("keydown", handle);
+    const first = dropdownRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
+    first?.focus();
   }, [open]);
+
+  function getMenuItems(): HTMLButtonElement[] {
+    if (!dropdownRef.current) return [];
+    return Array.from(dropdownRef.current.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+  }
+
+  function handleMenuKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const items = getMenuItems();
+    if (!items.length) return;
+    const focused = document.activeElement as HTMLButtonElement;
+    const idx = items.indexOf(focused);
+
+    switch (e.key) {
+      case "ArrowDown": {
+        e.preventDefault();
+        const next = idx < items.length - 1 ? idx + 1 : 0;
+        items[next].focus();
+        break;
+      }
+      case "ArrowUp": {
+        e.preventDefault();
+        const prev = idx > 0 ? idx - 1 : items.length - 1;
+        items[prev].focus();
+        break;
+      }
+      case "Home": {
+        e.preventDefault();
+        items[0].focus();
+        break;
+      }
+      case "End": {
+        e.preventDefault();
+        items[items.length - 1].focus();
+        break;
+      }
+      case "Escape": {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        break;
+      }
+    }
+  }
 
   function handleExportCSV() {
     if (csvData?.length) downloadCSV(csvData as Record<string, unknown>[], filename);
@@ -114,11 +156,13 @@ export function ChartExportMenu({
     <div ref={menuRef} className="relative inline-block">
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Chart options"
         aria-haspopup="menu"
         aria-expanded={open}
+        data-testid="chart-export-menu"
         className={[
           "inline-flex items-center justify-center w-[30px] h-[30px]",
           "border border-border rounded-md bg-card text-muted-foreground",
@@ -135,8 +179,11 @@ export function ChartExportMenu({
       {/* Dropdown */}
       {open && (
         <div
+          ref={dropdownRef}
           role="menu"
           aria-label="Chart export options"
+          data-testid="chart-export-menu-content"
+          onKeyDown={handleMenuKeyDown}
           className="absolute right-0 top-[calc(100%+4px)] z-50 bg-card border border-border rounded-lg shadow-lg min-w-[170px] py-1 animate-dropdown-in"
         >
           {hasCsv && (
@@ -222,8 +269,9 @@ function MenuItem({
     <button
       role="menuitem"
       type="button"
+      tabIndex={-1}
       onClick={onClick}
-      className="flex items-center gap-2 w-full px-[14px] py-[8px] bg-transparent border-none cursor-pointer text-[13px] text-foreground text-left transition-colors duration-100 hover:bg-accent"
+      className="flex items-center gap-2 w-full px-[14px] py-[8px] bg-transparent border-none cursor-pointer text-[13px] text-foreground text-left transition-colors duration-100 hover:bg-accent focus:bg-accent focus:outline-none"
     >
       <span className="text-muted-foreground flex">{icon}</span>
       {label}
