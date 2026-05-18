@@ -1721,6 +1721,9 @@ export function AdminDashboard() {
       )}
       </div>
 
+      {/* Chart Requests KPI Banner — RADV CMS compliance */}
+      <ChartRequestsKpiBanner />
+
       {/* ══════════════════════════════════════════════════════════════════════
           TOP OPPORTUNITIES — next-best-action predictive tile
           ══════════════════════════════════════════════════════════════════════ */}
@@ -2652,5 +2655,74 @@ export function AdminDashboard() {
     </>
     </TooltipProvider>
     </ErrorBoundary>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chart Requests KPI Banner — surfaces open / overdue RADV chart pull counts
+// ---------------------------------------------------------------------------
+
+function ChartRequestsKpiBanner() {
+  const [open, setOpen] = useState<number | null>(null);
+  const [overdue, setOverdue] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Pull summary across all audit runs for this tenant by fetching the run list
+    // and aggregating chart-request summaries lazily (best-effort, never blocks render).
+    let cancelled = false;
+    void (async () => {
+      try {
+        const runsRes = await fetch("/api/radv/audit-runs", { credentials: "include" });
+        if (!runsRes.ok || cancelled) return;
+        const { runs } = (await runsRes.json()) as { runs: { id: number }[] };
+        if (!runs?.length || cancelled) return;
+        // Only look at the 3 most-recent runs to avoid N+1 on large tenants
+        const slice = runs.slice(0, 3);
+        const results = await Promise.allSettled(
+          slice.map((r) =>
+            fetch(`/api/radv/${r.id}/chart-requests`, { credentials: "include" })
+              .then((res) => res.json() as Promise<{ summary: { open: number; overdue: number } }>)
+          )
+        );
+        if (cancelled) return;
+        let totalOpen = 0, totalOverdue = 0;
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            totalOpen += r.value?.summary?.open ?? 0;
+            totalOverdue += r.value?.summary?.overdue ?? 0;
+          }
+        }
+        setOpen(totalOpen);
+        setOverdue(totalOverdue);
+      } catch {
+        // non-blocking — banner simply stays hidden
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (open === null || open === 0) return null;
+
+  return (
+    <Link
+      href="/radv?tab=chart-requests"
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "10px 16px", borderRadius: 10, marginBottom: 16,
+        backgroundColor: overdue && overdue > 0 ? "#FEF2F2" : "#EFF6FF",
+        border: `1px solid ${overdue && overdue > 0 ? "#FECACA" : "#BFDBFE"}`,
+        textDecoration: "none", color: "inherit", fontSize: 13,
+      }}
+      aria-label="View RADV chart requests"
+    >
+      <ClipboardList size={16} color={overdue && overdue > 0 ? "#DC2626" : "#2563EB"} />
+      <span>
+        <strong style={{ color: overdue && overdue > 0 ? "#DC2626" : "#1D4ED8" }}>{open} chart request{open !== 1 ? "s" : ""} open</strong>
+        {overdue && overdue > 0
+          ? <span style={{ color: "#DC2626" }}> · {overdue} overdue</span>
+          : null}
+        <span style={{ color: "#64748B" }}> — RADV CMS compliance</span>
+      </span>
+    </Link>
   );
 }

@@ -1207,22 +1207,6 @@ function SimulatorPanel({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Chart Requests tab (stub — full implementation pending)
-// ---------------------------------------------------------------------------
-
-function ChartRequestsTab({ runId }: { runId: number }) {
-  return (
-    <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 32, textAlign: "center" }}>
-      <ClipboardList size={28} color={SUBTLE} style={{ margin: "0 auto 10px" }} />
-      <div style={{ fontWeight: 600, fontSize: 15, color: "#0F172A", marginBottom: 4 }}>Chart request tracking</div>
-      <div style={{ fontSize: 12, color: SUBTLE }}>
-        Chart request workflow for audit run #{runId} — coming soon.
-      </div>
-    </div>
-  );
-}
-
 function SimRow({ label, value, bold, color }: { label: string; value: string; bold?: boolean; color?: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dashed #F1F5F9" }}>
