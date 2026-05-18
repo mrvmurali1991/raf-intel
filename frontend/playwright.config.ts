@@ -20,15 +20,7 @@ const isFullRun = (process.env.PW_GREP ?? "@smoke") === "@full";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: [
-    "**/e2e/**/*.spec.ts",
-    "**/a11y/**/*.spec.ts",
-    "**/visual/**/*.spec.ts",
-    "**/demo/**/*.spec.ts",
-    "*.spec.ts",
-  ],
-
-  // Match all .spec.ts files under tests/ and tests/e2e/
+  // Match every .spec.ts in tests/ — covers e2e/, a11y/, visual/, demo/, and root.
   testMatch: ["**/*.spec.ts"],
 
   // Grep on the tag env var; defaults to @smoke so CI is always fast.
