@@ -64,7 +64,7 @@ def _check_migration_022() -> bool:
                 """
                 SELECT 1
                 FROM   information_schema.COLUMNS
-                WHERE  TABLE_NAME  = 'diagnoses'
+                WHERE  TABLE_NAME  = 'raf_meat_evidence'
                   AND  COLUMN_NAME = 'context_classification'
                 LIMIT  1
                 """
@@ -82,7 +82,7 @@ def _check_migration_022() -> bool:
         env = (os.getenv("APP_ENV") or "").lower()
         msg = (
             "migration 022 required for attestation negation gate "
-            "(diagnoses.context_classification column missing)"
+            "(raf_meat_evidence.context_classification column missing)"
         )
         if env == "production":
             raise RuntimeError(msg)
