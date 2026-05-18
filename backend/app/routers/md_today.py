@@ -95,6 +95,27 @@ def md_today(
     for b in briefings:
         b["reviewed"] = int(b.get("patient_id") or 0) in reviewed_pids
 
+    # Decorate every HCC gap with supporting labs + per-HCC dollar value.
+    # The huddle is most useful when the doctor sees both at a glance.
+    from app.services.hcc_lab_evidence import evidence_for_gaps
+    total_revenue_at_stake = 0.0
+    total_supporting_labs = 0
+    for b in briefings:
+        emr_pid = int(b.get("patient_id") or b.get("emr_pid") or 0)
+        gaps = b.get("hcc_gaps") or b.get("top_gaps") or []
+        if emr_pid and gaps:
+            try:
+                evidence_for_gaps(emr_pid, gaps)
+                for g in gaps:
+                    total_revenue_at_stake += float(
+                        g.get("estimated_annual_revenue_dollars") or 0
+                    )
+                    le = g.get("lab_evidence") or {}
+                    total_supporting_labs += len(le.get("supporting") or [])
+            except Exception as exc:  # never block the huddle on enrichment
+                logger.warning("lab evidence enrichment failed pid=%s: %s",
+                               emr_pid, exc)
+
     open_hcc_total = sum(len(b.get("hcc_gaps") or []) for b in briefings)
     reviewed_count = sum(1 for b in briefings if b.get("reviewed"))
 
@@ -109,6 +130,8 @@ def md_today(
             "review_progress_pct": (
                 round(100 * reviewed_count / len(briefings)) if briefings else 0
             ),
+            "total_revenue_at_stake_dollars": round(total_revenue_at_stake, 2),
+            "total_supporting_labs": total_supporting_labs,
         },
     }
 

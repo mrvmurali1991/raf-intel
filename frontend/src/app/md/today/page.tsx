@@ -15,6 +15,23 @@ import { useAuth } from "@/contexts/auth-context";
 
 // ---------- Types ----------
 
+interface LabEvidenceEntry {
+  label: string;
+  loinc: string;
+  value: number;
+  units: string;
+  date: string | null;
+  reference_range: string;
+  abnormal_flag: string;
+  status: "support" | "borderline" | "contradict";
+}
+
+interface LabEvidence {
+  supporting?: LabEvidenceEntry[];
+  borderline?: LabEvidenceEntry[];
+  contradictory?: LabEvidenceEntry[];
+}
+
 interface HCCGap {
   hcc_code?: string | number;
   hcc?: string | number;
@@ -24,6 +41,9 @@ interface HCCGap {
   confidence_score?: number;
   expected_dollars?: number;
   revenue_estimate?: number;
+  estimated_annual_revenue_dollars?: number;
+  raf_coefficient?: number;
+  lab_evidence?: LabEvidence;
   source?: string;
   suspect_id?: number;
   meat_status?: string;
@@ -54,6 +74,8 @@ interface MDTodayResponse {
     total_open_hcc_gaps: number;
     reviewed_count: number;
     review_progress_pct: number;
+    total_revenue_at_stake_dollars?: number;
+    total_supporting_labs?: number;
   };
 }
 
@@ -80,7 +102,29 @@ function signalBand(c: number): { label: string; color: string; bg: string } {
 }
 
 function dollarsOf(g: HCCGap): number {
-  return g.expected_dollars ?? g.revenue_estimate ?? 0;
+  return (
+    g.estimated_annual_revenue_dollars ??
+    g.expected_dollars ??
+    g.revenue_estimate ??
+    0
+  );
+}
+
+function formatUSD(n: number): string {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+function labStatusColor(s: LabEvidenceEntry["status"]): {
+  bg: string;
+  fg: string;
+} {
+  if (s === "support") return { bg: "#D1FAE5", fg: "#065F46" };
+  if (s === "borderline") return { bg: "#FEF3C7", fg: "#92400E" };
+  return { bg: "#FEE2E2", fg: "#991B1B" };
 }
 
 function hccLabel(g: HCCGap): string {
@@ -202,6 +246,18 @@ export default function MDTodayPage() {
               value={`${data?.summary.reviewed_count ?? 0} / ${
                 data?.summary.total_visits ?? 0
               }`}
+            />
+            <SummaryStat
+              label="Revenue at stake"
+              value={
+                data?.summary.total_revenue_at_stake_dollars
+                  ? formatUSD(data.summary.total_revenue_at_stake_dollars)
+                  : "$0"
+              }
+            />
+            <SummaryStat
+              label="Supporting labs"
+              value={data?.summary.total_supporting_labs ?? 0}
             />
             <button
               type="button"
@@ -481,12 +537,17 @@ function HuddleCard({
                     {dollarsOf(g) > 0 && (
                       <span
                         style={{
-                          fontSize: 11,
-                          color: "#64748b",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "#065F46",
+                          background: "#D1FAE5",
+                          padding: "2px 8px",
+                          borderRadius: 6,
                           fontVariantNumeric: "tabular-nums",
                         }}
+                        title={`Estimated annual revenue at the V28 base rate (RAF coefficient ${g.raf_coefficient ?? "—"})`}
                       >
-                        +${Math.round(dollarsOf(g)).toLocaleString()}
+                        {formatUSD(dollarsOf(g))}/yr
                       </span>
                     )}
                   </div>
@@ -500,6 +561,50 @@ function HuddleCard({
                   >
                     {g.description ?? g.display ?? ""}
                   </div>
+                  {/* Inline lab evidence — labs that support this HCC. */}
+                  {g.lab_evidence && (
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        padding: 0,
+                        margin: "6px 0 0",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 4,
+                      }}
+                      aria-label="Supporting lab values"
+                    >
+                      {[
+                        ...(g.lab_evidence.supporting ?? []),
+                        ...(g.lab_evidence.borderline ?? []),
+                        ...(g.lab_evidence.contradictory ?? []),
+                      ]
+                        .slice(0, 4)
+                        .map((lab, li) => {
+                          const c = labStatusColor(lab.status);
+                          return (
+                            <li
+                              key={`${lab.loinc}-${li}`}
+                              title={`${lab.label} ${lab.value} ${lab.units} on ${lab.date?.slice(0, 10) ?? "?"} (ref ${lab.reference_range || "—"})`}
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                background: c.bg,
+                                color: c.fg,
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              {lab.label.replace(/Hemoglobin /i, "")}
+                              {" "}
+                              {lab.value}
+                              {lab.units}
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1 print:hidden">
