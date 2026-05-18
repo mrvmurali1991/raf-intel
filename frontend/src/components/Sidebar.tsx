@@ -414,11 +414,16 @@ export function Sidebar() {
       alignItems: "center",
       gap: collapsed ? 0 : 10,
       justifyContent: collapsed ? "center" : "flex-start",
-      height: 38,
+      height: 36,
       fontSize: 13,
-      fontWeight: 500,
+      fontWeight: active ? 600 : 500,
+      letterSpacing: active ? "-0.01em" : "normal",
       color: active ? TEXT_ACTIVE : TEXT_DEFAULT,
-      backgroundColor: active ? BG_ACTIVE : hovered ? BG_HOVER : "transparent",
+      // Linear-style: tinted bg when active, subtle hover bg
+      backgroundColor: active
+        ? isDark ? "rgba(15,118,110,0.18)" : "rgba(13,148,136,0.10)"
+        : hovered ? BG_HOVER : "transparent",
+      // Linear-style colored left bar accent
       borderLeft: active ? `3px solid ${ACCENT}` : "3px solid transparent",
       borderRadius: collapsed ? 8 : "0 8px 8px 0",
       marginRight: collapsed ? 8 : 8,
@@ -426,23 +431,23 @@ export function Sidebar() {
       paddingLeft: collapsed ? 0 : 13,
       paddingRight: collapsed ? 0 : 12,
       textDecoration: "none",
-      transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+      transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
       position: "relative",
       cursor: "pointer",
       boxShadow: active
         ? isDark
-          ? `0 0 12px ${ACCENT}25, inset 0 0 0 1px ${ACCENT}15`
-          : `0 0 10px ${ACCENT}15, inset 0 0 0 1px ${ACCENT}10`
+          ? `inset 0 0 0 1px rgba(15,118,110,0.2), 0 1px 4px rgba(15,118,110,0.12)`
+          : `inset 0 0 0 1px rgba(13,148,136,0.18), 0 1px 3px rgba(13,148,136,0.10)`
         : "none",
     };
 
     const iconStyle: CSSProperties = {
-      width: 18,
-      height: 18,
+      width: 17,
+      height: 17,
       flexShrink: 0,
-      color: active ? ACCENT_LIGHT : TEXT_DEFAULT,
-      transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1), color 200ms",
-      transform: hovered ? "scale(1.15)" : "scale(1)",
+      color: active ? ACCENT_LIGHT : hovered ? ACCENT : TEXT_DEFAULT,
+      transition: "transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), color 180ms",
+      transform: hovered && !active ? "scale(1.12)" : active ? "scale(1.05)" : "scale(1)",
     };
 
     return (
