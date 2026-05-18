@@ -496,10 +496,10 @@ export default function ReportsPage() {
 
       {/* ── Tab Content ──────────────────────────────────────────────────── */}
       <TabFade tabKey={activeTab}>
-        {activeTab === "Revenue" && <RevenueTab revenue={revenue} scorecard={scorecard} router={router} paymentYear={paymentYear} />}
-        {activeTab === "Patient Scorecard" && <ScorecardTab scorecard={scorecard} router={router} />}
-        {activeTab === "HCC Distribution" && <HccTab hccDist={hccDist} />}
-        {activeTab === "Recapture Gaps" && <RecaptureTab recapture={recapture} router={router} />}
+        {activeTab === "Revenue" && <RevenueTab revenue={revenue} scorecard={scorecard} router={router} paymentYear={paymentYear} isHistoricalPY={isHistoricalPY} />}
+        {activeTab === "Patient Scorecard" && <ScorecardTab scorecard={scorecard} router={router} isHistoricalPY={isHistoricalPY} />}
+        {activeTab === "HCC Distribution" && <HccTab hccDist={hccDist} isHistoricalPY={isHistoricalPY} />}
+        {activeTab === "Recapture Gaps" && <RecaptureTab recapture={recapture} router={router} isHistoricalPY={isHistoricalPY} />}
         {activeTab === "Data Quality" && <DataQualityTab dataQuality={dataQuality} />}
         {(activeTab === "Longitudinal Trends" || activeTab === "CMS Benchmarks" || activeTab === "Settlement Projection" || activeTab === "Scheduled Reports") && (
           <ReportsHeavyTabs activeTab={activeTab as "Longitudinal Trends" | "CMS Benchmarks" | "Settlement Projection" | "Scheduled Reports"} revenue={revenue} />
