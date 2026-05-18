@@ -90,7 +90,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
       { href: "/worklist", label: "Today's Worklist", nonAdminLabel: "My Worklist", icon: Stethoscope, shortcut: "g w" },
-      { href: "/md/today", label: "Provider Prep (MD)", icon: HeartPulse, shortcut: "g m", visibleToRoles: ["provider", "md", "admin"] },
+      { href: "/md/today", label: "Provider Prep (MD)", icon: HeartPulse, shortcut: "g m", visibleToRoles: ["provider", "md"] },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
     ],
   },
