@@ -634,7 +634,10 @@ def recapture_gaps_report(year: int = Query(default=None),
             pd.fname,
             pd.lname
         FROM lists l
-        LEFT JOIN patient_data pd ON pd.pid = l.pid
+        -- Join on patient_data.id (autoincrement, what lists.pid actually
+        -- references in OpenEMR seed data). Fall back to pd.pid via COALESCE
+        -- in the upstream Python so we get names for both shapes.
+        LEFT JOIN patient_data pd ON (pd.id = l.pid OR pd.pid = l.pid)
         WHERE l.type        = 'medical_problem'
           AND l.activity    = 1
           AND l.diagnosis   IS NOT NULL
