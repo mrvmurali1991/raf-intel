@@ -166,7 +166,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
         <main
           id="main-content"
-          className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-4 pt-14 md:p-6 md:pt-16 lg:px-10 lg:pb-10 lg:pt-20"
+          className="min-h-screen transition-all duration-300 ease-out lg:ml-64 p-4 pt-16 pl-16 md:pl-6 md:p-6 md:pt-16 lg:pl-10 lg:px-10 lg:pb-10 lg:pt-20 overflow-x-hidden"
           tabIndex={-1}
         >
           <EmrDeactivatedBanner />

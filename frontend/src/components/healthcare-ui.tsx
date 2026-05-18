@@ -528,7 +528,7 @@ export interface PageHeaderProps {
 export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between mb-6 pb-5 border-b border-border gap-4 flex-wrap">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         {backHref && (
           <Link
             href={backHref}
@@ -542,7 +542,7 @@ export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHea
             {icon}
           </div>
         )}
-        <div>
+        <div className="min-w-0">
           <h1 className="m-0 text-[22px] font-bold text-foreground leading-tight">{title}</h1>
           {subtitle && <p className="mt-1 mb-0 text-[13px] text-muted-foreground">{subtitle}</p>}
         </div>

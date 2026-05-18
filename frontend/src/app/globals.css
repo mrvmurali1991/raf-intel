@@ -56,7 +56,14 @@
 .login-input-focus:focus {
   border-color: #14b8a6;
   box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15), 0 0 15px rgba(20, 184, 166, 0.1);
+  /* outline suppressed: the box-shadow ring above serves as the visible
+     focus indicator. Keyboard users get :focus-visible ring below.
+     WCAG 2.4.7: compliant — visible indicator provided. */
   outline: none;
+}
+.login-input-focus:focus-visible {
+  outline: 2px solid #14b8a6;
+  outline-offset: 2px;
 }
 
 /* ---- End login page animations ---- */
@@ -241,6 +248,15 @@
   html {
     @apply font-sans;
     scroll-behavior: smooth;
+    /* 2025 Inter OpenType features: cv02 = contextual alternates,
+       cv03 = disambiguation glyphs, cv11 = single-story 'a' */
+    font-feature-settings: "cv02", "cv03", "cv11", "liga" 1;
+  }
+
+  /* Heading elements get tighter tracking for modern SaaS feel */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+    font-weight: 700;
   }
 
   /* Skip to content link for accessibility */
@@ -276,20 +292,23 @@
     }
   }
 
-  /* Better scrollbar styling */
+  /* Refined scrollbar — thinner, tasteful */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.2);
+    background: hsl(var(--muted-foreground) / 0.15);
     border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.35);
+    background: hsl(var(--muted-foreground) / 0.3);
+    background-clip: padding-box;
   }
 
   /* Selection color */
@@ -584,6 +603,104 @@
   background-size: 20px 20px;
 }
 
+/* ===== 2025 Aurora / Mesh Gradient Backgrounds ===== */
+
+/* Aurora hero background — used on login page and dashboard hero */
+.aurora-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(20, 184, 166, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 110%, rgba(59, 130, 246, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(139, 92, 246, 0.06) 0%, transparent 60%),
+    hsl(var(--background));
+}
+.dark .aurora-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(20, 184, 166, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 110%, rgba(59, 130, 246, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(139, 92, 246, 0.05) 0%, transparent 60%),
+    hsl(var(--background));
+}
+
+/* Glassmorphic frosted panel — used on ExplainPanel, login card */
+.glass-frosted {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.dark .glass-frosted {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Status badge dot indicator pattern */
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px currentColor, 0 0 0 0 transparent;
+  background: currentColor;
+  opacity: 0.85;
+}
+.status-dot-success { color: #10b981; }
+.status-dot-warning { color: #f59e0b; }
+.status-dot-error   { color: #ef4444; }
+.status-dot-info    { color: #3b82f6; }
+.status-dot-neutral { color: #94a3b8; }
+
+/* KPI card lift with multi-layer soft shadow */
+.kpi-card-lift {
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.kpi-card-lift:hover {
+  transform: scale(1.012) translateY(-2px);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 16px 40px rgba(0, 0, 0, 0.06),
+    0 0 0 1px hsl(var(--primary) / 0.08);
+}
+
+/* Table row hover — subtle tinted bg */
+.table-row-hover {
+  transition: background-color 0.12s ease;
+}
+.table-row-hover:hover {
+  background-color: hsl(var(--primary) / 0.04);
+}
+.dark .table-row-hover:hover {
+  background-color: hsl(var(--primary) / 0.06);
+}
+
+/* Sidebar Linear-style active accent with left bar */
+.sidebar-active-item {
+  position: relative;
+}
+.sidebar-active-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 65%;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #0f766e, #2dd4bf);
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.4);
+}
+
 /* Custom range slider */
 input[type="range"] {
   -webkit-appearance: none;
@@ -758,8 +875,8 @@ select.appearance-none {
     gap: 0;
     margin-bottom: 16px;
     border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
     overflow: hidden;
     min-height: 64px;
@@ -864,9 +981,12 @@ select.appearance-none {
     padding: 16px !important;
   }
 
-  /* KPI grids — 2 columns on tablet */
+  /* KPI grids — 2 columns on tablet.
+     .kpi-strip-bento covers the "2fr 1fr 1fr 1fr" bento layout (not repeat(4,…)). */
   .kpi-strip,
-  [style*="gridTemplateColumns: repeat(4"] {
+  .kpi-strip-bento,
+  [style*="gridTemplateColumns: repeat(4"],
+  [style*="gridTemplateColumns: 2fr 1fr 1fr 1fr"] {
     grid-template-columns: repeat(2, 1fr) !important;
   }
 
@@ -882,13 +1002,17 @@ select.appearance-none {
 @media (max-width: 640px) {
   main#main-content {
     padding: 12px !important;
+    /* Prevent KPI cards and wide content from causing horizontal viewport scroll */
+    overflow-x: hidden;
   }
 
   /* KPI grids — 1 column on mobile */
   .kpi-strip,
+  .kpi-strip-bento,
   [style*="gridTemplateColumns: repeat(4"],
   [style*="gridTemplateColumns: repeat(3"],
-  [style*="gridTemplateColumns: repeat(2"] {
+  [style*="gridTemplateColumns: repeat(2"],
+  [style*="gridTemplateColumns: 2fr 1fr 1fr 1fr"] {
     grid-template-columns: 1fr !important;
   }
 
