@@ -1248,6 +1248,7 @@ export default function ProspectivePage() {
                     index={i}
                     scheduledAwv={scheduledAwv}
                     onMarkScheduled={(pid) => setScheduledAwv((s) => new Set([...s, pid]))}
+                    isHistoricalPY={isHistoricalPY}
                   />
                 ))}
               </tbody>
@@ -1310,7 +1311,9 @@ export default function ProspectivePage() {
           </div>
         </div>
         <button
-          onClick={exportChaseList}
+          onClick={isHistoricalPY ? undefined : exportChaseList}
+          disabled={isHistoricalPY}
+          title={isHistoricalPY ? "Disabled in historical view" : undefined}
           style={{
             display: "flex",
             alignItems: "center",
@@ -1318,11 +1321,12 @@ export default function ProspectivePage() {
             padding: "11px 22px",
             borderRadius: 9,
             border: "none",
-            background: C.primary,
+            background: isHistoricalPY ? "#D1D5DB" : C.primary,
             color: C.white,
             fontSize: 14,
             fontWeight: 600,
-            cursor: "pointer",
+            cursor: isHistoricalPY ? "not-allowed" : "pointer",
+            opacity: isHistoricalPY ? 0.6 : 1,
             flexShrink: 0,
           }}
         >
