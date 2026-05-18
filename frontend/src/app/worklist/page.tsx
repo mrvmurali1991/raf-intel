@@ -54,6 +54,8 @@ interface WorklistSuspect {
   confidence?: number;
 }
 
+type AwvStatus = "overdue" | "due_soon" | "current" | "future" | "unknown";
+
 interface WorklistItem {
   patient_id: number;
   patient_name: string;
@@ -64,6 +66,35 @@ interface WorklistItem {
   estimated_raf_impact: number;
   estimated_revenue_at_risk: number;
   priority_score: number;
+  awv_status?: AwvStatus;
+  awv_due_date?: string | null;
+  awv_last_date?: string | null;
+}
+
+function awvPill(status?: AwvStatus): { bg: string; color: string; label: string } {
+  switch (status) {
+    case "overdue":
+      return { bg: tokens.dangerSoft, color: tokens.danger, label: "Overdue" };
+    case "due_soon":
+      return { bg: tokens.warningSoft, color: tokens.warningStrong, label: "Due soon" };
+    case "current":
+      return { bg: tokens.slate100, color: tokens.slate700, label: "Current" };
+    case "future":
+      return { bg: tokens.slate100, color: tokens.slate500, label: "Future" };
+    default:
+      return { bg: tokens.slate100, color: tokens.slate500, label: "Unknown" };
+  }
+}
+
+function awvDaysLabel(item: WorklistItem): string | null {
+  if (!item.awv_due_date) return null;
+  const due = new Date(item.awv_due_date);
+  const now = new Date();
+  const days = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (item.awv_status === "overdue") return `AWV overdue by ${Math.abs(days)}d`;
+  if (item.awv_status === "due_soon") return `AWV due in ${days}d`;
+  if (item.awv_status === "current") return "AWV current";
+  return null;
 }
 
 interface WorklistResponse {
@@ -622,11 +653,17 @@ export default function WorklistPage() {
           </section>
         )}
 
-        {/* Summary strip */}
+        {/* Summary strip — 4 tiles incl. AWV (CMS G0136 2026 lever) */}
         <div style={{ marginTop: 16, marginBottom: isElevated ? 8 : 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <SummaryTile label="Patients to see" value={summary.patients} icon={<Stethoscope size={18} />} color={tokens.primary} />
           <SummaryTile label="Open gaps" value={summary.gaps} icon={<FileText size={18} />} color={tokens.riskHigh} />
           <SummaryTile label="Revenue at risk" value={fmtCurrency(summary.revenue)} icon={<Activity size={18} />} color={tokens.warningStrong} />
+          <SummaryTile
+            label="AWV due/overdue"
+            value={data.items.filter((i) => i.awv_status === "overdue" || i.awv_status === "due_soon").length}
+            icon={<CalendarClock size={18} />}
+            color={tokens.danger}
+          />
         </div>
 
         {/* Provider filter pills — elevated only */}
@@ -859,6 +896,23 @@ function PatientCard({
             {item.open_recapture_gaps.length > 4 && (
               <span style={{ fontSize: 11, color: tokens.slate500, alignSelf: "center" }}>+{item.open_recapture_gaps.length - 4} more</span>
             )}
+          </div>
+        )}
+        {/* AWV status row — hidden for "future" to keep cards compact */}
+        {item.awv_status && item.awv_status !== "future" && awvDaysLabel(item) && (
+          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+            <CalendarClock size={12} color={awvPill(item.awv_status).color} />
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: awvPill(item.awv_status).bg,
+                color: awvPill(item.awv_status).color,
+                fontWeight: 600,
+              }}
+            >
+              {awvDaysLabel(item)}
+            </span>
           </div>
         )}
         <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: tokens.primary, fontWeight: 600 }}>
