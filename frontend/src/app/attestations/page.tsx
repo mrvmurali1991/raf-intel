@@ -104,9 +104,27 @@ const STATUS_BADGE: Record<
 // Fetchers
 // ---------------------------------------------------------------------------
 
+// Backend shape: { period_days, total, by_status: {pending,attested,rejected,deferred},
+//                   attestation_rate_pct, avg_turnaround_hours, ... }
+// Map to the flat DashboardStats shape the component consumes.
 async function fetchDashboard(): Promise<DashboardStats> {
-  const { data } = await api.get<DashboardStats>("/api/attestations/dashboard");
-  return data;
+  const { data } = await api.get<{
+    total: number;
+    by_status: { pending: number; attested: number; rejected: number; deferred: number };
+    attestation_rate_pct: number;
+    avg_turnaround_hours?: number;
+  }>("/api/attestations/dashboard", { timeout: 15_000 });
+  return {
+    total: data.total,
+    pending: data.by_status?.pending ?? 0,
+    attested: data.by_status?.attested ?? 0,
+    rejected: data.by_status?.rejected ?? 0,
+    deferred: data.by_status?.deferred ?? 0,
+    // Backend returns a percentage (0–100); frontend displays it as-is via toFixed(1)%
+    // so we normalise to 0–1 fraction here.
+    attestation_rate: (data.attestation_rate_pct ?? 0) / 100,
+    avg_turnaround_hours: data.avg_turnaround_hours,
+  };
 }
 
 async function fetchAttestations(
@@ -119,7 +137,8 @@ async function fetchAttestations(
   });
   if (status !== "all") params.set("status", status);
   const { data } = await api.get<AttestationListResponse>(
-    `/api/attestations?${params.toString()}`
+    `/api/attestations?${params.toString()}`,
+    { timeout: 15_000 }
   );
   return data;
 }
@@ -350,15 +369,40 @@ export default function AttestationsPage() {
           Loading attestations…
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={<ClipboardCheck size={40} />}
-          title="No attestations found"
-          description={
-            search
-              ? "Try a different search term."
-              : "No attestations match the selected filter."
-          }
-        />
+        search || statusFilter !== "all" ? (
+          <EmptyState
+            icon={<ClipboardCheck size={40} />}
+            title="No attestations found"
+            description={
+              search
+                ? "Try a different search term."
+                : "No attestations match the selected filter."
+            }
+          />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+            <EmptyState
+              icon={<ClipboardCheck size={40} />}
+              title="No attestations yet"
+              description="Accepted suspects appear here once providers are assigned. Review your suspect queue to get started."
+            />
+            <a
+              href="/suspects"
+              style={{
+                display: "inline-block",
+                padding: "9px 20px",
+                borderRadius: 8,
+                background: "#2563EB",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: 13,
+                textDecoration: "none",
+              }}
+            >
+              Go to Suspects
+            </a>
+          </div>
+        )
       ) : (
         <div
           style={{
