@@ -177,7 +177,7 @@ export function ReadinessDetailModal({ gapId, open, onClose }: ReadinessDetailMo
         onClick={(e) => e.stopPropagation()}
         style={{
           background: colors.white,
-          borderRadius: 12,
+          borderRadius: 10,
           boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
           width: "100%",
           maxWidth: 560,

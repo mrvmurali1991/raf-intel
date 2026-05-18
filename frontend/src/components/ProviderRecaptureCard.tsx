@@ -123,7 +123,7 @@ export default function ProviderRecaptureCard({
       style={{
         position: "relative",
         padding: 20,
-        borderRadius: 12,
+        borderRadius: 10,
         background: colors.white,
         border: `1px solid ${colors.slate200}`,
         boxShadow: "0 4px 14px rgba(15,23,42,0.08)",
@@ -169,7 +169,7 @@ export default function ProviderRecaptureCard({
           border: `1px solid ${colors.slate100}`,
         }}
       >
-        <div style={{ fontSize: 11, color: colors.slate600, fontWeight: 600 }}>RECAPTURE RATE</div>
+        <div style={{ fontSize: 11, color: colors.slate600, fontWeight: 600 }}>Recapture Rate</div>
         <div
           style={{
             fontSize: 28,

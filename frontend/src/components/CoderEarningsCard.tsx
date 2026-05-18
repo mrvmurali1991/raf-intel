@@ -35,7 +35,7 @@ export function CoderEarningsCard({ coderId, coderName, year }: CoderEarningsCar
 
   if (isLoading) {
     return (
-      <div className="premium-card shimmer" style={{ height: 220, borderRadius: 12 }} />
+      <div className="premium-card shimmer" style={{ height: 220, borderRadius: 10 }} />
     );
   }
   if (isError || !data) {

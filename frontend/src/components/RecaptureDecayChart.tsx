@@ -109,7 +109,7 @@ export default function RecaptureDecayChart({
       <div
         style={{
           height,
-          borderRadius: 12,
+          borderRadius: 10,
           background: "linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 50%, #F1F5F9 100%)",
           backgroundSize: "200% 100%",
           animation: "shimmer 1.5s infinite",
@@ -138,7 +138,7 @@ export default function RecaptureDecayChart({
   return (
     <div
       className="premium-card"
-      style={{ padding: 24, marginBottom: 24, background: "#fff", borderRadius: 12 }}
+      style={{ padding: 24, marginBottom: 24, background: "#fff", borderRadius: 10 }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div>

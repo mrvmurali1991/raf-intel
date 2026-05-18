@@ -103,7 +103,7 @@ function CaptureBadge({ rate }: { rate: number | null }) {
   const pct = rate == null ? null : Math.round(rate * 100);
   const color = captureColor(rate);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 20, fontSize: 12, fontWeight: 700, color, background: `${color}18` }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 14, fontSize: 12, fontWeight: 700, color, background: `${color}18` }}>
       {pct == null ? "—" : `${pct}%`}
     </span>
   );
@@ -166,7 +166,7 @@ function Modal({ open, onClose, title, children, width = 560 }: { open: boolean;
       style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.45)", padding: 24 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div ref={ref} tabIndex={-1} style={{ background: C.card, borderRadius: 16, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+      <div ref={ref} tabIndex={-1} style={{ background: C.card, borderRadius: 14, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>{title}</h2>
           <button onClick={onClose} aria-label="Close dialog" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.textMuted, padding: 4, display: "flex" }}><X size={20} /></button>
@@ -308,7 +308,7 @@ export function AutoDiscoverDialog({ open, onClose }: { open: boolean; onClose: 
     <Modal open={open} onClose={handleClose} title="Auto-Discover Providers from EMR" width={600}>
       {effectivePhase === "idle" && (
         <div style={{ textAlign: "center", padding: "24px 0" }}>
-          <div style={{ width: 64, height: 64, borderRadius: 16, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+          <div style={{ width: 64, height: 64, borderRadius: 14, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
             <Zap size={28} color={C.primary} />
           </div>
           <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: C.text }}>Scan OpenEMR Users</h3>

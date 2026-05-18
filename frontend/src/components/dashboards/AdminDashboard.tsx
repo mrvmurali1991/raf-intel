@@ -82,6 +82,10 @@ import {
   ExportButton,
 } from "@/components/dashboard-charts";
 import { tokens } from "@/styles/tokens";
+import { TourModal } from "./admin/TourModal";
+import { OnboardingCard } from "./admin/OnboardingCard";
+import { TopOpportunitiesTile } from "./admin/TopOpportunitiesTile";
+import { V28HeroCard } from "./admin/V28HeroCard";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,7 +157,7 @@ function generateSparklineData(center: number, count: number): number[] {
 const card: React.CSSProperties = {
   background: "#FFFFFF",
   border: "1px solid #E5E7EB",
-  borderRadius: 16,
+  borderRadius: 14,
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
   padding: 24,
 };
@@ -323,7 +327,7 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
         justifyContent: "space-between",
         background: tokens.warningSoft,
         border: `1px solid ${tokens.warningBorder ?? "#FDE68A"}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: "12px 20px",
         marginTop: 16,
         marginBottom: 24,
@@ -376,603 +380,11 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tour Modal — step-by-step guided walkthrough (Cmd+K invokable)
-// ---------------------------------------------------------------------------
+// (TourModal extracted to ./admin/TourModal.tsx)
+// (TopOpportunitiesTile extracted to ./admin/TopOpportunitiesTile.tsx)
+// (OnboardingCard extracted to ./admin/OnboardingCard.tsx)
+// (V28HeroCard extracted to ./admin/V28HeroCard.tsx)
 
-const TOUR_STEPS = [
-  {
-    title: "Population Health Intelligence",
-    body: "The dashboard shows your full patient population. KPI tiles at the top surface revenue opportunity, member count, analyzed patients, and average RAF score at a glance.",
-    icon: <BarChart3 size={28} color="#3B82F6" />,
-    cta: null as string | null,
-    ctaHref: null as string | null,
-  },
-  {
-    title: "Connect your EMR",
-    body: "Go to EMR Config to connect OpenEMR, Epic, or any FHIR-compatible source. Once connected, patients sync automatically and analysis runs on the next scheduled cycle.",
-    icon: <Heart size={28} color="#EF4444" />,
-    cta: "Go to EMR Config",
-    ctaHref: "/emr-config",
-  },
-  {
-    title: "Upload a Patient CSV",
-    body: "No EMR? Upload a CSV of patient records directly from the Uploads page. The system maps columns automatically and ingests data within minutes.",
-    icon: <Upload size={28} color="#8B5CF6" />,
-    cta: "Go to Uploads",
-    ctaHref: "/uploads",
-  },
-  {
-    title: "Run RAF Analysis",
-    body: "After patients are loaded, trigger an analysis run from the Analysis page. The AI engine scores each patient, surfaces HCC coding gaps, and calculates revenue opportunity.",
-    icon: <Brain size={28} color="#10B981" />,
-    cta: "Go to Analysis",
-    ctaHref: "/analysis",
-  },
-  {
-    title: "Review Reports",
-    body: "Explore the Reports section for per-patient scorecards, HCC gap lists, provider leaderboards, and CMS sweep deadline tracking.",
-    icon: <FileBarChart size={28} color="#F59E0B" />,
-    cta: "Go to Reports",
-    ctaHref: "/reports",
-  },
-];
-
-function TourModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState(0);
-  const router = useRouter();
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const total = TOUR_STEPS.length;
-  const current = TOUR_STEPS[step];
-
-  const handleKey = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") onClose();
-    if (e.key === "ArrowRight" && step < total - 1) setStep((s) => s + 1);
-    if (e.key === "ArrowLeft" && step > 0) setStep((s) => s - 1);
-  }, [step, total, onClose]);
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [handleKey]);
-
-  return (
-    <div
-      ref={overlayRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Product tour"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(15,23,42,0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 9998,
-        backdropFilter: "blur(2px)",
-      }}
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-    >
-      <div
-        style={{
-          background: "#FFFFFF",
-          borderRadius: 20,
-          padding: "36px 36px 28px",
-          maxWidth: 480,
-          width: "90%",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
-          position: "relative",
-        }}
-      >
-        {/* Close */}
-        <button
-          onClick={onClose}
-          aria-label="Close tour"
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            border: "none",
-            background: "#F1F5F9",
-            borderRadius: 8,
-            padding: 6,
-            cursor: "pointer",
-            color: "#64748B",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <X size={16} />
-        </button>
-
-        {/* Step indicator */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
-          {TOUR_STEPS.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setStep(i)}
-              aria-label={`Go to step ${i + 1}`}
-              style={{
-                flex: 1,
-                height: 4,
-                borderRadius: 2,
-                border: "none",
-                cursor: "pointer",
-                background: i <= step ? "#3B82F6" : "#E2E8F0",
-                transition: "background 0.2s",
-                padding: 0,
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Icon */}
-        <div style={{
-          background: "#F8FAFC",
-          borderRadius: 14,
-          padding: 16,
-          display: "inline-flex",
-          marginBottom: 18,
-          border: "1px solid #E2E8F0",
-        }}>
-          {current.icon}
-        </div>
-
-        {/* Content */}
-        <div className="text-muted-foreground text-[11px] font-semibold tracking-widest uppercase mb-1.5">
-          Step {step + 1} of {total}
-        </div>
-        <h3 className="text-foreground text-[19px] font-bold tracking-tight" style={{ margin: "0 0 10px" }}>
-          {current.title}
-        </h3>
-        <p className="text-muted-foreground text-sm leading-relaxed" style={{ margin: "0 0 24px" }}>
-          {current.body}
-        </p>
-
-        {/* Nav */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <button
-            onClick={() => setStep((s) => s - 1)}
-            disabled={step === 0}
-            className="text-muted-foreground text-[13px] font-medium border border-border bg-background rounded-lg px-[18px] py-[9px]"
-            style={{ cursor: step === 0 ? "default" : "pointer", opacity: step === 0 ? 0.35 : 1 }}
-          >
-            Back
-          </button>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            {current.cta && current.ctaHref && (
-              <button
-                onClick={() => { onClose(); router.push(current.ctaHref!); }}
-                className="text-foreground text-[13px] font-semibold bg-muted border-0 rounded-lg px-[18px] py-[9px] cursor-pointer"
-              >
-                {current.cta}
-              </button>
-            )}
-            {step < total - 1 ? (
-              <button
-                onClick={() => setStep((s) => s + 1)}
-                className="text-white text-[13px] font-semibold bg-blue-500 border-0 rounded-lg px-5 py-[9px] cursor-pointer"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                onClick={onClose}
-                className="text-white text-[13px] font-semibold bg-emerald-500 border-0 rounded-lg px-5 py-[9px] cursor-pointer"
-              >
-                Finish
-              </button>
-            )}
-          </div>
-        </div>
-
-        <p className="text-muted-foreground/60 text-[11px] text-center mt-4 mb-0">
-          Use arrow keys to navigate &middot; Esc to close
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// TopOpportunitiesTile — "Top 5 RAF Capture Opportunities" predictive tile
-// ---------------------------------------------------------------------------
-
-function ConfidenceDots({ score }: { score: number }) {
-  // 5 dots filled proportionally by confidence (0–1)
-  const filled = Math.round(score * 5);
-  return (
-    <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }} aria-label={`Confidence ${Math.round(score * 100)}%`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: i < filled ? "#10B981" : "#E2E8F0",
-            boxShadow: i < filled ? "0 0 4px rgba(16,185,129,0.5)" : "none",
-            flexShrink: 0,
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
-function TopOpportunitiesTile({
-  opportunities,
-  isLoading,
-}: {
-  opportunities: TopOpportunity[];
-  isLoading: boolean;
-}) {
-  const router = useRouter();
-
-  return (
-    <div
-      style={{
-        ...card,
-        marginBottom: 24,
-        background: "linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)",
-        border: "1px solid #A7F3D0",
-      }}
-      role="region"
-      aria-label="Top 5 RAF Capture Opportunities"
-      data-testid="top-opportunities-tile"
-    >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ background: "#D1FAE5", borderRadius: 10, padding: 8, border: "1px solid #6EE7B7" }}>
-            <Target size={18} color="#059669" />
-          </div>
-          <div>
-            <h3 className="text-foreground text-[15px] font-bold m-0 leading-tight">
-              Top 5 RAF Capture Opportunities
-            </h3>
-            <p className="text-muted-foreground text-[12px] mt-0.5 mb-0">
-              Closing in 14 days — ranked by RAF lift x confidence
-            </p>
-          </div>
-        </div>
-        <Link
-          href="/suspects"
-          style={{ fontSize: 12, fontWeight: 600, color: "#059669", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}
-        >
-          View All <ChevronRight size={13} />
-        </Link>
-      </div>
-
-      {/* Table */}
-      {isLoading ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {Array.from({ length: 3 }, (_, i) => (
-            <Pulse key={i} w="100%" h={40} r={8} />
-          ))}
-        </div>
-      ) : opportunities.length === 0 ? (
-        <div
-          style={{
-            padding: "24px 0",
-            textAlign: "center",
-            color: "#6B7280",
-            fontSize: 13,
-          }}
-        >
-          <CheckCircle size={28} color="#10B981" style={{ margin: "0 auto 8px", display: "block" }} />
-          No more high-priority opportunities this period
-        </div>
-      ) : (
-        <>
-          {/* Column headers */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 2fr 1fr 1fr 80px",
-              gap: 8,
-              padding: "0 8px 6px",
-              borderBottom: "1px solid #D1FAE5",
-              marginBottom: 4,
-            }}
-          >
-            {["Patient", "Condition", "Confidence", "$ At Risk", "Days Left"].map((h) => (
-              <span key={h} style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                {h}
-              </span>
-            ))}
-          </div>
-
-          {/* Rows */}
-          {opportunities.map((opp, i) => (
-            <div
-              key={opp.patient_id}
-              role="button"
-              tabIndex={0}
-              aria-label={`Open details for ${opp.patient_name}`}
-              onClick={() => router.push(`/suspects?patient_id=${opp.patient_id}`)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/suspects?patient_id=${opp.patient_id}`); } }}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 2fr 1fr 1fr 80px",
-                gap: 8,
-                padding: "10px 8px",
-                borderRadius: 8,
-                cursor: "pointer",
-                borderBottom: i < opportunities.length - 1 ? "1px solid #ECFDF5" : "none",
-                transition: "background 0.15s",
-                alignItems: "center",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(16,185,129,0.06)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              {/* Patient name */}
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {opp.patient_name}
-              </span>
-
-              {/* Condition */}
-              <span style={{ fontSize: 12, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={opp.condition}>
-                {opp.condition}
-              </span>
-
-              {/* Confidence dots */}
-              <ConfidenceDots score={opp.confidence_score} />
-
-              {/* Revenue at risk — tabular nums */}
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#065F46", fontVariantNumeric: "tabular-nums" }}>
-                {fmt$(opp.revenue_at_risk)}
-              </span>
-
-              {/* Days remaining pill */}
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "3px 10px",
-                  borderRadius: 12,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                  background: opp.days_remaining < 7 ? "#FEF3C7" : "#D1FAE5",
-                  color: opp.days_remaining < 7 ? "#92400E" : "#065F46",
-                  border: opp.days_remaining < 7 ? "1px solid #FDE68A" : "1px solid #A7F3D0",
-                  width: "fit-content",
-                }}
-                aria-label={`${opp.days_remaining} days remaining`}
-              >
-                {opp.days_remaining}d
-              </span>
-            </div>
-          ))}
-
-          {/* Empty-state trailer when fewer than 5 */}
-          {opportunities.length < 5 && opportunities.length > 0 && (
-            <div style={{ padding: "10px 8px", fontSize: 12, color: "#6B7280", fontStyle: "italic", borderTop: "1px solid #ECFDF5", marginTop: 4 }}>
-              No more high-priority opportunities this period
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// OnboardingCard — replaces KPI strip when patientCount === 0
-// ---------------------------------------------------------------------------
-
-function OnboardingCard({
-  emrConnected,
-  demoLoading,
-  onTryDemo,
-  "data-testid": testId = "onboarding-card",
-}: {
-  emrConnected: boolean;
-  demoLoading: boolean;
-  onTryDemo: () => void;
-  "data-testid"?: string;
-}) {
-  const steps = [
-    {
-      number: 1,
-      title: "Connect your EMR",
-      description: "Link OpenEMR, Epic, or any FHIR source to import patient records automatically.",
-      icon: <Heart size={20} color={emrConnected ? "#10B981" : "#3B82F6"} />,
-      ctaLabel: "Go to EMR Config",
-      ctaHref: "/emr-config" as string | undefined,
-      ctaAction: undefined as (() => void) | undefined,
-      complete: emrConnected,
-    },
-    {
-      number: 2,
-      title: "Or upload a patient CSV",
-      description: "No EMR? Upload a CSV directly. The system maps columns and ingests data in minutes.",
-      icon: <Upload size={20} color="#8B5CF6" />,
-      ctaLabel: "Go to Uploads",
-      ctaHref: "/uploads" as string | undefined,
-      ctaAction: undefined as (() => void) | undefined,
-      complete: false,
-    },
-    {
-      number: 3,
-      title: "Or try with sample data",
-      description: "Explore all features instantly using the bundled OpenEMR demo with 9 real-looking patients.",
-      icon: <Play size={20} color="#F59E0B" />,
-      ctaLabel: demoLoading ? "Connecting..." : "Try Demo",
-      ctaHref: undefined as string | undefined,
-      ctaAction: onTryDemo,
-      complete: false,
-    },
-  ];
-
-  return (
-    <div
-      style={{
-        ...card,
-        padding: "32px 36px",
-        marginBottom: 24,
-        background: "linear-gradient(135deg, #FAFBFF 0%, #F0F4FF 100%)",
-        border: "1px solid #DBEAFE",
-      }}
-      role="region"
-      aria-label="Getting started"
-      data-testid={testId}
-    >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
-        <div style={{
-          background: "#EFF6FF",
-          borderRadius: 12,
-          padding: 12,
-          border: "1px solid #BFDBFE",
-        }}>
-          <BookOpen size={24} color="#3B82F6" />
-        </div>
-        <div>
-          <h2 className="text-foreground text-lg font-bold tracking-tight m-0">
-            Get started in 3 steps
-          </h2>
-          <p className="text-muted-foreground text-[13px] mt-1 mb-0">
-            Complete any one step to populate your dashboard
-          </p>
-        </div>
-      </div>
-
-      {/* Steps */}
-      <div
-        className="onboarding-steps"
-        style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}
-      >
-        <style>{`
-          @media (max-width: 768px) {
-            .onboarding-steps { grid-template-columns: 1fr !important; }
-          }
-        `}</style>
-        {steps.map((s) => (
-          <div
-            key={s.number}
-            style={{
-              background: s.complete ? "#F0FDF4" : "#FFFFFF",
-              border: s.complete ? "1px solid #BBF7D0" : "1px solid #E2E8F0",
-              borderRadius: 14,
-              padding: "20px 20px 16px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}
-          >
-            {/* Step number + icon */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-                background: s.complete ? "#10B981" : "#EFF6FF",
-                border: s.complete ? "none" : "1px solid #BFDBFE",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 13,
-                fontWeight: 700,
-                color: s.complete ? "#FFFFFF" : "#3B82F6",
-                flexShrink: 0,
-              }}>
-                {s.complete ? <CheckCircle size={16} color="#FFFFFF" strokeWidth={2.5} /> : s.number}
-              </div>
-              <div style={{ opacity: 0.75 }}>{s.icon}</div>
-            </div>
-
-            {/* Text */}
-            <div>
-              <div className="text-foreground text-sm font-bold mb-1">
-                {s.title}
-              </div>
-              <div className="text-muted-foreground text-xs leading-snug">
-                {s.description}
-              </div>
-            </div>
-
-            {/* CTA */}
-            {!s.complete ? (
-              s.ctaHref ? (
-                <Link
-                  href={s.ctaHref}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    marginTop: "auto",
-                    padding: "8px 14px",
-                    border: "1px solid #BFDBFE",
-                    borderRadius: 8,
-                    background: "#EFF6FF",
-                    color: "#1D4ED8",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    textDecoration: "none",
-                    width: "fit-content",
-                  }}
-                >
-                  {s.ctaLabel}
-                  <ChevronRight size={12} />
-                </Link>
-              ) : (
-                <button
-                  onClick={s.ctaAction}
-                  disabled={demoLoading}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    marginTop: "auto",
-                    padding: "8px 14px",
-                    border: "none",
-                    borderRadius: 8,
-                    background: "#FEF3C7",
-                    color: "#92400E",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: demoLoading ? "wait" : "pointer",
-                    width: "fit-content",
-                    opacity: demoLoading ? 0.7 : 1,
-                  }}
-                >
-                  {demoLoading
-                    ? <RefreshCw size={12} style={{ animation: "spin 1s linear infinite" }} />
-                    : <Play size={12} />}
-                  {s.ctaLabel}
-                </button>
-              )
-            ) : (
-              <div style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "6px 12px",
-                borderRadius: 8,
-                background: "#D1FAE5",
-                color: "#065F46",
-                fontSize: 12,
-                fontWeight: 600,
-                width: "fit-content",
-                marginTop: "auto",
-              }}>
-                <CheckCircle size={12} strokeWidth={2.5} />
-                Done
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main Dashboard
 // ---------------------------------------------------------------------------
 
@@ -1236,7 +648,7 @@ export function AdminDashboard() {
           padding: 40,
         }}
       >
-        <div style={{ background: "#FEF2F2", borderRadius: 16, padding: 24 }}>
+        <div style={{ background: "#FEF2F2", borderRadius: 14, padding: 24 }}>
           <AlertCircle size={48} color="#EF4444" />
         </div>
         <h2 className="text-foreground text-xl font-bold">
@@ -1342,7 +754,7 @@ export function AdminDashboard() {
             <button
               onClick={() => setShowTour(true)}
               aria-label="Take the product tour"
-              className="inline-flex items-center gap-1.5 px-3 py-1 border border-blue-200 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold cursor-pointer transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1 border border-teal-200 rounded-full bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-semibold cursor-pointer transition-colors"
             >
               <BookOpen size={12} />
               Take the tour
@@ -1402,7 +814,7 @@ export function AdminDashboard() {
             justifyContent: "space-between",
             background: "linear-gradient(135deg, #FFF7ED 0%, #FFFBEB 100%)",
             border: "1px solid #FED7AA",
-            borderRadius: 12,
+            borderRadius: 10,
             padding: "20px 28px",
             marginBottom: 24,
             gap: 16,
@@ -1486,7 +898,7 @@ export function AdminDashboard() {
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "#FFFFFF",
-              borderRadius: 16,
+              borderRadius: 14,
               padding: "32px",
               maxWidth: 460,
               width: "90%",
@@ -1494,7 +906,7 @@ export function AdminDashboard() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-              <div style={{ background: "#FFF7ED", borderRadius: 12, padding: 12 }}>
+              <div style={{ background: "#FFF7ED", borderRadius: 10, padding: 12 }}>
                 <Stethoscope size={28} color="#F59E0B" />
               </div>
               <div>
@@ -1573,8 +985,8 @@ export function AdminDashboard() {
             marginBottom: 24,
           }}
         >
-          <div style={{ background: "#F0F9FF", borderRadius: 16, padding: 24, display: "inline-block", marginBottom: 20 }}>
-            <Stethoscope size={48} color="#3B82F6" />
+          <div style={{ background: "#F0FDFA", borderRadius: 14, padding: 24, display: "inline-block", marginBottom: 20 }}>
+            <Stethoscope size={48} color="#0D9488" />
           </div>
           <h2 className="text-foreground text-[22px] font-bold mb-2 mt-0">
             Welcome to RAF Intelligence
@@ -1746,7 +1158,7 @@ export function AdminDashboard() {
           style={{
             background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
             border: "2px solid #f59e0b",
-            borderRadius: 16,
+            borderRadius: 14,
             padding: "20px 24px",
             marginBottom: 20,
             display: "flex",
@@ -1760,7 +1172,7 @@ export function AdminDashboard() {
           <div style={{
             background: "rgba(245,158,11,0.15)",
             border: "1px solid rgba(245,158,11,0.35)",
-            borderRadius: 12,
+            borderRadius: 10,
             padding: "10px 12px",
             flexShrink: 0,
             display: "flex",
@@ -1982,7 +1394,7 @@ export function AdminDashboard() {
                   style={{
                     background: t.bg,
                     border: `1px solid ${t.border}`,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     padding: 18,
                     textAlign: "center",
                     cursor: "pointer",
@@ -2092,8 +1504,8 @@ export function AdminDashboard() {
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                           <span style={{
                             fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4,
-                            color: ((s.confidence_score as number) ?? 0) >= 0.9 ? "#DC2626" : ((s.confidence_score as number) ?? 0) >= 0.8 ? "#D97706" : "#2563EB",
-                            background: ((s.confidence_score as number) ?? 0) >= 0.9 ? "#FEF2F2" : ((s.confidence_score as number) ?? 0) >= 0.8 ? "#FFFBEB" : "#EFF6FF",
+                            color: ((s.confidence_score as number) ?? 0) >= 0.9 ? "#DC2626" : ((s.confidence_score as number) ?? 0) >= 0.8 ? "#D97706" : "#0F766E",
+                            background: ((s.confidence_score as number) ?? 0) >= 0.9 ? "#FEF2F2" : ((s.confidence_score as number) ?? 0) >= 0.8 ? "#FFFBEB" : "#F0FDFA",
                           }}>
                             {Math.round(((s.confidence_score as number) ?? 0) * 100)}%
                           </span>
@@ -2182,13 +1594,13 @@ export function AdminDashboard() {
                               width: 24,
                               height: 24,
                               borderRadius: 8,
-                              background: i < 3 ? "#EFF6FF" : "#F8FAFC",
+                              background: i < 3 ? "#F0FDFA" : "#F8FAFC",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               fontSize: 11,
                               fontWeight: 700,
-                              color: i < 3 ? "#2563EB" : "#64748B",
+                              color: i < 3 ? "#0F766E" : "#64748B",
                               flexShrink: 0,
                             }}
                           >
@@ -2259,8 +1671,20 @@ export function AdminDashboard() {
               icon={<BarChart3 size={18} />}
             />
             {waterfallData.length === 0 ? (
-              <div className="text-muted-foreground text-sm py-8 text-center">
-                No HCC data available. Run analysis first.
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <p className="text-[13px] font-semibold text-foreground">
+                  {totalPop === 0
+                    ? "Connect EMR or upload a CSV to begin"
+                    : `${analyzed > 0 ? analyzed : totalPop} patient${(analyzed > 0 ? analyzed : totalPop) !== 1 ? "s" : ""} ready — run analysis to see the revenue waterfall`}
+                </p>
+                {totalPop === 0 && (
+                  <a
+                    href="/emr-config"
+                    className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    Connect EMR
+                  </a>
+                )}
               </div>
             ) : (
               <div>
@@ -2627,7 +2051,7 @@ export function AdminDashboard() {
                         {fmt$(revOpp)}
                       </td>
                       <td style={{ padding: "12px", fontSize: 12, color: "#475569", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#EFF6FF", padding: "2px 8px", borderRadius: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "#0F766E", background: "#F0FDFA", padding: "2px 8px", borderRadius: 4 }}>
                           {((p.hcc_count_ai ?? p.hcc_count_billing ?? 0) as number)}
                         </span>
                       </td>
@@ -2712,15 +2136,15 @@ function ChartRequestsKpiBanner() {
       style={{
         display: "flex", alignItems: "center", gap: 10,
         padding: "10px 16px", borderRadius: 10, marginBottom: 16,
-        backgroundColor: overdue && overdue > 0 ? "#FEF2F2" : "#EFF6FF",
-        border: `1px solid ${overdue && overdue > 0 ? "#FECACA" : "#BFDBFE"}`,
+        backgroundColor: overdue && overdue > 0 ? "#FEF2F2" : "#F0FDFA",
+        border: `1px solid ${overdue && overdue > 0 ? "#FECACA" : "#99F6E4"}`,
         textDecoration: "none", color: "inherit", fontSize: 13,
       }}
       aria-label="View RADV chart requests"
     >
-      <ClipboardList size={16} color={overdue && overdue > 0 ? "#DC2626" : "#2563EB"} />
+      <ClipboardList size={16} color={overdue && overdue > 0 ? "#DC2626" : "#0D9488"} />
       <span>
-        <strong style={{ color: overdue && overdue > 0 ? "#DC2626" : "#1D4ED8" }}>{open} chart request{open !== 1 ? "s" : ""} open</strong>
+        <strong style={{ color: overdue && overdue > 0 ? "#DC2626" : "#0F766E" }}>{open} chart request{open !== 1 ? "s" : ""} open</strong>
         {overdue && overdue > 0
           ? <span style={{ color: "#DC2626" }}> · {overdue} overdue</span>
           : null}

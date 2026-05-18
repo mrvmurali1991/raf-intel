@@ -82,7 +82,7 @@ export function MeatReviewModal({ gap, onClose, onChange }: MeatReviewModalProps
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "#fff",
-          borderRadius: 12,
+          borderRadius: 10,
           width: "100%",
           maxWidth: 880,
           maxHeight: "90vh",

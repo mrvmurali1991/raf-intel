@@ -70,7 +70,7 @@ export function RecurringGapsList({ year, onDetected }: RecurringGapsListProps) 
         padding: 24,
         marginBottom: 24,
         border: `1px solid ${colors.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         background: colors.white,
       }}
     >

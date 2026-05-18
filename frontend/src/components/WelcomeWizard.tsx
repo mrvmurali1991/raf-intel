@@ -325,13 +325,13 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
         </div>
 
         {/* Card */}
-        <div style={{ background: BG, borderRadius: 20, overflow: "hidden", boxShadow: "0 25px 80px rgba(0,0,0,0.3)" }}>
+        <div style={{ background: BG, borderRadius: 14, overflow: "hidden", boxShadow: "0 25px 80px rgba(0,0,0,0.3)" }}>
 
           {/* ── STEP 1: Welcome ── */}
           {step === 1 && (
             <div style={{ padding: "48px 48px 40px" }}>
               <div style={{ textAlign: "center", marginBottom: 36 }}>
-                <div style={{ width: 72, height: 72, borderRadius: 18, background: PRIMARY_LIGHT, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                <div style={{ width: 72, height: 72, borderRadius: 14, background: PRIMARY_LIGHT, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
                   <Sparkles size={32} color={PRIMARY} />
                 </div>
                 <h1 style={{ fontSize: 28, fontWeight: 800, color: TEXT, margin: "0 0 8px" }}>Welcome to RAF Intelligence</h1>
@@ -388,7 +388,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                   { icon: Sparkles, label: "AI Analysis", sub: "Find missed HCCs" },
                   { icon: BarChart3, label: "Track Revenue", sub: "Maximize RAF scores" },
                 ].map((f) => (
-                  <div key={f.label} style={{ padding: 16, background: BG_SUBTLE, borderRadius: 12, border: `1px solid ${BORDER}` }}>
+                  <div key={f.label} style={{ padding: 16, background: BG_SUBTLE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
                     <f.icon size={22} color={PRIMARY} style={{ marginBottom: 8 }} />
                     <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{f.label}</div>
                     <div style={{ fontSize: 11, color: TEXT_SEC, marginTop: 2 }}>{f.sub}</div>
@@ -425,7 +425,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 12, background: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 10, background: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
                         <Play size={22} color={WARNING} />
                       </div>
                       <div>
@@ -455,7 +455,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                           setConnectionMode("form");
                         }} style={{
                           display: "flex", alignItems: "center", gap: 10, padding: 14,
-                          border: `1px solid ${BORDER}`, borderRadius: 12,
+                          border: `1px solid ${BORDER}`, borderRadius: 10,
                           background: BG, cursor: "pointer", textAlign: "left",
                           transition: "all 150ms",
                         }}>
@@ -478,7 +478,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
               {/* Demo confirmation */}
               {connectionMode === "demo" && (
                 <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ width: 72, height: 72, borderRadius: 18, background: WARNING_LIGHT, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+                  <div style={{ width: 72, height: 72, borderRadius: 14, background: WARNING_LIGHT, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
                     <Stethoscope size={32} color={WARNING} />
                   </div>
                   <h2 style={{ fontSize: 24, fontWeight: 800, color: TEXT, margin: "0 0 8px" }}>Connect Demo OpenEMR?</h2>
@@ -486,7 +486,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
                     This will connect to the bundled OpenEMR demo instance with sample patient data. You can explore all features of RAF Intelligence.
                   </p>
                   <div style={{
-                    background: SUCCESS_LIGHT, border: `1px solid ${SUCCESS}40`, borderRadius: 12,
+                    background: SUCCESS_LIGHT, border: `1px solid ${SUCCESS}40`, borderRadius: 10,
                     padding: "16px 20px", marginBottom: 28, textAlign: "left", maxWidth: 380, margin: "0 auto 28px",
                     fontSize: 13, color: "#166534", lineHeight: 1.6,
                   }}>
@@ -618,7 +618,7 @@ export function WelcomeWizard({ forceOpen, onClose }: WelcomeWizardProps) {
           {/* ── STEP 3: Data Preview ── */}
           {step === 3 && (
             <div style={{ padding: "48px 48px 40px", textAlign: "center" }}>
-              <div style={{ width: 72, height: 72, borderRadius: 18, background: BG_ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+              <div style={{ width: 72, height: 72, borderRadius: 14, background: BG_ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
                 <Users size={32} color={PRIMARY} />
               </div>
               <h2 style={{ fontSize: 24, fontWeight: 800, color: TEXT, margin: "0 0 8px" }}>Your Data at a Glance</h2>

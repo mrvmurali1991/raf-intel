@@ -122,7 +122,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
       {/* RAF Score + Payment */}
       <div style={{
         background: `linear-gradient(135deg, ${C.blue50} 0%, ${C.white} 100%)`,
-        borderRadius: 16, border: `1px solid ${C.blue100}`,
+        borderRadius: 14, border: `1px solid ${C.blue100}`,
         padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
       }}>
         <div>
@@ -484,7 +484,7 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
   );
 
   return (
-    <div style={{ borderRadius: 12, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
+    <div style={{ borderRadius: 10, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
@@ -705,7 +705,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
       {hasExtras && extraCoeffSum > 0 && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16,
-          padding: "16px 24px", borderRadius: 12,
+          padding: "16px 24px", borderRadius: 10,
           background: `linear-gradient(135deg, ${C.blue50} 0%, ${C.emerald50} 100%)`,
           border: `1px solid ${C.blue100}`,
         }}>
@@ -1005,7 +1005,11 @@ export function RAFTab({
         {recaptureLoading ? (
           <SectionLoader />
         ) : !recaptureItems.length ? (
-          <EmptyState title="No recapture gaps identified" />
+          <EmptyState
+            state={breakdown ? "complete" : "no-data"}
+            title={breakdown ? `no gaps after analysis for ${selectedYear}` : "no analysis run yet"}
+            description={breakdown ? undefined : "Run RAF analysis to detect recapture opportunities"}
+          />
         ) : (
           <div>
             <div

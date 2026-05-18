@@ -53,7 +53,7 @@ export function BonusLeaderboard({
     return (
       <div
         className="premium-card shimmer"
-        style={{ height: 240, borderRadius: 12 }}
+        style={{ height: 240, borderRadius: 10 }}
         aria-label="Loading leaderboard"
       />
     );

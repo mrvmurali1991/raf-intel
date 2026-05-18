@@ -513,7 +513,7 @@ function ScheduledReportsTab() {
 
       {showDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) setShowDialog(false); }}>
-          <div style={{ background: C.white, borderRadius: 16, padding: 32, width: 480, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+          <div style={{ background: C.white, borderRadius: 14, padding: 32, width: 480, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Schedule a Report</h3>
               <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 20, lineHeight: 1, padding: 4 }} aria-label="Close dialog">×</button>
@@ -554,7 +554,7 @@ function ScheduledReportsTab() {
 
       {reports.length === 0 ? (
         <div className="premium-shadow" style={{ ...cardStyle, padding: 60, textAlign: "center" as const }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: C.borderLight, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: C.borderLight, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.textSub} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           </div>
           <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.text }}>No scheduled reports yet</p>

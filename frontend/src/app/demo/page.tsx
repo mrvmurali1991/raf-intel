@@ -1270,7 +1270,7 @@ function Step7Content({ data, rafData }: { data: any; rafData: any }) {
               <div className="text-xs text-muted-foreground italic py-1">No HCC-carrying codes billed</div>
             ) : null}
             <div className="border-t-2 border-gray-300 dark:border-gray-600 pt-2 mt-2 flex justify-between font-bold text-lg">
-              <span>TOTAL:</span>
+              <span>Total:</span>
               <span className="text-gray-600 dark:text-gray-400">{(billingRAF ?? 0).toFixed(3)}</span>
             </div>
           </div>
@@ -1307,7 +1307,7 @@ function Step7Content({ data, rafData }: { data: any; rafData: any }) {
               </div>
             ))}
             <div className="border-t-2 border-emerald-400 dark:border-emerald-600 pt-2 mt-2 flex justify-between font-bold text-lg">
-              <span>TOTAL:</span>
+              <span>Total:</span>
               <span className="text-emerald-700 dark:text-emerald-400">{(aiRAF ?? 0).toFixed(3)}</span>
             </div>
           </div>

@@ -171,7 +171,7 @@ function ServiceCard({ children, title, icon }: { children: React.ReactNode; tit
     <div
       style={{
         padding: 20,
-        borderRadius: 12,
+        borderRadius: 10,
         border: `1px solid ${tokens.slate200}`,
         background: tokens.white,
       }}
@@ -313,7 +313,7 @@ export default function SystemHealthPage() {
         style={{
           marginTop: showDegradedBanner ? 12 : 20,
           padding: "14px 20px",
-          borderRadius: 12,
+          borderRadius: 10,
           display: "flex",
           alignItems: "center",
           gap: 12,
@@ -487,7 +487,7 @@ export default function SystemHealthPage() {
             style={{
               marginTop: 12,
               padding: 20,
-              borderRadius: 12,
+              borderRadius: 10,
               border: `1px solid ${tokens.slate200}`,
               background: tokens.white,
               display: "grid",
@@ -522,7 +522,7 @@ export default function SystemHealthPage() {
         <div
           style={{
             marginTop: 12,
-            borderRadius: 12,
+            borderRadius: 10,
             border: `1px solid ${tokens.slate200}`,
             background: tokens.white,
             overflow: "auto",
@@ -638,7 +638,7 @@ export default function SystemHealthPage() {
         <div
           style={{
             marginTop: 12,
-            borderRadius: 12,
+            borderRadius: 10,
             border: `1px solid ${tokens.slate200}`,
             background: tokens.white,
             overflow: "auto",

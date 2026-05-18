@@ -288,7 +288,7 @@ export default function SuspectDrawer({
 
       {/* RIGHT — Code card + actions */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ padding: 16, borderRadius: 12, backgroundColor: C.white, border: `1px solid ${C.border}` }}>
+        <div style={{ padding: 16, borderRadius: 10, backgroundColor: C.white, border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.label, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
             Suspected Code
           </div>

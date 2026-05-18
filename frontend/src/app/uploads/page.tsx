@@ -213,7 +213,7 @@ export default function UploadsPage() {
         }}
         style={{
           border: `2px dashed ${dragOver ? C.brand : C.border}`,
-          borderRadius: 16,
+          borderRadius: 14,
           background: dragOver ? C.brandSoft : C.bgCard,
           padding: "48px 24px",
           textAlign: "center",

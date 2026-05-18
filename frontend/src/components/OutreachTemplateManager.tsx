@@ -70,7 +70,7 @@ export function OutreachTemplateManager() {
   return (
     <div
       className="premium-card"
-      style={{ padding: 24, borderRadius: 12 }}
+      style={{ padding: 24, borderRadius: 10 }}
     >
       <div
         style={{
@@ -296,7 +296,7 @@ function CreateTemplateDialog({ onClose }: { onClose: () => void }) {
           width: 520,
           maxWidth: "90vw",
           background: colors.white,
-          borderRadius: 12,
+          borderRadius: 10,
           padding: 24,
           boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
         }}

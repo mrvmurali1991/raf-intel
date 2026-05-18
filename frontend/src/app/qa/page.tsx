@@ -494,10 +494,10 @@ function RaterLine({
 function RatingPill({ rating }: { rating: Rating }) {
   const { bg, fg, label } =
     rating === "accept"
-      ? { bg: T.emerald50, fg: T.emerald600, label: "ACCEPT" }
+      ? { bg: T.emerald50, fg: T.emerald600, label: "Accept" }
       : rating === "reject"
-      ? { bg: T.red50, fg: T.red600, label: "REJECT" }
-      : { bg: T.amber50, fg: T.amber600, label: "UNCLEAR" };
+      ? { bg: T.red50, fg: T.red600, label: "Reject" }
+      : { bg: T.amber50, fg: T.amber600, label: "Unclear" };
   return (
     <span
       style={{

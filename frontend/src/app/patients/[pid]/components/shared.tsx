@@ -605,7 +605,7 @@ export function Card({
       className={`premium-card bg-card border-border ${extraClassName || ""}`}
       style={{
         border: "1px solid",
-        borderRadius: 12,
+        borderRadius: 10,
         padding: noPadding ? 0 : 20,
         ...style,
       }}

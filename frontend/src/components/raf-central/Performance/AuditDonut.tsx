@@ -80,7 +80,7 @@ export function AuditDonut({
           {compliant}/{total} HCCs
         </div>
         <span className={cn("inline-flex w-fit rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", riskBg)}>
-          {pctNum >= 90 ? "LOW" : pctNum >= 70 ? "MEDIUM" : "HIGH"} RISK
+          {pctNum >= 90 ? "Low" : pctNum >= 70 ? "Medium" : "High"} Risk
         </span>
       </div>
     </div>

@@ -676,7 +676,7 @@ export default function ProvidersPage() {
         className="premium-card premium-shadow gradient-border"
         style={{
           background: C.card,
-          borderRadius: 16,
+          borderRadius: 14,
           /* overflow:hidden clips border-radius; use clip so inline scroll still works on mobile */
           overflow: "clip",
           animation: "fadeInUp 0.5s ease-out both",
@@ -994,7 +994,7 @@ export default function ProvidersPage() {
                               style={{
                                 width: 38,
                                 height: 38,
-                                borderRadius: 12,
+                                borderRadius: 10,
                                 background: `linear-gradient(135deg, ${initialsColor(providerName(row))}, ${initialsColor(providerName(row))}cc)`,
                                 color: C.white,
                                 display: "flex",

@@ -514,7 +514,7 @@ export default function ProspectivePage() {
   const cardStyle: React.CSSProperties = {
     background: C.white,
     border: `1px solid ${C.slate200}`,
-    borderRadius: 12,
+    borderRadius: 10,
   };
 
   const thStyle: React.CSSProperties = {
@@ -605,7 +605,7 @@ export default function ProspectivePage() {
         {/* Stats skeleton */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className={`premium-card shimmer animate-slide-up stagger-${i + 1}`} style={{ background: C.white, border: `1px solid ${C.slate200}`, borderRadius: 12, padding: 20 }}>
+            <div key={i} className={`premium-card shimmer animate-slide-up stagger-${i + 1}`} style={{ background: C.white, border: `1px solid ${C.slate200}`, borderRadius: 10, padding: 20 }}>
               <div className="skeleton" style={{ width: 90, height: 12, borderRadius: 4, marginBottom: 10 }} />
               <div className="skeleton" style={{ width: 60, height: 28, borderRadius: 4, marginBottom: 8 }} />
               <div className="skeleton" style={{ width: 110, height: 10, borderRadius: 4 }} />
@@ -613,12 +613,12 @@ export default function ProspectivePage() {
           ))}
         </div>
         {/* Table skeleton */}
-        <div className="premium-card premium-shadow animate-fade-in" style={{ background: C.white, border: `1px solid ${C.slate200}`, borderRadius: 12, overflow: "hidden" }}>
+        <div className="premium-card premium-shadow animate-fade-in" style={{ background: C.white, border: `1px solid ${C.slate200}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ height: 44, background: C.slate50, borderBottom: `1px solid ${C.slate200}` }} />
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="shimmer" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 80px", alignItems: "center", padding: "0 16px", height: 60, borderBottom: `1px solid ${C.slate100}`, gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 16, background: C.slate100, flexShrink: 0 }} />
+                <div style={{ width: 32, height: 32, borderRadius: 14, background: C.slate100, flexShrink: 0 }} />
                 <div style={{ width: 130, height: 12, borderRadius: 4, background: C.slate100 }} />
               </div>
               {[70, 80, 80, 70, 60].map((w, j) => (
@@ -1291,7 +1291,7 @@ export default function ProspectivePage() {
             style={{
               width: 44,
               height: 44,
-              borderRadius: 12,
+              borderRadius: 10,
               background: `${C.primary}1A`,
               display: "flex",
               alignItems: "center",

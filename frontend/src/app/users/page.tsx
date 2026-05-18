@@ -467,7 +467,7 @@ function Modal({
         className="animate-scale-in"
         style={{
           backgroundColor: C.white,
-          borderRadius: 16,
+          borderRadius: 14,
           width: "100%",
           maxWidth: width,
           maxHeight: "90vh",
@@ -1277,7 +1277,7 @@ export default function UsersPage() {
           className="premium-card animate-scale-in"
           style={{
             backgroundColor: C.card,
-            borderRadius: 16,
+            borderRadius: 14,
             padding: 48,
             textAlign: "center",
             maxWidth: 400,
@@ -1285,7 +1285,7 @@ export default function UsersPage() {
         >
           <div
             style={{
-              width: 60, height: 60, borderRadius: 16,
+              width: 60, height: 60, borderRadius: 14,
               backgroundColor: C.redLight, display: "flex",
               alignItems: "center", justifyContent: "center",
               margin: "0 auto 16px",
@@ -1316,7 +1316,7 @@ export default function UsersPage() {
           style={{
             position: "fixed", top: 20, right: 20, zIndex: 2000,
             background: toast.ok ? `linear-gradient(135deg, ${tokens.success}, ${tokens.successDark})` : `linear-gradient(135deg, ${tokens.riskHigh}, ${tokens.danger})`,
-            color: C.white, padding: "12px 18px", borderRadius: 12,
+            color: C.white, padding: "12px 18px", borderRadius: 10,
             fontSize: 13, fontWeight: 600,
             boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
             display: "flex", alignItems: "center", gap: 8,
@@ -1533,7 +1533,7 @@ export default function UsersPage() {
                       />
                     ) : (
                       <div style={{ textAlign: "center", padding: "40px 24px" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 16, backgroundColor: C.primaryLight, marginBottom: 14 }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 14, backgroundColor: C.primaryLight, marginBottom: 14 }}>
                           <UsersRound size={26} className="text-primary" />
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No users yet</div>

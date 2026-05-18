@@ -207,7 +207,7 @@ export function PatientHedisStrip({ pid, year }: PatientHedisStripProps) {
       style={{
         marginTop: 20,
         padding: "14px 20px",
-        borderRadius: 12,
+        borderRadius: 10,
         boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
       }}
     >

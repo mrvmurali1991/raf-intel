@@ -1,4 +1,14 @@
 /**
+ * @radius-policy Radius tokens — use ONLY Tailwind token classes, never arbitrary values.
+ *   rounded-sm  → ~6px   (--radius * 0.6)  — inputs, chips
+ *   rounded-md  → ~8px   (--radius * 0.8)  — buttons, small cards
+ *   rounded-lg  → 10px   (--radius)        — standard cards (default)
+ *   rounded-xl  → ~14px  (--radius * 1.4)  — hero/modal cards only
+ *   rounded-2xl → ~18px  (--radius * 1.8)  — login panel only
+ *   rounded-full                            — badges, avatars, pills ONLY
+ *   NEVER use rounded-[Npx] — add a token above instead.
+ *   eslint: no arbitrary value rounded classes (enforced by review)
+ *
  * @deprecated DO NOT ADD NEW VALUES HERE.
  *
  * This file is the single source of truth for design tokens used as inline

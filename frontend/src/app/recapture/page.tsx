@@ -200,10 +200,10 @@ export default function RecapturePage() {
         <PageHeader title="Recapture Gaps" subtitle="Loading recapture opportunities…" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="premium-card shimmer" style={{ height: 100, borderRadius: 12 }} />
+            <div key={i} className="premium-card shimmer" style={{ height: 100, borderRadius: 10 }} />
           ))}
         </div>
-        <div className="premium-card shimmer" style={{ height: 300, borderRadius: 12 }} />
+        <div className="premium-card shimmer" style={{ height: 300, borderRadius: 10 }} />
       </div>
     );
   }
@@ -353,7 +353,7 @@ export default function RecapturePage() {
                 aria-label="Search patients by name"
                 style={{
                   padding: "7px 10px 7px 30px",
-                  borderRadius: 20,
+                  borderRadius: 14,
                   border: `1px solid ${colors.slate200}`,
                   fontSize: 13,
                   color: colors.slate900,
@@ -371,7 +371,7 @@ export default function RecapturePage() {
               />
             </div>
             {/* Sort Pills */}
-            <div style={{ display: "flex", gap: 4, background: colors.slate100, borderRadius: 20, padding: 3 }}>
+            <div style={{ display: "flex", gap: 4, background: colors.slate100, borderRadius: 14, padding: 3 }}>
               {sortOptions.map((opt) => (
                 <button
                   key={opt.key}
@@ -379,7 +379,7 @@ export default function RecapturePage() {
                   className="btn-press"
                   style={{
                     padding: "5px 12px",
-                    borderRadius: 16,
+                    borderRadius: 14,
                     border: "none",
                     fontSize: 12,
                     fontWeight: 600,

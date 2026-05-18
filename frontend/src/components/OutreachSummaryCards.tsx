@@ -63,7 +63,7 @@ export function OutreachSummaryCards({ year }: Props) {
       <div
         style={{
           padding: 16,
-          borderRadius: 12,
+          borderRadius: 10,
           background: "#FEF2F2",
           border: "1px solid #FECACA",
           color: "#B91C1C",

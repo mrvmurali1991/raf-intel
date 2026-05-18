@@ -39,7 +39,7 @@ export const T = {
   card: {
     background: C.card,
     border: `1px solid ${C.border}`,
-    borderRadius: 12,
+    borderRadius: 10,
     boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
     padding: 24,
   } as React.CSSProperties,

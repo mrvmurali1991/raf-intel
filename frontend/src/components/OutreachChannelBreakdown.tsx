@@ -73,7 +73,7 @@ export function OutreachChannelBreakdown({ year, height = 280 }: Props) {
       className="premium-card"
       style={{
         padding: 24,
-        borderRadius: 12,
+        borderRadius: 10,
       }}
     >
       <div

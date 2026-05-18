@@ -439,7 +439,7 @@ function PricingCard({
         border: highlight
           ? "none"
           : `1px solid ${hovered ? tokens.infoBlue : tokens.slate200}`,
-        borderRadius: 16,
+        borderRadius: 14,
         padding: 28,
         display: "flex",
         flexDirection: "column",
@@ -959,7 +959,7 @@ export default function ROICalculatorPage() {
         className="animate-in mesh-pattern"
         style={{
           background: `linear-gradient(135deg, ${tokens.slate900} 0%, #1E3A8A 40%, ${tokens.primary} 70%, ${tokens.infoBlue} 100%)`,
-          borderRadius: 20,
+          borderRadius: 14,
           padding: "32px 36px",
           marginBottom: 32,
           display: "flex",
@@ -1275,7 +1275,7 @@ export default function ROICalculatorPage() {
               marginTop: 24,
               padding: 18,
               background: `linear-gradient(135deg, ${tokens.slate50} 0%, ${tokens.primarySoft} 100%)`,
-              borderRadius: 12,
+              borderRadius: 10,
               border: `1px solid ${tokens.slate200}`,
             }}
           >
@@ -1321,7 +1321,7 @@ export default function ROICalculatorPage() {
             className="opportunity-card gradient-border"
             style={{
               background: `linear-gradient(135deg, ${tokens.successSoft} 0%, ${tokens.successSoft} 50%, ${tokens.emerald100} 100%)`,
-              borderRadius: 16,
+              borderRadius: 14,
               padding: 28,
             }}
           >
@@ -1362,7 +1362,7 @@ export default function ROICalculatorPage() {
                     justifyContent: "space-between",
                     padding: "14px 16px",
                     background: tokens.white,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     border: `1px solid ${item.color}20`,
                     gap: 12,
                     boxShadow: `0 1px 4px ${item.color}08`,
@@ -1555,7 +1555,7 @@ export default function ROICalculatorPage() {
               background: results.paybackMonths <= 6
                 ? `linear-gradient(135deg, #1E3A8A, ${tokens.primary})`
                 : `linear-gradient(135deg, ${tokens.slate700}, ${tokens.slate600})`,
-              borderRadius: 12,
+              borderRadius: 10,
               padding: "16px 20px",
               display: "flex",
               alignItems: "center",
@@ -1566,7 +1566,7 @@ export default function ROICalculatorPage() {
               style={{
                 width: 44,
                 height: 44,
-                borderRadius: 12,
+                borderRadius: 10,
                 background: "rgba(255,255,255,0.15)",
                 display: "flex",
                 alignItems: "center",
@@ -1854,7 +1854,7 @@ export default function ROICalculatorPage() {
         style={{
           marginTop: 40,
           background: `linear-gradient(135deg, ${tokens.slate900} 0%, #1E3A8A 60%, ${tokens.primary} 100%)`,
-          borderRadius: 20,
+          borderRadius: 14,
           padding: "40px 48px",
           display: "flex",
           alignItems: "center",

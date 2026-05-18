@@ -101,7 +101,7 @@ export default function WorklistPage() {
         <PageHeader title="Today's worklist" subtitle="Loading prioritized patients…" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginTop: 16 }}>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="premium-card shimmer" style={{ height: 140, borderRadius: 12 }} />
+            <div key={i} className="premium-card shimmer" style={{ height: 140, borderRadius: 10 }} />
           ))}
         </div>
       </div>
@@ -158,7 +158,7 @@ export default function WorklistPage() {
           style={{
             marginTop: 24,
             padding: "32px 20px",
-            borderRadius: 12,
+            borderRadius: 10,
             background: tokens.successSoft,
             border: `1px solid ${tokens.success}`,
             color: tokens.successDark,
@@ -261,7 +261,7 @@ function SummaryTile({
     <div
       style={{
         padding: "14px 16px",
-        borderRadius: 12,
+        borderRadius: 10,
         background: tokens.white,
         border: `1px solid ${tokens.slate200}`,
         display: "flex",
@@ -304,7 +304,7 @@ function PatientCard({ item }: { item: WorklistItem }) {
       style={{
         display: "block",
         padding: 16,
-        borderRadius: 12,
+        borderRadius: 10,
         background: tokens.white,
         border: `1px solid ${tokens.slate200}`,
         textDecoration: "none",

@@ -377,7 +377,7 @@ export function DocumentIngestionDetailDrawer({
                   gap: 6,
                   backgroundColor: T.accentBg,
                   border: `1px solid #BFDBFE`,
-                  borderRadius: 20,
+                  borderRadius: 14,
                   padding: "4px 12px",
                   marginBottom: 20,
                 }}

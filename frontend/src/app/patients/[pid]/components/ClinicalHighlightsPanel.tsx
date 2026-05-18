@@ -74,7 +74,7 @@ export function ClinicalHighlightsPanel({ pid }: { pid: string }) {
     return (
       <div
         style={{
-          borderRadius: 12,
+          borderRadius: 10,
           border: `1px solid ${C.slate200}`,
           padding: "16px 20px",
           background: "#F8FAFC",
@@ -111,7 +111,7 @@ export function ClinicalHighlightsPanel({ pid }: { pid: string }) {
   return (
     <div
       style={{
-        borderRadius: 12,
+        borderRadius: 10,
         border: `1px solid ${isFallback ? C.slate200 : "#BAE6FD"}`,
         background: isFallback ? "#F8FAFC" : "linear-gradient(135deg, #F0F9FF, #ECFDF5)",
         overflow: "hidden",

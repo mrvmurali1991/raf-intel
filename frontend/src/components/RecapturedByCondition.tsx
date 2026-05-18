@@ -105,7 +105,7 @@ export default function RecapturedByCondition({ year }: Props) {
         style={{
           background: T.white,
           border: `1px solid ${T.slate200}`,
-          borderRadius: 12,
+          borderRadius: 10,
           padding: 16,
           height: 220,
         }}
@@ -124,7 +124,7 @@ export default function RecapturedByCondition({ year }: Props) {
       style={{
         background: T.white,
         border: `1px solid ${T.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
       }}
     >

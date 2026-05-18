@@ -740,7 +740,7 @@ export default function SuspectsPage() {
             gap: 12,
             background: C.highSoft,
             border: `1px solid ${tokens.dangerBorder}`,
-            borderRadius: 12,
+            borderRadius: 10,
             padding: "12px 16px",
             marginBottom: 20,
             fontSize: 13,
@@ -906,7 +906,7 @@ export default function SuspectsPage() {
             style={{
               backgroundColor: C.bgCard,
               border: `1px solid ${C.borderSoft}`,
-              borderRadius: 12,
+              borderRadius: 10,
               padding: "14px 16px",
               display: "flex",
               alignItems: "center",
@@ -1117,7 +1117,7 @@ export default function SuspectsPage() {
                     style={{
                       position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 120,
                       backgroundColor: tokens.white, border: `1px solid ${C.border}`,
-                      borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)",
+                      borderRadius: 10, boxShadow: "0 8px 24px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)",
                       padding: "14px 16px", minWidth: 280, display: "flex", flexDirection: "column", gap: 14,
                     }}
                   >
@@ -1491,7 +1491,7 @@ export default function SuspectsPage() {
               style={{
                 width: 56,
                 height: 56,
-                borderRadius: 16,
+                borderRadius: 14,
                 backgroundColor: C.brandSoft,
                 color: C.brand,
                 display: "flex",
@@ -2428,7 +2428,7 @@ function SuspectDrawer({
         <div
           style={{
             padding: 16,
-            borderRadius: 12,
+            borderRadius: 10,
             backgroundColor: C.white,
             border: `1px solid ${C.border}`,
           }}

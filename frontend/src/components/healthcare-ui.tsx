@@ -130,7 +130,7 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
       <div className="animate-fade-in stat-card-gradient-border bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="skeleton" style={{ width: 80, height: 14, borderRadius: 6 }} />
-          <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 12 }} />
+          <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 10 }} />
         </div>
         <div>
           <div className="skeleton" style={{ width: 100, height: 28, borderRadius: 8 }} />

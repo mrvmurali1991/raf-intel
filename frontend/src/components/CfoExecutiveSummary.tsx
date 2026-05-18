@@ -77,7 +77,7 @@ function KpiCard({ label, value, subtle, color, icon, emphasis }: KpiProps) {
       style={{
         background: T.white,
         border: `1px solid ${T.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
         display: "flex",
         flexDirection: "column",
@@ -133,7 +133,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
             key={i}
             style={{
               height: 100,
-              borderRadius: 12,
+              borderRadius: 10,
               background: T.slate100,
               border: `1px solid ${T.slate200}`,
             }}
@@ -246,7 +246,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
           style={{
             background: T.white,
             border: `1px solid ${T.slate200}`,
-            borderRadius: 12,
+            borderRadius: 10,
             padding: 16,
           }}
         >
@@ -285,7 +285,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
           style={{
             background: T.white,
             border: `1px solid ${T.slate200}`,
-            borderRadius: 12,
+            borderRadius: 10,
             padding: 16,
           }}
         >

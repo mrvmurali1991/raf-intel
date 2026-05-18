@@ -377,7 +377,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           margin: "0 16px",
           backgroundColor: BG_MODAL,
           border: `1px solid ${BORDER}`,
-          borderRadius: 12,
+          borderRadius: 10,
           overflow: "hidden",
           boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 0 80px rgba(37,99,235,0.08)",
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',

@@ -535,7 +535,7 @@ export default function ReportsPage() {
         {activeTab === "Recapture Gaps" && <RecaptureTab recapture={recapture} router={router} isHistoricalPY={isHistoricalPY} />}
         {activeTab === "Quality" && <DataQualityTab dataQuality={dataQuality} />}
         {activeTab === "Provider Performance" && (
-          <div style={{ padding: "48px 24px", textAlign: "center", color: C.textMuted, fontSize: 14, borderRadius: 12, border: `1px dashed ${C.border}` }}>
+          <div style={{ padding: "48px 24px", textAlign: "center", color: C.textMuted, fontSize: 14, borderRadius: 10, border: `1px dashed ${C.border}` }}>
             <Lock size={20} style={{ marginBottom: 10, opacity: 0.4 }} />
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Provider Performance</div>
             <div style={{ fontSize: 13 }}>Provider-level performance benchmarks are coming soon.</div>
@@ -1035,7 +1035,17 @@ function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistribut
           );
         })}
         {top20.length === 0 && (
-          <p style={{ textAlign: "center", color: C.textMuted, padding: 40 }}>No HCC data available</p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "28px 16px", textAlign: "center" }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: 0 }}>
+              No HCC data — run analysis to populate this chart
+            </p>
+            <a
+              href="/patients"
+              style={{ display: "inline-block", padding: "7px 16px", borderRadius: 8, background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+            >
+              Go to Patients
+            </a>
+          </div>
         )}
       </div>
     </div>

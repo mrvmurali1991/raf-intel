@@ -379,7 +379,7 @@ const styles: Record<string, React.CSSProperties> = {
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "flex-start",
     padding: "16px 20px", background: "linear-gradient(135deg,#1e3a5f,#1e40af)",
-    borderRadius: 12, color: "#fff",
+    borderRadius: 10, color: "#fff",
   },
   title:    { margin: 0, fontSize: 18, fontWeight: 700 },
   subtitle: { margin: "4px 0 0", fontSize: 13, opacity: 0.8 },

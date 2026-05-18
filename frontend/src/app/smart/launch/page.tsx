@@ -149,7 +149,7 @@ export default function SmartLaunchPage() {
         style={{
           background: "#1e293b",
           padding: "32px 40px",
-          borderRadius: 12,
+          borderRadius: 10,
           maxWidth: 520,
           width: "100%",
           textAlign: "center",

@@ -123,7 +123,7 @@ export default function PreVisitSummaryModal({
         className="premium-card animate-scale-in"
         style={{
           background: C.white,
-          borderRadius: 16,
+          borderRadius: 14,
           width: "100%",
           maxWidth: 720,
           maxHeight: "90vh",

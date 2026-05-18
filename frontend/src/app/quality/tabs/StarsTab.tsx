@@ -21,7 +21,7 @@ export default function StarsTab({ stars }: { stars: StarsEstimate }) {
             ...T.card,
             display: "flex", flexDirection: "column", alignItems: "center",
             background: `linear-gradient(135deg, ${tokens.slate900} 0%, ${tokens.slate800} 50%, ${tokens.slate900} 100%)`,
-            border: "1px solid rgba(255,255,255,0.06)", borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14,
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: tokens.slate400, marginBottom: 16 }}>
@@ -40,7 +40,7 @@ export default function StarsTab({ stars }: { stars: StarsEstimate }) {
             ...T.card,
             display: "flex", flexDirection: "column", alignItems: "center",
             background: `linear-gradient(135deg, ${tokens.primaryDark} 0%, ${tokens.primary} 50%, ${tokens.primaryDark} 100%)`,
-            border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: tokens.slate200, marginBottom: 16 }}>

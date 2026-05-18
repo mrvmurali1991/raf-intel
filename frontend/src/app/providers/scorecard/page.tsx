@@ -162,7 +162,7 @@ function SortHeader({
 function TableSkeleton() {
   const rows = Array.from({ length: 6 });
   return (
-    <div style={{ background: tokens.white, border: `1px solid ${tokens.slate200}`, borderRadius: 12, overflow: "hidden" }}>
+    <div style={{ background: tokens.white, border: `1px solid ${tokens.slate200}`, borderRadius: 10, overflow: "hidden" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
@@ -321,7 +321,7 @@ export default function ProviderScorecardsPage() {
               style={{
                 background: tokens.white,
                 border: `1px solid ${tokens.slate200}`,
-                borderRadius: 12,
+                borderRadius: 10,
                 padding: "14px 16px",
               }}
             >
@@ -358,7 +358,7 @@ export default function ProviderScorecardsPage() {
           style={{
             background: tokens.white,
             border: `1px solid ${tokens.slate200}`,
-            borderRadius: 12,
+            borderRadius: 10,
             overflow: "hidden",
           }}
         >

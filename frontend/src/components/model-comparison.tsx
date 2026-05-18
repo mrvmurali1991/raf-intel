@@ -209,7 +209,7 @@ function ScoreComparisonCard({
       style={{
         background: C.white,
         border: `1px solid ${C.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         overflow: "hidden",
       }}
     >
@@ -460,7 +460,7 @@ function HCCComparisonTable({
       style={{
         background: C.white,
         border: `1px solid ${C.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         overflow: "hidden",
       }}
     >
@@ -702,7 +702,7 @@ function HCCComparisonTable({
                           }}
                         >
                           <XCircle size={14} />
-                          {isRemovedInV28 ? "REMOVED" : "Not mapped"}
+                          {isRemovedInV28 ? "Removed" : "Not mapped"}
                         </span>
                       )}
                     </td>
@@ -767,7 +767,7 @@ function TransitionTimeline({
       style={{
         background: C.white,
         border: `1px solid ${C.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: "16px 20px",
       }}
     >
@@ -967,7 +967,7 @@ function RevenueImpactSummary({
       style={{
         background: bg,
         border: `1px solid ${border}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: "16px 20px",
         display: "flex",
         alignItems: "center",
@@ -1075,7 +1075,7 @@ function ComparisonSkeleton() {
           style={{
             background: C.white,
             border: `1px solid ${C.slate200}`,
-            borderRadius: 12,
+            borderRadius: 10,
             height: h,
             animation: "pulse 1.5s ease-in-out infinite",
           }}
@@ -1119,7 +1119,7 @@ export function ModelComparison({ pid, year }: ModelComparisonProps) {
         style={{
           background: C.red50,
           border: `1px solid ${C.red100}`,
-          borderRadius: 12,
+          borderRadius: 10,
           padding: "24px 20px",
           display: "flex",
           alignItems: "flex-start",

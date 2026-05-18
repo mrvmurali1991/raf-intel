@@ -293,7 +293,7 @@ export function GenerateDialog({ onClose, onSuccess }: GenerateDialogProps) {
       style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
       role="dialog" aria-modal="true" aria-labelledby="gen-dialog-title"
     >
-      <div style={{ backgroundColor: T.white, borderRadius: 16, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div style={{ backgroundColor: T.white, borderRadius: 14, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: `1px solid ${T.slate200}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -437,7 +437,7 @@ export function UploadResponseDialog({ batchId, batchName, onClose, onSuccess }:
   return (
     <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
       role="dialog" aria-modal="true" aria-labelledby="upload-dialog-title">
-      <div style={{ backgroundColor: T.white, borderRadius: 16, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div style={{ backgroundColor: T.white, borderRadius: 14, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: `1px solid ${T.slate200}` }}>
           <div>

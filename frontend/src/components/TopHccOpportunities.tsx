@@ -249,7 +249,7 @@ function Card({ children }: { children: React.ReactNode }) {
       style={{
         background: T.white,
         border: `1px solid ${T.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
         boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
       }}

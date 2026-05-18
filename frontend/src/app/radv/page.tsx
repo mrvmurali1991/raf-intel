@@ -379,7 +379,7 @@ function RunList({ runs, onOpen }: { runs: RunSummary[] | null; onOpen: (id: num
   }
   if (runs.length === 0) {
     return (
-      <div style={{ backgroundColor: "#fff", borderRadius: 12, padding: 48, textAlign: "center", border: "1px solid #E2E8F0" }}>
+      <div style={{ backgroundColor: "#fff", borderRadius: 10, padding: 48, textAlign: "center", border: "1px solid #E2E8F0" }}>
         <ShieldCheck size={36} color={SUBTLE} style={{ margin: "0 auto 12px" }} />
         <div style={{ fontWeight: 600, fontSize: 16, color: "#0F172A", marginBottom: 4 }}>
           No audit runs yet
@@ -391,7 +391,7 @@ function RunList({ runs, onOpen }: { runs: RunSummary[] | null; onOpen: (id: num
     );
   }
   return (
-    <div style={{ backgroundColor: "#fff", borderRadius: 12, border: "1px solid #E2E8F0", overflow: "hidden" }}>
+    <div style={{ backgroundColor: "#fff", borderRadius: 10, border: "1px solid #E2E8F0", overflow: "hidden" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
@@ -541,7 +541,7 @@ function CreateRunDialog({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        style={{ backgroundColor: "#fff", borderRadius: 12, padding: 24, width: 460, boxShadow: "0 12px 40px rgba(0,0,0,0.15)" }}
+        style={{ backgroundColor: "#fff", borderRadius: 10, padding: 24, width: 460, boxShadow: "0 12px 40px rgba(0,0,0,0.15)" }}
       >
         <h2 id="radv-dialog-title" style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>New RADV audit run</h2>
         <Field label="Name">
@@ -699,7 +699,7 @@ function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: num
 
       {activeTab === "records" && <div style={{ display: "grid", gridTemplateColumns: "300px 1fr 320px", gap: 12, alignItems: "stretch" }}>
         {/* Column 1 — record list */}
-        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "auto", maxHeight: 700 }}>
+        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, overflow: "auto", maxHeight: 700 }}>
           <div style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: SUBTLE, textTransform: "uppercase", borderBottom: "1px solid #F1F5F9" }}>
             Sampled records
           </div>
@@ -736,7 +736,7 @@ function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: num
         </div>
 
         {/* Column 2 — record detail + decision panel */}
-        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 16 }}>
+        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, padding: 16 }}>
           {!activeRecord ? (
             <div style={{ color: SUBTLE }}>Select a record to review.</div>
           ) : (
@@ -930,13 +930,13 @@ function ChartRequestsTab({ runId }: { runId: number }) {
       )}
 
       {requests.length === 0 ? (
-        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 40, textAlign: "center" }}>
+        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, padding: 40, textAlign: "center" }}>
           <ClipboardList size={32} color={SUBTLE} style={{ margin: "0 auto 10px" }} />
           <div style={{ fontWeight: 600, color: "#0F172A" }}>No chart requests yet</div>
           <div style={{ fontSize: 13, color: SUBTLE, marginTop: 4 }}>Create one to track chart pull requests for CMS RADV compliance.</div>
         </div>
       ) : (
-        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
@@ -1092,7 +1092,7 @@ function SimulatorPanel({
   }, [rate, run.summary.total_records, run.summary.undefensible, extrapolationEnforced]);
 
   return (
-    <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 16 }}>
+    <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <DollarSign size={18} color={PRIMARY} />

@@ -68,7 +68,7 @@ export function BonusMultiplierBanner({
         alignItems: "center",
         gap: 12,
         padding: "12px 18px",
-        borderRadius: 12,
+        borderRadius: 10,
         background: tint.bg,
         border: `1px solid ${tint.border}`,
         color: tint.text,

@@ -294,7 +294,7 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
       style={{
         background: T.white,
         border: `1px solid ${T.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
       }}
     >
@@ -567,7 +567,7 @@ function EmptyState({ message, days }: { message: string; days: number }) {
         padding: "32px 20px",
         textAlign: "center",
         background: T.slate50,
-        borderRadius: 12,
+        borderRadius: 10,
         border: `1px dashed ${T.slate200}`,
       }}
     >
@@ -618,7 +618,7 @@ function ErrorState({ message }: { message: string }) {
         padding: 20,
         background: T.amber50,
         border: `1px solid ${T.amber100}`,
-        borderRadius: 12,
+        borderRadius: 10,
         display: "flex",
         gap: 10,
         alignItems: "flex-start",

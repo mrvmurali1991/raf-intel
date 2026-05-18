@@ -263,7 +263,7 @@ export function OverviewTab({
       {/* Analysis Status Banner */}
       {isDemoOnly && (
         <div className="animate-slide-up stagger-1 bg-amber-50 border border-amber-200 dark:bg-amber-950 dark:border-amber-700" style={{
-          borderRadius: 12,
+          borderRadius: 10,
           padding: "16px 20px",
           display: "flex",
           alignItems: "center",
@@ -309,7 +309,7 @@ export function OverviewTab({
 
       {!isDemoOnly && (
         <div className="animate-slide-up stagger-1 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950 dark:border-emerald-700" style={{
-          borderRadius: 12,
+          borderRadius: 10,
           padding: "14px 20px",
           display: "flex",
           alignItems: "center",
@@ -330,7 +330,7 @@ export function OverviewTab({
       {aiAnalysis && aiAnalysis.totalDx > 0 && (
         <div className="animate-fade-in" style={{
           background: "linear-gradient(135deg, #EFF6FF, #F0FDF4)",
-          borderRadius: 12,
+          borderRadius: 10,
           border: `1px solid ${C.blue100}`,
           padding: "16px 20px",
           marginBottom: 16,
@@ -767,11 +767,16 @@ export function OverviewTab({
             >
             {!recaptureItems.length ? (
               <EmptyState
-                title="No recapture gaps"
-                description={
+                state={(profile?.data_completeness?.completeness_pct ?? 100) < 60 ? "no-data" : "complete"}
+                title={
                   (profile?.data_completeness?.completeness_pct ?? 100) < 60
-                    ? "Analyze encounters to identify potential gaps — data quality is low"
-                    : `All conditions appear to be documented for ${selectedYear}`
+                    ? "clinical notes missing — upload notes to find gaps"
+                    : `all conditions documented for ${selectedYear}`
+                }
+                cta={
+                  (profile?.data_completeness?.completeness_pct ?? 100) < 60
+                    ? { label: "Upload Notes", href: "#documents" }
+                    : undefined
                 }
               />
             ) : (

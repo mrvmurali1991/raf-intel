@@ -75,7 +75,7 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
             key={i}
             style={{
               height: 120,
-              borderRadius: 12,
+              borderRadius: 10,
               background: `linear-gradient(90deg, ${tokens.slate100} 0%, ${tokens.slate200} 50%, ${tokens.slate100} 100%)`,
               backgroundSize: "200% 100%",
               animation: "shimmer 1.5s infinite",

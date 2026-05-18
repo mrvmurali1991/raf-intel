@@ -466,7 +466,7 @@ function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
                 flex: "1 1 260px",
                 backgroundColor: c.bg,
                 border: `1px solid ${c.border}`,
-                borderRadius: 12,
+                borderRadius: 10,
                 padding: "14px 18px",
                 display: "flex",
                 alignItems: "center",
@@ -1040,7 +1040,7 @@ export default function SubmissionsPage() {
                 style={{
                   backgroundColor: T.white,
                   border: `1px solid ${T.slate200}`,
-                  borderRadius: 12,
+                  borderRadius: 10,
                   padding: "20px 20px",
                   display: "flex",
                   flexDirection: "column",

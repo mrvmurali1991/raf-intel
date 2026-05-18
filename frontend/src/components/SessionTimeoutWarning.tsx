@@ -257,7 +257,7 @@ export function SessionTimeoutWarning() {
           maxWidth: 420,
           backgroundColor: BG_MODAL,
           border: `1px solid ${BORDER}`,
-          borderRadius: 16,
+          borderRadius: 14,
           overflow: "hidden",
           boxShadow: "0 30px 70px rgba(0,0,0,0.6)",
           outline: "none",

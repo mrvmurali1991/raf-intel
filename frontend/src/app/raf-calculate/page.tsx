@@ -549,12 +549,12 @@ const page: Record<string, React.CSSProperties> = {
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
     background: `linear-gradient(135deg, ${tokens.slate900}, ${tokens.primaryDark})`,
-    borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: tokens.white,
+    borderRadius: 14, padding: "24px 28px", marginBottom: 24, color: tokens.white,
     flexWrap: "wrap", gap: 16,
   },
   headerLeft: { display: "flex", alignItems: "center", gap: 14 },
   headerIcon: {
-    width: 48, height: 48, borderRadius: 12,
+    width: 48, height: 48, borderRadius: 10,
     background: "rgba(255,255,255,0.15)",
     display: "flex", alignItems: "center", justifyContent: "center",
     flexShrink: 0,
@@ -578,7 +578,7 @@ const page: Record<string, React.CSSProperties> = {
 
   card: {
     background: tokens.white, border: `1px solid ${tokens.slate200}`,
-    borderRadius: 12, padding: "16px 18px",
+    borderRadius: 10, padding: "16px 18px",
   },
   cardTitle: {
     display: "flex", alignItems: "center", gap: 6,
@@ -603,10 +603,10 @@ const page: Record<string, React.CSSProperties> = {
   emptyState: {
     padding: "48px 32px", textAlign: "center",
     background: tokens.white, border: `1.5px dashed ${tokens.slate200}`,
-    borderRadius: 16,
+    borderRadius: 14,
   },
   emptyIcon: {
-    width: 72, height: 72, borderRadius: 18,
+    width: 72, height: 72, borderRadius: 14,
     background: tokens.slate100,
     display: "flex", alignItems: "center", justifyContent: "center",
     margin: "0 auto 16px",
@@ -619,7 +619,7 @@ const page: Record<string, React.CSSProperties> = {
   loadingState: {
     padding: "60px 32px", textAlign: "center",
     background: tokens.white, border: `1.5px solid ${tokens.slate200}`,
-    borderRadius: 16,
+    borderRadius: 14,
   },
   loadingSpinner: {
     width: 40, height: 40,

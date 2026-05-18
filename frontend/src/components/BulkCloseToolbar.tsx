@@ -164,7 +164,7 @@ export default function BulkCloseToolbar({ selectedIds, onCleared, onClosed }: P
                     type="button"
                     onClick={() => setMeat(k)}
                     style={{
-                      padding: "5px 14px", borderRadius: 16,
+                      padding: "5px 14px", borderRadius: 14,
                       border: meat === k ? "2px solid #2563EB" : "1px solid #E2E8F0",
                       background: meat === k ? "#EFF6FF" : "#fff",
                       color: "#0F172A", fontSize: 12, fontWeight: 600,

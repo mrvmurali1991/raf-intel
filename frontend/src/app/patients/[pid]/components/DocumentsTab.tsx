@@ -209,7 +209,7 @@ export function DocumentsTab({
           onClick={() => fileInputRef.current?.click()}
           style={{
             border: `2px dashed ${dragOver ? C.blue600 : C.slate300}`,
-            borderRadius: 12, padding: selectedFile ? "16px 24px" : "40px 24px",
+            borderRadius: 10, padding: selectedFile ? "16px 24px" : "40px 24px",
             textAlign: "center", cursor: "pointer",
             background: dragOver ? C.blue50 : C.slate100,
             transition: "all 0.2s ease", marginBottom: 16,
@@ -251,7 +251,7 @@ export function DocumentsTab({
               <button
                 key={rt} onClick={() => setReportType(rt)} className="btn-press"
                 style={{
-                  padding: "6px 14px", borderRadius: 20,
+                  padding: "6px 14px", borderRadius: 14,
                   border: `1.5px solid ${reportType === rt ? C.blue600 : C.slate300}`,
                   background: reportType === rt ? C.blue50 : C.white,
                   color: reportType === rt ? C.blue600 : C.slate600,

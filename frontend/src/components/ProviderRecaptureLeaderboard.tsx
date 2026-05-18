@@ -137,7 +137,7 @@ export default function ProviderRecaptureLeaderboard({
       <div
         style={{
           padding: 24,
-          borderRadius: 12,
+          borderRadius: 10,
           background: colors.white,
           border: `1px solid ${colors.slate200}`,
         }}
@@ -188,7 +188,7 @@ export default function ProviderRecaptureLeaderboard({
       data-testid="provider-recapture-leaderboard"
       style={{
         padding: 24,
-        borderRadius: 12,
+        borderRadius: 10,
         background: colors.white,
         border: `1px solid ${colors.slate200}`,
         boxShadow: "0 1px 3px rgba(15,23,42,0.04)",

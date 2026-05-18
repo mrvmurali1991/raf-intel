@@ -207,7 +207,7 @@ export default function DocumentExtractViewer({
       <div
         style={{
           background: C.panel,
-          borderRadius: 12,
+          borderRadius: 10,
           border: `1px solid ${C.border}`,
           display: "flex",
           flexDirection: "column",
@@ -361,7 +361,7 @@ export default function DocumentExtractViewer({
       <aside
         style={{
           background: C.panel,
-          borderRadius: 12,
+          borderRadius: 10,
           border: `1px solid ${C.border}`,
           display: "flex",
           flexDirection: "column",

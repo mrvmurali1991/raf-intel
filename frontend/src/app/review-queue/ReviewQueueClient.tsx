@@ -350,7 +350,7 @@ export default function ReviewQueueClient() {
         <div role="alert" style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 12, background: C.highSoft,
-          border: `1px solid ${tokens.dangerBorder}`, borderRadius: 12, padding: "12px 16px",
+          border: `1px solid ${tokens.dangerBorder}`, borderRadius: 10, padding: "12px 16px",
           marginBottom: 16, fontSize: 13, color: C.high, fontWeight: 600,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

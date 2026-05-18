@@ -202,7 +202,7 @@ export default function PopulationHeatmapPage() {
             color: tokens.danger,
             background: tokens.riskHighSoft,
             border: `1px solid ${tokens.riskHigh}33`,
-            borderRadius: 12,
+            borderRadius: 10,
           }}
         >
           <AlertTriangle size={28} style={{ marginBottom: 10 }} />

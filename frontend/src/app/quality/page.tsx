@@ -477,7 +477,7 @@ export default function QualityPage() {
             border: "1px solid rgba(255,255,255,0.06)",
             marginBottom: 28,
             flexWrap: "wrap",
-            borderRadius: 16,
+            borderRadius: 14,
           }}
         >
           <StarsGauge rating={currentStars} />

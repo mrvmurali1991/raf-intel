@@ -233,7 +233,7 @@ export function AuditReadinessCard() {
 
   if (isLoading) {
     return (
-      <div className="premium-card shimmer" style={{ height: 220, borderRadius: 12 }} />
+      <div className="premium-card shimmer" style={{ height: 220, borderRadius: 10 }} />
     );
   }
 
@@ -243,7 +243,7 @@ export function AuditReadinessCard() {
         className="premium-card"
         style={{
           padding: 20,
-          borderRadius: 12,
+          borderRadius: 10,
           background: tokens.dangerSoft,
           border: `1px solid ${tokens.dangerBorder}`,
           color: tokens.danger,
@@ -266,7 +266,7 @@ export function AuditReadinessCard() {
       data-testid="arc-card"
       style={{
         padding: isMobile ? 16 : 24,
-        borderRadius: 12,
+        borderRadius: 10,
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "260px 1fr",
         gap: isMobile ? 16 : 24,

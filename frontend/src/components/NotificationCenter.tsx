@@ -491,7 +491,7 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
           <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }} role="list" aria-live="polite" aria-label="Notification list">
             {notifications.length === 0 ? (
               <div role="listitem" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", gap: 10 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Bell size={20} style={{ color: "#cbd5e1" }} aria-hidden />
                 </div>
                 <div style={{ textAlign: "center" }}>
