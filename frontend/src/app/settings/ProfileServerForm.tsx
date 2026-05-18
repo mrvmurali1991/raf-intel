@@ -43,12 +43,6 @@ export function ProfileServerForm({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">
-        <span className="inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/20 px-2 py-0.5">
-          Server Action (RSC)
-        </span>
-      </div>
-
       <form action={formAction} className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -144,7 +138,7 @@ export function ProfileServerForm({
                 Saving...
               </>
             ) : (
-              "Save Profile (Server Action)"
+              "Save Profile"
             )}
           </Button>
         </div>

@@ -171,43 +171,7 @@ function SectionHeader({
 // ---------------------------------------------------------------------------
 
 function ProfileTab() {
-  const { user, updateProfile } = useAuth();
-  const [firstName, setFirstName] = useState(user?.first_name ?? "");
-  const [lastName, setLastName] = useState(user?.last_name ?? "");
-  const [title, setTitle] = useState(user?.title ?? "");
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url ?? "");
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-
-  const isDirty =
-    firstName !== (user?.first_name ?? "") ||
-    lastName !== (user?.last_name ?? "") ||
-    title !== (user?.title ?? "") ||
-    avatarUrl !== (user?.avatar_url ?? "");
-
-  useEffect(() => {
-    if (!isDirty) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFeedback(null);
-    setSaving(true);
-    try {
-      await updateProfile({ first_name: firstName, last_name: lastName, title, avatar_url: avatarUrl });
-      setFeedback({ type: "success", message: "Profile updated successfully." });
-    } catch (err: any) {
-      setFeedback({
-        type: "error",
-        message: err?.response?.data?.detail ?? err?.message ?? "Failed to update profile.",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const { user } = useAuth();
 
   return (
     <div className="space-y-6">
@@ -219,72 +183,6 @@ function ProfileTab() {
         defaultTitle={user?.title ?? ""}
         defaultAvatarUrl={user?.avatar_url ?? ""}
       />
-
-      <div className="pt-4 border-t border-border/40">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-          Legacy path (axios fallback)
-        </p>
-        <form onSubmit={handleSave} className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="First name" htmlFor="profile-first-name">
-              <Input
-                id="profile-first-name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="First name"
-                className={inputClasses}
-                required
-              />
-            </FormField>
-            <FormField label="Last name" htmlFor="profile-last-name">
-              <Input
-                id="profile-last-name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Last name"
-                className={inputClasses}
-                required
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Email address" htmlFor="profile-email" hint="Email cannot be changed here. Contact your administrator.">
-            <Input
-              id="profile-email"
-              value={user?.email ?? ""}
-              disabled
-              className="h-10 rounded-xl opacity-50 cursor-not-allowed bg-muted/40"
-            />
-          </FormField>
-
-          <FormField label="Title / Credentials" htmlFor="profile-title">
-            <Input
-              id="profile-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. MD, RN, CPC"
-              className={inputClasses}
-            />
-          </FormField>
-
-          <FormField label="Avatar URL" htmlFor="profile-avatar-url">
-            <Input
-              id="profile-avatar-url"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://..."
-              type="url"
-              className={inputClasses}
-            />
-          </FormField>
-
-          {feedback && <Feedback type={feedback.type} message={feedback.message} />}
-
-          <Button type="submit" disabled={saving} className={primaryBtnClasses}>
-            {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Profile"}
-          </Button>
-        </form>
-      </div>
     </div>
   );
 }
