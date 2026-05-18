@@ -798,6 +798,222 @@ function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: num
   );
 }
 
+// ---------------------------------------------------------------------------
+// Chart Requests Tab
+// ---------------------------------------------------------------------------
+
+const CHART_STATUS_META: Record<ChartStatus, { label: string; bg: string; color: string }> = {
+  requested: { label: "Requested", bg: "#E0F2FE", color: "#0369A1" },
+  received:  { label: "Received",  bg: "#FEF3C7", color: "#92400E" },
+  coded:     { label: "Coded",     bg: "#DCFCE7", color: "#166534" },
+  disputed:  { label: "Disputed",  bg: "#FEE2E2", color: "#991B1B" },
+  cleared:   { label: "Cleared",   bg: "#F1F5F9", color: "#475569" },
+};
+
+function ChartRequestsTab({ runId }: { runId: number }) {
+  const [requests, setRequests] = useState<ChartRequest[]>([]);
+  const [summary, setSummary] = useState<ChartRequestsSummary>({ total: 0, open: 0, overdue: 0 });
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newPatientId, setNewPatientId] = useState("");
+  const [newDueDate, setNewDueDate] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [patching, setPatching] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<{ chart_requests: ChartRequest[]; summary: ChartRequestsSummary }>(
+        `/api/radv/${runId}/chart-requests`
+      );
+      setRequests(res.data.chart_requests || []);
+      setSummary(res.data.summary);
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Load failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [runId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function createRequest() {
+    if (!newPatientId) return;
+    setCreating(true);
+    try {
+      await api.post(`/api/radv/${runId}/chart-requests`, {
+        patient_id: Number(newPatientId),
+        due_date: newDueDate || null,
+        notes: newNotes || null,
+      });
+      setShowCreate(false);
+      setNewPatientId(""); setNewDueDate(""); setNewNotes("");
+      void load();
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Create failed");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function patch(reqId: number, newStatus: ChartStatus, receivedAt?: string) {
+    setPatching(reqId);
+    try {
+      await api.patch(`/api/radv/${runId}/chart-requests/${reqId}`, {
+        status: newStatus,
+        received_at: receivedAt || undefined,
+      });
+      void load();
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Update failed");
+    } finally {
+      setPatching(null);
+    }
+  }
+
+  if (loading) return <div style={{ color: SUBTLE, padding: 24 }}>Loading chart requests…</div>;
+
+  return (
+    <div>
+      {err && <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 6, backgroundColor: "#FEE2E2", color: DANGER, fontSize: 12 }}>{err}</div>}
+
+      {/* Summary bar */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
+        <div style={{ padding: "8px 16px", borderRadius: 8, backgroundColor: "#F1F5F9", fontSize: 13 }}>
+          <strong>{summary.total}</strong> <span style={{ color: SUBTLE }}>total</span>
+        </div>
+        <div style={{ padding: "8px 16px", borderRadius: 8, backgroundColor: "#E0F2FE", fontSize: 13 }}>
+          <strong style={{ color: "#0369A1" }}>{summary.open}</strong> <span style={{ color: SUBTLE }}>open</span>
+        </div>
+        {summary.overdue > 0 && (
+          <div style={{ padding: "8px 16px", borderRadius: 8, backgroundColor: "#FEE2E2", fontSize: 13 }}>
+            <Clock size={12} style={{ verticalAlign: "middle", marginRight: 4 }} />
+            <strong style={{ color: DANGER }}>{summary.overdue}</strong> <span style={{ color: SUBTLE }}>overdue</span>
+          </div>
+        )}
+        <button onClick={() => setShowCreate(!showCreate)}
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 6, border: "none", backgroundColor: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+          <Plus size={13} /> Request chart
+        </button>
+      </div>
+
+      {showCreate && (
+        <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <label style={{ flex: "1 1 120px" }}>
+              <div style={{ fontSize: 11, color: SUBTLE, fontWeight: 600, marginBottom: 4 }}>Patient ID *</div>
+              <input value={newPatientId} onChange={(e) => setNewPatientId(e.target.value)} type="number"
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 13 }} />
+            </label>
+            <label style={{ flex: "1 1 150px" }}>
+              <div style={{ fontSize: 11, color: SUBTLE, fontWeight: 600, marginBottom: 4 }}>Due date</div>
+              <input value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} type="date"
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 13 }} />
+            </label>
+            <label style={{ flex: "2 1 220px" }}>
+              <div style={{ fontSize: 11, color: SUBTLE, fontWeight: 600, marginBottom: 4 }}>Notes</div>
+              <input value={newNotes} onChange={(e) => setNewNotes(e.target.value)}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 13 }} />
+            </label>
+            <button onClick={createRequest} disabled={creating || !newPatientId}
+              style={{ padding: "8px 16px", borderRadius: 6, border: "none", backgroundColor: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              {creating ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => setShowCreate(false)}
+              style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #E2E8F0", backgroundColor: "#fff", cursor: "pointer", fontSize: 13 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {requests.length === 0 ? (
+        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 40, textAlign: "center" }}>
+          <ClipboardList size={32} color={SUBTLE} style={{ margin: "0 auto 10px" }} />
+          <div style={{ fontWeight: 600, color: "#0F172A" }}>No chart requests yet</div>
+          <div style={{ fontSize: 13, color: SUBTLE, marginTop: 4 }}>Create one to track chart pull requests for CMS RADV compliance.</div>
+        </div>
+      ) : (
+        <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                {["Patient", "Requested", "Due Date", "Days Outstanding", "Status", "Actions"].map((h) => (
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: SUBTLE, fontWeight: 600, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((r) => {
+                const meta = CHART_STATUS_META[r.status];
+                const isOverdue = (r.status === "requested" || r.status === "received")
+                  && !!r.due_date && new Date(r.due_date) < new Date();
+                const busy = patching === r.id;
+                return (
+                  <tr key={r.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                    <td style={{ padding: "10px 14px", color: "#0F172A", fontWeight: 600 }}>#{r.patient_id}</td>
+                    <td style={{ padding: "10px 14px", color: SUBTLE, fontSize: 12 }}>
+                      {new Date(r.requested_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: isOverdue ? DANGER : SUBTLE, fontWeight: isOverdue ? 600 : 400 }}>
+                      {r.due_date ? new Date(r.due_date).toLocaleDateString() : "—"}
+                      {isOverdue && <AlertTriangle size={11} style={{ verticalAlign: "middle", marginLeft: 4 }} />}
+                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600,
+                      color: r.days_outstanding > 14 && (r.status === "requested" || r.status === "received") ? DANGER : SUBTLE }}>
+                      {r.days_outstanding}d
+                    </td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, backgroundColor: meta.bg, color: meta.color, fontSize: 11, fontWeight: 600 }}>
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {r.status === "requested" && (
+                          <button onClick={() => patch(r.id, "received", new Date().toISOString())} disabled={busy}
+                            aria-label="Mark received"
+                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${SUCCESS}`, color: SUCCESS, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                            <CheckCircle2 size={11} /> Received
+                          </button>
+                        )}
+                        {r.status === "received" && (
+                          <button onClick={() => patch(r.id, "coded")} disabled={busy}
+                            aria-label="Mark coded"
+                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${PRIMARY}`, color: PRIMARY, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                            <CheckCheck size={11} /> Coded
+                          </button>
+                        )}
+                        {(r.status === "requested" || r.status === "received" || r.status === "coded") && (
+                          <button onClick={() => patch(r.id, "disputed")} disabled={busy}
+                            aria-label="Dispute chart request"
+                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${DANGER}`, color: DANGER, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                            <XCircle size={11} /> Dispute
+                          </button>
+                        )}
+                        {r.status === "disputed" && (
+                          <button onClick={() => patch(r.id, "cleared")} disabled={busy}
+                            aria-label="Clear dispute"
+                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${WARN}`, color: WARN, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                            Clear
+                          </button>
+                        )}
+                        {busy && <Loader2 size={13} color={SUBTLE} />}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DecisionButton({
   current, value, onClick, busy,
 }: { current: Decision; value: Decision; onClick: () => void; busy: boolean }) {
