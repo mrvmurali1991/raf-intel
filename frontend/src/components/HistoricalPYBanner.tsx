@@ -16,6 +16,7 @@
 
 import { Lock } from "lucide-react";
 import { usePaymentYear } from "@/contexts/payment-year-context";
+import { tokens } from "@/styles/tokens";
 
 interface Props {
   /** Override the year to check.  Defaults to the context value. */
@@ -43,14 +44,14 @@ export function HistoricalPYBanner({ paymentYear: pyProp, marginBottom = 24 }: P
         padding: "12px 18px",
         marginBottom,
         borderRadius: 10,
-        background: "#FFFBEB",
-        border: "1px solid #F59E0B",
-        color: "#92400E",
+        background: tokens.warningSoft,
+        border: `1px solid ${tokens.warningBorder}`,
+        color: tokens.warningText,
         fontSize: 14,
         fontWeight: 600,
       }}
     >
-      <Lock size={16} style={{ flexShrink: 0, color: "#D97706" }} aria-hidden="true" />
+      <Lock size={16} style={{ flexShrink: 0, color: tokens.amber600 }} aria-hidden="true" />
       Historical view — PY{year}. Data is read-only.
     </div>
   );

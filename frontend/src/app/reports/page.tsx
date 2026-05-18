@@ -2,7 +2,7 @@
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
+import { usePaymentYear, useIsHistoricalPY, PAYMENT_YEARS } from "@/contexts/payment-year-context";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -311,13 +311,12 @@ export default function ReportsPage() {
   const router = useRouter();
   const [year, setYear] = useState(new Date().getFullYear());
   const { paymentYear, setPaymentYear } = usePaymentYear();
+  const isHistoricalPY = useIsHistoricalPY();
   const [activeTab, setActiveTab] = useState<TabKey>("Revenue");
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const { from, to } = presetToDates("30d");
     return { preset: "30d", from, to };
   });
-
-  const isHistoricalPY = paymentYear !== CURRENT_PAYMENT_YEAR;
 
   // ── Data Queries ──────────────────────────────────────────────────────────
   const revenue = useQuery({ queryKey: ["revenue", year, paymentYear], queryFn: () => getRevenueOpportunity(year, paymentYear), staleTime: 60_000, retry: 1, gcTime: 0 });

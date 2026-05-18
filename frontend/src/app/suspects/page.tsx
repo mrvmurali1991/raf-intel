@@ -675,11 +675,16 @@ export default function SuspectsPage() {
         ctaHref="/attestations"
       />
       <style>{`
-        @keyframes pulseSk { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-        @keyframes rowEnter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes pulseSk { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+          @keyframes rowEnter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        }
         .suspect-row {
           animation: rowEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
           transition: background-color 0.15s ease;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .suspect-row { animation: none; }
         }
         .suspect-row:hover { background-color: ${C.bgBand} !important; }
         .suspect-row:focus-visible {
@@ -2284,9 +2289,11 @@ function SuspectDrawer({
       }}
     >
       <style>{`
-        @keyframes drawerFadeIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes drawerFadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
         }
       `}</style>
 

@@ -42,6 +42,7 @@ import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { MetricCard } from "@/components/ui/metric-card";
 import { fmtCurrencyFull, fmtCurrencyCompact } from "@/lib/format";
 import { tokens } from "@/styles/tokens";
+import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 // ── Dynamic import: defer Pre-Visit Summary modal (~35 kB) ──
 // Modal only opens on user click — zero cost on initial page paint.
 const PreVisitSummaryModal = dynamic(
@@ -122,7 +123,7 @@ type DaysSinceFilter = "all" | "30" | "90" | "180" | "365";
 type PriorityFilter = "all" | "High" | "Medium" | "Low";
 
 const PAGE_SIZE = 20;
-const REVENUE_PER_RAF_POINT = 12000;
+const REVENUE_PER_RAF_POINT = MA_PAYMENT_PER_RAF;
 const AVG_SUSPECT_HCC_COEFFICIENT = 0.35;
 const AWV_REVENUE_INITIAL = 250;
 const AWV_REVENUE_SUBSEQUENT = 175;
@@ -277,7 +278,7 @@ export default function ProspectivePage() {
   // ── Data Fetching ──────────────────────────────────────────────────────────
 
   const { data: patientsData, isLoading: loadingPatients, isError: patientsError, refetch: refetchPatients } = useQuery({
-    queryKey: ["prospective-patients"],
+    queryKey: ["prospective-patients", paymentYear],
     queryFn: () => searchPatients({ limit: 500, offset: 0 }),
     staleTime: 5 * 60 * 1000,
   });
@@ -289,7 +290,7 @@ export default function ProspectivePage() {
   });
 
   const { data: suspectsData } = useQuery({
-    queryKey: ["suspects-open"],
+    queryKey: ["suspects-open", paymentYear],
     queryFn: () => getSuspects("open", 1000),
     staleTime: 5 * 60 * 1000,
   });
