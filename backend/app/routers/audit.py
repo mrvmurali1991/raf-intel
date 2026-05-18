@@ -346,6 +346,125 @@ def download_package_by_id(
 
 
 # ---------------------------------------------------------------------------
+# Chain integrity endpoints
+# ---------------------------------------------------------------------------
+
+
+class ChainStatusResponse(BaseModel):
+    total_entries: int
+    last_hash: str | None
+    file_exists: bool
+
+
+class VerifyChainResponse(BaseModel):
+    ok: bool
+    total_entries: int
+    integrity_pct: float
+    first_break_line: int | None
+    errors: list[str]
+
+
+@router.get("/chain/status", summary="Return chain entry count and last hash", response_model=ChainStatusResponse)
+def chain_status(
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("audit", "read")),
+) -> ChainStatusResponse:
+    """Return total entries and last SHA-256 hash in the immutable audit chain."""
+    from app.services.immutable_audit import _AUDIT_FILE  # noqa: PLC0415
+
+    if not _AUDIT_FILE.exists():
+        return ChainStatusResponse(total_entries=0, last_hash=None, file_exists=False)
+
+    total = 0
+    last_hash: str | None = None
+    try:
+        with open(_AUDIT_FILE, encoding="utf-8") as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                total += 1
+                try:
+                    entry = json.loads(raw)
+                    last_hash = entry.get("current_hash")
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.warning("chain_status read error: %s", exc)
+
+    return ChainStatusResponse(total_entries=total, last_hash=last_hash, file_exists=True)
+
+
+@router.get("/verify", summary="Verify audit chain integrity", response_model=VerifyChainResponse)
+def verify_chain(
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("audit", "read")),
+) -> VerifyChainResponse:
+    """Walk the full hash chain, recompute every SHA-256, return pass/fail + integrity %."""
+    from app.services.immutable_audit import _AUDIT_FILE, _GENESIS_HASH, _compute_hash  # noqa: PLC0415
+
+    if not _AUDIT_FILE.exists():
+        return VerifyChainResponse(ok=True, total_entries=0, integrity_pct=100.0,
+                                   first_break_line=None, errors=[])
+
+    errors: list[str] = []
+    first_break: int | None = None
+    expected_prev = _GENESIS_HASH
+    total = 0
+    bad = 0
+
+    try:
+        with open(_AUDIT_FILE, encoding="utf-8") as f:
+            for line_num, raw in enumerate(f, 1):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                total += 1
+                try:
+                    entry = json.loads(raw)
+                except json.JSONDecodeError as exc:
+                    errors.append(f"Line {line_num}: invalid JSON — {exc}")
+                    bad += 1
+                    if first_break is None:
+                        first_break = line_num
+                    continue
+
+                if entry.get("previous_hash") != expected_prev:
+                    msg = (f"Line {line_num}: chain break — expected prev "
+                           f"{expected_prev[:16]}… got {str(entry.get('previous_hash',''))[:16]}…")
+                    errors.append(msg)
+                    bad += 1
+                    if first_break is None:
+                        first_break = line_num
+
+                stored = entry.pop("current_hash", None)
+                recomputed = _compute_hash(entry)
+                entry["current_hash"] = stored
+
+                if stored != recomputed:
+                    errors.append(f"Line {line_num}: hash mismatch — stored {str(stored)[:16]}… "
+                                  f"vs computed {recomputed[:16]}…")
+                    bad += 1
+                    if first_break is None:
+                        first_break = line_num
+
+                expected_prev = stored or recomputed
+
+    except Exception as exc:
+        logger.error("verify_chain error: %s", exc)
+        raise HTTPException(status_code=500, detail="Chain verification failed") from exc
+
+    integrity_pct = round(((total - bad) / total * 100) if total > 0 else 100.0, 2)
+    return VerifyChainResponse(
+        ok=len(errors) == 0,
+        total_entries=total,
+        integrity_pct=integrity_pct,
+        first_break_line=first_break,
+        errors=errors[:20],  # cap at 20 to avoid huge payloads
+    )
+
+
+# ---------------------------------------------------------------------------
 # PDF builder
 # ---------------------------------------------------------------------------
 

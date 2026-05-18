@@ -778,6 +778,30 @@ export async function getDashboardTrends(): Promise<DashboardTrends> {
 }
 
 // ---------------------------------------------------------------------------
+// KPI Trends  —  GET /api/v1/dashboard/kpi-trends
+// ---------------------------------------------------------------------------
+
+export interface KpiTrends {
+  weeks: number;
+  open_gaps: number[];
+  suspects: number[];
+  panel_patients: number[];
+  avg_raf: number[];
+  deltas: {
+    open_gaps?: number | null;
+    suspects?: number | null;
+    panel_patients?: number | null;
+    avg_raf?: number | null;
+  };
+  error?: boolean;
+}
+
+export async function getKpiTrends(weeks = 12): Promise<KpiTrends> {
+  const { data } = await api.get("/api/v1/dashboard/kpi-trends", { params: { weeks } });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Patient APIs
 // ---------------------------------------------------------------------------
 
@@ -2105,6 +2129,34 @@ export async function getAuditPackages(
   const { data } = await api.get("/api/audit/packages", {
     params: pid ? { pid } : undefined,
   });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Audit chain integrity
+// ---------------------------------------------------------------------------
+
+export interface AuditChainStatus {
+  total_entries: number;
+  last_hash: string | null;
+  file_exists: boolean;
+}
+
+export interface AuditChainVerifyResult {
+  ok: boolean;
+  total_entries: number;
+  integrity_pct: number;
+  first_break_line: number | null;
+  errors: string[];
+}
+
+export async function getAuditChainStatus(): Promise<AuditChainStatus> {
+  const { data } = await api.get("/api/audit/chain/status");
+  return data;
+}
+
+export async function verifyAuditChain(): Promise<AuditChainVerifyResult> {
+  const { data } = await api.get("/api/audit/verify");
   return data;
 }
 
@@ -4522,5 +4574,50 @@ export async function getPatientHedisGaps(
     `/api/hedis/patient/${pid}/gaps`,
     { params: year ? { year } : undefined },
   );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Quarterly RAF Capture Goals
+// ---------------------------------------------------------------------------
+
+export type GoalMetric = "raf_capture_count" | "revenue" | "gaps_closed";
+
+export interface RafGoal {
+  id: number;
+  tenant_id: string;
+  period: string;
+  metric: GoalMetric;
+  target_value: number;
+  actual_value: number;
+  percent_complete: number;
+  days_remaining: number;
+  owner_user_id: number | null;
+  created_at: string;
+  quarter_end?: string;
+  on_track?: boolean;
+}
+
+export interface GoalCreatePayload {
+  period: string;
+  metric: GoalMetric;
+  target_value: number;
+  owner_user_id?: number | null;
+}
+
+export async function listGoals(period?: string): Promise<RafGoal[]> {
+  const { data } = await api.get<RafGoal[]>("/api/v1/goals", {
+    params: period ? { period } : undefined,
+  });
+  return data;
+}
+
+export async function createGoal(payload: GoalCreatePayload): Promise<RafGoal> {
+  const { data } = await api.post<RafGoal>("/api/v1/goals", payload);
+  return data;
+}
+
+export async function getGoalProgress(id: number): Promise<RafGoal> {
+  const { data } = await api.get<RafGoal>(`/api/v1/goals/${id}/progress`);
   return data;
 }

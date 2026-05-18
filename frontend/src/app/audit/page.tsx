@@ -3,11 +3,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getPatients, getAuditPackages, generateAudit, getAuditDownloadUrl } from "@/lib/api";
+import { getPatients, getAuditPackages, generateAudit, getAuditDownloadUrl, getAuditChainStatus, verifyAuditChain } from "@/lib/api";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { useToast } from "@/components/Toast";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
-import { Shield, FileDown, Loader2, CheckCircle2, Search, X, ChevronDown, Package } from "lucide-react";
+import { Shield, FileDown, Loader2, CheckCircle2, Search, X, ChevronDown, Package, Hash, RefreshCw, AlertTriangle, Download } from "lucide-react";
 
 const RadvScenariosCard = dynamic(() => import("./AuditRadvScenariosCard"), {
   ssr: false,
@@ -243,6 +243,274 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 }
 
 /* ------------------------------------------------------------------ */
+/*  Hash Tooltip                                                      */
+/* ------------------------------------------------------------------ */
+
+function HashTooltip({ currentHash, previousHash }: { currentHash?: string; previousHash?: string }) {
+  const [visible, setVisible] = useState(false);
+
+  if (!currentHash && !previousHash) return null;
+
+  return (
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      <button
+        type="button"
+        aria-label="Show SHA-256 hashes"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        style={{
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          padding: "2px 4px",
+          borderRadius: 4,
+          display: "inline-flex",
+          alignItems: "center",
+          color: "#94A3B8",
+        }}
+      >
+        <Hash size={13} />
+      </button>
+
+      {visible && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute",
+            left: "calc(100% + 8px)",
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 100,
+            backgroundColor: "#1E293B",
+            color: "#F1F5F9",
+            borderRadius: 8,
+            padding: "10px 12px",
+            width: 340,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+            fontSize: 11,
+            fontFamily: "monospace",
+            lineHeight: 1.6,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ marginBottom: 6, fontFamily: "sans-serif", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Cryptographic Hash Chain
+          </div>
+          {currentHash && (
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: "#64748B" }}>SHA-256 (this): </span>
+              <span style={{ color: "#7DD3FC", wordBreak: "break-all" }}>{currentHash}</span>
+            </div>
+          )}
+          {previousHash && (
+            <div>
+              <span style={{ color: "#64748B" }}>SHA-256 (prev): </span>
+              <span style={{ color: "#A78BFA", wordBreak: "break-all" }}>{previousHash}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Audit Chain Integrity Card                                        */
+/* ------------------------------------------------------------------ */
+
+function AuditChainIntegrityCard() {
+  const [verifyResult, setVerifyResult] = useState<{
+    ok: boolean; total_entries: number; integrity_pct: number;
+    first_break_line: number | null; errors: string[];
+  } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+
+  const { data: chainStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ["audit-chain-status"],
+    queryFn: getAuditChainStatus,
+    staleTime: 30_000,
+  });
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    try {
+      const result = await verifyAuditChain();
+      setVerifyResult(result);
+    } catch (e) {
+      setVerifyResult({ ok: false, total_entries: 0, integrity_pct: 0, first_break_line: null, errors: ["Verification request failed"] });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      // Build CSV from chain status data — lightweight client-side export
+      const rows = [["entry_count", "last_hash", "exported_at"]];
+      rows.push([
+        String(chainStatus?.total_entries ?? 0),
+        chainStatus?.last_hash ?? "",
+        new Date().toISOString(),
+      ]);
+      const csv = rows.map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-chain-custody-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently fail — no toast dependency needed here
+    }
+  };
+
+  const verified = verifyResult?.ok;
+  const pct = verifyResult?.integrity_pct ?? null;
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        border: "2px solid #2563EB",
+        overflow: "hidden",
+        marginBottom: 24,
+        boxShadow: "0 0 0 4px rgba(37,99,235,0.07)",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: "16px 24px",
+          background: "linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 100%)",
+          borderBottom: "1px solid #DBEAFE",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            width: 36, height: 36, borderRadius: 10,
+            backgroundColor: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <Shield size={18} color="#fff" />
+        </div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#1E3A8A" }}>
+            Audit Chain Integrity
+          </h2>
+          <p style={{ margin: 0, fontSize: 12, color: "#3B82F6", marginTop: 1 }}>
+            SHA-256 hash-chained tamper-evident log — HIPAA §164.312(b)
+          </p>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "7px 14px", borderRadius: 7,
+              border: "1px solid #BFDBFE", backgroundColor: "#EFF6FF",
+              color: "#1D4ED8", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}
+            aria-label="Export chain of custody report"
+          >
+            <Download size={14} /> Export Chain of Custody
+          </button>
+          <button
+            type="button"
+            onClick={handleVerify}
+            disabled={verifying}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "7px 14px", borderRadius: 7,
+              border: "none", backgroundColor: verifying ? "#E2E8F0" : "#2563EB",
+              color: verifying ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600,
+              cursor: verifying ? "not-allowed" : "pointer",
+            }}
+            aria-label="Verify chain integrity"
+          >
+            {verifying ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
+            {verifying ? "Verifying..." : "Verify Chain Integrity"}
+          </button>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ padding: "16px 24px", display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+            Total Entries
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", fontFamily: "monospace" }}>
+            {statusLoading ? "—" : (chainStatus?.total_entries ?? 0).toLocaleString()}
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+            Last Entry Hash
+          </div>
+          <div
+            style={{
+              fontFamily: "monospace", fontSize: 12, color: "#1D4ED8",
+              backgroundColor: "#EFF6FF", padding: "6px 10px", borderRadius: 6,
+              border: "1px solid #BFDBFE", wordBreak: "break-all",
+              maxWidth: 480,
+            }}
+          >
+            {statusLoading ? "loading..." : (chainStatus?.last_hash ?? "No entries yet")}
+          </div>
+        </div>
+
+        {/* Verify result badge */}
+        {verifyResult && (
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 16px", borderRadius: 8,
+              backgroundColor: verified ? "#F0FDF4" : "#FEF2F2",
+              border: `1px solid ${verified ? "#BBF7D0" : "#FECACA"}`,
+            }}
+          >
+            {verified
+              ? <CheckCircle2 size={18} color="#16A34A" />
+              : <AlertTriangle size={18} color="#DC2626" />}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: verified ? "#166534" : "#991B1B" }}>
+                {verified ? "Chain Intact" : "Integrity Breach"}
+              </div>
+              <div style={{ fontSize: 12, color: verified ? "#15803D" : "#B91C1C" }}>
+                {pct}% integrity
+                {verifyResult.first_break_line && ` · Break at line ${verifyResult.first_break_line}`}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Error list */}
+      {verifyResult && !verified && verifyResult.errors.length > 0 && (
+        <div style={{ padding: "0 24px 16px" }}>
+          <div style={{ backgroundColor: "#FEF2F2", borderRadius: 8, padding: "10px 14px", border: "1px solid #FECACA" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#991B1B", marginBottom: 6 }}>
+              Chain Errors ({verifyResult.errors.length})
+            </div>
+            {verifyResult.errors.map((e, i) => (
+              <div key={i} style={{ fontSize: 11, fontFamily: "monospace", color: "#7F1D1D", marginBottom: 2 }}>{e}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Page                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -290,6 +558,9 @@ export default function AuditPage() {
         subtitle="Generate and download audit documentation packages"
         icon={<Shield size={22} />}
       />
+
+      {/* ---- Audit Chain Integrity ---- */}
+      <AuditChainIntegrityCard />
 
       {/* ---- IRR / Kappa tile ---- */}
       <div style={{ marginBottom: 24 }}>
@@ -429,7 +700,7 @@ export default function AuditPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
-                  {["#", "Patient", "Year", "Generated", "Size", "Download"].map((h) => (
+                  {["#", "Patient", "Year", "Generated", "Size", "", "Download"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -440,6 +711,7 @@ export default function AuditPage() {
                         color: "#64748B",
                         textTransform: "uppercase",
                         letterSpacing: 0.5,
+                        width: h === "" ? 32 : undefined,
                       }}
                     >
                       {h}
@@ -472,6 +744,12 @@ export default function AuditPage() {
                       </td>
                       <td style={{ padding: "12px 16px", color: "#475569" }}>
                         {formatBytes(pkg.file_size_bytes)}
+                      </td>
+                      <td style={{ padding: "12px 16px", textAlign: "center", width: 32 }}>
+                        <HashTooltip
+                          currentHash={pkg.current_hash ?? pkg.hash_self ?? undefined}
+                          previousHash={pkg.previous_hash ?? pkg.hash_prev ?? undefined}
+                        />
                       </td>
                       <td style={{ padding: "12px 16px", textAlign: "right" }}>
                         <a

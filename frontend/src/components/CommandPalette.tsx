@@ -47,7 +47,7 @@ import type { Patient } from "@/types";
 // Types
 // ---------------------------------------------------------------------------
 
-type ResultCategory = "patients" | "pages" | "actions";
+type ResultCategory = "patients" | "navigate" | "actions";
 
 interface BaseResult {
   id: string;
@@ -57,9 +57,10 @@ interface BaseResult {
 }
 
 interface PageResult extends BaseResult {
-  category: "pages";
+  category: "navigate";
   href: string;
   icon: React.ComponentType<{ style?: CSSProperties }>;
+  shortcut?: string; // e.g. "g h"
 }
 
 interface PatientResult extends BaseResult {
@@ -81,45 +82,69 @@ type SearchResult = PageResult | PatientResult | ActionResult;
 // ---------------------------------------------------------------------------
 
 const PAGE_RESULTS: PageResult[] = [
-  { id: "p-dash",    category: "pages", label: "Dashboard",          href: "/",            icon: LayoutDashboard, description: "Overview & KPIs" },
-  { id: "p-pat",     category: "pages", label: "Patients",           href: "/patients",    icon: Users,           description: "Patient roster" },
-  { id: "p-sus",     category: "pages", label: "Review Queue",       href: "/suspects",    icon: ClipboardCheck,  description: "HCC suspects" },
-  { id: "p-rec",     category: "pages", label: "Recapture Gaps",     href: "/recapture",   icon: CalendarClock,   description: "Gap closure" },
-  { id: "p-pro",     category: "pages", label: "Prospective",        href: "/prospective", icon: Target,          description: "Prospective HCC" },
-  { id: "p-ana",     category: "pages", label: "Clinical Analysis",  href: "/analysis",    icon: Microscope,      description: "AI-powered HCC coding" },
-  { id: "p-bat",     category: "pages", label: "Batch Analysis",     href: "/batch",       icon: Layers,          description: "Bulk processing" },
-  { id: "p-doc",     category: "pages", label: "Documents",          href: "/documents",   icon: FileImage,       description: "Document uploads" },
-  { id: "p-cla",     category: "pages", label: "Claims",             href: "/claims",      icon: FileText,        description: "Claims data" },
-  { id: "p-dem",     category: "pages", label: "Pipeline Demo",      href: "/demo",        icon: Workflow,        description: "Demo pipeline" },
-  { id: "p-rep",     category: "pages", label: "Analytics",          href: "/reports",     icon: BarChart3,       description: "Reports & analytics" },
-  { id: "p-prov",    category: "pages", label: "Provider Performance",href: "/providers",  icon: UserCheck,       description: "Provider metrics" },
-  { id: "p-qual",    category: "pages", label: "Quality & STARS",    href: "/quality",     icon: Star,            description: "STARS measures" },
-  { id: "p-sub",     category: "pages", label: "CMS Submissions",    href: "/submissions", icon: Send,            description: "CMS data submissions" },
-  { id: "p-roi",     category: "pages", label: "ROI Calculator",     href: "/roi",         icon: Calculator,      description: "ROI estimates" },
-  { id: "p-aud",     category: "pages", label: "Compliance & Audit", href: "/audit",       icon: ShieldCheck,     description: "Audit tools" },
-  { id: "p-usr",     category: "pages", label: "Users",              href: "/users",       icon: UsersRound,      description: "User management" },
-  { id: "p-dev",     category: "pages", label: "Developer",          href: "/developer",   icon: Code,            description: "Developer tools" },
-  { id: "p-emr",     category: "pages", label: "EMR Config",         href: "/emr-config",  icon: Database,        description: "EMR connections" },
-  { id: "p-set",     category: "pages", label: "Settings",           href: "/settings",    icon: Settings,        description: "Account settings" },
+  { id: "p-dash",    category: "navigate", label: "Dashboard",           href: "/",            icon: LayoutDashboard, description: "Overview & KPIs",           shortcut: "g h" },
+  { id: "p-pat",     category: "navigate", label: "Patients",            href: "/patients",    icon: Users,           description: "Patient roster",            shortcut: "g p" },
+  { id: "p-sus",     category: "navigate", label: "Review Queue",        href: "/review-queue",icon: ClipboardCheck,  description: "HCC suspects",              shortcut: "g s" },
+  { id: "p-rec",     category: "navigate", label: "Recapture Gaps",      href: "/recapture",   icon: CalendarClock,   description: "Gap closure" },
+  { id: "p-pro",     category: "navigate", label: "Prospective",         href: "/prospective", icon: Target,          description: "Prospective HCC" },
+  { id: "p-ana",     category: "navigate", label: "Clinical Analysis",   href: "/analysis",    icon: Microscope,      description: "AI-powered HCC coding",     shortcut: "g a" },
+  { id: "p-bat",     category: "navigate", label: "Batch Analysis",      href: "/batch",       icon: Layers,          description: "Bulk processing" },
+  { id: "p-doc",     category: "navigate", label: "Documents",           href: "/documents",   icon: FileImage,       description: "Document uploads" },
+  { id: "p-cla",     category: "navigate", label: "Claims",              href: "/claims",      icon: FileText,        description: "Claims data" },
+  { id: "p-dem",     category: "navigate", label: "Pipeline Demo",       href: "/demo",        icon: Workflow,        description: "Demo pipeline" },
+  { id: "p-rep",     category: "navigate", label: "Analytics",           href: "/reports",     icon: BarChart3,       description: "Reports & analytics",       shortcut: "g r" },
+  { id: "p-prov",    category: "navigate", label: "Provider Performance", href: "/providers",  icon: UserCheck,       description: "Provider metrics" },
+  { id: "p-qual",    category: "navigate", label: "Quality & STARS",     href: "/quality",     icon: Star,            description: "STARS measures" },
+  { id: "p-sub",     category: "navigate", label: "CMS Submissions",     href: "/submissions", icon: Send,            description: "CMS data submissions" },
+  { id: "p-roi",     category: "navigate", label: "ROI Calculator",      href: "/roi",         icon: Calculator,      description: "ROI estimates" },
+  { id: "p-aud",     category: "navigate", label: "Compliance & Audit",  href: "/audit",       icon: ShieldCheck,     description: "Audit tools" },
+  { id: "p-usr",     category: "navigate", label: "Users",               href: "/users",       icon: UsersRound,      description: "User management" },
+  { id: "p-dev",     category: "navigate", label: "Developer",           href: "/developer",   icon: Code,            description: "Developer tools" },
+  { id: "p-emr",     category: "navigate", label: "EMR Config",          href: "/emr-config",  icon: Database,        description: "EMR connections",           shortcut: "g e" },
+  { id: "p-set",     category: "navigate", label: "Settings",            href: "/settings",    icon: Settings,        description: "Account settings" },
 ];
 
 const ACTION_RESULTS: ActionResult[] = [
+  {
+    id: "a-accept-suspects",
+    category: "actions",
+    label: "Accept all suspects",
+    description: "Bulk-accept every open HCC suspect in Review Queue",
+    action: () => {
+      window.dispatchEvent(new CustomEvent("cmd:accept-all-suspects"));
+    },
+  },
+  {
+    id: "a-pre-submission",
+    category: "actions",
+    label: "Run pre-submission validation",
+    href: "/pre-submission",
+    description: "Validate RAF data before CMS submission",
+  },
+  {
+    id: "a-export-gaps",
+    category: "actions",
+    label: "Export gaps to CSV",
+    description: "Download all open care gaps as a CSV file",
+    action: () => {
+      window.dispatchEvent(new CustomEvent("cmd:export-gaps-csv"));
+    },
+  },
   { id: "a-analysis",   category: "actions", label: "Run Analysis",        href: "/analysis",   description: "Open Clinical Analysis" },
   { id: "a-batch",      category: "actions", label: "Run Batch Analysis",  href: "/batch",      description: "Open Batch Analysis" },
   { id: "a-audit",      category: "actions", label: "Generate Audit",      href: "/audit",      description: "Open Compliance & Audit" },
   { id: "a-emr",        category: "actions", label: "Add EMR Connection",  href: "/emr-config", description: "Configure EMR" },
-  { id: "a-patient",    category: "actions", label: "View All Patients",   href: "/patients",   description: "Go to patient roster" },
   { id: "a-settings",   category: "actions", label: "Open Settings",       href: "/settings",   description: "Account & preferences" },
 ];
 
 // Category display config
 const CATEGORY_LABELS: Record<ResultCategory, string> = {
   patients: "Patients",
-  pages: "Pages",
+  navigate: "Navigate",
   actions: "Actions",
 };
 
-const CATEGORY_ORDER: ResultCategory[] = ["patients", "pages", "actions"];
+const CATEGORY_ORDER: ResultCategory[] = ["patients", "navigate", "actions"];
 
 const RECENT_KEY = "raf_command_recent";
 const MAX_RECENT = 5;
@@ -227,7 +252,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setLoading(true);
 
     const pageMatches: PageResult[] = PAGE_RESULTS.filter((p) =>
-      matchesQuery(p.label, p.description, q)
+      matchesQuery(p.label, p.description, q) ||
+      (p.shortcut && p.shortcut.toLowerCase().includes(q.toLowerCase()))
     );
 
     const actionMatches: ActionResult[] = ACTION_RESULTS.filter((a) =>
@@ -293,7 +319,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
     if (result.category === "patients") {
       router.push(`/patients/${(result as PatientResult).pid}`);
-    } else if (result.category === "pages") {
+    } else if (result.category === "navigate") {
       router.push((result as PageResult).href);
     } else {
       const action = result as ActionResult;
@@ -540,6 +566,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                             return <PageIcon style={{ width: 15, height: 15, color: isActive ? "#fff" : TEXT_SECONDARY }} aria-hidden />;
                           })()
                         )}
+
                       </div>
 
                       {/* Text */}
@@ -570,6 +597,37 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                           </div>
                         )}
                       </div>
+
+                      {/* Keyboard shortcut hint */}
+                      {result.category === "navigate" && (result as PageResult).shortcut && (
+                        <span
+                          style={{
+                            display: "flex",
+                            gap: 3,
+                            flexShrink: 0,
+                            marginLeft: "auto",
+                          }}
+                          aria-label={`Shortcut: ${(result as PageResult).shortcut}`}
+                        >
+                          {((result as PageResult).shortcut as string).split(" ").map((k) => (
+                            <kbd
+                              key={k}
+                              style={{
+                                backgroundColor: isActive ? "rgba(255,255,255,0.15)" : BG_INPUT,
+                                border: `1px solid ${isActive ? "rgba(255,255,255,0.3)" : BORDER}`,
+                                borderRadius: 3,
+                                padding: "1px 5px",
+                                fontSize: 10,
+                                fontFamily: "inherit",
+                                color: isActive ? "rgba(255,255,255,0.85)" : TEXT_SECONDARY,
+                                lineHeight: "16px",
+                              }}
+                            >
+                              {k}
+                            </kbd>
+                          ))}
+                        </span>
+                      )}
 
                       {/* Arrow indicator */}
                       {isActive && (
