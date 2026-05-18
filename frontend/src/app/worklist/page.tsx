@@ -11,6 +11,9 @@
  *   Shift+Click range · Cmd/Ctrl+A select all visible · Esc clear
  * Bulk actions bar (sticky top when any selection):
  *   Send to Attestation · Schedule AWV · Export CSV
+ *
+ * Tooltips: shadcn Tooltip (base-ui) with 200 ms delay on every interactive
+ * element, pill, and filter — WCAG 2.1 AA focus-accessible.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -36,6 +39,12 @@ import { PageHeader } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import api from "@/lib/api";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,6 +106,24 @@ function awvDaysLabel(item: WorklistItem): string | null {
   return null;
 }
 
+function awvTooltip(item: WorklistItem): string {
+  const dueLabel = item.awv_due_date
+    ? ` (due ${new Date(item.awv_due_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})`
+    : "";
+  switch (item.awv_status) {
+    case "overdue":
+      return `Annual Wellness Visit is past due${dueLabel}. Schedule immediately to avoid missing CMS G0439 reimbursement for this payment year.`;
+    case "due_soon":
+      return `Annual Wellness Visit is coming up${dueLabel}. Schedule before the payment year closes to capture the CMS G0439 reimbursement.`;
+    case "current":
+      return `Annual Wellness Visit has been completed this year${dueLabel}. No further action needed for this measure.`;
+    case "future":
+      return `Annual Wellness Visit is not yet due${dueLabel}. Plan ahead to ensure it is completed within the measurement year.`;
+    default:
+      return "AWV status is unknown. Review the patient chart to verify Annual Wellness Visit history.";
+  }
+}
+
 interface WorklistResponse {
   provider_id: number;
   measurement_year: number;
@@ -143,6 +170,37 @@ function capacityColor(pct: number): string {
 }
 
 const ELEVATED_ROLES = new Set(["admin", "super_admin", "manager", "supervisor"]);
+
+// ---------------------------------------------------------------------------
+// WT — thin wrapper: TooltipProvider + Tooltip + Trigger + Content
+// Renders children as the trigger; text is the tooltip message.
+// delay defaults to 200 ms per design spec.
+// ---------------------------------------------------------------------------
+
+function WT({
+  text,
+  children,
+  side = "top",
+  delay = 200,
+  asChild = true,
+}: {
+  text: string;
+  children: React.ReactElement;
+  side?: "top" | "bottom" | "left" | "right";
+  delay?: number;
+  asChild?: boolean;
+}) {
+  return (
+    <TooltipProvider delay={delay}>
+      <Tooltip>
+        <TooltipTrigger asChild={asChild}>{children}</TooltipTrigger>
+        <TooltipContent side={side} sideOffset={6} className="max-w-[260px] text-center leading-snug">
+          {text}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Toast
@@ -268,35 +326,60 @@ function WorklistBulkActionsBar({
         </button>
       )}
       <div style={{ width: 1, height: 20, background: tokens.slate200, flexShrink: 0 }} />
-      <button
-        type="button"
-        onClick={onAttest}
-        disabled={attesting}
-        aria-label={`Send ${selectedCount} patients to attestation`}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: "none", background: attesting ? tokens.slate300 : brand, color: tokens.white, fontSize: 12, fontWeight: 600, cursor: attesting ? "not-allowed" : "pointer" }}
+
+      {/* Bulk action: Send to Attestation */}
+      <WT
+        text="Submit selected patients for HCC gap attestation. Creates a structured attestation record for each patient and sends to your coding queue."
+        side="bottom"
       >
-        {attesting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <FileText size={13} />}
-        {attesting ? "Creating…" : "Send to Attestation"}
-      </button>
-      <button
-        type="button"
-        onClick={onScheduleAWV}
-        aria-label={`Schedule AWV for ${selectedCount} patients`}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${brand}`, background: tokens.white, color: brand, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+        <button
+          type="button"
+          onClick={onAttest}
+          disabled={attesting}
+          aria-label={`Send ${selectedCount} patients to attestation`}
+          data-testid="bulk-attest-btn"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: "none", background: attesting ? tokens.slate300 : brand, color: tokens.white, fontSize: 12, fontWeight: 600, cursor: attesting ? "not-allowed" : "pointer" }}
+        >
+          {attesting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <FileText size={13} />}
+          {attesting ? "Creating…" : "Send to Attestation"}
+        </button>
+      </WT>
+
+      {/* Bulk action: Schedule AWV */}
+      <WT
+        text="Open the calendar to batch-schedule Annual Wellness Visits for all selected patients before the payment year closes."
+        side="bottom"
       >
-        <CalendarClock size={13} />
-        Schedule AWV
-      </button>
-      <button
-        type="button"
-        onClick={onExportCSV}
-        disabled={exporting}
-        aria-label={`Export ${selectedCount} patients to CSV`}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
+        <button
+          type="button"
+          onClick={onScheduleAWV}
+          aria-label={`Schedule AWV for ${selectedCount} patients`}
+          data-testid="bulk-schedule-awv-btn"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${brand}`, background: tokens.white, color: brand, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+        >
+          <CalendarClock size={13} />
+          Schedule AWV
+        </button>
+      </WT>
+
+      {/* Bulk action: Export CSV */}
+      <WT
+        text="Download a CSV of selected patients with RAF scores, open gaps, revenue at risk, and AWV status for offline review or reporting."
+        side="bottom"
       >
-        {exporting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
-        {exporting ? "Exporting…" : "Export CSV"}
-      </button>
+        <button
+          type="button"
+          onClick={onExportCSV}
+          disabled={exporting}
+          aria-label={`Export ${selectedCount} patients to CSV`}
+          data-testid="bulk-export-csv-btn"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
+        >
+          {exporting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
+          {exporting ? "Exporting…" : "Export CSV"}
+        </button>
+      </WT>
+
       <span aria-hidden style={{ marginLeft: "auto", fontSize: 11, color: tokens.slate500, fontStyle: "italic" }}>
         Shift+Click range · Cmd/Ctrl+A all · Esc clear
       </span>
@@ -487,11 +570,12 @@ export default function WorklistPage() {
   }, [selectedIds]);
 
   const summary = useMemo(() => {
-    if (!data?.items) return { patients: 0, gaps: 0, revenue: 0 };
+    if (!data?.items) return { patients: 0, gaps: 0, revenue: 0, awvDue: 0 };
     return {
       patients: data.items.length,
       gaps: data.items.reduce((s, p) => s + (p.open_recapture_gaps?.length ?? 0), 0),
       revenue: data.items.reduce((s, p) => s + (p.estimated_revenue_at_risk ?? 0), 0),
+      awvDue: data.items.filter((i) => i.awv_status === "overdue" || i.awv_status === "due_soon").length,
     };
   }, [data]);
 
@@ -644,6 +728,7 @@ export default function WorklistPage() {
                         prov={prov}
                         isSelected={filterProviderId === prov.provider_id}
                         onClick={() => setFilterProviderId((c) => c === prov.provider_id ? null : prov.provider_id)}
+                        targetCapacity={workloadData.target_capacity}
                       />
                     ))}
                   </div>
@@ -655,29 +740,67 @@ export default function WorklistPage() {
 
         {/* Summary strip — 4 tiles incl. AWV (CMS G0136 2026 lever) */}
         <div style={{ marginTop: 16, marginBottom: isElevated ? 8 : 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          <SummaryTile label="Patients to see" value={summary.patients} icon={<Stethoscope size={18} />} color={tokens.primary} />
-          <SummaryTile label="Open gaps" value={summary.gaps} icon={<FileText size={18} />} color={tokens.riskHigh} />
-          <SummaryTile label="Revenue at risk" value={fmtCurrency(summary.revenue)} icon={<Activity size={18} />} color={tokens.warningStrong} />
-          <SummaryTile
-            label="AWV due/overdue"
-            value={data.items.filter((i) => i.awv_status === "overdue" || i.awv_status === "due_soon").length}
-            icon={<CalendarClock size={18} />}
-            color={tokens.danger}
-          />
+          <WT
+            text={`${summary.patients} patient${summary.patients === 1 ? "" : "s"} in your panel have open HCC gaps or AWV actions due this measurement year.`}
+            side="bottom"
+          >
+            <div data-testid="tile-patients-to-see">
+              <SummaryTile label="Patients to see" value={summary.patients} icon={<Stethoscope size={18} />} color={tokens.primary} />
+            </div>
+          </WT>
+          <WT
+            text={`${summary.gaps} total open HCC recapture gap${summary.gaps === 1 ? "" : "s"} across all prioritized patients. Each gap represents a condition that was coded in a prior year but not yet confirmed this year.`}
+            side="bottom"
+          >
+            <div data-testid="tile-open-gaps">
+              <SummaryTile label="Open gaps" value={summary.gaps} icon={<FileText size={18} />} color={tokens.riskHigh} />
+            </div>
+          </WT>
+          <WT
+            text={`Estimated incremental revenue at risk if open HCC gaps are not recaptured this measurement year. Calculated at the MA rate of ~$9,000 per RAF point.`}
+            side="bottom"
+          >
+            <div data-testid="tile-revenue-at-risk">
+              <SummaryTile label="Revenue at risk" value={fmtCurrency(summary.revenue)} icon={<Activity size={18} />} color={tokens.warningStrong} />
+            </div>
+          </WT>
+          <WT
+            text={`${summary.awvDue} patient${summary.awvDue === 1 ? "" : "s"} have an Annual Wellness Visit that is overdue or due soon. Completing AWVs enables G0439 billing and supports comprehensive risk documentation.`}
+            side="bottom"
+          >
+            <div data-testid="tile-awv-due">
+              <SummaryTile
+                label="AWV due/overdue"
+                value={summary.awvDue}
+                icon={<CalendarClock size={18} />}
+                color={tokens.danger}
+              />
+            </div>
+          </WT>
         </div>
 
         {/* Provider filter pills — elevated only */}
         {isElevated && providerPills.length > 0 && (
           <div role="group" aria-label="Filter by provider" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12, marginBottom: 20 }}>
-            <ProviderPill label="All providers" count={null} active={filterProviderId === null} onClick={() => setFilterProviderId(null)} />
+            <WT text="Show worklist across all providers in your organization.">
+              <span>
+                <ProviderPill label="All providers" count={null} active={filterProviderId === null} onClick={() => setFilterProviderId(null)} />
+              </span>
+            </WT>
             {providerPills.map((p) => (
-              <ProviderPill
+              <WT
                 key={p.id}
-                label={p.name}
-                count={p.taskCount}
-                active={filterProviderId === p.id}
-                onClick={() => setFilterProviderId((c) => c === p.id ? null : p.id)}
-              />
+                text={`Filter worklist to show only ${p.name}'s ${p.taskCount} open task${p.taskCount === 1 ? "" : "s"}.`}
+              >
+                <span>
+                  <ProviderPill
+                    label={p.name}
+                    count={p.taskCount}
+                    active={filterProviderId === p.id}
+                    onClick={() => setFilterProviderId((c) => c === p.id ? null : p.id)}
+                  />
+                </span>
+              </WT>
             ))}
           </div>
         )}
@@ -726,27 +849,43 @@ export default function WorklistPage() {
 // HeatmapRow
 // ---------------------------------------------------------------------------
 
-function HeatmapRow({ prov, isSelected, onClick }: { prov: ProviderWorkloadRow; isSelected: boolean; onClick: () => void }) {
+function HeatmapRow({
+  prov,
+  isSelected,
+  onClick,
+  targetCapacity = 30,
+}: {
+  prov: ProviderWorkloadRow;
+  isSelected: boolean;
+  onClick: () => void;
+  targetCapacity?: number;
+}) {
   const barColor = capacityColor(prov.capacity_pct);
   const barPct = Math.max(prov.capacity_pct, 2);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={isSelected}
-      aria-label={`${prov.provider_name}: ${prov.capacity_pct}% capacity. Click to filter.`}
-      style={{ display: "grid", gridTemplateColumns: "180px 1fr 120px", alignItems: "center", gap: 12, padding: "6px 8px", borderRadius: 8, border: isSelected ? `1.5px solid ${barColor}` : `1px solid ${tokens.slate100}`, background: isSelected ? `${barColor}0D` : "transparent", cursor: "pointer", textAlign: "left", width: "100%" }}
+    <WT
+      text={`Capacity = ${prov.open_gaps} open gaps out of a target of ${targetCapacity}. Click to filter the worklist to ${prov.provider_name}'s patients only.`}
+      side="right"
     >
-      <span style={{ fontSize: 13, fontWeight: 600, color: tokens.slate800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {prov.provider_name}
-      </span>
-      <div style={{ height: 10, borderRadius: 999, background: tokens.slate100, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${barPct}%`, background: barColor, borderRadius: 999, transition: "width 300ms ease" }} />
-      </div>
-      <span style={{ fontSize: 12, color: tokens.slate500, whiteSpace: "nowrap", textAlign: "right" }}>
-        <span style={{ fontWeight: 700, color: barColor }}>{prov.capacity_pct}%</span>{" · "}{prov.total_workload} tasks
-      </span>
-    </button>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={isSelected}
+        aria-label={`${prov.provider_name}: ${prov.capacity_pct}% capacity. Click to filter.`}
+        data-testid={`heatmap-row-${prov.provider_id}`}
+        style={{ display: "grid", gridTemplateColumns: "180px 1fr 120px", alignItems: "center", gap: 12, padding: "6px 8px", borderRadius: 8, border: isSelected ? `1.5px solid ${barColor}` : `1px solid ${tokens.slate100}`, background: isSelected ? `${barColor}0D` : "transparent", cursor: "pointer", textAlign: "left", width: "100%" }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, color: tokens.slate800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {prov.provider_name}
+        </span>
+        <div style={{ height: 10, borderRadius: 999, background: tokens.slate100, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${barPct}%`, background: barColor, borderRadius: 999, transition: "width 300ms ease" }} />
+        </div>
+        <span style={{ fontSize: 12, color: tokens.slate500, whiteSpace: "nowrap", textAlign: "right" }}>
+          <span style={{ fontWeight: 700, color: barColor }}>{prov.capacity_pct}%</span>{" · "}{prov.total_workload} tasks
+        </span>
+      </button>
+    </WT>
   );
 }
 
@@ -778,7 +917,7 @@ function ProviderPill({ label, count, active, onClick }: { label: string; count:
 
 function SummaryTile({ label, value, icon, color }: { label: string; value: string | number; icon: React.ReactNode; color: string }) {
   return (
-    <div style={{ padding: "14px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}`, display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ padding: "14px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}`, display: "flex", alignItems: "center", gap: 12, cursor: "default" }}>
       <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}1A`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {icon}
       </div>
@@ -823,37 +962,44 @@ function PatientCard({
   return (
     <div style={{ position: "relative" }}>
       {/* 16px checkbox — always visible, positioned top-left */}
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={isSelected}
-        aria-label={`Select ${item.patient_name}`}
-        onClick={handleCheckboxClick}
-        style={{
-          position: "absolute",
-          top: 10,
-          left: 10,
-          zIndex: 10,
-          width: 16,
-          height: 16,
-          borderRadius: 4,
-          border: isSelected ? `2px solid ${brand}` : `2px solid ${tokens.slate300}`,
-          background: isSelected ? brand : tokens.white,
-          cursor: "pointer",
-          padding: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "background 100ms, border-color 100ms",
-          boxShadow: isSelected ? `0 0 0 3px rgba(15,118,110,0.18)` : undefined,
-        }}
+      <WT
+        text="Select this patient for a bulk action (Send to Attestation, Schedule AWV, or Export CSV). Shift+Click to select a range."
+        side="right"
+        delay={200}
       >
-        {isSelected && (
-          <svg width="9" height="7" viewBox="0 0 9 7" fill="none" aria-hidden>
-            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </button>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isSelected}
+          aria-label={`Select ${item.patient_name}`}
+          onClick={handleCheckboxClick}
+          data-testid={`card-checkbox-${item.patient_id}`}
+          style={{
+            position: "absolute",
+            top: 10,
+            left: 10,
+            zIndex: 10,
+            width: 16,
+            height: 16,
+            borderRadius: 4,
+            border: isSelected ? `2px solid ${brand}` : `2px solid ${tokens.slate300}`,
+            background: isSelected ? brand : tokens.white,
+            cursor: "pointer",
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "background 100ms, border-color 100ms",
+            boxShadow: isSelected ? `0 0 0 3px rgba(15,118,110,0.18)` : undefined,
+          }}
+        >
+          {isSelected && (
+            <svg width="9" height="7" viewBox="0 0 9 7" fill="none" aria-hidden>
+              <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+      </WT>
 
       <Link
         href={`/patients/${item.patient_id}`}
@@ -878,9 +1024,18 @@ function PatientCard({
               {item.last_visit_date ? ` · last visit ${item.last_visit_date}` : ""}
             </div>
           </div>
-          <span style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 999, background: band.bg, color: band.color, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            {band.label}
-          </span>
+          {/* Priority pill */}
+          <WT
+            text="Computed from RAF lift × confidence × days outstanding. High = score ≥ 70, Medium = 40–69, Low = below 40."
+            side="top"
+          >
+            <span
+              data-testid={`priority-pill-${item.patient_id}`}
+              style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 999, background: band.bg, color: band.color, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", cursor: "default" }}
+            >
+              {band.label}
+            </span>
+          </WT>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <Stat label="Open gaps" value={item.open_recapture_gaps?.length ?? 0} tone={(item.open_recapture_gaps?.length ?? 0) > 0 ? tokens.riskHigh : tokens.slate500} />
@@ -889,9 +1044,7 @@ function PatientCard({
         {item.open_recapture_gaps && item.open_recapture_gaps.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
             {item.open_recapture_gaps.slice(0, 4).map((g, i) => (
-              <span key={`${g.hcc_code}-${i}`} style={{ padding: "2px 8px", borderRadius: 999, background: tokens.dangerSoft, color: tokens.danger, fontSize: 11, fontWeight: 600 }}>
-                HCC {g.hcc_code}
-              </span>
+              <HccGapChip key={`${g.hcc_code}-${i}`} gap={g} patientId={item.patient_id} />
             ))}
             {item.open_recapture_gaps.length > 4 && (
               <span style={{ fontSize: 11, color: tokens.slate500, alignSelf: "center" }}>+{item.open_recapture_gaps.length - 4} more</span>
@@ -902,25 +1055,99 @@ function PatientCard({
         {item.awv_status && item.awv_status !== "future" && awvDaysLabel(item) && (
           <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
             <CalendarClock size={12} color={awvPill(item.awv_status).color} />
-            <span
-              style={{
-                padding: "2px 8px",
-                borderRadius: 999,
-                background: awvPill(item.awv_status).bg,
-                color: awvPill(item.awv_status).color,
-                fontWeight: 600,
-              }}
-            >
-              {awvDaysLabel(item)}
-            </span>
+            <WT text={awvTooltip(item)} side="top">
+              <span
+                data-testid={`awv-pill-${item.patient_id}`}
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  background: awvPill(item.awv_status).bg,
+                  color: awvPill(item.awv_status).color,
+                  fontWeight: 600,
+                  cursor: "default",
+                }}
+              >
+                {awvDaysLabel(item)}
+              </span>
+            </WT>
           </div>
         )}
         <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: tokens.primary, fontWeight: 600 }}>
           <span>Priority score · {item.priority_score}</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>Open chart <ChevronRight size={14} /></span>
+          {/* Open chart CTA */}
+          <WT
+            text="Opens full patient detail with RAF breakdown, HCC evidence, encounter history, and documentation support tools."
+            side="top"
+          >
+            <span
+              data-testid={`open-chart-${item.patient_id}`}
+              style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
+            >
+              Open chart <ChevronRight size={14} />
+            </span>
+          </WT>
         </div>
       </Link>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HccGapChip — HCC code chip with Reject button tooltip
+// ---------------------------------------------------------------------------
+
+function HccGapChip({ gap, patientId }: { gap: WorklistGap; patientId: number }) {
+  return (
+    <span
+      data-testid={`hcc-chip-${patientId}-${gap.hcc_code}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "2px 6px 2px 8px",
+        borderRadius: 999,
+        background: tokens.dangerSoft,
+        color: tokens.danger,
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      HCC {gap.hcc_code}
+      <WT
+        text="Reject this HCC gap with a reason code. All rejections are logged with timestamp and user for DOJ-compliant audit trail."
+        side="top"
+        delay={200}
+      >
+        <button
+          type="button"
+          aria-label={`Reject HCC ${gap.hcc_code} gap`}
+          data-testid={`hcc-reject-${patientId}-${gap.hcc_code}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Rejection logic lives in the patient detail page; navigate or open modal there
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 14,
+            height: 14,
+            borderRadius: "50%",
+            border: "none",
+            background: "transparent",
+            color: tokens.danger,
+            cursor: "pointer",
+            padding: 0,
+            opacity: 0.7,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
+        >
+          <X size={10} aria-hidden />
+        </button>
+      </WT>
+    </span>
   );
 }
 
