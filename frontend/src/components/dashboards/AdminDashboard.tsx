@@ -797,6 +797,12 @@ export function AdminDashboard() {
   const [dateRange, setDateRange] = useState("ytd");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  // After 12 s, stop waiting for slow/missing queries and show whatever is available
+  const [kpiTimedOut, setKpiTimedOut] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setKpiTimedOut(true), 12_000);
+    return () => clearTimeout(t);
+  }, []);
 
   // ---- Batch 1: Core stats (critical, loads first) ----
   const [emrStatusQ, statsQ, popQ] = useQueries({
@@ -1468,7 +1474,7 @@ export function AdminDashboard() {
           demoLoading={demoLoading}
           onTryDemo={() => setShowDemoConfirm(true)}
         />
-      ) : (statsL && revL) ? (
+      ) : (statsL && !kpiTimedOut) ? (
         <KPISkeleton />
       ) : (
         <div
@@ -1530,6 +1536,12 @@ export function AdminDashboard() {
             trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
             href="/reports?tab=raf-distribution"
           />
+        </div>
+      )}
+      {/* Inline notice when kpi-trends endpoint failed or timed out */}
+      {(kpiTrendsQ.isError || (kpiTimedOut && !kpiTrends)) && (
+        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: -16, marginBottom: 8, paddingLeft: 4 }}>
+          Sparkline trends couldn&apos;t load — showing latest values only.
         </div>
       )}
       </div>
