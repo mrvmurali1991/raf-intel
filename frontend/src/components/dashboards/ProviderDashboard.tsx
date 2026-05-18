@@ -1,11 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import Link from "next/link";
 import { CheckCircle, Users, Activity, FileText, Stethoscope } from "lucide-react";
 import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
 import { MetricCard } from "@/components/ui/metric-card";
-import { getDashboardStats } from "@/lib/api";
+import { getDashboardStats, getKpiTrends } from "@/lib/api";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
 
 interface ProviderDashboardStats {
@@ -46,23 +46,36 @@ function KPISkeleton() {
 }
 
 export function ProviderDashboard() {
-  const { data: stats, isLoading } = useQuery<ProviderDashboardStats>({
-    queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      const result = await getDashboardStats();
-      // getDashboardStats returns DashboardStats; cast through unknown so we
-      // can pluck the optional fields this dashboard renders without
-      // depending on the full shape.
-      const r = result as unknown as Record<string, unknown>;
-      return {
-        total_patients: typeof r.total_patients === "number" ? r.total_patients : undefined,
-        average_raf_score: typeof r.average_raf_score === "number" ? r.average_raf_score : undefined,
-        pending_attestations: typeof r.pending_attestations === "number" ? r.pending_attestations : undefined,
-        open_recapture_gaps: typeof r.open_recapture_gaps === "number" ? r.open_recapture_gaps : undefined,
-        total_suspects_open: typeof r.total_suspects_open === "number" ? r.total_suspects_open : undefined,
-      };
-    },
+  const [statsQ, kpiTrendsQ] = useQueries({
+    queries: [
+      {
+        queryKey: ["dashboard-stats"],
+        queryFn: async (): Promise<ProviderDashboardStats> => {
+          const result = await getDashboardStats();
+          // getDashboardStats returns DashboardStats; cast through unknown so we
+          // can pluck the optional fields this dashboard renders without
+          // depending on the full shape.
+          const r = result as unknown as Record<string, unknown>;
+          return {
+            total_patients: typeof r.total_patients === "number" ? r.total_patients : undefined,
+            average_raf_score: typeof r.average_raf_score === "number" ? r.average_raf_score : undefined,
+            pending_attestations: typeof r.pending_attestations === "number" ? r.pending_attestations : undefined,
+            open_recapture_gaps: typeof r.open_recapture_gaps === "number" ? r.open_recapture_gaps : undefined,
+            total_suspects_open: typeof r.total_suspects_open === "number" ? r.total_suspects_open : undefined,
+          };
+        },
+      },
+      {
+        queryKey: ["kpi-trends-12w"],
+        queryFn: () => getKpiTrends(12),
+        retry: 1,
+        staleTime: 300_000,
+      },
+    ],
   });
+  const stats = statsQ.data;
+  const isLoading = statsQ.isLoading;
+  const kpiTrends = kpiTrendsQ.data;
 
   return (
     <div className="fade-in-up">
@@ -89,7 +102,8 @@ export function ProviderDashboard() {
             icon={<FileText size={20} />}
             intent="danger"
             href="/recapture"
-            sparklinePlaceholder
+            trend={kpiTrends?.open_gaps?.length ? kpiTrends.open_gaps : undefined}
+            delta={kpiTrends?.deltas?.open_gaps != null ? -(kpiTrends.deltas.open_gaps) : undefined}
             actionLink={{ label: "View worklist", href: "/worklist" }}
           />
           <MetricCard
@@ -99,7 +113,8 @@ export function ProviderDashboard() {
             icon={<Activity size={20} />}
             intent="warning"
             href="/suspects"
-            sparklinePlaceholder
+            trend={kpiTrends?.suspects?.length ? kpiTrends.suspects : undefined}
+            delta={kpiTrends?.deltas?.suspects ?? undefined}
           />
           <MetricCard
             label="Panel patients"
@@ -108,7 +123,8 @@ export function ProviderDashboard() {
             icon={<Users size={20} />}
             intent="default"
             href="/patients"
-            sparklinePlaceholder
+            trend={kpiTrends?.panel_patients?.length ? kpiTrends.panel_patients : undefined}
+            delta={kpiTrends?.deltas?.panel_patients ?? undefined}
           />
           <MetricCard
             label="Average RAF"
@@ -117,7 +133,8 @@ export function ProviderDashboard() {
             icon={<CheckCircle size={20} />}
             intent="success"
             href="/providers"
-            sparklinePlaceholder
+            trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
+            delta={kpiTrends?.deltas?.avg_raf ?? undefined}
           />
         </div>
       )}

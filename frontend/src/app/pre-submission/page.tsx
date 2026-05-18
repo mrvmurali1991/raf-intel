@@ -26,7 +26,8 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, AlertCircle, Info, ShieldCheck, ExternalLink } from "lucide-react";
 
 import api from "@/lib/api";
-import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
 
@@ -166,28 +167,28 @@ export default function PreSubmissionPage() {
         className="grid grid-cols-1 md:grid-cols-3 gap-4"
         aria-label="Severity totals"
       >
-        <StatCard
+        <MetricCard
           label="High severity"
           value={high}
           subtitle="Will be rejected by CMS"
           icon={<AlertCircle size={20} />}
-          accentClassName="text-red-700 bg-red-100 dark:text-red-200 dark:bg-red-900/30"
+          intent="danger"
           loading={isLoading}
         />
-        <StatCard
+        <MetricCard
           label="Medium severity"
           value={medium}
           subtitle="Risk of RADV reversal"
           icon={<AlertTriangle size={20} />}
-          accentClassName="text-amber-700 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/30"
+          intent="warning"
           loading={isLoading}
         />
-        <StatCard
+        <MetricCard
           label="Low severity"
           value={low}
           subtitle="Advisory — review when possible"
           icon={<Info size={20} />}
-          accentClassName="text-slate-700 bg-slate-100 dark:text-slate-200 dark:bg-slate-800/60"
+          intent="default"
           loading={isLoading}
         />
       </section>

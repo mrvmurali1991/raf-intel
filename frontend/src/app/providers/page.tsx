@@ -55,7 +55,8 @@ import { downloadCSV } from "@/lib/csv-export";
 import { initialsColor } from "@/lib/ui-utils";
 import { fmtCurrencySmart } from "@/lib/format";
 import { tokens } from "@/styles/tokens";
-import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import FeatureFlag from "@/components/FeatureFlag";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";
@@ -619,16 +620,15 @@ export default function ProvidersPage() {
           }}
         >
           <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "0ms" }}>
-          <StatCard
+          <MetricCard
             label="Total Providers"
             value={summary?.total_providers?.toLocaleString() ?? "—"}
             subtitle="In this system"
             icon={<Users size={18} />}
-            color={C.primary}
           />
           </div>
           <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "60ms" }}>
-          <StatCard
+          <MetricCard
             label="Avg Capture Rate"
             value={summary ? fmtPct(summary.avg_capture_rate) : "—"}
             subtitle={
@@ -639,34 +639,33 @@ export default function ProvidersPage() {
                 : undefined
             }
             icon={<CheckCircle size={18} />}
-            color={captureColor(summary?.avg_capture_rate ?? null)}
+            intent={summary?.avg_capture_rate != null && summary.avg_capture_rate >= 0.85 ? "success" : "warning"}
           />
           </div>
           <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "120ms" }}>
-          <StatCard
+          <MetricCard
             label="Avg RAF Score"
             value={summary ? fmtN(summary.average_raf_score, 3) : "—"}
             subtitle="Population average"
             icon={<TrendingUp size={18} />}
-            color={C.amber}
+            intent="warning"
           />
           </div>
           <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "180ms" }}>
-          <StatCard
+          <MetricCard
             label="Revenue Opportunity"
             value={summary ? fmt$(summary.total_revenue_opportunity) : "—"}
             subtitle="Across all providers"
             icon={<DollarSign size={18} />}
-            color={C.emerald}
+            intent="success"
           />
           </div>
           <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "240ms" }}>
-          <StatCard
+          <MetricCard
             label="Avg MEAT Score"
             value={summary ? fmtPct(summary.avg_meat_completeness) : "—"}
             subtitle="Documentation quality"
             icon={<Award size={18} />}
-            color={C.violet}
           />
           </div>
         </div>

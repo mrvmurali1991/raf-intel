@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from "lucide-react";
-import { getRecaptureGapsReport } from "@/lib/api";
-import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { getRecaptureGapsReport, getRevenueOpportunity, useMetricFormula } from "@/lib/api";
+import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import FeatureFlag from "@/components/FeatureFlag";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import { tokens } from "@/styles/tokens";
@@ -105,6 +106,14 @@ export default function RecapturePage() {
     queryKey: ["recapture-gaps", year],
     queryFn: () => getRecaptureGapsReport(year) as unknown as Promise<RecaptureReport>,
   });
+
+  // Revenue meta — stale-while-revalidate; provides formula tooltip for CFO.
+  const { data: revData } = useQuery({
+    queryKey: ["revenue-opportunity", year],
+    queryFn: () => getRevenueOpportunity(year),
+    staleTime: 5 * 60 * 1000,
+  });
+  const revenueAtRiskMeta = useMetricFormula(revData as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? revData?._meta ?? null;
 
   // ── Derived data ────────────────────────────────────────────────────────
 
@@ -271,27 +280,29 @@ export default function RecapturePage() {
         style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gridAutoRows: "min-content", gap: 16, marginBottom: 24 }}
       >
         <div className="animate-fade-in stagger-1 recapture-hero-tile" style={{ gridColumn: "span 6", gridRow: "span 2" }}>
-          <StatCard
-            label="Estimated Revenue at Risk"
-            value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
-            subtitle="Unrecaptured chronic conditions x prior-year RAF dollars"
-            color={colors.red600}
-            icon={<ArrowUpDown size={18} />}
-          />
+          <div data-testid="revenue-at-risk-value">
+            <MetricCard
+              label="Estimated Revenue at Risk"
+              value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
+              subtitle="Unrecaptured chronic conditions x prior-year RAF dollars"
+              intent="danger"
+              icon={<ArrowUpDown size={18} />}
+              meta={revenueAtRiskMeta ?? undefined}
+            />
+          </div>
         </div>
         <div className="animate-fade-in stagger-2" style={{ gridColumn: "span 3" }}>
-          <StatCard
+          <MetricCard
             label="Total Recapture Gaps"
             value={(data.total_gaps ?? 0).toLocaleString()}
-            color={colors.amber500}
+            intent="warning"
             icon={<RefreshCw size={18} />}
           />
         </div>
         <div className="animate-fade-in stagger-3" style={{ gridColumn: "span 3" }}>
-          <StatCard
+          <MetricCard
             label="Patients Affected"
             value={(data.patients_affected ?? 0).toLocaleString()}
-            color={colors.primary}
             icon={<Calendar size={18} />}
           />
         </div>

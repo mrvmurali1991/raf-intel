@@ -19,7 +19,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Star, AlertTriangle, Users, Activity, ExternalLink, Send } from "lucide-react";
-import { PageHeader, StatCard, SectionHeader } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import {
   getHedisScores,
   getHedisScoresBySegment,
@@ -271,12 +272,13 @@ export default function HedisPage() {
         }}
       >
         {(scoresQ.data?.measures ?? []).map((m: HedisMeasureScore) => (
-          <StatCard
+          <MetricCard
             key={m.measure_id}
             label={`${m.measure_id} · ${m.name.split("(")[0].trim()}`}
             value={`${m.rate_pct.toFixed(1)}%`}
             subtitle={`${starsStr(m.stars)} · n=${m.denominator}`}
             icon={<Star size={18} />}
+            intent={m.rate_pct >= 80 ? "success" : m.rate_pct >= 60 ? "warning" : "danger"}
           />
         ))}
         {scoresQ.isLoading && <div style={{ color: "#64748b" }}>Loading scores…</div>}

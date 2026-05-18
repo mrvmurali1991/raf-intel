@@ -34,6 +34,7 @@ import {
   getSuspects,
   getRecaptureGapsReport,
   getRevenueOpportunity,
+  useMetricFormula,
 } from "@/lib/api";
 import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { fmtCurrencyFull, fmtCurrencyCompact } from "@/lib/format";
@@ -289,11 +290,12 @@ export default function ProspectivePage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  useQuery({
+  const { data: revenueData } = useQuery({
     queryKey: ["revenue-opportunity"],
     queryFn: () => getRevenueOpportunity(new Date().getFullYear()),
     staleTime: 5 * 60 * 1000,
   });
+  const revenueAtRiskMeta = useMetricFormula(revenueData as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? revenueData?._meta ?? null;
 
   // ── Data Enrichment ────────────────────────────────────────────────────────
 
@@ -706,13 +708,16 @@ export default function ProspectivePage() {
           />
         </div>
         <div className="animate-slide-up stagger-3 card-glow-emerald">
-          <StatCard
-            label="Revenue at Risk"
-            value={fmtCurrencyCompact(stats.totalRevenue)}
-            subtitle="estimated opportunity"
-            color={C.emerald500}
-            icon={<TrendingUp size={18} />}
-          />
+          <div data-testid="revenue-at-risk-value">
+            <StatCard
+              label="Revenue at Risk"
+              value={fmtCurrencyCompact(stats.totalRevenue)}
+              subtitle="estimated opportunity"
+              color={C.emerald500}
+              icon={<TrendingUp size={18} />}
+              meta={revenueAtRiskMeta ?? undefined}
+            />
+          </div>
         </div>
         <div className="animate-slide-up stagger-4 card-glow-blue">
           <StatCard

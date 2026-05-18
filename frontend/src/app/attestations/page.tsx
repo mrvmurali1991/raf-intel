@@ -31,7 +31,8 @@ import {
   ChevronRight,
   RefreshCw,
 } from "lucide-react";
-import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { tokens } from "@/styles/tokens";
 import api from "@/lib/api";
 
@@ -234,39 +235,45 @@ export default function AttestationsPage() {
           marginBottom: 24,
         }}
       >
-        <StatCard
+        <MetricCard
           label="Total"
           value={statsLoading ? "—" : String(stats?.total ?? 0)}
           icon={<ClipboardCheck size={18} />}
+          loading={statsLoading}
         />
-        <StatCard
+        <MetricCard
           label="Pending"
           value={statsLoading ? "—" : String(stats?.pending ?? 0)}
           icon={<Clock size={18} />}
+          intent="warning"
+          loading={statsLoading}
         />
-        <StatCard
+        <MetricCard
           label="Attested"
           value={statsLoading ? "—" : String(stats?.attested ?? 0)}
           icon={<CheckCircle2 size={18} />}
+          intent="success"
+          loading={statsLoading}
         />
-        <StatCard
+        <MetricCard
           label="Rejected"
           value={statsLoading ? "—" : String(stats?.rejected ?? 0)}
           icon={<XCircle size={18} />}
+          intent="danger"
+          loading={statsLoading}
         />
-        <StatCard
+        <MetricCard
           label="Deferred"
           value={statsLoading ? "—" : String(stats?.deferred ?? 0)}
           icon={<AlertCircle size={18} />}
+          loading={statsLoading}
         />
-        <StatCard
+        <MetricCard
           label="Attestation Rate"
-          value={
-            statsLoading
-              ? "—"
-              : `${((stats?.attestation_rate ?? 0) * 100).toFixed(1)}%`
-          }
+          value={statsLoading ? "—" : `${((stats?.attestation_rate ?? 0) * 100).toFixed(1)}%`}
           icon={<CheckCircle2 size={18} />}
+          intent="success"
+          loading={statsLoading}
         />
       </div>
 

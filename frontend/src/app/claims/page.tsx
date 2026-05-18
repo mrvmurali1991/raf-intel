@@ -45,7 +45,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { tokens } from "@/styles/tokens";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
-import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import {
   FileText,
   Upload,
@@ -648,17 +649,17 @@ export default function ClaimsPage() {
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16,
       }}>
-        <StatCard loading={statsQ.isLoading} label="Total Batches" value={fmtN(kpi.totalBatches)}
+        <MetricCard loading={statsQ.isLoading} label="Total Batches" value={fmtN(kpi.totalBatches)}
           subtitle={statsQ.data?.last_upload ? `Last upload ${fmtDate(statsQ.data.last_upload)}` : "No uploads yet"}
-          icon={<Layers size={18} />} color={C.teal} />
-        <StatCard loading={statsQ.isLoading} label="Total Claims" value={fmtN(kpi.totalClaims)}
-          subtitle="All ingested claim records" icon={<FileText size={18} />} color={C.blue} />
-        <StatCard loading={statsQ.isLoading} label="Matched Patients" value={fmtN(kpi.totalMatched)}
-          subtitle={`${kpi.matchedPct}% of claims linked`} icon={<Users size={18} />} color={C.emerald} />
-        <StatCard loading={statsQ.isLoading} label="Top HCCs Identified" value={fmtN(kpi.uniqueHccs)}
-          subtitle="Unique HCC categories" icon={<Tag size={18} />} color={C.violet} />
-        <StatCard loading={statsQ.isLoading} label="Revenue Opportunity" value={fmt$(kpi.revenueOpportunity)}
-          subtitle="Estimated (matched × HCCs)" icon={<DollarSign size={18} />} color={C.amber} />
+          icon={<Layers size={18} />} />
+        <MetricCard loading={statsQ.isLoading} label="Total Claims" value={fmtN(kpi.totalClaims)}
+          subtitle="All ingested claim records" icon={<FileText size={18} />} />
+        <MetricCard loading={statsQ.isLoading} label="Matched Patients" value={fmtN(kpi.totalMatched)}
+          subtitle={`${kpi.matchedPct}% of claims linked`} icon={<Users size={18} />} intent="success" />
+        <MetricCard loading={statsQ.isLoading} label="Top HCCs Identified" value={fmtN(kpi.uniqueHccs)}
+          subtitle="Unique HCC categories" icon={<Tag size={18} />} />
+        <MetricCard loading={statsQ.isLoading} label="Revenue Opportunity" value={fmt$(kpi.revenueOpportunity)}
+          subtitle="Estimated (matched × HCCs)" icon={<DollarSign size={18} />} intent="success" />
       </div>
 
       {/* Batch table or empty hero */}

@@ -57,6 +57,7 @@ import {
   getSuspectsSummary,
   getWorkflowSummary,
   isEmrDeactivatedError,
+  useMetricFormula,
 } from "@/lib/api";
 import { MetricTrend } from "@/components/charts/MetricTrend";
 import {
@@ -878,6 +879,8 @@ export function AdminDashboard() {
   const avgRaf = rev?.average_raf_score ?? stats?.average_raf_score ?? 0;
   const rawRevenueOpp = rev?.estimated_annual_revenue ?? 0;
   const revenueOpp = Math.abs(rawRevenueOpp);
+  // Formula provenance for CFO tooltip — _meta direct field or scanned fallback
+  const revMeta = useMetricFormula(rev as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? rev?._meta ?? null;
 
   // Suspects count
   const suspectsCount = suspectsData?.length ?? 0;
@@ -1477,14 +1480,17 @@ export function AdminDashboard() {
             .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
           `}</style>
           {/* Hero tile — Revenue Opportunity dominates the row. */}
-          <MetricCard
-            label="Revenue Opportunity"
-            value={revenueOpp > 0 ? `$${(revenueOpp / 1_000_000).toFixed(1)}M` : "--"}
-            subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
-            icon={<DollarSign size={20} />}
-            intent={revenueOpp > 0 ? "success" : "default"}
-            href="/reports"
-          />
+          <div data-testid="revenue-at-risk-value">
+            <MetricCard
+              label="Revenue Opportunity"
+              value={revenueOpp > 0 ? `$${(revenueOpp / 1_000_000).toFixed(1)}M` : "--"}
+              subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
+              icon={<DollarSign size={20} />}
+              intent={revenueOpp > 0 ? "success" : "default"}
+              href="/reports"
+              meta={revMeta ?? undefined}
+            />
+          </div>
           <MetricCard
             label="Suspects"
             value={suspectsCount.toLocaleString()}

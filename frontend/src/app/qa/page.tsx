@@ -31,7 +31,8 @@ import {
 } from "lucide-react";
 
 import api from "@/lib/api";
-import { PageHeader, StatCard } from "@/components/healthcare-ui";
+import { PageHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { useToast } from "@/components/Toast";
 
 // ---------------------------------------------------------------------------
@@ -228,9 +229,9 @@ export default function QAReviewPage() {
           marginBottom: 24,
         }}
       >
-        <StatCard label="Awaiting secondary" value={counts.pending} icon={<ShieldCheck size={18} />} color={T.amber600} />
-        <StatCard label="Escalated" value={counts.escalated} icon={<AlertTriangle size={18} />} color={T.red600} />
-        <StatCard label="Closed today" value={counts.closed} icon={<CheckCheck size={18} />} color={T.emerald600} />
+        <MetricCard label="Awaiting secondary" value={counts.pending} icon={<ShieldCheck size={18} />} intent="warning" />
+        <MetricCard label="Escalated" value={counts.escalated} icon={<AlertTriangle size={18} />} intent="danger" />
+        <MetricCard label="Closed today" value={counts.closed} icon={<CheckCheck size={18} />} intent="success" />
       </div>
 
       {/* Kanban */}

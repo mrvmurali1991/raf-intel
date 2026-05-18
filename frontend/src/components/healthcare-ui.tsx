@@ -4,6 +4,8 @@ import React from "react";
 import { ArrowUp, ArrowDown, ChevronLeft, Info, X } from "lucide-react";
 import Link from "next/link";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
+import type { MetricMeta } from "@/lib/api";
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 //
@@ -44,6 +46,10 @@ function riskGlyph(score: number | null): string {
   return "";
 }
 
+/**
+ * @deprecated Use MetricCard from @/components/ui/metric-card instead.
+ * StatCard will be removed once all call-sites outside the top-10 pages are migrated.
+ */
 // ─── 1. StatCard ─────────────────────────────────────────────────────────────
 
 export interface StatCardEmptyState {
@@ -92,6 +98,11 @@ export interface StatCardProps {
    * Pass a <MetricTrend /> element.
    */
   sparkline?: React.ReactNode;
+  /**
+   * MetricMeta block from the backend _meta field. When provided, renders a
+   * rich formula tooltip (MetricMetaTooltip) next to the label.
+   */
+  meta?: MetricMeta;
 }
 
 /** Returns true when a value should trigger the empty-state layout. */
@@ -102,7 +113,12 @@ function isEmptyValue(value: React.ReactNode): boolean {
   return false;
 }
 
-export function StatCard({ label, value, subtitle, icon, trend, accentClassName = "text-primary bg-primary/10", loading, href, info, emptyState, actionLink, sparklinePlaceholder, sparkline }: StatCardProps) {
+/** @deprecated Use MetricCard from @/components/ui/metric-card instead. */
+export function StatCard({ label, value, subtitle, icon, trend, accentClassName = "text-primary bg-primary/10", loading, href, info, emptyState, actionLink, sparklinePlaceholder, sparkline, meta }: StatCardProps) {
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.warn(`[StatCard] "${label}" — StatCard is deprecated. Migrate to <MetricCard> from @/components/ui/metric-card.`);
+  }
   const [showInfo, setShowInfo] = React.useState(false);
 
   if (loading) {
@@ -130,11 +146,13 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {label}
           </span>
-          {info && (
+          {meta && <MetricMetaTooltip meta={meta} />}
+          {!meta && info && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowInfo(!showInfo); }}
               className={`border-none bg-transparent cursor-pointer p-0.5 flex items-center transition-colors ${showInfo ? "text-primary" : "text-muted-foreground"}`}
               aria-label={`Info about ${label}`}
+              data-testid="revenue-at-risk-info"
             >
               <Info size={14} />
             </button>

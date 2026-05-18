@@ -30,7 +30,8 @@ import {
   Stethoscope,
   FlaskConical,
 } from "lucide-react";
-import { PageHeader, StatCard, SectionHeader, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { tokens } from "@/styles/tokens";
 
 // ---------------------------------------------------------------------------
@@ -2010,37 +2011,36 @@ export default function EmrConfigPage() {
         {/* Stats bar */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginBottom: 32 }}>
           <div className="animate-slide-up stagger-1">
-            <StatCard
+            <MetricCard
               label="Total Connections"
               value={connections.length}
               icon={<Database size={18} />}
-              color={C.primary}
             />
           </div>
           <div className="animate-slide-up stagger-2">
-            <StatCard
+            <MetricCard
               label="Active"
               value={activeCount}
               icon={<CheckCircle2 size={18} />}
-              color={C.emerald600}
+              intent="success"
               subtitle={`${connections.length - activeCount} inactive`}
             />
           </div>
           <div className="animate-slide-up stagger-3">
-            <StatCard
+            <MetricCard
               label="Last Sync"
               value={formatRelativeTime(mostRecentSync)}
               icon={<Clock size={18} />}
-              color={C.amber600}
+              intent="warning"
               subtitle={mostRecentSync ? formatDateTime(mostRecentSync) : "No syncs yet"}
             />
           </div>
           <div className="animate-slide-up stagger-4">
-            <StatCard
+            <MetricCard
               label="Errors"
               value={errorCount}
               icon={<AlertTriangle size={18} />}
-              color={errorCount > 0 ? C.red600 : C.emerald600}
+              intent={errorCount > 0 ? "danger" : "success"}
               subtitle={errorCount > 0 ? "Connections need attention" : "All connections healthy"}
             />
           </div>

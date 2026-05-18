@@ -31,7 +31,8 @@ import {
   FileCheck,
   Inbox,
 } from "lucide-react";
-import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 
 // ─────────────────────────────────────────────
 // Lazy-loaded heavy panels (deferred from initial paint)
@@ -1073,40 +1074,39 @@ export default function SubmissionsPage() {
             </div>
           ) : (
             <>
-              <StatCard
+              <MetricCard
                 label="Total Batches"
                 value={stats.total_batches}
                 icon={<FileText size={18} />}
-                color={T.blue600}
                 subtitle="All submission batches"
               />
-              <StatCard
+              <MetricCard
                 label="Records Submitted"
                 value={stats.records_submitted?.toLocaleString() ?? "0"}
                 icon={<Send size={18} />}
-                color={T.emerald600}
+                intent="success"
                 subtitle="Across all batches"
               />
-              <StatCard
+              <MetricCard
                 label="Acceptance Rate"
                 value={`${(stats.acceptance_rate ?? 0).toFixed(1)}%`}
                 icon={<CheckCircle size={18} />}
-                color={T.emerald500}
+                intent="success"
                 subtitle="CMS accepted records"
-                trend={{ value: 1.2, label: "vs last sweep" }}
+                delta={1.2}
               />
-              <StatCard
+              <MetricCard
                 label="Pending Validation"
                 value={stats.pending_validation}
                 icon={<Clock size={18} />}
-                color={T.amber500}
+                intent="warning"
                 subtitle="Awaiting validation run"
               />
-              <StatCard
+              <MetricCard
                 label="Upcoming Deadlines"
                 value={stats.upcoming_deadlines}
                 icon={<Calendar size={18} />}
-                color={deadlines.some((d) => d.days_remaining < 7) ? T.red600 : T.amber500}
+                intent={deadlines.some((d) => d.days_remaining < 7) ? "danger" : "warning"}
                 subtitle="Within 30 days"
               />
             </>

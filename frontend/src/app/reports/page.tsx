@@ -21,11 +21,12 @@ import {
   getHccDistribution,
   getRecaptureGapsReport,
   getDataCompleteness,
+  useMetricFormula,
   type RevenueOpportunityReport,
   type PatientScorecardRow,
   type HccDistributionRow,
 } from "@/lib/api";
-import { StatCard } from "@/components/healthcare-ui";
+import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
 import { FileDown, Printer } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { tokens } from "@/styles/tokens";
@@ -511,6 +512,8 @@ export default function ReportsPage() {
 function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<RevenueOpportunityReport>; scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void } }) {
   const r = revenue.data;
   const patients: PatientRow[] = scorecard.data ?? [];
+  // Formula provenance for CFO tooltip
+  const revMeta = useMetricFormula(r as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? r?._meta ?? null;
 
   const { top25, patientsWithGaps } = useMemo(() => {
     const allWithGaps = [...patients].filter((p) => (p.gap ?? 0) > 0);
@@ -532,7 +535,7 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20, marginBottom: 32 }}>
         {/* Revenue Card */}
-        <div className="hover-lift card-glow-emerald" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
+        <div className="hover-lift card-glow-emerald" data-testid="revenue-at-risk-value" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Estimated Annual Revenue</p>
