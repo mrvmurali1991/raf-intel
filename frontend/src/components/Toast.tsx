@@ -170,7 +170,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 removeToast(t.id);
               }}
               disabled={t.action.disabled}
-              title={t.action.disabled ? "Coming soon" : undefined}
+              title={t.action.disabled ? "Coming soon" : t.action.label === "Undo" ? "5-second window to reverse the action" : undefined}
+              aria-label={t.action.label === "Undo" ? "Undo — 5-second window to reverse the action" : t.action.label}
               className={cn(
                 "mt-1.5 text-xs font-semibold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current",
                 t.action.disabled
