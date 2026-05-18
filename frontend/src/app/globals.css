@@ -191,6 +191,7 @@
   --accent: 177 25% 93%;
   --accent-foreground: 220 20% 18%;
   --destructive: 0 72% 51%;
+  --success: 152 69% 38%;
   --warning: oklch(0.75 0.18 75);
   --warning-foreground: oklch(0.18 0 0);
   --warning-soft: oklch(0.95 0.08 75);
@@ -229,6 +230,7 @@
   --accent: 177 20% 18%;
   --accent-foreground: 210 15% 95%;
   --destructive: 0 65% 48%;
+  --success: 152 60% 48%;
   --warning: oklch(0.68 0.16 75);
   --warning-foreground: oklch(0.98 0 0);
   --warning-soft: oklch(0.32 0.10 75);

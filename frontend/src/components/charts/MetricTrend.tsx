@@ -8,7 +8,7 @@
  *   <MetricTrend series={[1.1, 1.12, 1.09, 1.13]} delta={-1.2} format="raf" />
  */
 
-import React, { useMemo } from "react";
+import React, { useId, useMemo } from "react";
 
 export type MetricTrendFormat = "number" | "raf" | "currency" | "percent";
 
@@ -70,8 +70,9 @@ export function MetricTrend({
     ? points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
     : null;
 
-  // Gradient fill under line
-  const gradientId = useMemo(() => `mtg-${Math.random().toString(36).slice(2, 8)}`, []);
+  // Gradient fill under line — useId gives a stable, concurrent-safe ID
+  const rawId = useId();
+  const gradientId = "mtg-" + rawId.replace(/:/g, "");
 
   return (
     <span

@@ -88,10 +88,10 @@ const intentAccent: Record<MetricCardIntent, string> = {
 };
 
 const intentSpark: Record<MetricCardIntent, string> = {
-  default: "#2563EB",
-  success: "#10B981",
-  warning: "#F59E0B",
-  danger:  "#DC2626",
+  default: "hsl(var(--chart-1))",
+  success: "hsl(var(--success))",
+  warning: "hsl(var(--warning))",
+  danger:  "hsl(var(--destructive))",
 };
 
 const intentDelta: Record<MetricCardIntent, { pos: string; neg: string; zero: string }> = {
@@ -205,7 +205,7 @@ export function MetricCard({
       onClick={resolvedClick}
       onKeyDown={
         isInteractive
-          ? (e) => { if (e.key === "Enter" || e.key === " ") resolvedClick?.(); }
+          ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); resolvedClick?.(); } }
           : undefined
       }
       aria-label={isInteractive ? `${label}: ${value}. Click to drill down.` : undefined}
