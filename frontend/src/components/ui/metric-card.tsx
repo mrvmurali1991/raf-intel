@@ -52,6 +52,21 @@ export interface MetricCardProps {
   /** Optional sub-label (e.g. "vs last quarter") */
   subtitle?: string;
   className?: string;
+  /**
+   * Text link rendered BELOW the metric number — uniform CTA placement.
+   * Replaces embedded buttons; displayed as "label →" in primary color.
+   */
+  actionLink?: { label: string; href: string };
+  /**
+   * When true, renders a 32 px placeholder row reserved for a MetricTrend
+   * sparkline (Agent #9). Replace with <MetricTrend /> once wired.
+   */
+  sparklinePlaceholder?: boolean;
+  /**
+   * Slot for a pre-built <MetricTrend /> or custom sparkline node.
+   * Takes priority over sparklinePlaceholder when both are supplied.
+   */
+  sparkline?: React.ReactNode;
 }
 
 // ---------------------------------------------------------------------------
