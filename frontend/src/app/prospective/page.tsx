@@ -708,16 +708,16 @@ export default function ProspectivePage() {
           />
         </div>
         <div className="animate-slide-up stagger-3 card-glow-emerald">
-          <div data-testid="revenue-at-risk-value">
-            <StatCard
-              label="Revenue at Risk"
-              value={fmtCurrencyCompact(stats.totalRevenue)}
-              subtitle="estimated opportunity"
-              color={C.emerald500}
-              icon={<TrendingUp size={18} />}
-              meta={revenueAtRiskMeta ?? undefined}
-            />
-          </div>
+          <StatCard
+            label="Revenue at Risk"
+            value={fmtCurrencyCompact(stats.totalRevenue)}
+            subtitle="estimated opportunity"
+            color={C.emerald500}
+            icon={<TrendingUp size={18} />}
+            meta={revenueAtRiskMeta ?? undefined}
+            labelTestId="revenue-at-risk-label"
+            valueTestId="revenue-at-risk-value"
+          />
         </div>
         <div className="animate-slide-up stagger-4 card-glow-blue">
           <StatCard

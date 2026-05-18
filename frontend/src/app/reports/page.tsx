@@ -573,14 +573,14 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20, marginBottom: 32 }}>
         {/* Revenue Card */}
-        <div className="hover-lift card-glow-emerald" data-testid="revenue-at-risk-value" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
+        <div className="hover-lift card-glow-emerald" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
+              <p data-testid="revenue-at-risk-label" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
                 Estimated Annual Revenue
                 {revMeta && <MetricMetaTooltip meta={revMeta} side="bottom" />}
               </p>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.emeraldDark }}>{fmt$(totalRevenue)}</p>
+              <p data-testid="revenue-at-risk-value" style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.emeraldDark }}>{fmt$(totalRevenue)}</p>
               <p style={{ fontSize: 12, color: C.textSub, margin: "4px 0 0" }}>@ ${REVENUE_PER_RAF.toLocaleString()} / RAF point</p>
               {r?.last_computed_at && (() => {
                 const d = new Date(r.last_computed_at);
@@ -922,7 +922,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 3: HCC DISTRIBUTION
 // ══════════════════════════════════════════════════════════════════════════════
-function HccTab({ hccDist }: { hccDist: QueryResult<HccDistributionRow[]> }) {
+function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistributionRow[]>; isHistoricalPY?: boolean }) {
   const chartRef = React.useRef<HTMLDivElement | null>(null);
   if (hccDist.isLoading) return <Spinner label="Loading HCC distribution..." />;
   if (hccDist.isError) return <ErrorBox message="Failed to load HCC data" onRetry={hccDist.refetch} />;
@@ -1071,7 +1071,7 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
           <h3 className="gradient-text" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>All Recapture Gaps</h3>
           <button
             onClick={() => {
-              if (!gaps.length) return;
+              if (isHistoricalPY || !gaps.length) return;
               downloadCSV(gaps.map((g) => ({
                 "Patient ID": g.patient_id ?? g.pid ?? "",
                 "Patient Name": [g.last_name, g.first_name].filter(Boolean).join(", ") || (g.patient_name ?? ""),
@@ -1081,7 +1081,9 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
                 "Last Coded": g.onset_date ?? g.last_coded ?? "",
               })), "recapture-gaps");
             }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            disabled={isHistoricalPY}
+            title={isHistoricalPY ? "Disabled in historical view" : undefined}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
           >
             <FileDown size={14} />
             Export CSV

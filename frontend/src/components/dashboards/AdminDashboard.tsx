@@ -516,13 +516,13 @@ function TourModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Content */}
-        <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+        <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
           Step {step + 1} of {total}
         </div>
-        <h3 style={{ fontSize: 19, fontWeight: 700, color: "#0F172A", margin: "0 0 10px", letterSpacing: "-0.02em" }}>
+        <h3 className="text-foreground" style={{ fontSize: 19, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.02em" }}>
           {current.title}
         </h3>
-        <p style={{ fontSize: 14, color: "#475569", lineHeight: 1.65, margin: "0 0 24px" }}>
+        <p className="text-muted-foreground" style={{ fontSize: 14, lineHeight: 1.65, margin: "0 0 24px" }}>
           {current.body}
         </p>
 
@@ -600,7 +600,7 @@ function TourModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <p style={{ textAlign: "center", fontSize: 11, color: "#CBD5E1", marginTop: 16, marginBottom: 0 }}>
+        <p className="text-muted-foreground/60" style={{ textAlign: "center", fontSize: 11, marginTop: 16, marginBottom: 0 }}>
           Use arrow keys to navigate &middot; Esc to close
         </p>
       </div>
@@ -680,7 +680,7 @@ function OnboardingCard({
           <BookOpen size={24} color="#3B82F6" />
         </div>
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
+          <h2 className="text-foreground" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
             Get started in 3 steps
           </h2>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
@@ -735,10 +735,10 @@ function OnboardingCard({
 
             {/* Text */}
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 4 }}>
+              <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
                 {s.title}
               </div>
-              <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.55 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 12, lineHeight: 1.55 }}>
                 {s.description}
               </div>
             </div>
@@ -1095,7 +1095,7 @@ export function AdminDashboard() {
     <TooltipProvider delay={200}>
     <>
     {showTour && <TourModal onClose={() => setShowTour(false)} />}
-    <div className="admin-dash-outer" style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
+    <div className="admin-dash-outer bg-background" style={{ minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
       <DataQualityBanner />
       <style>{`
         @keyframes shimmer {
@@ -1150,11 +1150,11 @@ export function AdminDashboard() {
       {/* ── Header ── */}
       <div className="admin-dash-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+          <h1 className="text-foreground" style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
             Population Health Intelligence
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: "#64748B" }}>{dateStr}</span>
+            <span className="text-muted-foreground" style={{ fontSize: 13 }}>{dateStr}</span>
             <button
               onClick={() => setShowTour(true)}
               aria-label="Take the product tour"
@@ -1189,6 +1189,7 @@ export function AdminDashboard() {
           />
           <button
             onClick={handleRefresh}
+            className="text-muted-foreground"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -1197,7 +1198,6 @@ export function AdminDashboard() {
               border: "1px solid #E5E7EB",
               borderRadius: 10,
               background: "#FFFFFF",
-              color: "#475569",
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
@@ -1356,12 +1356,12 @@ export function AdminDashboard() {
                 <Stethoscope size={28} color="#F59E0B" />
               </div>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1E293B", margin: 0 }}>
+                <h3 className="text-foreground" style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
                   Connect Demo OpenEMR?
                 </h3>
               </div>
             </div>
-            <p style={{ fontSize: 14, color: "#64748B", lineHeight: 1.6, margin: "0 0 8px" }}>
+            <p className="text-muted-foreground" style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 8px" }}>
               This will connect to the bundled <strong>OpenEMR</strong> demo instance with sample patient data. You can use this to explore all features of RAF Intelligence.
             </p>
             <div style={{
@@ -1434,10 +1434,10 @@ export function AdminDashboard() {
           <div style={{ background: "#F0F9FF", borderRadius: 16, padding: 24, display: "inline-block", marginBottom: 20 }}>
             <Stethoscope size={48} color="#3B82F6" />
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1E293B", margin: "0 0 8px" }}>
+          <h2 className="text-foreground" style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px" }}>
             Welcome to RAF Intelligence
           </h2>
-          <p style={{ fontSize: 15, color: "#64748B", maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.6 }}>
+          <p className="text-muted-foreground" style={{ fontSize: 15, maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.6 }}>
             Connect your EMR system to start analyzing patient data, identifying HCC coding gaps, and uncovering revenue opportunities.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
@@ -1576,7 +1576,7 @@ export function AdminDashboard() {
       )}
       {/* Inline notice when kpi-trends endpoint failed or timed out */}
       {(kpiTrendsQ.isError || (kpiTimedOut && !kpiTrends)) && (
-        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: -16, marginBottom: 8, paddingLeft: 4 }}>
+        <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: -16, marginBottom: 8, paddingLeft: 4 }}>
           Sparkline trends couldn&apos;t load — showing latest values only.
         </div>
       )}
@@ -1737,13 +1737,13 @@ export function AdminDashboard() {
                     }}
                   />
                   <div style={{ fontSize: 13, fontWeight: 600, color: t.color }}>{t.label}</div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "#0F172A", margin: "4px 0", letterSpacing: "-0.02em" }}>
+                  <div className="text-foreground" style={{ fontSize: 28, fontWeight: 800, margin: "4px 0", letterSpacing: "-0.02em" }}>
                     {fmtN(t.count)}
                   </div>
-                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>
+                  <div className="text-muted-foreground" style={{ fontSize: 12, fontWeight: 500 }}>
                     {tiers.total > 0 ? `${Math.round((t.count / tiers.total) * 100)}%` : "0%"} of population
                   </div>
-                  <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>{t.desc}</div>
+                  <div className="text-muted-foreground" style={{ fontSize: 10, marginTop: 2 }}>{t.desc}</div>
                 </div>
                 </Link>
               ))}
@@ -1772,7 +1772,7 @@ export function AdminDashboard() {
               }
             />
             {suspectsCount === 0 ? (
-              <div style={{ color: "#64748B", fontSize: 14, padding: "24px 0", textAlign: "center" }}>
+              <div className="text-muted-foreground" style={{ fontSize: 14, padding: "24px 0", textAlign: "center" }}>
                 No suspect conditions found. Run clinical analysis to identify gaps.
               </div>
             ) : (
@@ -1866,7 +1866,7 @@ export function AdminDashboard() {
               }
             />
             {topOpps.length === 0 ? (
-              <div style={{ color: "#64748B", fontSize: 14, padding: "32px 0", textAlign: "center" }}>
+              <div className="text-muted-foreground" style={{ fontSize: 14, padding: "32px 0", textAlign: "center" }}>
                 <Calculator size={32} color="#CBD5E1" style={{ marginBottom: 8 }} />
                 <div>Run clinical analysis to identify revenue gaps.</div>
               </div>
@@ -1876,11 +1876,11 @@ export function AdminDashboard() {
               <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 360 }}>
                 {/* Table header */}
                 <div style={{ display: "flex", alignItems: "center", padding: "0 8px 10px", borderBottom: "1px solid #E5E7EB" }}>
-                  <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient</span>
-                  <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Billing RAF</span>
-                  <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>TMIAB RAF</span>
-                  <span style={{ width: 60, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Gap</span>
-                  <span style={{ width: 80, fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Revenue</span>
+                  <span className="text-muted-foreground" style={{ flex: 1, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient</span>
+                  <span className="text-muted-foreground" style={{ width: 70, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Billing RAF</span>
+                  <span className="text-muted-foreground" style={{ width: 70, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>TMIAB RAF</span>
+                  <span className="text-muted-foreground" style={{ width: 60, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Gap</span>
+                  <span className="text-muted-foreground" style={{ width: 80, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Revenue</span>
                   <span style={{ width: 20 }} />
                 </div>
                 {topOpps.map((p, i: number) => {
@@ -1936,7 +1936,7 @@ export function AdminDashboard() {
                             {p.name as string}
                           </span>
                         </div>
-                        <span style={{ width: 70, fontSize: 12, fontWeight: 500, color: "#64748B", textAlign: "center" }}>
+                        <span className="text-muted-foreground" style={{ width: 70, fontSize: 12, fontWeight: 500, textAlign: "center" }}>
                           {(p.billing_raf as number) != null ? (p.billing_raf as number).toFixed(2) : "--"}
                         </span>
                         <span style={{ width: 70, fontSize: 12, fontWeight: 600, color: "#1E293B", textAlign: "center" }}>
@@ -1988,7 +1988,7 @@ export function AdminDashboard() {
               icon={<BarChart3 size={18} />}
             />
             {waterfallData.length === 0 ? (
-              <div style={{ color: "#64748B", fontSize: 14, padding: "32px 0", textAlign: "center" }}>
+              <div className="text-muted-foreground" style={{ fontSize: 14, padding: "32px 0", textAlign: "center" }}>
                 No HCC data available. Run analysis first.
               </div>
             ) : (
@@ -1998,7 +1998,7 @@ export function AdminDashboard() {
                   totalLabel="Total Opportunity"
                   height={36}
                 />
-                <div style={{ marginTop: 16, fontSize: 11, color: "#64748B", lineHeight: 1.5 }}>
+                <div className="text-muted-foreground" style={{ marginTop: 16, fontSize: 11, lineHeight: 1.5 }}>
                   Revenue estimated as patient count x coefficient x $12,000 base rate per condition category.
                 </div>
               </div>
@@ -2053,12 +2053,12 @@ export function AdminDashboard() {
                     {prov.name.replace("Dr. ", "").charAt(0)}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{prov.name}</div>
-                    <div style={{ fontSize: 11, color: "#64748B" }}>{prov.specialty}</div>
+                    <div className="text-foreground" style={{ fontSize: 13, fontWeight: 600 }}>{prov.name}</div>
+                    <div className="text-muted-foreground" style={{ fontSize: 11 }}>{prov.specialty}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: "#64748B", width: 32, textAlign: "center" }}>{prov.patients}</span>
+                  <span className="text-muted-foreground" style={{ fontSize: 12, width: 32, textAlign: "center" }}>{prov.patients}</span>
                   <span
                     style={{
                       fontSize: 11,
@@ -2083,7 +2083,7 @@ export function AdminDashboard() {
           </div>
           {/* Provider comparison bar chart */}
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #F1F5F9" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 10 }}>Patient Distribution</div>
+            <div className="text-muted-foreground" style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Patient Distribution</div>
             <MiniBarChart
               data={providers.map((p: { name: string; patients: number }, idx: number) => ({
                 label: p.name,
@@ -2181,7 +2181,7 @@ export function AdminDashboard() {
                       <Icon size={16} color={item.color} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{item.title}</div>
+                      <div className="text-foreground" style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       <span style={{
@@ -2299,11 +2299,11 @@ export function AdminDashboard() {
                   {["#", "Patient Name", "Age", "Sex", "Risk Level", "Billing RAF", "TMIAB RAF", "Gap", "Revenue", "HCCs", "Status"].map((h) => (
                     <th
                       key={h}
+                      className="text-muted-foreground"
                       style={{
                         padding: "10px 12px",
                         fontSize: 11,
                         fontWeight: 700,
-                        color: "#64748B",
                         textTransform: "uppercase",
                         letterSpacing: "0.05em",
                         borderBottom: "2px solid #E5E7EB",
@@ -2335,10 +2335,10 @@ export function AdminDashboard() {
                       onClick={() => router.push(`/patients/${p.pid}`)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/patients/${p.pid}`); } }}
                     >
-                      <td style={{ padding: "12px", fontSize: 12, fontWeight: 600, color: "#64748B", borderBottom: "1px solid #F1F5F9" }}>{idx + 1}</td>
+                      <td className="text-muted-foreground" style={{ padding: "12px", fontSize: 12, fontWeight: 600, borderBottom: "1px solid #F1F5F9" }}>{idx + 1}</td>
                       <td style={{ padding: "12px", borderBottom: "1px solid #F1F5F9" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{p.name as string}</span>
+                          <span className="text-foreground" style={{ fontSize: 13, fontWeight: 600 }}>{p.name as string}</span>
                           <Sparkline
                             data={generateSparklineData(aiRaf, 6)}
                             width={48}

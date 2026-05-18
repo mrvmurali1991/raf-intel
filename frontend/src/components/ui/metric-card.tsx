@@ -76,6 +76,12 @@ export interface MetricCardProps {
    * (layout-stable, Playwright-reachable). Omit entirely to suppress the icon.
    */
   meta?: MetricMeta | null;
+  /**
+   * ISO-8601 timestamp of the last time this metric was computed.
+   * When provided, renders "Last refreshed Xm ago" below the value.
+   * Silently omitted if null/undefined or an invalid date.
+   */
+  freshness?: string;
   /** data-testid placed on the label span — for smoke-test parity selectors */
   labelTestId?: string;
   /** data-testid placed on the value span — for smoke-test parity selectors */
@@ -205,6 +211,7 @@ export function MetricCard({
   sparklinePlaceholder,
   sparkline,
   meta,
+  freshness,
   labelTestId,
   valueTestId,
 }: MetricCardProps) {
@@ -275,6 +282,20 @@ export function MetricCard({
           </span>
           {delta !== undefined && <DeltaBadge delta={delta} intent={intent} />}
         </div>
+
+        {/* Last-refreshed freshness row */}
+        {freshness && (() => {
+          const rel = relativeTime(freshness);
+          return rel ? (
+            <span
+              data-testid="last-refreshed"
+              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 leading-none"
+            >
+              <Clock size={11} aria-hidden />
+              Last refreshed {rel} ago
+            </span>
+          ) : null;
+        })()}
 
         {/* Subtitle */}
         {subtitle && (
