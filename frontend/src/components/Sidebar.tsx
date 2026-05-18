@@ -1286,7 +1286,12 @@ export function Sidebar() {
             paddingTop: 6,
           }}
         >
-          <span style={{ fontSize: 10, color: TEXT_SECTION }}>v2.0</span>
+          <span
+            style={{ fontSize: 10, color: TEXT_SECTION, fontFamily: "monospace" }}
+            title={`Build ${process.env.NEXT_PUBLIC_BUILD_ID || "dev"} — ${process.env.NEXT_PUBLIC_BUILD_TIME || "unknown"}`}
+          >
+            v2.0 · {(process.env.NEXT_PUBLIC_BUILD_ID || "dev").slice(0, 7)}
+          </span>
         </div>
       </div>
     </>

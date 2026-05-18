@@ -11,6 +11,10 @@ const commitSha = (() => {
   }
 })();
 
+// Expose build identity to the browser so the user can verify the live deploy.
+process.env.NEXT_PUBLIC_BUILD_ID = commitSha ?? "dev";
+process.env.NEXT_PUBLIC_BUILD_TIME = new Date().toISOString();
+
 const nextConfig: NextConfig = {
   output: "standalone",
   generateBuildId: () => commitSha ?? null,
@@ -29,6 +33,14 @@ const nextConfig: NextConfig = {
   // Security headers
   headers: async () => [
     {
+      // Hashed JS/CSS chunks — content-addressed, safe to cache forever.
+      // Filename changes when content changes, so the browser auto-busts.
+      source: "/_next/static/:path*",
+      headers: [
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    },
+    {
       // Public images/icons: cache for 1 month
       source: "/:path*.(png|jpg|jpeg|gif|ico|svg|webp)",
       headers: [
@@ -43,10 +55,16 @@ const nextConfig: NextConfig = {
       ],
     },
     {
-      // HTML pages: short cache with revalidation
+      // HTML / RSC payloads: NEVER cache. Cloudflare + browser must always
+      // revalidate. This is what lets new deploys appear without hard-refresh.
+      // The hashed _next/static chunks above carry the actual immutability.
       source: "/:path*",
       headers: [
-        { key: "Cache-Control", value: "public, max-age=60, stale-while-revalidate=300" },
+        { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" },
+        { key: "Pragma", value: "no-cache" },
+        { key: "Expires", value: "0" },
+        { key: "CDN-Cache-Control", value: "no-store" },
+        { key: "Cloudflare-CDN-Cache-Control", value: "no-store" },
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "X-Frame-Options", value: "DENY" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
