@@ -142,6 +142,15 @@ from app.routers import pre_submission as pre_submission_router
 from app.routers import tenant_branding as tenant_branding_router
 from app.routers import encryption_admin as encryption_admin_router
 from app.routers import hie_sync as hie_sync_router
+from app.routers import hl7v2_mdm_receiver as hl7v2_mdm_receiver_router
+from app.routers import tenant_doc_policy as tenant_doc_policy_router
+from app.routers import inovalon_admin as inovalon_admin_router
+from app.routers import fhir_bulk_export as fhir_bulk_export_router
+from app.routers import datavant_admin as datavant_admin_router
+from app.routers import datavant_webhook as datavant_webhook_router
+from app.routers import reveleer_admin as reveleer_admin_router
+from app.routers import direct_inbound as direct_inbound_router
+from app.routers import document_ingestion_dashboard as document_ingestion_dashboard_router
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +384,23 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, admin.router)
     # HIE (CommonWell + Carequality) admin sync
     _mount(app, hie_sync_router.router)
+    # HL7 v2 MDM HTTP receiver
+    _mount(app, hl7v2_mdm_receiver_router.router)
+    # Per-tenant OCR / LLM document policy (42 CFR Part 2)
+    _mount(app, tenant_doc_policy_router.router)
+    # Inovalon Electronic Record On Demand
+    _mount(app, inovalon_admin_router.router)
+    # FHIR Bulk Data $export client
+    _mount(app, fhir_bulk_export_router.router)
+    # Datavant Switchboard
+    _mount(app, datavant_admin_router.router)
+    _mount(app, datavant_webhook_router.router)
+    # Reveleer bi-directional
+    _mount(app, reveleer_admin_router.router)
+    # Direct Trust + C-CDA inbound
+    _mount(app, direct_inbound_router.router)
+    # Document Ingestion Dashboard
+    _mount(app, document_ingestion_dashboard_router.router)
     _mount(app, meat_router.router)
     _mount(app, meat_evidence_router.router)
     _mount(app, radv_audit_router.router)
