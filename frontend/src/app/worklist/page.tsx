@@ -15,10 +15,10 @@
  * dependency so this can land alongside other api.ts edits.
  */
 
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronRight, FileText, Activity, Stethoscope, ExternalLink, CalendarClock } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckSquare, ChevronRight, Download, ExternalLink, FileText, Activity, Loader2, Stethoscope, X } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { PageHeader } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
@@ -83,6 +83,214 @@ interface WorklistResponse {
 }
 
 type SortKey = "priority" | "awv_due";
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+
+function Toast({
+  message,
+  linkHref,
+  linkLabel,
+  onDismiss,
+}: {
+  message: string;
+  linkHref?: string;
+  linkLabel?: string;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed",
+        bottom: 24,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 9999,
+        background: tokens.slate900,
+        color: tokens.white,
+        padding: "12px 20px",
+        borderRadius: 10,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        fontSize: 13,
+        fontWeight: 500,
+        boxShadow: "0 8px 32px rgba(15,23,42,0.35)",
+        maxWidth: "90vw",
+      }}
+    >
+      <CheckSquare size={16} style={{ flexShrink: 0, color: "#34d399" }} />
+      <span>{message}</span>
+      {linkHref && linkLabel && (
+        <Link href={linkHref} style={{ color: "#67e8f9", fontWeight: 700, textDecoration: "underline", whiteSpace: "nowrap" }}>
+          {linkLabel}
+        </Link>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss notification"
+        style={{ background: "none", border: "none", color: tokens.slate400, cursor: "pointer", padding: 0, marginLeft: 4, display: "flex", alignItems: "center" }}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WorklistBulkActionsBar
+// ---------------------------------------------------------------------------
+
+function WorklistBulkActionsBar({
+  selectedCount,
+  totalCount,
+  onClear,
+  onSelectAll,
+  onAttest,
+  onScheduleAWV,
+  onExportCSV,
+  attesting,
+  exporting,
+}: {
+  selectedCount: number;
+  totalCount: number;
+  onClear: () => void;
+  onSelectAll: () => void;
+  onAttest: () => void;
+  onScheduleAWV: () => void;
+  onExportCSV: () => void;
+  attesting: boolean;
+  exporting: boolean;
+}) {
+  const brand = "#0F766E";
+  if (selectedCount === 0) return null;
+  return (
+    <div
+      role="region"
+      aria-label="Bulk actions"
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 10,
+        padding: "10px 16px",
+        borderBottom: `2px solid ${brand}`,
+        background: "rgba(15,118,110,0.07)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+      }}
+    >
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {selectedCount} patient{selectedCount === 1 ? "" : "s"} selected
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: brand, color: tokens.white, borderRadius: 999, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
+        {selectedCount} selected
+      </span>
+      <button type="button" onClick={onClear} aria-label="Clear selection" style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
+        Clear
+      </button>
+      {selectedCount < totalCount && (
+        <button type="button" onClick={onSelectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
+          Select all {totalCount}
+        </button>
+      )}
+      <div style={{ width: 1, height: 20, background: tokens.slate200, flexShrink: 0 }} />
+      <button
+        type="button"
+        onClick={onAttest}
+        disabled={attesting}
+        aria-label={`Send ${selectedCount} patients to attestation`}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: "none", background: attesting ? tokens.slate300 : brand, color: tokens.white, fontSize: 12, fontWeight: 600, cursor: attesting ? "not-allowed" : "pointer" }}
+      >
+        {attesting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <FileText size={13} />}
+        {attesting ? "Creating…" : "Send to Attestation"}
+      </button>
+      <button
+        type="button"
+        onClick={onScheduleAWV}
+        aria-label={`Schedule AWV for ${selectedCount} patients`}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${brand}`, background: tokens.white, color: brand, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+      >
+        <CalendarClock size={13} />
+        Schedule AWV
+      </button>
+      <button
+        type="button"
+        onClick={onExportCSV}
+        disabled={exporting}
+        aria-label={`Export ${selectedCount} patients to CSV`}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
+      >
+        {exporting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
+        {exporting ? "Exporting…" : "Export CSV"}
+      </button>
+      <span aria-hidden style={{ marginLeft: "auto", fontSize: 11, color: tokens.slate500, fontStyle: "italic" }}>
+        Shift+Click range · Cmd/Ctrl+A all · Esc clear
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AWV batch modal
+// ---------------------------------------------------------------------------
+
+function AWVBatchModal({ selectedCount, onClose }: { selectedCount: number; onClose: () => void }) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Schedule AWV for selected patients"
+      tabIndex={-1}
+      style={{ position: "fixed", inset: 0, zIndex: 9990, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: tokens.white, borderRadius: 12, boxShadow: "0 12px 48px rgba(15,23,42,0.25)", width: "100%", maxWidth: 480, padding: 24 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>
+            Schedule AWV — {selectedCount} patient{selectedCount === 1 ? "" : "s"}
+          </h3>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", color: tokens.slate500, display: "flex" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: tokens.slate600, margin: "0 0 16px" }}>
+          Batch AWV scheduling is managed in the Calendar module. Open the calendar to
+          assign appointment slots for all {selectedCount} selected patient{selectedCount === 1 ? "" : "s"}.
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 13, cursor: "pointer" }}>
+            Cancel
+          </button>
+          <Link href="/appointments" style={{ padding: "7px 16px", borderRadius: 6, background: "#0F766E", color: tokens.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            Open Calendar
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // AWV helpers ----------------------------------------------------------------
 

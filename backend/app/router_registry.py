@@ -105,6 +105,7 @@ from app.routers import pipeline as pipeline_router
 from app.routers import pipeline_settings as pipeline_settings_router
 from app.routers import provider_suspect_hotlist as provider_suspect_hotlist_router
 from app.routers import provider_worklist as provider_worklist_router
+from app.routers import worklist as worklist_bulk_router
 from app.routers import radv as radv_router
 from app.routers import radv_audit as radv_audit_router
 from app.routers import radv_audit_runs as radv_audit_runs_router
@@ -156,6 +157,7 @@ from app.routers import document_ingestion_dashboard as document_ingestion_dashb
 from app.routers import demo_reset as demo_reset_router
 from app.routers import goals as goals_router
 from app.routers import ehr_writeback as ehr_writeback_router
+from app.routers import hcc_rejections as hcc_rejections_router
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +367,9 @@ def register_routers(app: FastAPI) -> None:
     # Provider worklist — prioritized patient lists and action items
     _mount(app, provider_worklist_router.router)
 
+    # Worklist bulk actions — bulk-attest, bulk-export
+    _mount(app, worklist_bulk_router.router)
+
     # Real-time suspect hot-list (provider drawer "action this week")
     _mount(app, provider_suspect_hotlist_router.router)
 
@@ -436,3 +441,6 @@ def register_routers(app: FastAPI) -> None:
 
     # EHR Problem List write-back queue (SMART-on-FHIR Condition stub)
     _mount(app, ehr_writeback_router.router)
+
+    # HCC Rejections — two-way coding audit (DOJ-compliant, Reveleer 2026)
+    _mount(app, hcc_rejections_router.router)
