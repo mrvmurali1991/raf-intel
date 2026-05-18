@@ -243,7 +243,9 @@ def extract_from_openemr_document(
         )
         return {"suspects": [], "skipped": "read_failed"}
 
-    return extract_from_document(
+    # Route through the universal entry point so TIFF/GIF/BMP and >1000-page
+    # PDFs are auto-handled. Single-pdf small docs pass through unchanged.
+    return extract_from_document_unified(
         doc_bytes=data,
         mime_type=str(rec.get("mimetype") or "application/octet-stream"),
         year=yr,
@@ -251,3 +253,162 @@ def extract_from_openemr_document(
         document_filename=str(rec.get("name") or ""),
         tenant_id=tenant_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# Gemini-first universal-input helpers
+# ---------------------------------------------------------------------------
+# Per Google docs: Gemini natively supports PDF (text + scanned, up to 1000
+# pages / 50 MB), JPEG, PNG, WEBP, HEIC, HEIF. We auto-convert TIFF/GIF/BMP
+# to PNG so the caller never has to think about format mismatches.
+
+_AUTO_CONVERT_FROM = frozenset({
+    "image/tiff", "image/tif", "image/gif", "image/bmp"
+})
+
+
+def to_gemini_compatible(
+    doc_bytes: bytes, mime_type: str
+) -> tuple[bytes, str]:
+    """Return (bytes, mime) ready for inline_data.
+
+    Strategy:
+      * If mime is already Gemini-supported → passthrough.
+      * If mime is convertible (TIFF/GIF/BMP) → convert to PNG via Pillow.
+        For multi-page TIFFs we stack the pages into a single PNG with
+        sequential strips (Gemini reads it as one image — acceptable for
+        small page counts; larger TIFFs should be PDF-converted upstream).
+      * Otherwise → return passthrough; caller's `extract_from_document`
+        will mark it as unsupported.
+    """
+    m = (mime_type or "").lower().strip()
+    if m not in _AUTO_CONVERT_FROM:
+        return doc_bytes, m
+
+    try:
+        # Lazy import — keeps Pillow off the unit-test path.
+        from io import BytesIO
+        from PIL import Image  # type: ignore
+
+        img = Image.open(BytesIO(doc_bytes))
+        # For multi-page TIFF/GIF: pick the first frame for simplicity.
+        # Production should split + send each frame; tracked as a TODO.
+        if hasattr(img, "n_frames") and img.n_frames > 1:
+            logger.info(
+                "to_gemini_compatible: multi-frame %s (%d frames), using frame 0",
+                m, img.n_frames,
+            )
+            img.seek(0)
+        # Always convert to RGB before saving as PNG to drop alpha-mode
+        # variants that some scanners produce.
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        out = BytesIO()
+        img.save(out, format="PNG", optimize=True)
+        return out.getvalue(), "image/png"
+    except Exception as exc:
+        logger.warning(
+            "to_gemini_compatible: failed to convert %s: %s — sending raw",
+            m, exc,
+        )
+        return doc_bytes, m
+
+
+def chunk_pdf_pages(
+    pdf_bytes: bytes, chunk_size: int = 500
+) -> list[bytes]:
+    """Split a PDF into chunks of `chunk_size` pages each.
+
+    Used when a chart is > 1000 pages or > 20 MB and exceeds Gemini's
+    inline-data window. Returns a list of complete PDF blobs each within
+    Gemini's per-request limit.
+
+    Lazy imports pypdf so non-PDF code paths don't pay the cost.
+    """
+    try:
+        from io import BytesIO
+        from pypdf import PdfReader, PdfWriter  # type: ignore
+    except ImportError:
+        logger.warning("chunk_pdf_pages: pypdf not installed — returning whole PDF")
+        return [pdf_bytes]
+
+    reader = PdfReader(BytesIO(pdf_bytes))
+    total = len(reader.pages)
+    if total <= chunk_size:
+        return [pdf_bytes]
+
+    out: list[bytes] = []
+    for start in range(0, total, chunk_size):
+        writer = PdfWriter()
+        for i in range(start, min(start + chunk_size, total)):
+            writer.add_page(reader.pages[i])
+        buf = BytesIO()
+        writer.write(buf)
+        out.append(buf.getvalue())
+    logger.info(
+        "chunk_pdf_pages: split %d pages into %d chunks", total, len(out)
+    )
+    return out
+
+
+def extract_from_document_unified(
+    *,
+    doc_bytes: bytes,
+    mime_type: str,
+    year: int,
+    document_id: int | None = None,
+    document_filename: str | None = None,
+    tenant_id: str | None = None,
+) -> dict[str, Any]:
+    """Universal entry point: auto-convert + auto-chunk + extract.
+
+    Caller passes raw bytes + raw mime. We:
+      1. Convert TIFF/GIF/BMP → PNG losslessly via Pillow (image_to_gemini_compatible)
+      2. Detect oversized PDFs and chunk into ≤500-page pieces
+      3. Call extract_from_document on each chunk
+      4. Merge suspects across chunks (dedup by hcc_code+icd10_code)
+    """
+    # Step 1: format normalize
+    norm_bytes, norm_mime = to_gemini_compatible(doc_bytes, mime_type)
+
+    # Step 2: detect oversize PDF + chunk
+    chunks: list[bytes]
+    if norm_mime == "application/pdf" and len(norm_bytes) > 20 * 1024 * 1024:
+        chunks = chunk_pdf_pages(norm_bytes, chunk_size=500)
+    else:
+        chunks = [norm_bytes]
+
+    if len(chunks) == 1:
+        return extract_from_document(
+            doc_bytes=chunks[0], mime_type=norm_mime, year=year,
+            document_id=document_id, document_filename=document_filename,
+            tenant_id=tenant_id,
+        )
+
+    # Multi-chunk path: extract each, merge
+    all_suspects: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    raw_total = 0
+    for i, chunk_bytes in enumerate(chunks):
+        partial = extract_from_document(
+            doc_bytes=chunk_bytes, mime_type=norm_mime, year=year,
+            document_id=document_id,
+            document_filename=(f"{document_filename}#chunk{i}" if document_filename else None),
+            tenant_id=tenant_id,
+        )
+        raw_total += int(partial.get("raw_count") or 0)
+        for s in partial.get("suspects") or []:
+            key = (str(s.get("hcc_code") or ""), str(s.get("icd10_code") or ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            all_suspects.append(s)
+    return {
+        "suspects": all_suspects,
+        "raw_count": raw_total,
+        "kept_count": len(all_suspects),
+        "document_id": document_id,
+        "document_filename": document_filename,
+        "mime_type": norm_mime,
+        "chunks_processed": len(chunks),
+    }

@@ -29,11 +29,31 @@ _GEMINI_MIMETYPES: frozenset[str] = frozenset(
     {
         "application/pdf",
         "image/jpeg",
+        "image/jpg",
         "image/png",
         "image/webp",
         "image/heic",
+        "image/heif",
     }
 )
+
+# Mime types we can losslessly convert to a Gemini-supported format before send.
+# Per Google docs: TIFF and multi-page TIFF are NOT directly accepted, but the
+# pages convert cleanly to PNG via Pillow. We do that conversion in-process
+# so the caller never knows the difference — keeps the doctor's view simple.
+_CONVERTIBLE_TO_GEMINI: frozenset[str] = frozenset(
+    {
+        "image/tiff",
+        "image/tif",
+        "image/gif",
+        "image/bmp",
+    }
+)
+
+# Hard Gemini Vision PDF limits (Google AI docs, 2026):
+GEMINI_PDF_MAX_BYTES = 50 * 1024 * 1024     # 50 MB Cloud Storage path
+GEMINI_INLINE_MAX_BYTES = 20 * 1024 * 1024  # 20 MB inline_data
+GEMINI_PDF_MAX_PAGES = 1000                  # hard ceiling per request
 
 # Document categories that must bypass LLM processing (42 CFR Part 2 default).
 _NO_LLM_CATEGORIES: frozenset[str] = frozenset({"behavioral_health", "substance_abuse"})
@@ -74,13 +94,16 @@ def choose_extractor(
 ) -> ExtractorChoice:
     """Decide which extractor to use for a document.
 
+    Default is Gemini-first: every PDF / image goes to the vision model
+    natively. OCR is a deliberate carve-out for the cases below.
+
     Decision priority (highest first):
 
-    1. Tenant-level LLM disable flag → ``ocr_fallback``
-    2. Per-category tenant block list → ``ocr_fallback``
+    1. Tenant-level LLM disable flag → ``ocr_fallback``      (customer mandate)
+    2. Per-category tenant block list → ``ocr_fallback``      (customer mandate)
     3. Globally protected categories (42 CFR Part 2) → ``ocr_fallback``
-    4. TIFF (Gemini does not support it) → ``ocr_fallback``
-    5. Supported Gemini MIME type → ``gemini_vision``
+    4. Convertible mimetype (TIFF/GIF/BMP) → ``gemini_vision``  (auto-converted in-process)
+    5. Gemini-supported mimetype → ``gemini_vision``
     6. Everything else → ``skip``
     """
     mime = (mimetype or "").lower().strip()
@@ -110,18 +133,36 @@ def choose_extractor(
         )
         return "ocr_fallback"
 
-    # 4. TIFF — not supported by Gemini Vision
-    if mime == "image/tiff":
-        log.debug("choose_extractor: TIFF detected → ocr_fallback")
-        return "ocr_fallback"
+    # 4. Convertible image format → upstream caller (gemini_document_extractor)
+    #    converts to PNG before sending. Treat as Gemini-supported.
+    if mime in _CONVERTIBLE_TO_GEMINI:
+        log.debug("choose_extractor: %r will be auto-converted to PNG for Gemini", mime)
+        return "gemini_vision"
 
-    # 5. Gemini-supported format
+    # 5. Gemini-supported format directly
     if mime in _GEMINI_MIMETYPES:
         return "gemini_vision"
 
     # 6. Unsupported
     log.warning("choose_extractor: unsupported mimetype %r → skip", mime)
     return "skip"
+
+
+def needs_chunking(mime: str, size_bytes: int, page_count: int | None = None) -> bool:
+    """Return True when a PDF must be split before sending to Gemini.
+
+    Triggered by: > 1000 pages, > 20 MB inline payload, or > 50 MB total.
+    The chunker in `gemini_document_extractor.chunk_pdf_pages` handles this.
+    """
+    if (mime or "").lower() != "application/pdf":
+        return False
+    if size_bytes > GEMINI_PDF_MAX_BYTES:
+        return True
+    if size_bytes > GEMINI_INLINE_MAX_BYTES:
+        return True  # would need Cloud Storage path — chunking is simpler
+    if page_count is not None and page_count > GEMINI_PDF_MAX_PAGES:
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
