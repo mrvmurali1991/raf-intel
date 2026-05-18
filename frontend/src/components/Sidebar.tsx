@@ -991,6 +991,7 @@ export function Sidebar() {
           aria-label={
             theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
           }
+          aria-pressed={theme === "dark"}
           title={
             collapsed
               ? theme === "dark"
@@ -1005,7 +1006,37 @@ export function Sidebar() {
             <Moon style={{ width: 16, height: 16 }} />
           )}
           {!collapsed && (
-            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+            <>
+              <span style={{ flex: 1 }}>Dark mode</span>
+              {/* Visual switch indicator — shows ON/OFF state at a glance */}
+              <span
+                role="presentation"
+                data-state={theme === "dark" ? "on" : "off"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  width: 32,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: theme === "dark" ? "#0f766e" : (isDark ? "#334155" : "#cbd5e1"),
+                  padding: "0 2px",
+                  transition: "background-color 200ms",
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    backgroundColor: "#ffffff",
+                    transform: theme === "dark" ? "translateX(14px)" : "translateX(0)",
+                    transition: "transform 200ms cubic-bezier(0.4,0,0.2,1)",
+                    flexShrink: 0,
+                  }}
+                />
+              </span>
+            </>
           )}
         </button>
 
