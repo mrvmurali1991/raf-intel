@@ -55,9 +55,19 @@ They are NOT blocked — no deprecated StatCard renders remain.
 | src/components/OutreachChannelBreakdown.tsx | EmptyState only |
 | src/components/OutreachTemplateManager.tsx | EmptyState only |
 
-## Next steps (pass 5+)
+## Pass 5 — PageHeader / SectionHeader / EmptyState extracted (this pass)
 
-- Replace `PageHeader` with a local `<PageHeader>` in ui/ to remove
-  the last `healthcare-ui` surface area
-- Migrate `EmptyState`, `SectionHeader` to ui/ primitives
-- Once `healthcare-ui.tsx` exports zero components, delete the file
+- `src/components/ui/page-header.tsx` — canonical `PageHeader` implementation
+- `src/components/ui/section-header.tsx` — canonical `SectionHeader` implementation
+- `src/components/ui/empty-state.tsx` — canonical `EmptyState` implementation
+- `healthcare-ui.tsx` re-exports all three for backward compat; existing 224 import
+  sites across 53 files continue to work without changes.
+
+## Next steps (pass 6+)
+
+- Future PR: redirect the 224 `@/components/healthcare-ui` import sites to
+  `@/components/ui/page-header`, `@/components/ui/section-header`, and
+  `@/components/ui/empty-state` directly (codemod-friendly, one file at a time).
+- Migrate remaining healthcare-ui exports (`ProgressBar`, `RiskBadge`, `DataRow`,
+  `RAFScoreBadge`, etc.) to ui/ primitives.
+- Once `healthcare-ui.tsx` exports zero inline implementations, delete the file.

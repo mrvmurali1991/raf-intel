@@ -130,6 +130,41 @@
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
   --color-warning-soft: hsl(var(--warning-soft));
+
+  /* Risk level */
+  --color-risk-high:        hsl(var(--risk-high));
+  --color-risk-high-soft:   hsl(var(--risk-high-soft));
+  --color-risk-medium:      hsl(var(--risk-medium));
+  --color-risk-medium-soft: hsl(var(--risk-medium-soft));
+  --color-risk-low:         hsl(var(--risk-low));
+  --color-risk-low-soft:    hsl(var(--risk-low-soft));
+
+  /* Warning semantic */
+  --color-warning-border:   hsl(var(--warning-border));
+  --color-warning-text:     hsl(var(--warning-text));
+  --color-warning-strong:   hsl(var(--warning-strong));
+
+  /* Kappa IRR bands */
+  --color-kappa-excellent:       hsl(var(--kappa-excellent));
+  --color-kappa-excellent-soft:  hsl(var(--kappa-excellent-soft));
+  --color-kappa-moderate:        hsl(var(--kappa-moderate));
+  --color-kappa-moderate-soft:   hsl(var(--kappa-moderate-soft));
+  --color-kappa-poor:            hsl(var(--kappa-poor));
+  --color-kappa-poor-soft:       hsl(var(--kappa-poor-soft));
+  --color-kappa-neutral:         hsl(var(--kappa-neutral));
+  --color-kappa-neutral-soft:    hsl(var(--kappa-neutral-soft));
+
+  /* Sub-chip accents */
+  --color-sky-bg:        hsl(var(--sky-bg));
+  --color-sky-border:    hsl(var(--sky-border));
+  --color-sky-text:      hsl(var(--sky-text));
+  --color-orange-bg:     hsl(var(--orange-bg));
+  --color-orange-border: hsl(var(--orange-border));
+  --color-orange-text:   hsl(var(--orange-text));
+  --color-violet-bg:     hsl(var(--violet-bg));
+  --color-violet-border: hsl(var(--violet-border));
+  --color-violet-text:   hsl(var(--violet-text));
+
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -229,6 +264,39 @@
   --chart-4: 155 70% 40%;
   --chart-5: 140 72% 38%;
   --radius: 0.625rem;
+
+  /* ---- Semantic risk / kappa / sub-chip tokens ---- */
+  --risk-high:         0 72% 51%;
+  --risk-high-soft:    0 100% 97%;
+  --risk-medium:       38 92% 50%;
+  --risk-medium-soft:  48 100% 96%;
+  --risk-low:          152 69% 38%;
+  --risk-low-soft:     138 76% 97%;
+
+  --warning-soft:      45 96% 91%;
+  --warning-border:    43 96% 65%;
+  --warning-text:      20 94% 26%;
+  --warning-strong:    38 92% 50%;
+
+  --kappa-excellent:      142 72% 37%;
+  --kappa-excellent-soft: 141 84% 93%;
+  --kappa-moderate:       38 92% 50%;
+  --kappa-moderate-soft:  45 96% 91%;
+  --kappa-poor:           0 72% 51%;
+  --kappa-poor-soft:      0 93% 94%;
+  --kappa-neutral:        215 20% 65%;
+  --kappa-neutral-soft:   210 36% 96%;
+
+  --sky-bg:            199 100% 97%;
+  --sky-border:        199 85% 81%;
+  --sky-text:          200 98% 33%;
+  --orange-bg:         33 100% 97%;
+  --orange-border:     27 96% 83%;
+  --orange-text:       16 88% 41%;
+  --violet-bg:         250 100% 97%;
+  --violet-border:     251 86% 93%;
+  --violet-text:       263 80% 49%;
+
   --sidebar: 220 20% 97%;
   --sidebar-foreground: 220 15% 30%;
   --sidebar-primary: 177 73% 26%;
@@ -267,6 +335,38 @@
   --chart-3: 175 70% 50%;
   --chart-4: 155 65% 48%;
   --chart-5: 140 68% 45%;
+  /* ---- Semantic risk / kappa / sub-chip tokens (dark) ---- */
+  --risk-high:         0 65% 58%;
+  --risk-high-soft:    0 40% 13%;
+  --risk-medium:       38 80% 60%;
+  --risk-medium-soft:  40 40% 12%;
+  --risk-low:          152 60% 48%;
+  --risk-low-soft:     160 40% 12%;
+
+  --warning-soft:      32 30% 22%;
+  --warning-border:    38 55% 38%;
+  --warning-text:      38 80% 72%;
+  --warning-strong:    38 80% 60%;
+
+  --kappa-excellent:      142 55% 50%;
+  --kappa-excellent-soft: 142 40% 14%;
+  --kappa-moderate:       38 80% 60%;
+  --kappa-moderate-soft:  40 40% 12%;
+  --kappa-poor:           0 65% 58%;
+  --kappa-poor-soft:      0 40% 13%;
+  --kappa-neutral:        215 15% 55%;
+  --kappa-neutral-soft:   225 12% 16%;
+
+  --sky-bg:            210 50% 14%;
+  --sky-border:        210 40% 28%;
+  --sky-text:          199 80% 62%;
+  --orange-bg:         27 40% 13%;
+  --orange-border:     27 50% 28%;
+  --orange-text:       27 85% 68%;
+  --violet-bg:         270 40% 13%;
+  --violet-border:     270 35% 28%;
+  --violet-text:       263 70% 72%;
+
   --sidebar: 225 15% 6%;
   --sidebar-foreground: 210 12% 80%;
   --sidebar-primary: 177 60% 42%;
@@ -1231,38 +1331,19 @@ select.appearance-none {
 }
 
 /* ---------- Tinted badge / highlight backgrounds ----------
-   These light tints (#EFF6FF, #DBEAFE blue; #ECFDF5, #F0FDF4, #D1FAE5 green;
-   #FEF2F2, #FEE2E2 red; #FEF3C7, #FFFBEB amber) map to the accent surface
-   in dark mode so badges remain distinguishable but don't blind the eye. */
+   Tokens riskHighSoft, riskLowSoft, warningSoft, kappa*Soft, sky/orange/violetBg
+   are now CSS-variable-backed and dark-aware in tokens.ts — no rgb() spray needed.
+   Blue tints that are NOT in tokens.ts (EFF6FF, DBEAFE) still need an override. */
 
-/* Blue tints */
+/* Blue tints (info-only, not in tokens) */
 .dark [style*="background-color: rgb(239, 246, 255)"],
 .dark [style*="background-color: rgb(219, 234, 254)"] {
   background-color: hsl(210 50% 14%) !important;
 }
 
-/* Green tints */
-.dark [style*="background-color: rgb(236, 253, 245)"],
-.dark [style*="background-color: rgb(240, 253, 244)"],
+/* Green tints (emerald100 #D1FAE5 — kept as hex in tokens, still needs override) */
 .dark [style*="background-color: rgb(209, 250, 229)"] {
   background-color: hsl(160 40% 12%) !important;
-}
-
-/* Red tints */
-.dark [style*="background-color: rgb(254, 242, 242)"],
-.dark [style*="background-color: rgb(254, 226, 226)"] {
-  background-color: hsl(0 40% 13%) !important;
-}
-
-/* Amber tints */
-.dark [style*="background-color: rgb(254, 243, 199)"],
-.dark [style*="background-color: rgb(255, 251, 235)"] {
-  background-color: hsl(40 40% 12%) !important;
-}
-
-/* Purple tints */
-.dark [style*="background-color: rgb(245, 243, 255)"] {
-  background-color: hsl(270 40% 13%) !important;
 }
 
 /* ---------- Dark text that must flip to foreground ----------

@@ -516,96 +516,16 @@ export function DataRow({ label, value }: DataRowProps) {
 }
 
 // ─── 8. SectionHeader ────────────────────────────────────────────────────────
-
-export interface SectionHeaderProps {
-  title: string;
-  icon?: React.ReactNode;
-  count?: number;
-  action?: React.ReactNode;
-}
-
-export function SectionHeader({ title, icon, count, action }: SectionHeaderProps) {
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2">
-        {icon && <span className="text-primary flex">{icon}</span>}
-        <div className="flex flex-col">
-          <h3 className="m-0 text-base font-bold text-foreground">{title}</h3>
-          <div className="w-8 h-[3px] rounded-sm bg-primary mt-1 opacity-70" />
-        </div>
-        {count !== undefined && (
-          <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            {count}
-          </span>
-        )}
-      </div>
-      {action && <div>{action}</div>}
-    </div>
-  );
-}
+// Moved to @/components/ui/section-header — re-exported for backward compat.
+export type { SectionHeaderProps } from "@/components/ui/section-header";
+export { SectionHeader } from "@/components/ui/section-header";
 
 // ─── 9. EmptyState ───────────────────────────────────────────────────────────
-
-export interface EmptyStateProps {
-  icon?: React.ReactNode;
-  title: string;
-  description?: string;
-}
-
-export function EmptyState({ icon, title, description }: EmptyStateProps) {
-  return (
-    <div
-      className="animate-fade-in flex flex-col items-center justify-center px-6 py-12 text-center border-2 border-dashed border-border rounded-2xl"
-      role="status"
-    >
-      {icon && (
-        <div className="animate-gentle-bounce w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground mb-4">
-          {icon}
-        </div>
-      )}
-      <h4 className="m-0 text-[15px] font-semibold text-foreground">{title}</h4>
-      {description && (
-        <p className="mt-2 text-[13px] text-muted-foreground max-w-[320px] leading-relaxed">
-          {description}
-        </p>
-      )}
-    </div>
-  );
-}
+// Moved to @/components/ui/empty-state — re-exported for backward compat.
+export type { EmptyStateProps } from "@/components/ui/empty-state";
+export { EmptyState } from "@/components/ui/empty-state";
 
 // ─── 10. PageHeader ──────────────────────────────────────────────────────────
-
-export interface PageHeaderProps {
-  title: React.ReactNode;
-  subtitle?: string;
-  icon?: React.ReactNode;
-  actions?: React.ReactNode;
-  backHref?: string;
-}
-
-export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHeaderProps) {
-  return (
-    <div className="flex items-start justify-between mb-6 pb-5 border-b border-border gap-4 flex-wrap">
-      <div className="flex items-center gap-3 min-w-0">
-        {backHref && (
-          <Link
-            href={backHref}
-            className="hover-lift w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground no-underline flex-shrink-0"
-          >
-            <ChevronLeft size={18} />
-          </Link>
-        )}
-        {icon && (
-          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 shadow-sm">
-            {icon}
-          </div>
-        )}
-        <div className="min-w-0">
-          <h1 className="m-0 text-[22px] font-bold text-foreground leading-tight">{title}</h1>
-          {subtitle && <p className="mt-1 mb-0 text-[13px] text-muted-foreground">{subtitle}</p>}
-        </div>
-      </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
-    </div>
-  );
-}
+// Moved to @/components/ui/page-header — re-exported for backward compat.
+export type { PageHeaderProps } from "@/components/ui/page-header";
+export { PageHeader } from "@/components/ui/page-header";

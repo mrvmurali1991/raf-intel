@@ -10,9 +10,9 @@
  *     return `var(--token-name)` strings instead of hard-coded hex values.
  *     At runtime the browser resolves these through the active `:root` / `.dark`
  *     block, so dark-mode is handled automatically without any JS toggling.
- *   - Domain-specific tokens with no direct CSS-variable counterpart retain
- *     their hex literals — they are overridden at the stylesheet level by the
- *     `.dark [style*="..."]` selectors already present in globals.css.
+ *   - All semantic domain tokens (risk, warning, kappa, sky/orange/violet chips)
+ *     now return `hsl(var(--token-name))` — dark mode is handled via the `.dark`
+ *     block in globals.css, no `[style*="rgb(...)"]` spray selectors needed.
  *   - The `resolveToken(value)` helper is provided for the rare case where a
  *     consumer needs the *computed* hex string at runtime (e.g. canvas/SVG
  *     APIs that cannot consume `var(--…)` strings).
@@ -66,18 +66,18 @@ export const tokens = {
   white: "#FFFFFF",
 
   // ---- Risk-level colors ----
-  riskHigh:       "#DC2626",
-  riskHighSoft:   "#FEF2F2",
-  riskMedium:     "#D97706",
-  riskMediumSoft: "#FFFBEB",
-  riskLow:        "#059669",
-  riskLowSoft:    "#ECFDF5",
+  riskHigh:       "hsl(var(--risk-high))",
+  riskHighSoft:   "hsl(var(--risk-high-soft))",
+  riskMedium:     "hsl(var(--risk-medium))",
+  riskMediumSoft: "hsl(var(--risk-medium-soft))",
+  riskLow:        "hsl(var(--risk-low))",
+  riskLowSoft:    "hsl(var(--risk-low-soft))",
 
   // ---- Warning / amber palette ----
-  warningSoft:   "#FEF3C7",
-  warningBorder: "#FCD34D",
-  warningText:   "#78350F",
-  warningStrong: "#F59E0B",
+  warningSoft:   "hsl(var(--warning-soft))",
+  warningBorder: "hsl(var(--warning-border))",
+  warningText:   "hsl(var(--warning-text))",
+  warningStrong: "hsl(var(--warning-strong))",
 
   // ---- Primary action / brand-info palette ----
   // --primary is defined in :root and overridden in .dark in globals.css.
@@ -107,15 +107,15 @@ export const tokens = {
   accentPurple:  "#8B5CF6",
 
   // ---- Sky / teal sub-chips ----
-  skyBg:         "#F0F9FF",
-  skyBorder:     "#BAE6FD",
-  skyText:       "#0369A1",
-  orangeBg:      "#FFF7ED",
-  orangeBorder:  "#FED7AA",
-  orangeText:    "#C2410C",
-  violetBg:      "#F5F3FF",
-  violetBorder:  "#DDD6FE",
-  violetText:    "#6D28D9",
+  skyBg:         "hsl(var(--sky-bg))",
+  skyBorder:     "hsl(var(--sky-border))",
+  skyText:       "hsl(var(--sky-text))",
+  orangeBg:      "hsl(var(--orange-bg))",
+  orangeBorder:  "hsl(var(--orange-border))",
+  orangeText:    "hsl(var(--orange-text))",
+  violetBg:      "hsl(var(--violet-bg))",
+  violetBorder:  "hsl(var(--violet-border))",
+  violetText:    "hsl(var(--violet-text))",
 
   // ---- Indigo accent ----
   indigoText:    "#6366f1",
@@ -144,14 +144,14 @@ export const tokens = {
   amber600:      "#D97706",
 
   // ---- Cohen's kappa IRR band colours ----
-  kappaExcellent:     "#16A34A",
-  kappaExcellentSoft: "#DCFCE7",
-  kappaModerate:      "#D97706",
-  kappaModerateSoft:  "#FEF3C7",
-  kappaPoor:          "#DC2626",
-  kappaPoorSoft:      "#FEE2E2",
-  kappaNeutral:       "#94A3B8",
-  kappaNeutralSoft:   "#F1F5F9",
+  kappaExcellent:     "hsl(var(--kappa-excellent))",
+  kappaExcellentSoft: "hsl(var(--kappa-excellent-soft))",
+  kappaModerate:      "hsl(var(--kappa-moderate))",
+  kappaModerateSoft:  "hsl(var(--kappa-moderate-soft))",
+  kappaPoor:          "hsl(var(--kappa-poor))",
+  kappaPoorSoft:      "hsl(var(--kappa-poor-soft))",
+  kappaNeutral:       "hsl(var(--kappa-neutral))",
+  kappaNeutralSoft:   "hsl(var(--kappa-neutral-soft))",
 
   // ---- Typography helpers ----
   // Consumers: attestations/page.tsx uses tokens.font?.sans as a fontFamily value.
