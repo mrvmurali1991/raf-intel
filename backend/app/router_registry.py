@@ -79,6 +79,7 @@ from app.routers import outreach_v2 as outreach_v2_router
 from app.routers import chart_chase_v2 as chart_chase_v2_router
 from app.routers import fhir_circuit_health as fhir_circuit_health_router
 from app.routers import fhir_writeback_async as fhir_writeback_async_router
+from app.routers import soc2_evidence as soc2_evidence_router
 from app.routers import provider_pdf_report as provider_pdf_report_router
 from app.routers import provider_revenue_breakdown as provider_revenue_breakdown_router
 from app.routers import provider_scorecards as provider_scorecards_router
@@ -263,6 +264,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, chart_chase_v2_router.router)
     _mount(app, fhir_circuit_health_router.router)
     _mount(app, fhir_writeback_async_router.router)
+    _mount(app, soc2_evidence_router.router)
     _mount(app, provider_pdf_report_router.router)
     _mount(app, provider_scorecards_router.router)
     _mount(app, feature_flags_router.router)

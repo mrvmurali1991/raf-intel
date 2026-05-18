@@ -1704,7 +1704,12 @@ class OpenEMRFhirAdapter:
             # We store one row per encounter in raf_encounter_analysis.
             # encounter_id is a surrogate generated from the FHIR id hash so
             # we can upsert deterministically.
-            encounter_surrogate: int = int(hashlib.md5(encounter_fhir_id.encode()).hexdigest()[:8], 16) % (2**31)
+            # Surrogate ID — purely deterministic indexing key, NOT a security hash.
+            # `usedforsecurity=False` quiets bandit B324 and is required by FIPS.
+            encounter_surrogate: int = int(
+                hashlib.md5(encounter_fhir_id.encode(), usedforsecurity=False).hexdigest()[:8],
+                16,
+            ) % (2**31)
 
             cur.execute(
                 """

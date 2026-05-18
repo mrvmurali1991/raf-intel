@@ -10,6 +10,13 @@ This folder contains the documentation enterprise customers (Medicare Advantage 
 | [`SUBPROCESSORS.md`](./SUBPROCESSORS.md) | Third-party processors that touch PHI | BAA Exhibit A, customer privacy office |
 | [`BAA_TEMPLATE.md`](./BAA_TEMPLATE.md) | Business Associate Agreement template | Legal, contract negotiation |
 | [`FEDRAMP_ROADMAP.md`](./FEDRAMP_ROADMAP.md) | Path to FedRAMP Moderate authorization | Government / federal-adjacent customers |
+| [`NIST_800_53_CONTROL_MATRIX.md`](./NIST_800_53_CONTROL_MATRIX.md) | 325-control implementation evidence catalog | FedRAMP / SOC 2 / HITRUST overlap |
+| [`THREAT_MODEL.md`](./THREAT_MODEL.md) | STRIDE threat model per trust boundary | Security review, pen-test prep |
+| [`SECURITY_SCAN_BASELINE.md`](./SECURITY_SCAN_BASELINE.md) | Bandit / pip-audit / Trivy findings + policy | Security review, customer questionnaires |
+| [`PERF_BASELINE.md`](./PERF_BASELINE.md) | Locust P50/P95/P99 baseline at 50u | Customer SLO negotiation |
+| [`SOC2_EVIDENCE_AUTOMATION.md`](./SOC2_EVIDENCE_AUTOMATION.md) | Daily SOC 2 evidence collection + admin API | Vanta / Drata / A-LIGN integration |
+| [`OBSERVABILITY.md`](./OBSERVABILITY.md) | OpenTelemetry / tracing / metrics / alerts | SRE + customer ops |
+| [`HEDIS_NCQA_VALIDATION.md`](./HEDIS_NCQA_VALIDATION.md) | Self-validation against NCQA spec | HEDIS measure trust |
 
 ## Certifications (status)
 
