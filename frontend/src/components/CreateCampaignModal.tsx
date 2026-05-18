@@ -496,7 +496,7 @@ export default function CreateCampaignModal({ open, onClose }: Props) {
                 type="button"
                 onClick={() => setStep((s) => Math.min(5, s + 1) as Step)}
                 disabled={!canAdvance}
-                className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-40"
               >
                 Next <ChevronRight size={14} />
               </button>

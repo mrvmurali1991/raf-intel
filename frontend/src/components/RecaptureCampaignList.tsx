@@ -101,7 +101,7 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
           <button
             type="button"
             onClick={onCreateClick}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 rounded-md bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
           >
             <Plus size={14} /> New campaign
           </button>
@@ -120,7 +120,7 @@ export default function RecaptureCampaignList({ onSelect, onCreateClick }: Props
           <button
             type="button"
             onClick={onCreateClick}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
           >
             <Plus size={14} /> Create your first campaign
           </button>

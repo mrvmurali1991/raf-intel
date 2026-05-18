@@ -182,13 +182,13 @@
   --card-foreground: 220 25% 10%;
   --popover: 0 0% 100%;
   --popover-foreground: 220 25% 10%;
-  --primary: 210 90% 45%;
+  --primary: 177 73% 26%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 30% 95%;
+  --secondary: 177 30% 95%;
   --secondary-foreground: 220 20% 18%;
   --muted: 210 20% 95%;
   --muted-foreground: 215 15% 38%;
-  --accent: 210 30% 93%;
+  --accent: 177 25% 93%;
   --accent-foreground: 220 20% 18%;
   --destructive: 0 72% 51%;
   --warning: oklch(0.75 0.18 75);
@@ -196,8 +196,8 @@
   --warning-soft: oklch(0.95 0.08 75);
   --border: 214 25% 90%;
   --input: 214 25% 90%;
-  --ring: 210 90% 45%;
-  --chart-1: 210 90% 45%;
+  --ring: 177 73% 26%;
+  --chart-1: 177 73% 26%;
   --chart-2: 195 85% 48%;
   --chart-3: 175 75% 42%;
   --chart-4: 155 70% 40%;
@@ -205,12 +205,12 @@
   --radius: 0.625rem;
   --sidebar: 220 20% 97%;
   --sidebar-foreground: 220 15% 30%;
-  --sidebar-primary: 210 90% 45%;
+  --sidebar-primary: 177 73% 26%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 210 25% 93%;
+  --sidebar-accent: 177 25% 93%;
   --sidebar-accent-foreground: 220 20% 15%;
   --sidebar-border: 214 20% 92%;
-  --sidebar-ring: 210 90% 45%;
+  --sidebar-ring: 177 73% 26%;
 }
 
 .dark {
@@ -220,13 +220,13 @@
   --card-foreground: 210 15% 95%;
   --popover: 225 15% 10%;
   --popover-foreground: 210 15% 95%;
-  --primary: 210 85% 58%;
+  --primary: 177 60% 42%;
   --primary-foreground: 225 15% 8%;
   --secondary: 225 12% 16%;
   --secondary-foreground: 210 15% 95%;
   --muted: 225 12% 16%;
   --muted-foreground: 215 12% 68%;
-  --accent: 225 12% 18%;
+  --accent: 177 20% 18%;
   --accent-foreground: 210 15% 95%;
   --destructive: 0 65% 48%;
   --warning: oklch(0.68 0.16 75);
@@ -234,20 +234,20 @@
   --warning-soft: oklch(0.32 0.10 75);
   --border: 225 12% 18%;
   --input: 225 12% 18%;
-  --ring: 210 85% 58%;
-  --chart-1: 210 85% 58%;
+  --ring: 177 60% 42%;
+  --chart-1: 177 60% 42%;
   --chart-2: 195 80% 55%;
   --chart-3: 175 70% 50%;
   --chart-4: 155 65% 48%;
   --chart-5: 140 68% 45%;
   --sidebar: 225 15% 6%;
   --sidebar-foreground: 210 12% 80%;
-  --sidebar-primary: 210 85% 58%;
+  --sidebar-primary: 177 60% 42%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 225 12% 14%;
   --sidebar-accent-foreground: 210 12% 90%;
   --sidebar-border: 225 12% 14%;
-  --sidebar-ring: 210 85% 58%;
+  --sidebar-ring: 177 60% 42%;
 }
 
 @layer base {
@@ -1626,4 +1626,34 @@ select.appearance-none {
     font-size: 12px !important;
   }
   /* Year selector — give buttons a min-tap-target for one-thumb operation. */
+}
+
+/* ================================================================
+   DARK MODE — Tailwind utility class overrides
+   These catch bg-white / border-slate-200 Tailwind classes that
+   lack a dark: counterpart variant (inline [style] selectors above
+   only cover React inline styles, not Tailwind classes).
+   ================================================================ */
+
+/* bg-white without an explicit dark: override → card surface */
+.dark .bg-white:not([class*="dark:"]) {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+}
+
+/* border-slate-200 without dark: override → semantic border */
+.dark .border-slate-200:not([class*="dark:"]) {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* text-slate-500 / text-gray-500 without dark: override → muted */
+.dark .text-slate-500:not([class*="dark:"]),
+.dark .text-gray-500:not([class*="dark:"]) {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* text-slate-900 / text-gray-900 without dark: override → foreground */
+.dark .text-slate-900:not([class*="dark:"]),
+.dark .text-gray-900:not([class*="dark:"]) {
+  color: hsl(var(--foreground)) !important;
 }

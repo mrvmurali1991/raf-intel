@@ -34,7 +34,7 @@ function KPISkeleton() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
       {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-white border border-border/40 rounded-2xl p-6 shadow-sm">
+        <div key={i} className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm">
           <Pulse w={100} h={14} />
           <div style={{ height: 12 }} />
           <Pulse w={80} h={32} />
@@ -77,35 +77,25 @@ export function ProviderDashboard() {
         <KPISkeleton />
       ) : (
         <div
-          className="kpi-strip-bento"
-          style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 20, marginBottom: 32 }}
+          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}
+          role="status"
+          aria-live="polite"
         >
-          {/* Bento sizing: "Open recapture gaps" is the most clinically-actionable
-              tile (every gap = a chart to review + revenue at risk) — it occupies
-              the hero slot with 2x width and a larger primary number. Shared
-              min-height keeps the row visually balanced. */}
-          <style>{`
-            .kpi-strip-bento > a,
-            .kpi-strip-bento > div { min-height: 132px; display: grid; }
-            .kpi-strip-bento > a > div,
-            .kpi-strip-bento > div > div { height: 100%; }
-            .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
-          `}</style>
-          <div className="kpi-strip-hero">
-            <StatCard
-              label="Open recapture gaps"
-              value={stats?.open_recapture_gaps ?? "—"}
-              subtitle="HCCs from prior year not yet documented"
-              icon={<FileText size={20} />}
-              color="#EF4444"
-              href="/recapture"
-              emptyState={{
-                message: "No open gaps — nice work! All HCCs are documented.",
-                ctaLabel: "View recapture history",
-                ctaHref: "/recapture",
-              }}
-            />
-          </div>
+          <StatCard
+            label="Open recapture gaps"
+            value={stats?.open_recapture_gaps ?? "—"}
+            subtitle="HCCs from prior year not yet documented"
+            icon={<FileText size={20} />}
+            color="#EF4444"
+            href="/recapture"
+            sparklinePlaceholder
+            actionLink={{ label: "View worklist", href: "/worklist" }}
+            emptyState={{
+              message: "No open gaps — nice work! All HCCs are documented.",
+              ctaLabel: "View recapture history",
+              ctaHref: "/recapture",
+            }}
+          />
           <StatCard
             label="Suspect conditions"
             value={stats?.total_suspects_open ?? "—"}
@@ -113,6 +103,7 @@ export function ProviderDashboard() {
             icon={<Activity size={20} />}
             color="#F59E0B"
             href="/suspects"
+            sparklinePlaceholder
             emptyState={{
               message: "No suspects to review right now.",
               ctaLabel: "Run AI scan",
@@ -126,6 +117,7 @@ export function ProviderDashboard() {
             icon={<Users size={20} />}
             color="#3B82F6"
             href="/patients"
+            sparklinePlaceholder
             emptyState={{
               message: "Connect your EHR to see your patient panel.",
               ctaLabel: "Set up integration",
@@ -139,14 +131,16 @@ export function ProviderDashboard() {
             icon={<CheckCircle size={20} />}
             color="#10B981"
             href="/providers"
+            sparklinePlaceholder
           />
         </div>
       )}
 
       <SectionHeader title="Where to start" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
-        <Link href="/worklist" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-sky-700 mb-2">
+        {/* primary action — teal */}
+        <Link href="/worklist" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <div className="flex items-center gap-3 text-teal-700 dark:text-teal-400 mb-2">
             <Stethoscope size={24} />
             <span className="font-semibold text-lg text-foreground">Today's worklist</span>
           </div>
@@ -155,8 +149,9 @@ export function ProviderDashboard() {
             conditions, and revenue at risk on a single screen.
           </p>
         </Link>
-        <Link href="/recapture" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-rose-600 mb-2">
+        {/* urgency / warning — amber */}
+        <Link href="/recapture" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400 mb-2">
             <FileText size={24} />
             <span className="font-semibold text-lg text-foreground">Close recapture gaps</span>
           </div>
@@ -165,8 +160,9 @@ export function ProviderDashboard() {
             this year — the highest-revenue lever in your worklist.
           </p>
         </Link>
-        <Link href="/suspects" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
-          <div className="flex items-center gap-3 text-amber-600 mb-2">
+        {/* info — slate */}
+        <Link href="/suspects" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400 mb-2">
             <Activity size={24} />
             <span className="font-semibold text-lg text-foreground">Review suspect conditions</span>
           </div>

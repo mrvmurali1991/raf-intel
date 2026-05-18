@@ -236,9 +236,9 @@ function ToggleSwitch({ enabled, disabled, onChange, ariaLabel }: ToggleSwitchPr
       aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onChange(!enabled)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 ${
         enabled
-          ? "bg-blue-600"
+          ? "bg-teal-700"
           : "bg-slate-300 dark:bg-slate-600"
       }`}
     >

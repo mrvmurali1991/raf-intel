@@ -1021,7 +1021,7 @@ function WebhooksTab() {
             </p>
             <button
               onClick={() => { setEditTarget(null); setDialogOpen(true); }}
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 transition-colors mt-2"
             >
               <Plus className="h-4 w-4" />
               Add your first webhook
@@ -1287,7 +1287,7 @@ function KeysTab() {
               <p className="text-xs text-muted-foreground mt-0.5">Manage token integration lifecycle natively</p>
             </div>
           </div>
-          <button onClick={() => setShowGenerate(!showGenerate)} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
+          <button onClick={() => setShowGenerate(!showGenerate)} className="flex items-center gap-2 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg">
             Generate New Key
           </button>
         </div>
