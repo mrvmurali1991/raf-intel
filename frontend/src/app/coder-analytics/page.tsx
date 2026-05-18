@@ -11,9 +11,11 @@
  * HCC heat-map is rendered as a small table colour-coded by frequency.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { ChartExportMenu } from "@/components/ui/chart-export-menu";
+import { downloadCSV } from "@/lib/csv-export";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -257,6 +259,7 @@ function tabStyle(active: boolean): React.CSSProperties {
 
 function PersonalDashboard({ m }: { m: CoderMetrics }) {
   const trendValues = m.daily_trend.map((d) => d.total);
+  const trendRef = useRef<HTMLDivElement | null>(null);
   return (
     <>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
@@ -290,11 +293,22 @@ function PersonalDashboard({ m }: { m: CoderMetrics }) {
         />
       </div>
 
-      <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, background: "white", padding: 16, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+      <div ref={trendRef} style={{ border: "1px solid #E2E8F0", borderRadius: 10, background: "white", padding: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Daily review trend</div>
-          <div style={{ fontSize: 12, color: "#64748B" }}>
-            {m.date_from} → {m.date_to}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: 12, color: "#64748B" }}>{m.date_from} → {m.date_to}</div>
+            <ChartExportMenu
+              filename="coder-daily-trend"
+              csvData={m.daily_trend.map((d) => ({
+                "Date": d.date,
+                "Accepted": d.accepted,
+                "Dismissed": d.dismissed,
+                "Total": d.total,
+              }))}
+              chartRef={trendRef as React.RefObject<HTMLElement>}
+              rawData={m.daily_trend as unknown as Record<string, unknown>[]}
+            />
           </div>
         </div>
         <Sparkline values={trendValues} />
@@ -326,6 +340,9 @@ function TeamView({
   sortKey: keyof CoderMetrics;
   onSort: (k: keyof CoderMetrics) => void;
 }) {
+  const histRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLDivElement | null>(null);
+
   // Build a simple distribution histogram of charts/hr (5 buckets).
   const cph = sortedRows.map((r) => r.charts_per_hour).filter((v) => v > 0);
   const max = Math.max(...cph, 12);
@@ -347,9 +364,17 @@ function TeamView({
         <StatTile label="P95 charts/hr" value={team.team_p95_charts_per_hour} good="up" />
       </div>
 
-      <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, background: "white", padding: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", marginBottom: 8 }}>
-          Charts/hour distribution
+      <div ref={histRef} style={{ border: "1px solid #E2E8F0", borderRadius: 10, background: "white", padding: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>
+            Charts/hour distribution
+          </div>
+          <ChartExportMenu
+            filename="coder-charts-per-hour-dist"
+            csvData={histogram.map((b) => ({ "Range (charts/hr)": b.label, "Coder Count": b.count }))}
+            chartRef={histRef as React.RefObject<HTMLElement>}
+            rawData={histogram.map((b) => ({ label: b.label, count: b.count }))}
+          />
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 12, height: 100 }}>
           {histogram.map((b) => {
@@ -367,9 +392,31 @@ function TeamView({
         </div>
       </div>
 
-      <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, background: "white", overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid #F1F5F9", fontSize: 13, fontWeight: 600 }}>
-          Per-coder breakdown
+      <div ref={tableRef} style={{ border: "1px solid #E2E8F0", borderRadius: 10, background: "white", overflow: "hidden" }}>
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid #F1F5F9", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>Per-coder breakdown</span>
+          <ChartExportMenu
+            filename="coder-team-breakdown"
+            csvData={sortedRows.map((r) => ({
+              "Coder": r.coder_name ?? `Coder ${r.coder_user_id}`,
+              "Email": r.coder_email ?? "",
+              "Charts Reviewed": r.charts_reviewed,
+              "Charts/hr": r.charts_per_hour,
+              "AI Accept %": `${r.ai_acceptance_rate_pct}%`,
+              "Avg Time on Chart": fmtSeconds(r.avg_time_on_chart_seconds),
+              "Force-accept no MEAT": r.suspects_force_accepted_no_meat,
+            }))}
+            chartRef={tableRef as React.RefObject<HTMLElement>}
+            rawData={sortedRows.map((r) => ({
+              coder_id: r.coder_user_id,
+              coder_name: r.coder_name ?? "",
+              charts_reviewed: r.charts_reviewed,
+              charts_per_hour: r.charts_per_hour,
+              ai_acceptance_rate_pct: r.ai_acceptance_rate_pct,
+              avg_time_on_chart_seconds: r.avg_time_on_chart_seconds,
+              force_accept_no_meat: r.suspects_force_accepted_no_meat,
+            }))}
+          />
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead style={{ background: "#F8FAFC" }}>

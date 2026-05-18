@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { CheckCircle, Users, Activity, FileText, Stethoscope } from "lucide-react";
-import { PageHeader, SectionHeader, StatCard } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { getDashboardStats } from "@/lib/api";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
 
@@ -81,55 +82,40 @@ export function ProviderDashboard() {
           role="status"
           aria-live="polite"
         >
-          <StatCard
+          <MetricCard
             label="Open recapture gaps"
             value={stats?.open_recapture_gaps ?? "—"}
             subtitle="HCCs from prior year not yet documented"
             icon={<FileText size={20} />}
-            color="#EF4444"
+            intent="danger"
             href="/recapture"
             sparklinePlaceholder
             actionLink={{ label: "View worklist", href: "/worklist" }}
-            emptyState={{
-              message: "No open gaps — nice work! All HCCs are documented.",
-              ctaLabel: "View recapture history",
-              ctaHref: "/recapture",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Suspect conditions"
             value={stats?.total_suspects_open ?? "—"}
             subtitle="AI-flagged suggestions awaiting your review"
             icon={<Activity size={20} />}
-            color="#F59E0B"
+            intent="warning"
             href="/suspects"
             sparklinePlaceholder
-            emptyState={{
-              message: "No suspects to review right now.",
-              ctaLabel: "Run AI scan",
-              ctaHref: "/suspects",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Panel patients"
             value={stats?.total_patients ?? "—"}
             subtitle="Under your care"
             icon={<Users size={20} />}
-            color="#3B82F6"
+            intent="default"
             href="/patients"
             sparklinePlaceholder
-            emptyState={{
-              message: "Connect your EHR to see your patient panel.",
-              ctaLabel: "Set up integration",
-              ctaHref: "/settings/integrations",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Average RAF"
             value={stats?.average_raf_score ? stats.average_raf_score.toFixed(3) : "—"}
             subtitle="Across your panel"
             icon={<CheckCircle size={20} />}
-            color="#10B981"
+            intent="success"
             href="/providers"
             sparklinePlaceholder
           />

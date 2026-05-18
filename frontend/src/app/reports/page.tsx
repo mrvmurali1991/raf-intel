@@ -29,6 +29,8 @@ import { StatCard } from "@/components/healthcare-ui";
 import { FileDown, Printer } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { tokens } from "@/styles/tokens";
+import { ChartExportMenu } from "@/components/ui/chart-export-menu";
+import { DateRangePicker, presetToDates, type DateRange } from "@/components/charts/DateRangePicker";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 type QueryResult<T = unknown> = { data?: T; isLoading?: boolean; isError?: boolean; refetch?: () => void };
@@ -305,6 +307,10 @@ export default function ReportsPage() {
   const router = useRouter();
   const [year, setYear] = useState(new Date().getFullYear());
   const [activeTab, setActiveTab] = useState<TabKey>("Revenue");
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const { from, to } = presetToDates("30d");
+    return { preset: "30d", from, to };
+  });
 
   // ── Data Queries ──────────────────────────────────────────────────────────
   const revenue = useQuery({ queryKey: ["revenue", year], queryFn: () => getRevenueOpportunity(year), staleTime: 60_000 });
@@ -364,6 +370,11 @@ export default function ReportsPage() {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            className="no-print"
+          />
           <button
             onClick={handlePrint}
             className="no-print"
@@ -786,6 +797,7 @@ function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow
 // TAB 3: HCC DISTRIBUTION
 // ══════════════════════════════════════════════════════════════════════════════
 function HccTab({ hccDist }: { hccDist: QueryResult<HccDistributionRow[]> }) {
+  const chartRef = React.useRef<HTMLDivElement | null>(null);
   if (hccDist.isLoading) return <Spinner label="Loading HCC distribution..." />;
   if (hccDist.isError) return <ErrorBox message="Failed to load HCC data" onRetry={hccDist.refetch} />;
 
@@ -799,27 +811,34 @@ function HccTab({ hccDist }: { hccDist: QueryResult<HccDistributionRow[]> }) {
     return C.blue;
   }
 
+  const csvData = top20.map((item, i) => ({
+    "Rank": i + 1,
+    "HCC Code": item.hcc_code,
+    "Patient Count": item.patient_count,
+  }));
+
   return (
-    <div className="premium-shadow" style={cardStyle}>
+    <div ref={chartRef} className="premium-shadow" style={cardStyle}>
       <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
         <div>
           <h3 className="gradient-text" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>HCC Distribution — Top 20 by Patient Count</h3>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: C.textMuted }}>Hierarchical Condition Categories across the population</p>
         </div>
-        <button
-          onClick={() => {
-            if (!top20.length) return;
-            downloadCSV(top20.map((item, i) => ({
-              "Rank": i + 1,
-              "HCC Code": item.hcc_code,
-              "Patient Count": item.patient_count,
-            })), "hcc-distribution");
-          }}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-        >
-          <FileDown size={14} />
-          Export CSV
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => { if (top20.length) downloadCSV(csvData, "hcc-distribution"); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <FileDown size={14} />
+            Export CSV
+          </button>
+          <ChartExportMenu
+            filename="hcc-distribution"
+            csvData={csvData as Record<string, unknown>[]}
+            chartRef={chartRef as React.RefObject<HTMLElement>}
+            rawData={top20.map((item, i) => ({ rank: i + 1, hcc_code: item.hcc_code, patient_count: item.patient_count }) as Record<string, unknown>)}
+          />
+        </div>
       </div>
       <div style={{ padding: 20 }}>
         {top20.map((item, i) => {

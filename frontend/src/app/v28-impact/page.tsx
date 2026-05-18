@@ -12,7 +12,7 @@
  * Backed by GET /api/v28-impact/portfolio.
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -25,6 +25,8 @@ import {
   Calendar,
   Users,
 } from "lucide-react";
+import { ChartExportMenu } from "@/components/ui/chart-export-menu";
+import { downloadCSV } from "@/lib/csv-export";
 
 // ---------- Types ----------
 
@@ -77,6 +79,9 @@ function fmtRAF(n: number): string {
 export default function V28ImpactPage() {
   const queryClient = useQueryClient();
   const [year, setYear] = useState<number>(2026);
+  const histogramRef = useRef<HTMLElement | null>(null);
+  const erodedRef = useRef<HTMLElement | null>(null);
+  const hccBreakdownRef = useRef<HTMLElement | null>(null);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery<PortfolioImpact>({
     queryKey: ["v28-impact", "portfolio", year],
@@ -241,6 +246,7 @@ export default function V28ImpactPage() {
 
           {/* Histogram */}
           <section
+            ref={(el) => { histogramRef.current = el; }}
             aria-label="Per-patient delta distribution"
             style={{
               padding: 16,
@@ -250,8 +256,26 @@ export default function V28ImpactPage() {
               marginBottom: 20,
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
-              Per-patient annual Δ revenue distribution
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                Per-patient annual Δ revenue distribution
+              </div>
+              <ChartExportMenu
+                filename="v28-delta-histogram"
+                csvData={data.delta_histogram.map((b) => ({
+                  "Revenue Bucket": b.bucket_label,
+                  "Patient Count": b.count,
+                  "Range Low": b.lo,
+                  "Range High": b.hi,
+                }))}
+                chartRef={histogramRef}
+                rawData={data.delta_histogram.map((b) => ({
+                  bucket_label: b.bucket_label,
+                  count: b.count,
+                  lo: b.lo,
+                  hi: b.hi,
+                }))}
+              />
             </div>
             <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>
               X axis: $ bucket. Y axis: patient count. Negative bins (left) indicate erosion.
@@ -268,6 +292,7 @@ export default function V28ImpactPage() {
           >
             {/* Top eroded patients */}
             <section
+              ref={(el) => { erodedRef.current = el; }}
               aria-label="Top eroded patients"
               style={{
                 background: "#fff",
@@ -276,8 +301,32 @@ export default function V28ImpactPage() {
                 padding: 16,
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
-                Top-eroded patients ({data.top_eroded_patients.length})
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                  Top-eroded patients ({data.top_eroded_patients.length})
+                </div>
+                <ChartExportMenu
+                  filename="v28-eroded-patients"
+                  csvData={data.top_eroded_patients.map((r) => ({
+                    "PID": r.pid,
+                    "V24 RAF": fmtRAF(r.v24),
+                    "V28 RAF": fmtRAF(r.v28),
+                    "Delta RAF": fmtRAF(r.delta),
+                    "Delta %": `${r.delta_pct.toFixed(1)}%`,
+                    "Revenue Impact": fmtMoney(r.revenue),
+                    "Dropped HCCs": r.dropped_hccs.join(", "),
+                  }))}
+                  chartRef={erodedRef}
+                  rawData={data.top_eroded_patients.map((r) => ({
+                    pid: r.pid,
+                    v24: r.v24,
+                    v28: r.v28,
+                    delta: r.delta,
+                    delta_pct: r.delta_pct,
+                    revenue: r.revenue,
+                    dropped_hccs: r.dropped_hccs.join(", "),
+                  }))}
+                />
               </div>
               {data.top_eroded_patients.length === 0 ? (
                 <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>
@@ -348,6 +397,7 @@ export default function V28ImpactPage() {
 
             {/* HCC erosion breakdown */}
             <section
+              ref={(el) => { hccBreakdownRef.current = el; }}
               aria-label="HCC erosion breakdown"
               style={{
                 background: "#fff",
@@ -356,8 +406,22 @@ export default function V28ImpactPage() {
                 padding: 16,
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
-                HCC erosion breakdown
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                  HCC erosion breakdown
+                </div>
+                <ChartExportMenu
+                  filename="v28-hcc-erosion"
+                  csvData={Object.entries(data.hcc_erosion_breakdown).map(([hcc, count]) => ({
+                    "HCC Code": `HCC ${hcc}`,
+                    "Patients Affected": count,
+                  }))}
+                  chartRef={hccBreakdownRef}
+                  rawData={Object.entries(data.hcc_erosion_breakdown).map(([hcc, count]) => ({
+                    hcc_code: hcc,
+                    patients_affected: count,
+                  }))}
+                />
               </div>
               <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>
                 HCCs most-frequently dropped across the panel.

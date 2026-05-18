@@ -77,6 +77,21 @@ export interface StatCardProps {
    * instead of the bare numeric value.
    */
   emptyState?: StatCardEmptyState;
+  /**
+   * Optional text link rendered BELOW the metric number.
+   * Replaces embedded CTA buttons for a uniform content model.
+   */
+  actionLink?: { label: string; href: string };
+  /**
+   * When true, renders a 32 px placeholder row for a future sparkline chart
+   * (MetricTrend from Agent #9). Replace with the real component once available.
+   */
+  sparklinePlaceholder?: boolean;
+  /**
+   * Optional inline sparkline + delta rendered below the metric number.
+   * Pass a <MetricTrend /> element.
+   */
+  sparkline?: React.ReactNode;
 }
 
 /** Returns true when a value should trigger the empty-state layout. */
@@ -87,7 +102,7 @@ function isEmptyValue(value: React.ReactNode): boolean {
   return false;
 }
 
-export function StatCard({ label, value, subtitle, icon, trend, accentClassName = "text-primary bg-primary/10", loading, href, info, emptyState }: StatCardProps) {
+export function StatCard({ label, value, subtitle, icon, trend, accentClassName = "text-primary bg-primary/10", loading, href, info, emptyState, actionLink, sparklinePlaceholder, sparkline }: StatCardProps) {
   const [showInfo, setShowInfo] = React.useState(false);
 
   if (loading) {
@@ -108,6 +123,7 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
   const cardContent = (
     <div
       className={`animate-fade-in kpi-card-lift stat-card-gradient-border bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col gap-3 ${href ? "cursor-pointer" : ""}`}
+      style={{ minHeight: 160, padding: 24 }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
@@ -178,6 +194,26 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
           </span>
           <span className="text-muted-foreground">{trend.label}</span>
         </div>
+      )}
+      {/* Sparkline row */}
+      {sparkline ? (
+        <div className="mt-auto pt-1">{sparkline}</div>
+      ) : sparklinePlaceholder ? (
+        <div
+          aria-hidden="true"
+          className="mt-auto rounded-md bg-muted/40"
+          style={{ height: 32, width: "100%" }}
+        />
+      ) : null}
+      {actionLink && (
+        <Link
+          href={actionLink.href}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-0.5 text-xs font-semibold text-primary no-underline hover:underline mt-auto"
+          aria-label={actionLink.label}
+        >
+          {actionLink.label} &rarr;
+        </Link>
       )}
     </div>
   );

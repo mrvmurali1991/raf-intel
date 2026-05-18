@@ -188,6 +188,9 @@ export function MetricCard({
   icon,
   subtitle,
   className,
+  actionLink,
+  sparklinePlaceholder,
+  sparkline,
 }: MetricCardProps) {
   const router = useRouter();
   if (loading) return <MetricCardSkeleton className={className} />;
@@ -220,7 +223,8 @@ export function MetricCard({
         className,
       )}
     >
-      <CardContent className="flex flex-col gap-2 p-5">
+      {/* 160 px min-height + 24 px padding per KPI card spec */}
+      <CardContent className="flex flex-col gap-2" style={{ minHeight: 160, padding: 24 }}>
         {/* Header row: label + icon badge */}
         <div className="flex items-start justify-between gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground leading-none">
@@ -252,9 +256,27 @@ export function MetricCard({
           <p className="text-xs text-muted-foreground leading-snug">{subtitle}</p>
         )}
 
-        {/* Sparkline */}
-        {trend && trend.length >= 2 && (
+        {/* Sparkline — real node takes priority; placeholder shown when pending */}
+        {sparkline ?? (trend && trend.length >= 2 ? (
           <Spark data={trend} colour={intentSpark[intent]} />
+        ) : sparklinePlaceholder ? (
+          <div
+            aria-hidden="true"
+            className="mt-auto rounded-md bg-muted/40"
+            style={{ height: 32, width: "100%" }}
+          />
+        ) : null)}
+
+        {/* Action link — sits BELOW the number, never embedded as a button */}
+        {actionLink && (
+          <a
+            href={actionLink.href}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary no-underline hover:underline"
+            aria-label={actionLink.label}
+          >
+            {actionLink.label} &rarr;
+          </a>
         )}
       </CardContent>
     </Card>

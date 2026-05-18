@@ -1486,14 +1486,14 @@ export function AdminDashboard() {
             href="/reports"
           />
           <MetricCard
-            label="Panel Patients"
-            value={totalPop.toLocaleString()}
-            subtitle="Active members"
-            icon={<Users size={20} />}
-            intent="default"
-            href="/patients"
-            trend={kpiTrends?.panel_patients?.length ? kpiTrends.panel_patients : undefined}
-            delta={kpiTrends?.deltas?.panel_patients ?? undefined}
+            label="Suspects"
+            value={suspectsCount.toLocaleString()}
+            subtitle="Open suspect conditions"
+            icon={<Brain size={20} />}
+            intent="warning"
+            href="/suspects"
+            trend={kpiTrends?.suspects?.length ? kpiTrends.suspects : undefined}
+            delta={kpiTrends?.deltas?.suspects ?? undefined}
           />
           <MetricCard
             label="Open Gaps"
