@@ -386,6 +386,8 @@ export interface RevenueOpportunityReport {
   total_gap: number;
   estimated_annual_revenue: number;
   average_raf_score: number;
+  /** Backend _meta block — formula provenance for CFO tooltip */
+  _meta?: import("@/lib/api").MetricMeta;
 }
 
 export interface JobStatusResponse {

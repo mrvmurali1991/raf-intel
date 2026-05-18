@@ -538,7 +538,10 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
         <div className="hover-lift card-glow-emerald" data-testid="revenue-at-risk-value" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Estimated Annual Revenue</p>
+              <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
+                Estimated Annual Revenue
+                {revMeta && <MetricMetaTooltip meta={revMeta} side="bottom" />}
+              </p>
               <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.emeraldDark }}>{fmt$(totalRevenue)}</p>
               <p style={{ fontSize: 12, color: C.textSub, margin: "4px 0 0" }}>@ ${REVENUE_PER_RAF.toLocaleString()} / RAF point</p>
             </div>

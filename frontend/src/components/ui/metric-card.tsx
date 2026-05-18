@@ -19,6 +19,8 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
+import type { MetricMeta } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,6 +69,11 @@ export interface MetricCardProps {
    * Takes priority over sparklinePlaceholder when both are supplied.
    */
   sparkline?: React.ReactNode;
+  /**
+   * MetricMeta block from the backend _meta field. When provided, renders
+   * a small (i) info button in the card header that opens a formula tooltip.
+   */
+  meta?: MetricMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +198,7 @@ export function MetricCard({
   actionLink,
   sparklinePlaceholder,
   sparkline,
+  meta,
 }: MetricCardProps) {
   const router = useRouter();
   if (loading) return <MetricCardSkeleton className={className} />;
@@ -225,10 +233,11 @@ export function MetricCard({
     >
       {/* sizing driven by CSS tokens --kpi-card-min-h / --kpi-card-pad */}
       <CardContent className="flex flex-col gap-2 min-h-[var(--kpi-card-min-h)] p-[var(--kpi-card-pad)]">
-        {/* Header row: label + icon badge */}
+        {/* Header row: label + meta tooltip + icon badge */}
         <div className="flex items-start justify-between gap-2">
-          <span className="text-label leading-none">
+          <span className="flex items-center gap-1 text-label leading-none">
             {label}
+            {meta && <MetricMetaTooltip meta={meta} />}
           </span>
           {icon && (
             <span
