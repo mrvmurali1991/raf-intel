@@ -1,1 +1,1 @@
-# Partners — third-party chart-retrieval integrations
+# Partners integration adapters
