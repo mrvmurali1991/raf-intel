@@ -20,6 +20,8 @@ from __future__ import annotations
 import pytest
 import requests
 
+pytestmark = pytest.mark.integration
+
 # Analysis endpoints can be very slow due to Gemini API latency
 ANALYSIS_TIMEOUT = 120  # seconds
 

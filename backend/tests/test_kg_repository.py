@@ -49,10 +49,13 @@ def _db_reachable() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _db_reachable(),
-    reason="raf_intelligence MySQL is not reachable from the test runner.",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _db_reachable(),
+        reason="raf_intelligence MySQL is not reachable from the test runner.",
+    ),
+]
 
 
 # ---------------------------------------------------------------------------

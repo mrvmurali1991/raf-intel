@@ -1,15 +1,23 @@
 "use client";
 
 /**
- * MD Today — pre-visit huddle UI.
+ * MD Today — pre-visit huddle UI (polished demo-grade).
  *
- * Mobile/tablet-first. Each scheduled visit becomes a card with the top
- * HCC gaps for that patient. One-tap Accept/Reject with a MEAT-attestation
- * checkbox gates the FHIR write-back.
+ * Features:
+ *  - Premium empty state with next-visit date computation
+ *  - Loading skeleton mirroring the card layout (shimmer-pulse)
+ *  - Card fade-in + translate-up animations, staggered 80ms/card (CSS keyframes)
+ *  - Accept/Decline tactile press (scale-down on :active)
+ *  - Reviewed state: 70% opacity + green check overlay in 200ms
+ *  - Print-sheet upgrade: clinic logo, per-patient page-break, no action buttons
+ *  - Keyboard-shortcuts sticky footer
+ *  - Revenue tile animated glow when total > $50k
+ *  - WCAG 2.2 AA: prefers-reduced-motion, focus indicators, aria-live toasts
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -69,6 +77,7 @@ interface MDTodayResponse {
   provider_id: number;
   date: string;
   briefings: Briefing[];
+  next_visit_date?: string;
   summary: {
     total_visits: number;
     total_open_hcc_gaps: number;
@@ -76,6 +85,10 @@ interface MDTodayResponse {
     review_progress_pct: number;
     total_revenue_at_stake_dollars?: number;
     total_supporting_labs?: number;
+  };
+  tenant_branding?: {
+    clinic_name?: string;
+    logo_url?: string;
   };
 }
 
@@ -131,12 +144,52 @@ function hccLabel(g: HCCGap): string {
   return `HCC ${g.hcc_code ?? g.hcc ?? "—"}`;
 }
 
-// ---------- Component ----------
+/** Derive the soonest future visit date from briefing list or server hint */
+function nextVisitDate(data: MDTodayResponse | undefined): string | null {
+  if (data?.next_visit_date) return data.next_visit_date;
+  if (!data?.briefings?.length) return null;
+  const dates = data.briefings
+    .map((b) => b.visit_date)
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  return dates[0] ?? null;
+}
+
+function formatDateFriendly(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// ---------- Toast ----------
+
+interface Toast {
+  id: number;
+  message: string;
+  type: "success" | "error";
+}
+
+// ---------- Main Component ----------
 
 export default function MDTodayPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [meatChecked, setMeatChecked] = useState<Record<string, boolean>>({});
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastCounter = useRef(0);
+
+  const pushToast = useCallback((message: string, type: Toast["type"] = "success") => {
+    const id = ++toastCounter.current;
+    setToasts((t) => [...t, { id, message, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  }, []);
 
   const { data, isLoading, isError, refetch } = useQuery<MDTodayResponse>({
     queryKey: ["md-today"],
@@ -161,7 +214,11 @@ export default function MDTodayPage() {
       });
       return res.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["md-today"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["md-today"] });
+      pushToast("HCC gap accepted", "success");
+    },
+    onError: () => pushToast("Failed to accept — please retry", "error"),
   });
 
   const decline = useMutation({
@@ -171,7 +228,11 @@ export default function MDTodayPage() {
       });
       return res.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["md-today"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["md-today"] });
+      pushToast("HCC gap declined", "success");
+    },
+    onError: () => pushToast("Failed to decline — please retry", "error"),
   });
 
   const markReviewed = useMutation({
@@ -179,50 +240,206 @@ export default function MDTodayPage() {
       const res = await api.post(`/api/md/today/reviewed/${patient_id}`);
       return res.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["md-today"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["md-today"] });
+      pushToast("Patient marked as reviewed", "success");
+    },
   });
 
   const briefings = useMemo(() => data?.briefings ?? [], [data]);
 
-  // Keyboard A/D shortcuts on the currently focused card
+  // Keyboard navigation
   const [focusIdx, setFocusIdx] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName ?? "";
       if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
+
       if (e.key === "ArrowDown" || e.key === "j") {
         setFocusIdx((i) => Math.min(i + 1, Math.max(0, briefings.length - 1)));
         e.preventDefault();
       } else if (e.key === "ArrowUp" || e.key === "k") {
         setFocusIdx((i) => Math.max(0, i - 1));
         e.preventDefault();
+      } else if (e.key === "?" ) {
+        setShowHelp((v) => !v);
+      } else if (e.key === "a" || e.key === "A") {
+        const b = briefings[focusIdx];
+        if (b) {
+          const gaps = gapsOf(b);
+          const firstGap = gaps.find((g) => g.suspect_id);
+          if (firstGap?.suspect_id) {
+            accept.mutate({
+              suspect_id: firstGap.suspect_id,
+              meat_signed: meatChecked[`${b.patient_id}`] ?? false,
+              patient_id: b.patient_id,
+            });
+          }
+        }
+      } else if (e.key === "d" || e.key === "D") {
+        const b = briefings[focusIdx];
+        if (b) {
+          const gaps = gapsOf(b);
+          const firstGap = gaps.find((g) => g.suspect_id);
+          if (firstGap?.suspect_id) decline.mutate(firstGap.suspect_id);
+        }
+      } else if (e.key === "r" || e.key === "R") {
+        const b = briefings[focusIdx];
+        if (b) markReviewed.mutate(b.patient_id);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [briefings.length]);
+  }, [briefings, focusIdx, meatChecked, accept, decline, markReviewed]);
+
+  const revenueAtStake = data?.summary.total_revenue_at_stake_dollars ?? 0;
+  const highRevenue = revenueAtStake > 50_000;
+  const clinicName = data?.tenant_branding?.clinic_name ?? "Clinic";
+  const logoUrl = data?.tenant_branding?.logo_url;
 
   // ---------- Render ----------
-
   return (
     <div
       className="min-h-screen bg-slate-50 print:bg-white"
-      style={{ paddingBottom: 80 }}
+      style={{ paddingBottom: 88 }}
     >
-      {/* ---- Header / summary ---- */}
+      {/* ===== Global keyframe styles ===== */}
+      <style>{`
+        @keyframes huddle-fade-up {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes huddle-shimmer {
+          0%   { background-position: -400px 0; }
+          100% { background-position: 400px 0; }
+        }
+        @keyframes huddle-reviewed {
+          from { opacity: 1; }
+          to   { opacity: 0.7; }
+        }
+        @keyframes huddle-revenue-glow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+          50%       { box-shadow: 0 0 0 8px rgba(16,185,129,0.18), 0 0 24px rgba(16,185,129,0.12); }
+        }
+        @keyframes huddle-check-pop {
+          0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+          70%  { transform: scale(1.15) rotate(4deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateY(8px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Card entry animation */
+        .huddle-card-anim {
+          animation: huddle-fade-up 0.32s ease both;
+        }
+
+        /* Shimmer skeleton bar */
+        .huddle-shimmer-bar {
+          background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+          background-size: 800px 100%;
+          animation: huddle-shimmer 1.4s infinite linear;
+          border-radius: 6px;
+        }
+
+        /* Revenue glow */
+        .huddle-revenue-glow {
+          animation: huddle-revenue-glow 2.4s ease-in-out infinite;
+        }
+
+        /* Green check overlay pop */
+        .huddle-check-overlay {
+          animation: huddle-check-pop 0.2s ease both;
+        }
+
+        /* Toast */
+        .huddle-toast {
+          animation: toast-in 0.22s ease both;
+        }
+
+        /* Button tactile press */
+        .huddle-btn-press:active {
+          transform: scale(0.97);
+        }
+
+        /* Focus ring */
+        .huddle-focus:focus-visible {
+          outline: 3px solid #0EA5E9;
+          outline-offset: 2px;
+        }
+
+        /* Respect reduced-motion */
+        @media (prefers-reduced-motion: reduce) {
+          .huddle-card-anim,
+          .huddle-shimmer-bar,
+          .huddle-revenue-glow,
+          .huddle-check-overlay,
+          .huddle-toast,
+          .huddle-btn-press:active {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+
+        /* ====== Print styles ====== */
+        @media print {
+          .print-hide { display: none !important; }
+          .print-show { display: block !important; }
+          body { background: white !important; color: black !important; }
+          .print-page-break { page-break-after: always; }
+          .huddle-card-anim { animation: none !important; }
+          header { page-break-after: avoid; position: static !important; box-shadow: none !important; }
+          article { page-break-inside: avoid; }
+          .print-coder-footer { display: flex !important; }
+        }
+      `}</style>
+
+      {/* ===== Print-only header ===== */}
+      <div
+        className="hidden print-show"
+        style={{
+          display: "none",
+          padding: "8px 20px 12px",
+          borderBottom: "2px solid #0F172A",
+          marginBottom: 12,
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+        aria-hidden="true"
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {logoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={logoUrl} alt={clinicName} style={{ height: 36 }} />
+          ) : (
+            <span style={{ fontWeight: 800, fontSize: 18, color: "#0F172A" }}>
+              {clinicName}
+            </span>
+          )}
+        </div>
+        <div style={{ textAlign: "right", fontSize: 12, color: "#475569" }}>
+          <div style={{ fontWeight: 700 }}>Pre-Visit Huddle Sheet</div>
+          <div>{data?.date ?? new Date().toISOString().slice(0, 10)}</div>
+          <div>
+            {user?.first_name ?? "Provider"} {user?.last_name ?? ""}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Header / summary ===== */}
       <header
-        className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm print:static print:shadow-none"
+        className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm print-hide"
         style={{ padding: "14px 20px" }}
       >
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: "#0F172A",
-                margin: 0,
-              }}
+              style={{ fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}
             >
               Today&apos;s Huddle
             </h1>
@@ -232,7 +449,7 @@ export default function MDTodayPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 text-sm">
+          <div className="flex items-center gap-4 text-sm flex-wrap">
             <SummaryStat
               label="Visits"
               value={data?.summary.total_visits ?? 0}
@@ -249,11 +466,8 @@ export default function MDTodayPage() {
             />
             <SummaryStat
               label="Revenue at stake"
-              value={
-                data?.summary.total_revenue_at_stake_dollars
-                  ? formatUSD(data.summary.total_revenue_at_stake_dollars)
-                  : "$0"
-              }
+              value={revenueAtStake ? formatUSD(revenueAtStake) : "$0"}
+              glow={highRevenue}
             />
             <SummaryStat
               label="Supporting labs"
@@ -262,7 +476,8 @@ export default function MDTodayPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="px-3 py-2 rounded-md border border-slate-300 hover:bg-slate-100 text-slate-700 font-medium print:hidden"
+              className="huddle-btn-press huddle-focus px-3 py-2 rounded-md border border-slate-300 hover:bg-slate-100 text-slate-700 font-medium print-hide"
+              style={{ transition: "background 0.15s" }}
               aria-label="Print huddle sheet"
             >
               Print
@@ -272,120 +487,352 @@ export default function MDTodayPage() {
 
         {/* Progress bar */}
         <div
-          className="mt-3 h-2 bg-slate-100 rounded-full overflow-hidden print:hidden"
-          aria-hidden="true"
+          className="mt-3 h-2 bg-slate-100 rounded-full overflow-hidden print-hide"
+          role="progressbar"
+          aria-valuenow={data?.summary.review_progress_pct ?? 0}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${data?.summary.review_progress_pct ?? 0}% of patients reviewed`}
         >
           <div
-            className="h-full bg-emerald-500 transition-all"
-            style={{ width: `${data?.summary.review_progress_pct ?? 0}%` }}
+            className="h-full bg-emerald-500"
+            style={{
+              width: `${data?.summary.review_progress_pct ?? 0}%`,
+              transition: "width 0.4s ease",
+            }}
           />
         </div>
       </header>
 
-      {/* ---- Content ---- */}
+      {/* ===== Main content ===== */}
       <main
         className="max-w-7xl mx-auto"
         style={{ padding: "20px" }}
         role="region"
         aria-label="Pre-visit huddle cards"
       >
-        {isLoading && (
-          <div className="text-slate-500" role="status">
-            Loading today&apos;s huddle…
-          </div>
-        )}
+        {/* Loading skeleton */}
+        {isLoading && <HuddleSkeleton />}
 
+        {/* Error state */}
         {isError && (
           <div
             role="alert"
-            className="p-4 bg-red-50 border border-red-200 rounded text-red-800"
+            className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800"
           >
             Failed to load huddle.{" "}
             <button
               type="button"
               onClick={() => refetch()}
-              className="underline font-semibold"
+              className="underline font-semibold huddle-focus"
             >
               Retry
             </button>
           </div>
         )}
 
+        {/* Empty state */}
         {!isLoading && !isError && briefings.length === 0 && (
-          <div className="p-8 bg-white border border-slate-200 rounded text-center text-slate-600">
-            No scheduled visits found for today.
-          </div>
+          <EmptyState data={data} router={router} />
         )}
 
-        <div
-          className="grid gap-4"
-          style={{
-            gridTemplateColumns:
-              "repeat(auto-fill, minmax(320px, 1fr))",
-          }}
-        >
-          {briefings.map((b, idx) => (
-            <HuddleCard
-              key={b.patient_id}
-              b={b}
-              focused={idx === focusIdx}
-              meatChecked={meatChecked[`${b.patient_id}`] ?? false}
-              setMeatChecked={(v) =>
-                setMeatChecked((s) => ({
-                  ...s,
-                  [`${b.patient_id}`]: v,
-                }))
-              }
-              onAccept={(g) => {
-                if (!g.suspect_id) return;
-                accept.mutate({
-                  suspect_id: g.suspect_id,
-                  meat_signed:
-                    meatChecked[`${b.patient_id}`] ?? false,
-                  patient_id: b.patient_id,
-                });
-              }}
-              onDecline={(g) => {
-                if (!g.suspect_id) return;
-                decline.mutate(g.suspect_id);
-              }}
-              onReviewed={() => markReviewed.mutate(b.patient_id)}
-            />
-          ))}
-        </div>
+        {/* Cards grid */}
+        {!isLoading && briefings.length > 0 && (
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}
+          >
+            {briefings.map((b, idx) => (
+              <HuddleCard
+                key={b.patient_id}
+                b={b}
+                cardIndex={idx}
+                focused={idx === focusIdx}
+                meatChecked={meatChecked[`${b.patient_id}`] ?? false}
+                setMeatChecked={(v) =>
+                  setMeatChecked((s) => ({ ...s, [`${b.patient_id}`]: v }))
+                }
+                onAccept={(g) => {
+                  if (!g.suspect_id) return;
+                  accept.mutate({
+                    suspect_id: g.suspect_id,
+                    meat_signed: meatChecked[`${b.patient_id}`] ?? false,
+                    patient_id: b.patient_id,
+                  });
+                }}
+                onDecline={(g) => {
+                  if (!g.suspect_id) return;
+                  decline.mutate(g.suspect_id);
+                }}
+                onReviewed={() => markReviewed.mutate(b.patient_id)}
+              />
+            ))}
+          </div>
+        )}
       </main>
 
-      <style jsx global>{`
-        @media print {
-          .print\\:hidden {
-            display: none !important;
-          }
-          .print\\:static {
-            position: static !important;
-          }
-          header {
-            page-break-after: avoid;
-          }
-          article {
-            page-break-inside: avoid;
-          }
-        }
-      `}</style>
+      {/* ===== Keyboard shortcuts sticky footer ===== */}
+      <ShortcutsBanner showHelp={showHelp} onDismissHelp={() => setShowHelp(false)} />
+
+      {/* ===== Toast region ===== */}
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        role="status"
+        className="print-hide"
+        style={{
+          position: "fixed",
+          bottom: 96,
+          right: 20,
+          zIndex: 50,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          pointerEvents: "none",
+        }}
+      >
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className="huddle-toast"
+            style={{
+              background: t.type === "success" ? "#065F46" : "#991B1B",
+              color: "#fff",
+              padding: "10px 16px",
+              borderRadius: 10,
+              fontSize: 13,
+              fontWeight: 600,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
+              maxWidth: 280,
+            }}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-// ---------- Sub-components ----------
+// ---------- Empty state ----------
+
+function EmptyState({
+  data,
+  router,
+}: {
+  data: MDTodayResponse | undefined;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const nd = nextVisitDate(data);
+  return (
+    <div
+      className="huddle-card-anim"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "72px 24px",
+        background: "#fff",
+        border: "1px solid #e2e8f0",
+        borderRadius: 16,
+        textAlign: "center",
+        gap: 12,
+      }}
+      data-testid="empty-state"
+    >
+      {/* Calendar icon */}
+      <div
+        style={{
+          width: 72,
+          height: 72,
+          background: "#F0F9FF",
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 4,
+        }}
+        aria-hidden="true"
+      >
+        <svg
+          width="36"
+          height="36"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#0EA5E9"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </div>
+
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+        No visits scheduled today
+      </h2>
+
+      {nd ? (
+        <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>
+          Your next visit is on{" "}
+          <strong style={{ color: "#0F172A" }}>{formatDateFriendly(nd)}</strong>
+        </p>
+      ) : (
+        <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>
+          Check back tomorrow — your schedule will appear here.
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => router.push("/worklist")}
+        className="huddle-btn-press huddle-focus"
+        style={{
+          marginTop: 8,
+          padding: "10px 22px",
+          borderRadius: 8,
+          border: "1px solid #0EA5E9",
+          background: "#F0F9FF",
+          color: "#0369A1",
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: "pointer",
+          transition: "background 0.15s",
+        }}
+        aria-label="Review last visit's notes in worklist"
+      >
+        Review last visit&apos;s notes
+      </button>
+    </div>
+  );
+}
+
+// ---------- Loading skeleton ----------
+
+function HuddleSkeleton() {
+  return (
+    <div
+      className="grid gap-4"
+      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}
+      role="status"
+      aria-label="Loading huddle cards"
+      data-testid="huddle-skeleton"
+    >
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          style={{
+            background: "#fff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            padding: 16,
+            boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
+          }}
+          aria-hidden="true"
+        >
+          {/* Patient header skeleton */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div
+                className="huddle-shimmer-bar"
+                style={{ height: 18, width: "60%", marginBottom: 8 }}
+              />
+              <div
+                className="huddle-shimmer-bar"
+                style={{ height: 12, width: "40%" }}
+              />
+            </div>
+            <div
+              className="huddle-shimmer-bar"
+              style={{ height: 26, width: 80, borderRadius: 999 }}
+            />
+          </div>
+
+          {/* MEAT checkbox skeleton */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <div
+              className="huddle-shimmer-bar"
+              style={{ height: 18, width: 18, borderRadius: 4 }}
+            />
+            <div
+              className="huddle-shimmer-bar"
+              style={{ height: 14, width: "55%" }}
+            />
+          </div>
+
+          {/* Gap rows skeleton */}
+          {[0, 1, 2].map((j) => (
+            <div
+              key={j}
+              style={{
+                borderTop: "1px solid #f1f5f9",
+                paddingTop: 10,
+                paddingBottom: 10,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <div
+                    className="huddle-shimmer-bar"
+                    style={{ height: 18, width: 56, borderRadius: 4 }}
+                  />
+                  <div
+                    className="huddle-shimmer-bar"
+                    style={{ height: 18, width: 60, borderRadius: 4 }}
+                  />
+                </div>
+                <div
+                  className="huddle-shimmer-bar"
+                  style={{ height: 13, width: "80%" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div
+                  className="huddle-shimmer-bar"
+                  style={{ height: 32, width: 64, borderRadius: 6 }}
+                />
+                <div
+                  className="huddle-shimmer-bar"
+                  style={{ height: 32, width: 64, borderRadius: 6 }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+      <span className="sr-only">Loading today&apos;s huddle, please wait…</span>
+    </div>
+  );
+}
+
+// ---------- Summary stat tile ----------
 
 function SummaryStat({
   label,
   value,
+  glow,
 }: {
   label: string;
   value: string | number;
+  glow?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-end">
+    <div
+      className={`flex flex-col items-end${glow ? " huddle-revenue-glow" : ""}`}
+      style={{
+        borderRadius: 8,
+        padding: glow ? "4px 8px" : undefined,
+        transition: "box-shadow 0.3s",
+      }}
+    >
       <div style={{ fontSize: 18, fontWeight: 700, color: "#0F172A" }}>
         {value}
       </div>
@@ -396,8 +843,11 @@ function SummaryStat({
   );
 }
 
+// ---------- Huddle card ----------
+
 function HuddleCard({
   b,
+  cardIndex,
   focused,
   meatChecked,
   setMeatChecked,
@@ -406,6 +856,7 @@ function HuddleCard({
   onReviewed,
 }: {
   b: Briefing;
+  cardIndex: number;
   focused: boolean;
   meatChecked: boolean;
   setMeatChecked: (v: boolean) => void;
@@ -414,9 +865,12 @@ function HuddleCard({
   onReviewed: () => void;
 }) {
   const gaps = gapsOf(b);
+  const patientName = nameOf(b);
+
   return (
     <article
       tabIndex={0}
+      className="huddle-card-anim huddle-focus print-page-break"
       style={{
         background: "#fff",
         border: `1px solid ${focused ? "#0EA5E9" : "#e2e8f0"}`,
@@ -425,15 +879,56 @@ function HuddleCard({
         borderRadius: 12,
         padding: 16,
         boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
+        position: "relative",
         opacity: b.reviewed ? 0.7 : 1,
+        transition: "opacity 0.2s ease",
+        animationDelay: `${cardIndex * 80}ms`,
       }}
-      aria-label={`Huddle card for ${nameOf(b)}`}
+      aria-label={`Huddle card for ${patientName}`}
     >
+      {/* Reviewed green check overlay */}
+      {b.reviewed && (
+        <div
+          className="huddle-check-overlay"
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            width: 28,
+            height: 28,
+            borderRadius: "50%",
+            background: "#10B981",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          aria-hidden="true"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <polyline
+              points="2,7 6,11 12,3"
+              stroke="#fff"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* Print-only patient header */}
+      <div
+        className="hidden print-show"
+        style={{ display: "none", marginBottom: 8, fontSize: 11, color: "#64748b" }}
+      >
+        Patient Huddle — {patientName}
+      </div>
+
       {/* Patient header */}
       <div className="flex items-start justify-between gap-2">
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#0F172A" }}>
-            {nameOf(b)}
+            {patientName}
           </div>
           <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
             {b.age ? `${b.age}y` : ""} {b.sex ? `· ${b.sex}` : ""}{" "}
@@ -455,6 +950,7 @@ function HuddleCard({
               color: "#065F46",
               padding: "3px 8px",
               borderRadius: 999,
+              marginRight: b.reviewed ? 32 : 0,
             }}
           >
             Reviewed
@@ -463,17 +959,18 @@ function HuddleCard({
           <button
             type="button"
             onClick={onReviewed}
-            className="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-100"
-            aria-label={`Mark ${nameOf(b)} reviewed`}
+            className="huddle-btn-press huddle-focus print-hide text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-100"
+            style={{ transition: "background 0.15s" }}
+            aria-label={`Mark ${patientName} reviewed`}
           >
             Mark reviewed
           </button>
         )}
       </div>
 
-      {/* MEAT checkbox */}
+      {/* MEAT checkbox — screen only */}
       <label
-        className="flex items-center gap-2 mt-3 mb-2 text-sm cursor-pointer print:hidden"
+        className="flex items-center gap-2 mt-3 mb-2 text-sm cursor-pointer print-hide"
         style={{ color: "#0F172A" }}
       >
         <input
@@ -481,7 +978,8 @@ function HuddleCard({
           checked={meatChecked}
           onChange={(e) => setMeatChecked(e.target.checked)}
           aria-label="I documented MEAT in today's note"
-          style={{ width: 18, height: 18 }}
+          className="huddle-focus"
+          style={{ width: 18, height: 18, cursor: "pointer" }}
         />
         <span>MEAT documented in today&apos;s note</span>
       </label>
@@ -498,7 +996,7 @@ function HuddleCard({
               <li
                 key={(g.suspect_id ?? i) + "-" + (g.hcc_code ?? "")}
                 style={{
-                  borderTop: i === 0 ? "1px solid #f1f5f9" : "1px solid #f1f5f9",
+                  borderTop: "1px solid #f1f5f9",
                   paddingTop: 10,
                   paddingBottom: 10,
                   display: "flex",
@@ -545,7 +1043,7 @@ function HuddleCard({
                           borderRadius: 6,
                           fontVariantNumeric: "tabular-nums",
                         }}
-                        title={`Estimated annual revenue at the V28 base rate (RAF coefficient ${g.raf_coefficient ?? "—"})`}
+                        title={`Estimated annual revenue at V28 base rate (RAF ${g.raf_coefficient ?? "—"})`}
                       >
                         {formatUSD(dollarsOf(g))}/yr
                       </span>
@@ -561,7 +1059,8 @@ function HuddleCard({
                   >
                     {g.description ?? g.display ?? ""}
                   </div>
-                  {/* Inline lab evidence — labs that support this HCC. */}
+
+                  {/* Lab evidence chips */}
                   {g.lab_evidence && (
                     <ul
                       style={{
@@ -581,23 +1080,24 @@ function HuddleCard({
                       ]
                         .slice(0, 4)
                         .map((lab, li) => {
-                          const c = labStatusColor(lab.status);
+                          const lc = labStatusColor(lab.status);
                           return (
                             <li
                               key={`${lab.loinc}-${li}`}
-                              title={`${lab.label} ${lab.value} ${lab.units} on ${lab.date?.slice(0, 10) ?? "?"} (ref ${lab.reference_range || "—"})`}
+                              title={`${lab.label} ${lab.value} ${lab.units} on ${
+                                lab.date?.slice(0, 10) ?? "?"
+                              } (ref ${lab.reference_range || "—"})`}
                               style={{
                                 fontSize: 10,
                                 fontWeight: 600,
-                                background: c.bg,
-                                color: c.fg,
+                                background: lc.bg,
+                                color: lc.fg,
                                 padding: "2px 6px",
                                 borderRadius: 4,
                                 fontVariantNumeric: "tabular-nums",
                               }}
                             >
-                              {lab.label.replace(/Hemoglobin /i, "")}
-                              {" "}
+                              {lab.label.replace(/Hemoglobin /i, "")}{" "}
                               {lab.value}
                               {lab.units}
                             </li>
@@ -605,13 +1105,67 @@ function HuddleCard({
                         })}
                     </ul>
                   )}
+
+                  {/* Coder-use-only footer — screen hidden, print visible */}
+                  {g.suspect_id && (
+                    <div
+                      className="print-coder-footer"
+                      style={{
+                        display: "none",
+                        marginTop: 6,
+                        gap: 6,
+                        alignItems: "center",
+                        borderTop: "1px dashed #cbd5e1",
+                        paddingTop: 4,
+                      }}
+                      aria-hidden="true"
+                    >
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        Coder use only:
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          background: "#F1F5F9",
+                          color: "#475569",
+                          padding: "1px 5px",
+                          borderRadius: 3,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        ID #{g.suspect_id}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          background: sig.bg,
+                          color: sig.color,
+                          padding: "1px 5px",
+                          borderRadius: 3,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {sig.label} ({(c * 100).toFixed(0)}%)
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex flex-col gap-1 print:hidden">
+                {/* Action buttons — screen only */}
+                <div className="flex flex-col gap-1 print-hide">
                   <button
                     type="button"
                     onClick={() => onAccept(g)}
                     disabled={!g.suspect_id}
+                    className="huddle-btn-press huddle-focus"
                     style={{
                       minWidth: 64,
                       minHeight: 32,
@@ -623,8 +1177,9 @@ function HuddleCard({
                       fontWeight: 700,
                       cursor: g.suspect_id ? "pointer" : "not-allowed",
                       opacity: g.suspect_id ? 1 : 0.4,
+                      transition: "opacity 0.15s",
                     }}
-                    aria-label={`Accept ${hccLabel(g)} for ${nameOf(b)}`}
+                    aria-label={`Accept ${hccLabel(g)} for ${patientName}`}
                   >
                     Accept
                   </button>
@@ -632,6 +1187,7 @@ function HuddleCard({
                     type="button"
                     onClick={() => onDecline(g)}
                     disabled={!g.suspect_id}
+                    className="huddle-btn-press huddle-focus"
                     style={{
                       minWidth: 64,
                       minHeight: 32,
@@ -643,8 +1199,9 @@ function HuddleCard({
                       fontWeight: 600,
                       cursor: g.suspect_id ? "pointer" : "not-allowed",
                       opacity: g.suspect_id ? 1 : 0.4,
+                      transition: "opacity 0.15s",
                     }}
-                    aria-label={`Decline ${hccLabel(g)} for ${nameOf(b)}`}
+                    aria-label={`Decline ${hccLabel(g)} for ${patientName}`}
                   >
                     Decline
                   </button>
@@ -655,5 +1212,97 @@ function HuddleCard({
         </ul>
       )}
     </article>
+  );
+}
+
+// ---------- Keyboard shortcuts banner ----------
+
+function ShortcutsBanner({
+  showHelp,
+  onDismissHelp,
+}: {
+  showHelp: boolean;
+  onDismissHelp: () => void;
+}) {
+  return (
+    <footer
+      className="print-hide"
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 20,
+        background: "rgba(15,23,42,0.93)",
+        color: "#CBD5E1",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 20,
+        padding: "10px 20px",
+        fontSize: 12,
+        backdropFilter: "blur(6px)",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+      }}
+      aria-label="Keyboard shortcuts"
+    >
+      <ShortcutKey keys="↑↓" label="navigate" />
+      <ShortcutKey keys="A" label="accept" />
+      <ShortcutKey keys="D" label="decline" />
+      <ShortcutKey keys="R" label="review" />
+      <button
+        type="button"
+        onClick={onDismissHelp}
+        className="huddle-focus"
+        style={{
+          background: "transparent",
+          border: "none",
+          color: "#94A3B8",
+          cursor: "pointer",
+          fontSize: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "2px 4px",
+        }}
+        aria-label="Toggle keyboard help"
+        aria-expanded={showHelp}
+      >
+        <kbd
+          style={{
+            background: "rgba(255,255,255,0.12)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: 4,
+            padding: "0px 5px",
+            fontFamily: "monospace",
+            fontSize: 11,
+          }}
+        >
+          ?
+        </kbd>{" "}
+        help
+      </button>
+    </footer>
+  );
+}
+
+function ShortcutKey({ keys, label }: { keys: string; label: string }) {
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <kbd
+        style={{
+          background: "rgba(255,255,255,0.12)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: 4,
+          padding: "1px 6px",
+          fontFamily: "monospace",
+          fontSize: 11,
+          color: "#F1F5F9",
+        }}
+      >
+        {keys}
+      </kbd>
+      <span style={{ color: "#94A3B8" }}>{label}</span>
+    </span>
   );
 }

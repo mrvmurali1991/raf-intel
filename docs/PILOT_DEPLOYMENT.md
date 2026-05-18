@@ -36,23 +36,30 @@ That single target will:
 5. Apply all Alembic DB migrations
 6. Seed the demo patient panel
 7. Run the fast unit test suite (`backend/scripts/test-fast.sh`) — exits on failure
-8. Execute a 30-second end-to-end smoke: login, list suspects, accept one, verify audit row
+8. Execute a 30-second end-to-end smoke: login → list suspects → accept one → verify audit row
 9. Print the READY banner with all URLs and credentials
 
-### Start the frontend (separate terminal)
+At the end of a successful run you will see:
+
+```
+  ╔══════════════════════════════════════════════════════════════╗
+  ║              RAF INTELLIGENCE — PILOT READY                 ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║  Backend URL  : http://localhost:8500                        ║
+  ║  Frontend URL : http://localhost:3000                        ║
+  ║               (start: cd frontend && npm run dev)            ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║  Demo login   : admin@raf.health  /  Admin@123               ║
+  ...
+```
+
+### Start the frontend (in a separate terminal)
 
 ```bash
 cd frontend && npm install && npm run dev
 ```
 
 The backend API is containerised; the frontend runs locally via Next.js dev server for faster iteration.
-
----
-
-## Demo Credentials
-
-- URL: http://localhost:3000
-- Login: `admin@raf.health` / `Admin@123`
 
 ---
 
@@ -67,6 +74,8 @@ The backend API is containerised; the frontend runs locally via Next.js dev serv
 | Document Ingestion | http://localhost:3000/admin/document-ingestion |
 | API Docs (Swagger) | http://localhost:8500/docs |
 | Health check | http://localhost:8500/health |
+
+Demo credentials: `admin@raf.health` / `Admin@123`
 
 ---
 
@@ -84,13 +93,15 @@ The backend API is containerised; the frontend runs locally via Next.js dev serv
 
 ## Diagnostic Dashboard
 
+Run at any time:
+
 ```bash
 make pilot-doctor
 ```
 
 Output includes:
 
-- Container health (raf-backend / raf-mysql / raf-redis) with OK/!!/XX
+- Container health (raf-backend / raf-mysql / raf-redis) with ✅/⚠️/❌
 - Backend `/health` endpoint status
 - Admin login check
 - Row counts: patients, suspects, audit_log, raf_meat_evidence, users, hcc_codes
@@ -107,9 +118,9 @@ Output includes:
 make pilot-teardown
 ```
 
-Stops containers, removes Docker volumes, and clears `/tmp/raf-demo-pdfs/`. Safe to re-run.
+Stops containers, removes Docker volumes (`raf_mysql_data`, `redis_data`), and clears `/tmp/raf-demo-pdfs/`. Safe to re-run.
 
-To preserve data volumes:
+To preserve data volumes (e.g. for handoff):
 
 ```bash
 bash scripts/pilot-teardown.sh --keep-data
@@ -119,7 +130,7 @@ bash scripts/pilot-teardown.sh --keep-data
 
 ## Customer-Supplied Environment Variables
 
-Add these to `.env` before running `make pilot-ready` (re-running is idempotent):
+Add these to `.env` before running `make pilot-ready` (or after — re-running is idempotent for the container restart):
 
 ### AI / LLM
 
@@ -158,7 +169,7 @@ OPENEMR_DB_PASSWORD=<password>
 OPENEMR_DB_NAME=openemr
 ```
 
-See `docs/OPENEMR_OAUTH2_SETUP.md` for step-by-step OAuth2 client setup, including the "enable disabled client" requirement.
+See `docs/OPENEMR_OAUTH2_SETUP.md` for step-by-step OAuth2 client setup including the "enable disabled client" requirement.
 
 ### Production overrides
 
@@ -166,14 +177,14 @@ See `docs/OPENEMR_OAUTH2_SETUP.md` for step-by-step OAuth2 client setup, includi
 APP_ENV=production
 FRONTEND_URL=https://your-pilot-domain.com
 BACKEND_PORT=8500
-DB_SSL_ENABLED=false
+DB_SSL_ENABLED=false     # set true if using RDS / Cloud SQL with TLS
 ```
 
 ---
 
 ## Troubleshooting
 
-### `/health` never returns 200
+### `/health` never returns 200 (timeout at step 4)
 
 ```
 docker logs raf-backend --tail=100
@@ -186,11 +197,17 @@ Common causes:
 
 ### Migrations fail
 
-```bash
+```
 docker exec raf-backend python /app/scripts/apply_migrations.py
 ```
 
-If the `raf_intelligence` DB is absent:
+If you see `Target database is not up to date`, confirm the `raf_intelligence` DB exists:
+
+```
+docker exec raf-mysql mysql -uroot -proot -e "SHOW DATABASES;"
+```
+
+If it is absent, the schema init script did not run. Recreate the container with volumes removed:
 
 ```bash
 make pilot-teardown && make pilot-ready
@@ -198,12 +215,14 @@ make pilot-teardown && make pilot-ready
 
 ### Admin login fails (401)
 
+The admin account may be locked from failed attempts:
+
 ```bash
 docker exec raf-mysql mysql -uroot -proot raf_intelligence \
   -e "UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE email='admin@raf.health';"
 ```
 
-`pilot-ready.sh` runs this automatically, but you can run it manually.
+`pilot-ready.sh` runs this automatically, but you can run it manually at any time.
 
 ### Seed returns 0 patients
 
@@ -215,6 +234,8 @@ Then run `make pilot-doctor` to confirm row counts.
 
 ### Redis "no PONG"
 
+The default password is `rafredis123`. If you customised `REDIS_PASSWORD` in `.env`, ensure the container was restarted after the change:
+
 ```bash
 docker compose -f docker-compose.local.yml restart redis
 ```
@@ -224,6 +245,8 @@ docker compose -f docker-compose.local.yml restart redis
 ```bash
 docker compose -f docker-compose.local.yml build --no-cache backend
 ```
+
+Common cause: stale layer cache after a Python dependency change.
 
 ---
 
@@ -235,7 +258,9 @@ docker compose -f docker-compose.local.yml build --no-cache backend
 make pilot-ready
 ```
 
-To force a full rebuild from scratch:
+It will skip secret generation (already in `.env`), skip `docker compose up` if containers are already running, and re-run migrations + smoke.
+
+To force a full rebuild:
 
 ```bash
 make pilot-teardown && make pilot-ready
@@ -245,6 +270,10 @@ make pilot-teardown && make pilot-ready
 
 ## Enterprise / Procurement Documentation
 
-See `docs/enterprise/` for security architecture, SOC 2 alignment, and HA deployment details.
-See `docs/HA_DEPLOYMENT.md` for multi-server topology.
-See `docs/incident_runbooks.md` for on-call procedures.
+See `docs/enterprise/` for:
+
+- `OBSERVABILITY.md` — metrics, tracing, alerting stack
+- Security architecture and SOC 2 alignment
+- HA deployment topology (`docs/HA_DEPLOYMENT.md`)
+- Database replica setup (`docs/DB_REPLICA.md`)
+- Incident runbooks (`docs/incident_runbooks.md`)

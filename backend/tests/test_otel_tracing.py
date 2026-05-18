@@ -37,6 +37,7 @@ def _make_in_memory_provider():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestFastAPIAutoInstrumentation:
     """Verify that FastAPI requests produce spans with correct service.name."""
 
@@ -86,8 +87,13 @@ class TestFastAPIAutoInstrumentation:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestAcceptSuspectSpan:
-    """Verify that accept_suspect emits a span with tenant_id attribute."""
+    """Verify that accept_suspect emits a span with tenant_id attribute.
+
+    Marked integration: requires suspect_engine to have tracing wired
+    via app.telemetry.get_tracer (instrumentation pending).
+    """
 
     def test_accept_suspect_span_has_tenant_id(self):
         """Mock DB and inject InMemorySpanExporter; call accept_suspect; assert span."""

@@ -993,3 +993,20 @@ def close_dynamic_pool(host: str, port: int, database: str, user: str) -> None:
             port,
             database,
         )
+
+
+# ---------------------------------------------------------------------------
+# Compatibility shim — some routers use get_db() as a FastAPI Depends target
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def get_db(dictionary: bool = True) -> Generator:
+    """Alias for ``raf_cursor`` used by FastAPI Depends injection.
+
+    Some routers import ``get_db`` as a SQLAlchemy-style dependency.
+    This shim forwards all calls to :func:`raf_cursor` so those routers
+    work without a SQLAlchemy session layer.
+    """
+    with raf_cursor(dictionary=dictionary) as cursor:
+        yield cursor

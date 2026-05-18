@@ -22,6 +22,8 @@ import re
 import pytest
 import requests
 
+pytestmark = pytest.mark.integration
+
 # Analysis can take up to 2 minutes with Gemini
 ANALYSIS_TIMEOUT = 120
 

@@ -37,10 +37,13 @@ def _raf_db_reachable() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _raf_db_reachable(),
-    reason="RAF MySQL not reachable — skipping real-DB inbox tests",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _raf_db_reachable(),
+        reason="RAF MySQL not reachable — skipping real-DB inbox tests",
+    ),
+]
 
 # ---------------------------------------------------------------------------
 # Import module under test AFTER guard so import errors don't break suites

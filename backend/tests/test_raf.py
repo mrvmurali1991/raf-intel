@@ -21,6 +21,8 @@ import pytest
 import requests
 from datetime import date
 
+pytestmark = pytest.mark.integration
+
 # CMS-HCC V28 practical ceiling — real patients rarely exceed 5.0 in OpenEMR demos
 RAF_SCORE_MAX = 5.0
 RAF_SCORE_MIN = 0.0
