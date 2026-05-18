@@ -621,14 +621,20 @@ def recapture_gaps_report(year: int = Query(default=None),
         emr_pid_to_name[pr["emr_pid"]] = {"first_name": pr["first_name"] or "", "last_name": pr["last_name"] or ""}
         emr_pid_to_id[pr["emr_pid"]] = pr["id"]
 
-    # Step 2: Query OpenEMR clinical tables for recapture gaps
+    # Step 2: Query OpenEMR clinical tables for recapture gaps.
+    # JOIN patient_data directly so we get names from OpenEMR's own source —
+    # the raf_intelligence.patients map can miss when emr_pid is UUID-format
+    # while openemr lists.pid is integer.
     sql = """
         SELECT
             l.pid,
             l.title,
             l.diagnosis,
-            l.begdate
+            l.begdate,
+            pd.fname,
+            pd.lname
         FROM lists l
+        LEFT JOIN patient_data pd ON pd.pid = l.pid
         WHERE l.type        = 'medical_problem'
           AND l.activity    = 1
           AND l.diagnosis   IS NOT NULL
@@ -654,12 +660,16 @@ def recapture_gaps_report(year: int = Query(default=None),
             rows = cur.fetchall()
         for row in rows:
             emr_pid = int(row["pid"])
+            # Prefer raf_intelligence mapping when available, fall back to
+            # patient_data fname/lname from OpenEMR.
             names = emr_pid_to_name.get(emr_pid, {})
+            first_name = names.get("first_name") or (row.get("fname") or "")
+            last_name = names.get("last_name") or (row.get("lname") or "")
             raf_patient_id = emr_pid_to_id.get(emr_pid, emr_pid)
             gaps.append({
                 "pid": raf_patient_id,
-                "first_name": names.get("first_name", ""),
-                "last_name": names.get("last_name", ""),
+                "first_name": first_name,
+                "last_name": last_name,
                 "condition": row.get("title") or "",
                 "icd_code": row.get("diagnosis") or "",
                 "onset_date": row["begdate"].isoformat() if hasattr(row.get("begdate"), "isoformat") else (row.get("begdate") or ""),

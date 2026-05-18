@@ -286,13 +286,13 @@ export default function RecapturePage() {
       `}</style>
       <div
         className="recapture-bento-summary"
-        style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gridAutoRows: "min-content", gap: 16, marginBottom: 24 }}
+        style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}
       >
-        <div className="animate-fade-in stagger-1 recapture-hero-tile" style={{ gridColumn: "span 6", gridRow: "span 2" }}>
+        <div className="animate-fade-in stagger-1">
           <MetricCard
             label="Estimated Revenue at Risk"
             value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
-            subtitle="Unrecaptured chronic conditions x prior-year RAF dollars"
+            subtitle="Unrecaptured chronic conditions × prior-year RAF dollars"
             intent="danger"
             icon={<ArrowUpDown size={18} />}
             meta={revenueAtRiskMeta ?? undefined}
@@ -301,7 +301,7 @@ export default function RecapturePage() {
             valueTestId="revenue-at-risk-value"
           />
         </div>
-        <div className="animate-fade-in stagger-2" style={{ gridColumn: "span 3" }}>
+        <div className="animate-fade-in stagger-2">
           <MetricCard
             label="Total Recapture Gaps"
             value={(data.total_gaps ?? 0).toLocaleString()}
@@ -309,7 +309,7 @@ export default function RecapturePage() {
             icon={<RefreshCw size={18} />}
           />
         </div>
-        <div className="animate-fade-in stagger-3" style={{ gridColumn: "span 3" }}>
+        <div className="animate-fade-in stagger-3">
           <MetricCard
             label="Patients Affected"
             value={(data.patients_affected ?? 0).toLocaleString()}
