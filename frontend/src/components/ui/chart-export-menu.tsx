@@ -86,7 +86,6 @@ export function ChartExportMenu({
     setOpen(false);
     try {
       // Dynamically import html2canvas only when needed — keeps bundle small
-      // @ts-expect-error: html2canvas has no @types package; dynamic import is safe at runtime
       const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(chartRef.current as HTMLElement, { useCORS: true, scale: 2 });
       const link = document.createElement("a");
