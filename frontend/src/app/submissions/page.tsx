@@ -366,10 +366,75 @@ function CmsStatusBadge({ status }: { status: "accepted" | "rejected" | "pending
 function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
   const sorted = [...deadlines].sort((a, b) => a.days_remaining - b.days_remaining);
 
-  function deadlineColors(days: number) {
-    if (days < 7) return { bg: T.red50, border: T.red500 + "40", text: T.red600, badge: T.red100, badgeText: T.red600 };
-    if (days <= 30) return { bg: T.amber50, border: T.amber500 + "40", text: T.amber600, badge: T.amber100, badgeText: T.amber600 };
-    return { bg: T.emerald50, border: T.emerald500 + "40", text: T.emerald600, badge: T.emerald100, badgeText: T.emerald600 };
+  type DeadlineTheme = {
+    bg: string;
+    border: string;
+    text: string;
+    badge: string;
+    badgeText: string;
+    rowOpacity: number;
+    pillLabel: string;
+    pillBg: string;
+    pillColor: string;
+  };
+
+  function deadlineTheme(days: number): DeadlineTheme {
+    if (days < 0) {
+      return {
+        bg: T.red50,
+        border: T.red500 + "40",
+        text: T.red600,
+        badge: T.red100,
+        badgeText: T.red600,
+        rowOpacity: 0.72,
+        pillLabel: "Overdue",
+        pillBg: T.red100,
+        pillColor: T.red600,
+      };
+    }
+    if (days <= 7) {
+      return {
+        bg: T.amber50,
+        border: T.amber500 + "40",
+        text: T.amber600,
+        badge: T.amber100,
+        badgeText: T.amber600,
+        rowOpacity: 1,
+        pillLabel: "Closing soon",
+        pillBg: T.amber100,
+        pillColor: T.amber600,
+      };
+    }
+    if (days <= 30) {
+      return {
+        bg: T.amber50,
+        border: T.amber500 + "30",
+        text: T.amber600,
+        badge: T.amber100,
+        badgeText: T.amber600,
+        rowOpacity: 1,
+        pillLabel: "",
+        pillBg: "",
+        pillColor: "",
+      };
+    }
+    return {
+      bg: T.emerald50,
+      border: T.emerald500 + "40",
+      text: T.emerald600,
+      badge: T.emerald100,
+      badgeText: T.emerald600,
+      rowOpacity: 1,
+      pillLabel: "",
+      pillBg: "",
+      pillColor: "",
+    };
+  }
+
+  function deadlineCountLabel(days: number): string {
+    if (days < 0) return `Closed ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`;
+    if (days === 0) return "Due today";
+    return `${days} day${days === 1 ? "" : "s"} left`;
   }
 
   return (
@@ -385,12 +450,13 @@ function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <Calendar size={14} className="text-muted-foreground" />
         <span style={{ fontSize: 12, fontWeight: 600, color: T.slate500, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          Upcoming Submission Deadlines
+          Submission Deadlines
         </span>
       </div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {sorted.map((d, i) => {
-          const c = deadlineColors(d.days_remaining);
+          const c = deadlineTheme(d.days_remaining);
+          const isOverdue = d.days_remaining < 0;
           return (
             <div
               key={`${d.name}-${i}`}
@@ -406,36 +472,61 @@ function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
                 justifyContent: "space-between",
                 gap: 12,
                 animation: `fadeInUp 0.4s ease-out ${0.08 * i}s both`,
+                opacity: c.rowOpacity,
               }}
+              aria-label={`${d.name}: ${deadlineCountLabel(d.days_remaining)}`}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: T.slate800 }}>{d.name}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: T.slate800,
+                      textDecoration: isOverdue ? "line-through" : "none",
+                      textDecorationColor: T.slate400,
+                    }}
+                  >
+                    {d.name}
+                  </span>
+                  {c.pillLabel && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        backgroundColor: c.pillBg,
+                        color: c.pillColor,
+                        border: `1px solid ${c.pillColor}33`,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        whiteSpace: "nowrap",
+                      }}
+                      role="status"
+                    >
+                      {c.pillLabel}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: 11, color: T.slate500 }}>
                   PY{d.payment_year} · {d.sweep_type} · Due {new Date(d.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
                 <span
                   style={{
-                    fontSize: 20,
-                    fontWeight: 800,
+                    fontSize: 13,
+                    fontWeight: 700,
                     color: c.text,
-                    lineHeight: 1,
+                    lineHeight: 1.3,
+                    textAlign: "right",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {d.days_remaining}
-                </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    backgroundColor: c.badge,
-                    color: c.badgeText,
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  days left
+                  {deadlineCountLabel(d.days_remaining)}
                 </span>
               </div>
             </div>
