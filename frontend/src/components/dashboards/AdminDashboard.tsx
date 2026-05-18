@@ -6,6 +6,7 @@ import { QProgressCard } from "@/components/QProgressCard";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { usePaymentYear } from "@/contexts/payment-year-context";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
@@ -333,10 +334,10 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
           <Clock size={18} color={tokens.riskMedium} />
         </div>
         <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: tokens.warningText ?? "#92400E" }}>
+          <h3 className="text-sm font-bold m-0" style={{ color: tokens.warningText ?? "#92400E" }}>
             CMS Data Sweep Deadline
           </h3>
-          <p style={{ fontSize: 12, color: tokens.warningText ?? "#92400E", opacity: 0.8, margin: "2px 0 0" }}>
+          <p className="text-xs opacity-80 mt-0.5 mb-0" style={{ color: tokens.warningText ?? "#92400E" }}>
             Mid-Year V24/V28 Blended Submission
           </p>
         </div>
@@ -361,10 +362,10 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
       </div>
 
       <div style={{ textAlign: "right", borderLeft: "1px solid rgba(217, 119, 6, 0.25)", paddingLeft: 20 }}>
-        <div style={{ fontSize: 11, color: tokens.warningText ?? "#92400E", opacity: 0.8, fontWeight: 500, marginBottom: 2 }}>
+        <div className="text-[11px] font-medium opacity-80 mb-0.5" style={{ color: tokens.warningText ?? "#92400E" }}>
           Pending Opportunity
         </div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: tokens.warningText ?? "#92400E", letterSpacing: "-0.3px" }}>
+        <div className="text-lg font-extrabold tracking-tight" style={{ color: tokens.warningText ?? "#92400E" }}>
           {fmt$(revenueOpp)}
         </div>
       </div>
@@ -1062,6 +1063,7 @@ export function AdminDashboard() {
     {showTour && <TourModal onClose={() => setShowTour(false)} />}
     <div className="admin-dash-outer bg-background" style={{ minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
       <DataQualityBanner />
+      <HistoricalPYBanner />
       <style>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }
@@ -1123,9 +1125,7 @@ export function AdminDashboard() {
             <button
               onClick={() => setShowTour(true)}
               aria-label="Take the product tour"
-              className="inline-flex items-center gap-1.5 px-3 py-1 border border-blue-200 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold cursor-pointer"
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#DBEAFE"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#EFF6FF"; }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 border border-blue-200 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold cursor-pointer transition-colors"
             >
               <BookOpen size={12} />
               Take the tour
@@ -1661,14 +1661,14 @@ export function AdminDashboard() {
                       boxShadow: `0 0 8px ${t.color}40`,
                     }}
                   />
-                  <div style={{ fontSize: 13, fontWeight: 600, color: t.color }}>{t.label}</div>
-                  <div className="text-foreground" style={{ fontSize: 28, fontWeight: 800, margin: "4px 0", letterSpacing: "-0.02em" }}>
+                  <div className="text-[13px] font-semibold" style={{ color: t.color }}>{t.label}</div>
+                  <div className="text-foreground text-[28px] font-extrabold tracking-tight my-1">
                     {fmtN(t.count)}
                   </div>
-                  <div className="text-muted-foreground" style={{ fontSize: 12, fontWeight: 500 }}>
+                  <div className="text-muted-foreground text-xs font-medium">
                     {tiers.total > 0 ? `${Math.round((t.count / tiers.total) * 100)}%` : "0%"} of population
                   </div>
-                  <div className="text-muted-foreground" style={{ fontSize: 10, marginTop: 2 }}>{t.desc}</div>
+                  <div className="text-muted-foreground text-[10px] mt-0.5">{t.desc}</div>
                 </div>
                 </Link>
               ))}
@@ -1801,11 +1801,11 @@ export function AdminDashboard() {
               <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 360 }}>
                 {/* Table header */}
                 <div style={{ display: "flex", alignItems: "center", padding: "0 8px 10px", borderBottom: "1px solid #E5E7EB" }}>
-                  <span className="text-muted-foreground" style={{ flex: 1, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient</span>
-                  <span className="text-muted-foreground" style={{ width: 70, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Billing RAF</span>
-                  <span className="text-muted-foreground" style={{ width: 70, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>TMIAB RAF</span>
-                  <span className="text-muted-foreground" style={{ width: 60, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Gap</span>
-                  <span className="text-muted-foreground" style={{ width: 80, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Revenue</span>
+                  <span className="text-muted-foreground flex-1 text-[11px] font-semibold uppercase tracking-[0.05em]">Patient</span>
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.05em] text-center" style={{ width: 70 }}>Billing RAF</span>
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.05em] text-center" style={{ width: 70 }}>TMIAB RAF</span>
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.05em] text-center" style={{ width: 60 }}>Gap</span>
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.05em] text-right" style={{ width: 80 }}>Revenue</span>
                   <span style={{ width: 20 }} />
                 </div>
                 {topOpps.map((p, i: number) => {
@@ -1913,7 +1913,7 @@ export function AdminDashboard() {
               icon={<BarChart3 size={18} />}
             />
             {waterfallData.length === 0 ? (
-              <div className="text-muted-foreground" style={{ fontSize: 14, padding: "32px 0", textAlign: "center" }}>
+              <div className="text-muted-foreground text-sm py-8 text-center">
                 No HCC data available. Run analysis first.
               </div>
             ) : (
@@ -1923,7 +1923,7 @@ export function AdminDashboard() {
                   totalLabel="Total Opportunity"
                   height={36}
                 />
-                <div className="text-muted-foreground" style={{ marginTop: 16, fontSize: 11, lineHeight: 1.5 }}>
+                <div className="text-muted-foreground mt-4 text-[11px] leading-snug">
                   Revenue estimated as patient count x coefficient x $12,000 base rate per condition category.
                 </div>
               </div>
@@ -1978,8 +1978,8 @@ export function AdminDashboard() {
                     {prov.name.replace("Dr. ", "").charAt(0)}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div className="text-foreground" style={{ fontSize: 13, fontWeight: 600 }}>{prov.name}</div>
-                    <div className="text-muted-foreground" style={{ fontSize: 11 }}>{prov.specialty}</div>
+                    <div className="text-foreground text-[13px] font-semibold">{prov.name}</div>
+                    <div className="text-muted-foreground text-[11px]">{prov.specialty}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2008,7 +2008,7 @@ export function AdminDashboard() {
           </div>
           {/* Provider comparison bar chart */}
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #F1F5F9" }}>
-            <div className="text-muted-foreground" style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Patient Distribution</div>
+            <div className="text-muted-foreground text-xs font-semibold mb-2.5">Patient Distribution</div>
             <MiniBarChart
               data={providers.map((p: { name: string; patients: number }, idx: number) => ({
                 label: p.name,
@@ -2106,7 +2106,7 @@ export function AdminDashboard() {
                       <Icon size={16} color={item.color} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="text-foreground" style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                      <div className="text-foreground text-[13px] font-semibold">{item.title}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       <span style={{
@@ -2224,17 +2224,8 @@ export function AdminDashboard() {
                   {["#", "Patient Name", "Age", "Sex", "Risk Level", "Billing RAF", "TMIAB RAF", "Gap", "Revenue", "HCCs", "Status"].map((h) => (
                     <th
                       key={h}
-                      className="text-muted-foreground"
-                      style={{
-                        padding: "10px 12px",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        borderBottom: "2px solid #E5E7EB",
-                        textAlign: h === "#" || h === "Patient Name" ? "left" : "center",
-                        whiteSpace: "nowrap",
-                      }}
+                      className="text-muted-foreground text-[11px] font-bold uppercase tracking-[0.05em] whitespace-nowrap px-3 py-2.5 border-b-2 border-border"
+                      style={{ textAlign: h === "#" || h === "Patient Name" ? "left" : "center" }}
                     >
                       {h}
                     </th>
@@ -2260,10 +2251,10 @@ export function AdminDashboard() {
                       onClick={() => router.push(`/patients/${p.pid}`)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/patients/${p.pid}`); } }}
                     >
-                      <td className="text-muted-foreground" style={{ padding: "12px", fontSize: 12, fontWeight: 600, borderBottom: "1px solid #F1F5F9" }}>{idx + 1}</td>
+                      <td className="text-muted-foreground p-3 text-xs font-semibold border-b border-slate-100">{idx + 1}</td>
                       <td style={{ padding: "12px", borderBottom: "1px solid #F1F5F9" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span className="text-foreground" style={{ fontSize: 13, fontWeight: 600 }}>{p.name as string}</span>
+                          <span className="text-foreground text-[13px] font-semibold">{p.name as string}</span>
                           <Sparkline
                             data={generateSparklineData(aiRaf, 6)}
                             width={48}
