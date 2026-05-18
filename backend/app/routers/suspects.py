@@ -32,6 +32,10 @@ from app.auth import get_current_user, require_permission
 from app.db import raf_cursor
 from app.rate_limit import limiter
 from app.services.openemr_connector import get_all_patients, get_patient
+from app.services.redis_cache import (
+    invalidate_hedis_scores,
+    invalidate_v28_portfolio,
+)
 from app.services.suspect_engine import (
     accept_suspect,
     dismiss_suspect,
@@ -467,6 +471,14 @@ def bulk_update(
                 "bulk_update: id=%s action=%s failed: %s", sid, body.action, exc
             )
 
+    # Bulk accepts can shift many HCCs at once — invalidate v28/HEDIS caches.
+    if body.action == "accept" and succeeded > 0:
+        try:
+            invalidate_v28_portfolio(tenant_id)
+            invalidate_hedis_scores(tenant_id)
+        except Exception as exc:
+            logger.debug("bulk_update: cache invalidation failed: %s", exc)
+
     return BulkUpdateResult(
         action=body.action,
         requested=len(body.ids),
@@ -776,6 +788,16 @@ def accept_suspect_endpoint(
                 "SUSPECT_ACCEPTED_OVERRIDE suspect_id=%s: %s",
                 suspect_id, exc,
             )
+
+    # ------------------------------------------------------------------
+    # Cache invalidation — accepting a suspect shifts V28 RAF + HEDIS
+    # numerators.  Evict both for this tenant; the next read will rebuild.
+    # ------------------------------------------------------------------
+    try:
+        invalidate_v28_portfolio(tenant_id)
+        invalidate_hedis_scores(tenant_id)
+    except Exception as exc:
+        logger.debug("accept_suspect: cache invalidation failed: %s", exc)
 
     return AcceptActionResponse(
         suspect_id=suspect_id,

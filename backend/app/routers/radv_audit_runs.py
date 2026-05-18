@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services import radv_audit_run_service as svc
+from app.services.redis_cache import invalidate_audit_runs
 
 logger = logging.getLogger(__name__)
 
@@ -225,13 +226,21 @@ def simulate(
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict:
     try:
-        return svc.simulate_exposure(
+        result = svc.simulate_exposure(
             run_id=run_id,
             tenant_id=tenant_id,
             assumed_fail_rate=body.assumed_fail_rate,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Simulation re-projects the audit-run exposure $.  Any cached
+    # audit-runs view for this tenant is now stale — evict.
+    try:
+        invalidate_audit_runs(tenant_id)
+    except Exception as exc:
+        logger.debug("radv simulate: cache invalidation failed: %s", exc)
+    return result
 
 
 @router.post(

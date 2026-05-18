@@ -29,6 +29,7 @@ from app.services.hedis import (
 )
 from app.services.hedis.measures import stars_for_rate
 from app.services.hei import SEGMENTS, classify_patients_bulk
+from app.services.redis_cache import cached as redis_cached
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,40 @@ router = APIRouter(prefix="/api/hedis", tags=["hedis"])
 
 def _measurement_year(year: int | None) -> int:
     return year or date.today().year
+
+
+# ---------------------------------------------------------------------------
+# Cached compute layers
+# ---------------------------------------------------------------------------
+#
+# /measures is static measure metadata (no tenant scope), so we cache it for
+# 24 h.  /scores is the heavy aggregation — keyed on tenant+year with 30 min
+# TTL because newly accepted suspects can shift numerators inside an hour.
+
+@redis_cached(
+    key_builder=lambda year: f"raf:hedis:measures:{year}",
+    ttl_seconds=86400,
+    tenant_aware=False,
+)
+def _cached_measures_metadata(year: int) -> dict[str, Any]:
+    return {
+        "measurement_year": year,
+        "measures": list_measures(),
+        "star_cutoffs": NCQA_STAR_CUTOFFS,
+        "licensing_notice": (
+            "HEDIS measure specifications are copyright NCQA. Production use "
+            "requires an NCQA license — see https://www.ncqa.org/hedis/measures/"
+        ),
+    }
+
+
+@redis_cached(
+    key_builder=lambda tenant_id, year: f"raf:hedis:scores:{tenant_id}:{year}",
+    ttl_seconds=1800,
+    tenant_aware=True,
+)
+def _cached_hedis_scores(tenant_id: int, year: int) -> dict[str, Any]:
+    return _compute_hedis_scores(tenant_id, year)
 
 
 def _load_tenant_patients(tenant_id: int) -> list[dict[str, Any]]:
@@ -64,19 +99,17 @@ def _load_tenant_patients(tenant_id: int) -> list[dict[str, Any]]:
 )
 def list_hedis_measures(
     year: int = Query(None, description="Measurement year (defaults to current)"),
+    force_refresh: bool = Query(
+        False, description="Bypass Redis cache (admin debug)."
+    ),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """Return the measure catalog plus the NCQA Star cut-points used."""
-    return {
-        "measurement_year": _measurement_year(year),
-        "measures": list_measures(),
-        "star_cutoffs": NCQA_STAR_CUTOFFS,
-        "licensing_notice": (
-            "HEDIS measure specifications are copyright NCQA. Production use "
-            "requires an NCQA license — see https://www.ncqa.org/hedis/measures/"
-        ),
-    }
+    return _cached_measures_metadata(
+        _measurement_year(year),
+        force_refresh=force_refresh,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +122,9 @@ def list_hedis_measures(
 )
 def hedis_scores(
     year: int = Query(None, description="Measurement year (defaults to current)"),
+    force_refresh: bool = Query(
+        False, description="Bypass Redis cache (admin debug)."
+    ),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
@@ -96,6 +132,11 @@ def hedis_scores(
     """Compute tenant-wide HEDIS rates for every implemented measure."""
     yr = _measurement_year(year)
     tid = int(tenant_id)
+    return _cached_hedis_scores(tid, yr, force_refresh=force_refresh)
+
+
+def _compute_hedis_scores(tid: int, yr: int) -> dict[str, Any]:
+    """Heavy aggregation — split out so it can be Redis-memoised."""
     patients = _load_tenant_patients(tid)
 
     out_measures: list[dict[str, Any]] = []

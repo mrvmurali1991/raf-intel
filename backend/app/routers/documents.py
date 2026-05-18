@@ -50,6 +50,7 @@ from app.services.document_service import (
 )
 from app.services.emr_manager import active_patients_subquery
 from app.services.icd_validator import get_hcc_mapping
+from app.services.redis_cache import invalidate_doc_dashboard
 
 logger = logging.getLogger(__name__)
 
@@ -1151,6 +1152,13 @@ def confirm_diagnosis(
         raise HTTPException(
             status_code=404, detail=f"Diagnosis line {diag_id!r} not found"
         )
+
+    # A doc-level review change makes the ingestion dashboard counters stale.
+    try:
+        tenant_id = current_user.get("tenant_id") or "global"
+        invalidate_doc_dashboard(tenant_id)
+    except Exception as exc:
+        logger.debug("confirm_diagnosis: cache invalidation failed: %s", exc)
 
     return DiagnosisReviewResponse(
         diagnosis_id=diag_id,
