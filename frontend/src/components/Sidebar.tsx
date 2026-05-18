@@ -130,6 +130,8 @@ const navGroups: NavGroup[] = [
       { href: "/uploads", label: "Data Uploads", icon: Upload },
       { href: "/suspects", label: "Suspects", icon: ClipboardCheck },
       { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
+      { href: "/care-gaps", label: "Care Gaps", icon: CalendarClock },
+      { href: "/attestations", label: "Attestations", icon: ClipboardCheck },
       { href: "/prospective", label: "Prospective", icon: Target },
       { href: "/providers", label: "Provider Performance", icon: UserCheck },
       { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
