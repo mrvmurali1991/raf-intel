@@ -1346,6 +1346,12 @@ select.appearance-none {
   border-color: hsl(var(--border)) !important;
 }
 
+/* Select option background in dark mode */
+.dark select option {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
 /* Placeholder text */
 .dark input::placeholder,
 .dark textarea::placeholder {
