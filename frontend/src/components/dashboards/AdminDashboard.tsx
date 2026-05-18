@@ -296,7 +296,7 @@ function InfoMetricBox({ bg, valueColor, labelColor, value, label, tooltip }: {
 }
 
 // ---------------------------------------------------------------------------
-// CMS Sweep Deadline Widget
+// CMS Sweep Deadline Widget — Dark navy 3-column focal card
 // ---------------------------------------------------------------------------
 function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
   const [daysRemaining, setDaysRemaining] = useState(0);
@@ -304,7 +304,6 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
 
   useEffect(() => {
     const now = new Date();
-    // Default to end of June (Mid-Year Sweep) of current year
     const sweepDate = new Date(now.getFullYear(), 5, 30);
     if (now > sweepDate) {
       sweepDate.setFullYear(now.getFullYear() + 1);
@@ -312,68 +311,83 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
     const diffTime = Math.abs(sweepDate.getTime() - now.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     setDaysRemaining(diffDays);
-
     const totalDaysInYear = 365;
     const daysPassed = totalDaysInYear - diffDays;
-    setProgress((daysPassed / totalDaysInYear) * 100);
+    setProgress(Math.max(0, Math.min(100, (daysPassed / totalDaysInYear) * 100)));
   }, []);
 
   return (
     <div
-      className="animate-fade-in"
+      className="animate-fade-in cms-sweep-hero"
       style={{
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
         alignItems: "center",
-        justifyContent: "space-between",
-        background: tokens.warningSoft,
-        border: `1px solid ${tokens.warningBorder ?? "#FDE68A"}`,
+        background: "#0F172A",
         borderRadius: 10,
-        padding: "12px 20px",
-        marginTop: 16,
+        padding: "20px 28px",
         marginBottom: 24,
-        gap: 16,
-        flexWrap: "wrap",
-        color: tokens.warningText ?? "#92400E",
+        gap: 0,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ background: "rgba(217, 119, 6, 0.10)", borderRadius: 8, padding: 8, border: "1px solid rgba(217, 119, 6, 0.18)" }}>
-          <Clock size={18} color={tokens.riskMedium} />
+      {/* Subtle teal accent bar at top */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 3,
+        background: "linear-gradient(90deg, #0D9488 0%, #14B8A6 60%, transparent 100%)",
+      }} />
+
+      {/* Left: Clock icon + title */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{
+          background: "rgba(13,148,136,0.15)",
+          border: "1px solid rgba(13,148,136,0.25)",
+          borderRadius: 10,
+          padding: 10,
+          flexShrink: 0,
+        }}>
+          <Clock size={20} color="#2DD4BF" />
         </div>
         <div>
-          <h3 className="text-sm font-bold m-0" style={{ color: tokens.warningText ?? "#92400E" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#F8FAFC", letterSpacing: "-0.01em", lineHeight: 1.2 }}>
             CMS Data Sweep Deadline
-          </h3>
-          <p className="text-xs opacity-80 mt-0.5 mb-0" style={{ color: tokens.warningText ?? "#92400E" }}>
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(248,250,252,0.55)", marginTop: 3, fontWeight: 500 }}>
             Mid-Year V24/V28 Blended Submission
-          </p>
+          </div>
         </div>
       </div>
 
-      <div style={{ flex: 1, minWidth: 200, margin: "0 12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6, fontWeight: 500 }}>
-          <span style={{ color: tokens.riskMedium, fontWeight: 600 }}>{daysRemaining} Days Remaining</span>
-          <span style={{ color: tokens.warningText ?? "#92400E", opacity: 0.75 }}>June 30th</span>
+      {/* Center: days remaining + progress bar */}
+      <div style={{ padding: "0 28px", borderLeft: "1px solid rgba(255,255,255,0.08)", borderRight: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#2DD4BF", letterSpacing: "0.03em", textTransform: "uppercase" }}>
+            {daysRemaining} Days Remaining
+          </span>
+          <span style={{ fontSize: 11, color: "rgba(248,250,252,0.5)", fontWeight: 500 }}>June 30th</span>
         </div>
-        <div style={{ height: 6, background: "rgba(217, 119, 6, 0.18)", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
               width: `${progress}%`,
-              background: tokens.riskMedium,
+              background: "linear-gradient(90deg, #0D9488 0%, #2DD4BF 100%)",
               borderRadius: 4,
-              transition: "width 1s ease-in-out",
+              transition: "width 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           />
         </div>
       </div>
 
-      <div style={{ textAlign: "right", borderLeft: "1px solid rgba(217, 119, 6, 0.25)", paddingLeft: 20 }}>
-        <div className="text-[11px] font-medium opacity-80 mb-0.5" style={{ color: tokens.warningText ?? "#92400E" }}>
+      {/* Right: pending opportunity */}
+      <div style={{ textAlign: "right", paddingLeft: 28 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(248,250,252,0.5)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
           Pending Opportunity
         </div>
-        <div className="text-lg font-extrabold tracking-tight" style={{ color: tokens.warningText ?? "#92400E" }}>
-          {fmt$(revenueOpp)}
+        <div style={{ fontSize: 26, fontWeight: 900, color: "#F8FAFC", letterSpacing: "-0.025em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+          {revenueOpp > 0 ? fmt$(revenueOpp) : "$0"}
         </div>
       </div>
     </div>
@@ -713,7 +727,8 @@ export function AdminDashboard() {
     <>
     {showTour && <TourModal onClose={() => setShowTour(false)} />}
     <div className="admin-dash-outer bg-background" style={{ minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
-      <PageAlerts defaultOpen>
+      {/* PageAlerts collapsed by default — banners stay accessible but deprioritized */}
+      <PageAlerts defaultOpen={false}>
         <DataQualityBanner />
         <HistoricalPYBanner />
       </PageAlerts>
@@ -738,28 +753,25 @@ export function AdminDashboard() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
-        .fade-in-up {
-          animation: fadeInUp 500ms ease-out both;
-        }
+        .fade-in-up { animation: fadeInUp 500ms ease-out both; }
         .fade-in-up-1 { animation-delay: 0ms; }
         .fade-in-up-2 { animation-delay: 100ms; }
         .fade-in-up-3 { animation-delay: 200ms; }
         .fade-in-up-4 { animation-delay: 300ms; }
         .fade-in-up-5 { animation-delay: 400ms; }
         .fade-in-up-6 { animation-delay: 500ms; }
+        .shimmer {
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 400% 100%;
+          animation: shimmer 1.4s ease-in-out infinite;
+        }
         @media (max-width: 1024px) {
-          .kpi-strip { grid-template-columns: repeat(2, 1fr) !important; }
-          .row-60-40 { grid-template-columns: 1fr !important; }
-          .row-55-45 { grid-template-columns: 1fr !important; }
-          .row-50-50 { grid-template-columns: 1fr !important; }
-          /* Fix 2: Reduce outer div padding on mobile to prevent horizontal overflow.
-             On mobile main has ~12px padding; 40px L/R here = 92px total → overflows 414px.
-             Use 12px to match main padding, keeping total ≤ viewport width. */
+          .kpi-strip        { grid-template-columns: repeat(2, 1fr) !important; }
+          .row-60-40        { grid-template-columns: 1fr !important; }
+          .row-55-45        { grid-template-columns: 1fr !important; }
+          .row-50-50        { grid-template-columns: 1fr !important; }
+          .cms-sweep-hero   { grid-template-columns: 1fr !important; gap: 16px !important; }
           .admin-dash-outer { padding-left: 12px !important; padding-right: 12px !important; }
-          /* Fix 1: H1 must clear the fixed hamburger button.
-             Hamburger: fixed left-4(16px) + w-11(44px) = 60px right edge.
-             main padding (12px) + outer padding (12px) = 24px → H1 at x=24.
-             Add 48px left padding to header to push H1 to x ≥ 72px. */
           .admin-dash-header { padding-left: 48px !important; }
         }
         @media (max-width: 640px) {
@@ -768,24 +780,23 @@ export function AdminDashboard() {
       `}</style>
 
       {/* ── Header ── */}
-      <div className="admin-dash-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 16 }}>
+      <div className="admin-dash-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 className="text-foreground text-[26px] font-extrabold tracking-tight leading-tight m-0">
+          <h1 className="text-foreground font-extrabold tracking-tight leading-tight m-0" style={{ fontSize: 28 }}>
             Population Health Intelligence
           </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
-            <span className="text-muted-foreground text-[13px]">{dateStr}</span>
-            <button
-              onClick={() => setShowTour(true)}
-              aria-label="Take the product tour"
-              className="inline-flex items-center gap-1.5 px-3 py-1 border border-teal-200 rounded-full bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-semibold cursor-pointer transition-colors"
-            >
-              <BookOpen size={12} />
-              Take the tour
-            </button>
-          </div>
+          <span className="text-muted-foreground" style={{ fontSize: 13, marginTop: 6, display: "block" }}>{dateStr}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* Tour link — subtle, top-right */}
+          <button
+            onClick={() => setShowTour(true)}
+            aria-label="Take the product tour"
+            className="text-muted-foreground text-xs font-medium hover:text-foreground transition-colors cursor-pointer border-0 bg-transparent"
+          >
+            <BookOpen size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+            Tour
+          </button>
           <DateRangeSelector
             value={dateRange}
             onChange={setDateRange}
@@ -795,38 +806,36 @@ export function AdminDashboard() {
           />
           <button
             onClick={handleRefresh}
-            className="text-muted-foreground inline-flex items-center gap-1.5 px-[18px] py-[9px] border border-border bg-background text-[13px] font-semibold cursor-pointer rounded-[10px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150 hover:bg-muted hover:border-slate-300"
+            aria-label="Refresh dashboard"
+            className="text-muted-foreground inline-flex items-center gap-1.5 px-[14px] py-[8px] border border-border bg-background text-[13px] font-semibold cursor-pointer rounded-lg shadow-sm transition-all duration-150 hover:bg-muted hover:border-slate-300"
           >
             <RefreshCw size={14} />
             Refresh
           </button>
-          <ExportButton onExport={() => { /* future export */ }} label="Export Dashboard" />
+          <ExportButton onExport={() => { /* future export */ }} label="Export" />
         </div>
       </div>
 
-      {/* ── Data Freshness Bar ── */}
+      {/* ── EHR Sync Status Banner ── */}
       {emrConnected && (
-        <div
-          className="flex items-center gap-4 px-5 py-2.5 bg-green-50 border border-green-200 rounded-[10px] mb-6 text-xs text-green-800 font-medium"
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg mb-5 text-xs font-medium"
+          style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534" }}
         >
           <span
+            aria-hidden="true"
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "#10B981",
+              width: 8, height: 8, borderRadius: "50%", background: "#10B981",
               animation: "livePulse 2s ease-in-out infinite",
-              boxShadow: "0 0 6px rgba(16,185,129,0.4)",
-              flexShrink: 0,
+              boxShadow: "0 0 6px rgba(16,185,129,0.4)", flexShrink: 0,
             }}
           />
           <span>
-            {emrStatus?.display_name || "OpenEMR"} synced {timeAgo(workflowData?.last_sync_at)} | {fmtN(totalPop)} records | Last analysis: {timeAgo(workflowData?.last_analysis_at)}
+            {emrStatus?.display_name || "EHR ServiceDesk (FHIR)"} synced {timeAgo(workflowData?.last_sync_at)}&nbsp;|&nbsp;{fmtN(totalPop)} records&nbsp;|&nbsp;Last analysis: {timeAgo(workflowData?.last_analysis_at)}
           </span>
         </div>
       )}
       {!emrStatusL && !emrConnected && (
-        <div style={{ marginBottom: 24 }} />
+        <div style={{ marginBottom: 20 }} />
       )}
 
       {/* ── EMR Not Connected Banner ── */}
@@ -1076,89 +1085,83 @@ export function AdminDashboard() {
       {/* ══════════════════════════════════════════════════════════════════════
           ROW 1: 5-step onboarding checklist (always shown until hidden) + KPI Strip
           ══════════════════════════════════════════════════════════════════════ */}
-      {/* Checklist is self-hiding via localStorage — persists across sessions */}
-      {!statsL && (
-        <OnboardingCard
-          data-testid="onboarding-card"
-          emrConnected={emrConnected}
-          patientCount={totalPop}
-          analysisRunCount={workflowData?.recent_analyses_7d ?? 0}
-          attestationCount={onboardingAttestCount}
-          auditPackageCount={onboardingAuditCount}
-          demoLoading={demoLoading}
-          onTryDemo={() => setShowDemoConfirm(true)}
-        />
-      )}
+      {/* ── CMS Sweep Deadline Hero ── */}
+      <CmsSweepWidget revenueOpp={revenueOpp} />
+
+      {/* ── 4-KPI Strip ── */}
       <div className="fade-in-up fade-in-up-1">
       {(statsL && !kpiTimedOut) ? (
         <DashboardSkeleton />
       ) : (
         <div
-          className="kpi-strip kpi-strip-bento"
+          className="kpi-strip"
           role="status"
           aria-live="polite"
-          style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 20, marginBottom: 24 }}
+          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}
         >
-          {/* Bento sizing: hero (Revenue Opportunity) gets 2x width and a larger
-              primary number; all tiles share a minimum height so the row reads
-              as a unified bento strip even when individual cards render the
-              short empty-state layout. */}
-          <style>{`
-            .kpi-strip-bento > a,
-            .kpi-strip-bento > div { min-height: 132px; display: grid; }
-            .kpi-strip-bento > a > div,
-            .kpi-strip-bento > div > div { height: 100%; }
-            .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
-          `}</style>
-          {/* Hero tile — Revenue Opportunity dominates the row. */}
-          <MetricCard
-            label="Revenue Opportunity"
-            value={revenueOpp > 0 ? `$${(revenueOpp / 1_000_000).toFixed(1)}M` : "--"}
-            subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
-            icon={<DollarSign size={20} />}
-            intent={revenueOpp > 0 ? "success" : "default"}
-            href="/reports"
-            meta={revMeta ?? null}
-            freshness={rev?.last_computed_at ?? undefined}
-            labelTestId="revenue-at-risk-label"
-            valueTestId="revenue-at-risk-value"
-          />
-          <MetricCard
-            label="Suspects"
-            value={suspectsCount.toLocaleString()}
-            subtitle="Open suspect conditions"
-            icon={<Brain size={20} />}
-            intent="warning"
-            href="/suspects"
-            trend={kpiTrends?.suspects?.length ? kpiTrends.suspects : undefined}
-            delta={kpiTrends?.deltas?.suspects ?? undefined}
-          />
-          <MetricCard
-            label="Open Gaps"
-            value={(workflowData?.open_recapture_gaps ?? 0).toLocaleString()}
-            subtitle="Recapture gaps open"
-            icon={<AlertCircle size={20} />}
-            intent="warning"
-            href="/recapture"
-            trend={kpiTrends?.open_gaps?.length ? kpiTrends.open_gaps : undefined}
-            delta={kpiTrends?.deltas?.open_gaps != null ? -(kpiTrends.deltas.open_gaps) : undefined}
-          />
-          <MetricCard
-            label="Average RAF Score"
-            value={avgRaf > 0 ? avgRaf.toFixed(3) : "--"}
-            subtitle={avgRaf === 0 ? "Pending analysis" : avgRaf < 1.0 ? "Below average acuity" : avgRaf < 1.5 ? "Moderate acuity" : "High acuity population"}
-            icon={<TrendingUp size={20} />}
-            intent={avgRaf === 0 ? "default" : avgRaf >= 2.0 ? "danger" : avgRaf >= 1.0 ? "warning" : "success"}
-            delta={kpiTrends?.deltas?.avg_raf ?? rafTrend?.value}
-            trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
-            href="/reports?tab=raf-distribution"
-          />
-        </div>
-      )}
-      {/* Inline notice when kpi-trends endpoint failed or timed out */}
-      {(kpiTrendsQ.isError || (kpiTimedOut && !kpiTrends)) && (
-        <div className="text-muted-foreground text-[11px] -mt-4 mb-2 pl-1">
-          Sparkline trends couldn&apos;t load — showing latest values only.
+          {/* TOTAL MEMBERS */}
+          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Members</span>
+              <div style={{ background: "#F1F5F9", borderRadius: 8, padding: 6 }}>
+                <Users size={16} color="#64748B" />
+              </div>
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+              {fmtN(totalPop)}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748B" }}>Patients in system</div>
+          </div>
+
+          {/* PATIENTS ANALYZED */}
+          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Patients Analyzed</span>
+              <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
+                <CheckCircle size={16} color="#10B981" />
+              </div>
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+              {analyzed > 0 ? fmtN(analyzed) : fmtN(totalPop)}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748B" }}>
+              {totalPop > 0 ? `${Math.round(((analyzed > 0 ? analyzed : totalPop) / totalPop) * 100)}% coverage` : "No patients yet"}
+            </div>
+          </div>
+
+          {/* AVERAGE RAF SCORE */}
+          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Average RAF Score</span>
+              <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
+                <TrendingUp size={16} color="#10B981" />
+              </div>
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+              {avgRaf > 0 ? avgRaf.toFixed(3) : "--"}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748B" }}>
+              {avgRaf === 0 ? "Pending analysis" : avgRaf < 1.0 ? "Below average acuity" : avgRaf < 1.5 ? "Moderate acuity" : "High acuity population"}
+            </div>
+          </div>
+
+          {/* REVENUE OPPORTUNITY */}
+          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Revenue Opportunity</span>
+              <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
+                <DollarSign size={16} color="#10B981" />
+              </div>
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}
+              data-testid="revenue-at-risk-value"
+            >
+              {revenueOpp > 0 ? fmt$(revenueOpp) : "--"}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748B" }}>
+              {revenueOpp > 0 ? "Estimated annual capture" : "Run analysis to calculate"}
+            </div>
+          </div>
         </div>
       )}
       </div>
@@ -1167,33 +1170,11 @@ export function AdminDashboard() {
       <ChartRequestsKpiBanner />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TOP OPPORTUNITIES — next-best-action predictive tile
-          ══════════════════════════════════════════════════════════════════════ */}
-      {hasData && (
-        <div className="fade-in-up fade-in-up-2">
-          <TopOpportunitiesTile opportunities={rafCaptureOpps} isLoading={rafCaptureL} />
-        </div>
-      )}
-
-      {/* V28 Hero Card */}
-      <V28HeroCard
-        v28Summary={v28Summary}
-        isLoading={v28SummaryQ.isLoading}
-      />
-
-      {/* Q-Progress: most-tracked active quarterly goal */}
-      <div className="mb-6 max-w-sm">
-        <QProgressCard />
-      </div>
-
-      <CmsSweepWidget revenueOpp={revenueOpp} />
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          ROW 2: Risk Stratification (60%) + Suspect Conditions (40%)
+          ROW 2: Risk Stratification (50%) + Suspect Conditions (50%)
           ══════════════════════════════════════════════════════════════════════ */}
       <div
-        className="row-60-40 fade-in-up fade-in-up-2"
-        style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20, marginBottom: 24 }}
+        className="row-50-50 fade-in-up fade-in-up-2"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}
       >
         {/* Left: Risk Stratification */}
         {(statsL && popL) ? (
@@ -1297,9 +1278,9 @@ export function AdminDashboard() {
             {/* Tier cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
               {[
-                { label: "High Risk", desc: "RAF >= 2.0", count: tiers.high, color: "#EF4444", bg: "#FEF2F2", border: "#FECACA", filter: "high" },
-                { label: "Medium Risk", desc: "RAF 1.0 - 2.0", count: tiers.med, color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A", filter: "medium" },
-                { label: "Low Risk", desc: "RAF < 1.0", count: tiers.low, color: "#10B981", bg: "#F0FDF4", border: "#A7F3D0", filter: "low" },
+                { label: "High Risk", desc: "RAF >= 2.0", count: tiers.high, color: "#E11D48", bg: "#FFF1F2", border: "#FECDD3", filter: "high" },
+                { label: "Medium Risk", desc: "RAF 1.0 - 2.0", count: tiers.med, color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", filter: "medium" },
+                { label: "Low Risk", desc: "RAF < 1.0", count: tiers.low, color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", filter: "low" },
               ].map((t) => (
                 <Link
                   key={t.label}
@@ -1438,11 +1419,11 @@ export function AdminDashboard() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ROW 3: Top Revenue Opportunities (55%) + Revenue Waterfall (45%)
+          ROW 3: Top Revenue Opportunities (50%) + Revenue Waterfall (50%)
           ══════════════════════════════════════════════════════════════════════ */}
       <div
-        className="row-55-45 fade-in-up fade-in-up-3"
-        style={{ display: "grid", gridTemplateColumns: "11fr 9fr", gap: 20, marginBottom: 24 }}
+        className="row-50-50 fade-in-up fade-in-up-3"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}
       >
         {/* Left: Top Revenue Opportunities */}
         {scL ? (
@@ -1623,7 +1604,7 @@ export function AdminDashboard() {
           ══════════════════════════════════════════════════════════════════════ */}
       <div
         className="row-50-50 fade-in-up fade-in-up-4"
-        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}
       >
         {/* Left: Provider Performance */}
         <div style={{ ...card, transition: "box-shadow 0.2s, transform 0.2s" }}
@@ -1883,7 +1864,34 @@ export function AdminDashboard() {
       ) : null}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ROW 6: Patient Priority Table (full width)
+          BELOW-FOLD: V28 Hero + Top Opportunities + Onboarding (deprioritized)
+          ══════════════════════════════════════════════════════════════════════ */}
+      <V28HeroCard
+        v28Summary={v28Summary}
+        isLoading={v28SummaryQ.isLoading}
+      />
+
+      {hasData && (
+        <div className="fade-in-up fade-in-up-5">
+          <TopOpportunitiesTile opportunities={rafCaptureOpps} isLoading={rafCaptureL} />
+        </div>
+      )}
+
+      {!statsL && (
+        <OnboardingCard
+          data-testid="onboarding-card"
+          emrConnected={emrConnected}
+          patientCount={totalPop}
+          analysisRunCount={workflowData?.recent_analyses_7d ?? 0}
+          attestationCount={onboardingAttestCount}
+          auditPackageCount={onboardingAuditCount}
+          demoLoading={demoLoading}
+          onTryDemo={() => setShowDemoConfirm(true)}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          Patient Priority Table (full width)
           ══════════════════════════════════════════════════════════════════════ */}
       <div className="fade-in-up fade-in-up-6">
       {scL ? (
