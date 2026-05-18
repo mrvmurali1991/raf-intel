@@ -217,6 +217,10 @@ export default function AttestationsPage() {
         message="{count} attestations validated — ready for pre-submission checks"
         ctaLabel="Run Pre-submission"
         ctaHref="/pre-submission"
+        showWhenZero
+        zeroMessage="No attestations completed yet — accept suspects first, then providers can attest."
+        zeroCtaLabel="Go to Suspects"
+        zeroCtaHref="/suspects"
       />
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>

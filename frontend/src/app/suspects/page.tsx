@@ -10,6 +10,7 @@ import {
 import DataQualityBanner from "@/components/DataQualityBanner";
 import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
+import PageAlerts from "@/components/PageAlerts";
 import ProblemListWriteBackModal from "@/components/ProblemListWriteBackModal";
 import { tokens } from "@/styles/tokens";
 import {
@@ -665,19 +666,26 @@ export default function SuspectsPage() {
         overflowX: "hidden",
       }}
     >
-      <HistoricalPYBanner paymentYear={measurementYear} />
-      <DataQualityBanner />
-      <WorkflowProgressBar currentStage="suspects" />
-      <WorkflowHandoffBanner
-        count={statusCounts.accepted}
-        message="{count} suspects ready for attestation"
-        ctaLabel="Send to Attestations"
-        ctaHref="/attestations"
-      />
+      <PageAlerts defaultOpen>
+        <HistoricalPYBanner paymentYear={measurementYear} />
+        <DataQualityBanner />
+        <WorkflowProgressBar currentStage="suspects" />
+        <WorkflowHandoffBanner
+          count={statusCounts.accepted}
+          message="{count} suspects ready for attestation"
+          ctaLabel="Send to Attestations"
+          ctaHref="/attestations"
+          showWhenZero
+          zeroMessage="No suspects accepted yet — review AI suspects below and accept to proceed."
+          zeroCtaLabel="View Suspects"
+          zeroCtaHref="/suspects"
+        />
+      </PageAlerts>
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           @keyframes pulseSk { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
           @keyframes rowEnter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+          @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         }
         .suspect-row {
           animation: rowEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -1129,7 +1137,7 @@ export default function SuspectsPage() {
                                 display: "inline-flex", alignItems: "center", gap: 6,
                                 height: 30, padding: "0 12px", borderRadius: 8,
                                 border: `1px solid ${active ? C.brand : C.border}`,
-                                backgroundColor: active ? C.brandSoft : "#f8fafc",
+                                backgroundColor: active ? C.brandSoft : C.bgSubtle,
                                 color: active ? C.brand : C.textMuted,
                                 fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
                               }}
@@ -1161,7 +1169,7 @@ export default function SuspectsPage() {
                                 display: "inline-flex", alignItems: "center", gap: 5,
                                 height: 30, padding: "0 10px", borderRadius: 8,
                                 border: `1px solid ${active ? C.brand : C.border}`,
-                                backgroundColor: active ? C.brandSoft : "#f8fafc",
+                                backgroundColor: active ? C.brandSoft : C.bgSubtle,
                                 color: active ? C.brand : C.textMuted,
                                 fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
                               }}

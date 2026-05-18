@@ -152,7 +152,10 @@ export default function PreSubmissionPage() {
           }
           ctaLabel="Generate EDI 837"
           ctaHref="/edi-generation"
-          hideWhenZero={false}
+          showWhenZero
+          zeroMessage="No checks passed yet — complete attestations first, then run pre-submission checks."
+          zeroCtaLabel="Go to Attestations"
+          zeroCtaHref="/attestations"
         />
       )}
       <PageHeader
