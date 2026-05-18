@@ -102,14 +102,12 @@ export function SuspectsTab({
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>
+                  <span className="text-sm font-semibold text-foreground">
                     {s.suspected_condition || s.condition || s.evidence_type || "—"}
                   </span>
                   {(s.suspect_icd10 || s.icd10_code) && (
-                    <span style={{
+                    <span className="text-xs font-semibold font-mono bg-muted text-foreground border border-border" style={{
                       display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                      fontSize: 11, fontWeight: 600, fontFamily: "monospace",
-                      background: C.slate100, color: C.slate700, border: `1px solid ${C.slate200}`,
                     }}>
                       {s.suspect_icd10 || s.icd10_code}
                     </span>
@@ -131,8 +129,8 @@ export function SuspectsTab({
                   </span>
                 </div>
                 {(s.evidence_detail || s.evidence || s.rationale) && (
-                  <div style={{
-                    fontSize: 13, color: C.slate500, marginTop: 8, lineHeight: 1.5,
+                  <div className="text-sm text-muted-foreground" style={{
+                    marginTop: 8, lineHeight: 1.5,
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                   }}>
                     {typeof s.evidence_detail === "object" && s.evidence_detail
@@ -146,7 +144,7 @@ export function SuspectsTab({
                   </div>
                 )}
                 {s.source && (
-                  <div style={{ fontSize: 11, color: C.slate400, marginTop: 6 }}>
+                  <div className="text-xs text-muted-foreground" style={{ marginTop: 6 }}>
                     Source: {s.source}
                   </div>
                 )}

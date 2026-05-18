@@ -103,12 +103,12 @@ function MetricCell({
       }}
     >
       <div
+        className="text-muted-foreground"
         style={{
           fontSize: 10,
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
-          color: C.slate400,
           marginBottom: 4,
           whiteSpace: "nowrap",
         }}
@@ -119,15 +119,16 @@ function MetricCell({
         style={{
           fontSize: 22,
           fontWeight: 800,
-          color: color ?? C.slate900,
+          color: color ?? undefined,
           fontFamily: "monospace",
           lineHeight: 1,
         }}
+        className={color ? undefined : "text-foreground"}
       >
         {value}
       </div>
       {sub && (
-        <div style={{ marginTop: 3, fontSize: 11, color: C.slate400 }}>{sub}</div>
+        <div className="text-muted-foreground" style={{ marginTop: 3, fontSize: 11 }}>{sub}</div>
       )}
     </div>
   );
@@ -182,9 +183,8 @@ export function RiskSummaryCard({
 
   return (
     <div
+      className="bg-card border-b border-border"
       style={{
-        background: C.white,
-        borderBottom: `1px solid ${C.slate200}`,
         display: "flex",
         alignItems: "center",
         overflowX: "auto",
@@ -257,12 +257,12 @@ export function RiskSummaryCard({
         }}
       >
         <div
+          className="text-muted-foreground"
           style={{
             fontSize: 10,
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
-            color: C.slate400,
             marginBottom: 4,
             whiteSpace: "nowrap",
             display: "flex",
@@ -275,7 +275,7 @@ export function RiskSummaryCard({
             <ChevronRight
               size={11}
               aria-hidden="true"
-              style={{ color: C.slate400 }}
+              className="text-muted-foreground"
             />
           )}
         </div>
@@ -301,7 +301,7 @@ export function RiskSummaryCard({
           {v28Delta != null ? fmt(v28Delta, 3) : "—"}
         </div>
         {v28Delta != null && (
-          <div style={{ marginTop: 3, fontSize: 10, color: C.slate400 }}>
+          <div className="text-muted-foreground" style={{ marginTop: 3, fontSize: 10 }}>
             {v28Delta >= 0 ? "model improvement" : "model erosion"}
           </div>
         )}
@@ -328,12 +328,12 @@ export function RiskSummaryCard({
         }}
       >
         <div
+          className="text-muted-foreground"
           style={{
             fontSize: 10,
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
-            color: C.slate400,
             marginBottom: 4,
             whiteSpace: "nowrap",
             display: "flex",
@@ -360,7 +360,7 @@ export function RiskSummaryCard({
         >
           {fmtDollar(dollarAtStake)}
         </div>
-        <div style={{ marginTop: 3, fontSize: 10, color: C.slate400 }}>
+        <div className="text-muted-foreground" style={{ marginTop: 3, fontSize: 10 }}>
           vs baseline
         </div>
       </div>

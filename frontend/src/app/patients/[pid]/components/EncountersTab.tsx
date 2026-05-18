@@ -70,7 +70,7 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
     return (
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 16px", borderBottom: `1px solid #e2e8f0` }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
+          <span className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
           <button
             onClick={() => setYearFilter("all")}
             style={{
@@ -111,7 +111,7 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Year filter */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
+        <span className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Filter</span>
         <button
           onClick={() => setYearFilter("all")}
           style={{
@@ -170,9 +170,9 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
             >
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div
+                  className="text-primary bg-primary/10"
                   style={{
                     width: 40, height: 40, borderRadius: 10,
-                    background: C.blue50, color: C.blue600,
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                   }}
                 >
@@ -181,10 +181,10 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>
+                  <div className="text-sm font-semibold text-foreground">
                     {enc.reason || "Office Visit"}
                   </div>
-                  <div style={{ fontSize: 12, color: C.slate400, marginTop: 2 }}>
+                  <div className="text-xs text-muted-foreground" style={{ marginTop: 2 }}>
                     {enc.provider_fname || enc.provider_lname
                       ? `${enc.provider_fname || ""} ${enc.provider_lname || ""}`.trim()
                       : "Provider not listed"}
@@ -194,14 +194,13 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 13, color: C.slate500 }}>
+                <span className="text-sm text-muted-foreground">
                   {formatDate(enc.date)}
                 </span>
                 {!hasNotes && (
-                  <span style={{
+                  <span className="bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800" style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                    background: C.amber50, color: C.amber600, border: `1px solid ${C.amber100}`,
                   }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01" />
@@ -210,10 +209,9 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                   </span>
                 )}
                 {diagnoses.length > 0 && (
-                  <span style={{
+                  <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                    background: C.emerald50, color: C.emerald600, border: `1px solid ${C.emerald100}`,
                   }}>
                     {diagnoses.length} dx{hccFromAnalysis > 0 ? ` / ${hccFromAnalysis} HCC` : ""}
                   </span>
@@ -224,8 +222,8 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                   style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     padding: "6px 14px", borderRadius: 6,
-                    border: `1px solid ${C.slate200}`, background: C.white,
-                    color: !hasNotes ? C.slate400 : C.blue600,
+                    
+                    color: !hasNotes ? "var(--muted-foreground)" : "var(--primary)",
                     fontSize: 12, fontWeight: 600,
                     cursor: analyzeMutation.isPending || !hasNotes ? "not-allowed" : "pointer",
                     opacity: analyzeMutation.isPending || !hasNotes ? 0.5 : 1,
@@ -246,9 +244,9 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
 
             {/* Expanded content */}
             {isExpanded && (
-              <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.slate200}`, background: C.slate100 + "80" }}>
+              <div style={{ padding: "16px 20px" }}>
                 {!hasNotes ? (
-                  <div style={{ textAlign: "center", padding: "24px 0", color: C.slate400, fontSize: 13 }}>
+                  <div className="text-muted-foreground" style={{ textAlign: "center", padding: "24px 0", fontSize: 13 }}>
                     No clinical notes available for this encounter
                   </div>
                 ) : diagnoses.length > 0 ? (
@@ -259,12 +257,12 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                       padding: "10px 14px", marginBottom: 12,
                       background: "linear-gradient(135deg, rgba(59,130,246,0.06), rgba(16,185,129,0.06))",
                       border: `1px solid ${C.blue100}`, borderRadius: 8,
-                      fontSize: 12, color: C.slate600, lineHeight: 1.5,
+                      lineHeight: 1.5,
                     }}>
                       <span style={{ fontSize: 16 }}>{"\uD83E\uDD16"}</span>
                       <div>
-                        <strong style={{ color: C.slate800 }}>AI Analysis</strong> extracted <strong>{diagnoses.length}</strong> diagnoses
-                        {hccFromAnalysis > 0 && <> including <strong style={{ color: C.blue600 }}>{hccFromAnalysis} HCC-carrying codes</strong></>} from
+                        <strong className="text-foreground">AI Analysis</strong> extracted <strong>{diagnoses.length}</strong> diagnoses
+                        {hccFromAnalysis > 0 && <> including <strong className="text-primary">{hccFromAnalysis} HCC-carrying codes</strong></>} from
                         this encounter&apos;s SOAP notes. These codes are <strong>not yet in billing</strong> &mdash; review and accept to update claims.
                       </div>
                     </div>
@@ -300,13 +298,12 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                       return <LLMInputPanel llmInput={llmInput} />;
                     })()}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: C.slate500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <div className="text-xs font-semibold text-muted-foreground" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         AI-Extracted Diagnoses
                       </div>
-                      <span style={{
+                      <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" style={{
                         display: "inline-flex", alignItems: "center", gap: 4,
                         padding: "3px 10px", borderRadius: 999, fontSize: 10, fontWeight: 700,
-                        background: C.emerald50, color: C.emerald600, border: `1px solid ${C.emerald100}`,
                         textTransform: "uppercase", letterSpacing: "0.03em",
                       }}>
                         Source: AI Analysis
@@ -314,11 +311,11 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                     </div>
                     <div style={{
                       display: "grid", gridTemplateColumns: "1fr 100px 80px 100px 80px",
-                      padding: "8px 16px", background: C.white,
+                      padding: "8px 16px",
                       borderRadius: "8px 8px 0 0", border: `1px solid ${C.slate200}`, borderBottom: "none", gap: 8,
                     }}>
                       {["Diagnosis", "ICD-10", "HCC", "Confidence", "MEAT"].map((h) => (
-                        <span key={h} style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400 }}>
+                        <span key={h} className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           {h}
                         </span>
                       ))}
@@ -331,19 +328,19 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                           key={dx.icd10 || dx.icd10_code || `dx-${i}`}
                           style={{
                             display: "grid", gridTemplateColumns: "1fr 100px 80px 100px 80px",
-                            padding: "10px 16px", background: C.white,
+                            padding: "10px 16px",
                             border: `1px solid ${C.slate200}`, borderTop: "none",
                             borderRadius: i === diagnoses.length - 1 ? "0 0 8px 8px" : 0, gap: 8,
                           }}
                         >
-                          <span style={{ fontSize: 13, fontWeight: 500, color: C.slate800 }}>
+                          <span className="text-sm font-medium text-foreground">
                             {dx.condition || dx.diagnosis || dx.description || "\u2014"}
                           </span>
                           <span>
                             <span style={{
                               display: "inline-block", padding: "2px 6px", borderRadius: 4,
                               fontSize: 11, fontWeight: 600, fontFamily: "monospace",
-                              background: C.slate100, color: C.slate700, border: `1px solid ${C.slate200}`,
+                              
                             }}>
                               {dx.icd10_code || dx.code || "\u2014"}
                             </span>
@@ -353,7 +350,7 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                               <span style={{
                                 display: "inline-block", padding: "2px 6px", borderRadius: 4,
                                 fontSize: 11, fontWeight: 600, fontFamily: "monospace",
-                                background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`,
+                                
                               }}>
                                 {hcc}
                               </span>
@@ -366,18 +363,18 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
                     })}
                   </div>
                 ) : (
-                  <div style={{ textAlign: "center", padding: "24px 0", color: C.slate500, fontSize: 13 }}>
+                  <div className="text-muted-foreground" style={{ textAlign: "center", padding: "24px 0", fontSize: 13 }}>
                     <strong>Not analyzed yet.</strong> Click &ldquo;Analyze&rdquo; or &ldquo;Analyze All Encounters&rdquo; to run AI extraction on this encounter&apos;s SOAP notes. The AI will identify ICD-10 codes and HCC opportunities from the clinical documentation.
                   </div>
                 )}
 
                 {/* Show notes if present */}
                 {enc.notes && (
-                  <div style={{ marginTop: 12, padding: 16, background: C.white, borderRadius: 8, border: `1px solid ${C.slate200}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div className="bg-card border border-border" style={{ marginTop: 12, padding: 16, borderRadius: 8 }}>
+                    <div className="text-xs font-semibold text-muted-foreground" style={{ marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                       Clinical Notes
                     </div>
-                    <div style={{ fontSize: 13, color: C.slate700, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                    <div className="text-sm text-foreground" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
                       {enc.notes}
                     </div>
                   </div>

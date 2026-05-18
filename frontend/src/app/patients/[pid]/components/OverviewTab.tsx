@@ -108,8 +108,8 @@ function DataCompletenessChecklist({ profile, encounters, problems, meds, labSus
             }}
           >
             <span
-              style={{
-                color: C.slate600,
+              className="text-muted-foreground"
+            style={{
                 textTransform: "capitalize",
               }}
             >
@@ -117,11 +117,11 @@ function DataCompletenessChecklist({ profile, encounters, problems, meds, labSus
             </span>
             {s.present ? (
               <span
+                className="text-emerald-600 dark:text-emerald-400"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 4,
-                  color: C.emerald600,
                   fontSize: 12,
                   fontWeight: 600,
                 }}
@@ -142,11 +142,11 @@ function DataCompletenessChecklist({ profile, encounters, problems, meds, labSus
               </span>
             ) : (
               <span
+                className="text-red-500 dark:text-red-400"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 4,
-                  color: C.red500,
                   fontSize: 12,
                   fontWeight: 500,
                 }}
@@ -261,18 +261,16 @@ export function OverviewTab({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {/* Analysis Status Banner */}
       {isDemoOnly && (
-        <div className="animate-slide-up stagger-1" style={{
-          background: "#FFFBEB",
-          border: "1px solid #FDE68A",
+        <div className="animate-slide-up stagger-1 bg-amber-50 border border-amber-200 dark:bg-amber-950 dark:border-amber-700" style={{
           borderRadius: 12,
           padding: "16px 20px",
           display: "flex",
           alignItems: "center",
           gap: 16,
         }}>
-          <div style={{
+          <div className="bg-amber-100 dark:bg-amber-900" style={{
             width: 44, height: 44, borderRadius: 10,
-            background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center",
+            display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0,
           }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -281,10 +279,10 @@ export function OverviewTab({
             </svg>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#92400E", marginBottom: 2 }}>
+            <div className="text-sm font-bold text-amber-800 dark:text-amber-200" style={{ marginBottom: 2 }}>
               Demographics-Only Score
             </div>
-            <div style={{ fontSize: 13, color: "#A16207", lineHeight: 1.5 }}>
+            <div className="text-sm text-amber-700 dark:text-amber-300" style={{ lineHeight: 1.5 }}>
               This RAF score ({rafScore != null ? Number(rafScore).toFixed(3) : "\u2014"}) is calculated from demographics only
               ({patientAge ? `${patientAge}-year-old` : ""} {patientSex || ""}).
               {hasEncountersWithNotes
@@ -295,9 +293,10 @@ export function OverviewTab({
           {hasEncountersWithNotes && (
             <button
               onClick={() => setActiveTab("encounters")}
+              className="bg-amber-600 text-white hover:bg-amber-700"
               style={{
                 padding: "10px 18px", borderRadius: 8, border: "none",
-                background: "#D97706", color: "#fff", fontSize: 13, fontWeight: 700,
+                fontSize: 13, fontWeight: 700,
                 cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
               }}
             >
@@ -308,9 +307,7 @@ export function OverviewTab({
       )}
 
       {!isDemoOnly && (
-        <div className="animate-slide-up stagger-1" style={{
-          background: "#ECFDF5",
-          border: "1px solid #A7F3D0",
+        <div className="animate-slide-up stagger-1 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950 dark:border-emerald-700" style={{
           borderRadius: 12,
           padding: "14px 20px",
           display: "flex",
@@ -320,7 +317,7 @@ export function OverviewTab({
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
           </svg>
-          <div style={{ fontSize: 13, color: "#065F46", fontWeight: 500 }}>
+          <div className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
             <strong>{hccCount} HCC condition{hccCount !== 1 ? "s" : ""}</strong> identified from clinical analysis.
             RAF score includes demographic ({Number(breakdown?.demographic_score || 0).toFixed(3)}) + disease ({Number(breakdown?.disease_score || 0).toFixed(3)})
             {(breakdown?.interaction_score ?? 0) > 0 ? ` + interactions (${Number(breakdown?.interaction_score).toFixed(3)})` : ""}.
@@ -340,17 +337,16 @@ export function OverviewTab({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>{"\uD83E\uDD16"}</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.slate800 }}>
+              <span className="text-sm font-bold text-foreground">
                 AI Analysis Summary
               </span>
-              <span style={{
+              <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" style={{
                 padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700,
-                background: C.emerald50, color: C.emerald600, border: `1px solid ${C.emerald100}`,
               }}>
                 {aiAnalysis.analyzedEncounters}/{aiAnalysis.totalEncounters} encounters analyzed
               </span>
             </div>
-            <span style={{ fontSize: 11, color: C.slate400 }}>
+            <span className="text-xs text-muted-foreground">
               Powered by AI Engine
             </span>
           </div>
@@ -361,13 +357,13 @@ export function OverviewTab({
               background: C.white, borderRadius: 8, padding: "12px 16px",
               border: `1px solid ${C.slate200}`,
             }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                 AI-Extracted Diagnoses
               </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.blue600, fontFamily: "monospace" }}>
+              <div className="text-primary font-mono" style={{ fontSize: 22, fontWeight: 800 }}>
                 {aiAnalysis.totalDx}
               </div>
-              <div style={{ fontSize: 11, color: C.slate500, marginTop: 2 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: 2 }}>
                 {aiAnalysis.hccDx} with HCC mapping
               </div>
             </div>
@@ -377,13 +373,13 @@ export function OverviewTab({
               background: C.white, borderRadius: 8, padding: "12px 16px",
               border: `1px solid ${aiAnalysis.aiOnlyCount > 0 ? C.emerald100 : C.slate200}`,
             }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                 New Codes (Not in Billing)
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: aiAnalysis.aiOnlyCount > 0 ? C.emerald600 : C.slate400, fontFamily: "monospace" }}>
                 {aiAnalysis.aiOnlyCount}
               </div>
-              <div style={{ fontSize: 11, color: C.slate500, marginTop: 2 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: 2 }}>
                 {aiAnalysis.aiOnlyCount > 0 ? "Potential revenue opportunity" : "All codes already billed"}
               </div>
             </div>
@@ -393,21 +389,21 @@ export function OverviewTab({
               background: C.white, borderRadius: 8, padding: "12px 16px",
               border: `1px solid ${C.slate200}`,
             }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                 Data Sources
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: C.slate500, flexShrink: 0 }} />
-                  <span style={{ color: C.slate600, fontWeight: 500 }}>Billing (OpenEMR)</span>
-                  <span style={{ marginLeft: "auto", fontWeight: 700, color: C.slate700, fontFamily: "monospace" }}>
+                  <span className="text-muted-foreground font-medium">Billing (OpenEMR)</span>
+                  <span className="text-foreground font-mono font-bold" style={{ marginLeft: "auto" }}>
                     {hccCount}
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: C.emerald500, flexShrink: 0 }} />
-                  <span style={{ color: C.slate600, fontWeight: 500 }}>AI Analysis</span>
-                  <span style={{ marginLeft: "auto", fontWeight: 700, color: C.emerald600, fontFamily: "monospace" }}>
+                  <span className="text-muted-foreground font-medium">AI Analysis</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold" style={{ marginLeft: "auto" }}>
                     +{aiAnalysis.aiOnlyCount}
                   </span>
                 </div>
@@ -418,25 +414,22 @@ export function OverviewTab({
           {/* List new AI-only codes */}
           {aiAnalysis.aiOnlyCount > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: C.slate500, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 AI-Identified Codes Not Yet in Billing
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {aiAnalysis.aiOnlyCodes.map((dx: AIDiagnosis, i: number) => (
-                  <span key={dx.code || dx.icd10_code || i} style={{
+                  <span key={dx.code || dx.icd10_code || i} className="bg-card text-foreground border border-emerald-100 dark:border-emerald-800" style={{
                     display: "inline-flex", alignItems: "center", gap: 6,
                     padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 500,
-                    background: C.white, border: `1px solid ${C.emerald100}`,
-                    color: C.slate700,
                   }}>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.emerald600 }}>
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                       {dx.icd10_code || dx.code}
                     </span>
                     {dx.description || dx.condition || dx.diagnosis || ""}
                     {(dx.hcc_code || dx.hcc || dx.hcc_mapping?.hcc_code) && (
-                      <span style={{
+                      <span className="text-primary bg-primary/10 border border-primary/20" style={{
                         padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700,
-                        background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`,
                       }}>
                         {dx.hcc_code || dx.hcc || dx.hcc_mapping?.hcc_code}
                       </span>
@@ -504,25 +497,23 @@ export function OverviewTab({
                   <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
                   <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                 </svg>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.slate700, marginBottom: 4 }}>
+                <div className="text-sm font-semibold text-foreground" style={{ marginBottom: 4 }}>
                   No active problems
                 </div>
                 {hasEncountersWithNotes ? (
                   <>
-                    <div style={{ fontSize: 13, color: C.slate500, marginBottom: 12 }}>
+                    <div className="text-sm text-muted-foreground" style={{ marginBottom: 12 }}>
                       Run analysis on encounters to identify conditions
                     </div>
                     <button
                       onClick={() => setActiveTab("encounters")}
+                      className="bg-primary/10 text-primary border border-primary"
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 6,
                         padding: "8px 16px",
                         borderRadius: 8,
-                        border: `1px solid ${C.blue600}`,
-                        background: C.blue50,
-                        color: C.blue600,
                         fontSize: 13,
                         fontWeight: 600,
                         cursor: "pointer",
@@ -535,7 +526,7 @@ export function OverviewTab({
                     </button>
                   </>
                 ) : (
-                  <div style={{ fontSize: 13, color: C.slate500 }}>
+                  <div className="text-sm text-muted-foreground">
                     No encounters with clinical notes found
                   </div>
                 )}
@@ -544,48 +535,16 @@ export function OverviewTab({
               <div>
                 {/* Table header */}
                 <div
+                  className="bg-muted border-y border-border"
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 140px 120px",
                     padding: "8px 20px",
-                    background: C.slate100,
-                    borderTop: `1px solid ${C.slate200}`,
-                    borderBottom: `1px solid ${C.slate200}`,
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      color: C.slate400,
-                    }}
-                  >
-                    Condition
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      color: C.slate400,
-                    }}
-                  >
-                    ICD-10
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      color: C.slate400,
-                    }}
-                  >
-                    Onset
-                  </span>
+                  <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Condition</span>
+                  <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>ICD-10</span>
+                  <span className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Onset</span>
                 </div>
                 {/* Rows */}
                 {problemItems
@@ -609,32 +568,23 @@ export function OverviewTab({
                       }
                     >
                       <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: C.slate800,
-                        }}
+                        className="text-sm font-medium text-foreground"
                       >
                         {p.title || p.condition || p.diagnosis || "\u2014"}
                       </span>
                       <span>
                         <span
+                          className="text-xs font-semibold font-mono bg-muted text-foreground border border-border"
                           style={{
                             display: "inline-block",
                             padding: "2px 8px",
                             borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            fontFamily: "monospace",
-                            background: C.slate100,
-                            color: C.slate700,
-                            border: `1px solid ${C.slate200}`,
                           }}
                         >
                           {p.icd10_code || p.diagnosis_code || "\u2014"}
                         </span>
                       </span>
-                      <span style={{ fontSize: 12, color: C.slate500 }}>
+                      <span className="text-xs text-muted-foreground">
                         {formatDate(p.begdate || p.onset_date || p.date)}
                       </span>
                     </div>
@@ -713,20 +663,13 @@ export function OverviewTab({
                     >
                       <div>
                         <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: C.slate800,
-                          }}
+                          className="text-sm font-medium text-foreground"
                         >
                           {enc.reason || "Office Visit"}
                         </div>
                         <div
-                          style={{
-                            fontSize: 12,
-                            color: C.slate400,
-                            marginTop: 2,
-                          }}
+                          className="text-xs text-muted-foreground"
+                          style={{ marginTop: 2 }}
                         >
                           {enc.provider_fname || enc.provider_lname
                             ? `${enc.provider_fname || ""} ${enc.provider_lname || ""}`.trim()
@@ -744,9 +687,8 @@ export function OverviewTab({
                       >
                         {!hasNotes && (
                           <span
-                            style={{
-                              fontSize: 11,
-                              color: C.slate400,
+                            className="text-xs text-muted-foreground"
+                          style={{
                               fontStyle: "italic",
                             }}
                           >
@@ -759,16 +701,13 @@ export function OverviewTab({
                             analyzeMutation.mutate(enc.encounter_id);
                           }}
                           disabled={analyzeMutation.isPending || !hasNotes}
+                          className="bg-card text-muted-foreground border border-border"
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 4,
                             padding: "5px 12px",
                             borderRadius: 6,
-                            border: `1px solid ${C.slate200}`,
-                            background: C.white,
-                            color:
-                              !hasNotes ? C.slate400 : C.slate600,
                             fontSize: 12,
                             fontWeight: 500,
                             cursor:
@@ -847,11 +786,7 @@ export function OverviewTab({
                     >
                       <div style={{ flex: 1 }}>
                         <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: C.slate800,
-                          }}
+                          className="text-sm font-medium text-foreground"
                         >
                           {gap.condition ||
                             gap.hcc_label ||
@@ -867,16 +802,11 @@ export function OverviewTab({
                           }}
                         >
                           <span
-                            style={{
+                            className="text-xs font-semibold font-mono bg-muted text-foreground border border-border"
+                          style={{
                               display: "inline-block",
                               padding: "2px 8px",
                               borderRadius: 4,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              fontFamily: "monospace",
-                              background: C.slate100,
-                              color: C.slate700,
-                              border: `1px solid ${C.slate200}`,
                             }}
                           >
                             {gap.icd10_code ||
@@ -884,7 +814,7 @@ export function OverviewTab({
                               gap.hcc ||
                               "\u2014"}
                           </span>
-                          <span style={{ fontSize: 11, color: C.slate400 }}>
+                          <span className="text-xs text-muted-foreground">
                             {formatDate(gap.onset_date || gap.begdate)}
                           </span>
                         </div>

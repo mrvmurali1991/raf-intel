@@ -370,17 +370,17 @@ export function Spinner({ size = 16 }: { size?: number }) {
 export function SectionLoader({ label }: { label?: string }) {
   return (
     <div
+      className="text-muted-foreground"
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
         padding: "48px 0",
-        color: C.slate400,
       }}
     >
       <Spinner size={18} />
-      <span style={{ fontSize: 13 }}>{label || "Loading\u2026"}</span>
+      <span className="text-sm">{label || "Loading\u2026"}</span>
     </div>
   );
 }
@@ -529,6 +529,7 @@ export function PanelWithTimeout({
     return (
       <div
         role="alert"
+        className="text-muted-foreground"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -536,7 +537,6 @@ export function PanelWithTimeout({
           justifyContent: "center",
           gap: 8,
           padding: "32px 20px",
-          color: C.slate500,
           textAlign: "center",
         }}
       >
@@ -555,7 +555,7 @@ export function PanelWithTimeout({
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
-        <span style={{ fontSize: 13, color: C.slate500 }}>
+        <span className="text-sm text-muted-foreground">
           Couldn&apos;t load this section
         </span>
         {onRetry && (
@@ -564,13 +564,12 @@ export function PanelWithTimeout({
               setTimedOut(false);
               onRetry();
             }}
+            className="bg-card text-muted-foreground border-border"
             style={{
               marginTop: 4,
               padding: "6px 16px",
               borderRadius: 6,
-              border: `1px solid ${C.slate300}`,
-              background: C.white,
-              color: C.slate600,
+              border: "1px solid",
               fontSize: 12,
               fontWeight: 600,
               cursor: "pointer",
@@ -603,10 +602,9 @@ export function Card({
 }) {
   return (
     <div
-      className={`premium-card ${extraClassName || ""}`}
+      className={`premium-card bg-card border-border ${extraClassName || ""}`}
       style={{
-        background: C.white,
-        border: `1px solid ${C.slate200}`,
+        border: "1px solid",
         borderRadius: 12,
         padding: noPadding ? 0 : 20,
         ...style,
@@ -721,12 +719,12 @@ export function SimpleTable({
         {headers.map((h) => (
           <span
             key={h}
+            className="text-muted-foreground"
             style={{
               fontSize: 11,
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
-              color: C.slate500,
             }}
           >
             {h}
@@ -804,19 +802,19 @@ export function FindingsList({
         >
           <div>
             <div
-              style={{
+              className="text-foreground"
+            style={{
                 fontSize: 13,
                 fontWeight: 500,
-                color: C.slate800,
               }}
             >
               {item.name}
             </div>
             {item.detail && (
               <div
-                style={{
+                className="text-muted-foreground"
+              style={{
                   fontSize: 12,
-                  color: C.slate400,
                   marginTop: 2,
                 }}
               >

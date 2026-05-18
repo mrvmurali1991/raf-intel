@@ -52,11 +52,11 @@ const REPORT_TYPES = [
   "Custom Report",
 ];
 
-const DOC_STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  analyzed: { bg: C.emerald100, color: C.emerald600, label: "Analyzed" },
-  processing: { bg: C.blue100, color: C.blue600, label: "Processing" },
-  pending: { bg: C.amber100, color: C.amber600, label: "Pending" },
-  failed: { bg: C.red100, color: C.red600, label: "Failed" },
+const DOC_STATUS_STYLES: Record<string, { className: string; label: string }> = {
+  analyzed: { className: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400", label: "Analyzed" },
+  processing: { className: "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400", label: "Processing" },
+  pending: { className: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400", label: "Pending" },
+  failed: { className: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400", label: "Failed" },
 };
 
 export function DocumentsTab({
@@ -194,8 +194,8 @@ export function DocumentsTab({
             <FileUp size={18} color="#fff" />
           </div>
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: C.slate900, margin: 0 }}>Upload Document</h3>
-            <p style={{ fontSize: 12, color: C.slate500, margin: 0 }}>
+            <h3 className="text-foreground" style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Upload Document</h3>
+            <p className="text-xs text-muted-foreground" style={{ margin: 0 }}>
               Upload lab reports, medical records, or clinical documents for AI analysis
             </p>
           </div>
@@ -223,11 +223,11 @@ export function DocumentsTab({
           {selectedFile ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <Paperclip size={18} color={C.blue600} />
-              <span style={{ fontSize: 14, fontWeight: 600, color: C.slate800 }}>{selectedFile.name}</span>
-              <span style={{ fontSize: 12, color: C.slate500 }}>({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+              <span className="text-sm font-semibold text-foreground">{selectedFile.name}</span>
+              <span className="text-xs text-muted-foreground">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                style={{ background: "none", border: "none", cursor: "pointer", color: C.red500, padding: 4 }}
+                className="text-red-500 dark:text-red-400" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
               >
                 <XCircle size={16} />
               </button>
@@ -235,17 +235,17 @@ export function DocumentsTab({
           ) : (
             <>
               <Upload size={32} color={C.slate400} style={{ marginBottom: 8 }} />
-              <p style={{ fontSize: 14, fontWeight: 600, color: C.slate700, margin: "4px 0" }}>
+              <p className="text-sm font-semibold text-foreground" style={{ margin: "4px 0" }}>
                 Drop a file here or click to browse
               </p>
-              <p style={{ fontSize: 12, color: C.slate400, margin: 0 }}>PDF, PNG, JPG, DOC up to 25 MB</p>
+              <p className="text-xs text-muted-foreground" style={{ margin: 0 }}>PDF, PNG, JPG, DOC up to 25 MB</p>
             </>
           )}
         </div>
 
         {/* Report type pills */}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: C.slate600, marginBottom: 8, display: "block" }}>Report Type</label>
+          <label className="text-xs font-semibold text-muted-foreground" style={{ marginBottom: 8, display: "block" }}>Report Type</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {REPORT_TYPES.map((rt) => (
               <button
@@ -267,7 +267,7 @@ export function DocumentsTab({
         {/* Encounter date + Upload button */}
         <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.slate600, marginBottom: 4, display: "block" }}>
+            <label className="text-xs font-semibold text-muted-foreground" style={{ marginBottom: 4, display: "block" }}>
               Encounter Date (optional)
             </label>
             <input
@@ -275,7 +275,7 @@ export function DocumentsTab({
               onChange={(e) => setEncounterDate(e.target.value)}
               style={{
                 padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.slate300}`,
-                fontSize: 13, color: C.slate800, background: C.white,
+                fontSize: 13,
               }}
             />
           </div>
@@ -286,7 +286,7 @@ export function DocumentsTab({
             style={{
               padding: "9px 24px", borderRadius: 10, border: "none",
               background: !selectedFile ? C.slate300 : `linear-gradient(135deg, ${C.blue600}, ${C.emerald600})`,
-              color: C.white, fontSize: 13, fontWeight: 700,
+              fontSize: 13, fontWeight: 700,
               cursor: selectedFile ? "pointer" : "not-allowed",
               display: "flex", alignItems: "center", gap: 8,
               transition: "all 0.2s ease", opacity: uploadMutation.isPending ? 0.7 : 1,
@@ -301,8 +301,8 @@ export function DocumentsTab({
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
           <ClipboardList size={18} color={C.blue600} />
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: C.slate900, margin: 0 }}>Uploaded Documents</h3>
-          <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 700, background: C.blue100, color: C.blue600, padding: "2px 8px", borderRadius: 10 }}>
+          <h3 className="text-foreground" style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Uploaded Documents</h3>
+          <span className="tabular-nums text-primary bg-primary/10" style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>
             {docList.length}
           </span>
         </div>
@@ -313,8 +313,8 @@ export function DocumentsTab({
           <Card>
             <div style={{ textAlign: "center", padding: "48px 24px" }}>
               <FileText size={40} color={C.slate300} style={{ marginBottom: 12 }} />
-              <p style={{ fontSize: 15, fontWeight: 600, color: C.slate500, margin: "0 0 4px" }}>No documents yet</p>
-              <p style={{ fontSize: 13, color: C.slate400, margin: 0 }}>
+              <p className="text-muted-foreground font-semibold" style={{ margin: "0 0 4px", fontSize: 15 }}>No documents yet</p>
+              <p className="text-xs text-muted-foreground" style={{ margin: 0 }}>
                 Upload a document above to get started with AI-powered analysis
               </p>
             </div>
@@ -342,18 +342,18 @@ export function DocumentsTab({
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: C.slate900 }}>
+                          <span className="text-sm font-bold text-foreground">
                             {doc.filename || doc.file_name || "Document"}
                           </span>
-                          <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700, background: status.bg, color: status.color }}>
+                          <span className={status.className} style={{ padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700 }}>
                             {status.label}
                           </span>
                         </div>
                         <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 12, color: C.slate400 }}>{doc.report_type || reportType}</span>
-                          <span style={{ fontSize: 12, color: C.slate400 }}>{formatDate(doc.created_at || doc.upload_date)}</span>
+                          <span className="text-xs text-muted-foreground">{doc.report_type || reportType}</span>
+                          <span className="text-xs text-muted-foreground">{formatDate(doc.created_at || doc.upload_date)}</span>
                           {doc.diagnosis_count != null && doc.diagnosis_count > 0 && (
-                            <span style={{ fontSize: 12, color: C.emerald600, fontWeight: 600 }}>{doc.diagnosis_count} diagnoses</span>
+                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{doc.diagnosis_count} diagnoses</span>
                           )}
                         </div>
                       </div>
@@ -371,7 +371,7 @@ export function DocumentsTab({
                           className="btn-press"
                           style={{
                             padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.slate300}`,
-                            background: C.white, color: C.slate600, fontSize: 12, fontWeight: 600,
+                            fontSize: 12, fontWeight: 600,
                             cursor: "pointer", display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
                           }}
                         >
@@ -384,7 +384,7 @@ export function DocumentsTab({
                           title="Open split viewer with extracted HCCs side-by-side"
                           style={{
                             padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.blue600}`,
-                            background: C.blue50, color: C.blue600, fontSize: 12, fontWeight: 600,
+                            fontSize: 12, fontWeight: 600,
                             cursor: "pointer", display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
                             textDecoration: "none",
                           }}
@@ -431,7 +431,7 @@ export function DocumentsTab({
                             style={{
                               padding: "6px 12px", borderRadius: 8, border: "none",
                               background: `linear-gradient(135deg, ${C.blue600}, ${C.emerald600})`,
-                              color: C.white, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                              fontSize: 12, fontWeight: 600, cursor: "pointer",
                               display: "flex", alignItems: "center", gap: 4,
                             }}
                           >
@@ -454,9 +454,9 @@ export function DocumentsTab({
                               <div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                                   <Stethoscope size={14} color={C.blue600} />
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: C.slate800 }}>Clinical Summary</span>
+                                  <span className="text-sm font-bold text-foreground">Clinical Summary</span>
                                 </div>
-                                <p style={{ fontSize: 13, color: C.slate600, lineHeight: 1.6, margin: 0, background: C.slate100, padding: 12, borderRadius: 8 }}>
+                                <p className="text-sm text-muted-foreground bg-muted" style={{ lineHeight: 1.6, margin: 0, padding: 12, borderRadius: 8 }}>
                                   {aData.summary}
                                 </p>
                               </div>
@@ -465,14 +465,14 @@ export function DocumentsTab({
                             <div>
                               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
                                 <ClipboardList size={14} color={C.emerald600} />
-                                <span style={{ fontSize: 13, fontWeight: 700, color: C.slate800 }}>Extracted Diagnoses</span>
-                                <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 700, background: C.emerald100, color: C.emerald600, padding: "1px 6px", borderRadius: 8 }}>
+                                <span className="text-sm font-bold text-foreground">Extracted Diagnoses</span>
+                                <span className="tabular-nums text-xs font-bold bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400" style={{ padding: "1px 6px", borderRadius: 8 }}>
                                   {aData.diagnoses?.length ?? 0}
                                 </span>
                               </div>
 
                               {(!aData.diagnoses || aData.diagnoses.length === 0) ? (
-                                <p style={{ fontSize: 13, color: C.slate400, fontStyle: "italic" }}>No diagnoses extracted.</p>
+                                <p className="text-sm text-muted-foreground italic">No diagnoses extracted.</p>
                               ) : (
                                 <div style={{ overflowX: "auto" }}>
                                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -481,7 +481,7 @@ export function DocumentsTab({
                                         {["ICD-10", "Description", "HCC", "RAF Weight", "Confidence", "MEAT", "Actions"].map((h) => (
                                           <th key={h} style={{
                                             textAlign: "left", padding: "8px 10px", fontSize: 11, fontWeight: 700,
-                                            color: C.slate500, textTransform: "uppercase", letterSpacing: "0.5px",
+                                            textTransform: "uppercase", letterSpacing: "0.5px",
                                           }}>
                                             {h}
                                           </th>
@@ -494,45 +494,45 @@ export function DocumentsTab({
                                           borderBottom: `1px solid ${C.slate100}`,
                                           background: dx.status === "confirmed" ? `${C.emerald600}08` : dx.status === "rejected" ? `${C.red600}08` : "transparent",
                                         }}>
-                                          <td style={{ padding: "10px", fontWeight: 700, color: C.blue600, fontFamily: "monospace" }}>
+                                          <td className="font-mono font-bold text-primary" style={{ padding: "10px" }}>
                                             {dx.icd10_code || dx.icd_code || "--"}
                                           </td>
-                                          <td style={{ padding: "10px", color: C.slate700, maxWidth: 240 }}>
+                                          <td className="text-foreground" style={{ padding: "10px", maxWidth: 240 }}>
                                             {dx.description || dx.diagnosis || "--"}
                                           </td>
                                           <td style={{ padding: "10px" }}>
                                             {dx.hcc_code ? (
-                                              <span style={{ padding: "2px 6px", borderRadius: 6, background: C.amber100, color: C.amber600, fontSize: 11, fontWeight: 700 }}>
+                                              <span className="bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400 font-bold" style={{ padding: "2px 6px", borderRadius: 6, fontSize: 11 }}>
                                                 {dx.hcc_code}
                                               </span>
-                                            ) : <span style={{ color: C.slate400 }}>--</span>}
+                                            ) : <span className="text-muted-foreground">--</span>}
                                           </td>
-                                          <td className="tabular-nums" style={{ padding: "10px", fontWeight: 700, color: C.slate800 }}>
+                                          <td className="tabular-nums text-foreground font-bold" style={{ padding: "10px" }}>
                                             {dx.raf_weight != null ? (dx.raf_weight ?? 0).toFixed(3) : "--"}
                                           </td>
                                           <td style={{ padding: "10px" }}>
                                             {dx.confidence != null ? (
                                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                <div style={{ width: 40, height: 5, borderRadius: 3, background: C.slate200, overflow: "hidden" }}>
+                                                <div className="bg-muted" style={{ width: 40, height: 5, borderRadius: 3, overflow: "hidden" }}>
                                                   <div style={{
                                                     width: `${Math.round((dx.confidence ?? 0) * 100)}%`, height: "100%", borderRadius: 3,
                                                     background: (dx.confidence ?? 0) >= 0.8 ? C.emerald500 : (dx.confidence ?? 0) >= 0.5 ? C.amber500 : C.red500,
                                                   }} />
                                                 </div>
-                                                <span className="tabular-nums" style={{ fontSize: 11, color: C.slate500, fontWeight: 600 }}>
+                                                <span className="tabular-nums text-xs text-muted-foreground font-semibold">
                                                   {Math.round((dx.confidence ?? 0) * 100)}%
                                                 </span>
                                               </div>
-                                            ) : <span style={{ color: C.slate400 }}>--</span>}
+                                            ) : <span className="text-muted-foreground">--</span>}
                                           </td>
                                           <td style={{ padding: "10px" }}>
                                             <MeatDots evidence={dx.meat_evidence ?? (dx.meat as MEATEvidence | undefined)} />
                                           </td>
                                           <td style={{ padding: "10px" }}>
                                             {dx.status === "confirmed" ? (
-                                              <span style={{ fontSize: 11, fontWeight: 700, color: C.emerald600 }}>Confirmed</span>
+                                              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Confirmed</span>
                                             ) : dx.status === "rejected" ? (
-                                              <span style={{ fontSize: 11, fontWeight: 700, color: C.red600 }}>Rejected</span>
+                                              <span className="text-xs font-bold text-red-600 dark:text-red-400">Rejected</span>
                                             ) : (
                                               <div style={{ display: "flex", gap: 4 }}>
                                                 <button
@@ -540,7 +540,7 @@ export function DocumentsTab({
                                                   className="btn-press"
                                                   style={{
                                                     padding: "4px 8px", borderRadius: 6, border: `1px solid ${C.emerald600}`,
-                                                    background: C.emerald50, color: C.emerald600, fontSize: 11, fontWeight: 700,
+                                                    fontSize: 11, fontWeight: 700,
                                                     cursor: "pointer", display: "flex", alignItems: "center", gap: 3,
                                                   }}
                                                 >
@@ -551,7 +551,7 @@ export function DocumentsTab({
                                                   className="btn-press"
                                                   style={{
                                                     padding: "4px 8px", borderRadius: 6, border: `1px solid ${C.red500}`,
-                                                    background: C.red50, color: C.red600, fontSize: 11, fontWeight: 700,
+                                                    fontSize: 11, fontWeight: 700,
                                                     cursor: "pointer", display: "flex", alignItems: "center", gap: 3,
                                                   }}
                                                 >
@@ -574,11 +574,11 @@ export function DocumentsTab({
                                 <div style={{ flex: "1 1 200px" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
                                     <FlaskConical size={13} color={C.purple600} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: C.slate700 }}>Medications</span>
+                                    <span className="text-xs font-bold text-foreground">Medications</span>
                                   </div>
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                                     {aData.medications.map((med: string, i: number) => (
-                                      <span key={med || i} style={{ padding: "2px 8px", borderRadius: 6, background: C.slate100, fontSize: 11, color: C.slate600 }}>{med}</span>
+                                      <span key={med || i} className="bg-muted text-muted-foreground" style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11 }}>{med}</span>
                                     ))}
                                   </div>
                                 </div>
@@ -587,11 +587,11 @@ export function DocumentsTab({
                                 <div style={{ flex: "1 1 200px" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
                                     <FlaskConical size={13} color={C.amber600} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: C.slate700 }}>Labs</span>
+                                    <span className="text-xs font-bold text-foreground">Labs</span>
                                   </div>
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                                     {aData.labs.map((lab: string | { name: string; value: string }, i: number) => (
-                                      <span key={typeof lab === "string" ? lab : `${lab.name}-${i}`} style={{ padding: "2px 8px", borderRadius: 6, background: C.amber50, fontSize: 11, color: C.amber600 }}>
+                                      <span key={typeof lab === "string" ? lab : `${lab.name}-${i}`} className="bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11 }}>
                                         {typeof lab === "string" ? lab : `${lab.name}: ${lab.value}`}
                                       </span>
                                     ))}
@@ -602,11 +602,11 @@ export function DocumentsTab({
                                 <div style={{ flex: "1 1 200px" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
                                     <Stethoscope size={13} color={C.red500} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: C.slate700 }}>Vitals</span>
+                                    <span className="text-xs font-bold text-foreground">Vitals</span>
                                   </div>
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                                     {aData.vitals.map((v: string | { name: string; value: string }, i: number) => (
-                                      <span key={typeof v === "string" ? v : `${v.name}-${i}`} style={{ padding: "2px 8px", borderRadius: 6, background: C.red50, fontSize: 11, color: C.red600 }}>
+                                      <span key={typeof v === "string" ? v : `${v.name}-${i}`} className="bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400" style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11 }}>
                                         {typeof v === "string" ? v : `${v.name}: ${v.value}`}
                                       </span>
                                     ))}
@@ -631,14 +631,14 @@ export function DocumentsTab({
                             {/* Score comparison */}
                             <div style={{ display: "flex", gap: 24, flexWrap: "wrap", justifyContent: "center" }}>
                               <div style={{ textAlign: "center", minWidth: 140 }}>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: C.slate500, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Current RAF</p>
+                                <p className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Current RAF</p>
                                 <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: rafScoreColor(rafScore ?? 0), lineHeight: 1 }}>
                                   {(rafScore ?? 0).toFixed(3)}
                                 </span>
                               </div>
-                              <div style={{ display: "flex", alignItems: "center", color: C.slate400, fontSize: 28, fontWeight: 300 }}>&rarr;</div>
+                              <div className="text-muted-foreground" style={{ display: "flex", alignItems: "center", fontSize: 28, fontWeight: 300 }}>&rarr;</div>
                               <div style={{ textAlign: "center", minWidth: 140 }}>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: C.slate500, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Draft RAF</p>
+                                <p className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Draft RAF</p>
                                 <span className="tabular-nums" style={{
                                   fontSize: 36, fontWeight: 800, lineHeight: 1,
                                   background: `linear-gradient(135deg, ${C.blue600}, ${C.emerald600})`,
@@ -648,8 +648,8 @@ export function DocumentsTab({
                                 </span>
                               </div>
                               <div style={{ textAlign: "center", minWidth: 120 }}>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: C.slate500, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Delta</p>
-                                <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: C.emerald600, lineHeight: 1 }}>
+                                <p className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Delta</p>
+                                <span className="tabular-nums text-emerald-600 dark:text-emerald-400" style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>
                                   +{((dData.draft_raf ?? dData.draft_score ?? 0) - (rafScore ?? 0)).toFixed(3)}
                                 </span>
                               </div>
@@ -660,22 +660,22 @@ export function DocumentsTab({
                               <div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                                   <Brain size={14} color={C.blue600} />
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: C.slate800 }}>New HCC Codes</span>
+                                  <span className="text-sm font-bold text-foreground">New HCC Codes</span>
                                 </div>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                                   {(dData.new_hccs ?? dData.new_hcc_codes ?? []).map((hcc: string | { code?: string; hcc_code?: string; label?: string; description?: string; coefficient?: number; raf_weight?: number }, i: number) => (
                                     <div key={typeof hcc === "string" ? hcc : (hcc.hcc_code || hcc.code || `hcc-${i}`)} style={{
-                                      padding: "6px 12px", borderRadius: 8, background: C.emerald50,
+                                      padding: "6px 12px", borderRadius: 8,
                                       border: `1px solid ${C.emerald100}`, display: "flex", alignItems: "center", gap: 6,
                                     }}>
-                                      <span style={{ fontSize: 12, fontWeight: 800, color: C.emerald600, fontFamily: "monospace" }}>
+                                      <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
                                         {typeof hcc === "string" ? hcc : hcc.code ?? hcc.hcc_code}
                                       </span>
                                       {typeof hcc === "object" && hcc.description && (
-                                        <span style={{ fontSize: 11, color: C.slate500 }}>{hcc.description}</span>
+                                        <span className="text-xs text-muted-foreground">{hcc.description}</span>
                                       )}
                                       {typeof hcc === "object" && hcc.raf_weight != null && (
-                                        <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: C.blue600 }}>
+                                        <span className="tabular-nums text-xs font-bold text-primary">
                                           +{(hcc.raf_weight ?? 0).toFixed(3)}
                                         </span>
                                       )}
@@ -694,15 +694,15 @@ export function DocumentsTab({
                               }}>
                                 <TrendingUp size={18} color={C.emerald600} />
                                 <div>
-                                  <span style={{ fontSize: 12, color: C.slate500, fontWeight: 600 }}>Estimated Revenue Impact</span>
-                                  <span className="tabular-nums" style={{ display: "block", fontSize: 22, fontWeight: 800, color: C.emerald600 }}>
+                                  <span className="text-xs font-semibold text-muted-foreground">Estimated Revenue Impact</span>
+                                  <span className="tabular-nums text-emerald-600 dark:text-emerald-400" style={{ display: "block", fontSize: 22, fontWeight: 800 }}>
                                     ${((dData.estimated_revenue_impact ?? dData.revenue_impact ?? 0)).toLocaleString()}
                                   </span>
                                 </div>
                               </div>
                             )}
 
-                            <p style={{ fontSize: 11, color: C.slate400, fontStyle: "italic", margin: 0, padding: "8px 12px", background: C.slate100, borderRadius: 8 }}>
+                            <p className="text-xs text-muted-foreground italic bg-muted" style={{ margin: 0, padding: "8px 12px", borderRadius: 8 }}>
                               This is a preliminary score based on document-extracted diagnoses. Final RAF scores are subject to CMS adjudication and may differ from this estimate.
                             </p>
                           </div>

@@ -334,11 +334,10 @@ export function ClinicalTab({
         <div
           role="alert"
           aria-label="Drug-drug interaction warning"
+          className="bg-amber-50 border-amber-400 text-amber-800 dark:bg-amber-950 dark:border-amber-600 dark:text-amber-200"
           style={{
             borderRadius: 8,
-            border: "1px solid #F59E0B",
-            background: "#FFFBEB",
-            color: "#92400E",
+            border: "1px solid",
             padding: "10px 14px",
             fontSize: 13,
             lineHeight: 1.5,
@@ -353,7 +352,7 @@ export function ClinicalTab({
               </li>
             ))}
           </ul>
-          <div style={{ marginTop: 6, fontSize: 11, fontStyle: "italic", color: "#92400E" }}>
+          <div className="text-xs italic text-amber-800 dark:text-amber-200" style={{ marginTop: 6 }}>
             Screening heuristic — not a substitute for a clinical DDI service.
           </div>
         </div>
@@ -544,8 +543,8 @@ export function ClinicalTab({
                     </div>
                   </div>
                   {vitalsItems.length > 0 && (
-                    <div style={{ borderTop: `1px solid #e2e8f0`, padding: "12px 20px 0" }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Vitals-Derived Findings</div>
+                    <div className="border-t border-border" style={{ padding: "12px 20px 0" }}>
+                      <div className="text-sm font-semibold text-foreground" style={{ marginBottom: 8 }}>Vitals-Derived Findings</div>
                       <FindingsList
                         items={vitalsItems.map((s: ClinicalFindingItem) => ({
                           name: s.condition || s.finding || "\u2014",
@@ -599,8 +598,8 @@ export function ClinicalTab({
                     />
                   )}
                   {labItems.length > 0 && (
-                    <div style={{ borderTop: `1px solid #e2e8f0`, padding: "12px 20px 0" }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Lab-Derived Suspect Conditions</div>
+                    <div className="border-t border-border" style={{ padding: "12px 20px 0" }}>
+                      <div className="text-sm font-semibold text-foreground" style={{ marginBottom: 8 }}>Lab-Derived Suspect Conditions</div>
                       <FindingsList
                         items={labItems.map((s: ClinicalFindingItem) => ({
                           name: s.condition || s.finding || "\u2014",

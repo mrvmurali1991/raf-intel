@@ -79,10 +79,10 @@ function GapCard({ gap, pid }: { gap: PatientHedisGap; pid: string | number }) {
           {gap.measure_id}
         </span>
         <span
+          className="text-foreground"
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: C.slate700,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -108,7 +108,7 @@ function GapCard({ gap, pid }: { gap: PatientHedisGap; pid: string | number }) {
           {isOpen ? "Gap open" : "Met"}
         </span>
         {gap.last_value && (
-          <span style={{ color: C.slate500, marginLeft: 4 }}>
+          <span className="text-muted-foreground" style={{ marginLeft: 4 }}>
             Last: {gap.last_value}
           </span>
         )}
@@ -203,11 +203,10 @@ export function PatientHedisStrip({ pid, year }: PatientHedisStripProps) {
   return (
     <section
       aria-label="HEDIS quality gaps"
+      className="bg-card border border-border"
       style={{
         marginTop: 20,
         padding: "14px 20px",
-        background: C.white,
-        border: `1px solid ${C.slate200}`,
         borderRadius: 12,
         boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
       }}
@@ -241,10 +240,10 @@ export function PatientHedisStrip({ pid, year }: PatientHedisStripProps) {
           </div>
           <div>
             <h3
+              className="text-foreground"
               style={{
                 fontSize: 13,
                 fontWeight: 700,
-                color: C.slate800,
                 letterSpacing: "-0.01em",
                 margin: 0,
                 display: "inline",
@@ -271,7 +270,7 @@ export function PatientHedisStrip({ pid, year }: PatientHedisStripProps) {
             )}
           </div>
         </div>
-        <span style={{ fontSize: 11, color: C.slate400 }}>
+        <span className="text-xs text-muted-foreground">
           Co-located with HCC suspects — close gaps during this visit
         </span>
       </div>
@@ -279,7 +278,7 @@ export function PatientHedisStrip({ pid, year }: PatientHedisStripProps) {
       {/* Gap cards */}
       {isLoading && <StripSkeleton />}
       {isError && (
-        <p style={{ fontSize: 12, color: C.slate500, margin: 0 }}>
+        <p className="text-xs text-muted-foreground" style={{ margin: 0 }}>
           HEDIS gap data unavailable.
         </p>
       )}

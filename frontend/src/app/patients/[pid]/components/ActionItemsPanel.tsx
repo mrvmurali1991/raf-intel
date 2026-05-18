@@ -76,6 +76,7 @@ function DollarPill({ coefficient }: { coefficient?: number | null }) {
   const annual = Math.round(coefficient * 10_000);
   return (
     <span
+      className="bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -83,9 +84,6 @@ function DollarPill({ coefficient }: { coefficient?: number | null }) {
         borderRadius: 6,
         fontSize: 10,
         fontWeight: 700,
-        background: C.emerald50,
-        color: C.emerald600,
-        border: `1px solid ${C.emerald100}`,
       }}
       aria-label={`Estimated annual value: $${annual.toLocaleString()}`}
     >
@@ -114,6 +112,7 @@ function DocChip({ documentName, documentPage, onOpen }: DocChipProps) {
         onOpen();
       }}
       aria-label={`View source document: ${label}`}
+      className="bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -122,9 +121,6 @@ function DocChip({ documentName, documentPage, onOpen }: DocChipProps) {
         borderRadius: 6,
         fontSize: 10,
         fontWeight: 600,
-        background: C.amber50,
-        color: C.amber600,
-        border: `1px solid ${C.amber100}`,
         cursor: "pointer",
         maxWidth: 220,
         overflow: "hidden",
@@ -216,7 +212,7 @@ function DocDrawer({
           }}
         >
           <h2
-            style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate800 }}
+            className="text-foreground" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}
           >
             Source Document
           </h2>
@@ -225,9 +221,10 @@ function DocDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close document drawer"
+            className="text-muted-foreground border-border"
             style={{
               background: "transparent",
-              border: `1px solid ${C.slate200}`,
+              border: "1px solid",
               borderRadius: 6,
               width: 32,
               height: 32,
@@ -235,7 +232,6 @@ function DocDrawer({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: C.slate600,
             }}
           >
             <svg
@@ -256,10 +252,9 @@ function DocDrawer({
         </div>
 
         <div
+          className="bg-amber-50 border border-amber-100 dark:bg-amber-950 dark:border-amber-800"
           style={{
             padding: 16,
-            background: C.amber50,
-            border: `1px solid ${C.amber100}`,
             borderRadius: 10,
           }}
         >
@@ -290,10 +285,8 @@ function DocDrawer({
             </svg>
             <div>
               <div
+                className="text-sm font-bold text-foreground"
                 style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: C.slate800,
                   wordBreak: "break-all",
                 }}
               >
@@ -301,11 +294,10 @@ function DocDrawer({
               </div>
               {documentPage && (
                 <div
-                  style={{
+                  className="text-amber-600 dark:text-amber-400 font-semibold"
+                style={{
                     marginTop: 4,
                     fontSize: 12,
-                    color: C.amber600,
-                    fontWeight: 600,
                   }}
                 >
                   Page {documentPage}
@@ -316,12 +308,11 @@ function DocDrawer({
         </div>
 
         <div
+          className="bg-muted text-muted-foreground"
           style={{
             padding: 12,
-            background: C.slate100,
             borderRadius: 8,
             fontSize: 12,
-            color: C.slate500,
             lineHeight: 1.5,
           }}
         >
@@ -396,8 +387,7 @@ function HccCard({
         aria-label={`HCC suspect ${index + 1}: ${s.suspected_condition || s.condition || "Unknown condition"}. Press A to accept, D to dismiss, Enter to expand.`}
         onKeyDown={handleKeyDown}
         style={{
-          background: C.white,
-          border: `1px solid ${C.slate200}`,
+          border: "1px solid var(--border)",
           borderLeft: `4px solid ${borderColor}`,
           borderRadius: 10,
           padding: "14px 16px",
@@ -422,10 +412,8 @@ function HccCard({
         >
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
+              className="text-sm font-bold text-foreground"
               style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: C.slate800,
                 marginBottom: 6,
                 lineHeight: 1.3,
               }}
@@ -448,16 +436,11 @@ function HccCard({
 
               {(s.suspect_icd10 || s.icd10_code) && (
                 <span
+                  className="text-xs font-semibold font-mono bg-muted text-foreground border border-border"
                   style={{
                     display: "inline-block",
                     padding: "2px 7px",
                     borderRadius: 4,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    fontFamily: "monospace",
-                    background: C.slate100,
-                    color: C.slate700,
-                    border: `1px solid ${C.slate200}`,
                   }}
                 >
                   {s.suspect_icd10 || s.icd10_code}
@@ -466,16 +449,11 @@ function HccCard({
 
               {s.suspect_hcc != null && (
                 <span
+                  className="text-xs font-semibold font-mono text-primary bg-primary/10 border border-primary/20"
                   style={{
                     display: "inline-block",
                     padding: "2px 7px",
                     borderRadius: 4,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    fontFamily: "monospace",
-                    background: C.blue50,
-                    color: C.blue600,
-                    border: `1px solid ${C.blue100}`,
                   }}
                 >
                   HCC {s.suspect_hcc}
@@ -511,9 +489,6 @@ function HccCard({
                 gap: 5,
                 padding: "6px 12px",
                 borderRadius: 7,
-                border: `1px solid ${C.emerald500}`,
-                background: C.emerald50,
-                color: C.emerald600,
                 fontSize: 11,
                 fontWeight: 700,
                 cursor: acceptPending ? "not-allowed" : "pointer",
@@ -541,15 +516,13 @@ function HccCard({
               disabled={dismissPending}
               title="Dismiss (keyboard: D)"
               aria-label="Dismiss this HCC suspect"
+              className="bg-red-50 text-red-600 border border-red-400 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 5,
                 padding: "6px 12px",
                 borderRadius: 7,
-                border: `1px solid ${C.red500}`,
-                background: C.red50,
-                color: C.red600,
                 fontSize: 11,
                 fontWeight: 700,
                 cursor: dismissPending ? "not-allowed" : "pointer",
@@ -577,13 +550,13 @@ function HccCard({
 
         {/* Expand toggle chevron */}
         <div
+          className="text-muted-foreground"
           style={{
             marginTop: 8,
             display: "flex",
             alignItems: "center",
             gap: 4,
             fontSize: 11,
-            color: C.slate400,
             userSelect: "none",
           }}
         >
@@ -620,12 +593,12 @@ function HccCard({
             {s.meat_evidence && (
               <div style={{ marginBottom: 10 }}>
                 <div
+                  className="text-muted-foreground"
                   style={{
                     fontSize: 10,
                     fontWeight: 600,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: C.slate400,
                     marginBottom: 6,
                   }}
                 >
@@ -638,21 +611,20 @@ function HccCard({
             {(s.evidence_detail || s.evidence || s.rationale) && (
               <div>
                 <div
+                  className="text-muted-foreground"
                   style={{
                     fontSize: 10,
                     fontWeight: 600,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: C.slate400,
                     marginBottom: 4,
                   }}
                 >
                   Evidence
                 </div>
                 <div
+                  className="text-sm text-muted-foreground"
                   style={{
-                    fontSize: 12,
-                    color: C.slate600,
                     lineHeight: 1.5,
                   }}
                 >
@@ -683,12 +655,12 @@ function HccCard({
             {sourceDocName && (
               <div style={{ marginTop: 10 }}>
                 <div
+                  className="text-muted-foreground"
                   style={{
                     fontSize: 10,
                     fontWeight: 600,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: C.slate400,
                     marginBottom: 4,
                   }}
                 >
@@ -705,7 +677,7 @@ function HccCard({
 
             {s.source && (
               <div
-                style={{ marginTop: 8, fontSize: 11, color: C.slate400 }}
+                className="text-xs text-muted-foreground" style={{ marginTop: 8 }}
               >
                 Source: {s.source}
               </div>
@@ -783,10 +755,10 @@ function HedisGapCard({
           {measureId}
         </span>
         <span
+          className="text-foreground"
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: C.slate700,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -811,7 +783,7 @@ function HedisGapCard({
           Gap open
         </span>
         {lastValue && (
-          <span style={{ fontSize: 11, color: C.slate500 }}>
+          <span className="text-xs text-muted-foreground">
             · Last: {lastValue}
           </span>
         )}
@@ -930,9 +902,8 @@ export function ActionItemsPanel({
   return (
     <section
       aria-label="Today's action items"
+      className="bg-card border border-border"
       style={{
-        background: C.white,
-        border: `1px solid ${C.slate200}`,
         borderRadius: 14,
         overflow: "hidden",
         marginBottom: 20,
@@ -947,7 +918,7 @@ export function ActionItemsPanel({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 8,
-          background: `linear-gradient(135deg, ${C.blue50}, ${C.white})`,
+          background: "linear-gradient(135deg, hsl(var(--primary)/0.06), transparent)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -978,11 +949,11 @@ export function ActionItemsPanel({
             </svg>
           </div>
           <h2
+            className="text-foreground"
             style={{
               margin: 0,
               fontSize: 14,
               fontWeight: 700,
-              color: C.slate800,
               letterSpacing: "-0.01em",
             }}
           >
@@ -990,6 +961,7 @@ export function ActionItemsPanel({
           </h2>
           {(topSuspects.length > 0 || openHedisGaps.length > 0) && (
             <span
+              className="bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -997,8 +969,6 @@ export function ActionItemsPanel({
                 borderRadius: 999,
                 fontSize: 11,
                 fontWeight: 700,
-                background: C.amber100,
-                color: C.amber600,
               }}
               aria-label={`${topSuspects.length + openHedisGaps.length} items need attention`}
             >
@@ -1006,7 +976,7 @@ export function ActionItemsPanel({
             </span>
           )}
         </div>
-        <span style={{ fontSize: 11, color: C.slate400 }}>
+        <span className="text-xs text-muted-foreground">
           Keyboard: A = accept &middot; D = dismiss &middot; Enter = expand
         </span>
       </div>
@@ -1032,24 +1002,23 @@ export function ActionItemsPanel({
           }}
         >
           <div
+            className="text-muted-foreground"
             style={{
               fontSize: 11,
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.05em",
-              color: C.slate400,
               marginBottom: 2,
             }}
           >
             HCC Suspects
             {topSuspects.length > 0 && (
               <span
+                className="bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
                 style={{
                   marginLeft: 6,
                   padding: "1px 6px",
                   borderRadius: 4,
-                  background: C.amber100,
-                  color: C.amber600,
                   fontSize: 10,
                 }}
               >
@@ -1085,10 +1054,10 @@ export function ActionItemsPanel({
 
           {!suspectsLoading && topSuspects.length === 0 && (
             <div
+              className="text-muted-foreground"
               style={{
                 padding: "24px 0",
                 textAlign: "center",
-                color: C.slate400,
                 fontSize: 13,
               }}
             >
@@ -1120,24 +1089,23 @@ export function ActionItemsPanel({
           }}
         >
           <div
+            className="text-muted-foreground"
             style={{
               fontSize: 11,
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.05em",
-              color: C.slate400,
               marginBottom: 2,
             }}
           >
             HEDIS Gaps
             {openHedisGaps.length > 0 && (
               <span
+                className="bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
                 style={{
                   marginLeft: 6,
                   padding: "1px 6px",
                   borderRadius: 4,
-                  background: C.red100,
-                  color: C.red600,
                   fontSize: 10,
                 }}
               >
@@ -1161,10 +1129,10 @@ export function ActionItemsPanel({
 
           {!hedisQ.isLoading && openHedisGaps.length === 0 && (
             <div
+              className="text-emerald-600 dark:text-emerald-400"
               style={{
                 padding: "24px 0",
                 textAlign: "center",
-                color: C.emerald600,
                 fontSize: 12,
                 fontWeight: 600,
               }}

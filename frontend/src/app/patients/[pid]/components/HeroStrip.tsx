@@ -53,7 +53,7 @@ function InitialsAvatar({ name, pid }: { name: string; pid: string }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: C.white,
+        color: "#fff",
         fontSize: 20,
         fontWeight: 800,
         letterSpacing: "-0.03em",
@@ -140,13 +140,11 @@ export function HeroStrip({
 
   return (
     <header
-      className="premium-card animate-fade-in patient-sticky-header"
+      className="premium-card animate-fade-in patient-sticky-header bg-card border-b border-border"
       style={{
         position: "sticky",
         top: 0,
         zIndex: 30,
-        background: C.white,
-        borderBottom: `1px solid ${C.slate200}`,
         borderRadius: 0,
       }}
     >
@@ -176,8 +174,7 @@ export function HeroStrip({
               width: 44,
               height: 44,
               borderRadius: 8,
-              border: `1px solid ${C.slate200}`,
-              color: C.slate600,
+              border: "1px solid",
               textDecoration: "none",
               flexShrink: 0,
               transition: "background 0.15s, transform 0.2s",
@@ -214,12 +211,11 @@ export function HeroStrip({
               style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
             >
               <h1
-                className="gradient-text patient-name-h1"
+                className="gradient-text patient-name-h1 text-foreground"
                 style={{
                   margin: 0,
                   fontSize: 22,
                   fontWeight: 700,
-                  color: C.slate800,
                   lineHeight: 1.2,
                 }}
               >
@@ -228,6 +224,7 @@ export function HeroStrip({
 
               {mrn && (
                 <span
+                  className="bg-muted text-muted-foreground font-mono"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -235,9 +232,6 @@ export function HeroStrip({
                     borderRadius: 999,
                     fontSize: 11,
                     fontWeight: 600,
-                    fontFamily: "monospace",
-                    background: C.slate100,
-                    color: C.slate600,
                   }}
                 >
                   MRN {displayMrn}
@@ -246,6 +240,7 @@ export function HeroStrip({
 
               {mbi && !privacyMode && (
                 <span
+                  className="text-primary bg-primary/10 border border-primary/20 font-mono"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -253,10 +248,6 @@ export function HeroStrip({
                     borderRadius: 999,
                     fontSize: 11,
                     fontWeight: 600,
-                    fontFamily: "monospace",
-                    background: C.blue50,
-                    color: C.blue600,
-                    border: `1px solid ${C.blue100}`,
                   }}
                 >
                   MBI {mbi}
@@ -286,7 +277,7 @@ export function HeroStrip({
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: privacyMode ? C.blue600 : C.slate500,
+
                   flexShrink: 0,
                 }}
               >
@@ -296,13 +287,13 @@ export function HeroStrip({
 
             {/* Demographics row */}
             <div
-              style={{
+              className="text-muted-foreground"
+            style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
                 marginTop: 4,
                 fontSize: 12,
-                color: C.slate500,
                 flexWrap: "wrap",
               }}
             >
@@ -315,6 +306,7 @@ export function HeroStrip({
               {dob && <span>{formatDate(dob)}</span>}
               {insurancePlan && (
                 <span
+                  className="bg-muted text-muted-foreground"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -323,8 +315,6 @@ export function HeroStrip({
                     borderRadius: 6,
                     fontSize: 11,
                     fontWeight: 600,
-                    background: C.slate100,
-                    color: C.slate600,
                   }}
                 >
                   {insurancePlan}
@@ -332,12 +322,12 @@ export function HeroStrip({
               )}
               {primaryProvider && (
                 <span
+                  className="text-muted-foreground"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4,
                     fontSize: 11,
-                    color: C.slate500,
                   }}
                 >
                   <Stethoscope size={11} aria-hidden="true" />
@@ -398,9 +388,7 @@ export function HeroStrip({
               gap: 7,
               padding: "9px 16px",
               borderRadius: 10,
-              border: `1px solid ${C.blue600}`,
-              background: C.blue600,
-              color: C.white,
+
               fontSize: 12,
               fontWeight: 700,
               textDecoration: "none",

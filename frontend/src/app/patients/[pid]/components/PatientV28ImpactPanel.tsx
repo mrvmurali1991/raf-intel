@@ -63,7 +63,7 @@ export function PatientV28ImpactPanel({
 
   if (isLoading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b", padding: 24 }}>
+      <div className="text-muted-foreground" style={{ display: "flex", alignItems: "center", gap: 8, padding: 24 }}>
         <Loader2 size={16} className="animate-spin" />
         Computing V24 vs V28 delta…
       </div>
@@ -72,11 +72,9 @@ export function PatientV28ImpactPanel({
   if (error || !data) {
     return (
       <div
-        style={{
+        className="bg-red-50 border border-red-300 text-red-800 dark:bg-red-950 dark:border-red-700 dark:text-red-300"
+      style={{
           padding: 16,
-          border: "1px solid #fca5a5",
-          background: "#fef2f2",
-          color: "#7f1d1d",
           borderRadius: 8,
           display: "flex",
           gap: 8,
@@ -146,7 +144,7 @@ export function PatientV28ImpactPanel({
         )}
       </Section>
 
-      <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
+      <div className="text-xs text-muted-foreground" style={{ lineHeight: 1.4 }}>
         Disclaimer: estimates produced by hccinfhir (third-party CMS-HCC
         implementation). Not validated by CMS — cross-check against the
         official CMS HCC Software before contract / payment use.
@@ -170,23 +168,22 @@ function Stat({
 }) {
   return (
     <div
+      className="bg-card border border-border"
       style={{
         padding: 12,
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
         borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         gap: 4,
       }}
     >
-      <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.4, display: "flex", alignItems: "center", gap: 4 }}>
+      <div className="text-muted-foreground" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4, display: "flex", alignItems: "center", gap: 4 }}>
         {icon}
         {label}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: accent ?? "#0f172a" }}>{value}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: accent ?? "var(--foreground)" }}>{value}</div>
       {subtitle && (
-        <div style={{ fontSize: 11, color: "#64748b" }}>{subtitle}</div>
+        <div className="text-muted-foreground" style={{ fontSize: 11 }}>{subtitle}</div>
       )}
     </div>
   );
@@ -203,16 +200,15 @@ function Section({
 }) {
   return (
     <div
+      className="bg-card border border-border"
       style={{
         padding: 14,
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
         borderRadius: 8,
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{title}</div>
+      <div className="text-sm font-bold text-foreground">{title}</div>
       {subtitle && (
-        <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, marginBottom: 8 }}>
+        <div className="text-xs text-muted-foreground" style={{ marginTop: 2, marginBottom: 8 }}>
           {subtitle}
         </div>
       )}
@@ -245,7 +241,7 @@ function ChipRow({ chips, color, bg }: { chips: string[]; color: string; bg: str
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>{children}</div>;
+  return <div className="text-xs text-muted-foreground italic">{children}</div>;
 }
 
 export default PatientV28ImpactPanel;

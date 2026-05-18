@@ -31,10 +31,10 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
       <Card className="animate-slide-up stagger-1">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate900 }}>
+            <h3 className="text-foreground" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
               Audit Packages
             </h3>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: C.slate500 }}>
+            <p className="text-muted-foreground" style={{ margin: "4px 0 0", fontSize: 13 }}>
               Generate and download comprehensive audit documentation.
             </p>
           </div>
@@ -42,9 +42,9 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
             <select
               value={auditYear}
               onChange={(e) => setAuditYear(Number(e.target.value))}
+              className="bg-card text-foreground border border-border"
               style={{
-                padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.slate200}`,
-                background: C.white, fontSize: 13, color: C.slate700, cursor: "pointer",
+                padding: "8px 12px", borderRadius: 8, fontSize: 13, cursor: "pointer",
               }}
             >
               {[0, 1, 2, 3].map((offset) => {
@@ -55,10 +55,11 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
             <button
               onClick={() => auditMutation.mutate(auditYear)}
               disabled={auditMutation.isPending}
+              className="bg-primary text-primary-foreground"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "8px 16px", borderRadius: 8, border: "none",
-                background: C.blue600, color: C.white, fontSize: 13, fontWeight: 600,
+                fontSize: 13, fontWeight: 600,
                 cursor: auditMutation.isPending ? "not-allowed" : "pointer",
                 opacity: auditMutation.isPending ? 0.6 : 1,
               }}
@@ -87,15 +88,15 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
           />
         ) : (
           <div>
-            <div style={{
+            <div className="bg-muted border-b border-border" style={{
               display: "grid", gridTemplateColumns: "80px 80px 1fr 100px 100px",
-              padding: "8px 20px", background: C.slate100,
-              borderBottom: `1px solid ${C.slate200}`, gap: 16,
+              padding: "8px 20px",
+              gap: 16,
             }}>
               {["Package", "Year", "Created", "Size", "Actions"].map((h) => (
-                <span key={h} style={{
+                <span key={h} className="text-muted-foreground" style={{
                   fontSize: 11, fontWeight: 600, textTransform: "uppercase",
-                  letterSpacing: "0.05em", color: C.slate400,
+                  letterSpacing: "0.05em",
                   textAlign: h === "Actions" ? "right" : "left",
                 }}>
                   {h}
@@ -107,18 +108,18 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
                 key={pkg.id}
                 style={{
                   display: "grid", gridTemplateColumns: "80px 80px 1fr 100px 100px",
-                  padding: "12px 20px", borderBottom: `1px solid ${C.slate100}`,
+                  padding: "12px 20px", borderBottom: "1px solid var(--border)",
                   gap: 16, transition: "background 0.1s",
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
-                <span style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600, color: C.slate800 }}>
+<span className="text-foreground font-mono font-semibold text-sm">
                   #{pkg.id}
                 </span>
-                <span style={{ fontSize: 13, color: C.slate600 }}>{pkg.year}</span>
-                <span style={{ fontSize: 12, color: C.slate500 }}>{formatDate(pkg.created_at)}</span>
-                <span style={{ fontSize: 12, color: C.slate500 }}>
+<span className="text-sm text-muted-foreground">{pkg.year}</span>
+                <span className="text-xs text-muted-foreground">{formatDate(pkg.created_at)}</span>
+                <span className="text-xs text-muted-foreground">
                   {pkg.file_size_bytes ? `${(pkg.file_size_bytes / 1024).toFixed(1)} KB` : "\u2014"}
                 </span>
                 <span style={{ textAlign: "right" }}>
@@ -130,9 +131,10 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
                         alert(e?.response?.data?.detail || e?.message || "Download failed");
                       })
                     }
+                    className="text-primary"
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 4,
-                      fontSize: 12, fontWeight: 600, color: C.blue600,
+                      fontSize: 12, fontWeight: 600,
                       background: "none", border: "none", padding: 0, cursor: "pointer",
                     }}
                   >

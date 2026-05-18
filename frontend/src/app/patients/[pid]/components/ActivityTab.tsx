@@ -221,20 +221,17 @@ function MetadataChips({ metadata }: { metadata: Record<string, unknown> }) {
       {items.map((c) => (
         <span
           key={c.key}
+          className="text-muted-foreground bg-muted border border-border font-mono"
           style={{
             display: "inline-flex",
             alignItems: "center",
             padding: "2px 8px",
             borderRadius: 6,
-            background: C.slate100,
-            color: C.slate600,
             fontSize: 11,
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            border: `1px solid ${C.slate200}`,
           }}
         >
-          <span style={{ color: C.slate500, fontWeight: 600 }}>{c.key}</span>
-          <span style={{ margin: "0 4px", color: C.slate400 }}>=</span>
+          <span className="text-muted-foreground font-semibold">{c.key}</span>
+          <span className="text-muted-foreground" style={{ margin: "0 4px" }}>=</span>
           <span>{c.value}</span>
         </span>
       ))}
@@ -333,10 +330,10 @@ export function ActivityTab({ pid }: { pid: string | number }) {
     <div style={{ maxWidth: 820 }}>
       <Card className="animate-slide-up stagger-1">
         <header style={{ marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate900 }}>
+          <h3 className="text-foreground" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
             Activity feed
           </h3>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: C.slate500 }}>
+          <p className="text-muted-foreground" style={{ margin: "4px 0 0", fontSize: 13 }}>
             Who touched this chart, and when.  Sourced from the immutable
             audit log — read-only.
           </p>
@@ -385,10 +382,10 @@ export function ActivityTab({ pid }: { pid: string | number }) {
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.slate700 }}>
+            <div className="text-sm font-semibold text-foreground">
               No activity recorded yet for this patient
             </div>
-            <div style={{ fontSize: 12, color: C.slate400, maxWidth: 360, textAlign: "center" }}>
+            <div className="text-xs text-muted-foreground" style={{ maxWidth: 360, textAlign: "center" }}>
               Documentation queries, suspect decisions, and chart accesses will
               appear here as they happen.
             </div>
@@ -406,13 +403,13 @@ export function ActivityTab({ pid }: { pid: string | number }) {
                   }}
                 >
                   <h4
-                    style={{
+                    className="text-muted-foreground"
+                  style={{
                       margin: 0,
                       fontSize: 11,
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      color: C.slate500,
                     }}
                   >
                     {dayHeaderLabel(day)}
@@ -425,7 +422,7 @@ export function ActivityTab({ pid }: { pid: string | number }) {
                     }}
                     aria-hidden
                   />
-                  <span style={{ fontSize: 11, color: C.slate400, fontWeight: 500 }}>
+                  <span className="text-xs text-muted-foreground font-medium">
                     {rows.length} event{rows.length === 1 ? "" : "s"}
                   </span>
                 </div>
@@ -440,13 +437,13 @@ export function ActivityTab({ pid }: { pid: string | number }) {
                   {/* Spine — drawn behind each row's avatar. */}
                   <div
                     aria-hidden
+                    className="bg-border"
                     style={{
                       position: "absolute",
                       left: 17,
                       top: 18,
                       bottom: 18,
                       width: 2,
-                      background: C.slate200,
                     }}
                   />
                   {rows.map((event) => {
@@ -485,7 +482,7 @@ export function ActivityTab({ pid }: { pid: string | number }) {
                             >
                               {display}
                             </span>
-                            <span style={{ fontSize: 13, color: C.slate600 }}>
+                            <span className="text-sm text-muted-foreground">
                               {verb}
                             </span>
                             {event.resource_type && (
@@ -506,9 +503,8 @@ export function ActivityTab({ pid }: { pid: string | number }) {
                             )}
                           </div>
                           <div
-                            style={{
-                              fontSize: 12,
-                              color: C.slate400,
+                            className="text-xs text-muted-foreground"
+                          style={{
                               marginTop: 2,
                             }}
                             title={event.created_at}
