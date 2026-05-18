@@ -1486,21 +1486,24 @@ export function AdminDashboard() {
             href="/reports"
           />
           <MetricCard
-            label="Total Members"
+            label="Panel Patients"
             value={totalPop.toLocaleString()}
-            subtitle="Patients in system"
+            subtitle="Active members"
             icon={<Users size={20} />}
             intent="default"
             href="/patients"
+            trend={kpiTrends?.panel_patients?.length ? kpiTrends.panel_patients : undefined}
+            delta={kpiTrends?.deltas?.panel_patients ?? undefined}
           />
           <MetricCard
-            label="Patients Analyzed"
-            value={analyzed.toLocaleString()}
-            subtitle={totalPop > 0 ? `${Math.round((analyzed / totalPop) * 100)}% coverage` : "No data"}
-            icon={<CheckCircle size={20} />}
-            intent="success"
-            delta={analyzedTrend?.value}
-            href="/analysis"
+            label="Open Gaps"
+            value={(workflowData?.open_recapture_gaps ?? 0).toLocaleString()}
+            subtitle="Recapture gaps open"
+            icon={<AlertCircle size={20} />}
+            intent="warning"
+            href="/recapture"
+            trend={kpiTrends?.open_gaps?.length ? kpiTrends.open_gaps : undefined}
+            delta={kpiTrends?.deltas?.open_gaps != null ? -(kpiTrends.deltas.open_gaps) : undefined}
           />
           <MetricCard
             label="Average RAF Score"
@@ -1508,7 +1511,8 @@ export function AdminDashboard() {
             subtitle={avgRaf === 0 ? "Pending analysis" : avgRaf < 1.0 ? "Below average acuity" : avgRaf < 1.5 ? "Moderate acuity" : "High acuity population"}
             icon={<TrendingUp size={20} />}
             intent={avgRaf === 0 ? "default" : avgRaf >= 2.0 ? "danger" : avgRaf >= 1.0 ? "warning" : "success"}
-            delta={rafTrend?.value}
+            delta={kpiTrends?.deltas?.avg_raf ?? rafTrend?.value}
+            trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
             href="/reports?tab=raf-distribution"
           />
         </div>
