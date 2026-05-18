@@ -309,7 +309,14 @@ def score_delta_v24_to_v28(
 
 def _list_tenant_patient_ids(tenant_id: str) -> list[int]:
     """Return every active patient id in the tenant (native + FHIR)."""
+    seen: set[int] = set()
     pids: list[int] = []
+
+    def _add(pid: int) -> None:
+        if pid not in seen:
+            seen.add(pid)
+            pids.append(pid)
+
     with raf_cursor() as cur:
         # Native rows in patients table
         cur.execute(
@@ -318,7 +325,8 @@ def _list_tenant_patient_ids(tenant_id: str) -> list[int]:
             "ORDER BY id",
             (tenant_id,),
         )
-        pids.extend(int(r["id"]) for r in (cur.fetchall() or []))
+        for r in (cur.fetchall() or []):
+            _add(int(r["id"]))
 
         # FHIR-only rows (mirror of calculate_raf_for_all_patients)
         try:
@@ -338,7 +346,8 @@ def _list_tenant_patient_ids(tenant_id: str) -> list[int]:
                 """,
                 (tenant_id, tenant_id),
             )
-            pids.extend(int(r["id"]) for r in (cur.fetchall() or []))
+            for r in (cur.fetchall() or []):
+                _add(int(r["id"]))
         except Exception as exc:
             # FHIR side is best-effort; some deployments don't have the tables.
             logger.debug("FHIR patient enumeration skipped: %s", exc)

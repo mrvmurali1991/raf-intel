@@ -227,7 +227,7 @@ export default function V28ImpactPage() {
             <KPI
               label="Annual Δ Revenue (V28 - V24)"
               value={fmtMoney(data.total_revenue_delta)}
-              subtitle={`${data.raf_erosion_pct > 0 ? "+" : ""}${data.raf_erosion_pct.toFixed(2)}% RAF erosion`}
+              subtitle={`${data.raf_erosion_pct > 0 ? "+" : ""}${data.raf_erosion_pct.toFixed(2)}% ${data.raf_erosion_pct >= 0 ? "RAF uplift" : "RAF erosion"}`}
               accent={data.total_revenue_delta < 0 ? "#dc2626" : "#059669"}
               icon={
                 data.total_revenue_delta < 0 ? (
@@ -296,8 +296,8 @@ export default function V28ImpactPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.top_eroded_patients.map((row) => (
-                      <tr key={row.pid} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                    {data.top_eroded_patients.map((row, i) => (
+                      <tr key={`${row.pid}-${i}`} style={{ borderBottom: "1px solid #f1f5f9" }}>
                         <Td>
                           <Link
                             href={`/patients/${row.pid}?tab=v28-impact`}
