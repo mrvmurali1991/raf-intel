@@ -390,3 +390,77 @@ def patient_gaps(
         "open_gaps": [g for g in open_gaps if g["status"] == "open"],
         "all_gaps": open_gaps,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /spec-validation
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/spec-validation",
+    summary="NCQA HEDIS spec self-validation report (admin / manager only)",
+)
+def spec_validation(
+    year: int = Query(None, description="Measurement year (defaults to current)"),
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("admin", "read")),
+) -> dict:
+    """Return the NCQA HEDIS spec self-validation report for all 5 measures.
+
+    This endpoint produces evidence of spec-conformance for enterprise security
+    review meetings.  The report compares our implementation against publicly
+    documented NCQA HEDIS MY2026 specification summaries (age ranges,
+    look-back windows, value-set OIDs, exclusion criteria).
+
+    IMPORTANT: This is SELF-VALIDATION only.  We do not claim official NCQA
+    certification.  External certification by an NCQA-licensed vendor is
+    required before submitting rates to payers or CMS Star programs.
+
+    Access: admin and manager roles only.
+    """
+    from app.services.hedis.spec_validators import VALIDATORS
+
+    yr = _measurement_year(year)
+
+    results: dict = {}
+    for measure_id, validator_fn in VALIDATORS.items():
+        try:
+            results[measure_id] = validator_fn(yr)
+        except Exception as exc:
+            logger.error("spec_validation: error for %s: %s", measure_id, exc, exc_info=True)
+            results[measure_id] = {
+                "measure_id": measure_id,
+                "error": str(exc),
+                "self_validation_score": 0.0,
+            }
+
+    overall_score = round(
+        sum(r.get("self_validation_score", 0.0) for r in results.values()) / len(results),
+        3,
+    ) if results else 0.0
+
+    return {
+        "measurement_year": yr,
+        "measures_validated": list(results.keys()),
+        "overall_self_validation_score": overall_score,
+        "certification_status": (
+            "self-validated against publicly available NCQA HEDIS MY2026 spec summaries; "
+            "pending external NCQA certification"
+        ),
+        "methodology_summary": (
+            "Each measure validator encodes NCQA-published denominator age/sex criteria, "
+            "numerator look-back windows, value-set OIDs, and exclusion criteria.  "
+            "Discrepancies between the spec and our MVP implementation are explicitly "
+            "logged as KNOWN-MVP-GAP items.  Age/sex boundaries, BP/HbA1c thresholds, "
+            "and VSAC OID references match the NCQA public specification.  "
+            "Full EHR query wiring (LOINC/CPT/HCPCS code lookups) is roadmapped "
+            "for the next engineering milestone."
+        ),
+        "ncqa_certification_path": (
+            "1. License NCQA HEDIS technical specifications (annual subscription).  "
+            "2. Implement complete value-set lookups using VSAC OIDs listed in each report.  "
+            "3. Engage NCQA-certified HEDIS auditor for rate validation.  "
+            "4. Submit to NCQA Interactive Data Submission System (IDSS) for certified rates."
+        ),
+        "measures": results,
+    }
