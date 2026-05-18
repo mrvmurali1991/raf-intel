@@ -19,10 +19,6 @@ const nextConfig: NextConfig = {
     // Set to false once the type debt from the multi-agent merge is cleaned up.
     ignoreBuildErrors: true,
   },
-  eslint: {
-    // ESLint warnings shouldn't block the production build.
-    ignoreDuringBuilds: true,
-  },
   // Fix: Set turbopack root to THIS project directory
   // Without this, Next.js scans the entire home directory and spikes CPU
   turbopack: {
