@@ -989,3 +989,206 @@ def reverse_writeback_endpoint(
         reversed=result.get("success", False),
         reversal_reason=body.reversal_reason,
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/suspects/{suspect_id}/unaccept  –  undo within 5-second window
+# POST /api/suspects/{suspect_id}/undismiss –  undo within 5-second window
+# ---------------------------------------------------------------------------
+
+_UNDO_WINDOW_SECONDS = 30  # server-side grace period (UI enforces 5 s)
+
+
+class UndoActionResponse(BaseModel):
+    suspect_id: int
+    action: str
+    reverted_to: str
+
+
+@router.post(
+    "/{suspect_id}/unaccept",
+    summary="Undo an accept within the grace-period window",
+    response_model=UndoActionResponse,
+)
+@limiter.limit("30/minute")
+def unaccept_suspect_endpoint(
+    request: Request,
+    suspect_id: int,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("suspects", "write")),
+) -> UndoActionResponse:
+    """
+    Revert an accepted suspect back to 'open' if reviewed_at is within the
+    last ``_UNDO_WINDOW_SECONDS`` seconds.  Returns HTTP 409 when the window
+    has passed so the frontend can surface a clear error message.
+    """
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT status, reviewed_at
+                FROM   raf_suspect_conditions
+                WHERE  id        = %s
+                  AND  tenant_id = %s
+                LIMIT 1
+                """,
+                (suspect_id, tenant_id),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.exception("unaccept_suspect id=%s: DB lookup failed: %s", suspect_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Suspect {suspect_id} not found")
+
+    if (row.get("status") or "") != "accepted":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Suspect {suspect_id} is not in 'accepted' state (current: {row.get('status')})",
+        )
+
+    reviewed_at = row.get("reviewed_at")
+    if reviewed_at is not None:
+        import datetime as _dt
+        if isinstance(reviewed_at, str):
+            try:
+                reviewed_at = _dt.datetime.fromisoformat(reviewed_at)
+            except ValueError:
+                reviewed_at = None
+        if reviewed_at is not None:
+            age = (_dt.datetime.utcnow() - reviewed_at.replace(tzinfo=None)).total_seconds()
+            if age > _UNDO_WINDOW_SECONDS:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Undo window has passed ({int(age):.0f}s > {_UNDO_WINDOW_SECONDS}s). "
+                        "The acceptance has been committed to the audit log."
+                    ),
+                )
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE raf_suspect_conditions
+                SET status      = 'open',
+                    reviewed_by = NULL,
+                    reviewed_at = NULL,
+                    updated_at  = NOW()
+                WHERE id        = %s
+                  AND tenant_id = %s
+                """,
+                (suspect_id, tenant_id),
+            )
+    except Exception as exc:
+        logger.exception("unaccept_suspect id=%s: UPDATE failed: %s", suspect_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    try:
+        invalidate_v28_portfolio(tenant_id)
+        invalidate_hedis_scores(tenant_id)
+    except Exception as exc:
+        logger.debug("unaccept_suspect: cache invalidation failed: %s", exc)
+
+    logger.info(
+        "unaccept_suspect: suspect_id=%s reverted to open by user=%s tenant=%s",
+        suspect_id, current_user.get("email") or current_user.get("id"), tenant_id,
+    )
+
+    return UndoActionResponse(suspect_id=suspect_id, action="unaccept", reverted_to="open")
+
+
+@router.post(
+    "/{suspect_id}/undismiss",
+    summary="Undo a dismissal within the grace-period window",
+    response_model=UndoActionResponse,
+)
+@limiter.limit("30/minute")
+def undismiss_suspect_endpoint(
+    request: Request,
+    suspect_id: int,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("suspects", "write")),
+) -> UndoActionResponse:
+    """
+    Revert a dismissed suspect back to 'open' if reviewed_at is within the
+    last ``_UNDO_WINDOW_SECONDS`` seconds.
+    """
+    tenant_id: str | None = current_user.get("tenant_id") or None
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for this user")
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT status, reviewed_at
+                FROM   raf_suspect_conditions
+                WHERE  id        = %s
+                  AND  tenant_id = %s
+                LIMIT 1
+                """,
+                (suspect_id, tenant_id),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.exception("undismiss_suspect id=%s: DB lookup failed: %s", suspect_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Suspect {suspect_id} not found")
+
+    if (row.get("status") or "") != "dismissed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Suspect {suspect_id} is not in 'dismissed' state (current: {row.get('status')})",
+        )
+
+    reviewed_at = row.get("reviewed_at")
+    if reviewed_at is not None:
+        import datetime as _dt
+        if isinstance(reviewed_at, str):
+            try:
+                reviewed_at = _dt.datetime.fromisoformat(reviewed_at)
+            except ValueError:
+                reviewed_at = None
+        if reviewed_at is not None:
+            age = (_dt.datetime.utcnow() - reviewed_at.replace(tzinfo=None)).total_seconds()
+            if age > _UNDO_WINDOW_SECONDS:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Undo window has passed ({int(age):.0f}s > {_UNDO_WINDOW_SECONDS}s). "
+                        "The dismissal has been committed to the audit log."
+                    ),
+                )
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE raf_suspect_conditions
+                SET status      = 'open',
+                    reviewed_by = NULL,
+                    reviewed_at = NULL,
+                    updated_at  = NOW()
+                WHERE id        = %s
+                  AND tenant_id = %s
+                """,
+                (suspect_id, tenant_id),
+            )
+    except Exception as exc:
+        logger.exception("undismiss_suspect id=%s: UPDATE failed: %s", suspect_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    logger.info(
+        "undismiss_suspect: suspect_id=%s reverted to open by user=%s tenant=%s",
+        suspect_id, current_user.get("email") or current_user.get("id"), tenant_id,
+    )
+
+    return UndoActionResponse(suspect_id=suspect_id, action="undismiss", reverted_to="open")

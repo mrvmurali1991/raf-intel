@@ -1437,6 +1437,20 @@ export async function dismissSuspect(
   return data;
 }
 
+export async function unacceptSuspect(
+  suspectId: number,
+): Promise<{ suspect_id: number; action: string; reverted_to: string }> {
+  const { data } = await api.post(`/api/suspects/${suspectId}/unaccept`);
+  return data;
+}
+
+export async function undismissSuspect(
+  suspectId: number,
+): Promise<{ suspect_id: number; action: string; reverted_to: string }> {
+  const { data } = await api.post(`/api/suspects/${suspectId}/undismiss`);
+  return data;
+}
+
 export async function bulkUpdateSuspects(
   ids: number[],
   action: "accept" | "dismiss",

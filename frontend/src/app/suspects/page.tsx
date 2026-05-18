@@ -8,11 +8,15 @@ import {
   registerContextShortcut,
 } from "@/lib/keyboard-shortcuts";
 import DataQualityBanner from "@/components/DataQualityBanner";
+import WorkflowProgressBar from "@/components/WorkflowProgressBar";
+import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
 import { tokens } from "@/styles/tokens";
 import {
   getSuspects,
   acceptSuspect,
   dismissSuspect,
+  unacceptSuspect,
+  undismissSuspect,
   bulkUpdateSuspects,
 } from "@/lib/api";
 import type { DBSuspect } from "@/types";
@@ -386,23 +390,85 @@ export default function SuspectsPage() {
 
   /* --- Mutations --------------------------------------------------- */
 
-  const acceptMut = useMutation({
-    mutationFn: (id: number) => acceptSuspect(id),
+  // Undo refs — keyed by suspect id, value is the timeout handle.
+  // When Undo is clicked the timeout is cleared and the reverse API is called.
+  const undoTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  const undoMut = useMutation({
+    mutationFn: ({ id, kind }: { id: number; kind: "accept" | "dismiss" }) =>
+      kind === "accept" ? unacceptSuspect(id) : undismissSuspect(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suspects"] });
-      toast.success("Accepted via EMR", "Suspect condition accepted & written to OpenEMR.");
+      toast.success("Undone", "Action reversed — suspect is open again.");
     },
-    onError: () => toast.error("Error", "Failed to accept suspect."),
+    onError: () => toast.error("Undo Failed", "The undo window may have passed."),
   });
 
-  const dismissMut = useMutation({
-    mutationFn: (id: number) => dismissSuspect(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suspects"] });
-      toast.success("Dismissed", "Suspect condition dismissed.");
+  const handleAccept = useCallback(
+    (id: number) => {
+      acceptSuspect(id)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["suspects"] });
+          const timer = setTimeout(() => {
+            undoTimers.current.delete(id);
+          }, 5500);
+          undoTimers.current.set(id, timer);
+          toast.success(
+            "Accepted",
+            "Suspect accepted & written to OpenEMR.",
+            {
+              duration: 5500,
+              action: {
+                label: "Undo",
+                onClick: () => {
+                  const t = undoTimers.current.get(id);
+                  if (t) { clearTimeout(t); undoTimers.current.delete(id); }
+                  undoMut.mutate({ id, kind: "accept" });
+                },
+              },
+            }
+          );
+        })
+        .catch(() => toast.error("Error", "Failed to accept suspect."));
     },
-    onError: () => toast.error("Error", "Failed to dismiss suspect."),
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, toast]
+  );
+
+  const handleDismiss = useCallback(
+    (id: number) => {
+      dismissSuspect(id)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["suspects"] });
+          const timer = setTimeout(() => {
+            undoTimers.current.delete(id);
+          }, 5500);
+          undoTimers.current.set(id, timer);
+          toast.success(
+            "Dismissed",
+            "Suspect condition dismissed.",
+            {
+              duration: 5500,
+              action: {
+                label: "Undo",
+                onClick: () => {
+                  const t = undoTimers.current.get(id);
+                  if (t) { clearTimeout(t); undoTimers.current.delete(id); }
+                  undoMut.mutate({ id, kind: "dismiss" });
+                },
+              },
+            }
+          );
+        })
+        .catch(() => toast.error("Error", "Failed to dismiss suspect."));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, toast]
+  );
+
+  // Shim mutation objects so existing JSX that reads .isPending still compiles
+  const acceptMut = { isPending: false, mutate: handleAccept } as const;
+  const dismissMut = { isPending: false, mutate: handleDismiss } as const;
 
   const bulkMut = useMutation({
     mutationFn: ({ action }: { action: "accept" | "dismiss" }) =>
@@ -570,6 +636,13 @@ export default function SuspectsPage() {
       }}
     >
       <DataQualityBanner />
+      <WorkflowProgressBar currentStage="suspects" />
+      <WorkflowHandoffBanner
+        count={statusCounts.accepted}
+        message="{count} suspects ready for attestation"
+        ctaLabel="Send to Attestations"
+        ctaHref="/attestations"
+      />
       <style>{`
         @keyframes pulseSk { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
         @keyframes rowEnter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }

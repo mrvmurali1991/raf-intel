@@ -10,14 +10,9 @@ import {
   CalendarClock,
   Target,
   Microscope,
-  Layers,
-  FileImage,
-  FileText,
   Workflow,
   BarChart3,
   UserCheck,
-  Star,
-  Send,
   Calculator,
   ShieldCheck,
   UsersRound,
@@ -38,10 +33,8 @@ import {
   Upload,
   Stethoscope,
   MapPin,
-  Filter,
   TrendingDown,
   FileStack,
-  Sparkles,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -70,71 +63,65 @@ interface NavItem {
 interface NavGroup {
   title: string;
   items: NavItem[];
+  /** When true, section starts collapsed by default */
+  defaultCollapsed?: boolean;
 }
 
+// Feature flag — set NEXT_PUBLIC_DEMO_MODE=true to reveal demo-only nav items
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
 // ---------------------------------------------------------------------------
-// Navigation structure — all 21 pages present in /app
+// Navigation structure — 4 task-based sections
 // ---------------------------------------------------------------------------
 
 const navGroups: NavGroup[] = [
   {
-    title: "CORE WORKFLOW",
+    title: "DAILY WORK",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
-      { href: "/worklist", label: "Today's worklist", icon: Stethoscope, shortcut: "g w" },
+      { href: "/worklist", label: "Today's Worklist", icon: Stethoscope, shortcut: "g w" },
       { href: "/md/today", label: "Pre-visit Huddle", icon: HeartPulse, shortcut: "g m" },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
-      { href: "/review-queue", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
-      { href: "/qa", label: "QA Review Queue", icon: ShieldCheck },
     ],
   },
   {
-    // TODO(nav-batch-10): ANALYSIS group has 10 items, violating Miller's Law (7±2).
-    // Convert to a collapsible group: persist `collapsed` state in localStorage,
-    // show first 4 items by default with a "+6 more" expander. Skipped here to
-    // keep this change minimal — see follow-up ticket.
+    title: "HCC WORKFLOW",
+    items: [
+      { href: "/suspects", label: "Suspects", icon: ClipboardCheck },
+      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
+      { href: "/attestations", label: "Attestations", icon: ClipboardCheck },
+      { href: "/review-queue", label: "Review Queue", icon: ClipboardCheck, shortcut: "g s" },
+      { href: "/qa", label: "QA Review Queue", icon: ShieldCheck },
+      { href: "/pre-submission", label: "Pre-submission", icon: ShieldCheck },
+    ],
+  },
+  {
     title: "ANALYSIS",
     items: [
-      { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
-      { href: "/batch", label: "Batch Analysis", icon: Layers },
-      { href: "/reports", label: "Analytics", icon: BarChart3, shortcut: "g r" },
+      { href: "/reports", label: "Reports", icon: BarChart3, shortcut: "g r" },
       { href: "/population/heatmap", label: "Population", icon: MapPin },
-      { href: "/coder-analytics", label: "My Productivity", icon: BarChart3 },
-      { href: "/coder-analytics?view=team", label: "Team Analytics", icon: UsersRound, visibleToRoles: ["admin", "manager"] },
-      { href: "/documents", label: "Documents", icon: FileImage },
-      { href: "/claims", label: "Claims", icon: FileText },
-      { href: "/demo", label: "Pipeline Demo", icon: Workflow },
-      { href: "/crosswalk", label: "RAF Score Calculator", icon: ArrowLeftRight },
-      { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
+      { href: "/coder-analytics", label: "Coder Analytics", icon: BarChart3 },
+      { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
       { href: "/v28-impact", label: "V28 Impact", icon: TrendingDown },
       { href: "/roi", label: "ROI Calculator", icon: Calculator },
-      { href: "/audit", label: "Compliance & Audit", icon: ShieldCheck },
-      { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
-      { href: "/cohorts/builder", label: "Cohort Builder", icon: Filter },
-      { href: "/hedis", label: "HEDIS + Stars", icon: Star },
+      { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
+      { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
+      { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
+      ...(DEMO_MODE ? [{ href: "/demo", label: "Pipeline Demo", icon: Workflow }] : []),
     ],
   },
   {
     title: "ADMIN",
     items: [
-      { href: "/admin/demo", label: "Demo Mode", icon: Sparkles, visibleToRoles: ["admin", "manager"] },
-      { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack },
-      { href: "/users", label: "Users", icon: UsersRound },
-      { href: "/system", label: "System Health", icon: Activity },
-      { href: "/developer", label: "Developer", icon: Code },
-      { href: "/pre-submission", label: "Pre-submit", icon: ShieldCheck },
-      { href: "/submissions", label: "CMS Submissions", icon: Send },
-      { href: "/quality", label: "Quality & STARS", icon: Star },
-      { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
       { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/users", label: "Users", icon: UsersRound },
+      { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
       { href: "/uploads", label: "Data Uploads", icon: Upload },
-      { href: "/suspects", label: "Suspects", icon: ClipboardCheck },
-      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
-      { href: "/care-gaps", label: "Care Gaps", icon: CalendarClock },
-      { href: "/attestations", label: "Attestations", icon: ClipboardCheck },
-      { href: "/prospective", label: "Prospective", icon: Target },
-      { href: "/providers", label: "Provider Performance", icon: UserCheck },
-      { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
+      { href: "/audit", label: "Audit", icon: ShieldCheck },
+      { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
+      { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack, visibleToRoles: ["admin"] },
+      { href: "/system", label: "System Health", icon: Activity, visibleToRoles: ["admin"] },
+      { href: "/developer", label: "Developer", icon: Code, visibleToRoles: ["admin"] },
     ],
   },
 ];
@@ -359,6 +346,23 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  // Per-section collapse state — keyed by section title, persisted in localStorage
+  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? localStorage.getItem("raf-nav-sections") : null;
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  function toggleSection(title: string) {
+    setSectionCollapsed((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      try { localStorage.setItem("raf-nav-sections", JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  }
   // Only show shortcut hint badges after the user has triggered at least one shortcut
   const [showShortcutHints, setShowShortcutHints] = useState(false);
 
@@ -530,6 +534,15 @@ export function Sidebar() {
 
   // ----- Nav group renderer -----
   function renderNavGroup(group: NavGroup, index: number) {
+    // In collapsed (icon-only) sidebar mode, never hide items — no room for toggles
+    const isSectionCollapsed = !collapsed && !!sectionCollapsed[group.title];
+
+    const filteredItems = group.items.filter((it) => {
+      if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
+      const role = (user as { role?: string } | null)?.role ?? "";
+      return it.visibleToRoles.includes(role);
+    });
+
     return (
       <div key={group.title}>
         {!collapsed ? (
@@ -545,20 +558,46 @@ export function Sidebar() {
                 }}
               />
             )}
-            <div
+            {/* Clickable section header — clicking collapses/expands the group */}
+            <button
+              onClick={() => toggleSection(group.title)}
+              aria-expanded={!isSectionCollapsed}
+              aria-controls={`nav-section-${group.title}`}
               style={{
-                fontSize: 10,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: TEXT_SECTION,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "0 16px 0 16px",
                 marginTop: index > 0 ? 10 : 8,
                 marginBottom: 4,
-                paddingLeft: 16,
               }}
             >
-              {group.title}
-            </div>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: TEXT_SECTION,
+                }}
+              >
+                {group.title}
+              </span>
+              <ChevronDown
+                style={{
+                  width: 12,
+                  height: 12,
+                  color: TEXT_SECTION,
+                  flexShrink: 0,
+                  transform: isSectionCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                  transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              />
+            </button>
           </>
         ) : (
           index > 0 && (
@@ -582,13 +621,11 @@ export function Sidebar() {
             </div>
           )
         )}
-        {group.items
-          .filter((it) => {
-            if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
-            const role = (user as { role?: string } | null)?.role ?? "";
-            return it.visibleToRoles.includes(role);
-          })
-          .map(renderNavItem)}
+        {!isSectionCollapsed && (
+          <div id={`nav-section-${group.title}`}>
+            {filteredItems.map(renderNavItem)}
+          </div>
+        )}
       </div>
     );
   }
