@@ -79,18 +79,7 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
   return (
     <nav
       aria-label="HCC workflow stages"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 0,
-        background: "#F8FAFC",
-        border: "1px solid #E2E8F0",
-        borderRadius: 10,
-        padding: "6px 8px",
-        marginBottom: 20,
-        overflowX: "auto",
-        flexWrap: "nowrap",
-      }}
+      className="flex items-center gap-0 bg-muted/40 border border-border rounded-[10px] px-2 py-1.5 mb-5 overflow-x-auto flex-nowrap"
     >
       {STAGES.map((stage, idx) => {
         const isCurrent = stage.id === currentStage;
@@ -111,28 +100,15 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
               data-stage={stage.id}
               data-state={stateAttr}
               className={[
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap transition-colors",
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap transition-colors no-underline",
                 isCurrent
-                  ? "font-bold opacity-100"
+                  ? "bg-primary text-primary-foreground font-bold"
                   : isPast
-                  ? "font-medium opacity-100"
-                  : "font-medium opacity-60",
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium"
+                  : "text-muted-foreground font-medium opacity-60",
               ]
                 .filter(Boolean)
                 .join(" ")}
-              style={{
-                textDecoration: "none",
-                background: isCurrent
-                  ? "#0F766E"
-                  : isPast
-                  ? "#D1FAE5"
-                  : "transparent",
-                color: isCurrent
-                  ? "#FFFFFF"
-                  : isPast
-                  ? "#065F46"
-                  : "#94A3B8",
-              }}
             >
               {isPast ? (
                 <CheckCircle2 size={14} aria-hidden className="text-emerald-600" />
@@ -146,11 +122,7 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
               <ChevronRight
                 size={14}
                 aria-hidden
-                style={{
-                  color: "#CBD5E1",
-                  flexShrink: 0,
-                  margin: "0 2px",
-                }}
+                className="text-muted-foreground/50 shrink-0 mx-0.5"
               />
             )}
           </React.Fragment>
