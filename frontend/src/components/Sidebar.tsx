@@ -1008,7 +1008,7 @@ export function Sidebar() {
           )}
           {!collapsed && (
             <>
-              <span style={{ flex: 1 }}>Dark mode</span>
+              <span style={{ flex: 1 }}>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
               {/* Visual switch indicator — shows ON/OFF state at a glance */}
               <span
                 role="presentation"
@@ -1278,6 +1278,7 @@ export function Sidebar() {
           background: sidebarBaseStyle.background,
           flexDirection: "column",
           height: "100%",
+          overflow: "hidden",
           fontFamily: sidebarBaseStyle.fontFamily,
           width,
           transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
