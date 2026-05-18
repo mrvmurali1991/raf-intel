@@ -17,13 +17,21 @@
 
 import { useMemo, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronRight, FileText, Activity, Stethoscope, ExternalLink } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, ChevronRight, FileText, Activity, Stethoscope, ExternalLink, CalendarClock } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { PageHeader } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
 import DataQualityBanner from "@/components/DataQualityBanner";
+import { RejectGapModal } from "@/components/RejectGapModal";
 import api from "@/lib/api";
+
+interface RejectTarget {
+  patientId: number;
+  patientName: string;
+  hccCode: string;
+  paymentYear: number;
+}
 
 interface EvidencePreview {
   hcc_code: string;
@@ -50,6 +58,8 @@ interface WorklistSuspect {
   confidence?: number;
 }
 
+type AwvStatus = "overdue" | "due_soon" | "current" | "future" | "unknown";
+
 interface WorklistItem {
   patient_id: number;
   patient_name: string;
@@ -60,6 +70,9 @@ interface WorklistItem {
   estimated_raf_impact: number;
   estimated_revenue_at_risk: number;
   priority_score: number;
+  awv_last_date?: string | null;
+  awv_due_date?: string | null;
+  awv_status?: AwvStatus;
 }
 
 interface WorklistResponse {
@@ -67,6 +80,36 @@ interface WorklistResponse {
   measurement_year: number;
   total: number;
   items: WorklistItem[];
+}
+
+type SortKey = "priority" | "awv_due";
+
+// AWV helpers ----------------------------------------------------------------
+
+function awvPill(status: AwvStatus): { bg: string; color: string; border: string } {
+  switch (status) {
+    case "overdue":
+      return { bg: tokens.dangerSoft, color: tokens.danger, border: tokens.dangerBorder };
+    case "due_soon":
+      return { bg: tokens.warningSoft, color: tokens.warningStrong, border: tokens.warningBorder };
+    case "current":
+      return { bg: tokens.slate100, color: tokens.slate600, border: tokens.slate200 };
+    default:
+      return { bg: tokens.slate50, color: tokens.slate400, border: tokens.slate200 };
+  }
+}
+
+function awvLabel(status: AwvStatus, dueDate: string | null | undefined): string {
+  if (status === "unknown") return "AWV unknown";
+  if (!dueDate) return "AWV current";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  if (status === "overdue") return `AWV overdue by ${Math.abs(diffDays)}d`;
+  if (status === "due_soon") return `AWV due in ${diffDays}d`;
+  return `AWV due in ${diffDays}d`;
 }
 
 function fmtCurrency(n: number): string {
@@ -84,6 +127,22 @@ export default function WorklistPage() {
   const { user, isLoading: authLoading } = useAuth();
   const measurementYear = new Date().getFullYear();
   const providerId = user?.id ? Number(user.id) : null;
+  const [awvFilter, setAwvFilter] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("priority");
+
+  const queryClient = useQueryClient();
+  const [rejectTarget, setRejectTarget] = useState<RejectTarget | null>(null);
+  const [rejectedGaps, setRejectedGaps] = useState<Set<string>>(new Set());
+
+  const handleRejected = useCallback(
+    (_rejectionId: number) => {
+      if (!rejectTarget) return;
+      const key = `${rejectTarget.patientId}:${rejectTarget.hccCode}:${rejectTarget.paymentYear}`;
+      setRejectedGaps((prev) => new Set([...prev, key]));
+      queryClient.invalidateQueries({ queryKey: ["provider-worklist"] });
+    },
+    [rejectTarget, queryClient],
+  );
 
   const { data, isLoading, isError, error, refetch } = useQuery<WorklistResponse>({
     queryKey: ["provider-worklist", providerId, measurementYear],
@@ -98,12 +157,29 @@ export default function WorklistPage() {
     staleTime: 60_000,
   });
 
+  const displayItems = useMemo(() => {
+    if (!data?.items) return [];
+    let items = [...data.items];
+    if (awvFilter) {
+      items = items.filter((p) => p.awv_status === "overdue" || p.awv_status === "due_soon");
+    }
+    if (sortKey === "awv_due") {
+      items.sort((a, b) => {
+        const fa = a.awv_due_date ?? "9999-99-99";
+        const fb = b.awv_due_date ?? "9999-99-99";
+        return fa < fb ? -1 : fa > fb ? 1 : 0;
+      });
+    }
+    return items;
+  }, [data, awvFilter, sortKey]);
+
   const summary = useMemo(() => {
-    if (!data?.items) return { patients: 0, gaps: 0, revenue: 0 };
+    if (!data?.items) return { patients: 0, gaps: 0, revenue: 0, awvDue: 0 };
     return {
       patients: data.items.length,
       gaps: data.items.reduce((sum, p) => sum + (p.open_recapture_gaps?.length ?? 0), 0),
       revenue: data.items.reduce((sum, p) => sum + (p.estimated_revenue_at_risk ?? 0), 0),
+      awvDue: data.items.filter((p) => p.awv_status === "overdue" || p.awv_status === "due_soon").length,
     };
   }, [data]);
 
@@ -227,11 +303,11 @@ export default function WorklistPage() {
         subtitle={`${summary.patients} patient${summary.patients === 1 ? "" : "s"} prioritized for ${measurementYear}`}
       />
 
-      {/* Summary strip — collapses to 1 column on phones, 3 on tablets+ */}
+      {/* Summary strip */}
       <div
         style={{
           marginTop: 16,
-          marginBottom: 24,
+          marginBottom: 16,
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 12,
@@ -240,20 +316,79 @@ export default function WorklistPage() {
         <SummaryTile label="Patients to see" value={summary.patients} icon={<Stethoscope size={18} />} color={tokens.primary} />
         <SummaryTile label="Open gaps" value={summary.gaps} icon={<FileText size={18} />} color={tokens.riskHigh} />
         <SummaryTile label="Revenue at risk" value={fmtCurrency(summary.revenue)} icon={<Activity size={18} />} color={tokens.warningStrong} />
+        <SummaryTile label="AWV due/overdue" value={summary.awvDue} icon={<CalendarClock size={18} />} color={summary.awvDue > 0 ? tokens.danger : tokens.slate500} />
       </div>
 
-      {/* Patient cards — auto-fit grid; collapses to 1 column on phones */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {data.items.map((item) => (
-          <PatientCard key={item.patient_id} item={item} />
-        ))}
+      {/* Filter + sort toolbar */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <button
+          type="button"
+          onClick={() => setAwvFilter((v) => !v)}
+          aria-pressed={awvFilter}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "5px 14px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            border: `1.5px solid ${awvFilter ? tokens.danger : tokens.slate300}`,
+            background: awvFilter ? tokens.dangerSoft : tokens.white,
+            color: awvFilter ? tokens.danger : tokens.slate600,
+            transition: "all 120ms ease",
+          }}
+        >
+          <CalendarClock size={13} />
+          AWV Due Soon{summary.awvDue > 0 ? ` (${summary.awvDue})` : ""}
+        </button>
+        <label htmlFor="worklist-sort" style={{ fontSize: 12, fontWeight: 600, color: tokens.slate500, whiteSpace: "nowrap" }}>
+          Sort by
+        </label>
+        <select
+          id="worklist-sort"
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as SortKey)}
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            padding: "5px 10px",
+            borderRadius: 8,
+            border: `1px solid ${tokens.slate200}`,
+            background: tokens.white,
+            color: tokens.slate700,
+            cursor: "pointer",
+          }}
+        >
+          <option value="priority">Priority score</option>
+          <option value="awv_due">AWV due date</option>
+        </select>
+        {awvFilter && (
+          <span style={{ fontSize: 12, color: tokens.slate500 }}>
+            Showing {displayItems.length} of {summary.patients}
+          </span>
+        )}
       </div>
+
+      {/* Patient cards */}
+      {displayItems.length === 0 ? (
+        <div style={{ padding: "24px 16px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate200}`, color: tokens.slate500, textAlign: "center", fontSize: 14 }}>
+          No patients match the current filter.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: 16,
+          }}
+        >
+          {displayItems.map((item) => (
+            <PatientCard key={item.patient_id} item={item} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -344,9 +479,11 @@ function HighlightedExcerpt({ text, term }: { text: string; term: string }) {
 function GapChipWithPreview({
   gap,
   patientId,
+  onReject,
 }: {
   gap: WorklistGap;
   patientId: number;
+  onReject: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -408,6 +545,36 @@ function GapChipWithPreview({
       >
         HCC {hccCode}
       </span>
+      {/* Reject button — visible on hover of outer span */}
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReject(); }}
+        aria-label={`Reject HCC ${hccCode} gap`}
+        title="Reject this gap"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 14,
+          height: 14,
+          borderRadius: "50%",
+          border: "none",
+          background: "transparent",
+          color: tokens.danger,
+          cursor: "pointer",
+          padding: 0,
+          fontSize: 10,
+          fontWeight: 700,
+          lineHeight: 1,
+          verticalAlign: "middle",
+          marginLeft: 2,
+          opacity: 0.5,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.background = tokens.danger; (e.currentTarget as HTMLButtonElement).style.color = tokens.white; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.5"; (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = tokens.danger; }}
+      >
+        ✕
+      </button>
 
       {/* Hover card popover — only rendered when evidence exists and open */}
       {open && preview && (
@@ -559,6 +726,11 @@ function GapChipWithPreview({
 
 function PatientCard({ item }: { item: WorklistItem }) {
   const band = priorityBand(item.priority_score);
+  const awvStatus: AwvStatus = item.awv_status ?? "unknown";
+  const pill = awvPill(awvStatus);
+  const awvText = awvLabel(awvStatus, item.awv_due_date);
+  // hide the row for "future" (not actionable) to keep cards compact
+  const showAwvRow = awvStatus !== "future";
   return (
     <Link
       href={`/patients/${item.patient_id}`}
@@ -623,24 +795,45 @@ function PatientCard({ item }: { item: WorklistItem }) {
         />
       </div>
 
-      {item.open_recapture_gaps && item.open_recapture_gaps.length > 0 && (
+      {visibleGaps.length > 0 && (
         // stopPropagation so chip clicks/hover don't bubble to the card Link
         <div
           style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}
           onClick={(e) => e.stopPropagation()}
         >
-          {item.open_recapture_gaps.slice(0, 4).map((g, i) => (
+          {visibleGaps.slice(0, 4).map((g, i) => (
             <GapChipWithPreview
               key={`${g.hcc_code}-${i}`}
               gap={g}
               patientId={item.patient_id}
+              onReject={() => onRejectGap(g)}
             />
           ))}
-          {item.open_recapture_gaps.length > 4 && (
+          {visibleGaps.length > 4 && (
             <span style={{ fontSize: 11, color: tokens.slate500, alignSelf: "center" }}>
-              +{item.open_recapture_gaps.length - 4} more
+              +{visibleGaps.length - 4} more
             </span>
           )}
+        </div>
+      )}
+
+      {/* AWV status row */}
+      {showAwvRow && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, marginBottom: 4 }}>
+          <CalendarClock size={13} style={{ color: pill.color, flexShrink: 0 }} />
+          <span
+            style={{
+              padding: "2px 9px",
+              borderRadius: 999,
+              background: pill.bg,
+              color: pill.color,
+              border: `1px solid ${pill.border}`,
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {awvText}
+          </span>
         </div>
       )}
 
