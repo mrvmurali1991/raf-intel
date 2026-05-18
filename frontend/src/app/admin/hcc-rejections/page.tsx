@@ -16,6 +16,7 @@ import { ShieldAlert, AlertTriangle, ChevronLeft, ChevronRight as ChevronRightIc
 import { PageHeader } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
 import api from "@/lib/api";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 interface RejectionRow {
   id: number;
@@ -210,21 +211,35 @@ export default function HccRejectionsAdminPage() {
                         {row.payment_year}
                       </td>
                       <td style={{ padding: "9px 12px" }}>
-                        <span
-                          aria-label={`Reason: ${row.reason_label}`}
-                          style={{
-                            display: "inline-block",
-                            padding: "2px 8px",
-                            borderRadius: 6,
-                            background: rc.bg,
-                            color: rc.color,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                          }}
+                        <FieldTooltip
+                          content={
+                            row.reason_code === "not_supported_in_chart"     ? "Not Supported in Chart — no clinical documentation found in the medical record to support this HCC." :
+                            row.reason_code === "incorrect_specificity"      ? "Incorrect Specificity — the diagnosis code lacks the required specificity for RAF risk-adjustment credit." :
+                            row.reason_code === "resolved_condition"         ? "Resolved Condition — the condition was treated and resolved; no active status found in the encounter." :
+                            row.reason_code === "documentation_insufficient" ? "Documentation Insufficient — clinical notes exist but do not meet CMS RADV evidence standards." :
+                            row.reason_code === "coder_error"                ? "Coder Error — the HCC was mapped incorrectly; the underlying ICD-10 does not map to this HCC." :
+                            row.reason_code === "provider_dispute"           ? "Provider Dispute — the treating provider contests the coding and has submitted a corrected claim." :
+                            `Reason code: ${row.reason_code}`
+                          }
+                          side="right"
                         >
-                          {row.reason_label}
-                        </span>
+                          <span
+                            aria-label={`Reason: ${row.reason_label}`}
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              background: rc.bg,
+                              color: rc.color,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                              cursor: "help",
+                            }}
+                          >
+                            {row.reason_label}
+                          </span>
+                        </FieldTooltip>
                       </td>
                       <td
                         style={{
@@ -240,19 +255,25 @@ export default function HccRejectionsAdminPage() {
                         {row.reason_text ?? <span style={{ color: tokens.slate300 }}>—</span>}
                       </td>
                       <td style={{ padding: "9px 12px", textAlign: "center" }}>
-                        <span
-                          aria-label={row.prior_year_documented ? "Yes" : "No"}
-                          style={{
-                            padding: "2px 8px",
-                            borderRadius: 6,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background: row.prior_year_documented ? "#f0fdf4" : tokens.slate100,
-                            color: row.prior_year_documented ? "#166534" : tokens.slate500,
-                          }}
+                        <FieldTooltip
+                          content="Prior-year documented: True if this HCC was billed and accepted in the previous payment year. Used by RADV auditors to assess recapture patterns."
+                          side="top"
                         >
-                          {row.prior_year_documented ? "Yes" : "No"}
-                        </span>
+                          <span
+                            aria-label={row.prior_year_documented ? "Yes" : "No"}
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: row.prior_year_documented ? "#f0fdf4" : tokens.slate100,
+                              color: row.prior_year_documented ? "#166534" : tokens.slate500,
+                              cursor: "help",
+                            }}
+                          >
+                            {row.prior_year_documented ? "Yes" : "No"}
+                          </span>
+                        </FieldTooltip>
                       </td>
                       <td style={{ padding: "9px 12px", color: tokens.slate600, fontVariantNumeric: "tabular-nums" }}>
                         {row.rejected_by}
@@ -261,20 +282,24 @@ export default function HccRejectionsAdminPage() {
                         {fmtDate(row.rejected_at)}
                       </td>
                       <td style={{ padding: "9px 12px" }}>
-                        <code
-                          title={row.sha256_hash}
-                          style={{
-                            fontSize: 10,
-                            fontFamily: "monospace",
-                            color: tokens.slate500,
-                            background: tokens.slate100,
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            cursor: "help",
-                          }}
+                        <FieldTooltip
+                          content={`Truncated SHA-256 hash of this rejection event. Full hash: ${row.sha256_hash}. Each row is chained to the previous entry to form an immutable audit ledger.`}
+                          side="left"
                         >
-                          {truncateHash(row.sha256_hash)}
-                        </code>
+                          <code
+                            style={{
+                              fontSize: 10,
+                              fontFamily: "monospace",
+                              color: tokens.slate500,
+                              background: tokens.slate100,
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              cursor: "help",
+                            }}
+                          >
+                            {truncateHash(row.sha256_hash)}
+                          </code>
+                        </FieldTooltip>
                       </td>
                     </tr>
                   );

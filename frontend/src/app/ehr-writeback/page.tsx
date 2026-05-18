@@ -13,6 +13,7 @@ import { Activity, RefreshCw, AlertCircle, CheckCircle2, Clock } from "lucide-re
 import { getEhrWriteBackQueue } from "@/lib/api";
 import type { EhrWriteBackQueueItem } from "@/lib/api";
 import { FONT_SYS, FONT_MONO } from "@/lib/ui-utils";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 const STATUS_CONFIG: Record<
   EhrWriteBackQueueItem["status"],
@@ -156,27 +157,40 @@ export default function EhrWriteBackPage() {
       </div>
 
       {/* Filter tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-        {STATUS_FILTERS.map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 14,
-              border: "1.5px solid",
-              borderColor: statusFilter === s ? "#2563eb" : "#e2e8f0",
-              background: statusFilter === s ? "#eff6ff" : "#fff",
-              color: statusFilter === s ? "#2563eb" : "#64748b",
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              textTransform: "capitalize",
-            }}
-          >
-            {s}
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: 6, marginBottom: 18, alignItems: "center" }}>
+        {STATUS_FILTERS.map((s) => {
+          const tabTooltip =
+            s === "all"    ? "Show all write-back entries regardless of status." :
+            s === "queued" ? "Queued — entry is waiting to be delivered to the EHR via SMART-on-FHIR. Delivery is attempted on the next scheduler run." :
+            s === "sent"   ? "Sent — the Problem List entry was successfully written to the EHR. No further action needed." :
+                             "Failed — delivery to the EHR failed after the maximum number of retries. Click a row to retry manually.";
+          return (
+            <FieldTooltip key={s} content={tabTooltip} side="bottom">
+              <button
+                onClick={() => setStatusFilter(s)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 14,
+                  border: "1.5px solid",
+                  borderColor: statusFilter === s ? "#2563eb" : "#e2e8f0",
+                  background: statusFilter === s ? "#eff6ff" : "#fff",
+                  color: statusFilter === s ? "#2563eb" : "#64748b",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                }}
+              >
+                {s}
+              </button>
+            </FieldTooltip>
+          );
+        })}
+        <FieldTooltip content="This queue refreshes automatically every 30 seconds. Click any failed row to trigger an immediate retry." side="right">
+          <span style={{ fontSize: 11.5, color: "#94a3b8", marginLeft: 8, cursor: "default" }}>
+            Auto-refreshes every 30s
+          </span>
+        </FieldTooltip>
       </div>
 
       {/* Table */}

@@ -37,6 +37,7 @@ import {
 import { useFeatureFlagsAll } from "@/components/FeatureFlagContext";
 import { tokens } from "@/styles/tokens";
 import { passwordSchema, PASSWORD_MIN_LENGTH } from "@/lib/validators";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -217,7 +218,10 @@ function ChangePasswordPanel({ forceChange = false }: { forceChange?: boolean })
 
   return (
     <div className="space-y-5">
-      <h3 className="text-sm font-bold text-foreground">Change Password</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-bold text-foreground">Change Password</h3>
+        <FieldTooltip content={`Minimum ${PASSWORD_MIN_LENGTH} characters. Must include uppercase, lowercase, and a number. Passwords are hashed with bcrypt and never stored in plaintext.`} />
+      </div>
       {forceChange && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 p-4 animate-scale-in">
           <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -303,7 +307,10 @@ function MfaPanel() {
 
   return (
     <div className="space-y-5 pt-6 mt-6 border-t border-border/40">
-      <h3 className="text-sm font-bold text-foreground">Two-Factor Authentication</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-bold text-foreground">Two-Factor Authentication</h3>
+        <FieldTooltip content="Time-based One-Time Password (TOTP) MFA. After enabling, each login requires a 6-digit code from your authenticator app in addition to your password." />
+      </div>
       <p className="text-xs text-muted-foreground leading-relaxed">Add an extra layer of security using a TOTP authenticator app.</p>
 
       {feedback && <Feedback type={feedback.type} message={feedback.message} />}
@@ -431,7 +438,10 @@ function SessionsPanel() {
 
   return (
     <div className="space-y-4 pt-6 mt-6 border-t border-border/40">
-      <h3 className="text-sm font-bold text-foreground">Active Sessions</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-bold text-foreground">Active Sessions</h3>
+        <FieldTooltip content="All browser sessions currently authenticated to your account. Sessions expire after inactivity. Revoking a session forces immediate sign-out on that device." />
+      </div>
       <p className="text-xs text-muted-foreground leading-relaxed">Manage devices and sessions signed in to your account.</p>
       {feedback && <Feedback type={feedback.type} message={feedback.message} />}
       {loading ? (
@@ -503,7 +513,23 @@ function NotificationsTab() {
   return (
     <div>
       <SectionHeader icon={Bell} title="Notifications" description="Control how and when you receive alerts." />
-      <p className="text-sm text-muted-foreground">Notification preferences will be available in an upcoming release.</p>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">Notification preferences will be available in an upcoming release.</p>
+        <div className="flex flex-col gap-2 rounded-xl border border-border/40 p-4 bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Email Channel</span>
+            <FieldTooltip content="Receive alerts via email. Recommended for gap closure deadlines and compliance reminders." />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">In-App Channel</span>
+            <FieldTooltip content="Receive real-time notifications inside the RAF Intelligence UI. Zero configuration required." />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Frequency</span>
+            <FieldTooltip content="How often digest emails are batched: Immediate, Daily, or Weekly. Real-time in-app alerts are always instant." />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -516,7 +542,10 @@ function EmrConnectionsTab() {
   return (
     <div>
       <SectionHeader icon={Plug} title="EMR Connections" description="Connect your Electronic Medical Record systems." />
-      <p className="text-sm text-muted-foreground">EMR connection management is available via the admin panel.</p>
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-muted-foreground">EMR connection management is available via the admin panel.</p>
+        <FieldTooltip content="SMART-on-FHIR and REST connectors for Epic, Cerner, Athena, OpenEMR, and others. Each connector type determines the OAuth2 flow used for authentication." />
+      </div>
     </div>
   );
 }
@@ -529,7 +558,23 @@ function BrandingTab() {
   return (
     <div>
       <SectionHeader icon={Palette} title="Branding" description="Customize the look and feel of your workspace." />
-      <p className="text-sm text-muted-foreground">Branding customization will be available in an upcoming release.</p>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">Branding customization will be available in an upcoming release.</p>
+        <div className="flex flex-col gap-2 rounded-xl border border-border/40 p-4 bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Logo Upload</span>
+            <FieldTooltip content="Upload a PNG or SVG logo (recommended 200×50 px). Displayed in the sidebar header and patient-facing portal." />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Primary Color</span>
+            <FieldTooltip content="Hex color applied to buttons, badges, and active states across the entire workspace." />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Tagline</span>
+            <FieldTooltip content="Short phrase shown beneath your logo on the login screen and PDF report headers." />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -603,7 +648,10 @@ function AiAnalysisPanel() {
 
   return (
     <div className="space-y-5 pt-6 mt-6 border-t border-border/40">
-      <h3 className="text-sm font-bold text-foreground">AI Analysis</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-bold text-foreground">AI Analysis</h3>
+        <FieldTooltip content="Global AI analysis settings. The cutoff date prevents analysing future-dated data; the per-patient daily limit prevents runaway API costs." />
+      </div>
       <p className="text-xs text-muted-foreground leading-relaxed">Control how AI analyses are bounded in time and throttled per patient.</p>
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-4"><Loader2 className="h-4 w-4 animate-spin" />Loading AI settings...</div>
@@ -644,7 +692,10 @@ function FeatureFlagsPanel() {
 
   return (
     <div className="space-y-5 pt-6 mt-6 border-t border-border/40">
-      <h3 className="text-sm font-bold text-foreground">Feature Flags</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-bold text-foreground">Feature Flags</h3>
+        <FieldTooltip content="Enable or disable product features without a code deploy. Changes take effect immediately for all users in your workspace." />
+      </div>
       <p className="text-xs text-muted-foreground leading-relaxed">Enable or disable product features. Changes take effect immediately.</p>
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-10 rounded-xl" />)}</div>
@@ -699,7 +750,10 @@ function ApiKeysTab({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div>
       <SectionHeader icon={Key} title="API Keys" description="Manage API keys and configure AI analysis parameters." />
-      <p className="text-sm text-muted-foreground mb-6">API key management for external integrations.</p>
+      <div className="flex items-center gap-2 mb-6">
+        <p className="text-sm text-muted-foreground">API key management for external integrations.</p>
+        <FieldTooltip content="These keys grant programmatic access to the RAF Intelligence API. Rotate quarterly and never commit them to source control." />
+      </div>
       {isAdmin && (
         <>
           <AiAnalysisPanel />
@@ -719,7 +773,25 @@ function ComplianceTab() {
   return (
     <div>
       <SectionHeader icon={FileCheck} title="Compliance" description="HIPAA audit logs, data retention, and compliance settings." />
-      <p className="text-sm text-muted-foreground">Compliance settings will be available in an upcoming release.</p>
+      <div className="space-y-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>Compliance settings will be available in an upcoming release.</span>
+        </div>
+        <div className="flex flex-col gap-2 rounded-xl border border-border/40 p-4 bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-foreground">BAA Status</span>
+            <FieldTooltip content="Business Associate Agreement status with your covered entity. A signed BAA is required before processing PHI under HIPAA." />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-foreground">SOC 2 Audit Cycle</span>
+            <FieldTooltip content="RAF Intelligence undergoes an annual SOC 2 Type II audit. Your organization can request the latest report under NDA." />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-foreground">HIPAA Training</span>
+            <FieldTooltip content="Tracks whether each user has completed the required annual HIPAA Security Rule and Privacy Rule training." />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -732,17 +804,18 @@ interface TabDef {
   id: TabId;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  tooltip: string;
 }
 
 const ALL_TABS: TabDef[] = [
-  { id: "profile", label: "Profile", icon: User },
-  { id: "security", label: "Security", icon: ShieldCheck },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "emr-connections", label: "EMR Connections", icon: Plug },
-  { id: "branding", label: "Branding", icon: Palette },
-  { id: "team", label: "Team", icon: Users },
-  { id: "api-keys", label: "API Keys", icon: Key },
-  { id: "compliance", label: "Compliance", icon: FileCheck },
+  { id: "profile",         label: "Profile",         icon: User,       tooltip: "Update your display name, title, and profile picture." },
+  { id: "security",        label: "Security",        icon: ShieldCheck, tooltip: "Change your password, enable two-factor authentication, and manage active sessions." },
+  { id: "notifications",   label: "Notifications",   icon: Bell,       tooltip: "Control which channels receive alerts and how frequently you are notified." },
+  { id: "emr-connections", label: "EMR Connections", icon: Plug,       tooltip: "View and manage your linked Electronic Medical Record system connectors." },
+  { id: "branding",        label: "Branding",        icon: Palette,    tooltip: "Customize workspace logo, primary color, and tagline visible to your users." },
+  { id: "team",            label: "Team",            icon: Users,      tooltip: "Manage team members and their access levels across the platform." },
+  { id: "api-keys",        label: "API Keys",        icon: Key,        tooltip: "These keys grant programmatic access — rotate quarterly for security." },
+  { id: "compliance",      label: "Compliance",      icon: FileCheck,  tooltip: "Review BAA status, SOC 2 audit cycle, HIPAA training records, and data retention settings." },
 ];
 
 // ---------------------------------------------------------------------------
@@ -808,15 +881,16 @@ export default function SettingsPage() {
           className="w-52 shrink-0 self-start sticky top-20 flex flex-col h-auto gap-0.5 bg-transparent p-0"
           aria-label="Settings sections"
         >
-          {ALL_TABS.map(({ id, label, icon: Icon }) => (
-            <TabsTrigger
-              key={id}
-              value={id}
-              className="w-full justify-start gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium data-active:bg-blue-600 data-active:text-white data-active:shadow-md data-active:shadow-blue-500/25 hover:bg-muted/60 hover:text-foreground transition-all duration-200"
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </TabsTrigger>
+          {ALL_TABS.map(({ id, label, icon: Icon, tooltip }) => (
+            <FieldTooltip key={id} content={tooltip} side="right">
+              <TabsTrigger
+                value={id}
+                className="w-full justify-start gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium data-active:bg-blue-600 data-active:text-white data-active:shadow-md data-active:shadow-blue-500/25 hover:bg-muted/60 hover:text-foreground transition-all duration-200"
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </TabsTrigger>
+            </FieldTooltip>
           ))}
         </TabsList>
 

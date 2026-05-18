@@ -39,6 +39,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { useAuth } from "@/contexts/auth-context";
 import { tokens } from "@/styles/tokens";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 // ── API ───────────────────────────────────────────────────────────────────────
 // Uses the shared authApi instance from auth-context, which automatically
@@ -1337,15 +1338,17 @@ export default function UsersPage() {
         subtitle="Manage user accounts, roles, and permissions"
         icon={<UsersRound size={22} />}
         actions={
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Btn onClick={() => refetch()} variant="outline">
               <RefreshCw size={14} />
               Refresh
             </Btn>
-            <Btn onClick={() => setAddOpen(true)} variant="primary">
-              <Plus size={14} />
-              Add User
-            </Btn>
+            <FieldTooltip content="Creates a new user account. The user will be prompted to set a new password on first login." side="left">
+              <Btn onClick={() => setAddOpen(true)} variant="primary">
+                <Plus size={14} />
+                Add User
+              </Btn>
+            </FieldTooltip>
           </div>
         }
       />
@@ -1360,38 +1363,46 @@ export default function UsersPage() {
         }}
       >
         <div className="animate-fade-in stagger-1 hover-lift">
-          <MetricCard
-            label="Total Users"
-            value={stats.total}
-            icon={<UsersRound size={18} />}
-            loading={isLoading}
-          />
+          <FieldTooltip content="Total number of user accounts in the system, including active, inactive, and locked users." side="bottom">
+            <MetricCard
+              label="Total Users"
+              value={stats.total}
+              icon={<UsersRound size={18} />}
+              loading={isLoading}
+            />
+          </FieldTooltip>
         </div>
         <div className="animate-fade-in stagger-2 hover-lift">
-          <MetricCard
-            label="Active Users"
-            value={stats.active}
-            icon={<Activity size={18} />}
-            intent="success"
-            loading={isLoading}
-          />
+          <FieldTooltip content="Users with is_active=true who can currently sign in to the platform." side="bottom">
+            <MetricCard
+              label="Active Users"
+              value={stats.active}
+              icon={<Activity size={18} />}
+              intent="success"
+              loading={isLoading}
+            />
+          </FieldTooltip>
         </div>
         <div className="animate-fade-in stagger-3 hover-lift">
-          <MetricCard
-            label="Admin Users"
-            value={stats.admins}
-            icon={<ShieldCheck size={18} />}
-            intent="warning"
-            loading={isLoading}
-          />
+          <FieldTooltip content="Users with the Admin role. Admins have full read/write/delete access to all resources including user management." side="bottom">
+            <MetricCard
+              label="Admin Users"
+              value={stats.admins}
+              icon={<ShieldCheck size={18} />}
+              intent="warning"
+              loading={isLoading}
+            />
+          </FieldTooltip>
         </div>
         <div className="animate-fade-in stagger-4 hover-lift">
-          <MetricCard
-            label="Sessions Today"
-            value={stats.sessions}
-            icon={<UserCheck size={18} />}
-            loading={isLoading}
-          />
+          <FieldTooltip content="Sum of authenticated sessions opened today across all users. Resets at midnight UTC." side="bottom">
+            <MetricCard
+              label="Sessions Today"
+              value={stats.sessions}
+              icon={<UserCheck size={18} />}
+              loading={isLoading}
+            />
+          </FieldTooltip>
         </div>
       </div>
 
@@ -1570,7 +1581,19 @@ export default function UsersPage() {
 
                     {/* Role */}
                     <td style={{ padding: "12px 16px" }}>
-                      <span style={roleBadgeStyle(u.role)}>{u.role}</span>
+                      <FieldTooltip
+                        content={
+                          u.role === "admin"     ? "Admin — full read/write/delete/export/admin access on all resources." :
+                          u.role === "manager"   ? "Manager — read, write, export on all resources; no delete or admin actions." :
+                          u.role === "clinician" ? "Clinician — read access on clinical resources; can write encounters and suspects." :
+                          u.role === "coder"     ? "Coder — read all resources; can write claims and encounters; export claims and reports." :
+                          u.role === "auditor"   ? "Auditor — read-only + export access across all resources for compliance reviews." :
+                                                   "Viewer — read-only access with no export or write capabilities."
+                        }
+                        side="right"
+                      >
+                        <span style={roleBadgeStyle(u.role)}>{u.role}</span>
+                      </FieldTooltip>
                     </td>
 
                     {/* Title */}
@@ -1614,17 +1637,24 @@ export default function UsersPage() {
                           <ShieldCheck size={14} />
                           Perms
                         </Btn>
-                        <Btn
-                          onClick={() => handleToggleStatus(u)}
-                          variant="ghost"
-                          size="sm"
-                          style={{ color: u.status === "active" ? C.amber : C.emerald }}
-                          disabled={u.id === currentUser?.id}
+                        <FieldTooltip
+                          content={u.status === "active"
+                            ? "Soft-delete: user becomes inactive immediately but all audit history is preserved. Can be reactivated at any time."
+                            : "Re-activates this user so they can sign in again."}
+                          side="top"
                         >
-                          {u.status === "active"
-                            ? <><Lock size={13} /> Deactivate</>
-                            : <><Unlock size={13} /> Activate</>}
-                        </Btn>
+                          <Btn
+                            onClick={() => handleToggleStatus(u)}
+                            variant="ghost"
+                            size="sm"
+                            style={{ color: u.status === "active" ? C.amber : C.emerald }}
+                            disabled={u.id === currentUser?.id}
+                          >
+                            {u.status === "active"
+                              ? <><Lock size={13} /> Deactivate</>
+                              : <><Unlock size={13} /> Activate</>}
+                          </Btn>
+                        </FieldTooltip>
                         <Btn
                           onClick={() => handleResetPassword(u)}
                           variant="ghost"

@@ -17,6 +17,7 @@ import { updateProfile, type UpdateProfileState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 const initialState: UpdateProfileState = { status: "idle", message: "" };
 
@@ -46,12 +47,15 @@ export function ProfileServerForm({
       <form action={formAction} className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label
-              htmlFor="sa-first-name"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              First name
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="sa-first-name"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                First name
+              </label>
+              <FieldTooltip content="Your legal first name as it appears in patient-facing documents and audit logs." />
+            </div>
             <Input
               id="sa-first-name"
               name="first_name"
@@ -62,12 +66,15 @@ export function ProfileServerForm({
             />
           </div>
           <div className="space-y-1.5">
-            <label
-              htmlFor="sa-last-name"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Last name
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="sa-last-name"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Last name
+              </label>
+              <FieldTooltip content="Your legal last name. Used in clinical notes, reports, and the HIPAA audit trail." />
+            </div>
             <Input
               id="sa-last-name"
               name="last_name"
@@ -80,12 +87,15 @@ export function ProfileServerForm({
         </div>
 
         <div className="space-y-1.5">
-          <label
-            htmlFor="sa-title"
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-          >
-            Title / Credentials
-          </label>
+          <div className="flex items-center gap-1.5">
+            <label
+              htmlFor="sa-title"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              Title / Credentials
+            </label>
+            <FieldTooltip content="Professional title or credentials (e.g. MD, RN, CPC). Displayed next to your name in the care team view." />
+          </div>
           <Input
             id="sa-title"
             name="title"
@@ -96,12 +106,15 @@ export function ProfileServerForm({
         </div>
 
         <div className="space-y-1.5">
-          <label
-            htmlFor="sa-avatar-url"
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-          >
-            Avatar URL
-          </label>
+          <div className="flex items-center gap-1.5">
+            <label
+              htmlFor="sa-avatar-url"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              Avatar URL
+            </label>
+            <FieldTooltip content="Full HTTPS URL to your profile picture (PNG or JPEG, min 64×64 px). Leave blank to use auto-generated initials." />
+          </div>
           <Input
             id="sa-avatar-url"
             name="avatar_url"

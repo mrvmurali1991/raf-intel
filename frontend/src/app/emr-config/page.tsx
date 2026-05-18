@@ -33,6 +33,7 @@ import {
 import { PageHeader, SectionHeader, EmptyState } from "@/components/healthcare-ui";
 import { MetricCard } from "@/components/ui/metric-card";
 import { tokens } from "@/styles/tokens";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 // ---------------------------------------------------------------------------
 // Design tokens — shared slate palette and risk colors imported from
@@ -739,7 +740,9 @@ function ConnectionCard({ conn, onEdit, onDelete, onTest, onSync, onToggleActive
           <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{conn.name}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span className="text-muted-foreground" style={{ fontSize: 12, textTransform: "capitalize" }}>{conn.vendor.replace(/_/g, " ")}</span>
-            <ConnectionTypeBadge type={conn.connection_type} />
+            <FieldTooltip content={`SMART-on-FHIR connector status + last sync. Connection type: ${conn.connection_type === "fhir_r4" ? "FHIR R4 (recommended)" : "REST API"}.`} side="right">
+              <ConnectionTypeBadge type={conn.connection_type} />
+            </FieldTooltip>
           </div>
         </div>
 
@@ -792,14 +795,18 @@ function ConnectionCard({ conn, onEdit, onDelete, onTest, onSync, onToggleActive
               Authorize
             </Btn>
           )}
-          <Btn variant="secondary" size="sm" onClick={() => onTest(conn.id)} loading={isTestLoading}>
-            <TestTube2 size={13} />
-            Test
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => onSync(conn.id)} loading={isSyncLoading}>
-            <RefreshCw size={13} />
-            Sync
-          </Btn>
+          <FieldTooltip content="Validates connectivity by sending a test request to the configured FHIR or API endpoint. Does not import any data." side="top">
+            <Btn variant="secondary" size="sm" onClick={() => onTest(conn.id)} loading={isTestLoading}>
+              <TestTube2 size={13} />
+              Test
+            </Btn>
+          </FieldTooltip>
+          <FieldTooltip content="Triggers a full re-sync of patients and encounters from this EMR connection. May take several minutes for large datasets." side="top">
+            <Btn variant="secondary" size="sm" onClick={() => onSync(conn.id)} loading={isSyncLoading}>
+              <RefreshCw size={13} />
+              Sync
+            </Btn>
+          </FieldTooltip>
           <Btn variant="ghost" size="sm" onClick={() => onEdit(conn)}>
             <Pencil size={13} />
             Edit
@@ -1047,7 +1054,10 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
         {form.connection_type === "fhir_r4" && (
           <>
             <div>
-              <Label>FHIR Base URL *</Label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <Label>FHIR Base URL *</Label>
+                <FieldTooltip content="OAuth2 issuer URL from your EMR admin. For Epic this ends in /api/FHIR/R4; for OpenEMR it ends in /fhir." side="right" />
+              </div>
               <Input value={form.fhir_base_url} onChange={(v) => patch({ fhir_base_url: v })} placeholder="https://your-emr.example.com/fhir/R4" />
               {errors.fhir_base_url && <div style={{ fontSize: 11, color: C.red600, marginTop: 4 }}>{errors.fhir_base_url}</div>}
             </div>
@@ -1059,11 +1069,17 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div>
-                    <Label>Client ID</Label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <Label>Client ID</Label>
+                      <FieldTooltip content="App Orchard Client ID (Epic) or the equivalent client identifier issued by your EMR vendor." side="right" />
+                    </div>
                     <Input value={form.client_id} onChange={(v) => patch({ client_id: v })} placeholder="client_id" />
                   </div>
                   <div>
-                    <Label>Client Secret</Label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <Label>Client Secret</Label>
+                      <FieldTooltip content="App Orchard Client Secret (Epic) or equivalent. Never share this value — it is stored encrypted at rest." side="right" />
+                    </div>
                     <Input value={form.client_secret} onChange={(v) => patch({ client_secret: v })} type="password" placeholder="••••••••" />
                   </div>
                 </div>
@@ -1438,6 +1454,7 @@ function LiveAutoSyncPanel() {
             }} />
           </div>
           <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Live Auto-Sync</span>
+          <FieldTooltip content="Real-time sync via SSE (Server-Sent Events). Recommended for production environments. Polls every configured interval to ingest new patients and encounters." side="right" />
           {countdown && isEnabled && !hasError && (
             <span style={{
               fontSize: 11, fontWeight: 600,
