@@ -1364,6 +1364,7 @@ export default function UsersPage() {
             value={stats.total}
             icon={<UsersRound size={18} />}
             color={C.primary}
+            loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-2 hover-lift">
@@ -1372,6 +1373,7 @@ export default function UsersPage() {
             value={stats.active}
             icon={<Activity size={18} />}
             color={C.emerald}
+            loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-3 hover-lift">
@@ -1380,6 +1382,7 @@ export default function UsersPage() {
             value={stats.admins}
             icon={<ShieldCheck size={18} />}
             color={C.red}
+            loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-4 hover-lift">
@@ -1388,6 +1391,7 @@ export default function UsersPage() {
             value={stats.sessions}
             icon={<UserCheck size={18} />}
             color={C.violet}
+            loading={isLoading}
           />
         </div>
       </div>
