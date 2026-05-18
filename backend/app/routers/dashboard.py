@@ -168,3 +168,94 @@ def dashboard_kpi_trends(
             "avg_raf": _wow_delta(raf_series),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/dashboard/top-opportunities
+# Returns top 5 patients ranked by (estimated_raf_lift * confidence_score),
+# closing within `days` days.
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/api/v1/dashboard/top-opportunities",
+    summary="Top 5 RAF capture opportunities closing soon",
+)
+def dashboard_top_opportunities(
+    days: int = Query(default=14, ge=1, le=90, description="Closing window in days"),
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+) -> dict[str, Any]:
+    """
+    Returns up to 5 patients ranked by ``estimated_raf_lift * confidence_score``
+    whose recapture gap or suspect condition closes within *days* days.
+
+    Fields per row:
+    - patient_id, patient_name
+    - condition  (HCC label or suspect description)
+    - estimated_raf_lift
+    - confidence_score  (0–1)
+    - revenue_at_risk  (USD, lift × $10 000 per RAF point)
+    - days_remaining
+    """
+    from app.db import raf_cursor
+
+    cutoff = date.today() + timedelta(days=days)
+
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    p.id                                            AS patient_id,
+                    CONCAT(p.first_name, ' ', p.last_name)         AS patient_name,
+                    COALESCE(h.hcc_label, h.hcc_code, 'Unknown')   AS condition,
+                    COALESCE(h.estimated_lift, 0.20)               AS estimated_raf_lift,
+                    COALESCE(rs.confidence_score, 0.75)            AS confidence_score,
+                    COALESCE(h.gap_close_date, DATE_ADD(NOW(), INTERVAL %s DAY)) AS close_date
+                FROM raf_patient_hcc h
+                JOIN patients         p  ON p.id = h.patient_id
+                LEFT JOIN raf_scores  rs ON rs.patient_id = h.patient_id
+                                        AND rs.tenant_id  = h.tenant_id
+                WHERE h.tenant_id = %s
+                  AND h.status    = 'open'
+                  AND (
+                        h.gap_close_date IS NULL
+                     OR h.gap_close_date <= %s
+                  )
+                ORDER BY (COALESCE(h.estimated_lift, 0.20) * COALESCE(rs.confidence_score, 0.75)) DESC
+                LIMIT 5
+                """,
+                (days, tenant_id, cutoff.isoformat()),
+            )
+            rows = cur.fetchall()
+    except Exception as exc:
+        logger.warning("dashboard_top_opportunities query failed: %s", exc)
+        rows = []
+
+    today = date.today()
+    opportunities = []
+    for row in rows:
+        close_dt = row.get("close_date")
+        if close_dt is None:
+            days_rem = days
+        elif hasattr(close_dt, "date"):
+            days_rem = max(0, (close_dt.date() - today).days)
+        else:
+            days_rem = max(0, (close_dt - today).days)
+
+        lift = float(row.get("estimated_raf_lift") or 0.20)
+        conf = float(row.get("confidence_score") or 0.75)
+        opportunities.append(
+            {
+                "patient_id": row["patient_id"],
+                "patient_name": row["patient_name"],
+                "condition": row["condition"],
+                "estimated_raf_lift": round(lift, 3),
+                "confidence_score": round(conf, 3),
+                "revenue_at_risk": round(lift * 10_000),
+                "days_remaining": days_rem,
+            }
+        )
+
+    return {"opportunities": opportunities, "count": len(opportunities)}

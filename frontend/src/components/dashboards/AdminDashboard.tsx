@@ -60,6 +60,8 @@ import api, {
   getWorkflowSummary,
   isEmrDeactivatedError,
   useMetricFormula,
+  getTopOpportunities,
+  type TopOpportunity,
 } from "@/lib/api";
 import { MetricTrend } from "@/components/charts/MetricTrend";
 import {
@@ -574,6 +576,191 @@ function TourModal({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// TopOpportunitiesTile — "Top 5 RAF Capture Opportunities" predictive tile
+// ---------------------------------------------------------------------------
+
+function ConfidenceDots({ score }: { score: number }) {
+  // 5 dots filled proportionally by confidence (0–1)
+  const filled = Math.round(score * 5);
+  return (
+    <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }} aria-label={`Confidence ${Math.round(score * 100)}%`}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <span
+          key={i}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: i < filled ? "#10B981" : "#E2E8F0",
+            boxShadow: i < filled ? "0 0 4px rgba(16,185,129,0.5)" : "none",
+            flexShrink: 0,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function TopOpportunitiesTile({
+  opportunities,
+  isLoading,
+}: {
+  opportunities: TopOpportunity[];
+  isLoading: boolean;
+}) {
+  const router = useRouter();
+
+  return (
+    <div
+      style={{
+        ...card,
+        marginBottom: 24,
+        background: "linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)",
+        border: "1px solid #A7F3D0",
+      }}
+      role="region"
+      aria-label="Top 5 RAF Capture Opportunities"
+      data-testid="top-opportunities-tile"
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ background: "#D1FAE5", borderRadius: 10, padding: 8, border: "1px solid #6EE7B7" }}>
+            <Target size={18} color="#059669" />
+          </div>
+          <div>
+            <h3 className="text-foreground text-[15px] font-bold m-0 leading-tight">
+              Top 5 RAF Capture Opportunities
+            </h3>
+            <p className="text-muted-foreground text-[12px] mt-0.5 mb-0">
+              Closing in 14 days — ranked by RAF lift x confidence
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/suspects"
+          style={{ fontSize: 12, fontWeight: 600, color: "#059669", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}
+        >
+          View All <ChevronRight size={13} />
+        </Link>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {Array.from({ length: 3 }, (_, i) => (
+            <Pulse key={i} w="100%" h={40} r={8} />
+          ))}
+        </div>
+      ) : opportunities.length === 0 ? (
+        <div
+          style={{
+            padding: "24px 0",
+            textAlign: "center",
+            color: "#6B7280",
+            fontSize: 13,
+          }}
+        >
+          <CheckCircle size={28} color="#10B981" style={{ margin: "0 auto 8px", display: "block" }} />
+          No more high-priority opportunities this period
+        </div>
+      ) : (
+        <>
+          {/* Column headers */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "2fr 2fr 1fr 1fr 80px",
+              gap: 8,
+              padding: "0 8px 6px",
+              borderBottom: "1px solid #D1FAE5",
+              marginBottom: 4,
+            }}
+          >
+            {["Patient", "Condition", "Confidence", "$ At Risk", "Days Left"].map((h) => (
+              <span key={h} style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {h}
+              </span>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {opportunities.map((opp, i) => (
+            <div
+              key={opp.patient_id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open details for ${opp.patient_name}`}
+              onClick={() => router.push(`/suspects?patient_id=${opp.patient_id}`)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/suspects?patient_id=${opp.patient_id}`); } }}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "2fr 2fr 1fr 1fr 80px",
+                gap: 8,
+                padding: "10px 8px",
+                borderRadius: 8,
+                cursor: "pointer",
+                borderBottom: i < opportunities.length - 1 ? "1px solid #ECFDF5" : "none",
+                transition: "background 0.15s",
+                alignItems: "center",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(16,185,129,0.06)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {/* Patient name */}
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {opp.patient_name}
+              </span>
+
+              {/* Condition */}
+              <span style={{ fontSize: 12, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={opp.condition}>
+                {opp.condition}
+              </span>
+
+              {/* Confidence dots */}
+              <ConfidenceDots score={opp.confidence_score} />
+
+              {/* Revenue at risk — tabular nums */}
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#065F46", fontVariantNumeric: "tabular-nums" }}>
+                {fmt$(opp.revenue_at_risk)}
+              </span>
+
+              {/* Days remaining pill */}
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                  background: opp.days_remaining < 7 ? "#FEF3C7" : "#D1FAE5",
+                  color: opp.days_remaining < 7 ? "#92400E" : "#065F46",
+                  border: opp.days_remaining < 7 ? "1px solid #FDE68A" : "1px solid #A7F3D0",
+                  width: "fit-content",
+                }}
+                aria-label={`${opp.days_remaining} days remaining`}
+              >
+                {opp.days_remaining}d
+              </span>
+            </div>
+          ))}
+
+          {/* Empty-state trailer when fewer than 5 */}
+          {opportunities.length < 5 && opportunities.length > 0 && (
+            <div style={{ padding: "10px 8px", fontSize: 12, color: "#6B7280", fontStyle: "italic", borderTop: "1px solid #ECFDF5", marginTop: 4 }}>
+              No more high-priority opportunities this period
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // OnboardingCard — replaces KPI strip when patientCount === 0
 // ---------------------------------------------------------------------------
 
@@ -900,6 +1087,17 @@ export function AdminDashboard() {
     retry: 1,
   });
   const v28Summary = v28SummaryQ.data;
+
+  // ---- Top RAF Capture Opportunities (non-blocking, best-effort) ----
+  const rafCaptureQ = useQuery<TopOpportunity[]>({
+    queryKey: ["top-opportunities-14d"],
+    queryFn: () => getTopOpportunities(14),
+    staleTime: 300_000,
+    retry: 1,
+    enabled: hasData,
+  });
+  const rafCaptureOpps = rafCaptureQ.data ?? [];
+  const rafCaptureL = rafCaptureQ.isLoading;
 
   // Derived values
   const totalPop = stats?.total_patients ?? pop?.total_patients ?? 0;
@@ -1522,6 +1720,15 @@ export function AdminDashboard() {
         </div>
       )}
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TOP OPPORTUNITIES — next-best-action predictive tile
+          ══════════════════════════════════════════════════════════════════════ */}
+      {hasData && (
+        <div className="fade-in-up fade-in-up-2">
+          <TopOpportunitiesTile opportunities={rafCaptureOpps} isLoading={rafCaptureL} />
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           V28 HERO CARD — CMS-HCC V28 100% live PY2026, portfolio Δ revenue

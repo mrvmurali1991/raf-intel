@@ -4693,3 +4693,68 @@ export function useMetricFormula(
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard — Top 5 RAF Capture Opportunities
+// ---------------------------------------------------------------------------
+export interface TopOpportunity {
+  patient_id: number;
+  patient_name: string;
+  condition: string;
+  estimated_raf_lift: number;
+  confidence_score: number;
+  revenue_at_risk: number;
+  days_remaining: number;
+}
+
+export async function getTopOpportunities(days = 14): Promise<TopOpportunity[]> {
+  const { data } = await api.get("/api/v1/dashboard/top-opportunities", { params: { days } });
+  return data?.opportunities ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// EHR Problem List Write-Back
+// ---------------------------------------------------------------------------
+
+export interface EhrWriteBackPayload {
+  icd10: string;
+  hcc_code?: string | null;
+  evidence_text?: string | null;
+  attested_by?: string | null;
+  attested_at?: string | null;
+}
+
+export interface EhrWriteBackQueueItem {
+  id: number;
+  tenant_id: string;
+  patient_id: number;
+  icd10: string;
+  hcc_code: string | null;
+  evidence_text: string | null;
+  attested_by: string | null;
+  attested_at: string | null;
+  status: "queued" | "sent" | "failed";
+  last_attempt_at: string | null;
+  error_detail: string | null;
+  created_at: string;
+}
+
+export async function enqueueEhrWriteBack(
+  patientId: number,
+  payload: EhrWriteBackPayload,
+): Promise<{ status: string; queue_id: number; message: string }> {
+  const { data } = await api.post(
+    `/api/ehr/problem-list-write-back/${patientId}`,
+    payload,
+  );
+  return data;
+}
+
+export async function getEhrWriteBackQueue(
+  status?: string,
+): Promise<EhrWriteBackQueueItem[]> {
+  const { data } = await api.get("/api/ehr/problem-list-write-back", {
+    params: status ? { status } : {},
+  });
+  return data ?? [];
+}
