@@ -46,7 +46,7 @@ All callers receive a ``_meta`` key alongside every metric value:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from app.config import settings
@@ -60,9 +60,90 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 METRICS_VERSION = "v1"
 
+# How long a cached metric value stays fresh before recompute is triggered.
+_CACHE_TTL_SECONDS = 300  # 5 minutes
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds") + "Z"
+
+
+def _now_dt() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC for MySQL DATETIME
+
+
+# ---------------------------------------------------------------------------
+# metrics_cache helpers
+# ---------------------------------------------------------------------------
+
+
+def _cache_read(
+    tenant_id: str,
+    metric_name: str,
+    scope: str,
+    payment_year: int,
+) -> dict[str, Any] | None:
+    """Return cached row if it exists and is still fresh (< TTL), else None."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT value, last_refreshed_at, computed_at
+                FROM metrics_cache
+                WHERE tenant_id   = %s
+                  AND metric_name = %s
+                  AND scope       = %s
+                  AND payment_year = %s
+                """,
+                (tenant_id, metric_name, scope, payment_year),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            last_refreshed: datetime = row["last_refreshed_at"]
+            if last_refreshed.tzinfo is None:
+                last_refreshed = last_refreshed.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - last_refreshed).total_seconds()
+            if age > _CACHE_TTL_SECONDS:
+                return None
+            computed_at: datetime = row["computed_at"]
+            if computed_at.tzinfo is None:
+                computed_at = computed_at.replace(tzinfo=timezone.utc)
+            return {
+                "value": float(row["value"]),
+                "last_computed_at": computed_at.isoformat(timespec="seconds") + "Z",
+            }
+    except Exception as exc:
+        logger.debug("metrics_cache read failed (non-fatal): %s", exc)
+        return None
+
+
+def _cache_write(
+    tenant_id: str,
+    metric_name: str,
+    scope: str,
+    payment_year: int,
+    value: float,
+    computed_at: datetime,
+) -> None:
+    """Upsert a metrics_cache row. Silently swallows errors (table may not exist yet)."""
+    now = _now_dt()
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO metrics_cache
+                    (tenant_id, metric_name, scope, payment_year, value, last_refreshed_at, computed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    value             = VALUES(value),
+                    last_refreshed_at = VALUES(last_refreshed_at),
+                    computed_at       = VALUES(computed_at)
+                """,
+                (tenant_id, metric_name, scope, payment_year, value, now, computed_at),
+            )
+    except Exception as exc:
+        logger.debug("metrics_cache write failed (non-fatal): %s", exc)
 
 
 def _resolve_rate(payment_year: int | None) -> float:
@@ -124,28 +205,31 @@ def revenue_at_risk(
     rate = _resolve_rate(year)
     prior_year = year - 1
 
-    total_raf: float = 0.0
+    cached = _cache_read(tenant_id, "revenue_at_risk", scope, year)
+    if cached:
+        value = cached["value"]
+        last_computed_at = cached["last_computed_at"]
+    else:
+        total_raf: float = 0.0
 
-    if scope in ("recapture", "all"):
-        # Canonical SQL: sum raf_coefficient for HCCs present in prior year
-        # but absent in current year (unrecaptured HCCs).
-        # Falls back gracefully when recapture_gaps table is absent.
-        try:
-            recapture_raf = _recapture_raf_sum(tenant_id, prior_year, year)
-            total_raf += recapture_raf
-        except Exception as exc:
-            logger.warning("metrics_service: recapture RAF query failed: %s", exc)
+        if scope in ("recapture", "all"):
+            try:
+                recapture_raf = _recapture_raf_sum(tenant_id, prior_year, year)
+                total_raf += recapture_raf
+            except Exception as exc:
+                logger.warning("metrics_service: recapture RAF query failed: %s", exc)
 
-    if scope in ("prospective", "all"):
-        # Canonical SQL: sum raf_coefficient (defaulting to 0.15 per suspect)
-        # for open suspect conditions.
-        try:
-            suspect_raf = _suspect_raf_sum(tenant_id)
-            total_raf += suspect_raf
-        except Exception as exc:
-            logger.warning("metrics_service: suspect RAF query failed: %s", exc)
+        if scope in ("prospective", "all"):
+            try:
+                suspect_raf = _suspect_raf_sum(tenant_id)
+                total_raf += suspect_raf
+            except Exception as exc:
+                logger.warning("metrics_service: suspect RAF query failed: %s", exc)
 
-    value = round(total_raf * rate, 2)
+        value = round(total_raf * rate, 2)
+        computed_dt = _now_dt()
+        last_computed_at = computed_dt.replace(tzinfo=timezone.utc).isoformat(timespec="seconds") + "Z"
+        _cache_write(tenant_id, "revenue_at_risk", scope, year, value, computed_dt)
 
     scope_desc = {
         "recapture":   "SUM(raf_patient_hcc.raf_coefficient WHERE prior_year HCC absent in current_year)",
@@ -156,16 +240,11 @@ def revenue_at_risk(
     return {
         "value": value,
         "_meta": {
-            "formula": (
-                f"({scope_desc}) "
-                f"* revenue_per_raf_point({year}) "
-                f"= {round(total_raf, 4)} RAF-pts * ${rate:,.2f}/pt = ${value:,.2f}"
-            ),
+            "formula": f"({scope_desc}) * revenue_per_raf_point({year}) = ${value:,.2f}",
             "version": METRICS_VERSION,
-            "last_computed_at": _now_iso(),
+            "last_computed_at": last_computed_at,
             "payment_year": year,
             "revenue_per_raf_point": rate,
-            "total_raf_points": round(total_raf, 4),
             "scope": scope,
         },
     }
@@ -202,20 +281,30 @@ def recapture_rate(
           AND current_year = %s
     """
 
-    recaptured: int = 0
-    total: int = 0
+    cached = _cache_read(tenant_id, "recapture_rate", "recapture_gaps", year)
+    if cached:
+        rate_pct = cached["value"]
+        last_computed_at = cached["last_computed_at"]
+        recaptured = 0
+        total = 0
+    else:
+        recaptured: int = 0
+        total: int = 0
 
-    try:
-        with raf_cursor() as cur:
-            cur.execute(sql, (tenant_id, prior_year, year))
-            row = cur.fetchone()
-            if row:
-                recaptured = int(row["recaptured"] or 0)
-                total = int(row["total_eligible"] or 0)
-    except Exception as exc:
-        logger.warning("metrics_service.recapture_rate query failed: %s", exc)
+        try:
+            with raf_cursor() as cur:
+                cur.execute(sql, (tenant_id, prior_year, year))
+                row = cur.fetchone()
+                if row:
+                    recaptured = int(row["recaptured"] or 0)
+                    total = int(row["total_eligible"] or 0)
+        except Exception as exc:
+            logger.warning("metrics_service.recapture_rate query failed: %s", exc)
 
-    rate_pct = round((recaptured / total) * 100, 2) if total else 0.0
+        rate_pct = round((recaptured / total) * 100, 2) if total else 0.0
+        computed_dt = _now_dt()
+        last_computed_at = computed_dt.replace(tzinfo=timezone.utc).isoformat(timespec="seconds") + "Z"
+        _cache_write(tenant_id, "recapture_rate", "recapture_gaps", year, rate_pct, computed_dt)
 
     return {
         "value": rate_pct,
@@ -225,7 +314,7 @@ def recapture_rate(
                 f" = {rate_pct}%"
             ),
             "version": METRICS_VERSION,
-            "last_computed_at": _now_iso(),
+            "last_computed_at": last_computed_at,
             "payment_year": year,
             "recaptured": recaptured,
             "total_eligible": total,
@@ -255,55 +344,49 @@ def provider_average_raf(
 
     year = payment_year or _current_year()
 
-    params: list[Any] = [year, tenant_id]
     provider_clause = ""
+    params: list[Any] = [year, tenant_id]
     if provider_id is not None:
         provider_clause = "AND ppp.provider_id = %s"
         params.append(provider_id)
 
-    sql = f"""
-        SELECT AVG(rs.final_raf) AS avg_raf,
-               COUNT(DISTINCT rs.patient_id) AS patient_count
-        FROM raf_scores rs
-        JOIN patients p ON p.id = rs.patient_id AND p.tenant_id = %s
-        LEFT JOIN provider_patient_panel ppp ON ppp.patient_id = rs.patient_id
-        WHERE rs.measurement_year = %s
-          AND p.is_active = 1
-          {provider_clause}
-    """
-
-    # Fix param order: measurement_year first then tenant_id
-    params = [year, tenant_id]
-    if provider_id is not None:
-        params.append(provider_id)
-
-    avg: float = 0.0
-    patient_count: int = 0
-
-    try:
-        with raf_cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT AVG(rs.final_raf) AS avg_raf,
-                       COUNT(DISTINCT rs.patient_id) AS patient_count
-                FROM raf_scores rs
-                JOIN patients p ON p.id = rs.patient_id
-                LEFT JOIN provider_patient_panel ppp ON ppp.patient_id = rs.patient_id
-                WHERE rs.measurement_year = %s
-                  AND p.tenant_id = %s
-                  AND p.is_active = 1
-                  {provider_clause}
-                """,
-                params,
-            )
-            row = cur.fetchone()
-            if row:
-                avg = round(float(row["avg_raf"] or 0.0), 4)
-                patient_count = int(row["patient_count"] or 0)
-    except Exception as exc:
-        logger.warning("metrics_service.provider_average_raf query failed: %s", exc)
-
     scope_label = f"provider_id={provider_id}" if provider_id else "all_providers"
+    cached = _cache_read(tenant_id, "provider_average_raf", scope_label, year)
+    if cached:
+        avg = cached["value"]
+        last_computed_at = cached["last_computed_at"]
+        patient_count = 0
+    else:
+        avg: float = 0.0
+        patient_count: int = 0
+
+        try:
+            with raf_cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT AVG(rs.final_raf) AS avg_raf,
+                           COUNT(DISTINCT rs.patient_id) AS patient_count
+                    FROM raf_scores rs
+                    JOIN patients p ON p.id = rs.patient_id
+                    LEFT JOIN provider_patient_panel ppp ON ppp.patient_id = rs.patient_id
+                    WHERE rs.measurement_year = %s
+                      AND p.tenant_id = %s
+                      AND p.is_active = 1
+                      {provider_clause}
+                    """,
+                    params,
+                )
+                row = cur.fetchone()
+                if row:
+                    avg = round(float(row["avg_raf"] or 0.0), 4)
+                    patient_count = int(row["patient_count"] or 0)
+        except Exception as exc:
+            logger.warning("metrics_service.provider_average_raf query failed: %s", exc)
+
+        computed_dt = _now_dt()
+        last_computed_at = computed_dt.replace(tzinfo=timezone.utc).isoformat(timespec="seconds") + "Z"
+        _cache_write(tenant_id, "provider_average_raf", scope_label, year, avg, computed_dt)
+
     return {
         "value": avg,
         "_meta": {
@@ -313,7 +396,7 @@ def provider_average_raf(
                 f" = {avg} over {patient_count} patients"
             ),
             "version": METRICS_VERSION,
-            "last_computed_at": _now_iso(),
+            "last_computed_at": last_computed_at,
             "payment_year": year,
             "patient_count": patient_count,
             "scope": scope_label,

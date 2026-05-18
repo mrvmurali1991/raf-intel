@@ -95,8 +95,10 @@
   }
 }
 
-.animate-dropdown-in {
-  animation: fadeInDown 0.12s ease both;
+@media (prefers-reduced-motion: no-preference) {
+  .animate-dropdown-in {
+    animation: fadeInDown 0.12s ease both;
+  }
 }
 
 /* ---- End chart dropdown animation ---- */
@@ -503,11 +505,13 @@
 }
 
 /* Glow effect for hover */
-.glow-hover {
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
-}
 .glow-hover:hover {
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(59, 130, 246, 0.05);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .glow-hover {
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
 }
 
 /* Dashboard enhancements */
@@ -518,7 +522,11 @@
 
 .animate-gradient-shift {
   background-size: 200% 200%;
-  animation: gradient-shift 8s ease infinite;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-gradient-shift {
+    animation: gradient-shift 8s ease infinite;
+  }
 }
 
 @keyframes shimmer-border {
@@ -527,8 +535,10 @@
   100% { border-color: rgba(14, 165, 233, 0.3); }
 }
 
-.animate-shimmer-border {
-  animation: shimmer-border 3s ease-in-out infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .animate-shimmer-border {
+    animation: shimmer-border 3s ease-in-out infinite;
+  }
 }
 
 @keyframes slide-up-fade {
@@ -536,12 +546,14 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-slide-up {
-  animation: slide-up-fade 0.5s ease-out forwards;
-}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-slide-up {
+    animation: slide-up-fade 0.5s ease-out forwards;
+  }
 
-.stagger-1 { animation-delay: 0.05s; }
-.stagger-2 { animation-delay: 0.1s; }
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+}
 .stagger-3 { animation-delay: 0.15s; }
 .stagger-4 { animation-delay: 0.2s; }
 .stagger-5 { animation-delay: 0.25s; }
@@ -576,8 +588,10 @@
   50% { transform: scale(1.5); opacity: 0.5; }
 }
 
-.animate-pulse-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
 }
 
 /* Timeline connector line */
@@ -600,11 +614,18 @@
 }
 
 /* Smooth hover scale */
-.hover-lift {
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
 .hover-lift:hover {
   transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hover-lift {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift:hover {
+    transform: none;
+  }
 }
 
 /* Sidebar nav glow on active */
@@ -621,8 +642,10 @@
   backdrop-filter: blur(8px);
 }
 
-.premium-table tbody tr {
-  transition: background-color 0.15s ease, transform 0.15s ease;
+@media (prefers-reduced-motion: no-preference) {
+  .premium-table tbody tr {
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
 }
 
 /* Animated gradient border */
@@ -744,18 +767,22 @@
 .status-dot-neutral { color: #94a3b8; }
 
 /* KPI card lift with multi-layer soft shadow */
-.kpi-card-lift {
-  transition:
-    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
 .kpi-card-lift:hover {
-  transform: scale(1.012) translateY(-2px);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 4px 12px rgba(0, 0, 0, 0.06),
     0 16px 40px rgba(0, 0, 0, 0.06),
     0 0 0 1px hsl(var(--primary) / 0.08);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kpi-card-lift {
+    transition:
+      transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .kpi-card-lift:hover {
+    transform: scale(1.012) translateY(-2px);
+  }
 }
 
 /* Table row hover — subtle tinted bg */
@@ -1446,12 +1473,14 @@ select.appearance-none {
 }
 
 /* --- Improved premium-card hover --- */
-.premium-card {
-  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
-}
 .premium-card:hover {
   border-color: hsl(var(--primary) / 0.25);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .premium-card {
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+  }
 }
 
 /* --- Card highlight with left accent border --- */
@@ -1479,11 +1508,18 @@ select.appearance-none {
 }
 
 /* --- Micro-interactions --- */
-.btn-press {
-  transition: transform 0.1s ease;
-}
 .btn-press:active {
   transform: scale(0.97);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn-press {
+    transition: transform 0.1s ease;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-press:active {
+    transform: none;
+  }
 }
 
 .link-underline {
@@ -1498,17 +1534,25 @@ select.appearance-none {
   width: 0;
   height: 1.5px;
   background: currentColor;
-  transition: width 0.25s ease;
 }
 .link-underline:hover::after {
   width: 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .link-underline::after {
+    transition: width 0.25s ease;
+  }
 }
 
 /* --- StatCard animated gradient border on hover --- */
 .stat-card-gradient-border {
   position: relative;
   z-index: 0;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stat-card-gradient-border {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
 .stat-card-gradient-border::before {
   content: "";
@@ -1551,8 +1595,10 @@ select.appearance-none {
 @keyframes progressFillIn {
   from { width: 0%; }
 }
-.progress-fill-animate {
-  animation: progressFillIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+@media (prefers-reduced-motion: no-preference) {
+  .progress-fill-animate {
+    animation: progressFillIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
 }
 
 /* --- Mobile-first padding helper ---
@@ -1690,4 +1736,21 @@ select.appearance-none {
 .dark .text-slate-900:not([class*="dark:"]),
 .dark .text-gray-900:not([class*="dark:"]) {
   color: hsl(var(--foreground)) !important;
+}
+
+/* ================================================================
+   ACCESSIBILITY: prefers-reduced-motion — global safety net
+   Catches any animation/transition not individually guarded above.
+   Using 0.01ms (not 0) keeps JS transitionend/animationend events
+   firing so interactive components don't break.
+   ================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
