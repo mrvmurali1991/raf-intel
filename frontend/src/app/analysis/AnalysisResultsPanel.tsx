@@ -108,7 +108,7 @@ function SectionHeader({ icon, title, count, countColor, countBg }: {
       <div style={{ width: 32, height: 32, borderRadius: 8, background: countBg || tokens.primarySoft, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {icon}
       </div>
-      <span style={{ fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>{title}</span>
+      <span className="text-foreground" style={{ fontSize: 16, fontWeight: 700 }}>{title}</span>
       {count != null && (
         <span style={{ fontSize: 12, fontWeight: 700, background: countBg || tokens.primarySoft, color: countColor || tokens.primary, padding: "3px 10px", borderRadius: 10 }}>
           {count}
@@ -172,7 +172,7 @@ export default function AnalysisResultsPanel({ result }: AnalysisResultsPanelPro
         <div className="premium-card animate-fade-in" style={{ padding: "14px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 12, borderLeft: `4px solid ${confidence >= 0.85 ? tokens.success : confidence >= 0.6 ? tokens.warningStrong : tokens.riskHigh}` }}>
           {confidence >= 0.85 ? <CheckCircle2 size={20} color={tokens.success} /> : confidence >= 0.6 ? <AlertTriangle size={20} color={tokens.warningStrong} /> : <XCircle size={20} color={tokens.riskHigh} />}
           <div style={{ flex: 1 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: tokens.slate900 }}>
+            <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>
               {confidence >= 0.85 ? "Auto-Accept" : confidence >= 0.6 ? "Needs Review" : "Full Audit Required"}
             </span>
             <span style={{ fontSize: 13, color: tokens.slate500, marginLeft: 10 }}>
@@ -225,7 +225,7 @@ export default function AnalysisResultsPanel({ result }: AnalysisResultsPanelPro
                         <tr style={{ background: tokens.slate50 }}>
                           <td colSpan={7} style={{ padding: "18px 24px 18px 52px" }}>
                             {dx.supporting_text && (
-                              <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}` }}>
+                              <div className="bg-card" style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, border: `1px solid hsl(var(--border))` }}>
                                 <span style={{ fontSize: 11, fontWeight: 700, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em" }}>Supporting Evidence</span>
                                 <div style={{ fontSize: 13, color: tokens.slate700, fontStyle: "italic", marginTop: 6, lineHeight: 1.6 }}>&ldquo;{dx.supporting_text}&rdquo;</div>
                               </div>

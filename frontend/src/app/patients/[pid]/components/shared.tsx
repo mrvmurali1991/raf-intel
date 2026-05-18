@@ -49,14 +49,18 @@ export interface HCCDetail {
 }
 
 /** Extended RAF breakdown as returned at runtime (wider than the strict api type) */
-export interface ExtendedRafBreakdown extends Omit<RafBreakdown, "hcc_details"> {
+export interface ExtendedRafBreakdown extends Omit<RafBreakdown, "hcc_details" | "raf_score" | "model_segment" | "measurement_year"> {
   total_raf?: number;
   raf_score?: number;
   hcc_details?: HCCDetail[];
   hcc_count?: number;
   model_segment?: string;
-  demographic_base?: number;
   measurement_year?: number;
+  demographic_base?: number;
+  /** Alias used by legacy API responses; prefer demographic_base */
+  demographic_score?: number;
+  disease_score?: number;
+  interaction_score?: number;
   final_raf?: number;
 }
 
@@ -168,6 +172,8 @@ export interface AllergyItem {
   title?: string;
   allergen?: string;
   substance?: string;
+  /** Drug/substance category (e.g. "sulfa", "penicillin") */
+  category?: string;
   reaction?: string;
   severity?: string;
   begdate?: string;

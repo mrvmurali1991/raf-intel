@@ -32,7 +32,7 @@ function KPISkeleton() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
       {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-white border border-border/40 rounded-2xl p-6 shadow-sm">
+        <div key={i} className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm">
           <Pulse w={100} h={14} />
           <div style={{ height: 12 }} />
           <Pulse w={80} h={32} />
@@ -103,14 +103,14 @@ export function CoderDashboard() {
 
       <SectionHeader title="Active Quick Links" />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 16 }}>
-        <Link href="/suspects" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+        <Link href="/suspects" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
           <div className="flex items-center gap-3 text-amber-600 mb-2">
             <AlertTriangle size={24} />
             <span className="font-semibold text-lg text-foreground">Suspects Queue</span>
           </div>
           <p className="text-muted-foreground text-sm">Validations are waiting. Accept suspects to push them directly to OpenEMR.</p>
         </Link>
-        <Link href="/documents" className="block p-6 bg-white border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+        <Link href="/documents" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
           <div className="flex items-center gap-3 text-blue-600 mb-2">
             <FileText size={24} />
             <span className="font-semibold text-lg text-foreground">Document Analysis</span>

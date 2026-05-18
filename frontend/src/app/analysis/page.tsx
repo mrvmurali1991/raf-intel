@@ -137,7 +137,7 @@ function QueryError({ error, onRetry }: { error: unknown; onRetry: () => void })
           fontWeight: 600,
           borderRadius: 8,
           border: `1px solid ${tokens.riskHigh}`,
-          background: tokens.white,
+          background: `hsl(var(--card))`,
           color: tokens.riskHigh,
           cursor: "pointer",
           flexShrink: 0,
@@ -253,13 +253,13 @@ function PatientDropdown({
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           disabled={loading}
-          style={{ width: "100%", padding: "10px 12px 10px 38px", fontSize: 14, borderRadius: 10, border: `1px solid ${tokens.slate200}`, background: tokens.white, transition: "border-color 0.2s, box-shadow 0.2s" }}
+          style={{ width: "100%", padding: "10px 12px 10px 38px", fontSize: 14, borderRadius: 10, border: `1px solid hsl(var(--border))`, background: `hsl(var(--card))`, color: `hsl(var(--foreground))`, transition: "border-color 0.2s, box-shadow 0.2s" }}
         />
       </div>
       {open && filtered.length > 0 && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
-          <div style={{ position: "absolute", zIndex: 50, top: "100%", marginTop: 4, width: "100%", borderRadius: 12, border: `1px solid ${tokens.slate200}`, background: tokens.white, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ position: "absolute", zIndex: 50, top: "100%", marginTop: 4, width: "100%", borderRadius: 12, border: `1px solid hsl(var(--border))`, background: `hsl(var(--card))`, color: `hsl(var(--foreground))`, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 260, overflowY: "auto" }}>
             {filtered.map((p) => (
               <button
                 key={p.pid}
@@ -423,7 +423,7 @@ export default function AnalysisPage() {
     `inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold rounded-lg border cursor-pointer transition-all duration-200 ${
       active
         ? "border-blue-500 bg-blue-50 text-blue-600 shadow-sm shadow-blue-500/10"
-        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
+        : "border-border bg-card text-muted-foreground hover:border-border/80 hover:text-foreground"
     }`;
 
   return (

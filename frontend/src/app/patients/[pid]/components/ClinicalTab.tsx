@@ -565,7 +565,8 @@ export function ClinicalTab({
           <ClinicalSection title="Lab Results" loading={labsLoading}>
             {(() => {
               // labSuspects may carry a labs.results field not in the typed interface (extended backend response)
-              const labResults = ((labSuspects as ClinicalFindingsResponse & { labs?: { results?: Array<{ id?: number; result_text?: string; date?: string; encounter?: number }> } })?.labs?.results ?? []);
+              type LabResultItem = { id?: number; result_text?: string; date?: string; encounter?: number };
+              const labResults: LabResultItem[] = ((labSuspects as ClinicalFindingsResponse & { labs?: { results?: LabResultItem[] } })?.labs?.results ?? []);
               if (!labResults.length && !labItems.length) return <EmptyState title="No lab results" />;
               const parsed = labResults.map((l) => {
                 const rt = l.result_text || "";

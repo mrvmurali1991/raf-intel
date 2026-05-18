@@ -2,13 +2,15 @@
  * auth.ts — Shared authentication helpers for E2E tests.
  *
  * Exports:
- *   loginAs(page, role)  — log in using a named role (admin | coder | physician)
- *   loginAsAdmin(page)   — convenience alias
- *   logout(page)         — sign out and wait for /login
- *   getAuthToken(page)   — read the bearer token from localStorage
+ *   loginAs(page, role)           — log in using a named role (admin | coder | physician)
+ *   loginAsAdmin(page)            — convenience alias
+ *   logout(page)                  — sign out and wait for /login
+ *   getAuthToken(page)            — read the bearer token from localStorage
+ *   assertNoA11yViolations(page)  — run axe accessibility checks, fail on critical violations
  */
 
-import { type Page } from "@playwright/test";
+import { type Page, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 // ---------------------------------------------------------------------------
 // Canonical seeded credentials
@@ -83,4 +85,21 @@ export async function getAuthToken(page: Page): Promise<string | undefined> {
       undefined
     );
   });
+}
+
+/**
+ * Run axe-core accessibility checks on the current page state.
+ * Fails the test if any critical or serious violations are found.
+ */
+export async function assertNoA11yViolations(page: Page): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .options({ runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "best-practice"] } })
+    .analyze();
+  const critical = results.violations.filter(
+    (v) => v.impact === "critical" || v.impact === "serious"
+  );
+  expect(
+    critical,
+    `Accessibility violations found:\n${critical.map((v) => `  [${v.impact}] ${v.id}: ${v.description}`).join("\n")}`
+  ).toHaveLength(0);
 }

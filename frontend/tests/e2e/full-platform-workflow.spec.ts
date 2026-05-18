@@ -113,9 +113,9 @@ test(
 
     // Check audit trail via API
     const bearerToken = await fetchBearerToken(request);
-    const authHeaders = bearerToken
+    const authHeaders: Record<string, string> | undefined = bearerToken
       ? { Authorization: `Bearer ${bearerToken}` }
-      : {};
+      : undefined;
 
     const auditResp = await request.get(`${API_BASE}/api/admin/audit`, {
       headers: authHeaders,
@@ -444,7 +444,7 @@ test(
           {
             headers: token
               ? { Authorization: `Bearer ${token}` }
-              : {},
+              : undefined,
           }
         );
         expect([200, 202]).toContain(recordsResp.status());
@@ -563,7 +563,7 @@ test(
     await loginAsAdmin(page);
 
     const token = await fetchBearerToken(request);
-    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+    const authHeaders: Record<string, string> | undefined = token ? { Authorization: `Bearer ${token}` } : undefined;
 
     // Try UI first; fall back to direct API smoke
     const uiCandidates = [

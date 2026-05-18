@@ -134,6 +134,10 @@ export interface FinancialImpact {
   pmpm_delta: number;
   annual_delta: number;
   revenue_per_raf_point: number;
+  /** RAF submitted to CMS (from reconciliation data) */
+  submitted_raf?: number;
+  /** RAF accepted/approved by CMS */
+  accepted_raf?: number;
 }
 
 /** Mirrors backend CodingOptCard Pydantic model (app/routers/raf_central.py). */
