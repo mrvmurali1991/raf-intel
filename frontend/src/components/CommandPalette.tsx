@@ -216,7 +216,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   if (open && !prevOpen) {
     setPrevOpen(open);
     setQuery("");
-    setResults([]);
+    setResults([...PAGE_RESULTS, ...ACTION_RESULTS]);
     setActiveIndex(0);
   }
   if (open !== prevOpen) {
@@ -244,7 +244,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   // Search logic
   const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
-      setResults([]);
+      // Show all pages + actions by default when query is empty
+      setResults([...PAGE_RESULTS, ...ACTION_RESULTS]);
       setLoading(false);
       return;
     }
@@ -292,7 +293,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const list = query.trim() ? results : recentSearches;
+    const list = results;
     if (!list.length) return;
 
     if (e.key === "ArrowDown") {
@@ -334,9 +335,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   if (!open) return null;
 
-  const displayList = query.trim() ? results : recentSearches;
+  const displayList = results;
   const showRecent = !query.trim() && recentSearches.length > 0;
-  const isEmpty = !loading && query.trim() && results.length === 0;
+  const isEmpty = !loading && query.trim().length > 0 && results.length === 0;
 
   // Group results by category
   const grouped: Partial<Record<ResultCategory, SearchResult[]>> = {};
@@ -643,7 +644,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             );
           })}
 
-          {!query.trim() && recentSearches.length === 0 && (
+          {!loading && results.length === 0 && !query.trim() && (
             <div
               style={{
                 padding: "24px 16px",
