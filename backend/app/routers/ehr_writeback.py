@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id, require_permission
-from app.db import get_db_connection
+from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -84,22 +84,21 @@ def enqueue_writeback(
             (tenant_id, patient_id, icd10, hcc_code, evidence_text,
              attested_by, attested_at, status)
         VALUES
-            (:tenant_id, :patient_id, :icd10, :hcc_code, :evidence_text,
-             :attested_by, :attested_at, 'queued')
+            (%s, %s, %s, %s, %s, %s, %s, 'queued')
     """
-    params = {
-        "tenant_id": tenant_id,
-        "patient_id": patient_id,
-        "icd10": body.icd10,
-        "hcc_code": body.hcc_code,
-        "evidence_text": body.evidence_text,
-        "attested_by": attested_by,
-        "attested_at": attested_at,
-    }
+    params = (
+        tenant_id,
+        patient_id,
+        body.icd10,
+        body.hcc_code,
+        body.evidence_text,
+        attested_by,
+        attested_at,
+    )
     try:
-        with get_db_connection() as conn:
-            result = conn.execute(sql, params)
-            queue_id = result.lastrowid
+        with raf_cursor() as cur:
+            cur.execute(sql, params)
+            queue_id = cur.lastrowid
     except Exception as exc:
         logger.exception("ehr_writeback_queue insert failed: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to queue write-back") from exc
@@ -133,11 +132,12 @@ def list_writeback_queue(
     if role not in {"admin", "manager"}:
         raise HTTPException(status_code=403, detail="Admin/manager only")
 
-    where = "WHERE tenant_id = :tenant_id"
-    params: dict = {"tenant_id": tenant_id, "limit": limit}
+    where = "WHERE tenant_id = %s"
+    args: list = [tenant_id]
     if status:
-        where += " AND status = :status"
-        params["status"] = status
+        where += " AND status = %s"
+        args.append(status)
+    args.append(int(limit))
 
     sql = f"""
         SELECT id, tenant_id, patient_id, icd10, hcc_code, evidence_text,
@@ -146,13 +146,14 @@ def list_writeback_queue(
         FROM   ehr_writeback_queue
         {where}
         ORDER BY created_at DESC
-        LIMIT :limit
+        LIMIT %s
     """
     try:
-        with get_db_connection() as conn:
-            rows = conn.execute(sql, params).fetchall()
+        with raf_cursor() as cur:
+            cur.execute(sql, tuple(args))
+            rows = cur.fetchall() or []
     except Exception as exc:
         logger.exception("ehr_writeback_queue list failed: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to load queue") from exc
 
-    return [dict(r) for r in rows]
+    return rows
