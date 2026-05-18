@@ -2,9 +2,9 @@ name: Frontend CI
 
 on:
   pull_request:
-    branches: [server, feat/all-gaps-fix]
+    branches: [server, main]
   push:
-    branches: [server, feat/all-gaps-fix]
+    branches: [server, main, "feat/*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -168,5 +168,46 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ github.run_id }}
+          path: ${{ env.FRONTEND_DIR }}/playwright-report/
+          retention-days: 14
+
+  # ─────────────────────────────────────────────
+  # Smoke: @smoke-tagged Playwright tests against staging
+  # REQUIRED check — blocks PR merge if any @smoke test fails
+  # ─────────────────────────────────────────────
+  frontend-e2e-smoke:
+    name: Playwright @smoke (staging parity gate)
+    runs-on: ubuntu-22.04
+    needs: build
+    # No continue-on-error — this is a hard PR gate
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+      - name: Run @smoke tests against staging
+        run: npx playwright test --grep @smoke --reporter=html
+        working-directory: ${{ env.FRONTEND_DIR }}
+        env:
+          E2E_BASE_URL: https://raf.comercioit.com
+          CI: true
+
+      - name: Upload Playwright smoke report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-report-${{ github.run_id }}
           path: ${{ env.FRONTEND_DIR }}/playwright-report/
           retention-days: 14
