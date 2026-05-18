@@ -10,6 +10,7 @@ import {
 import DataQualityBanner from "@/components/DataQualityBanner";
 import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
+import ProblemListWriteBackModal from "@/components/ProblemListWriteBackModal";
 import { tokens } from "@/styles/tokens";
 import {
   getSuspects,
@@ -270,6 +271,9 @@ export default function SuspectsPage() {
   const [sortField, setSortField] = useState<SortField>((searchParams.get("sort") as SortField) || "confidence");
   const [page, setPage] = useState(0);
 
+  // EHR Problem List write-back modal state
+  const [writeBackSuspect, setWriteBackSuspect] = useState<DBSuspect | null>(null);
+
   // "More filters" popover
   const [moreOpen, setMoreOpen] = useState(false);
   const morePopoverRef = useRef<HTMLDivElement | null>(null);
@@ -450,6 +454,9 @@ export default function SuspectsPage() {
               },
             }
           );
+          // Prompt provider to push to EHR Problem List
+          const accepted = allSuspects.find((s) => s.id === id) ?? null;
+          setWriteBackSuspect(accepted);
         })
         .catch(() => toast.error("Error", "Failed to accept suspect."));
     },
@@ -2172,6 +2179,21 @@ export default function SuspectsPage() {
       )}
 
       {selected.size > 0 && <div style={{ height: 80 }} />}
+
+      {/* EHR Problem List write-back modal */}
+      <ProblemListWriteBackModal
+        open={writeBackSuspect !== null}
+        patientId={writeBackSuspect?.patient_id ?? 0}
+        patientName={writeBackSuspect?.patient_name}
+        icd10={writeBackSuspect?.suspect_icd10 ?? ""}
+        hccCode={writeBackSuspect ? String(writeBackSuspect.suspect_hcc) : null}
+        evidenceText={
+          typeof writeBackSuspect?.evidence_detail === "string"
+            ? writeBackSuspect.evidence_detail
+            : writeBackSuspect?.evidence_detail?.rationale ?? null
+        }
+        onClose={() => setWriteBackSuspect(null)}
+      />
     </div>
   );
 }

@@ -149,6 +149,7 @@ const navGroups: NavGroup[] = [
           { href: "/audit", label: "Audit", icon: ShieldCheck },
           { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
           { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack, visibleToRoles: ["admin"] },
+          { href: "/ehr-writeback", label: "EHR Write-Back Queue", icon: Activity, visibleToRoles: ["admin", "manager"] },
           { href: "/system", label: "System Health", icon: Activity, visibleToRoles: ["admin"] },
           { href: "/developer", label: "Developer", icon: Code, visibleToRoles: ["admin"] },
         ],

@@ -108,6 +108,7 @@ from app.routers import provider_worklist as provider_worklist_router
 from app.routers import radv as radv_router
 from app.routers import radv_audit as radv_audit_router
 from app.routers import radv_audit_runs as radv_audit_runs_router
+from app.routers import radv_chart_requests as radv_chart_requests_router
 from app.routers import raf_central as raf_central_router
 from app.routers import raf_inbox_admin as raf_inbox_admin_router
 from app.routers import realtime as realtime_router
@@ -154,6 +155,7 @@ from app.routers import direct_inbound as direct_inbound_router
 from app.routers import document_ingestion_dashboard as document_ingestion_dashboard_router
 from app.routers import demo_reset as demo_reset_router
 from app.routers import goals as goals_router
+from app.routers import ehr_writeback as ehr_writeback_router
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +414,8 @@ def register_routers(app: FastAPI) -> None:
     # exposure simulator, MAO-004 re-submission batch, evidence export.
     # Shares /api/radv prefix with radv_audit but owns /audit-runs/* paths.
     _mount(app, radv_audit_runs_router.router)
+    # RADV chart-request tracking — CMS-mandated workflow (Gap: chart pull docs).
+    _mount(app, radv_chart_requests_router.router)
     # RADV packet PDF export (per-patient, per-payment-year audit bundle).
     # Shares the /api/radv prefix with radv_audit but owns distinct paths.
     _mount(app, radv_router.router)
@@ -429,3 +433,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Quarterly RAF capture goals (goal-vs-actual tracking)
     _mount(app, goals_router.router)
+
+    # EHR Problem List write-back queue (SMART-on-FHIR Condition stub)
+    _mount(app, ehr_writeback_router.router)
