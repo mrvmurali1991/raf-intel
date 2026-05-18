@@ -409,7 +409,7 @@ export default function AttestationsPage() {
         <div
           className="bg-card border border-border"
           style={{
-            borderRadius: 12,
+            borderRadius: 10,
             overflow: "hidden",
           }}
         >

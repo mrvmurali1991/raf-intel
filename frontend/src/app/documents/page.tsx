@@ -424,7 +424,7 @@ function UploadPanel({ onClose, onUploaded }: UploadPanelProps) {
           className={isDragOver ? "card-glow-blue" : ""}
           style={{
             border: `2px dashed ${isDragOver ? c.primary : c.slate200}`,
-            borderRadius: 16,
+            borderRadius: 14,
             padding: "48px 24px",
             textAlign: "center",
             cursor: "pointer",
@@ -442,7 +442,7 @@ function UploadPanel({ onClose, onUploaded }: UploadPanelProps) {
             style={{
               width: 64,
               height: 64,
-              borderRadius: 20,
+              borderRadius: 14,
               background: isDragOver ? `${c.primary}1A` : `linear-gradient(135deg, ${c.primary}15 0%, ${c.primary}08 100%)`,
               display: "flex",
               alignItems: "center",
@@ -605,7 +605,7 @@ function FileItemRow({ item, patients, onUpdate, onRemove }: FileItemRowProps) {
       style={{
         background: item.status === "error" ? c.red50 : c.white,
         border: `1px solid ${item.status === "error" ? tokens.dangerBorder : c.slate200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
         transition: "all 0.2s ease",
       }}
@@ -1601,7 +1601,7 @@ function MeatTab({ meat }: { meat: MeatEvidence | null }) {
             className={`animate-fade-in hover-lift stagger-${idx + 1}`}
             style={{
               border: `1px solid ${meat[s.key] ? s.color + "40" : c.slate200}`,
-              borderRadius: 12,
+              borderRadius: 10,
               padding: 16,
               background: meat[s.key] ? `${s.color}08` : c.white,
               transition: "all 0.2s ease",
@@ -2236,7 +2236,7 @@ export default function DocumentsPage() {
           background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)",
         }}>
           <div style={{
-            background: tokens.white, borderRadius: 12, padding: "28px 32px",
+            background: tokens.white, borderRadius: 10, padding: "28px 32px",
             maxWidth: 400, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
           }}>
             <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>
@@ -2385,7 +2385,7 @@ function OpenEMRDocumentsPanel() {
       {/* Filter bar */}
       <div style={{
         display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
-        padding: "12px 16px", borderRadius: 12, background: c.white,
+        padding: "12px 16px", borderRadius: 10, background: c.white,
         border: `1px solid ${c.border}`,
       }}>
         <Search size={16} color={c.slate400} />
@@ -2491,7 +2491,7 @@ function OpenEMRDocumentsPanel() {
                   {doc.already_imported ? (
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: 4,
-                      padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      padding: "4px 10px", borderRadius: 14, fontSize: 12, fontWeight: 600,
                       background: c.emerald50, color: c.emerald600,
                     }}>
                       <CheckCircle2 size={12} /> Imported
@@ -2499,7 +2499,7 @@ function OpenEMRDocumentsPanel() {
                   ) : (
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: 4,
-                      padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      padding: "4px 10px", borderRadius: 14, fontSize: 12, fontWeight: 600,
                       background: c.amber50, color: c.amber500,
                     }}>
                       <Clock size={12} /> Not Imported

@@ -156,7 +156,7 @@ export default function AnalysisResultsPanel({ result }: AnalysisResultsPanelPro
           { label: "MEAT Score", value: `${meatCount}/${meatTotal}`, icon: <Sparkles size={18} />, gradient: "stat-card-rose" },
         ].map((s, i) => (
           <div key={s.label} className={`${s.gradient} hover-lift animate-fade-in stagger-${i + 1}`} style={{ padding: "18px 20px", borderRadius: 14, display: "flex", alignItems: "center", gap: 14, color: tokens.white }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
               {s.icon}
             </div>
             <div>

@@ -19,7 +19,7 @@ const BatchResultsPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="premium-card shimmer" style={{ height: 180, borderRadius: 12 }} />
+      <div className="premium-card shimmer" style={{ height: 180, borderRadius: 10 }} />
     ),
   }
 );

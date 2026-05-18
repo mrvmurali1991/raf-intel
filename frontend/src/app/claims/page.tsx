@@ -419,7 +419,7 @@ function ConfirmDeleteDialog({
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
       style={{ position: "fixed", inset: 0, zIndex: 110, padding: 16, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className="animate-scale-in" style={{ background: C.white, borderRadius: 14, width: "100%", maxWidth: 440, padding: 26, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: C.redSoft, color: C.red, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+        <div style={{ width: 48, height: 48, borderRadius: 10, background: C.redSoft, color: C.red, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
           <Trash2 size={22} />
         </div>
         <h3 className="text-foreground" style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>Delete batch?</h3>
@@ -446,12 +446,12 @@ function ConfirmDeleteDialog({
 function EmptyHero({ onUpload }: { onUpload: () => void }) {
   return (
     <div style={{
-      background: C.white, borderRadius: 16, border: `1px solid ${C.slate200}`,
+      background: C.white, borderRadius: 14, border: `1px solid ${C.slate200}`,
       padding: 40, boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
       textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center",
     }}>
       <div style={{
-        width: 72, height: 72, borderRadius: 20,
+        width: 72, height: 72, borderRadius: 14,
         background: `linear-gradient(135deg, ${C.tealSoft}, ${C.emeraldSoft})`,
         color: C.teal, display: "flex", alignItems: "center", justifyContent: "center",
         marginBottom: 18, border: `1px solid ${C.tealBorder}`,

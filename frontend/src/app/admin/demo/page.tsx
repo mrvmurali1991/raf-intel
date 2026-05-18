@@ -285,7 +285,7 @@ function StatTile({ icon, label, value, format, reducedMotion }: StatTileProps) 
         minWidth: 160,
         backgroundColor: "rgba(255,255,255,0.07)",
         border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 16,
+        borderRadius: 14,
         padding: "28px 24px",
         display: "flex",
         flexDirection: "column",
@@ -297,7 +297,7 @@ function StatTile({ icon, label, value, format, reducedMotion }: StatTileProps) 
         style={{
           width: 44,
           height: 44,
-          borderRadius: 12,
+          borderRadius: 10,
           backgroundColor: "rgba(245,158,11,0.18)",
           display: "flex",
           alignItems: "center",
@@ -434,7 +434,7 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
     <div
       style={{
         border: `1px solid ${isHighlighted ? PRIMARY : SLATE200}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: "18px 20px",
         backgroundColor: isHighlighted ? tokens.primarySoft : WHITE,
         cursor: "pointer",
@@ -481,7 +481,7 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
             color: PRIMARY,
             backgroundColor: tokens.primarySoft,
             padding: "3px 10px",
-            borderRadius: 20,
+            borderRadius: 14,
             whiteSpace: "nowrap",
             flexShrink: 0,
           }}
@@ -1315,7 +1315,7 @@ export default function AdminDemoPage() {
                       minWidth: 110,
                       backgroundColor: "rgba(255,255,255,0.07)",
                       border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: 12,
+                      borderRadius: 10,
                       padding: "16px 20px",
                     }}
                   >
@@ -1335,7 +1335,7 @@ export default function AdminDemoPage() {
               style={{
                 flex: "1 1 460px",
                 minWidth: 300,
-                borderRadius: 16,
+                borderRadius: 14,
                 overflow: "hidden",
                 border: "1px solid rgba(255,255,255,0.12)",
                 boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
@@ -1451,7 +1451,7 @@ export default function AdminDemoPage() {
                     display: "flex",
                     gap: 16,
                     padding: "18px 20px",
-                    borderRadius: 12,
+                    borderRadius: 10,
                     border: `1px solid ${SLATE200}`,
                     backgroundColor: WHITE,
                   }}

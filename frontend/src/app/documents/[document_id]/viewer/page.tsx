@@ -180,7 +180,7 @@ export default function DocumentViewerPage({ params }: ViewerPageProps) {
             padding: 24,
             background: "#fef2f2",
             border: "1px solid #fecaca",
-            borderRadius: 12,
+            borderRadius: 10,
             color: "#991b1b",
             fontSize: 14,
             fontWeight: 600,

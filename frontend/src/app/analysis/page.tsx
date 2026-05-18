@@ -41,7 +41,7 @@ const AnalysisResultsPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="premium-card shimmer" style={{ height: 200, borderRadius: 12, marginTop: 8 }} />
+      <div className="premium-card shimmer" style={{ height: 200, borderRadius: 10, marginTop: 8 }} />
     ),
   }
 );
@@ -259,7 +259,7 @@ function PatientDropdown({
       {open && filtered.length > 0 && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
-          <div style={{ position: "absolute", zIndex: 50, top: "100%", marginTop: 4, width: "100%", borderRadius: 12, border: `1px solid hsl(var(--border))`, background: `hsl(var(--card))`, color: `hsl(var(--foreground))`, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ position: "absolute", zIndex: 50, top: "100%", marginTop: 4, width: "100%", borderRadius: 10, border: `1px solid hsl(var(--border))`, background: `hsl(var(--card))`, color: `hsl(var(--foreground))`, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 260, overflowY: "auto" }}>
             {filtered.map((p) => (
               <button
                 key={p.pid}
@@ -291,7 +291,7 @@ function AnalyzingOverlay() {
       <div className="shimmer" style={{ position: "absolute", inset: 0, opacity: 0.5 }} />
       <div style={{ position: "relative", zIndex: 1 }}>
         {/* Pulsing brain icon */}
-        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, marginBottom: 20 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: 14, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, marginBottom: 20 }}>
           <div className="soft-pulse">
             <Brain size={36} style={{ color: tokens.primary }} />
           </div>
@@ -299,7 +299,7 @@ function AnalyzingOverlay() {
         <div className="text-foreground" style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Analyzing Clinical Note</div>
         <div className="text-muted-foreground" style={{ fontSize: 14, marginBottom: 20 }}>Extracting diagnoses, validating codes, and checking MEAT documentation</div>
         {/* Progress steps */}
-        <div style={{ display: "inline-flex", gap: 24, padding: "14px 24px", borderRadius: 12, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
+        <div style={{ display: "inline-flex", gap: 24, padding: "14px 24px", borderRadius: 10, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
           {[
             { icon: <Microscope size={15} />, text: "Parsing" },
             { icon: <Stethoscope size={15} />, text: "Diagnosing" },
@@ -431,7 +431,7 @@ export default function AnalysisPage() {
       {/* Header */}
       <div className="animate-fade-in" style={{ marginBottom: 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(37, 99, 235, 0.15)" }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, background: `linear-gradient(135deg, ${tokens.primarySoft}, ${tokens.primarySoft})`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(37, 99, 235, 0.15)" }}>
             <Stethoscope size={20} color={tokens.primary} />
           </div>
           <div>
@@ -481,7 +481,7 @@ export default function AnalysisPage() {
                 </span>
               </label>
               {/* Polished textarea with gutter */}
-              <div style={{ position: "relative", borderRadius: 12, border: `1px solid ${tokens.slate200}`, overflow: "hidden", transition: "border-color 0.2s, box-shadow 0.2s" }}
+              <div style={{ position: "relative", borderRadius: 10, border: `1px solid ${tokens.slate200}`, overflow: "hidden", transition: "border-color 0.2s, box-shadow 0.2s" }}
                 className="focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400"
               >
                 {/* Line number gutter */}

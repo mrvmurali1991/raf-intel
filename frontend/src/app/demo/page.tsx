@@ -321,10 +321,10 @@ function MEATGrid({ meat, size = "normal" }: { meat: { M?: string; E?: string; A
   const t = meat.T ?? meat.treatment ?? "";
 
   const items = [
-    { label: "M", title: "MONITOR", value: m },
-    { label: "E", title: "EVALUATE", value: e },
-    { label: "A", title: "ASSESS", value: a },
-    { label: "T", title: "TREAT", value: t },
+    { label: "M", title: "Monitor", value: m },
+    { label: "E", title: "Evaluate", value: e },
+    { label: "A", title: "Assess", value: a },
+    { label: "T", title: "Treat", value: t },
   ];
 
   return (
@@ -555,11 +555,11 @@ function Step2Content({ data, negatedConditions }: { data: any; negatedCondition
                 <TableCell className="text-center">
                   {row.kept ? (
                     <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-xs">
-                      KEPT
+                      Kept
                     </Badge>
                   ) : (
                     <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 text-xs">
-                      REMOVED
+                      Removed
                     </Badge>
                   )}
                 </TableCell>
@@ -2772,7 +2772,7 @@ export default function DemoPage() {
             style={{
               height: 44,
               width: 44,
-              borderRadius: 12,
+              borderRadius: 10,
               background: C_DEMO.accentSoft,
               display: "flex",
               alignItems: "center",
@@ -2818,7 +2818,7 @@ export default function DemoPage() {
         style={{
           background: C_DEMO.bgCard,
           border: `1px solid ${C_DEMO.border}`,
-          borderRadius: 16,
+          borderRadius: 14,
           boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
         }}
       >
@@ -2842,7 +2842,7 @@ export default function DemoPage() {
               style={{
                 background: tokens.slate100,
                 border: `1px solid ${C_DEMO.border}`,
-                borderRadius: 12,
+                borderRadius: 10,
               }}
             >
               <button
@@ -3165,7 +3165,7 @@ export default function DemoPage() {
           style={{
             background: C_DEMO.bgCard,
             border: `1px solid ${C_DEMO.border}`,
-            borderRadius: 16,
+            borderRadius: 14,
             boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
           }}
         >
@@ -3259,7 +3259,7 @@ export default function DemoPage() {
           style={{
             background: C_DEMO.bgCard,
             border: `1px solid ${C_DEMO.accent}`,
-            borderRadius: 16,
+            borderRadius: 14,
             boxShadow: "0 4px 12px rgba(79, 70, 229, 0.10)",
           }}
         >
@@ -3330,7 +3330,7 @@ export default function DemoPage() {
                     ? tokens.dangerBorder
                     : C_DEMO.border
                 }`,
-                borderRadius: 16,
+                borderRadius: 14,
                 boxShadow:
                   status === "running"
                     ? "0 4px 12px rgba(79, 70, 229, 0.10)"
@@ -3405,7 +3405,7 @@ export default function DemoPage() {
           style={{
             background: C_DEMO.bgCard,
             border: `1px dashed ${C_DEMO.border}`,
-            borderRadius: 16,
+            borderRadius: 14,
           }}
         >
           <CardContent className="py-4">

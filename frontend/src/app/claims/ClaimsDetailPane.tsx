@@ -112,7 +112,7 @@ function ClaimsTabContent({ q }: { q: QState<{ claims: ClaimRecord[]; total: num
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.slate800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
                 {c.patient_name ?? "—"}
-                {matched && <span title={`Matched to OpenEMR pid ${c.openemr_pid}`} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 999, background: C.emeraldSoft, color: C.emerald, border: `1px solid ${C.emerald}33` }}>MATCHED</span>}
+                {matched && <span title={`Matched to OpenEMR pid ${c.openemr_pid}`} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 999, background: C.emeraldSoft, color: C.emerald, border: `1px solid ${C.emerald}33` }}>Matched</span>}
               </div>
               {c.member_id && <div style={{ fontSize: 11, color: C.slate400, fontFamily: "ui-monospace, monospace" }}>{c.member_id}</div>}
             </div>
@@ -228,7 +228,7 @@ export default function ClaimsDetailPane({ batchId }: { batchId: number }) {
   ];
 
   return (
-    <div style={{ background: C.white, borderRadius: 12, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
+    <div style={{ background: C.white, borderRadius: 10, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
       {/* Tab bar */}
       <div style={{ display: "flex", borderBottom: `1px solid ${C.slate200}`, background: C.slate50, overflowX: "auto" }}>
         {tabs.map((t) => {

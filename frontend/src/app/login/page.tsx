@@ -713,7 +713,7 @@ export default function LoginPage() {
             mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
           }`}
         >
-          <div className="space-y-8 glass-frosted shadow-2xl shadow-slate-200/40 dark:shadow-black/40 p-9 sm:p-11 rounded-[2rem]">
+          <div className="space-y-8 glass-frosted shadow-2xl shadow-slate-200/40 dark:shadow-black/40 p-9 sm:p-11 rounded-2xl">
             {/* Brand area inside card */}
             <div className="flex flex-col items-center lg:items-start gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 via-teal-400 to-blue-500 shadow-lg shadow-teal-500/25 text-white ring-4 ring-teal-500/10 lg:hidden">

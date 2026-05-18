@@ -731,6 +731,13 @@ export default function PatientDetailPage({
         privacyMode={privacyMode}
         onPrivacyToggle={() => setPrivacyMode((v) => !v)}
         lastVisitDate={lastVisitDate}
+        encounters={encountersQ.data?.encounters ?? (Array.isArray(encountersQ.data) ? encountersQ.data : [])}
+        rafScore={rafScore}
+        dataQuality={dataQuality}
+        suspectCount={suspectCount}
+        onAnalyzeAll={() => batchMutation.mutate()}
+        onGenerateAudit={() => auditMutation.mutate(undefined)}
+        onCalculateRAF={() => handleTabChange("raf")}
       />
 
       {/* Print-only patient header */}
@@ -954,7 +961,7 @@ export default function PatientDetailPage({
                     color: rafSubTab === pill.id ? C.white : C.slate600,
                     background: rafSubTab === pill.id ? C.blue600 : C.white,
                     border: `1px solid ${rafSubTab === pill.id ? C.blue600 : C.slate200}`,
-                    borderRadius: 20, cursor: "pointer", transition: "all 0.15s",
+                    borderRadius: 14, cursor: "pointer", transition: "all 0.15s",
                   }}
                 >
                   {pill.label}

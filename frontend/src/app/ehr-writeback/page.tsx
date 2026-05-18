@@ -50,7 +50,7 @@ function StatusChip({ status }: { status: EhrWriteBackQueueItem["status"] }) {
         alignItems: "center",
         gap: 4,
         padding: "3px 9px",
-        borderRadius: 20,
+        borderRadius: 14,
         fontSize: 11.5,
         fontWeight: 600,
         background: cfg.bg,
@@ -163,7 +163,7 @@ export default function EhrWriteBackPage() {
             onClick={() => setStatusFilter(s)}
             style={{
               padding: "6px 14px",
-              borderRadius: 20,
+              borderRadius: 14,
               border: "1.5px solid",
               borderColor: statusFilter === s ? "#2563eb" : "#e2e8f0",
               background: statusFilter === s ? "#eff6ff" : "#fff",
@@ -183,7 +183,7 @@ export default function EhrWriteBackPage() {
       <div
         style={{
           background: "#fff",
-          borderRadius: 12,
+          borderRadius: 10,
           border: "1px solid #e2e8f0",
           overflow: "hidden",
         }}

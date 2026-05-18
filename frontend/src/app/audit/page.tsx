@@ -14,7 +14,7 @@ import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 const RadvScenariosCard = dynamic(() => import("./AuditRadvScenariosCard"), {
   ssr: false,
   loading: () => (
-    <div style={{ backgroundColor: "#fff", borderRadius: 12, border: "1px solid #E2E8F0", marginBottom: 24, padding: "32px 24px" }}>
+    <div style={{ backgroundColor: "#fff", borderRadius: 10, border: "1px solid #E2E8F0", marginBottom: 24, padding: "32px 24px" }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
         <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "#F1F5F9" }} />
         <div style={{ width: 140, height: 14, borderRadius: 6, backgroundColor: "#F1F5F9" }} />
@@ -375,7 +375,7 @@ function AuditChainIntegrityCard() {
     <div
       style={{
         backgroundColor: "#fff",
-        borderRadius: 12,
+        borderRadius: 10,
         border: "2px solid #2563EB",
         overflow: "hidden",
         marginBottom: 24,
@@ -547,7 +547,7 @@ export default function AuditPage() {
 
   const cardStyle: React.CSSProperties = {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 10,
     border: "1px solid #E2E8F0",
     overflow: "hidden",
   };

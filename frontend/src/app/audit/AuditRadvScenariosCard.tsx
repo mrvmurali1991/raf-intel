@@ -42,7 +42,7 @@ export default function AuditRadvScenariosCard() {
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
-    <div style={{ backgroundColor: "#fff", borderRadius: 12, border: "1px solid #E2E8F0", overflow: "hidden", marginBottom: 24 }} aria-label="RADV Scenarios">
+    <div style={{ backgroundColor: "#fff", borderRadius: 10, border: "1px solid #E2E8F0", overflow: "hidden", marginBottom: 24 }} aria-label="RADV Scenarios">
       {/* Header */}
       <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 10, background: "linear-gradient(135deg, #F5F3FF 0%, #F8FAFC 100%)" }}>
         <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "#8B5CF6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

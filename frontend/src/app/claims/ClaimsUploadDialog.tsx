@@ -80,7 +80,7 @@ export default function ClaimsUploadDialog({ onClose, onUploaded }: ClaimsUpload
       onClick={(e) => { if (e.target === e.currentTarget && !uploading) onClose(); }}
       style={{ position: "fixed", inset: 0, zIndex: 100, padding: 16, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}
     >
-      <div className="animate-scale-in" style={{ width: "100%", maxWidth: 540, background: C.white, borderRadius: 16, boxShadow: "0 25px 60px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div className="animate-scale-in" style={{ width: "100%", maxWidth: 540, background: C.white, borderRadius: 14, boxShadow: "0 25px 60px rgba(0,0,0,0.22)", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: `1px solid ${C.slate200}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -109,14 +109,14 @@ export default function ClaimsUploadDialog({ onClose, onUploaded }: ClaimsUpload
             <input ref={inputRef} type="file" accept={ACCEPTED_EXT.join(",")} onChange={(e) => pick(e.target.files?.[0])} style={{ display: "none" }} />
             {file ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: `${C.emerald}1A`, color: C.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={22} /></div>
+                <div style={{ width: 48, height: 48, borderRadius: 10, background: `${C.emerald}1A`, color: C.emerald, display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={22} /></div>
                 <div className="text-foreground" style={{ fontSize: 14, fontWeight: 600 }}>{file.name}</div>
                 <div className="text-muted-foreground" style={{ fontSize: 12 }}>{(file.size / 1024).toFixed(1)} KB</div>
                 {!uploading && <button onClick={(e) => { e.stopPropagation(); setFile(null); }} style={{ marginTop: 4, background: "none", border: "none", fontSize: 12, color: C.slate500, cursor: "pointer", textDecoration: "underline" }}>Replace file</button>}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: C.slate100, color: C.slate400, display: "flex", alignItems: "center", justifyContent: "center" }}><Upload size={22} /></div>
+                <div style={{ width: 48, height: 48, borderRadius: 10, background: C.slate100, color: C.slate400, display: "flex", alignItems: "center", justifyContent: "center" }}><Upload size={22} /></div>
                 <div>
                   <p className="text-foreground" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Drop a claims file here</p>
                   <p className="text-muted-foreground" style={{ margin: "4px 0 0", fontSize: 12 }}>or click to browse — {ACCEPTED_EXT.join(", ")}</p>

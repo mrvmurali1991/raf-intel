@@ -727,7 +727,7 @@ function ConnectionCard({ conn, onEdit, onDelete, onTest, onSync, onToggleActive
   return (
     <div className={`premium-card hover-lift animate-fade-in ${conn.status === "error" ? "card-glow-rose" : conn.status === "active" ? "card-glow-emerald" : ""}`} style={{
       overflow: "hidden",
-      borderRadius: 12,
+      borderRadius: 10,
     }}>
       {/* Main row */}
       <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
@@ -1633,7 +1633,7 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        background: C.white, borderRadius: 16, width: "100%", maxWidth: 520,
+        background: C.white, borderRadius: 14, width: "100%", maxWidth: 520,
         padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
         position: "relative",
       }}>
@@ -1654,7 +1654,7 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
             <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 2 }}>SMART on FHIR 2.0 with PKCE</div>
           </div>
           <span style={{
-            marginLeft: "auto", padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+            marginLeft: "auto", padding: "4px 10px", borderRadius: 14, fontSize: 10, fontWeight: 700,
             background: "#4F46E518", color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.06em",
           }}>
             Epic
@@ -2177,7 +2177,7 @@ export default function EmrConfigPage() {
         }}>
           <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              width: 44, height: 44, borderRadius: 10, flexShrink: 0,
               background: "#4F46E518", display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <Zap size={22} style={{ color: "#4F46E5" }} />
@@ -2186,7 +2186,7 @@ export default function EmrConfigPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Epic SMART on FHIR</span>
                 <span style={{
-                  padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+                  padding: "2px 8px", borderRadius: 14, fontSize: 10, fontWeight: 700,
                   background: "#4F46E518", color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.06em",
                 }}>
                   Available
@@ -2257,7 +2257,7 @@ export default function EmrConfigPage() {
             <div style={{ padding: "48px 24px", textAlign: "center" }}>
               <div style={{
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 60, height: 60, borderRadius: 16,
+                width: 60, height: 60, borderRadius: 14,
                 backgroundColor: C.blue100, color: C.blue600, marginBottom: 16,
               }}>
                 <Database size={28} />
@@ -2368,7 +2368,7 @@ export default function EmrConfigPage() {
           style={{
             position: "fixed", bottom: 24, right: 24, zIndex: 200,
             padding: "14px 20px",
-            borderRadius: 12,
+            borderRadius: 10,
             backgroundColor: toast.type === "success" ? C.emerald600 : C.red600,
             color: C.white,
             fontSize: 13, fontWeight: 600,

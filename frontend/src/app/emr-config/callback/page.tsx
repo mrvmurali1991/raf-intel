@@ -47,7 +47,7 @@ export default function OAuth2CallbackPage() {
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
       <div style={{
-        maxWidth: 440, width: "100%", padding: 32, borderRadius: 12,
+        maxWidth: 440, width: "100%", padding: 32, borderRadius: 10,
         background: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,0.08)", textAlign: "center",
       }}>
         {status === "loading" && (

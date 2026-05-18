@@ -634,7 +634,7 @@ function Modal(props: { title: string; children: React.ReactNode; actions: React
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
     }}>
       <div style={{
-        background: T.white, borderRadius: 12, width: 720, maxWidth: "95vw",
+        background: T.white, borderRadius: 10, width: 720, maxWidth: "95vw",
         maxHeight: "90vh", display: "flex", flexDirection: "column",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.slate200}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>

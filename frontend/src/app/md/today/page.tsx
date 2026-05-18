@@ -635,7 +635,7 @@ function EmptyState({
         padding: "72px 24px",
         background: "#fff",
         border: "1px solid #e2e8f0",
-        borderRadius: 16,
+        borderRadius: 14,
         textAlign: "center",
         gap: 12,
       }}
@@ -729,7 +729,7 @@ function HuddleSkeleton() {
           style={{
             background: "#fff",
             border: "1px solid #e2e8f0",
-            borderRadius: 12,
+            borderRadius: 10,
             padding: 16,
             boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
           }}
@@ -876,7 +876,7 @@ function HuddleCard({
         border: `1px solid ${focused ? "#0EA5E9" : "#e2e8f0"}`,
         outline: focused ? "2px solid #0EA5E9" : "none",
         outlineOffset: -2,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
         boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
         position: "relative",

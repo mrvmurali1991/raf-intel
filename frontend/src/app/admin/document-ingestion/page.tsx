@@ -220,7 +220,7 @@ function KpiStrip({ kpis }: { kpis: KpiData | undefined }) {
           style={{
             backgroundColor: T.card,
             border: `1px solid ${T.border}`,
-            borderRadius: 12,
+            borderRadius: 10,
             padding: "18px 20px",
           }}
         >
@@ -277,7 +277,7 @@ function SourceCard({ card, meta, active, onSelect }: SourceCardProps) {
       style={{
         backgroundColor: T.card,
         border: `2px solid ${active ? T.accent : T.border}`,
-        borderRadius: 12,
+        borderRadius: 10,
         padding: "16px",
         display: "flex",
         flexDirection: "column",
@@ -813,7 +813,7 @@ function DocumentIngestionPageInner() {
                     height: 180,
                     backgroundColor: T.card,
                     border: `1px solid ${T.border}`,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     animation: "pulse 1.5s ease-in-out infinite",
                   }}
                   aria-hidden="true"
@@ -864,7 +864,7 @@ function DocumentIngestionPageInner() {
             style={{
               backgroundColor: T.card,
               border: `1px solid ${T.border}`,
-              borderRadius: 12,
+              borderRadius: 10,
               overflow: "hidden",
             }}
           >

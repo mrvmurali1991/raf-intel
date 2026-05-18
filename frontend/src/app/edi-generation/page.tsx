@@ -67,7 +67,7 @@ const T = {
 const card: React.CSSProperties = {
   background: T.white,
   border: `1px solid ${T.border}`,
-  borderRadius: 12,
+  borderRadius: 10,
   padding: 20,
   marginBottom: 16,
 };
