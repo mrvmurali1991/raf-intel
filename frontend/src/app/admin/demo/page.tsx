@@ -6,7 +6,8 @@
  * 5-section scroll-snapped walkthrough for CMO / MA-plan exec demos.
  * Role-gated: admin | manager only.
  *
- * Sections:
+ * Sections
+ * --------
  *   1. Hero          — animated stat counters from live tenant data
  *   2. NLP Mining    — 3 highlighted suspect extractions from clinical notes
  *   3. Doc Ingestion — 9 source cards with live status + animated connector
@@ -18,9 +19,9 @@
  *   - "Reset demo data"  — admin-only, calls POST /api/admin/demo/reset
  *
  * Accessibility:
- *   - prefers-reduced-motion disables CSS animations and auto-scroll
- *   - Page Up / Page Down keyboard navigation between sections
- *   - axe-core 0 violations target
+ *   - prefers-reduced-motion disables CSS animations and auto-scroll behavior
+ *   - Page Down / Page Up navigates between sections
+ *   - aria-labels on all interactive elements (axe-core 0 violations target)
  */
 
 import React, {
@@ -62,29 +63,32 @@ import api from "@/lib/api";
 import { tokens } from "@/styles/tokens";
 
 // ---------------------------------------------------------------------------
-// Constants
+// Color palette
 // ---------------------------------------------------------------------------
 
-const NAVY = "#0B1437";
-const NAVY_MID = "#0D1A45";
+const NAVY       = "#0B1437";
+const NAVY_MID   = "#0D1A45";
 const NAVY_LIGHT = "#132054";
-const GOLD = "#F59E0B";
-const GOLD_SOFT = "#FEF3C7";
-const WHITE = tokens.white;
-const SLATE50 = tokens.slate50;
-const SLATE100 = tokens.slate100;
-const SLATE200 = tokens.slate200;
-const SLATE700 = tokens.slate700;
-const SLATE800 = tokens.slate800;
-const PRIMARY = tokens.primary;
-const SUCCESS = tokens.success;
-const TEAL = tokens.teal700;
+const GOLD       = "#F59E0B";
+const GOLD_SOFT  = "#FEF3C7";
+const WHITE      = tokens.white;
+const SLATE50    = tokens.slate50;
+const SLATE200   = tokens.slate200;
+const SLATE700   = tokens.slate700;
+const SLATE800   = tokens.slate800;
+const PRIMARY    = tokens.primary;
+const SUCCESS    = tokens.success;
+const TEAL       = tokens.teal700;
+
+// ---------------------------------------------------------------------------
+// Section identifiers
+// ---------------------------------------------------------------------------
 
 const SECTION_IDS = ["hero", "nlp", "ingestion", "huddle", "audit"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
 // ---------------------------------------------------------------------------
-// Live-data fetching helpers
+// API types
 // ---------------------------------------------------------------------------
 
 interface DemoStats {
@@ -115,6 +119,10 @@ interface IngestionDashboard {
   sources: IngestionSource[];
 }
 
+// ---------------------------------------------------------------------------
+// API fetchers
+// ---------------------------------------------------------------------------
+
 async function fetchDemoStats(): Promise<DemoStats> {
   const { data } = await api.get<DemoStats>("/api/admin/demo/stats");
   return data;
@@ -133,14 +141,12 @@ async function fetchIngestionDashboard(): Promise<IngestionDashboard> {
 }
 
 async function postDemoReset(): Promise<{ job_id: string }> {
-  const { data } = await api.post<{ job_id: string }>(
-    "/api/admin/demo/reset"
-  );
+  const { data } = await api.post<{ job_id: string }>("/api/admin/demo/reset");
   return data;
 }
 
 // ---------------------------------------------------------------------------
-// Stat Counter animation hook
+// Animated count-up hook
 // ---------------------------------------------------------------------------
 
 function useCountUp(
@@ -156,11 +162,12 @@ function useCountUp(
       setValue(target);
       return;
     }
+    if (target === 0) return;
     const start = performance.now();
     function tick(now: number) {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
+      // Ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(target * eased));
       if (progress < 1) {
@@ -175,7 +182,7 @@ function useCountUp(
 }
 
 // ---------------------------------------------------------------------------
-// Number formatting helpers
+// Formatting helpers
 // ---------------------------------------------------------------------------
 
 function fmtCount(n: number): string {
@@ -195,10 +202,71 @@ function fmtRaf(n: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Fallback data (shown when backend endpoints are unavailable)
 // ---------------------------------------------------------------------------
 
-// ---- Stat Counter tile ----
+const FALLBACK_STATS: DemoStats = {
+  patient_count: 12480,
+  avg_raf_score: 118, // ÷100 in UI = 1.18
+  suspects_ytd: 3740,
+  revenue_at_stake: 4_200_000,
+};
+
+const FALLBACK_SUSPECTS: SuspectRow[] = [
+  {
+    id: 1,
+    patient_initials: "J.M.",
+    hcc_label: "Chronic Kidney Disease, Stage 3",
+    icd10: "N18.3",
+    confidence: 0.92,
+    evidence_sentence:
+      "eGFR consistently below 45 mL/min/1.73m² for the past 18 months per lab records dated 2024-11-08.",
+    page_number: 4,
+    source_doc: "Nephrology Consult Note 2024-11-12",
+  },
+  {
+    id: 2,
+    patient_initials: "R.T.",
+    hcc_label: "Major Depressive Disorder, Moderate",
+    icd10: "F32.1",
+    confidence: 0.87,
+    evidence_sentence:
+      "Patient endorses persistent depressed mood, anhedonia, and sleep disturbance consistent with MDD per PHQ-9 score of 14.",
+    page_number: 2,
+    source_doc: "Behavioral Health Assessment 2025-01-20",
+  },
+  {
+    id: 3,
+    patient_initials: "A.K.",
+    hcc_label: "Peripheral Vascular Disease",
+    icd10: "I73.9",
+    confidence: 0.83,
+    evidence_sentence:
+      "ABI of 0.72 bilaterally noted; claudication symptoms reported with ambulation > 1 block.",
+    page_number: 7,
+    source_doc: "Vascular Surgery Consult 2025-02-03",
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Source metadata (9 ingestion sources)
+// ---------------------------------------------------------------------------
+
+const SOURCE_META = [
+  { id: "fhir-bulk",   name: "FHIR Bulk",   icon: Cloud },
+  { id: "fhir-docref", name: "FHIR DocRef", icon: FileText },
+  { id: "hl7v2-mdm",   name: "HL7 v2",      icon: Server },
+  { id: "direct-ccda", name: "Direct",       icon: Link2 },
+  { id: "hie",         name: "HIE",          icon: Database },
+  { id: "datavant",    name: "Datavant",     icon: FlaskConical },
+  { id: "inovalon",    name: "Inovalon",     icon: Zap },
+  { id: "reveleer",    name: "Reveleer",     icon: FileStack },
+  { id: "openemr",     name: "OpenEMR",      icon: Activity },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 interface StatTileProps {
   icon: React.ReactNode;
@@ -236,6 +304,7 @@ function StatTile({ icon, label, value, format, reducedMotion }: StatTileProps) 
           justifyContent: "center",
           color: GOLD,
         }}
+        aria-hidden="true"
       >
         {icon}
       </div>
@@ -260,9 +329,9 @@ function StatTile({ icon, label, value, format, reducedMotion }: StatTileProps) 
   );
 }
 
-// ---- Ingestion Source card ----
+// ---- Ingestion source card ----
 
-interface SourceCardProps {
+interface IngestionCardProps {
   id: string;
   name: string;
   icon: React.ComponentType<{ style?: CSSProperties }>;
@@ -279,7 +348,7 @@ function IngestionCard({
   docs24h,
   highlighted,
   onClick,
-}: SourceCardProps) {
+}: IngestionCardProps) {
   const statusColor =
     status === "active"
       ? SUCCESS
@@ -287,11 +356,7 @@ function IngestionCard({
       ? tokens.warningStrong
       : tokens.slate400;
   const statusLabel =
-    status === "active"
-      ? "Active"
-      : status === "idle"
-      ? "Idle"
-      : "Not configured";
+    status === "active" ? "Active" : status === "idle" ? "Idle" : "Not configured";
 
   return (
     <button
@@ -303,9 +368,7 @@ function IngestionCard({
         gap: 10,
         padding: "20px 14px",
         borderRadius: 14,
-        border: highlighted
-          ? `2px solid ${GOLD}`
-          : `1px solid ${SLATE200}`,
+        border: highlighted ? `2px solid ${GOLD}` : `1px solid ${SLATE200}`,
         backgroundColor: highlighted ? GOLD_SOFT : WHITE,
         cursor: "pointer",
         transition: "all 250ms cubic-bezier(0.4,0,0.2,1)",
@@ -314,6 +377,7 @@ function IngestionCard({
           : "0 1px 4px rgba(0,0,0,0.05)",
         transform: highlighted ? "scale(1.04)" : "scale(1)",
         textAlign: "center",
+        width: "100%",
       }}
       aria-label={`${name} — ${statusLabel}`}
       aria-pressed={highlighted}
@@ -323,12 +387,13 @@ function IngestionCard({
           width: 42,
           height: 42,
           borderRadius: 10,
-          backgroundColor: highlighted ? "rgba(245,158,11,0.12)" : SLATE100,
+          backgroundColor: highlighted ? "rgba(245,158,11,0.12)" : tokens.slate100,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: highlighted ? GOLD : SLATE700,
         }}
+        aria-hidden="true"
       >
         <Icon style={{ width: 20, height: 20 }} />
       </div>
@@ -380,6 +445,7 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       aria-label={`Suspect: ${suspect.hcc_label}. Click to see evidence.`}
+      aria-pressed={isHighlighted}
     >
       <div
         style={{
@@ -417,21 +483,14 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
             padding: "3px 10px",
             borderRadius: 20,
             whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
         >
           {confidencePct}% confidence
         </div>
       </div>
 
-      {/* Evidence sentence with yellow highlight on show-me */}
-      <p
-        style={{
-          fontSize: 13,
-          lineHeight: 1.7,
-          color: tokens.slate600,
-          margin: 0,
-        }}
-      >
+      <p style={{ fontSize: 13, lineHeight: 1.7, color: tokens.slate600, margin: 0 }}>
         {isHighlighted ? (
           <>
             <mark
@@ -444,19 +503,13 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
             >
               {suspect.evidence_sentence}
             </mark>{" "}
-            <span
-              style={{
-                fontSize: 11,
-                color: tokens.slate500,
-                marginLeft: 4,
-              }}
-            >
+            <span style={{ fontSize: 11, color: tokens.slate500, marginLeft: 4 }}>
               (p. {suspect.page_number} — {suspect.source_doc})
             </span>
           </>
         ) : (
           <span style={{ color: tokens.slate400, fontStyle: "italic" }}>
-            &ldquo;{suspect.evidence_sentence.slice(0, 80)}…&rdquo;
+            &ldquo;{suspect.evidence_sentence.slice(0, 80)}&hellip;&rdquo;
           </span>
         )}
       </p>
@@ -473,7 +526,7 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
             fontWeight: 600,
           }}
         >
-          <Search style={{ width: 12, height: 12 }} />
+          <Search style={{ width: 12, height: 12 }} aria-hidden="true" />
           Show me
         </div>
       )}
@@ -482,70 +535,7 @@ function SuspectItem({ suspect, isHighlighted, onClick }: SuspectItemProps) {
 }
 
 // ---------------------------------------------------------------------------
-// FALLBACK DATA — shown when backend endpoints are not yet available
-// ---------------------------------------------------------------------------
-
-const FALLBACK_STATS: DemoStats = {
-  patient_count: 12480,
-  avg_raf_score: 118, // / 100 => 1.18
-  suspects_ytd: 3740,
-  revenue_at_stake: 4200000,
-};
-
-const FALLBACK_SUSPECTS: SuspectRow[] = [
-  {
-    id: 1,
-    patient_initials: "J.M.",
-    hcc_label: "Chronic Kidney Disease, Stage 3",
-    icd10: "N18.3",
-    confidence: 0.92,
-    evidence_sentence:
-      "eGFR consistently below 45 mL/min/1.73m² for the past 18 months per lab records dated 2024-11-08.",
-    page_number: 4,
-    source_doc: "Nephrology Consult Note 2024-11-12",
-  },
-  {
-    id: 2,
-    patient_initials: "R.T.",
-    hcc_label: "Major Depressive Disorder, Moderate",
-    icd10: "F32.1",
-    confidence: 0.87,
-    evidence_sentence:
-      "Patient endorses persistent depressed mood, anhedonia, and sleep disturbance consistent with MDD per PHQ-9 score of 14.",
-    page_number: 2,
-    source_doc: "Behavioral Health Assessment 2025-01-20",
-  },
-  {
-    id: 3,
-    patient_initials: "A.K.",
-    hcc_label: "Peripheral Vascular Disease",
-    icd10: "I73.9",
-    confidence: 0.83,
-    evidence_sentence:
-      "ABI of 0.72 bilaterally noted; claudication symptoms reported with ambulation > 1 block.",
-    page_number: 7,
-    source_doc: "Vascular Surgery Consult 2025-02-03",
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Source metadata (mirrors document-ingestion page)
-// ---------------------------------------------------------------------------
-
-const SOURCE_META = [
-  { id: "fhir-bulk",   name: "FHIR Bulk",   icon: Cloud },
-  { id: "fhir-docref", name: "FHIR DocRef", icon: FileText },
-  { id: "hl7v2-mdm",   name: "HL7 v2",      icon: Server },
-  { id: "direct-ccda", name: "Direct",       icon: Link2 },
-  { id: "hie",         name: "HIE",          icon: Database },
-  { id: "datavant",    name: "Datavant",     icon: FlaskConical },
-  { id: "inovalon",    name: "Inovalon",     icon: Zap },
-  { id: "reveleer",    name: "Reveleer",     icon: FileStack },
-  { id: "openemr",     name: "OpenEMR",      icon: Activity },
-] as const;
-
-// ---------------------------------------------------------------------------
-// Main component
+// Main page component
 // ---------------------------------------------------------------------------
 
 export default function AdminDemoPage() {
@@ -573,7 +563,7 @@ export default function AdminDemoPage() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // ---- Scroll-snap refs ----
+  // ---- Scroll container / section refs ----
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
     hero: null,
@@ -583,8 +573,10 @@ export default function AdminDemoPage() {
     audit: null,
   });
 
-  // ---- Section state ----
+  // ---- Active section tracking ----
   const [activeSection, setActiveSection] = useState<SectionId>("hero");
+
+  // ---- Tour state ----
   const [tourRunning, setTourRunning] = useState(false);
   const tourTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -594,21 +586,19 @@ export default function AdminDemoPage() {
   // ---- Ingestion section state ----
   const [highlightedSource, setHighlightedSource] = useState<string | null>(null);
 
-  // ---- Data fetching ----
+  // ---- Data ----
   const { data: statsData } = useQuery({
     queryKey: ["demo-stats"],
     queryFn: fetchDemoStats,
     retry: false,
     staleTime: 60_000,
   });
-
   const { data: suspectsData } = useQuery({
     queryKey: ["demo-suspects"],
     queryFn: fetchDemoSuspects,
     retry: false,
     staleTime: 60_000,
   });
-
   const { data: ingestionData } = useQuery({
     queryKey: ["demo-ingestion-dashboard"],
     queryFn: fetchIngestionDashboard,
@@ -616,12 +606,11 @@ export default function AdminDemoPage() {
     staleTime: 60_000,
   });
 
-  const stats = statsData ?? FALLBACK_STATS;
+  const stats    = statsData ?? FALLBACK_STATS;
   const suspects = (suspectsData && suspectsData.length > 0)
     ? suspectsData.slice(0, 3)
     : FALLBACK_SUSPECTS;
 
-  // Build source status map from API data
   const sourceStatusMap = new Map<string, IngestionSource>(
     (ingestionData?.sources ?? []).map((s) => [s.id, s])
   );
@@ -687,21 +676,17 @@ export default function AdminDemoPage() {
     setTourRunning(false);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
-    };
-  }, []);
+  useEffect(() => () => { if (tourTimerRef.current) clearTimeout(tourTimerRef.current); }, []);
 
-  // ---- Keyboard navigation ----
+  // ---- Keyboard navigation (Page Up / Page Down) ----
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       const currentIdx = SECTION_IDS.indexOf(activeSection);
-      if (e.key === "PageDown" || e.key === "ArrowDown") {
+      if (e.key === "PageDown" || (e.key === "ArrowDown" && e.altKey)) {
         e.preventDefault();
         const next = SECTION_IDS[Math.min(currentIdx + 1, SECTION_IDS.length - 1)];
         scrollToSection(next);
-      } else if (e.key === "PageUp" || e.key === "ArrowUp") {
+      } else if (e.key === "PageUp" || (e.key === "ArrowUp" && e.altKey)) {
         e.preventDefault();
         const prev = SECTION_IDS[Math.max(currentIdx - 1, 0)];
         scrollToSection(prev);
@@ -713,49 +698,7 @@ export default function AdminDemoPage() {
 
   if (user && !isAdmin && !isManager) return null;
 
-  // ---- Common section header style ----
-  const SectionHeading = ({
-    children,
-    dark = false,
-  }: {
-    children: React.ReactNode;
-    dark?: boolean;
-  }) => (
-    <h2
-      style={{
-        fontSize: "clamp(28px, 4vw, 44px)",
-        fontWeight: 800,
-        color: dark ? WHITE : SLATE800,
-        letterSpacing: "-0.025em",
-        lineHeight: 1.15,
-        marginBottom: 12,
-      }}
-    >
-      {children}
-    </h2>
-  );
-
-  const SectionSubtext = ({
-    children,
-    dark = false,
-  }: {
-    children: React.ReactNode;
-    dark?: boolean;
-  }) => (
-    <p
-      style={{
-        fontSize: 16,
-        color: dark ? "rgba(255,255,255,0.65)" : tokens.slate500,
-        lineHeight: 1.7,
-        maxWidth: 560,
-        margin: 0,
-      }}
-    >
-      {children}
-    </p>
-  );
-
-  // ---- Section wrapper style ----
+  // ---- Reusable style helpers ----
   function sectionStyle(bg: string, minH = 700): CSSProperties {
     return {
       minHeight: minH,
@@ -776,25 +719,34 @@ export default function AdminDemoPage() {
 
   return (
     <>
-      {/* Animation keyframes (gated on !prefers-reduced-motion) */}
+      {/* Global keyframe animations — suppressed by prefers-reduced-motion */}
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           @keyframes fadeSlideUp {
-            from { opacity: 0; transform: translateY(24px); }
+            from { opacity: 0; transform: translateY(20px); }
             to   { opacity: 1; transform: translateY(0); }
           }
           @keyframes pulseGold {
             0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
             50%      { box-shadow: 0 0 0 8px rgba(245,158,11,0.2); }
           }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+          }
           .demo-section > * { animation: fadeSlideUp 0.5s ease both; }
-          .demo-gold-pulse  { animation: pulseGold 2s ease-in-out infinite; }
+          .demo-gold-pulse  { animation: pulseGold 2.5s ease-in-out infinite; }
+          .spin-icon        { animation: spin 1s linear infinite; }
         }
-        :focus-visible { outline: 3px solid #F59E0B; outline-offset: 2px; border-radius: 4px; }
+        :focus-visible {
+          outline: 3px solid #F59E0B;
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
       `}</style>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Fixed demo controls (top-right)                                     */}
+      {/* Fixed demo controls — top-right                                     */}
       {/* ------------------------------------------------------------------ */}
       <div
         style={{
@@ -808,7 +760,7 @@ export default function AdminDemoPage() {
         }}
         aria-label="Demo controls"
       >
-        {/* Section dots */}
+        {/* Section progress dots */}
         <div
           role="tablist"
           aria-label="Demo sections"
@@ -826,8 +778,7 @@ export default function AdminDemoPage() {
                 height: 8,
                 borderRadius: 4,
                 border: "none",
-                backgroundColor:
-                  activeSection === id ? GOLD : "rgba(255,255,255,0.4)",
+                backgroundColor: activeSection === id ? GOLD : "rgba(15,20,55,0.3)",
                 cursor: "pointer",
                 transition: "all 250ms",
                 padding: 0,
@@ -836,10 +787,10 @@ export default function AdminDemoPage() {
           ))}
         </div>
 
-        {/* Start / stop tour button */}
+        {/* Start / stop tour */}
         <button
           onClick={tourRunning ? stopTour : startTour}
-          className="demo-gold-pulse"
+          className={tourRunning ? undefined : "demo-gold-pulse"}
           style={{
             display: "flex",
             alignItems: "center",
@@ -852,19 +803,19 @@ export default function AdminDemoPage() {
             fontSize: 13,
             fontWeight: 700,
             cursor: "pointer",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.2)",
             transition: "background-color 200ms",
           }}
           aria-label={tourRunning ? "Stop demo tour" : "Start demo tour"}
         >
           {tourRunning ? (
             <>
-              <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+              <Loader2 className="spin-icon" style={{ width: 14, height: 14 }} aria-hidden="true" />
               Stop tour
             </>
           ) : (
             <>
-              <Play style={{ width: 14, height: 14 }} />
+              <Play style={{ width: 14, height: 14 }} aria-hidden="true" />
               Start demo tour
             </>
           )}
@@ -888,21 +839,15 @@ export default function AdminDemoPage() {
               fontWeight: 600,
               cursor: resetMutation.isPending ? "not-allowed" : "pointer",
               opacity: resetMutation.isPending ? 0.7 : 1,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             }}
             aria-label="Reset demo data"
             title="Re-seeds realistic demo data (admin only)"
           >
             {resetMutation.isPending ? (
-              <Loader2
-                style={{
-                  width: 14,
-                  height: 14,
-                  animation: "spin 1s linear infinite",
-                }}
-              />
+              <Loader2 className="spin-icon" style={{ width: 14, height: 14 }} aria-hidden="true" />
             ) : (
-              <RotateCcw style={{ width: 14, height: 14 }} />
+              <RotateCcw style={{ width: 14, height: 14 }} aria-hidden="true" />
             )}
             {resetMutation.isSuccess
               ? resetJobId
@@ -942,7 +887,7 @@ export default function AdminDemoPage() {
           aria-label="Section 1: Platform overview"
           tabIndex={-1}
         >
-          {/* Decorative accent */}
+          {/* Decorative radial glow */}
           <div
             aria-hidden="true"
             style={{
@@ -971,29 +916,40 @@ export default function AdminDemoPage() {
                 marginBottom: 28,
               }}
             >
-              <Sparkles style={{ width: 14, height: 14, color: GOLD }} />
+              <Sparkles style={{ width: 14, height: 14, color: GOLD }} aria-hidden="true" />
               <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 RAF Intelligence — Executive Overview
               </span>
             </div>
 
-            <SectionHeading dark>
-              The complete HCC risk-adjustment platform — from clinical note to CMS submission.
-            </SectionHeading>
-
-            <div style={{ marginBottom: 52 }}>
-              <SectionSubtext dark>
-                One platform that mines suspects from unstructured notes, closes gaps at the point of care, and delivers an audit-ready evidence chain for every dollar captured.
-              </SectionSubtext>
-            </div>
-
-            {/* Stat counters */}
-            <div
+            <h1
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 16,
+                fontSize: "clamp(28px, 4vw, 48px)",
+                fontWeight: 800,
+                color: WHITE,
+                letterSpacing: "-0.025em",
+                lineHeight: 1.15,
+                marginBottom: 20,
               }}
+            >
+              The complete HCC risk-adjustment platform — from clinical note to CMS submission.
+            </h1>
+
+            <p
+              style={{
+                fontSize: 16,
+                color: "rgba(255,255,255,0.65)",
+                lineHeight: 1.7,
+                maxWidth: 560,
+                marginBottom: 52,
+              }}
+            >
+              One platform that mines suspects from unstructured notes, closes gaps at the point of care, and delivers an audit-ready evidence chain for every dollar captured.
+            </p>
+
+            {/* Stat counter tiles */}
+            <div
+              style={{ display: "flex", flexWrap: "wrap", gap: 16 }}
               aria-label="Key platform metrics"
             >
               <StatTile
@@ -1027,7 +983,7 @@ export default function AdminDemoPage() {
             </div>
 
             {/* Scroll cue */}
-            <div
+            <button
               style={{
                 marginTop: 48,
                 display: "flex",
@@ -1036,16 +992,16 @@ export default function AdminDemoPage() {
                 color: "rgba(255,255,255,0.4)",
                 fontSize: 12,
                 cursor: "pointer",
+                background: "none",
+                border: "none",
+                padding: 0,
               }}
               onClick={() => scrollToSection("nlp")}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && scrollToSection("nlp")}
-              aria-label="Scroll to next section"
+              aria-label="Scroll to NLP section"
             >
-              <ChevronDown style={{ width: 18, height: 18 }} />
+              <ChevronDown style={{ width: 18, height: 18 }} aria-hidden="true" />
               Scroll to see NLP mining
-            </div>
+            </button>
           </div>
         </section>
 
@@ -1075,22 +1031,38 @@ export default function AdminDemoPage() {
                 marginBottom: 20,
               }}
             >
-              <Search style={{ width: 13, height: 13, color: PRIMARY }} />
+              <Search style={{ width: 13, height: 13, color: PRIMARY }} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: PRIMARY, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 NLP Suspect Extraction
               </span>
             </div>
 
-            <SectionHeading>
+            <h2
+              style={{
+                fontSize: "clamp(26px, 3.5vw, 42px)",
+                fontWeight: 800,
+                color: SLATE800,
+                letterSpacing: "-0.025em",
+                lineHeight: 1.15,
+                marginBottom: 12,
+              }}
+            >
               Every clinical note, automatically mined for HCC suspects.
-            </SectionHeading>
-            <div style={{ marginBottom: 36 }}>
-              <SectionSubtext>
-                Our Gemini-powered NLP pipeline reads every uploaded note and surfaces suspect conditions with verbatim evidence sentences — so coders review, not hunt.
-              </SectionSubtext>
-            </div>
+            </h2>
 
-            {/* "Live" note mock */}
+            <p
+              style={{
+                fontSize: 16,
+                color: tokens.slate500,
+                lineHeight: 1.7,
+                maxWidth: 560,
+                marginBottom: 36,
+              }}
+            >
+              Our Gemini-powered NLP pipeline reads every uploaded note and surfaces suspect conditions with verbatim evidence sentences — so coders review, not hunt.
+            </p>
+
+            {/* Mock clinical note */}
             <div
               style={{
                 backgroundColor: NAVY,
@@ -1108,30 +1080,29 @@ export default function AdminDemoPage() {
               <div style={{ color: GOLD, fontWeight: 700, marginBottom: 6, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Progress Note — Primary Care Visit
               </div>
-              <div>
-                Patient is a 68-year-old male presenting for quarterly follow-up. Lab results from 2024-11-08 show{" "}
-                <span style={{ color: "#FDE68A", fontWeight: 600 }}>
-                  eGFR consistently below 45 mL/min/1.73m²
-                </span>{" "}
-                for the past 18 months. Patient also reports{" "}
-                <span style={{ color: "#FDE68A", fontWeight: 600 }}>
-                  PHQ-9 score of 14
-                </span>
-                , consistent with moderate MDD…
-              </div>
+              Patient is a 68-year-old male presenting for quarterly follow-up. Lab results show{" "}
+              <span style={{ color: "#FDE68A", fontWeight: 600 }}>
+                eGFR consistently below 45 mL/min/1.73m&sup2;
+              </span>{" "}
+              for the past 18 months. Patient also reports{" "}
+              <span style={{ color: "#FDE68A", fontWeight: 600 }}>
+                PHQ-9 score of 14
+              </span>
+              , consistent with moderate MDD&hellip;
             </div>
 
             {/* Suspect cards */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              aria-label="Extracted suspects"
+            >
               {suspects.map((s) => (
                 <SuspectItem
                   key={s.id}
                   suspect={s}
                   isHighlighted={highlightedSuspect === s.id}
                   onClick={() =>
-                    setHighlightedSuspect(
-                      highlightedSuspect === s.id ? null : s.id
-                    )
+                    setHighlightedSuspect(highlightedSuspect === s.id ? null : s.id)
                   }
                 />
               ))}
@@ -1165,20 +1136,36 @@ export default function AdminDemoPage() {
                 marginBottom: 20,
               }}
             >
-              <FileStack style={{ width: 13, height: 13, color: SUCCESS }} />
+              <FileStack style={{ width: 13, height: 13, color: SUCCESS }} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: SUCCESS, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 9 Ingestion Sources
               </span>
             </div>
 
-            <SectionHeading>
+            <h2
+              style={{
+                fontSize: "clamp(26px, 3.5vw, 42px)",
+                fontWeight: 800,
+                color: SLATE800,
+                letterSpacing: "-0.025em",
+                lineHeight: 1.15,
+                marginBottom: 12,
+              }}
+            >
               Every document pathway — unified.
-            </SectionHeading>
-            <div style={{ marginBottom: 40 }}>
-              <SectionSubtext>
-                FHIR Bulk, DocRef, HL7 v2, Direct, HIE, Datavant, Inovalon, Reveleer, and OpenEMR — all wired into a single ingestion pipeline. Click any source to see which one processed the suspect above.
-              </SectionSubtext>
-            </div>
+            </h2>
+
+            <p
+              style={{
+                fontSize: 16,
+                color: tokens.slate500,
+                lineHeight: 1.7,
+                maxWidth: 560,
+                marginBottom: 40,
+              }}
+            >
+              FHIR Bulk, DocRef, HL7 v2, Direct, HIE, Datavant, Inovalon, Reveleer, and OpenEMR — all wired into a single ingestion pipeline. Click any source to see which one processed the suspect above.
+            </p>
 
             {/* 9-card grid */}
             <div
@@ -1192,9 +1179,9 @@ export default function AdminDemoPage() {
               aria-label="Ingestion source cards"
             >
               {SOURCE_META.map((src) => {
-                const apiSrc = sourceStatusMap.get(src.id);
-                const status = (apiSrc?.status as "active" | "idle" | "not_configured") ?? "idle";
-                const docs24h = apiSrc?.docs_24h ?? 0;
+                const apiSrc   = sourceStatusMap.get(src.id);
+                const status   = (apiSrc?.status as "active" | "idle" | "not_configured") ?? "idle";
+                const docs24h  = apiSrc?.docs_24h ?? 0;
                 return (
                   <div key={src.id} role="listitem">
                     <IngestionCard
@@ -1205,9 +1192,7 @@ export default function AdminDemoPage() {
                       docs24h={docs24h}
                       highlighted={highlightedSource === src.id}
                       onClick={() =>
-                        setHighlightedSource(
-                          highlightedSource === src.id ? null : src.id
-                        )
+                        setHighlightedSource(highlightedSource === src.id ? null : src.id)
                       }
                     />
                   </div>
@@ -1215,7 +1200,6 @@ export default function AdminDemoPage() {
               })}
             </div>
 
-            {/* Link to full dashboard */}
             <Link
               href="/admin/document-ingestion"
               style={{
@@ -1231,7 +1215,7 @@ export default function AdminDemoPage() {
               }}
             >
               View full ingestion dashboard
-              <ChevronDown style={{ width: 14, height: 14, transform: "rotate(-90deg)" }} />
+              <ChevronDown style={{ width: 14, height: 14, transform: "rotate(-90deg)" }} aria-hidden="true" />
             </Link>
           </div>
         </section>
@@ -1250,7 +1234,6 @@ export default function AdminDemoPage() {
           aria-label="Section 4: Doctor's huddle preview"
           tabIndex={-1}
         >
-          {/* Decorative accent */}
           <div
             aria-hidden="true"
             style={{
@@ -1276,7 +1259,7 @@ export default function AdminDemoPage() {
               flexWrap: "wrap",
             }}
           >
-            {/* Left column — text */}
+            {/* Left: text */}
             <div style={{ flex: "1 1 280px", minWidth: 240 }}>
               <div
                 style={{
@@ -1289,61 +1272,65 @@ export default function AdminDemoPage() {
                   marginBottom: 20,
                 }}
               >
-                <Activity style={{ width: 13, height: 13, color: tokens.infoBlue }} />
+                <Activity style={{ width: 13, height: 13, color: tokens.infoBlue }} aria-hidden="true" />
                 <span style={{ fontSize: 11, fontWeight: 700, color: tokens.infoBlue, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                   Pre-visit Huddle
                 </span>
               </div>
 
-              <SectionHeading dark>
+              <h2
+                style={{
+                  fontSize: "clamp(26px, 3.5vw, 42px)",
+                  fontWeight: 800,
+                  color: WHITE,
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.15,
+                  marginBottom: 16,
+                }}
+              >
                 Close gaps at the point of care — not months later.
-              </SectionHeading>
-              <div style={{ marginBottom: 32 }}>
-                <SectionSubtext dark>
-                  The pre-visit huddle surfaces every open HCC gap, suspect, and AWV item before the patient walks in — empowering providers to act in the same visit.
-                </SectionSubtext>
-              </div>
+              </h2>
+
+              <p
+                style={{
+                  fontSize: 16,
+                  color: "rgba(255,255,255,0.65)",
+                  lineHeight: 1.7,
+                  marginBottom: 32,
+                }}
+              >
+                The pre-visit huddle surfaces every open HCC gap, suspect, and AWV item before the patient walks in — empowering providers to act in the same visit.
+              </p>
 
               {/* KPI pair */}
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                <div
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.07)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
-                    padding: "16px 20px",
-                    flex: "1 1 120px",
-                    minWidth: 120,
-                  }}
-                >
-                  <div style={{ fontSize: 30, fontWeight: 800, color: SUCCESS, marginBottom: 4 }}>
-                    67%
+              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                {[
+                  { pct: "67%", color: SUCCESS, label: "HCC gaps closed at point-of-care" },
+                  { pct: "33%", color: tokens.infoBlue, label: "Retrospective capture (chart review)" },
+                ].map(({ pct, color, label }) => (
+                  <div
+                    key={pct}
+                    style={{
+                      flex: "1 1 120px",
+                      minWidth: 110,
+                      backgroundColor: "rgba(255,255,255,0.07)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 12,
+                      padding: "16px 20px",
+                    }}
+                  >
+                    <div style={{ fontSize: 30, fontWeight: 800, color, marginBottom: 4 }}>
+                      {pct}
+                    </div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>
+                      {label}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>
-                    HCC gaps closed at point-of-care
-                  </div>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.07)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
-                    padding: "16px 20px",
-                    flex: "1 1 120px",
-                    minWidth: 120,
-                  }}
-                >
-                  <div style={{ fontSize: 30, fontWeight: 800, color: tokens.infoBlue, marginBottom: 4 }}>
-                    33%
-                  </div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>
-                    Retrospective capture (chart review)
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Right column — iframe preview */}
+            {/* Right: iframe preview */}
             <div
               style={{
                 flex: "1 1 460px",
@@ -1354,21 +1341,19 @@ export default function AdminDemoPage() {
                 boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
                 aspectRatio: "16/9",
                 backgroundColor: NAVY,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                position: "relative",
               }}
-              aria-label="Huddle preview"
+              aria-label="Huddle preview window"
             >
-              {/* iframe with sandbox for safety */}
               <iframe
                 src="/md/today"
                 title="Pre-visit huddle preview"
                 style={{
+                  position: "absolute",
+                  inset: 0,
                   width: "117.6%",
                   height: "117.6%",
                   border: "none",
-                  borderRadius: 16,
                   transform: "scale(0.85)",
                   transformOrigin: "top left",
                 }}
@@ -1405,22 +1390,38 @@ export default function AdminDemoPage() {
                 marginBottom: 20,
               }}
             >
-              <ShieldCheck style={{ width: 13, height: 13, color: TEAL }} />
+              <ShieldCheck style={{ width: 13, height: 13, color: TEAL }} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 Audit Readiness
               </span>
             </div>
 
-            <SectionHeading>
+            <h2
+              style={{
+                fontSize: "clamp(26px, 3.5vw, 42px)",
+                fontWeight: 800,
+                color: SLATE800,
+                letterSpacing: "-0.025em",
+                lineHeight: 1.15,
+                marginBottom: 12,
+              }}
+            >
               Every action, immutably recorded.
-            </SectionHeading>
-            <div style={{ marginBottom: 44 }}>
-              <SectionSubtext>
-                Regulators, RADV auditors, and your compliance team need a complete, tamper-evident chain of custody for every risk-adjustment action. We deliver it out of the box.
-              </SectionSubtext>
-            </div>
+            </h2>
 
-            {/* Chain features */}
+            <p
+              style={{
+                fontSize: 16,
+                color: tokens.slate500,
+                lineHeight: 1.7,
+                maxWidth: 560,
+                marginBottom: 44,
+              }}
+            >
+              Regulators, RADV auditors, and your compliance team need a complete, tamper-evident chain of custody for every risk-adjustment action. We deliver it out of the box.
+            </p>
+
+            {/* Feature list */}
             <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 44 }}>
               {[
                 {
@@ -1468,6 +1469,7 @@ export default function AdminDemoPage() {
                       color: TEAL,
                       flexShrink: 0,
                     }}
+                    aria-hidden="true"
                   >
                     {icon}
                   </div>
@@ -1483,7 +1485,7 @@ export default function AdminDemoPage() {
               ))}
             </div>
 
-            {/* CTA to audit viewer */}
+            {/* CTA */}
             <Link
               href="/audit"
               style={{
@@ -1503,7 +1505,7 @@ export default function AdminDemoPage() {
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = NAVY_LIGHT)}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = NAVY)}
             >
-              <ShieldCheck style={{ width: 16, height: 16 }} />
+              <ShieldCheck style={{ width: 16, height: 16 }} aria-hidden="true" />
               Open audit chain viewer
             </Link>
           </div>

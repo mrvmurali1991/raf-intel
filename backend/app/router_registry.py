@@ -151,6 +151,7 @@ from app.routers import datavant_webhook as datavant_webhook_router
 from app.routers import reveleer_admin as reveleer_admin_router
 from app.routers import direct_inbound as direct_inbound_router
 from app.routers import document_ingestion_dashboard as document_ingestion_dashboard_router
+from app.routers import demo_reset as demo_reset_router
 
 
 # ---------------------------------------------------------------------------
@@ -419,3 +420,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Encryption key management (KMS BYOK)
     _mount(app, encryption_admin_router.router)
+
+    # Executive demo mode (reset + live stats + NLP suspects for /admin/demo)
+    _mount(app, demo_reset_router.router)

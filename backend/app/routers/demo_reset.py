@@ -4,19 +4,19 @@ Demo-mode endpoints for the executive demo page at /admin/demo.
 Routes
 ------
 POST /api/admin/demo/reset
-    Admin-only. Kicks off Celery task ``raf.demo.reseed_realistic`` that
+    Admin-only.  Enqueues Celery task ``raf.demo.reseed_realistic`` that
     truncates demo seed rows and re-runs the realistic-data seeder.
     Returns ``{ job_id }`` immediately; the caller polls
     GET /api/jobs/{job_id} for progress (existing jobs router).
 
 GET /api/admin/demo/stats
-    Admin/manager. Returns live tenant KPIs for the Hero stat counters.
+    Admin/manager.  Returns live tenant KPIs for the Hero stat counters.
 
 GET /api/admin/demo/suspects
-    Admin/manager. Returns up to 3 anonymised suspects from
-    raf_suspect_conditions joined with their raf_meat_evidence, where
-    evidence_detail->>'source' = 'demo_seed'.  Falls back to a safe stub
-    if no demo-seed rows are present so the page is always presentable.
+    Admin/manager.  Returns up to 3 anonymised suspects from
+    raf_suspect_conditions joined with their raf_meat_evidence.
+    Falls back to a safe stub if no rows are present so the page is
+    always presentable during a live demo.
 """
 # Note: do NOT use 'from __future__ import annotations' —
 # it breaks FastAPI/Pydantic schema generation.
@@ -63,53 +63,41 @@ class DemoResetResponse(BaseModel):
 
 class DemoStatsResponse(BaseModel):
     patient_count: int
-    avg_raf_score: int  # multiplied by 100 for integer transport (÷100 in UI)
+    avg_raf_score: int  # ×100 for integer transport; UI divides by 100
     suspects_ytd: int
     revenue_at_stake: int  # USD
-
-
-class DemoSuspect(BaseModel):
-    id: int
-    patient_initials: str
-    hcc_label: str
-    icd10: str
-    confidence: float
-    evidence_sentence: str
-    page_number: int
-    source_doc: str
 
 
 # ---------------------------------------------------------------------------
 # POST /api/admin/demo/reset
 # ---------------------------------------------------------------------------
 
-
 @router.post(
     "/reset",
     response_model=DemoResetResponse,
-    summary="Reset demo data — re-seed realistic tenant data",
+    summary="Reset demo data — re-seed realistic tenant data (admin only)",
 )
 async def reset_demo_data(
     current_user: dict = Depends(get_current_user),
 ) -> DemoResetResponse:
     """
-    Admin-only.  Enqueues Celery task ``raf.demo.reseed_realistic``.
+    Enqueues Celery task ``raf.demo.reseed_realistic``.
 
     The task:
       1. Deletes raf_suspect_conditions rows where
-         ``evidence_detail->>'source' = 'demo_seed'``.
-      2. Re-runs the realistic demo seeder (seed_raf_demo.py logic).
-      3. Updates the job status in the jobs table.
+         ``evidence_detail->>'$.source' = 'demo_seed'``.
+      2. Re-runs the realistic demo seeder.
+      3. Updates the job status row.
 
-    Returns a ``job_id`` immediately; poll ``GET /api/jobs/{job_id}``
-    for progress.
+    Returns ``job_id`` immediately; poll ``GET /api/jobs/{job_id}`` for progress.
     """
     _require_admin_or_manager(current_user)
+    role = (current_user.get("role") or "").lower()
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required for demo reset")
 
     job_id = str(uuid.uuid4())
 
-    # Try to enqueue via Celery; fall back to a stub response so the
-    # endpoint never hard-fails in environments without a running worker.
     try:
         from app.worker import celery_app  # type: ignore[import]
 
@@ -124,10 +112,8 @@ async def reset_demo_data(
         )
         logger.info("Demo reseed task queued job_id=%s", job_id)
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "Could not enqueue demo reseed task (worker may be offline): %s", exc
-        )
-        # Still return a job_id; the caller can surface "worker offline" in the UI.
+        # Worker may be offline in dev — still return job_id; UI shows "worker offline".
+        logger.warning("Could not enqueue demo reseed (worker offline?): %s", exc)
 
     return DemoResetResponse(job_id=job_id)
 
@@ -152,31 +138,27 @@ _FALLBACK_STATS = DemoStatsResponse(
 async def get_demo_stats(
     current_user: dict = Depends(get_current_user),
 ) -> DemoStatsResponse:
-    """Returns live tenant metrics.  Falls back to realistic stub on any DB error."""
+    """Live tenant metrics for the animated hero counters.  Falls back to stub on DB error."""
     _require_admin_or_manager(current_user)
     tenant_id = str(current_user.get("tenant_id", "1"))
 
     try:
         async with get_db() as conn:
-            # Patient count
             row_patients = await conn.fetchone(
                 "SELECT COUNT(*) AS cnt FROM patients WHERE tenant_id = %s",
                 (tenant_id,),
             )
             patient_count: int = int((row_patients or {}).get("cnt", 0))
 
-            # Average RAF score (raf_scores table, most recent score per patient)
             row_raf = await conn.fetchone(
                 """
                 SELECT AVG(rs.raf_score) AS avg_raf
                 FROM raf_scores rs
                 INNER JOIN (
                     SELECT patient_id, MAX(score_date) AS max_date
-                    FROM raf_scores
-                    WHERE tenant_id = %s
-                    GROUP BY patient_id
+                    FROM raf_scores WHERE tenant_id = %s GROUP BY patient_id
                 ) latest ON rs.patient_id = latest.patient_id
-                           AND rs.score_date = latest.max_date
+                         AND rs.score_date = latest.max_date
                 WHERE rs.tenant_id = %s
                 """,
                 (tenant_id, tenant_id),
@@ -184,32 +166,27 @@ async def get_demo_stats(
             raw_avg: float = float((row_raf or {}).get("avg_raf") or 1.18)
             avg_raf_score: int = round(raw_avg * 100)
 
-            # Suspects identified YTD (current calendar year)
             row_suspects = await conn.fetchone(
                 """
-                SELECT COUNT(*) AS cnt
-                FROM raf_suspect_conditions
-                WHERE tenant_id = %s
-                  AND YEAR(created_at) = YEAR(CURDATE())
+                SELECT COUNT(*) AS cnt FROM raf_suspect_conditions
+                WHERE tenant_id = %s AND YEAR(created_at) = YEAR(CURDATE())
                 """,
                 (tenant_id,),
             )
             suspects_ytd: int = int((row_suspects or {}).get("cnt", 0))
 
-            # Revenue at stake: sum of estimated_value for open suspects YTD
             row_rev = await conn.fetchone(
                 """
                 SELECT COALESCE(SUM(estimated_value), 0) AS total
                 FROM raf_suspect_conditions
                 WHERE tenant_id = %s
-                  AND status IN ('open','pending_review')
+                  AND status IN ('open', 'pending_review')
                   AND YEAR(created_at) = YEAR(CURDATE())
                 """,
                 (tenant_id,),
             )
             revenue_at_stake: int = int((row_rev or {}).get("total", 0))
 
-            # If all zeros, use fallback so demo looks compelling
             if patient_count == 0 and suspects_ytd == 0:
                 return _FALLBACK_STATS
 
@@ -281,10 +258,8 @@ async def get_demo_suspects(
 ) -> list[dict[str, Any]]:
     """
     Returns up to 3 suspects from ``raf_suspect_conditions`` joined with
-    ``raf_meat_evidence`` where the evidence source is 'demo_seed'.
-
-    Patient names are anonymised to initials.  Falls back to a static stub
-    when no demo-seed rows are present.
+    ``raf_meat_evidence``.  Patient names are reduced to initials.
+    Falls back to static stub when no rows are present.
     """
     _require_admin_or_manager(current_user)
     tenant_id = str(current_user.get("tenant_id", "1"))
@@ -295,29 +270,24 @@ async def get_demo_suspects(
                 """
                 SELECT
                     sc.id,
-                    CONCAT(
-                        LEFT(p.first_name, 1), '.',
-                        LEFT(p.last_name,  1), '.'
-                    ) AS patient_initials,
+                    CONCAT(LEFT(p.first_name,1), '.', LEFT(p.last_name,1), '.') AS patient_initials,
                     sc.hcc_label,
                     sc.icd10_code          AS icd10,
                     sc.confidence_score    AS confidence,
                     COALESCE(me.evidence_sentence, sc.evidence_sentence, '') AS evidence_sentence,
                     COALESCE(me.page_number, 1)                              AS page_number,
-                    COALESCE(me.source_document_name, sc.source_document_name, 'Clinical Note') AS source_doc
+                    COALESCE(me.source_document_name,
+                             sc.source_document_name, 'Clinical Note')       AS source_doc
                 FROM raf_suspect_conditions sc
                 LEFT JOIN patients p
                        ON p.id = sc.patient_id AND p.tenant_id = sc.tenant_id
                 LEFT JOIN raf_meat_evidence me
                        ON me.suspect_id = sc.id
-                      AND (me.evidence_detail->>'$.source' = 'demo_seed'
-                           OR me.id = (
-                               SELECT MIN(id) FROM raf_meat_evidence
-                               WHERE suspect_id = sc.id
-                           ))
+                      AND me.id = (
+                          SELECT MIN(id) FROM raf_meat_evidence
+                          WHERE suspect_id = sc.id
+                      )
                 WHERE sc.tenant_id = %s
-                  AND (sc.evidence_detail->>'$.source' = 'demo_seed'
-                       OR 1=1)
                 ORDER BY sc.confidence_score DESC
                 LIMIT 3
                 """,
@@ -327,13 +297,11 @@ async def get_demo_suspects(
             if not rows:
                 return _FALLBACK_SUSPECTS
 
-            # Sanitise: ensure patient_initials never exposes a full name
             result = []
             for r in rows:
-                initials = str(r.get("patient_initials") or "P.P.")
-                # If DB returned full name components, truncate safely
-                parts = initials.split(".")
-                safe_initials = ".".join(p[:1].upper() for p in parts if p) + "."
+                raw_init = str(r.get("patient_initials") or "P.P.")
+                parts = [p[:1].upper() for p in raw_init.replace(".", " ").split() if p]
+                safe_initials = ".".join(parts) + "." if parts else "P.P."
                 result.append(
                     {
                         "id": r["id"],
