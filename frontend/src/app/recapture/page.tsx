@@ -16,6 +16,12 @@ import DataQualityBanner from "@/components/DataQualityBanner";
 import { tokens } from "@/styles/tokens";
 import { KgGapBadge } from "@/components/kg/KgGapBadge";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 // Feature-flagged secondary sections are lazy-loaded to defer ~60 kB
 // (CfoExecutiveSummary, BonusLeaderboard, OutreachSummaryCards, AuditReadinessCard,
 // RecaptureVelocityKpis, RecaptureDecayChart) that are hidden behind feature flags.
@@ -299,6 +305,7 @@ export default function RecapturePage() {
             freshness={revData?.last_computed_at ?? undefined}
             labelTestId="revenue-at-risk-label"
             valueTestId="revenue-at-risk-value"
+            labelTooltip="Projected revenue loss if uncaptured chronic conditions are not re-coded before year-end. Calculated as total gaps × $3,000 average RAF revenue per gap."
           />
         </div>
         <div className="animate-fade-in stagger-2">
@@ -307,6 +314,7 @@ export default function RecapturePage() {
             value={(data.total_gaps ?? 0).toLocaleString()}
             intent="warning"
             icon={<RefreshCw size={18} />}
+            labelTooltip="Number of chronic conditions documented in a prior year that have not yet been re-coded in the current measurement year. Each gap requires a qualifying encounter."
           />
         </div>
         <div className="animate-fade-in stagger-3">
@@ -314,6 +322,7 @@ export default function RecapturePage() {
             label="Patients Affected"
             value={(data.patients_affected ?? 0).toLocaleString()}
             icon={<Calendar size={18} />}
+            labelTooltip="Distinct patients who have at least one open recapture gap this measurement year. One patient may have multiple gaps across different HCC categories."
           />
         </div>
       </div>
@@ -343,56 +352,83 @@ export default function RecapturePage() {
           </h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {/* Search */}
-            <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.slate400 }} />
-              <input
-                type="text"
-                placeholder="Search patient..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label="Search patients by name"
-                style={{
-                  padding: "7px 10px 7px 30px",
-                  borderRadius: 14,
-                  border: `1px solid ${colors.slate200}`,
-                  fontSize: 13,
-                  color: colors.slate900,
-                  width: "min(200px, calc(100vw - 180px))",
-                  transition: "border-color 0.2s, box-shadow 0.2s",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = colors.primary;
-                  e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.primary}1A`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = colors.slate200;
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              />
-            </div>
+            <TooltipProvider delay={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div style={{ position: "relative" }}>
+                    <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.slate400 }} />
+                    <input
+                      type="text"
+                      placeholder="Search patient..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      aria-label="Search patients by name or ICD code"
+                      data-testid="recapture-search"
+                      style={{
+                        padding: "7px 10px 7px 30px",
+                        borderRadius: 14,
+                        border: `1px solid ${colors.slate200}`,
+                        fontSize: 13,
+                        color: colors.slate900,
+                        width: "min(200px, calc(100vw - 180px))",
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = colors.primary;
+                        e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.primary}1A`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = colors.slate200;
+                        e.currentTarget.style.boxShadow = "none";
+                      }}
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6} data-testid="search-tooltip">
+                  Filter by patient name or ICD code
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {/* Sort Pills */}
             <div style={{ display: "flex", gap: 4, background: colors.slate100, borderRadius: 14, padding: 3 }}>
-              {sortOptions.map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setSortBy(opt.key)}
-                  className="btn-press"
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 14,
-                    border: "none",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    background: sortBy === opt.key ? colors.primary : "transparent",
-                    color: sortBy === opt.key ? colors.white : colors.slate600,
-                    boxShadow: sortBy === opt.key ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {sortOptions.map((opt) => {
+                const sortDesc: Record<SortKey, string> = {
+                  priority: "Sort by urgency: High (>365 days uncoded) first, then Medium, then Low",
+                  name: "Sort alphabetically by patient last name, then first name",
+                  condition: "Sort alphabetically by chronic condition diagnosis name",
+                };
+                return (
+                  <TooltipProvider key={opt.key} delay={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setSortBy(opt.key)}
+                          className="btn-press"
+                          aria-pressed={sortBy === opt.key}
+                          data-testid={`sort-${opt.key}`}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: 14,
+                            border: "none",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            background: sortBy === opt.key ? colors.primary : "transparent",
+                            color: sortBy === opt.key ? colors.white : colors.slate600,
+                            boxShadow: sortBy === opt.key ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6} data-testid={`sort-${opt.key}-tooltip`}>
+                        {sortDesc[opt.key]}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -407,10 +443,61 @@ export default function RecapturePage() {
                   <tr>
                     <th scope="col" style={thStyle}>Patient</th>
                     <th scope="col" style={thStyle}>Condition</th>
-                    <th scope="col" style={thStyle}>ICD-10</th>
+                    <th scope="col" style={thStyle}>
+                      <TooltipProvider delay={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              style={{ cursor: "help", borderBottom: "1px dotted currentColor" }}
+                              tabIndex={0}
+                              data-testid="col-icd10"
+                            >
+                              ICD-10
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={6} data-testid="col-icd10-tooltip">
+                            ICD-10-CM diagnosis code. Hover any code in the table to see its full description and RAF coefficient.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
                     <th scope="col" style={thStyle}>Last Coded</th>
-                    <th scope="col" style={thStyle}>Days Since</th>
-                    <th scope="col" style={thStyle}>Priority</th>
+                    <th scope="col" style={thStyle}>
+                      <TooltipProvider delay={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              style={{ cursor: "help", borderBottom: "1px dotted currentColor" }}
+                              tabIndex={0}
+                              data-testid="col-days-since"
+                            >
+                              Days Since
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={6} data-testid="col-days-since-tooltip">
+                            Days since last billing encounter for this HCC. Higher values indicate more urgent recapture need.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
+                    <th scope="col" style={thStyle}>
+                      <TooltipProvider delay={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              style={{ cursor: "help", borderBottom: "1px dotted currentColor" }}
+                              tabIndex={0}
+                              data-testid="col-priority"
+                            >
+                              Priority
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={6} data-testid="col-priority-tooltip">
+                            High: &gt;365 days uncoded · Medium: 180–365 days · Low: &lt;180 days
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -444,7 +531,21 @@ export default function RecapturePage() {
                       onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }}
                     >
                       <td style={{ ...tdStyle, fontWeight: 600, color: colors.primary }}>
-                        {g.last_name}, {g.first_name}
+                        <TooltipProvider delay={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                style={{ cursor: "pointer" }}
+                                data-testid={`patient-name-${g.pid}`}
+                              >
+                                {g.last_name}, {g.first_name}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={6} data-testid="patient-row-tooltip">
+                              Open patient chart
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </td>
                       <td style={tdStyle}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -461,38 +562,76 @@ export default function RecapturePage() {
                             <span>{g.condition}</span>
                           )}
                           <FeatureFlag flagKey="kg_evidence_panel">
-                            <KgGapBadge
-                              evidenceType={g.evidence_type ?? "kg_rule"}
-                              suspectId={g.id ?? undefined}
-                              hccCode={g.hcc_code}
-                              patientId={Number(g.pid) || undefined}
-                            />
+                            <TooltipProvider delay={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <KgGapBadge
+                                      evidenceType={g.evidence_type ?? "kg_rule"}
+                                      suspectId={g.id ?? undefined}
+                                      hccCode={g.hcc_code}
+                                      patientId={Number(g.pid) || undefined}
+                                    />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" sideOffset={6} data-testid="kg-badge-tooltip">
+                                  Knowledge graph rule matched — see evidence panel for source citations and supporting clinical signals
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </FeatureFlag>
                         </span>
                       </td>
-                      <td className="tabular-nums" style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12 }}>{g.icd_code}</td>
+                      <td className="tabular-nums" style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12 }}>
+                        <TooltipProvider delay={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                style={{ cursor: "help", borderBottom: "1px dotted currentColor" }}
+                                data-testid={`icd-code-${g.icd_code}`}
+                              >
+                                {g.icd_code}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={6} data-testid="icd-code-tooltip">
+                              <span className="font-semibold">{g.icd_code}</span> — {g.condition}
+                              <br />
+                              <span className="text-[10px] opacity-70">RAF coefficient determined by CMS HCC model for this diagnosis category.</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
                       <td className="tabular-nums" style={{ ...tdStyle, color: colors.subtleText }}>{new Date(g.onset_date).toLocaleDateString()}</td>
                       <td className="tabular-nums" style={{ ...tdStyle, fontWeight: 600 }}>{g.days}</td>
                       <td style={tdStyle}>
-                        <span
-                          title={
-                            g.priority.label === "High" ? "High priority: condition uncoded for >365 days" :
-                            g.priority.label === "Medium" ? "Medium priority: condition uncoded 180–365 days" :
-                            "Low priority: condition uncoded <180 days"
-                          }
-                          style={{
-                            display: "inline-block",
-                            padding: "3px 10px",
-                            borderRadius: 999,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: g.priority.color,
-                            backgroundColor: `${g.priority.color}1A`,
-                            cursor: "help",
-                          }}
-                        >
-                          {g.priority.label}
-                        </span>
+                        <TooltipProvider delay={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "3px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: g.priority.color,
+                                  backgroundColor: `${g.priority.color}1A`,
+                                  cursor: "help",
+                                }}
+                                data-testid={`priority-pill-${g.pid}`}
+                              >
+                                {g.priority.label}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" sideOffset={6} data-testid="priority-tooltip">
+                              {g.priority.label === "High"
+                                ? "High — condition uncoded for >365 days. Immediate outreach recommended."
+                                : g.priority.label === "Medium"
+                                ? "Medium — condition uncoded 180–365 days. Schedule within 30 days."
+                                : "Low — condition uncoded <180 days. Standard scheduling applies."}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </td>
                     </tr>
                   ))}
@@ -578,9 +717,24 @@ export default function RecapturePage() {
                 <span style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 220, fontSize: 13, color: colors.slate900, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {c.condition}
                 </span>
-                <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: colors.primary, fontFamily: "monospace" }}>
-                  {c.icd_code}
-                </span>
+                <TooltipProvider delay={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: colors.primary, fontFamily: "monospace", cursor: "help", borderBottom: "1px dotted currentColor" }}
+                        tabIndex={0}
+                        data-testid={`top-condition-chip-${c.icd_code}`}
+                      >
+                        {c.icd_code}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" sideOffset={6} data-testid="top-condition-tooltip">
+                      <span className="font-semibold">{c.icd_code}</span> — {c.condition}
+                      <br />
+                      <span className="text-[10px] opacity-70">{c.gap_count} open gap{c.gap_count !== 1 ? "s" : ""} across your patient panel</span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <div style={{ flex: 1, height: 8, borderRadius: 4, background: colors.slate200, overflow: "hidden" }}>
                   <div
                     style={{

@@ -20,6 +20,12 @@ import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { MetricMeta } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +109,11 @@ export interface MetricCardProps {
   labelTestId?: string;
   /** data-testid placed on the value span — for smoke-test parity selectors */
   valueTestId?: string;
+  /**
+   * Plain-text description shown in a 200 ms hover tooltip on the label itself.
+   * Supplements (does not replace) the MetricMetaTooltip formula icon.
+   */
+  labelTooltip?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,6 +260,7 @@ export function MetricCard({
   freshness,
   labelTestId,
   valueTestId,
+  labelTooltip,
 }: MetricCardProps) {
   const router = useRouter();
   if (loading) return <MetricCardSkeleton className={className} />;
@@ -289,7 +301,25 @@ export function MetricCard({
             className="flex items-center gap-1 text-label leading-none"
             data-testid={labelTestId}
           >
-            {label}
+            {labelTooltip ? (
+              <TooltipProvider delay={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="cursor-help underline decoration-dotted decoration-muted-foreground/50 underline-offset-2"
+                      tabIndex={0}
+                    >
+                      {label}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6} data-testid="metric-label-tooltip">
+                    {labelTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              label
+            )}
             {/* Render the (i) icon whenever meta is explicitly provided,
                 including null (loading state). Omitting the prop suppresses it. */}
             {meta !== undefined && <MetricMetaTooltip meta={meta} />}
