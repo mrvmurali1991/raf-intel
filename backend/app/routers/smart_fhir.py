@@ -557,7 +557,13 @@ def delete_registration(
     summary="SMART 2.0 discovery document (issuer-side)",
 )
 def smart_configuration_well_known(request: Request) -> JSONResponse:
-    """Advertise SMART 2.0 issuer capabilities at the canonical location."""
+    """Advertise SMART 2.0 issuer capabilities at the canonical location.
+
+    Conforms to SMART App Launch STU 2.2 (https://hl7.org/fhir/smart-app-launch/STU2.2/).
+    Scopes include the Epic read-only connector set required for RAF Intelligence:
+    patient/Patient.read, patient/Condition.read, patient/Encounter.read,
+    patient/Observation.read.
+    """
     base_url = str(request.base_url).rstrip("/")
     body = {
         "issuer": f"{base_url}/smart",

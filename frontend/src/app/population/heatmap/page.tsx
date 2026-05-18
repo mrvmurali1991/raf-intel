@@ -22,6 +22,7 @@ import { MapPin, AlertTriangle, Users, Activity } from "lucide-react";
 import api from "@/lib/api";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { tokens } from "@/styles/tokens";
+import { MetricCard } from "@/components/ui/metric-card";
 
 // ---------------------------------------------------------------------------
 // Types — match backend/app/routers/population_heatmap.py response shape
@@ -133,14 +134,12 @@ export default function PopulationHeatmapPage() {
 
   return (
     <div
-      className="rci-page-pad-desktop"
+      className="rci-page-pad-desktop bg-background text-foreground"
       style={{
         minHeight: "100vh",
-        background: tokens.slate50,
         padding: "20px 16px 56px",
         fontFamily:
           "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        color: tokens.slate900,
       }}
     >
       <PageHeader
@@ -169,10 +168,10 @@ export default function PopulationHeatmapPage() {
                 padding: "8px 32px 8px 14px",
                 fontSize: 14,
                 fontWeight: 600,
-                border: `1px solid ${tokens.slate200}`,
+                border: `1px solid hsl(var(--border))`,
                 borderRadius: 8,
-                background: tokens.white,
-                color: tokens.slate900,
+                background: `hsl(var(--card))`,
+                color: `hsl(var(--foreground))`,
                 cursor: "pointer",
                 appearance: "none",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
@@ -216,7 +215,7 @@ export default function PopulationHeatmapPage() {
               padding: "8px 20px",
               borderRadius: 8,
               border: `1px solid ${tokens.riskHigh}`,
-              background: tokens.white,
+              background: `hsl(var(--card))`,
               color: tokens.riskHigh,
               fontSize: 13,
               fontWeight: 600,
@@ -249,41 +248,37 @@ export default function PopulationHeatmapPage() {
               marginBottom: 24,
             }}
           >
-            <KpiCard
+            <MetricCard
               label="ZIP Codes"
               value={totals.zipCount.toLocaleString()}
               icon={<MapPin size={20} />}
-              color={tokens.primary}
-              bg={tokens.primarySoft}
+              intent="default"
             />
-            <KpiCard
+            <MetricCard
               label="Patients"
               value={totals.patientCount.toLocaleString()}
               icon={<Users size={20} />}
-              color={tokens.primaryDark}
-              bg={tokens.primarySoft}
+              intent="default"
             />
-            <KpiCard
+            <MetricCard
               label="Open Gaps"
               value={totals.openGaps.toLocaleString()}
               icon={<Activity size={20} />}
-              color={tokens.warningStrong}
-              bg={"rgba(245, 158, 11, 0.10)"}
+              intent="warning"
             />
-            <KpiCard
+            <MetricCard
               label="High-Risk Patients"
               value={totals.highRisk.toLocaleString()}
               icon={<AlertTriangle size={20} />}
-              color={tokens.riskHigh}
-              bg={tokens.riskHighSoft}
+              intent="danger"
             />
           </div>
 
           {/* Bar chart */}
           <div
+            className="bg-card"
             style={{
-              background: tokens.white,
-              border: `1px solid ${tokens.slate200}`,
+              border: `1px solid hsl(var(--border))`,
               borderRadius: 14,
               overflow: "hidden",
               boxShadow:
@@ -293,7 +288,7 @@ export default function PopulationHeatmapPage() {
             <div
               style={{
                 padding: "18px 22px",
-                borderBottom: `1px solid ${tokens.slate200}`,
+                borderBottom: `1px solid hsl(var(--border))`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -305,20 +300,20 @@ export default function PopulationHeatmapPage() {
             >
               <div>
                 <h3
+                  className="text-foreground"
                   style={{
                     margin: 0,
                     fontSize: 15,
                     fontWeight: 700,
-                    color: tokens.slate900,
                   }}
                 >
                   Top {top20.length} ZIP Codes by Patient Count
                 </h3>
                 <p
+                  className="text-muted-foreground"
                   style={{
                     margin: "4px 0 0",
                     fontSize: 12,
-                    color: tokens.slate500,
                   }}
                 >
                   Bar length = patient count.  Colour reflects average RAF
@@ -335,9 +330,9 @@ export default function PopulationHeatmapPage() {
                   style={{
                     padding: "6px 14px",
                     borderRadius: 8,
-                    border: `1px solid ${tokens.slate200}`,
-                    background: viewAsTable ? tokens.primary : tokens.white,
-                    color: viewAsTable ? tokens.white : tokens.slate700,
+                    border: `1px solid hsl(var(--border))`,
+                    background: viewAsTable ? tokens.primary : `hsl(var(--card))`,
+                    color: viewAsTable ? tokens.white : `hsl(var(--foreground))`,
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -559,76 +554,6 @@ export default function PopulationHeatmapPage() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function KpiCard({
-  label,
-  value,
-  icon,
-  color,
-  bg,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  color: string;
-  bg: string;
-}) {
-  return (
-    <div
-      style={{
-        background: tokens.white,
-        border: `1px solid ${tokens.slate200}`,
-        borderLeft: `4px solid ${color}`,
-        borderRadius: 14,
-        padding: 20,
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-      }}
-    >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 10,
-          background: bg,
-          color,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
-      <div>
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            color: tokens.slate500,
-          }}
-        >
-          {label}
-        </div>
-        <div
-          style={{
-            fontSize: 24,
-            fontWeight: 700,
-            color: tokens.slate900,
-            marginTop: 4,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {value}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function RafLegend() {
   const items: Array<{ label: string; color: string }> = [
     { label: "Low (<0.8)", color: tokens.riskLow },
@@ -649,12 +574,12 @@ function RafLegend() {
       {items.map((item) => (
         <div
           key={item.label}
+          className="text-muted-foreground"
           style={{
             display: "flex",
             alignItems: "center",
             gap: 6,
             fontSize: 11,
-            color: tokens.slate600,
           }}
         >
           <span

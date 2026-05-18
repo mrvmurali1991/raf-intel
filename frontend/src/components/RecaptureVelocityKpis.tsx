@@ -16,7 +16,6 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Line, LineChart, ResponsiveContainer } from "recharts";
 
 import {
   getRecaptureDecayCurve,
@@ -25,6 +24,7 @@ import {
   type RecaptureVelocityResponse,
 } from "@/lib/api";
 import { tokens } from "@/styles/tokens";
+import { MetricCard } from "@/components/ui/metric-card";
 
 const REVENUE_PER_GAP = 3000;
 
@@ -109,118 +109,41 @@ export default function RecaptureVelocityKpis({ year }: RecaptureVelocityKpisPro
   const earlyRate = v.early_recapture_rate;
   const earlyColour = colourForEarlyRate(earlyRate);
 
+  const earlyIntent =
+    earlyRate >= 0.7 ? "success" : earlyRate >= 0.5 ? "warning" : "danger";
+
   return (
     <div
       className="rci-velocity-strip"
       style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}
     >
-      {/* Card 1 — Avg Days to Close */}
-      <KpiCard
+      <MetricCard
         label="Avg Days to Close"
-        primary={`${v.avg_days_to_close.toFixed(1)} days`}
-        sub={`Median ${v.median_days_to_close.toFixed(1)} · ${pct(v.days_to_close_target_30)} closed ≤30d`}
-        accent={tokens.infoBlue}
-      >
-        {sparkData.length > 0 && (
-          <div style={{ width: "100%", height: 36, marginTop: 8 }}>
-            <ResponsiveContainer>
-              <LineChart data={sparkData}>
-                <Line
-                  type="monotone"
-                  dataKey="v"
-                  stroke={tokens.infoBlue}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </KpiCard>
-
-      {/* Card 2 — YTD $ Recaptured */}
-      <KpiCard
+        value={`${v.avg_days_to_close.toFixed(1)} days`}
+        subtitle={`Median ${v.median_days_to_close.toFixed(1)} · ${pct(v.days_to_close_target_30)} closed ≤30d`}
+        trend={sparkData.map((d) => d.v)}
+        intent="default"
+      />
+      <MetricCard
         label="YTD $ Recaptured"
-        primary={fmtCurrency(v.ytd_$_recaptured)}
-        sub={`${v.closed_cohort_gaps} of ${v.total_cohort_gaps} gaps closed`}
-        accent={tokens.success}
+        value={fmtCurrency(v.ytd_$_recaptured)}
+        subtitle={`${v.closed_cohort_gaps} of ${v.total_cohort_gaps} gaps closed`}
+        intent="success"
       />
-
-      {/* Card 3 — YE Projected $ */}
-      <KpiCard
+      <MetricCard
         label="YE Projected $"
-        primary={fmtCurrency(v.ye_projected_$)}
-        sub={
-          <span style={{ color: projectedDelta >= 0 ? tokens.success : tokens.riskHigh, fontWeight: 600 }}>
-            {projectedDelta >= 0 ? "+" : ""}
-            {fmtCurrency(projectedDelta)} vs budget ({fmtCurrency(budgetBaseline)})
-          </span>
-        }
-        accent={tokens.accentPurple}
+        value={fmtCurrency(v.ye_projected_$)}
+        delta={budgetBaseline > 0 ? (projectedDelta / budgetBaseline) * 100 : undefined}
+        subtitle={`vs budget ${fmtCurrency(budgetBaseline)}`}
+        intent={projectedDelta >= 0 ? "success" : "danger"}
       />
-
-      {/* Card 4 — Early Recapture Rate */}
-      <KpiCard
+      <MetricCard
         label="Early-Recapture Rate"
-        primary={
-          <span style={{ color: earlyColour }}>
-            {pct(earlyRate)}
-          </span>
-        }
-        sub={`Q1 closures · Q4 lag ${pct(v.late_recapture_rate)}`}
-        accent={earlyColour}
+        value={pct(earlyRate)}
+        subtitle={`Q1 closures · Q4 lag ${pct(v.late_recapture_rate)}`}
+        intent={earlyIntent}
       />
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// KpiCard primitive
-// ---------------------------------------------------------------------------
-
-function KpiCard({
-  label,
-  primary,
-  sub,
-  accent,
-  children,
-}: {
-  label: string;
-  primary: React.ReactNode;
-  sub: React.ReactNode;
-  accent: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div
-      className="premium-card"
-      style={{
-        padding: 16,
-        borderRadius: 12,
-        background: "#fff",
-        borderLeft: `3px solid ${accent}`,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: tokens.slate500,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-        }}
-      >
-        {label}
-      </div>
-      <div className="tabular-nums" style={{ fontSize: 24, fontWeight: 700, color: tokens.slate900 }}>
-        {primary}
-      </div>
-      <div style={{ fontSize: 12, color: tokens.slate500 }}>{sub}</div>
-      {children}
-    </div>
-  );
-}
