@@ -52,13 +52,16 @@ export default async function DashboardOrchestrator() {
   const role = await getRole();
 
   let Dashboard: React.ComponentType;
-  if (role === "admin" || role === "manager" || role === "auditor") {
-    Dashboard = AdminDashboard;
+  if (role === "provider" || role === "clinician") {
+    Dashboard = ProviderDashboard;
   } else if (role === "coder") {
     Dashboard = CoderDashboard;
   } else {
-    // "provider", "clinician", unknown, or unauthenticated (middleware redirects before reaching here)
-    Dashboard = ProviderDashboard;
+    // admin, manager, auditor, AND unknown/null (SSR-cookie race) all land here.
+    // AdminDashboard is the full Population Health Intelligence view — the safe
+    // default when role detection fails (middleware redirects unauthenticated users
+    // before this code runs, so a null role here means SSR couldn't read cookies).
+    Dashboard = AdminDashboard;
   }
 
   return (
