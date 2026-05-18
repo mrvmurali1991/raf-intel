@@ -531,17 +531,8 @@ function TourModal({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => setStep((s) => s - 1)}
             disabled={step === 0}
-            style={{
-              padding: "9px 18px",
-              border: "1px solid #E2E8F0",
-              borderRadius: 8,
-              background: "#FFFFFF",
-              color: "#64748B",
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: step === 0 ? "default" : "pointer",
-              opacity: step === 0 ? 0.35 : 1,
-            }}
+            className="text-muted-foreground text-[13px] font-medium border border-border bg-background rounded-lg px-[18px] py-[9px]"
+            style={{ cursor: step === 0 ? "default" : "pointer", opacity: step === 0 ? 0.35 : 1 }}
           >
             Back
           </button>
@@ -550,16 +541,7 @@ function TourModal({ onClose }: { onClose: () => void }) {
             {current.cta && current.ctaHref && (
               <button
                 onClick={() => { onClose(); router.push(current.ctaHref!); }}
-                style={{
-                  padding: "9px 18px",
-                  border: "none",
-                  borderRadius: 8,
-                  background: "#F1F5F9",
-                  color: "#1E293B",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className="text-foreground text-[13px] font-semibold bg-muted border-0 rounded-lg px-[18px] py-[9px] cursor-pointer"
               >
                 {current.cta}
               </button>
@@ -567,32 +549,14 @@ function TourModal({ onClose }: { onClose: () => void }) {
             {step < total - 1 ? (
               <button
                 onClick={() => setStep((s) => s + 1)}
-                style={{
-                  padding: "9px 20px",
-                  border: "none",
-                  borderRadius: 8,
-                  background: "#3B82F6",
-                  color: "#FFFFFF",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className="text-white text-[13px] font-semibold bg-blue-500 border-0 rounded-lg px-5 py-[9px] cursor-pointer"
               >
                 Next
               </button>
             ) : (
               <button
                 onClick={onClose}
-                style={{
-                  padding: "9px 20px",
-                  border: "none",
-                  borderRadius: 8,
-                  background: "#10B981",
-                  color: "#FFFFFF",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className="text-white text-[13px] font-semibold bg-emerald-500 border-0 rounded-lg px-5 py-[9px] cursor-pointer"
               >
                 Finish
               </button>
@@ -680,10 +644,10 @@ function OnboardingCard({
           <BookOpen size={24} color="#3B82F6" />
         </div>
         <div>
-          <h2 className="text-foreground" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+          <h2 className="text-foreground text-lg font-bold tracking-tight m-0">
             Get started in 3 steps
           </h2>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+          <p className="text-muted-foreground text-[13px] mt-1 mb-0">
             Complete any one step to populate your dashboard
           </p>
         </div>
@@ -735,10 +699,10 @@ function OnboardingCard({
 
             {/* Text */}
             <div>
-              <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+              <div className="text-foreground text-sm font-bold mb-1">
                 {s.title}
               </div>
-              <div className="text-muted-foreground" style={{ fontSize: 12, lineHeight: 1.55 }}>
+              <div className="text-muted-foreground text-xs leading-snug">
                 {s.description}
               </div>
             </div>
@@ -1059,10 +1023,10 @@ export function AdminDashboard() {
         <div style={{ background: "#FEF2F2", borderRadius: 16, padding: 24 }}>
           <AlertCircle size={48} color="#EF4444" />
         </div>
-        <h2 className="text-foreground" style={{ fontSize: 20, fontWeight: 700 }}>
+        <h2 className="text-foreground text-xl font-bold">
           Unable to Load Dashboard
         </h2>
-        <p className="text-muted-foreground" style={{ fontSize: 14, maxWidth: 400 }}>
+        <p className="text-muted-foreground text-sm max-w-[400px]">
           The analytics service is not responding. Please verify the backend is running and try again.
         </p>
         <button
@@ -1151,27 +1115,15 @@ export function AdminDashboard() {
       {/* ── Header ── */}
       <div className="admin-dash-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 className="text-foreground" style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+          <h1 className="text-foreground text-[26px] font-extrabold tracking-tight leading-tight m-0">
             Population Health Intelligence
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
-            <span className="text-muted-foreground" style={{ fontSize: 13 }}>{dateStr}</span>
+            <span className="text-muted-foreground text-[13px]">{dateStr}</span>
             <button
               onClick={() => setShowTour(true)}
               aria-label="Take the product tour"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "4px 12px",
-                border: "1px solid #BFDBFE",
-                borderRadius: 20,
-                background: "#EFF6FF",
-                color: "#1D4ED8",
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 border border-blue-200 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold cursor-pointer"
               onMouseEnter={(e) => { e.currentTarget.style.background = "#DBEAFE"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "#EFF6FF"; }}
             >
@@ -1190,23 +1142,7 @@ export function AdminDashboard() {
           />
           <button
             onClick={handleRefresh}
-            className="text-muted-foreground"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "9px 18px",
-              border: "1px solid #E5E7EB",
-              borderRadius: 10,
-              background: "#FFFFFF",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#CBD5E1"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; e.currentTarget.style.borderColor = "#E5E7EB"; }}
+            className="text-muted-foreground inline-flex items-center gap-1.5 px-[18px] py-[9px] border border-border bg-background text-[13px] font-semibold cursor-pointer rounded-[10px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150 hover:bg-muted hover:border-slate-300"
           >
             <RefreshCw size={14} />
             Refresh
@@ -1218,19 +1154,7 @@ export function AdminDashboard() {
       {/* ── Data Freshness Bar ── */}
       {emrConnected && (
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            padding: "10px 20px",
-            background: "#F0FDF4",
-            border: "1px solid #BBF7D0",
-            borderRadius: 10,
-            marginBottom: 24,
-            fontSize: 12,
-            color: "#166534",
-            fontWeight: 500,
-          }}
+          className="flex items-center gap-4 px-5 py-2.5 bg-green-50 border border-green-200 rounded-[10px] mb-6 text-xs text-green-800 font-medium"
         >
           <span
             style={{
@@ -1273,10 +1197,10 @@ export function AdminDashboard() {
               <AlertCircle size={24} color="#F59E0B" />
             </div>
             <div>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#92400E", margin: 0 }}>
+              <h3 className="text-[15px] font-bold text-amber-900 m-0">
                 No EMR System Connected
               </h3>
-              <p style={{ fontSize: 13, color: "#A16207", margin: "4px 0 0" }}>
+              <p className="text-[13px] text-amber-700 mt-1 mb-0">
                 Connect your EMR to see patient data, or try the demo with sample OpenEMR data.
               </p>
             </div>
@@ -1357,12 +1281,12 @@ export function AdminDashboard() {
                 <Stethoscope size={28} color="#F59E0B" />
               </div>
               <div>
-                <h3 className="text-foreground" style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+                <h3 className="text-foreground text-lg font-bold m-0">
                   Connect Demo OpenEMR?
                 </h3>
               </div>
             </div>
-            <p className="text-muted-foreground" style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 8px" }}>
+            <p className="text-muted-foreground text-sm leading-relaxed mb-2 mt-0">
               This will connect to the bundled <strong>OpenEMR</strong> demo instance with sample patient data. You can use this to explore all features of RAF Intelligence.
             </p>
             <div style={{
@@ -1435,10 +1359,10 @@ export function AdminDashboard() {
           <div style={{ background: "#F0F9FF", borderRadius: 16, padding: 24, display: "inline-block", marginBottom: 20 }}>
             <Stethoscope size={48} color="#3B82F6" />
           </div>
-          <h2 className="text-foreground" style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px" }}>
+          <h2 className="text-foreground text-[22px] font-bold mb-2 mt-0">
             Welcome to RAF Intelligence
           </h2>
-          <p className="text-muted-foreground" style={{ fontSize: 15, maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.6 }}>
+          <p className="text-muted-foreground text-[15px] leading-relaxed max-w-[480px] mx-auto mb-6 mt-0">
             Connect your EMR system to start analyzing patient data, identifying HCC coding gaps, and uncovering revenue opportunities.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
@@ -1577,7 +1501,7 @@ export function AdminDashboard() {
       )}
       {/* Inline notice when kpi-trends endpoint failed or timed out */}
       {(kpiTrendsQ.isError || (kpiTimedOut && !kpiTrends)) && (
-        <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: -16, marginBottom: 8, paddingLeft: 4 }}>
+        <div className="text-muted-foreground text-[11px] -mt-4 mb-2 pl-1">
           Sparkline trends couldn&apos;t load — showing latest values only.
         </div>
       )}
@@ -1773,7 +1697,7 @@ export function AdminDashboard() {
               }
             />
             {suspectsCount === 0 ? (
-              <div className="text-muted-foreground" style={{ fontSize: 14, padding: "24px 0", textAlign: "center" }}>
+              <div className="text-muted-foreground text-sm py-6 text-center">
                 No suspect conditions found. Run clinical analysis to identify gaps.
               </div>
             ) : (
@@ -1867,7 +1791,7 @@ export function AdminDashboard() {
               }
             />
             {topOpps.length === 0 ? (
-              <div className="text-muted-foreground" style={{ fontSize: 14, padding: "32px 0", textAlign: "center" }}>
+              <div className="text-muted-foreground text-sm py-8 text-center">
                 <Calculator size={32} color="#CBD5E1" style={{ marginBottom: 8 }} />
                 <div>Run clinical analysis to identify revenue gaps.</div>
               </div>

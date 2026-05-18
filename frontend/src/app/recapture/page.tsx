@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { usePaymentYear } from "@/contexts/payment-year-context";
+import { usePaymentYear, useIsHistoricalPY } from "@/contexts/payment-year-context";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -99,6 +100,7 @@ type SortKey = "priority" | "name" | "condition";
 export default function RecapturePage() {
   const router = useRouter();
   const { paymentYear: year, setPaymentYear: setYear } = usePaymentYear();
+  const isHistoricalPY = useIsHistoricalPY();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("priority");
   const [page, setPage] = useState(1);
@@ -238,6 +240,7 @@ export default function RecapturePage() {
   return (
     <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto", overflowX: "hidden" }} className="rci-page-pad-desktop">
       <DataQualityBanner />
+      <HistoricalPYBanner />
       {/* Header */}
       <div className="animate-fade-in">
         <PageHeader
@@ -630,8 +633,10 @@ export default function RecapturePage() {
           </p>
         </div>
         <button
-          onClick={exportCSV}
+          onClick={isHistoricalPY ? undefined : exportCSV}
+          disabled={isHistoricalPY}
           aria-label="Export recapture gaps to CSV"
+          title={isHistoricalPY ? "Disabled in historical view" : undefined}
           className="btn-press"
           style={{
             display: "flex",
@@ -640,11 +645,12 @@ export default function RecapturePage() {
             padding: "10px 20px",
             borderRadius: 8,
             border: "none",
-            background: `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`,
+            background: isHistoricalPY ? "#D1D5DB" : `linear-gradient(135deg, ${tokens.primary}, ${tokens.primaryDark})`,
             color: colors.white,
             fontSize: 13,
             fontWeight: 600,
-            cursor: "pointer",
+            cursor: isHistoricalPY ? "not-allowed" : "pointer",
+            opacity: isHistoricalPY ? 0.6 : 1,
             flexShrink: 0,
             boxShadow: "0 2px 8px rgba(37,99,235,0.3)",
             transition: "all 0.2s ease",

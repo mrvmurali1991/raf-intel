@@ -31,6 +31,7 @@ import {
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
 import { Clock, FileDown, Printer, Lock } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 import { ChartExportMenu } from "@/components/ui/chart-export-menu";
 import { DateRangePicker, presetToDates, type DateRange } from "@/components/charts/DateRangePicker";
 
@@ -429,29 +430,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Historical view banner ────────────────────────────────────── */}
-      {isHistoricalPY && (
-        <div
-          data-testid="historical-view-badge"
-          role="status"
-          aria-live="polite"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "12px 18px",
-            marginBottom: 24,
-            borderRadius: 10,
-            background: "#FFFBEB",
-            border: "1px solid #F59E0B",
-            color: "#92400E",
-            fontSize: 14,
-            fontWeight: 600,
-          }}
-        >
-          <Lock size={16} style={{ flexShrink: 0, color: "#D97706" }} />
-          Historical view — PY{paymentYear}. Data is read-only.
-        </div>
-      )}
+      <HistoricalPYBanner paymentYear={paymentYear} />
 
       {/* ── Tab Bar (pill style) ──────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 6, marginBottom: 32, padding: 6, background: tokens.slate100, borderRadius: 14, flexWrap: "wrap" }}>

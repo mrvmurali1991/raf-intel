@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
-import { usePaymentYear } from "@/contexts/payment-year-context";
+import { usePaymentYear, useIsHistoricalPY } from "@/contexts/payment-year-context";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -175,11 +176,13 @@ function AwvRow({
   index,
   scheduledAwv,
   onMarkScheduled,
+  isHistoricalPY,
 }: {
   patient: EnrichedPatient;
   index: number;
   scheduledAwv: Set<number>;
   onMarkScheduled: (pid: number) => void;
+  isHistoricalPY?: boolean;
 }) {
   const age = calcAge(patient.DOB);
   const isInitial = !patient.awv_had_this_year && (age ?? 0) >= 65;
@@ -231,19 +234,22 @@ function AwvRow({
           </span>
         ) : (
           <button
-            onClick={() => { onMarkScheduled(patient.pid); }}
+            onClick={isHistoricalPY ? undefined : () => { onMarkScheduled(patient.pid); }}
+            disabled={isHistoricalPY}
+            title={isHistoricalPY ? "Disabled in historical view" : undefined}
             style={{
               display: "flex",
               alignItems: "center",
               gap: 5,
               padding: "6px 12px",
               borderRadius: 7,
-              border: `1px solid ${C.primary}`,
-              background: `${C.primary}0D`,
+              border: `1px solid ${isHistoricalPY ? "#D1D5DB" : C.primary}`,
+              background: isHistoricalPY ? "#F3F4F6" : `${C.primary}0D`,
               fontSize: 12,
               fontWeight: 600,
-              color: C.primary,
-              cursor: "pointer",
+              color: isHistoricalPY ? "#9CA3AF" : C.primary,
+              cursor: isHistoricalPY ? "not-allowed" : "pointer",
+              opacity: isHistoricalPY ? 0.6 : 1,
             }}
           >
             <CalendarPlus size={12} /> Schedule
@@ -259,6 +265,7 @@ function AwvRow({
 export default function ProspectivePage() {
   const router = useRouter();
   const { paymentYear } = usePaymentYear();
+  const isHistoricalPY = useIsHistoricalPY();
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
@@ -626,6 +633,7 @@ export default function ProspectivePage() {
 
   return (
     <div style={{ padding: 32, maxWidth: 1400, margin: "0 auto" }}>
+      <HistoricalPYBanner />
       {/* Header */}
       <PageHeader
         title="Prospective RAF Management"
@@ -634,21 +642,28 @@ export default function ProspectivePage() {
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
-              onClick={exportWorklistCSV}
+              onClick={isHistoricalPY ? undefined : exportWorklistCSV}
+              disabled={isHistoricalPY}
               aria-label="Export worklist as CSV"
+              title={isHistoricalPY ? "Disabled in historical view" : undefined}
               className="btn-press"
               style={{
                 display: "flex", alignItems: "center", gap: 7,
                 padding: "9px 18px", borderRadius: 9,
-                border: `1px solid ${C.slate200}`, background: C.white,
-                color: C.slate600, fontSize: 13, fontWeight: 600,
-                cursor: "pointer",
+                border: `1px solid ${C.slate200}`,
+                background: isHistoricalPY ? "#F3F4F6" : C.white,
+                color: isHistoricalPY ? "#9CA3AF" : C.slate600,
+                fontSize: 13, fontWeight: 600,
+                cursor: isHistoricalPY ? "not-allowed" : "pointer",
+                opacity: isHistoricalPY ? 0.6 : 1,
               }}
             >
               <FileDown size={14} /> Export CSV
             </button>
             <button
-              onClick={exportChaseList}
+              onClick={isHistoricalPY ? undefined : exportChaseList}
+              disabled={isHistoricalPY}
+              title={isHistoricalPY ? "Disabled in historical view" : undefined}
               className="btn-press"
               style={{
                 display: "flex",
@@ -657,11 +672,12 @@ export default function ProspectivePage() {
                 padding: "9px 18px",
                 borderRadius: 9,
                 border: "none",
-                background: C.primary,
+                background: isHistoricalPY ? "#D1D5DB" : C.primary,
                 color: C.white,
                 fontSize: 13,
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: isHistoricalPY ? "not-allowed" : "pointer",
+                opacity: isHistoricalPY ? 0.6 : 1,
               }}
             >
               <Download size={14} /> Export Chase List

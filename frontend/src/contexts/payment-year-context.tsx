@@ -102,3 +102,13 @@ export function usePaymentYear(): PaymentYearContextType {
   }
   return ctx;
 }
+
+/**
+ * Convenience hook: returns true when the selected payment year is earlier
+ * than the current calendar year (i.e. the user is viewing historical data).
+ * Disabling writes in historical mode prevents unintentional data mutations.
+ */
+export function useIsHistoricalPY(): boolean {
+  const { paymentYear } = usePaymentYear();
+  return paymentYear < CURRENT_YEAR;
+}
