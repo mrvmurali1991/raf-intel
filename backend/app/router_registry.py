@@ -141,6 +141,7 @@ from app.routers import suspect_feedback as suspect_feedback_router
 from app.routers import pre_submission as pre_submission_router
 from app.routers import tenant_branding as tenant_branding_router
 from app.routers import encryption_admin as encryption_admin_router
+from app.routers import hie_sync as hie_sync_router
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +373,8 @@ def register_routers(app: FastAPI) -> None:
     # Admin
     _mount(app, retention.router)
     _mount(app, admin.router)
+    # HIE (CommonWell + Carequality) admin sync
+    _mount(app, hie_sync_router.router)
     _mount(app, meat_router.router)
     _mount(app, meat_evidence_router.router)
     _mount(app, radv_audit_router.router)
