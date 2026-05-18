@@ -449,10 +449,12 @@ export default function AuditPage() {
               </thead>
               <tbody>
                 {packages.map((pkg: any, idx: number) => {
-                  const patient = patientList.find((p: any) => Number(p.pid) === pkg.pid);
+                  const patient = patientList.find((p: any) => Number(p.pid) === (pkg.patient_id ?? pkg.pid));
                   const patientLabel = patient
                     ? `${patient.first_name ?? patient.fname} ${patient.last_name ?? patient.lname}`
-                    : `PID ${pkg.pid}`;
+                    : (pkg.patient_id ?? pkg.pid) != null
+                      ? `PID ${pkg.patient_id ?? pkg.pid}`
+                      : "—";
 
                   return (
                     <tr key={pkg.id} style={{ borderBottom: idx < packages.length - 1 ? "1px solid #F8FAFC" : "none" }}>
@@ -463,7 +465,7 @@ export default function AuditPage() {
                         {patientLabel}
                       </td>
                       <td style={{ padding: "12px 16px", color: "#475569" }}>
-                        {pkg.year}
+                        {pkg.measurement_year ?? pkg.year ?? "—"}
                       </td>
                       <td style={{ padding: "12px 16px", color: "#64748B", fontSize: 13 }}>
                         {fmtDate(pkg.created_at)}

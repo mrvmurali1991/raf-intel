@@ -738,11 +738,12 @@ export interface AuditPackagesResponse {
   count: number;
   packages: Array<{
     id: number;
-    pid: number;
-    year: number;
-    filepath?: string;
+    patient_id: number;
+    measurement_year: number;
+    file_path?: string;
     file_size_bytes?: number;
     created_at: string;
+    status?: string;
   }>;
 }
 
