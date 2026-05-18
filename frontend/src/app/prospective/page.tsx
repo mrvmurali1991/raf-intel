@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
+import { usePaymentYear } from "@/contexts/payment-year-context";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -257,6 +258,7 @@ function AwvRow({
 
 export default function ProspectivePage() {
   const router = useRouter();
+  const { paymentYear } = usePaymentYear();
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
@@ -286,14 +288,14 @@ export default function ProspectivePage() {
   });
 
   const { data: recaptureReport } = useQuery<{ gaps?: { pid?: number | string }[] }>({
-    queryKey: ["recapture-gaps-current"],
-    queryFn: () => getRecaptureGapsReport(new Date().getFullYear()),
+    queryKey: ["recapture-gaps-current", paymentYear],
+    queryFn: () => getRecaptureGapsReport(undefined, paymentYear),
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: revenueData } = useQuery({
-    queryKey: ["revenue-opportunity"],
-    queryFn: () => getRevenueOpportunity(new Date().getFullYear()),
+    queryKey: ["revenue-opportunity", paymentYear],
+    queryFn: () => getRevenueOpportunity(undefined, paymentYear),
     staleTime: 5 * 60 * 1000,
   });
   const revenueAtRiskMeta = useMetricFormula(revenueData as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? revenueData?._meta ?? null;

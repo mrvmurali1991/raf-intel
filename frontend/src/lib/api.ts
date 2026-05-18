@@ -1436,10 +1436,11 @@ export async function getJobStatus(
 
 export async function getSuspects(
   status: string = "open",
-  limit: number = 200
+  limit: number = 200,
+  paymentYear?: number
 ): Promise<SuspectsResponse> {
   const { data } = await api.get("/api/suspects", {
-    params: { status, limit },
+    params: { status, limit, ...(paymentYear ? { payment_year: paymentYear } : {}) },
   });
   return data;
 }

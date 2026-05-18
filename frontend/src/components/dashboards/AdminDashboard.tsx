@@ -5,6 +5,7 @@ import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { QProgressCard } from "@/components/QProgressCard";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
+import { usePaymentYear } from "@/contexts/payment-year-context";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
@@ -515,13 +516,13 @@ function TourModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Content */}
-        <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+        <div className="text-muted-foreground text-[11px] font-semibold tracking-widest uppercase mb-1.5">
           Step {step + 1} of {total}
         </div>
-        <h3 className="text-foreground" style={{ fontSize: 19, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.02em" }}>
+        <h3 className="text-foreground text-[19px] font-bold tracking-tight" style={{ margin: "0 0 10px" }}>
           {current.title}
         </h3>
-        <p className="text-muted-foreground" style={{ fontSize: 14, lineHeight: 1.65, margin: "0 0 24px" }}>
+        <p className="text-muted-foreground text-sm leading-relaxed" style={{ margin: "0 0 24px" }}>
           {current.body}
         </p>
 
@@ -599,7 +600,7 @@ function TourModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <p className="text-muted-foreground/60" style={{ textAlign: "center", fontSize: 11, marginTop: 16, marginBottom: 0 }}>
+        <p className="text-muted-foreground/60 text-[11px] text-center mt-4 mb-0">
           Use arrow keys to navigate &middot; Esc to close
         </p>
       </div>
@@ -825,6 +826,7 @@ function OnboardingCard({
 export function AdminDashboard() {
   const qc = useQueryClient();
   const router = useRouter();
+  const { paymentYear } = usePaymentYear();
   const [demoLoading, setDemoLoading] = useState(false);
   const [showDemoConfirm, setShowDemoConfirm] = useState(false);
   const [showTour, setShowTour] = useState(false);
@@ -843,7 +845,7 @@ export function AdminDashboard() {
     queries: [
       { queryKey: ["emr-status"], queryFn: getEmrStatus, retry: 1, staleTime: 60_000 },
       { queryKey: ["dashboard-stats"], queryFn: getDashboardStats, retry: 1, staleTime: 60_000 },
-      { queryKey: ["population-summary", new Date().getFullYear()], queryFn: () => getPopulationSummary(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
+      { queryKey: ["population-summary", paymentYear], queryFn: () => getPopulationSummary(paymentYear), retry: 1, staleTime: 60_000 },
     ],
   });
   const emrStatus = emrStatusQ.data;
@@ -889,7 +891,7 @@ export function AdminDashboard() {
   // ---- Batch 2: Analytics (secondary) ----
   const [revQ, dcQ, scorecardQ, trendsQ, kpiTrendsQ] = useQueries({
     queries: [
-      { queryKey: ["revenue-opportunity", new Date().getFullYear()], queryFn: () => getRevenueOpportunity(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
+      { queryKey: ["revenue-opportunity", paymentYear], queryFn: () => getRevenueOpportunity(undefined, paymentYear), retry: 1, staleTime: 60_000 },
       { queryKey: ["data-completeness"], queryFn: getDataCompleteness, retry: 1, staleTime: 60_000 },
       { queryKey: ["patient-scorecard"], queryFn: () => getPatientScorecard(), retry: 1, staleTime: 60_000 },
       { queryKey: ["dashboard-trends"], queryFn: getDashboardTrends, retry: 1, staleTime: 60_000 },

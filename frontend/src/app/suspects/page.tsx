@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import type { DBSuspect } from "@/types";
 import { useToast } from "@/components/Toast";
+import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
 import {
   ClipboardList,
   TrendingUp,
@@ -294,7 +295,7 @@ export default function SuspectsPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedRationale, setExpandedRationale] = useState<Set<number>>(new Set());
-  const [measurementYear, setMeasurementYear] = useState<number>(2026);
+  const { paymentYear: measurementYear, setPaymentYear: setMeasurementYear } = usePaymentYear();
 
   // Close "More" popover on outside click
   useEffect(() => {
@@ -313,8 +314,8 @@ export default function SuspectsPage() {
   /* --- Data -------------------------------------------------------- */
 
   const { data: suspectsData, isLoading, isError } = useQuery({
-    queryKey: ["suspects", statusFilter],
-    queryFn: () => getSuspects(statusFilter === "coded" ? "all" : statusFilter, 500),
+    queryKey: ["suspects", statusFilter, measurementYear],
+    queryFn: () => getSuspects(statusFilter === "coded" ? "all" : statusFilter, 500, measurementYear),
   });
 
   const allSuspects: DBSuspect[] = useMemo(
@@ -816,7 +817,7 @@ export default function SuspectsPage() {
                     backgroundPosition: "right 2px center",
                   }}
                 >
-                  {[2024, 2025, 2026].map((y) => (
+                  {PAYMENT_YEARS.map((y) => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
