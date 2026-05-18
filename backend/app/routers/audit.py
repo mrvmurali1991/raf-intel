@@ -12,6 +12,7 @@ GET  /api/admin/audit/timestamp/{token_id}/verify    Re-verify an RFC 3161 times
 # Removed: from __future__ import annotations (breaks FastAPI schema generation)
 
 import io
+import json
 import logging
 import os
 import textwrap

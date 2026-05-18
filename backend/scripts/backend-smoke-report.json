@@ -1,0 +1,188 @@
+{
+  "generated_at": "2026-05-18T19:02:18.399088Z",
+  "summary": {
+    "total": 23,
+    "pass": 23,
+    "fail": 0,
+    "pass_rate": "100.0%"
+  },
+  "results": [
+    {
+      "name": "dashboard_stats",
+      "path": "/api/v1/dashboard/stats",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"total_patients\": 43, \"patients_analyzed\": 42, \"average_raf_score\": 0.8958, \"coverage_pct\": 97.7, \"total_suspects_open\": 215, \"open_recapture_gaps\": ..."
+    },
+    {
+      "name": "dashboard_kpi_trends",
+      "path": "/api/v1/dashboard/kpi-trends",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"weeks\": 12, \"open_gaps\": [2.0, 3.0, 2.0, 0.0, 1.0, 2.0, 2.0, 1.0, 0.0, 28.0, 0.0, 0.0], \"suspects\": [0.0, 0.0, 0.0, 0.0, 7.0, 0.0, 0.0, 0.0, 0.0, 24..."
+    },
+    {
+      "name": "dashboard_top_opportunities",
+      "path": "/api/v1/dashboard/top-opportunities",
+      "status_code": 200,
+      "category": "PASS_EXPECTED_EMPTY",
+      "response_excerpt": "{\"opportunities\": [], \"count\": 0}"
+    },
+    {
+      "name": "patients_list",
+      "path": "/api/v1/patients?limit=10",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"patients\": [{\"id\": 22, \"pid\": 22, \"name\": \"Donna Adams\", \"fname\": \"Donna\", \"lname\": \"Adams\", \"dob\": \"1965-04-22\", \"DOB\": \"1965-04-22\", \"sex\": \"Femal..."
+    },
+    {
+      "name": "worklist_provider",
+      "path": "/api/v1/worklist/provider/6",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"provider_id\": 6, \"measurement_year\": 2026, \"total\": 0, \"items\": []}"
+    },
+    {
+      "name": "worklist_summary",
+      "path": "/api/v1/worklist/summary",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"total_patients_needing_attention\": 25, \"total_raf_impact_at_risk\": 36.908, \"total_revenue_at_risk\": 1037627.78, \"total_revenue_at_risk_meta\": {\"form..."
+    },
+    {
+      "name": "worklist_provider_workload",
+      "path": "/api/v1/worklist/provider-workload",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"providers\": [], \"total_open_gaps\": 0, \"target_capacity\": 30, \"measurement_year\": 2026}"
+    },
+    {
+      "name": "suspects_list",
+      "path": "/api/v1/suspects",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"status_filter\": \"open\", \"count\": 191, \"limit\": 200, \"offset\": 0, \"suspects\": [{\"id\": 115, \"patient_id\": 4, \"measurement_year\": 2026, \"suspect_hcc\": ..."
+    },
+    {
+      "name": "suspects_by_patient",
+      "path": "/api/v1/suspects/22",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"pid\": 22, \"patient_name\": \"Donna Adams\", \"status_filter\": \"open\", \"year_filter\": null, \"count\": 4, \"suspects\": [{\"id\": 294, \"patient_id\": 22, \"measu..."
+    },
+    {
+      "name": "recapture_gaps",
+      "path": "/api/v1/recapture/gaps",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"total\": 50, \"limit\": 50, \"offset\": 0, \"gaps\": [{\"id\": 488, \"patient_id\": 2, \"tenant_id\": 1, \"hcc_code\": \"138\", \"icd10_code\": \"N18.4\", \"prior_year\": ..."
+    },
+    {
+      "name": "reports_recapture_gaps",
+      "path": "/api/reports/recapture-gaps",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"measurement_year\": 2026, \"total_gaps\": 223, \"patients_affected\": 30, \"gaps\": [{\"pid\": 1, \"first_name\": \"\", \"last_name\": \"\", \"condition\": \"Chronic Sy..."
+    },
+    {
+      "name": "reports_revenue_opportunity",
+      "path": "/api/reports/revenue-opportunity",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"measurement_year\": 2026, \"total_patients_analyzed\": 29, \"total_billing_raf\": 37.6252, \"total_ai_raf\": 33.0203, \"total_gap\": -4.6049, \"estimated_annu..."
+    },
+    {
+      "name": "reports_patient_scorecard",
+      "path": "/api/reports/patient-scorecard",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "[{\"pid\": 0, \"name\": \"Test SyncUser\", \"age\": 46, \"sex\": \"Male\", \"billing_raf\": null, \"ai_raf\": null, \"gap\": null, \"revenue_opportunity\": null, \"hcc_cou..."
+    },
+    {
+      "name": "reports_hcc_distribution",
+      "path": "/api/reports/hcc-distribution",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "[{\"hcc_code\": \"38\", \"patient_count\": 9}, {\"hcc_code\": \"280\", \"patient_count\": 6}, {\"hcc_code\": \"37\", \"patient_count\": 5}, {\"hcc_code\": \"226\", \"patient..."
+    },
+    {
+      "name": "v28_impact_portfolio",
+      "path": "/api/v1/v28-impact/portfolio",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"tenant_id\": \"1\", \"measurement_year\": 2026, \"patient_count\": 43, \"computed_patient_count\": 43, \"total_v24_raf\": 30.6167, \"total_v28_raf\": 31.803, \"av..."
+    },
+    {
+      "name": "radv_audit_runs_legacy",
+      "path": "/api/radv/audit-runs",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"runs\": [], \"extrapolation_enforced\": false, \"extrapolation_note\": \"Disabled per Sept 2025 N.D. Tex. court ruling (HHS appeal pending). Exposure show..."
+    },
+    {
+      "name": "radv_audit_runs_v1",
+      "path": "/api/v1/radv/audit-runs",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"runs\": [], \"extrapolation_enforced\": false, \"extrapolation_note\": \"Disabled per Sept 2025 N.D. Tex. court ruling (HHS appeal pending). Exposure show..."
+    },
+    {
+      "name": "goals",
+      "path": "/api/v1/goals",
+      "status_code": 200,
+      "category": "PASS_EXPECTED_EMPTY",
+      "response_excerpt": "[]"
+    },
+    {
+      "name": "hcc_rejections",
+      "path": "/api/v1/hcc-rejections",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"total\": 0, \"page\": 1, \"page_size\": 50, \"items\": []}"
+    },
+    {
+      "name": "audit_chain_status",
+      "path": "/api/audit/chain/status",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"total_entries\": 2061, \"last_hash\": \"68779d8e76844bef6438c059aa7c044ee627f539a99dc407049104a8d81ba3fb\", \"file_exists\": true}"
+    },
+    {
+      "name": "audit_verify",
+      "path": "/api/audit/verify",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"ok\": false, \"total_entries\": 2061, \"integrity_pct\": 99.9, \"first_break_line\": 1161, \"errors\": [\"Line 1161: chain break \\u2014 expected prev bb0ada4a..."
+    },
+    {
+      "name": "auth_me",
+      "path": "/api/v1/auth/me",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"id\": 1, \"email\": \"admin@raf.health\", \"full_name\": \"Admin User\", \"role\": \"admin\", \"tenant_id\": 1, \"last_login_at\": \"2026-05-18T19:02:17\", \"created_at..."
+    },
+    {
+      "name": "auth_tenants",
+      "path": "/api/auth/tenants",
+      "status_code": 200,
+      "category": "PASS",
+      "response_excerpt": "{\"tenants\": [{\"tenant_id\": \"1\", \"name\": \"Demo OpenEMR Panel\", \"patient_count\": 43, \"user_count\": 2}], \"current_tenant_id\": \"1\"}"
+    }
+  ],
+  "failing": [
+    {
+      "name": "dashboard_top_opportunities",
+      "path": "/api/v1/dashboard/top-opportunities",
+      "status_code": 200,
+      "category": "PASS_EXPECTED_EMPTY",
+      "response_excerpt": "{\"opportunities\": [], \"count\": 0}"
+    },
+    {
+      "name": "goals",
+      "path": "/api/v1/goals",
+      "status_code": 200,
+      "category": "PASS_EXPECTED_EMPTY",
+      "response_excerpt": "[]"
+    }
+  ]
+}

@@ -351,6 +351,12 @@ def register_routers(app: FastAPI) -> None:
     # BI Tools Export
     _mount(app, bi_export.router)
 
+    # Provider worklist — prioritized patient lists and action items.
+    # NOTE: must be mounted BEFORE coder_worklist because both use the
+    # /api/worklist prefix and coder_worklist has a /{item_id} catch-all
+    # that would shadow /summary, /provider, and /provider-workload otherwise.
+    _mount(app, provider_worklist_router.router)
+
     # Coder worklist / review queue
     _mount(app, coder_worklist.router)
     _mount(app, review_router.router)
@@ -363,9 +369,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Multi-rater QA review workflow (Reveleer-style dual review)
     _mount(app, qa_reviews_router.router)
-
-    # Provider worklist — prioritized patient lists and action items
-    _mount(app, provider_worklist_router.router)
 
     # Worklist bulk actions — bulk-attest, bulk-export
     _mount(app, worklist_bulk_router.router)

@@ -11,11 +11,9 @@ driven by :mod:`app.services.suspect_engine` which calls the same underlying
 :func:`extract_hcc_suspects_from_note` function during a full patient scan.
 """
 
-from __future__ import annotations
-
 import logging
 from datetime import date
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -40,7 +38,7 @@ class ExtractSuspectsRequest(BaseModel):
 
     patient_id: int = Field(..., description="OpenEMR patient PID")
     note_text: str = Field(..., min_length=1, description="Free-text clinical note")
-    measurement_year: int | None = Field(
+    measurement_year: Optional[int] = Field(
         default=None,
         description="Measurement year for filter/context. Defaults to today's year.",
     )
