@@ -32,7 +32,11 @@ router = APIRouter(prefix="/api/chart-chase/v2", tags=["chart-chase-v2"])
 
 # Storage path for uploaded documents
 UPLOAD_ROOT = Path(os.getenv("CC_UPLOAD_ROOT", "/app/uploads/chart_chase"))
-UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+try:
+    UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # Non-fatal in test environments where /app is read-only.
+    logger.debug("Could not create UPLOAD_ROOT %s — uploads will fail at runtime.", UPLOAD_ROOT)
 
 
 # ----------- Models -----------

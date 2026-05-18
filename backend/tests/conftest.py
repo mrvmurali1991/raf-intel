@@ -42,6 +42,11 @@ import jwt
 import pytest
 
 
+def _is_integration_test(request: pytest.FixtureRequest) -> bool:
+    """Return True if the current test is marked @pytest.mark.integration."""
+    return request.node.get_closest_marker("integration") is not None
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _patch_emr_gate_for_all_tests():
     """
@@ -59,6 +64,79 @@ def _patch_emr_gate_for_all_tests():
     with patch(
         "app.services.emr_manager.list_connections", return_value=[{"is_active": 1}]
     ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _auto_mock_gemini(request: pytest.FixtureRequest):
+    """
+    Auto-mock Gemini/Vertex LLM calls for all non-integration tests.
+    Prevents real API calls and eliminates credential requirements in fast mode.
+    """
+    if _is_integration_test(request):
+        yield
+        return
+
+    _empty_response = {"candidates": [{"content": {"parts": [{"text": "[]"}]}}]}
+
+    _targets = [
+        "app.services.llm.vertex_client.llm_generate_content",
+        "app.services.llm.gemini_client.llm_generate_content",
+    ]
+    from contextlib import ExitStack
+    import importlib
+
+    with ExitStack() as stack:
+        for target in _targets:
+            parent = target.rsplit(".", 1)[0]
+            try:
+                importlib.import_module(parent)
+                stack.enter_context(
+                    patch(target, side_effect=lambda *_a, **_kw: _empty_response)
+                )
+            except Exception:
+                pass
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _auto_mock_redis(request: pytest.FixtureRequest):
+    """
+    Auto-mock Redis connections for all non-integration tests.
+    Prevents connection attempts when Redis is not running locally.
+    """
+    if _is_integration_test(request):
+        yield
+        return
+
+    import importlib
+    from contextlib import ExitStack
+
+    _mock_redis = MagicMock()
+    _mock_redis.get.return_value = None
+    _mock_redis.set.return_value = True
+    _mock_redis.delete.return_value = 1
+    _mock_redis.exists.return_value = 0
+    _mock_redis.expire.return_value = True
+    _mock_redis.incr.return_value = 1
+    _mock_redis.pipeline.return_value.__enter__ = lambda s: s
+    _mock_redis.pipeline.return_value.__exit__ = MagicMock(return_value=False)
+
+    _redis_targets = [
+        "app.cache.get_redis_client",
+        "app.services.cache_service.get_redis_client",
+    ]
+
+    with ExitStack() as stack:
+        for target in _redis_targets:
+            parent = target.rsplit(".", 1)[0]
+            try:
+                importlib.import_module(parent)
+                stack.enter_context(
+                    patch(target, return_value=_mock_redis)
+                )
+            except Exception:
+                pass
         yield
 
 

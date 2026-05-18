@@ -9,6 +9,8 @@ from __future__ import annotations
 import pytest
 import requests
 
+pytestmark = pytest.mark.integration
+
 
 # ---------------------------------------------------------------------------
 # Health endpoint

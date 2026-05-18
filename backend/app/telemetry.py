@@ -206,3 +206,105 @@ def instrument_app(app) -> None:
             logger.warning("instrument_app: MySQL instrumentation failed: %s", exc)
 
     _APP_INSTRUMENTED = True
+
+
+# ---------------------------------------------------------------------------
+# PHI-safe span attribute helper
+# ---------------------------------------------------------------------------
+
+# PHI key substrings: any span-attribute key whose lowercase form contains
+# one of these sequences is considered PHI-bearing and stripped from spans.
+# Intentionally specific to avoid false positives (e.g. "model_name" is fine).
+_PHI_KEY_SUBSTRINGS: tuple[str, ...] = (
+    "note_text",
+    "mbi",
+    "dob",
+    "ssn",
+    "patient_name",
+    "date_of_birth",
+    "birthdate",
+    "mbi_number",
+    "phi_",
+    "_phi",
+)
+
+
+def _safe_attrs(attrs: dict) -> dict:
+    """Return a copy of *attrs* with PHI-bearing keys removed.
+
+    A key is PHI-bearing if its lowercase form contains any of the
+    ``_PHI_KEY_SUBSTRINGS`` tokens.  Values are never inspected —
+    only key names.  All other keys (including "model_name",
+    "tenant_id", "suspects_returned") are preserved.
+    """
+    result: dict = {}
+    for key, value in attrs.items():
+        key_lower = str(key).lower()
+        if any(token in key_lower for token in _PHI_KEY_SUBSTRINGS):
+            continue
+        result[key] = value
+    return result
+
+
+def get_telemetry_status() -> dict:
+    """Return a status snapshot for /api/admin/telemetry (and tests).
+
+    Safe to call even when OTel packages are not installed — returns
+    conservative defaults in that case.
+    """
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    sample_rate_str = os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")
+    try:
+        sample_rate = float(sample_rate_str)
+    except (ValueError, TypeError):
+        sample_rate = 1.0
+
+    try:
+        from opentelemetry import trace
+        provider_name = type(trace.get_tracer_provider()).__name__
+    except ImportError:
+        provider_name = "NoOpTracerProvider"
+
+    try:
+        from opentelemetry.sdk.trace.export import SpanExporter
+        exporter_name = "otlp" if endpoint else ("console" if os.getenv("APP_ENV") == "development" else "none")
+    except ImportError:
+        exporter_name = "none"
+
+    return {
+        "tracer_provider": provider_name,
+        "exporter": exporter_name,
+        "endpoint_set": bool(endpoint),
+        "sample_rate": sample_rate,
+        "initialized": _OTEL_INITIALIZED,
+    }
+
+
+def get_tracer(name: str = "raf-intelligence"):
+    """Return the active OTel tracer for *name*, or a no-op tracer.
+
+    Callers should use this instead of ``opentelemetry.trace.get_tracer``
+    directly so that missing-package failures are handled gracefully.
+    """
+    try:
+        from opentelemetry import trace
+        return trace.get_tracer(name)
+    except ImportError:
+        # Return a dummy tracer that does nothing.
+        class _NoOpSpan:
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                pass
+            def set_attribute(self, *_):
+                pass
+            def is_recording(self):
+                return False
+
+        class _NoOpTracer:
+            def start_as_current_span(self, *_a, **_kw):
+                return _NoOpSpan()
+            def start_span(self, *_a, **_kw):
+                return _NoOpSpan()
+
+        return _NoOpTracer()
