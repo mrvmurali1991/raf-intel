@@ -27,6 +27,7 @@ import {
   focusPatientSearch,
   type ShortcutCategory,
 } from "@/lib/keyboard-shortcuts";
+import { openHelpPanel } from "@/components/HelpPanel";
 
 // ---------------------------------------------------------------------------
 // localStorage flag — set the first time any shortcut fires
@@ -92,7 +93,7 @@ export function KeyboardShortcuts() {
 
   // ----- Single-key handler ------------------------------------------------
   function handleSingleKey(key: string): boolean {
-    if (key === "?") { setShowHelp(true); return true; }
+    if (key === "?") { openHelpPanel(); setShowHelp(true); return true; }
     if (key === "/") { focusPatientSearch(); return true; }
     if (key === "A" || key === "a") {
       return dispatchContextShortcut("accept-focused-suspect");

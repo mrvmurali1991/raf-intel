@@ -45,6 +45,7 @@ import { ImportCSVModal } from "./components/ImportCSVModal";
 import { BulkActionsBar } from "./components/BulkActionsBar";
 import { KPIStrip } from "@/components/dashboards/admin/KPIStrip";
 import { RiskFilterChips } from "./components/RiskFilterChips";
+import { HelpButton } from "@/components/HelpPanel";
 
 // ---------------------------------------------------------------------------
 // Constants & Types
@@ -1054,6 +1055,7 @@ export default function PatientsPage() {
             <FileDown size={14} />
             Export
           </button>
+          <HelpButton />
         </div>
       </div>
 

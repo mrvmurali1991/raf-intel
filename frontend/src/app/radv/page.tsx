@@ -13,6 +13,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
+import { HelpButton } from "@/components/HelpPanel";
 import {
   ShieldCheck,
   FileText,
@@ -32,6 +33,12 @@ import {
   Info,
   GitCompare,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,6 +160,28 @@ const formatUsd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 // ---------------------------------------------------------------------------
+// Shared Tip helper — 200 ms open delay, keyboard accessible
+// ---------------------------------------------------------------------------
+
+function Tip({ content, children, side = "top", maxWidth = 260 }: {
+  content: React.ReactNode;
+  children: React.ReactElement;
+  side?: "top" | "bottom" | "left" | "right";
+  maxWidth?: number;
+}) {
+  return (
+    <TooltipProvider delay={200}>
+      <Tooltip>
+        <TooltipTrigger render={children} />
+        <TooltipContent side={side} className="max-w-none text-xs leading-snug" style={{ maxWidth }}>
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Extrapolation toggle — court-ruling sensitivity
 // ---------------------------------------------------------------------------
 
@@ -163,9 +192,8 @@ function ExtrapolationToggle({
   enforced: boolean;
   onChange: (v: boolean) => void;
 }) {
-  const [showTip, setShowTip] = useState(false);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <Scale size={15} color={enforced ? DANGER : SUCCESS} />
       <span style={{ fontSize: 12, fontWeight: 600, color: SUBTLE }}>Extrapolation:</span>
       <div
@@ -199,32 +227,23 @@ function ExtrapolationToggle({
           Enforced
         </button>
       </div>
-      <button
-        onMouseEnter={() => setShowTip(true)}
-        onFocus={() => setShowTip(true)}
-        onMouseLeave={() => setShowTip(false)}
-        onBlur={() => setShowTip(false)}
-        aria-label="Extrapolation context"
-        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}
+      <Tip
+        side="bottom"
+        maxWidth={280}
+        content={
+          <>
+            <strong>Per Sept 2025 N.D. Tex. court ruling</strong> vacating CMS extrapolation.
+            {" "}Disabled = direct sample-only exposure. Toggle to model CMS&rsquo;s intended approach.
+          </>
+        }
       >
-        <Info size={14} color={SUBTLE} />
-      </button>
-      {showTip && (
-        <div
-          role="tooltip"
-          style={{
-            position: "absolute", top: 26, right: 0, zIndex: 20,
-            backgroundColor: "#1E293B", color: "#fff", fontSize: 11,
-            padding: "8px 10px", borderRadius: 6, width: 260,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)", lineHeight: 1.5,
-          }}
+        <button
+          aria-label="Extrapolation context"
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}
         >
-          <strong>Per Sept 2025 court ruling</strong> (N.D. Tex.), CMS RADV
-          extrapolation provisions are currently vacated. HHS appeal is pending;
-          PY2020 audits begin Feb 2026. Plans must prepare for both scenarios.
-          Use <em>Stress-test both</em> in the simulator to compare.
-        </div>
-      )}
+          <Info size={14} color={SUBTLE} />
+        </button>
+      </Tip>
     </div>
   );
 }
@@ -278,7 +297,6 @@ export default function RadvPage() {
         ? "Request timed out after 15 s — the server may be unavailable. Refresh to retry."
         : axiosErr?.response?.data?.detail || "Failed to load audit runs";
       setError(msg);
-      // Ensure spinner exits — set runs to empty array so RunList renders the error path.
       setRuns([]);
     } finally {
       clearTimeout(timer);
@@ -338,6 +356,7 @@ export default function RadvPage() {
                 <Plus size={16} /> New audit run
               </button>
             )}
+            <HelpButton routeOverride="/radv" />
           </div>
         </div>
 
@@ -372,6 +391,30 @@ export default function RadvPage() {
 // ---------------------------------------------------------------------------
 // Run list
 // ---------------------------------------------------------------------------
+
+const SAMPLE_METHOD_TIPS: Record<SampleMethod, string> = {
+  random: "Pure random sampling — each record has equal probability of selection. Simple but may miss high-risk HCC clusters.",
+  stratified_hcc:
+    "Stratified by HCC code — ensures proportional representation across condition categories. Preferred for plans with uneven HCC distributions.",
+  high_risk_first:
+    "High-risk-first sampling — records with the highest per-patient RAF score are sampled first. Maximises exposure coverage with a smaller sample.",
+};
+
+function SampleMethodPill({ method }: { method: SampleMethod }) {
+  return (
+    <Tip content={SAMPLE_METHOD_TIPS[method]} side="top" maxWidth={240}>
+      <span
+        tabIndex={0}
+        style={{
+          fontSize: 12, color: SUBTLE, cursor: "default",
+          borderBottom: "1px dashed #CBD5E1",
+        }}
+      >
+        {method}
+      </span>
+    </Tip>
+  );
+}
 
 function RunList({ runs, onOpen }: { runs: RunSummary[] | null; onOpen: (id: number) => void }) {
   if (runs === null) {
@@ -408,13 +451,26 @@ function RunList({ runs, onOpen }: { runs: RunSummary[] | null; onOpen: (id: num
                 <td style={{ padding: "12px 14px", fontWeight: 600, color: "#0F172A" }}>{r.name}</td>
                 <td style={{ padding: "12px 14px", color: SUBTLE }}>{r.payment_year}</td>
                 <td style={{ padding: "12px 14px", color: SUBTLE }}>{r.record_count}/{r.sample_size}</td>
-                <td style={{ padding: "12px 14px", color: SUBTLE, fontSize: 12 }}>{r.sample_method}</td>
+                <td style={{ padding: "12px 14px" }}>
+                  <SampleMethodPill method={r.sample_method} />
+                </td>
                 <td style={{ padding: "12px 14px" }}>
                   <StatusBadge status={r.status} />
                 </td>
                 <td style={{ padding: "12px 14px", color: SUBTLE }}>{decided}/{r.record_count}</td>
-                <td style={{ padding: "12px 14px", fontWeight: 600, color: r.total_exposure_dollars > 0 ? DANGER : "#0F172A" }}>
-                  {formatUsd(Number(r.total_exposure_dollars || 0))}
+                <td style={{ padding: "12px 14px" }}>
+                  <Tip
+                    content="Dollar amount at risk based on sampled record failures × applicable multiplier"
+                    side="left"
+                    maxWidth={220}
+                  >
+                    <span
+                      tabIndex={0}
+                      style={{ fontWeight: 600, color: r.total_exposure_dollars > 0 ? DANGER : "#0F172A", cursor: "default" }}
+                    >
+                      {formatUsd(Number(r.total_exposure_dollars || 0))}
+                    </span>
+                  </Tip>
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "right" }}>
                   <button
@@ -471,19 +527,16 @@ function CreateRunDialog({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const firstInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Focus first input on mount
   useEffect(() => {
     firstInputRef.current?.focus();
   }, []);
 
-  // Return focus to trigger on unmount
   useEffect(() => {
     return () => {
       triggerRef?.current?.focus();
     };
   }, [triggerRef]);
 
-  // Focus trap + Escape handler
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -660,11 +713,35 @@ function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: num
     <div>
       {/* Top stats bar */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}>
-        <StatTile label="Records" value={`${run.summary.total_records}/${run.sample_size}`} />
-        <StatTile label="Defensible" value={String(run.summary.defensible)} color={SUCCESS} />
-        <StatTile label="Undefensible" value={String(run.summary.undefensible)} color={DANGER} />
-        <StatTile label="Pending" value={String(run.summary.pending)} color={SUBTLE} />
-        <StatTile label="Total exposure" value={formatUsd(run.summary.total_exposure_dollars)} color={run.summary.total_exposure_dollars > 0 ? DANGER : "#0F172A"} />
+        <StatTile
+          label="Records"
+          value={`${run.summary.total_records}/${run.sample_size}`}
+          tooltip="Total records reviewed out of sampled target"
+        />
+        <StatTile
+          label="Defensible"
+          value={String(run.summary.defensible)}
+          color={SUCCESS}
+          tooltip="Records with sufficient MEAT documentation to withstand CMS scrutiny — no clawback expected"
+        />
+        <StatTile
+          label="Undefensible"
+          value={String(run.summary.undefensible)}
+          color={DANGER}
+          tooltip="Records where documentation gaps make the HCC code indefensible — primary source of financial exposure"
+        />
+        <StatTile
+          label="Pending"
+          value={String(run.summary.pending)}
+          color={SUBTLE}
+          tooltip="Records not yet reviewed by a coder — require a defensible / undefensible decision before run can be exported"
+        />
+        <StatTile
+          label="Total exposure"
+          value={formatUsd(run.summary.total_exposure_dollars)}
+          color={run.summary.total_exposure_dollars > 0 ? DANGER : "#0F172A"}
+          tooltip="Dollar amount at risk based on sampled record failures × applicable multiplier"
+        />
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, justifyContent: "space-between", alignItems: "center" }}>
@@ -750,11 +827,18 @@ function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: num
                     MRN {activeRecord.mrn || "—"} · HCCs {activeRecord.sampled_hcc_codes.join(", ") || "—"}
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: SUBTLE }}>
-                  Exposure: <strong style={{ color: activeRecord.extrapolated_exposure_dollars > 0 ? DANGER : "#0F172A" }}>
-                    {formatUsd(Number(activeRecord.extrapolated_exposure_dollars || 0))}
-                  </strong>
-                </div>
+                <Tip
+                  content="Dollar amount at risk based on sampled record failures × applicable multiplier"
+                  side="left"
+                  maxWidth={220}
+                >
+                  <div style={{ fontSize: 12, color: SUBTLE, cursor: "default" }} tabIndex={0}>
+                    Exposure:{" "}
+                    <strong style={{ color: activeRecord.extrapolated_exposure_dollars > 0 ? DANGER : "#0F172A" }}>
+                      {formatUsd(Number(activeRecord.extrapolated_exposure_dollars || 0))}
+                    </strong>
+                  </div>
+                </Tip>
               </div>
 
               <div style={{ display: "flex", gap: 16, padding: 12, backgroundColor: "#F8FAFC", borderRadius: 8, marginBottom: 16 }}>
@@ -802,13 +886,55 @@ function RunDetailView({ runId, onChanged, extrapolationEnforced }: { runId: num
 // Chart Requests Tab
 // ---------------------------------------------------------------------------
 
-const CHART_STATUS_META: Record<ChartStatus, { label: string; bg: string; color: string }> = {
-  requested: { label: "Requested", bg: "#E0F2FE", color: "#0369A1" },
-  received:  { label: "Received",  bg: "#FEF3C7", color: "#92400E" },
-  coded:     { label: "Coded",     bg: "#DCFCE7", color: "#166534" },
-  disputed:  { label: "Disputed",  bg: "#FEE2E2", color: "#991B1B" },
-  cleared:   { label: "Cleared",   bg: "#F1F5F9", color: "#475569" },
+const CHART_STATUS_META: Record<ChartStatus, { label: string; bg: string; color: string; tip: string }> = {
+  requested: {
+    label: "Requested",
+    bg: "#E0F2FE",
+    color: "#0369A1",
+    tip: "Chart has been formally requested from the provider — awaiting receipt.",
+  },
+  received: {
+    label: "Received",
+    bg: "#FEF3C7",
+    color: "#92400E",
+    tip: "Chart received from provider — pending coder review and HCC validation.",
+  },
+  coded: {
+    label: "Coded",
+    bg: "#DCFCE7",
+    color: "#166534",
+    tip: "Coder has reviewed the chart and confirmed or updated the HCC coding.",
+  },
+  disputed: {
+    label: "Disputed",
+    bg: "#FEE2E2",
+    color: "#991B1B",
+    tip: "Coding or documentation has been formally disputed — requires resolution before export.",
+  },
+  cleared: {
+    label: "Cleared",
+    bg: "#F1F5F9",
+    color: "#475569",
+    tip: "Dispute resolved and chart cleared — no outstanding issues.",
+  },
 };
+
+function ChartStatusPill({ status }: { status: ChartStatus }) {
+  const meta = CHART_STATUS_META[status];
+  return (
+    <Tip content={meta.tip} side="top" maxWidth={230}>
+      <span
+        tabIndex={0}
+        style={{
+          display: "inline-block", padding: "3px 10px", borderRadius: 999,
+          backgroundColor: meta.bg, color: meta.color, fontSize: 11, fontWeight: 600, cursor: "default",
+        }}
+      >
+        {meta.label}
+      </span>
+    </Tip>
+  );
+}
 
 function ChartRequestsTab({ runId }: { runId: number }) {
   const [requests, setRequests] = useState<ChartRequest[]>([]);
@@ -947,10 +1073,9 @@ function ChartRequestsTab({ runId }: { runId: number }) {
             </thead>
             <tbody>
               {requests.map((r) => {
-                const meta = CHART_STATUS_META[r.status];
                 const isOverdue = (r.status === "requested" || r.status === "received")
                   && !!r.due_date && new Date(r.due_date) < new Date();
-                const busy = patching === r.id;
+                const isBusy = patching === r.id;
                 return (
                   <tr key={r.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
                     <td style={{ padding: "10px 14px", color: "#0F172A", fontWeight: 600 }}>#{r.patient_id}</td>
@@ -966,41 +1091,59 @@ function ChartRequestsTab({ runId }: { runId: number }) {
                       {r.days_outstanding}d
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, backgroundColor: meta.bg, color: meta.color, fontSize: 11, fontWeight: 600 }}>
-                        {meta.label}
-                      </span>
+                      <ChartStatusPill status={r.status} />
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {r.status === "requested" && (
-                          <button onClick={() => patch(r.id, "received", new Date().toISOString())} disabled={busy}
-                            aria-label="Mark received"
-                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${SUCCESS}`, color: SUCCESS, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
-                            <CheckCircle2 size={11} /> Received
-                          </button>
+                          <Tip content="Mark this chart as received from the provider — moves it to coder review queue" side="top" maxWidth={210}>
+                            <button
+                              onClick={() => patch(r.id, "received", new Date().toISOString())}
+                              disabled={isBusy}
+                              aria-label="Mark received"
+                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${SUCCESS}`, color: SUCCESS, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                            >
+                              <CheckCircle2 size={11} /> Received
+                            </button>
+                          </Tip>
                         )}
                         {r.status === "received" && (
-                          <button onClick={() => patch(r.id, "coded")} disabled={busy}
-                            aria-label="Mark coded"
-                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${PRIMARY}`, color: PRIMARY, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
-                            <CheckCheck size={11} /> Coded
-                          </button>
+                          <Tip content="Confirm coder has reviewed the chart and assigned or validated HCC codes" side="top" maxWidth={210}>
+                            <button
+                              onClick={() => patch(r.id, "coded")}
+                              disabled={isBusy}
+                              aria-label="Mark coded"
+                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${PRIMARY}`, color: PRIMARY, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                            >
+                              <CheckCheck size={11} /> Coded
+                            </button>
+                          </Tip>
                         )}
                         {(r.status === "requested" || r.status === "received" || r.status === "coded") && (
-                          <button onClick={() => patch(r.id, "disputed")} disabled={busy}
-                            aria-label="Dispute chart request"
-                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${DANGER}`, color: DANGER, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
-                            <XCircle size={11} /> Dispute
-                          </button>
+                          <Tip content="Flag this chart request as disputed — documentation or coding is contested and requires resolution" side="top" maxWidth={230}>
+                            <button
+                              onClick={() => patch(r.id, "disputed")}
+                              disabled={isBusy}
+                              aria-label="Dispute chart request"
+                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${DANGER}`, color: DANGER, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                            >
+                              <XCircle size={11} /> Dispute
+                            </button>
+                          </Tip>
                         )}
                         {r.status === "disputed" && (
-                          <button onClick={() => patch(r.id, "cleared")} disabled={busy}
-                            aria-label="Clear dispute"
-                            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${WARN}`, color: WARN, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
-                            Clear
-                          </button>
+                          <Tip content="Dispute resolved — chart is cleared and no longer blocking export" side="top" maxWidth={200}>
+                            <button
+                              onClick={() => patch(r.id, "cleared")}
+                              disabled={isBusy}
+                              aria-label="Clear dispute"
+                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${WARN}`, color: WARN, backgroundColor: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                            >
+                              Clear
+                            </button>
+                          </Tip>
                         )}
-                        {busy && <Loader2 size={13} color={SUBTLE} />}
+                        {isBusy && <Loader2 size={13} color={SUBTLE} />}
                       </div>
                     </td>
                   </tr>
@@ -1037,12 +1180,18 @@ function DecisionButton({
   );
 }
 
-function StatTile({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, padding: 12 }}>
+function StatTile({ label, value, color, tooltip }: { label: string; value: string; color?: string; tooltip?: string }) {
+  const inner = (
+    <div style={{ backgroundColor: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, padding: 12, cursor: tooltip ? "default" : undefined }}>
       <div style={{ fontSize: 11, color: SUBTLE, fontWeight: 600, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: color || "#0F172A" }}>{value}</div>
     </div>
+  );
+  if (!tooltip) return inner;
+  return (
+    <Tip content={tooltip} side="top" maxWidth={230}>
+      <div tabIndex={0} style={{ outline: "none" }}>{inner}</div>
+    </Tip>
   );
 }
 
@@ -1098,21 +1247,26 @@ function SimulatorPanel({
           <DollarSign size={18} color={PRIMARY} />
           <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Revenue exposure simulator</div>
         </div>
-        <button
-          onClick={() => setStressMode((s) => !s)}
-          data-testid="radv-stress-test-btn"
-          title="Show side-by-side comparison: court-ordered disabled vs. CMS enforced"
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "4px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700,
-            border: `1px solid ${stressMode ? PRIMARY : "#E2E8F0"}`,
-            backgroundColor: stressMode ? "#F0FDFA" : "#fff",
-            color: stressMode ? PRIMARY : SUBTLE,
-            cursor: "pointer",
-          }}
+        <Tip
+          side="left"
+          maxWidth={250}
+          content="Side-by-side comparison: direct exposure vs extrapolated. Use during prep before CMS submits final rule."
         >
-          <GitCompare size={11} /> Stress-test both
-        </button>
+          <button
+            onClick={() => setStressMode((s) => !s)}
+            data-testid="radv-stress-test-btn"
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "4px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700,
+              border: `1px solid ${stressMode ? PRIMARY : "#E2E8F0"}`,
+              backgroundColor: stressMode ? "#F0FDFA" : "#fff",
+              color: stressMode ? PRIMARY : SUBTLE,
+              cursor: "pointer",
+            }}
+          >
+            <GitCompare size={11} /> Stress-test both
+          </button>
+        </Tip>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -1171,7 +1325,6 @@ function SimulatorPanel({
             <GitCompare size={10} /> Scenario comparison
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {/* Disabled scenario */}
             <div style={{ border: `2px solid ${SUCCESS}`, borderRadius: 8, padding: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: SUCCESS, marginBottom: 6, textTransform: "uppercase" }}>
                 Court order (disabled)
@@ -1181,7 +1334,6 @@ function SimulatorPanel({
               </div>
               <div style={{ fontSize: 9, color: SUBTLE, marginTop: 2 }}>Sample-based only</div>
             </div>
-            {/* Enforced scenario */}
             <div style={{ border: `2px solid ${DANGER}`, borderRadius: 8, padding: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: DANGER, marginBottom: 6, textTransform: "uppercase" }}>
                 CMS enforced

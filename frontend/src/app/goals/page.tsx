@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { HelpButton } from "@/components/HelpPanel";
 import {
   Target,
   Plus,
@@ -294,14 +295,17 @@ export default function GoalsPage() {
               Track RAF capture targets vs actuals for the current quarter.
             </p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors self-start sm:self-auto"
-            aria-label="Set a new quarterly goal"
-          >
-            <Plus className="h-4 w-4" />
-            Set Goal
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              aria-label="Set a new quarterly goal"
+            >
+              <Plus className="h-4 w-4" />
+              Set Goal
+            </button>
+            <HelpButton />
+          </div>
         </header>
 
         {isLoading && (

@@ -2,6 +2,7 @@
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { HelpButton } from "@/components/HelpPanel";
 import { usePaymentYear, useIsHistoricalPY, PAYMENT_YEARS } from "@/contexts/payment-year-context";
 import { useTenantBranding } from "@/lib/useTenantBranding";
 import dynamic from "next/dynamic";
@@ -448,6 +449,7 @@ export default function ReportsPage() {
           >
             <Printer size={15} /> Print Report
           </button>
+          <HelpButton />
         </div>
       </div>
 

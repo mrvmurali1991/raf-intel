@@ -6,11 +6,113 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPatients, getAuditPackages, generateAudit, getAuditDownloadUrl, getAuditChainStatus, verifyAuditChain } from "@/lib/api";
 import { downloadCSV } from "@/lib/csv-export";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { HelpButton } from "@/components/HelpPanel";
 import { useToast } from "@/components/Toast";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
 import { Shield, FileDown, Loader2, CheckCircle2, Search, X, ChevronDown, Package, Hash, RefreshCw, AlertTriangle, Download } from "lucide-react";
 import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
 import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+/* ------------------------------------------------------------------ */
+/*  Shared Tip helper — 200 ms open delay, keyboard accessible         */
+/* ------------------------------------------------------------------ */
+
+function Tip({
+  content,
+  children,
+  side = "top",
+  maxWidth = 260,
+}: {
+  content: React.ReactNode;
+  children: React.ReactElement;
+  side?: "top" | "bottom" | "left" | "right";
+  maxWidth?: number;
+}) {
+  return (
+    <TooltipProvider delay={200}>
+      <Tooltip>
+        <TooltipTrigger render={children} />
+        <TooltipContent
+          side={side}
+          className="max-w-none text-xs leading-snug"
+          style={{ maxWidth }}
+        >
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Event-type pill config                                              */
+/* ------------------------------------------------------------------ */
+
+const EVENT_TYPE_META: Record<string, { bg: string; color: string; tip: string }> = {
+  hcc_accepted: {
+    bg: "#DCFCE7",
+    color: "#166534",
+    tip: "HCC code accepted — documentation meets MEAT criteria and the condition is supported for RAF scoring.",
+  },
+  hcc_rejected: {
+    bg: "#FEE2E2",
+    color: "#991B1B",
+    tip: "HCC code rejected — documentation is insufficient; this condition will not contribute to RAF score and may trigger a clawback.",
+  },
+  hcc_suspect: {
+    bg: "#FEF3C7",
+    color: "#92400E",
+    tip: "Suspected HCC — condition identified via predictive model but not yet confirmed by a clinician encounter.",
+  },
+  audit_export: {
+    bg: "#E0E7FF",
+    color: "#3730A3",
+    tip: "Audit package exported — a PDF or structured file was generated and downloaded for submission or archival.",
+  },
+  chain_verify: {
+    bg: "#EFF6FF",
+    color: "#1D4ED8",
+    tip: "Chain integrity verified — the entire hash chain was walked and returned pass/fail with percentage intact.",
+  },
+  record_update: {
+    bg: "#F1F5F9",
+    color: "#475569",
+    tip: "Audit record updated — coder decision, notes, or evidence status was modified on a sampled record.",
+  },
+};
+
+function EventTypePill({ eventType }: { eventType: string }) {
+  const meta = EVENT_TYPE_META[eventType] ?? {
+    bg: "#F1F5F9",
+    color: "#475569",
+    tip: `Event type: ${eventType}`,
+  };
+  return (
+    <Tip content={meta.tip} side="top" maxWidth={240}>
+      <span
+        tabIndex={0}
+        style={{
+          display: "inline-block",
+          padding: "2px 8px",
+          borderRadius: 999,
+          backgroundColor: meta.bg,
+          color: meta.color,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: "default",
+        }}
+      >
+        {eventType}
+      </span>
+    </Tip>
+  );
+}
 
 const RadvScenariosCard = dynamic(() => import("./AuditRadvScenariosCard"), {
   ssr: false,
@@ -248,56 +350,32 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 /*  Hash Tooltip                                                      */
 /* ------------------------------------------------------------------ */
 
-function HashTooltip({ currentHash, previousHash }: { currentHash?: string; previousHash?: string }) {
-  const [visible, setVisible] = useState(false);
-
+function HashTooltip({
+  currentHash,
+  previousHash,
+}: {
+  currentHash?: string;
+  previousHash?: string;
+}) {
   if (!currentHash && !previousHash) return null;
 
   return (
-    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-      <button
-        type="button"
-        aria-label="Show SHA-256 hashes"
-        onMouseEnter={() => setVisible(true)}
-        onMouseLeave={() => setVisible(false)}
-        onFocus={() => setVisible(true)}
-        onBlur={() => setVisible(false)}
-        style={{
-          border: "none",
-          background: "none",
-          cursor: "pointer",
-          padding: "2px 4px",
-          borderRadius: 4,
-          display: "inline-flex",
-          alignItems: "center",
-          color: "#94A3B8",
-        }}
-      >
-        <Hash size={13} />
-      </button>
-
-      {visible && (
-        <div
-          role="tooltip"
-          style={{
-            position: "absolute",
-            left: "calc(100% + 8px)",
-            top: "50%",
-            transform: "translateY(-50%)",
-            zIndex: 100,
-            backgroundColor: "#1E293B",
-            color: "#F1F5F9",
-            borderRadius: 8,
-            padding: "10px 12px",
-            width: 340,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-            fontSize: 11,
-            fontFamily: "monospace",
-            lineHeight: 1.6,
-            pointerEvents: "none",
-          }}
-        >
-          <div style={{ marginBottom: 6, fontFamily: "sans-serif", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+    <Tip
+      side="left"
+      maxWidth={360}
+      content={
+        <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6 }}>
+          <div
+            style={{
+              fontFamily: "sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#94A3B8",
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              marginBottom: 6,
+            }}
+          >
             Cryptographic Hash Chain
           </div>
           {currentHash && (
@@ -313,8 +391,25 @@ function HashTooltip({ currentHash, previousHash }: { currentHash?: string; prev
             </div>
           )}
         </div>
-      )}
-    </div>
+      }
+    >
+      <button
+        type="button"
+        aria-label="Show SHA-256 hashes for this entry and its parent"
+        style={{
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          padding: "2px 4px",
+          borderRadius: 4,
+          display: "inline-flex",
+          alignItems: "center",
+          color: "#94A3B8",
+        }}
+      >
+        <Hash size={13} />
+      </button>
+    </Tip>
   );
 }
 
@@ -413,64 +508,89 @@ function AuditChainIntegrityCard() {
           </p>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "7px 14px", borderRadius: 7,
-              border: "1px solid #BFDBFE", backgroundColor: "#EFF6FF",
-              color: "#1D4ED8", fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
-            aria-label="Export chain of custody report"
-            data-testid="export-csv-audit-chain"
+          <Tip
+            side="bottom"
+            maxWidth={260}
+            content="Downloads CSV with all entries and their hashes for offline audit or regulatory submission"
           >
-            <Download size={14} /> Export Chain of Custody
-          </button>
-          <button
-            type="button"
-            onClick={handleVerify}
-            disabled={verifying}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "7px 14px", borderRadius: 7,
-              border: "none", backgroundColor: verifying ? "#E2E8F0" : "#2563EB",
-              color: verifying ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600,
-              cursor: verifying ? "not-allowed" : "pointer",
-            }}
-            aria-label="Verify chain integrity"
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 7,
+                border: "1px solid #BFDBFE", backgroundColor: "#EFF6FF",
+                color: "#1D4ED8", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}
+              aria-label="Export chain of custody report"
+              data-testid="export-csv-audit-chain"
+            >
+              <Download size={14} /> Export Chain of Custody
+            </button>
+          </Tip>
+          <Tip
+            side="bottom"
+            maxWidth={260}
+            content="Walks every entry, recomputes hashes end-to-end, returns pass/fail + percentage of entries intact"
           >
-            {verifying ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
-            {verifying ? "Verifying..." : "Verify Chain Integrity"}
-          </button>
+            <button
+              type="button"
+              onClick={handleVerify}
+              disabled={verifying}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 7,
+                border: "none", backgroundColor: verifying ? "#E2E8F0" : "#2563EB",
+                color: verifying ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600,
+                cursor: verifying ? "not-allowed" : "pointer",
+              }}
+              aria-label="Verify chain integrity"
+            >
+              {verifying ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
+              {verifying ? "Verifying..." : "Verify Chain Integrity"}
+            </button>
+          </Tip>
+          <HelpButton routeOverride="/audit" />
         </div>
       </div>
 
       {/* Stats row */}
       <div style={{ padding: "16px 24px", display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
-            Total Entries
+        <Tip
+          side="bottom"
+          maxWidth={270}
+          content="Each audit event is hashed (SHA-256) and chained to the previous entry — tamper-evident"
+        >
+          <div style={{ cursor: "default" }} tabIndex={0}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+              Total Entries
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", fontFamily: "monospace" }}>
+              {statusLoading ? "—" : (chainStatus?.total_entries ?? 0).toLocaleString()}
+            </div>
           </div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", fontFamily: "monospace" }}>
-            {statusLoading ? "—" : (chainStatus?.total_entries ?? 0).toLocaleString()}
+        </Tip>
+        <Tip
+          side="bottom"
+          maxWidth={300}
+          content="Final hash in the chain; matches the integrity verify result — if this changes without a new event, the chain has been tampered with"
+        >
+          <div style={{ flex: 1, minWidth: 0, cursor: "default" }} tabIndex={0}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+              Last Entry Hash
+            </div>
+            <div
+              style={{
+                fontFamily: "monospace", fontSize: 12, color: "#1D4ED8",
+                backgroundColor: "#EFF6FF", padding: "6px 10px", borderRadius: 6,
+                border: "1px solid #BFDBFE", wordBreak: "break-all",
+                maxWidth: 480,
+              }}
+            >
+              {statusLoading ? "loading..." : (chainStatus?.last_hash ?? "No entries yet")}
+            </div>
           </div>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
-            Last Entry Hash
-          </div>
-          <div
-            style={{
-              fontFamily: "monospace", fontSize: 12, color: "#1D4ED8",
-              backgroundColor: "#EFF6FF", padding: "6px 10px", borderRadius: 6,
-              border: "1px solid #BFDBFE", wordBreak: "break-all",
-              maxWidth: 480,
-            }}
-          >
-            {statusLoading ? "loading..." : (chainStatus?.last_hash ?? "No entries yet")}
-          </div>
-        </div>
+        </Tip>
 
         {/* Verify result badge */}
         {verifyResult && (
@@ -734,6 +854,9 @@ export default function AuditPage() {
                       ? `PID ${pkg.patient_id ?? pkg.pid}`
                       : "—";
 
+                  const eventType: string | undefined =
+                    pkg.event_type ?? pkg.type ?? undefined;
+
                   return (
                     <tr key={pkg.id} style={{ borderBottom: idx < packages.length - 1 ? "1px solid #F8FAFC" : "none" }}>
                       <td style={{ padding: "12px 16px", color: "#64748B", fontFamily: "monospace", fontSize: 13 }}>
@@ -758,26 +881,29 @@ export default function AuditPage() {
                         />
                       </td>
                       <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                        <a
-                          href={getAuditDownloadUrl(pkg.id)}
-                          download
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "6px 12px",
-                            borderRadius: 6,
-                            border: "1px solid #E2E8F0",
-                            backgroundColor: "#fff",
-                            color: "#475569",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            textDecoration: "none",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <FileDown size={14} /> Download
-                        </a>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                          {eventType && <EventTypePill eventType={eventType} />}
+                          <a
+                            href={getAuditDownloadUrl(pkg.id)}
+                            download
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #E2E8F0",
+                              backgroundColor: "#fff",
+                              color: "#475569",
+                              fontSize: 13,
+                              fontWeight: 500,
+                              textDecoration: "none",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FileDown size={14} /> Download
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   );

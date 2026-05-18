@@ -72,6 +72,7 @@ import {
   PageHeader,
 } from "@/components/healthcare-ui";
 import { MetricCard } from "@/components/ui/metric-card";
+import { HelpButton } from "@/components/HelpPanel";
 import {
   AnimatedNumber,
   Sparkline,
@@ -851,6 +852,7 @@ export function AdminDashboard() {
             Refresh
           </button>
           <ExportButton onExport={() => { /* future export */ }} label="Export" />
+          <HelpButton routeOverride="/" />
         </div>
       </div>
 
