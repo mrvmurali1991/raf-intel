@@ -1199,7 +1199,7 @@ export default function SuspectsPage() {
                                 display: "inline-flex", alignItems: "center", gap: 6,
                                 height: 30, padding: "0 10px", borderRadius: 8,
                                 border: `1px solid ${active ? color : C.border}`,
-                                backgroundColor: active ? `${color}14` : "#f8fafc",
+                                backgroundColor: active ? `${color}14` : C.bgSubtle,
                                 color: active ? color : C.textMuted,
                                 fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
                               }}
@@ -1399,7 +1399,7 @@ export default function SuspectsPage() {
                 fontFamily: "monospace",
                 fontSize: 11,
                 fontWeight: 700,
-                color: "#334155",
+                color: C.label,
                 boxShadow: "0 1px 1px rgba(0,0,0,0.06)",
               }}
             >
@@ -1411,6 +1411,8 @@ export default function SuspectsPage() {
       </div>
 
       <div
+        role="grid"
+        aria-label="Suspected conditions"
         onKeyDown={handleListKeyDown}
         style={{
           backgroundColor: C.bgCard,
@@ -1423,6 +1425,10 @@ export default function SuspectsPage() {
       >
         {/* Header row */}
         <div
+          role="rowgroup"
+        >
+        <div
+          role="row"
           style={{
             display: "grid",
             gridTemplateColumns: SUSPECTS_GRID,
@@ -1438,7 +1444,7 @@ export default function SuspectsPage() {
             color: C.label,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div role="columnheader" aria-sort={sortField === "patient" ? "ascending" : "none"} style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {selectableIds.length > 0 && (
               <input
                 type="checkbox"
@@ -1450,22 +1456,24 @@ export default function SuspectsPage() {
             )}
             Patient
           </div>
-          <div>Suspected Condition</div>
-          <div>Evidence</div>
-          <div>Confidence</div>
-          <div style={{ justifySelf: "end" }}>RAF Lift</div>
-          <div style={{ justifySelf: "end" }}>Revenue</div>
-          <div style={{ justifySelf: "end" }}>Status</div>
-          <div style={{ justifySelf: "end" }}>Actions</div>
+          <div role="columnheader">Suspected Condition</div>
+          <div role="columnheader">Evidence</div>
+          <div role="columnheader" aria-sort={sortField === "confidence" ? "descending" : "none"}>Confidence</div>
+          <div role="columnheader" aria-sort={sortField === "raf" ? "descending" : "none"} style={{ justifySelf: "end" }}>RAF Lift</div>
+          <div role="columnheader" style={{ justifySelf: "end" }}>Revenue</div>
+          <div role="columnheader" style={{ justifySelf: "end" }}>Status</div>
+          <div role="columnheader" style={{ justifySelf: "end" }}>Actions</div>
+        </div>
         </div>
 
         {/* Body */}
         {isLoading && (
-          <div>
+          <div role="rowgroup">
             {Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} index={i} />)}
           </div>
         )}
 
+        <div role="rowgroup">
         {!isLoading && filteredSorted.length === 0 && (
           <div
             style={{
@@ -1998,6 +2006,7 @@ export default function SuspectsPage() {
             </div>
           );
         })}
+        </div>{/* /rowgroup */}
       </div>
 
       {/* ============================================================ */}

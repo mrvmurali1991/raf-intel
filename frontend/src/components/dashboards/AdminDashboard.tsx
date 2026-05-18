@@ -7,6 +7,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/comp
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { usePaymentYear } from "@/contexts/payment-year-context";
 import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
+import PageAlerts from "@/components/PageAlerts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
@@ -1276,8 +1277,10 @@ export function AdminDashboard() {
     <>
     {showTour && <TourModal onClose={() => setShowTour(false)} />}
     <div className="admin-dash-outer bg-background" style={{ minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
-      <DataQualityBanner />
-      <HistoricalPYBanner />
+      <PageAlerts defaultOpen>
+        <DataQualityBanner />
+        <HistoricalPYBanner />
+      </PageAlerts>
       <style>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }

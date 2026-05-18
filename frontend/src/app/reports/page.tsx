@@ -452,9 +452,43 @@ export default function ReportsPage() {
       {/* ── Historical view banner ────────────────────────────────────── */}
       <HistoricalPYBanner paymentYear={paymentYear} />
 
-      {/* ── Tab Bar (pill style) ──────────────────────────────────────── */}
+      {/* ── Group switcher: Clinical / Analytics ────────────────────── */}
+      <div
+        role="group"
+        aria-label="Report group"
+        style={{ display: "inline-flex", gap: 4, marginBottom: 16, padding: 4, background: tokens.slate100, borderRadius: 10 }}
+      >
+        {(["Clinical", "Analytics"] as ReportGroup[]).map((g) => {
+          const isActive = activeGroup === g;
+          return (
+            <button
+              key={g}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => handleGroupChange(g)}
+              style={{
+                padding: "7px 22px",
+                fontSize: 13,
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? C.white : C.textMuted,
+                background: isActive ? C.primary : "transparent",
+                border: "none",
+                borderRadius: 7,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                letterSpacing: "-0.01em",
+                boxShadow: isActive ? "0 1px 4px rgba(37,99,235,0.25)" : "none",
+              }}
+            >
+              {g}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Tab Bar — shows only the active group's tabs ─────────────── */}
       <div style={{ display: "flex", gap: 6, marginBottom: 32, padding: 6, background: tokens.slate100, borderRadius: 14, flexWrap: "wrap" }}>
-        {TABS.map((tab) => {
+        {GROUP_TABS[activeGroup].map((tab) => {
           const isActive = activeTab === tab;
           return (
             <button
@@ -499,7 +533,14 @@ export default function ReportsPage() {
         {activeTab === "Patient Scorecard" && <ScorecardTab scorecard={scorecard} router={router} isHistoricalPY={isHistoricalPY} />}
         {activeTab === "HCC Distribution" && <HccTab hccDist={hccDist} isHistoricalPY={isHistoricalPY} />}
         {activeTab === "Recapture Gaps" && <RecaptureTab recapture={recapture} router={router} isHistoricalPY={isHistoricalPY} />}
-        {activeTab === "Data Quality" && <DataQualityTab dataQuality={dataQuality} />}
+        {activeTab === "Quality" && <DataQualityTab dataQuality={dataQuality} />}
+        {activeTab === "Provider Performance" && (
+          <div style={{ padding: "48px 24px", textAlign: "center", color: C.textMuted, fontSize: 14, borderRadius: 12, border: `1px dashed ${C.border}` }}>
+            <Lock size={20} style={{ marginBottom: 10, opacity: 0.4 }} />
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Provider Performance</div>
+            <div style={{ fontSize: 13 }}>Provider-level performance benchmarks are coming soon.</div>
+          </div>
+        )}
         {(activeTab === "Longitudinal Trends" || activeTab === "CMS Benchmarks" || activeTab === "Settlement Projection" || activeTab === "Scheduled Reports") && (
           <ReportsHeavyTabs activeTab={activeTab as "Longitudinal Trends" | "CMS Benchmarks" | "Settlement Projection" | "Scheduled Reports"} revenue={revenue} />
         )}

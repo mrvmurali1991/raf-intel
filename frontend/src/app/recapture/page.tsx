@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { usePaymentYear, useIsHistoricalPY } from "@/contexts/payment-year-context";
 import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
+import PageAlerts from "@/components/PageAlerts";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -239,8 +240,10 @@ export default function RecapturePage() {
 
   return (
     <div style={{ padding: "20px 16px", maxWidth: 1200, margin: "0 auto", overflowX: "hidden" }} className="rci-page-pad-desktop">
-      <DataQualityBanner />
-      <HistoricalPYBanner />
+      <PageAlerts defaultOpen>
+        <DataQualityBanner />
+        <HistoricalPYBanner />
+      </PageAlerts>
       {/* Header */}
       <div className="animate-fade-in">
         <PageHeader
