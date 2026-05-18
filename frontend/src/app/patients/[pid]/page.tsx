@@ -3,8 +3,7 @@
 import React, { use, useState, useRef, useEffect, useMemo, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Printer, MoreHorizontal, Eye, EyeOff } from "lucide-react";
+import { Printer, MoreHorizontal } from "lucide-react";
 import {
   getPatient,
   getPatientProfile,
@@ -36,16 +35,8 @@ import {
 import { ModelComparison } from "@/components/model-comparison";
 import { AIHealthBanner } from "@/components/AIHealthBanner";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from "@/components/ui/tooltip";
-import {
-  RiskGauge,
-  ProgressBar,
-} from "@/components/healthcare-ui";
+// Tooltip + RiskGauge/ProgressBar used by sub-components; kept for legacy imports
+// that may re-emerge if tabs re-introduce inline KPI widgets.
 import { useToast } from "@/components/Toast";
 import { calculateAge } from "@/lib/utils";
 import type { Patient, AnalysisResult, AIDiagnosis } from "@/types";
@@ -88,6 +79,9 @@ import { DocumentsTab } from "./components/DocumentsTab";
 import { RAFCentralTab } from "./components/RAFCentralTab";
 import { PatientV28ImpactPanel } from "./components/PatientV28ImpactPanel";
 import { PatientHedisStrip } from "./components/PatientHedisStrip";
+import { HeroStrip } from "./components/HeroStrip";
+import { RiskSummaryCard } from "./components/RiskSummaryCard";
+import { ActionItemsPanel } from "./components/ActionItemsPanel";
 
 // ===========================================================================
 // MAIN PAGE COMPONENT
@@ -115,7 +109,7 @@ export default function PatientDetailPage({
 
   const [activeTab, setActiveTab] = useState(() => {
     const t = searchParams.get("tab");
-    // Legacy aliases → new "raf" tab
+    // Legacy aliases → new tab names
     if (
       t === "rafcentral" ||
       t === "rafdetails" ||
@@ -125,7 +119,11 @@ export default function PatientDetailPage({
     ) {
       return "raf";
     }
-    return t ?? "raf";
+    // suspects / review queue → meat evidence tab
+    if (t === "suspects" || t === "reviewqueue") return "meat";
+    // clinical → overview (clinical data merged into overview context)
+    if (t === "clinical") return "overview";
+    return t ?? "overview";
   });
 
   // Overflow menu open state for More Actions button
@@ -219,11 +217,13 @@ export default function PatientDetailPage({
   // the previous tab interactive while the new one mounts — smoother feel
   // than a hard re-render. URL update stays outside (urgent navigation).
   const handleTabChange = (tab: string) => {
-    // Resolve legacy tab aliases to the merged "raf" tab + sub-pill
+    // Resolve legacy tab aliases to new IA
     let resolvedTab = tab;
     if (tab === "rafcentral") { resolvedTab = "raf"; setRafSubTab("central"); }
     else if (tab === "rafdetails") { resolvedTab = "raf"; setRafSubTab("details"); }
     else if (tab === "modelcomparison" || tab === "models") { resolvedTab = "raf"; setRafSubTab("comparison"); }
+    else if (tab === "suspects" || tab === "reviewqueue") { resolvedTab = "meat"; }
+    else if (tab === "clinical") { resolvedTab = "overview"; }
     startTransition(() => {
       setActiveTab(resolvedTab);
     });
@@ -307,55 +307,65 @@ export default function PatientDetailPage({
   const medsQ = useQuery({
     queryKey: ["patient-meds", pid, selectedYear],
     queryFn: () => getPatientMedications(pid, selectedYear),
-    enabled: activeTab === "clinical" || activeTab === "overview",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const recaptureQ = useQuery({
     queryKey: ["patient-recapture", pid, selectedYear],
     queryFn: () => getPatientRecaptureGaps(pid, selectedYear),
+    staleTime: 30_000,
     enabled: activeTab === "raf" || activeTab === "overview",
   });
 
   const labSuspectsQ = useQuery({
     queryKey: ["patient-lab-suspects", pid, selectedYear],
     queryFn: () => getPatientLabSuspects(pid, selectedYear),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    // clinical data is now shown in overview tab
+    enabled: activeTab === "overview",
   });
 
   const vitalsSuspectsQ = useQuery({
     queryKey: ["patient-vitals-suspects", pid, selectedYear],
     queryFn: () => getPatientVitalsSuspects(pid, selectedYear),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const allergiesQ = useQuery({
     queryKey: ["patient-allergies", pid],
     queryFn: () => getPatientAllergies(pid),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const immunizationsQ = useQuery({
     queryKey: ["patient-immunizations", pid],
     queryFn: () => getPatientImmunizations(pid),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const familyHistoryQ = useQuery({
     queryKey: ["patient-family-history", pid],
     queryFn: () => getPatientFamilyHistory(pid),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const sdohQ = useQuery({
     queryKey: ["patient-sdoh", pid],
     queryFn: () => getPatientSdoh(pid),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const medGapsQ = useQuery({
     queryKey: ["patient-med-gaps", pid, selectedYear],
     queryFn: () => getPatientMedicationGaps(pid, selectedYear),
-    enabled: activeTab === "clinical",
+    staleTime: 30_000,
+    enabled: activeTab === "overview",
   });
 
   const auditsQ = useQuery({
@@ -625,49 +635,79 @@ export default function PatientDetailPage({
     };
   }, [encountersQ.data, profile, rafBreakdownQ.data]);
 
-  // Tab definitions — RAF Central / Details / Comparison merged into one "RAF" tab (B8)
-  const tabs = [
+  // ---- Coder-first tab IA (reorganised) ------------------------------------
+  // "Today's action items" (HCC suspects + HEDIS gaps) live above the tabs as
+  // a persistent action queue. The "suspects" tab is renamed "MEAT Evidence"
+  // to reflect its drill-down role; the review queue is always visible.
+  // Legacy aliases: suspects → meat, rafcentral → raf, activity → activity
+  const tabs: Array<{ id: string; label: string; badge?: number }> = [
     { id: "overview", label: "Overview" },
-    { id: "raf", label: "RAF" },
-    { id: "clinical", label: "Clinical Data" },
+    { id: "raf", label: "RAF Detail" },
+    { id: "meat", label: "MEAT Evidence" },
     { id: "encounters", label: "Encounters" },
-    { id: "documents", label: "Documents & Reports" },
-    {
-      id: "suspects",
-      label: "Review Queue",
-      badge: suspectCount > 0 ? suspectCount : undefined,
-    },
+    { id: "documents", label: "Documents" },
     { id: "audit", label: "Audit" },
     { id: "activity", label: "Activity" },
   ];
+
+  // Last encounter date for the hero strip staleness indicator
+  const lastVisitDate: string | null = (() => {
+    const encs = encountersQ.data?.encounters ?? (Array.isArray(encountersQ.data) ? encountersQ.data : []);
+    if (!encs.length) return null;
+    const sorted = [...encs].sort((a, b) => {
+      const da = new Date(a.encounter_date || a.date || "").getTime();
+      const db = new Date(b.encounter_date || b.date || "").getTime();
+      return db - da;
+    });
+    return sorted[0]?.encounter_date || sorted[0]?.date || null;
+  })();
+
+  // V28 delta — derive from v28-impact query (lazy: only needed for risk card)
+  const v28ImpactQ = useQuery({
+    queryKey: ["v28-impact", "patient", pid, selectedYear],
+    queryFn: async () => {
+      const { default: api } = await import("@/lib/api");
+      const res = await api.get(`/api/v28-impact/patient/${pid}`, { params: { year: selectedYear } });
+      return res.data as { v24_raf: number; v28_raf: number; raf_delta: number; revenue_delta_annual: number };
+    },
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  // Prior-year RAF from history
+  const priorYearRaf: number | null = (() => {
+    const entries = history?.scores ?? history?.history ?? [];
+    const priorEntry = (entries as Array<{ year?: number; measurement_year?: number; raf_score?: number; score?: number }>)
+      .find((e) => (e.year ?? e.measurement_year) === selectedYear - 1);
+    return priorEntry?.raf_score ?? priorEntry?.score ?? null;
+  })();
+
+  // V28 drawer open state (click on delta metric)
+  const [v28DrawerOpen, setV28DrawerOpen] = useState(false);
 
   // =========================================================================
   // RENDER
   // =========================================================================
   return (
     <div className="dot-grid mesh-pattern" style={{ minHeight: "100vh", background: C.bg }}>
-      {/* AI availability warning — surfaces when Gemini is unreachable */}
+      {/* AI availability warning */}
       <div style={{ padding: "12px 16px 0" }}>
         <AIHealthBanner />
       </div>
-      {/* Breadcrumb trail — Home > Patients > Patient {pid} */}
-      {/* Polite live region announces privacy-mode toggle to screen readers.
-          Symmetric — announces both enable AND disable so AT users get
-          consistent feedback (UX-review round-5 blocker #2). */}
+
+      {/* Polite live region — privacy-mode toggle (symmetric for AT) */}
       <div role="status" aria-live="polite" className="sr-only">
         {privacyMode
           ? "Privacy mode enabled. Patient name and MRN are masked."
           : "Privacy mode disabled. Patient name and MRN are visible."}
       </div>
+
+      {/* Breadcrumb */}
       <div style={{ padding: "0 16px" }}>
         <Breadcrumb
           items={[
             { label: "Patients", href: "/patients" },
             {
-              // Propagate privacy-mode masking into the breadcrumb so the
-              // patient identity isn't leaked at the top of the page when
-              // the sticky-header H1 is already masked (UX review round-4
-              // carry-over).
               label: (() => {
                 if (!patientName || patientName === "Loading…") return `Patient ${pid}`;
                 if (!privacyMode) return patientName;
@@ -680,294 +720,22 @@ export default function PatientDetailPage({
           ]}
         />
       </div>
-      {/* PATIENT HEADER (sticky) */}
-      <header
-        className="premium-card animate-fade-in patient-sticky-header"
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 30,
-          background: C.white,
-          borderBottom: `1px solid ${C.slate200}`,
-          minHeight: 80,
-          borderRadius: 0,
-        }}
-      >
-        <div
-          className="patient-sticky-inner"
-          style={{
-            width: "100%",
-            padding: "12px 16px",
-            minHeight: 80,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          {/* Left: back + avatar + patient name */}
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <Link
-              href="/patients"
-              className="hover-lift"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                // 44×44 = WCAG 2.5.5 AAA tap target; previously 36×36 was
-                // below Apple HIG/Google Material 44px minimums (UX review #4
-                // / round-2 #4). The icon stays the same size; padding does
-                // the work so visual weight isn't increased.
-                width: 44,
-                height: 44,
-                borderRadius: 8,
-                border: `1px solid ${C.slate200}`,
-                color: C.slate600,
-                textDecoration: "none",
-                flexShrink: 0,
-                transition: "background 0.15s, transform 0.2s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-            </Link>
-            <div
-              title={`PID ${pid}`}
-              style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: `linear-gradient(135deg, ${C.blue600}, ${C.emerald600})`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: C.white, fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em",
-                flexShrink: 0, boxShadow: "0 2px 8px rgba(15, 118, 110, 0.25)",
-              }}
-            >
-              {(patientName || "").trim().charAt(0).toUpperCase() || "\u2022"}
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <h1 className="gradient-text patient-name-h1" style={{ margin: 0, fontSize: 24, fontWeight: 700, color: C.slate800, lineHeight: 1.2 }}>
-                  {(() => {
-                    if (!privacyMode) return patientName;
-                    // Privacy-masked: keep first initial + last initial,
-                    // drop the body of the name so a passerby cannot
-                    // identify the patient at a glance.
-                    const parts = (patientName || "").trim().split(/\s+/);
-                    const f = parts[0]?.charAt(0) || "?";
-                    const l = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
-                    return `${f}${l ? ". " + l + "." : "."}`;
-                  })()}
-                </h1>
-                {patient?.mrn && (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", padding: "3px 10px",
-                    borderRadius: 999, fontSize: 11, fontWeight: 600, fontFamily: "monospace",
-                    background: C.slate100, color: C.slate600,
-                  }}>
-                    MRN {privacyMode
-                      ? `••••${String(patient.mrn).slice(-4)}`
-                      : patient.mrn}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setPrivacyMode((v) => !v)}
-                  aria-label={privacyMode ? "Disable privacy mode" : "Enable privacy mode"}
-                  aria-pressed={privacyMode}
-                  title={
-                    privacyMode
-                      ? "Privacy mode ON — name + MRN masked. Toggle with Ctrl/Cmd+Shift+P."
-                      : "Privacy mode OFF — name + MRN visible. Toggle with Ctrl/Cmd+Shift+P."
-                  }
-                  style={{
-                    background: "transparent",
-                    border: `1px solid ${C.slate200}`,
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    width: 28,
-                    height: 28,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    color: privacyMode ? C.blue600 : C.slate500,
-                  }}
-                >
-                  {privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </div>
-          </div>
 
-          {/* Right: demographics + actions */}
-          <div className="patient-header-actions" style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-            <div className="patient-demographics-row" style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: C.slate500, flexWrap: "wrap" }}>
-              {age !== null && <span className="demo-essential">{age} yrs</span>}
-              {sex && <span className="demo-essential" style={{ textTransform: "capitalize" }}>{sex}</span>}
-              {dob && <span className="demo-essential">{formatDate(dob)}</span>}
-            </div>
-            <div style={{ width: 1, height: 32, background: C.slate200 }} className="hidden sm:block" />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                onClick={() => batchMutation.mutate()}
-                disabled={batchMutation.isPending || batchStatus === "running"}
-                className="hover-lift patient-recalc-btn"
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  padding: "10px 18px", borderRadius: 12, border: "none",
-                  background: C.blue600, color: C.white, fontSize: 13, fontWeight: 600,
-                  cursor: batchMutation.isPending || batchStatus === "running" ? "not-allowed" : "pointer",
-                  boxShadow: "0 4px 10px rgba(15, 118, 110, 0.2)",
-                  opacity: batchMutation.isPending || batchStatus === "running" ? 0.6 : 1,
-                  transition: "opacity 0.15s, transform 0.2s, box-shadow 0.2s",
-                  minHeight: 44,
-                }}
-              >
-                {(batchMutation.isPending || batchStatus === "running") && <Spinner size={14} />}
-                {batchStatus === "running" ? "Analyzing..." : "Analyze All Encounters"}
-              </button>
-              {/* More Actions overflow menu */}
-              <div ref={moreMenuRef} style={{ position: "relative" }}>
-                <button
-                  ref={moreMenuTriggerRef}
-                  onClick={() => setMoreMenuOpen((v) => !v)}
-                  aria-label="More actions"
-                  aria-haspopup="menu"
-                  aria-expanded={moreMenuOpen}
-                  aria-controls="patient-more-actions-menu"
-                  className="patient-more-btn"
-                  style={{
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    width: 44, height: 44, borderRadius: 8,
-                    border: `1px solid ${C.slate200}`, background: C.white,
-                    color: C.slate600, cursor: "pointer",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = C.white)}
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-                {moreMenuOpen && (
-                  <div
-                    id="patient-more-actions-menu"
-                    style={{
-                      position: "absolute", top: "calc(100% + 4px)", right: 0,
-                      background: C.white, border: `1px solid ${C.slate200}`,
-                      borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
-                      minWidth: 200, zIndex: 100, overflow: "hidden",
-                    }}
-                    role="menu"
-                    aria-orientation="vertical"
-                    aria-label="More patient actions"
-                    onKeyDown={handleMoreMenuKeyDown}
-                  >
-                    <button
-                      role="menuitem"
-                      ref={(el) => { moreMenuItemsRef.current[0] = el; }}
-                      tabIndex={moreMenuOpen ? 0 : -1}
-                      onClick={() => { auditMutation.mutate(selectedYear); setMoreMenuOpen(false); }}
-                      disabled={auditMutation.isPending}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        width: "100%", padding: "10px 16px", background: "transparent",
-                        border: "none", color: C.slate700, fontSize: 13, fontWeight: 500,
-                        cursor: auditMutation.isPending ? "not-allowed" : "pointer",
-                        opacity: auditMutation.isPending ? 0.6 : 1,
-                        textAlign: "left",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      {auditMutation.isPending ? <Spinner size={13} /> : null}
-                      Generate Audit
-                    </button>
-                    <button
-                      role="menuitem"
-                      ref={(el) => { moreMenuItemsRef.current[1] = el; }}
-                      tabIndex={moreMenuOpen ? 0 : -1}
-                      onClick={() => { radvPacketMutation.mutate(selectedYear); setMoreMenuOpen(false); }}
-                      disabled={radvPacketMutation.isPending}
-                      aria-label={`Download RADV packet for payment year ${selectedYear}`}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        width: "100%", padding: "10px 16px", background: "transparent",
-                        border: "none", borderTop: `1px solid ${C.slate100}`,
-                        color: C.slate700, fontSize: 13, fontWeight: 500,
-                        cursor: radvPacketMutation.isPending ? "not-allowed" : "pointer",
-                        opacity: radvPacketMutation.isPending ? 0.6 : 1,
-                        textAlign: "left",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      {radvPacketMutation.isPending ? <Spinner size={13} /> : null}
-                      Download RADV Packet
-                    </button>
-                    <button
-                      role="menuitem"
-                      ref={(el) => { moreMenuItemsRef.current[2] = el; }}
-                      tabIndex={moreMenuOpen ? 0 : -1}
-                      onClick={() => {
-                        // Cotiviti-style hand-off: pre-fill a dispute draft
-                        // with the patient + measurement year and route the
-                        // coder to the disputes board where they can pick
-                        // an HCC + denial reason. Avoids forcing them to
-                        // copy/paste pid between two tools.
-                        const params = new URLSearchParams({
-                          new: "1",
-                          patient_id: String(pid),
-                          measurement_year: String(selectedYear),
-                        });
-                        router.push(`/disputes?${params.toString()}`);
-                        setMoreMenuOpen(false);
-                      }}
-                      aria-label="File a dispute or appeal for this patient"
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        width: "100%", padding: "10px 16px", background: "transparent",
-                        border: "none", borderTop: `1px solid ${C.slate100}`,
-                        color: C.slate700, fontSize: 13, fontWeight: 500,
-                        cursor: "pointer", textAlign: "left",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      File Dispute
-                    </button>
-                    <button
-                      role="menuitem"
-                      ref={(el) => { moreMenuItemsRef.current[3] = el; }}
-                      tabIndex={moreMenuOpen ? 0 : -1}
-                      onClick={() => { window.print(); setMoreMenuOpen(false); }}
-                      className="no-print"
-                      aria-label="Print patient record"
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        width: "100%", padding: "10px 16px", background: "transparent",
-                        border: "none", borderTop: `1px solid ${C.slate100}`,
-                        color: C.slate700, fontSize: 13, fontWeight: 500,
-                        cursor: "pointer", textAlign: "left",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <Printer size={13} /> Print
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* ================================================================
+          HERO STRIP — sticky, always-visible patient identity
+          ================================================================ */}
+      <HeroStrip
+        patient={patient}
+        profile={profile}
+        pid={pid}
+        privacyMode={privacyMode}
+        onPrivacyToggle={() => setPrivacyMode((v) => !v)}
+        lastVisitDate={lastVisitDate}
+      />
 
       {/* Print-only patient header */}
       <div className="print-header" style={{ display: "none" }}>
-        <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>RAF Intelligence — Patient Record</div>
+        <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>RAF Intelligence \u2014 Patient Record</div>
         <div style={{ fontSize: 18, fontWeight: 700 }}>{patientName}</div>
         <div style={{ fontSize: 12, marginTop: 4 }}>
           PID: {pid}
@@ -982,7 +750,7 @@ export default function PatientDetailPage({
         </div>
       </div>
 
-      {/* YEAR SELECTOR ROW — between action header and metric strip, right-aligned, no absolute positioning */}
+      {/* YEAR SELECTOR ROW */}
       <div
         style={{
           background: C.white,
@@ -1016,180 +784,75 @@ export default function PatientDetailPage({
         ))}
       </div>
 
-      {/* RISK SUMMARY STRIP */}
-      <style>{`
-        .metric-strip {
-          display: grid;
-          grid-template-columns: 200px 1fr 1fr 1fr 1fr;
-          width: 100%;
-          gap: 0;
-        }
-        @media (max-width: 640px) {
-          .metric-strip-wrapper {
-            height: auto !important;
-            padding: 8px 12px !important;
-          }
-          .metric-strip {
-            grid-template-columns: 1fr 1fr;
-            gap: 8px 0;
-          }
-          .metric-strip > div {
-            border-left: none !important;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 8px 12px !important;
-            justify-content: flex-start !important;
-            align-items: flex-start !important;
-          }
-          .metric-strip > div:nth-child(2),
-          .metric-strip > div:nth-child(4) {
-            border-left: 1px solid #e2e8f0 !important;
-          }
-        }
-      `}</style>
-      <div
-        className="animate-slide-up stagger-1 metric-strip-wrapper"
-        style={{
-          background: C.white,
-          borderBottom: `1px solid ${C.slate200}`,
-          height: 80,
-          display: "flex",
-          alignItems: "center",
-          padding: "0 24px",
-        }}
-      >
-        <div className="metric-strip">
-          {/* 1. RAF Score */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px" }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 2 }}>
-                RAF Score ({selectedYear})
-              </div>
-              <div
-                className="tabular-nums"
-                style={{
-                  fontSize: 24, fontWeight: 800,
-                  color: rafScore != null ? rafScoreColor(rafScore) : C.slate400,
-                  fontFamily: "monospace", lineHeight: 1,
-                  textShadow: rafScore != null ? `0 0 20px ${rafScoreColor(rafScore)}33` : "none",
-                }}
-              >
-                {rafScore != null ? Number(rafScore).toFixed(2) : "\u2014"}
-              </div>
-              {aiAnalysis && aiAnalysis.aiOnlyCount > 0 && (
-                <div style={{ fontSize: 10, color: C.emerald600, fontWeight: 600, marginTop: 2 }}>
-                  +{aiAnalysis.aiOnlyCount} AI-identified codes
-                </div>
-              )}
-            </div>
-          </div>
+      {/* ================================================================
+          RISK SUMMARY CARD — animated count-up, V24\u2192V28 delta, dollar
+          ================================================================ */}
+      <RiskSummaryCard
+        rafScore={rafScore}
+        breakdown={breakdown}
+        priorYearRaf={priorYearRaf}
+        v28Delta={v28ImpactQ.data?.raf_delta ?? null}
+        selectedYear={selectedYear}
+        onOpenV28Drawer={() => setV28DrawerOpen(true)}
+      />
 
-          {/* 2. Model Segment — Radix Tooltip matches the MEAT trigger in
-              the same KPI rail so keyboard / screen-reader access is
-              uniform across the rail (UX round-7 last blocker). */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", borderLeft: `1px solid ${C.slate100}`, padding: "0 16px" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 6 }}>
-              Model Segment
-            </div>
-            <TooltipProvider delay={200}>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={`Model segment ${segmentCodeUpper(modelSegment)}. ${segmentLabel(modelSegment)}.`}
-                      style={{ display: "inline-flex", alignItems: "center", padding: "4px 14px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: C.slate100, color: C.slate700, textAlign: "center", border: "none", cursor: "help", fontFamily: "inherit" }}
-                    />
-                  }
+      {/* V28 impact drawer (click on delta in risk card) */}
+      {v28DrawerOpen && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 200 }}
+            aria-hidden="true"
+            onClick={() => setV28DrawerOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="V24 to V28 impact breakdown"
+            style={{
+              position: "fixed", right: 0, top: 0, bottom: 0, width: 480,
+              background: C.white, boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
+              zIndex: 201, overflowY: "auto",
+            }}
+            onKeyDown={(e) => { if (e.key === "Escape") setV28DrawerOpen(false); }}
+          >
+            <div style={{ padding: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate800 }}>V24 \u2192 V28 Impact</h2>
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setV28DrawerOpen(false)}
+                  aria-label="Close V28 impact drawer"
+                  style={{
+                    background: "transparent", border: `1px solid ${C.slate200}`,
+                    borderRadius: 6, width: 32, height: 32, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", color: C.slate600,
+                  }}
                 >
-                  {segmentLabel(modelSegment)}
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
-                  <strong>Segment {segmentCodeUpper(modelSegment)}</strong> — {segmentLabel(modelSegment)}.
-                  CMS-HCC model segment determines which coefficient table
-                  applies to this patient&apos;s RAF score.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          {/* 3. HCC Count */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", borderLeft: `1px solid ${C.slate100}`, padding: "0 16px" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 6 }}>
-              HCC Count
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: C.slate900, lineHeight: 1 }}>{hccCount}</span>
-              <span style={{ fontSize: 12, color: C.slate400, fontWeight: 500 }}>conditions</span>
-            </div>
-          </div>
-
-          {/* 4. MEAT Compliance — Radix Tooltip provides a keyboard-accessible
-              gloss of the acronym so a new clinician/coder can learn what M/
-              E/A/T mean without leaving the chart. Native `title=` was
-              keyboard-inaccessible (failed WCAG 2.1 SC 1.4.13). */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", borderLeft: `1px solid ${C.slate100}`, padding: "0 16px" }}>
-            <TooltipProvider delay={200}>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="What is MEAT compliance? Explain the four documentation elements."
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        margin: 0,
-                        marginBottom: 6,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        color: C.slate400,
-                        cursor: "help",
-                        fontFamily: "inherit",
-                      }}
-                    />
-                  }
-                >
-                  MEAT Compliance
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
-                  <strong>MEAT</strong> = Monitor, Evaluate, Assess, Treat — the
-                  four documentation elements CMS requires to support each HCC
-                  in a RADV audit.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 16, fontWeight: 700, color: meatTotal === 0 ? C.slate400 : meatFilled === 0 && hccCount > 0 ? "#DC2626" : C.slate900, lineHeight: 1 }}>
-                {meatTotal > 0 && meatFilled === 0 && hccCount > 0 && (
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", display: "inline-block", flexShrink: 0 }} aria-hidden />
-                )}
-                {meatTotal === 0 ? "—" : meatFilled === 0 ? "Pending" : `${meatFilled}/${meatTotal}`}
-              </span>
-              <div style={{ width: 80 }}>
-                <ProgressBar value={meatTotal > 0 ? (meatFilled / meatTotal) * 100 : 0} showPercent={false} height={4} color={meatFilled > 0 ? C.emerald500 : meatFilled === 0 && hccCount > 0 ? "#DC2626" : C.amber600} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
               </div>
+              <PatientV28ImpactPanel pid={pid} year={selectedYear} />
             </div>
           </div>
+        </>
+      )}
 
-          {/* 5. Data Quality */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", borderLeft: `1px solid ${C.slate100}`, padding: "0 16px" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.slate400, marginBottom: 6 }}>
-              Data Quality
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%",
-                background: dataQuality === null ? C.gray400 : dataQuality >= 80 ? C.emerald500 : dataQuality >= 50 ? C.amber500 : C.red500,
-              }} />
-              <span style={{ fontSize: 20, fontWeight: 700, color: C.slate900, lineHeight: 1 }}>
-                {dataQuality !== null ? `${dataQuality}%` : "\u2014"}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* ================================================================
+          TODAY'S ACTION ITEMS — persistent above tabs (action queue)
+          HCC suspects (left 3/4) + HEDIS gaps (right 1/4)
+          ================================================================ */}
+      <div style={{ padding: "20px 24px 0" }}>
+        <ActionItemsPanel
+          pid={pid}
+          year={selectedYear}
+          suspects={suspectsQ.data}
+          suspectsLoading={suspectsQ.isLoading}
+          acceptMutation={acceptMutation}
+          dismissMutation={dismissMutation}
+        />
       </div>
 
       {/* TAB NAVIGATION */}
@@ -1220,7 +883,10 @@ export default function PatientDetailPage({
                   cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
                   transition: "color 0.15s, border-color 0.15s",
                   flexShrink: 0,
+                  outline: "none",
                 }}
+                onFocus={(e) => (e.currentTarget.style.outline = `2px solid ${C.blue600}`)}
+                onBlur={(e) => (e.currentTarget.style.outline = "none")}
               >
                 {tab.label}
                 {tab.badge !== undefined && (
@@ -1238,7 +904,7 @@ export default function PatientDetailPage({
         </div>
       </div>
 
-      {/* TAB CONTENT */}
+      {/* TAB CONTENT — lazy: each branch only mounts when tab is active */}
       <div role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="animate-slide-up stagger-2" style={{ padding: 24 }}>
         {activeTab === "overview" && (
           <OverviewTab
@@ -1268,7 +934,7 @@ export default function PatientDetailPage({
         )}
         {activeTab === "raf" && (
           <div>
-            {/* Sub-pill navigation for merged RAF tab */}
+            {/* Sub-pill navigation for RAF Detail tab */}
             <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
               {([
                 { id: "central" as const, label: "Central" },
@@ -1278,9 +944,7 @@ export default function PatientDetailPage({
               ]).map((pill) => (
                 <button
                   key={pill.id}
-                  onClick={() => {
-                    setRafSubTab(pill.id);
-                  }}
+                  onClick={() => setRafSubTab(pill.id)}
                   style={{
                     padding: "6px 16px", fontSize: 12, fontWeight: rafSubTab === pill.id ? 700 : 500,
                     color: rafSubTab === pill.id ? C.white : C.slate600,
@@ -1320,30 +984,18 @@ export default function PatientDetailPage({
             )}
           </div>
         )}
-        {activeTab === "clinical" && (
-          <ClinicalTab
-            meds={medsQ.data}
-            medsLoading={medsQ.isLoading}
-            vitalsSuspects={vitalsSuspectsQ.data}
-            vitalsLoading={vitalsSuspectsQ.isLoading}
-            labSuspects={labSuspectsQ.data}
-            labsLoading={labSuspectsQ.isLoading}
-            allergies={allergiesQ.data}
-            allergiesLoading={allergiesQ.isLoading}
-            immunizations={immunizationsQ.data}
-            immunizationsLoading={immunizationsQ.isLoading}
-            familyHistory={familyHistoryQ.data}
-            familyHistoryLoading={familyHistoryQ.isLoading}
-            sdoh={sdohQ.data}
-            sdohLoading={sdohQ.isLoading}
-            medGaps={medGapsQ.data}
-            medGapsLoading={medGapsQ.isLoading}
-            patient={patient}
-            profile={profile}
-            profileLoading={profileQ.isLoading}
-            breakdown={breakdown}
-            breakdownLoading={rafBreakdownQ.isLoading}
-          />
+        {/* "meat" tab = deep MEAT Evidence drill-down (replaces old "suspects" tab) */}
+        {activeTab === "meat" && (
+          <>
+            <SuspectsTab
+              suspects={suspectsQ.data}
+              suspectsLoading={suspectsQ.isLoading}
+              acceptMutation={acceptMutation}
+              dismissMutation={dismissMutation}
+            />
+            {/* HEDIS strip — still co-located for PCP visit context */}
+            <PatientHedisStrip pid={pid} year={selectedYear} />
+          </>
         )}
         {activeTab === "encounters" && (
           <EncountersTab
@@ -1353,18 +1005,6 @@ export default function PatientDetailPage({
             lastAnalysisResult={lastAnalysisResult}
             selectedYear={selectedYear}
           />
-        )}
-        {activeTab === "suspects" && (
-          <>
-            <SuspectsTab
-              suspects={suspectsQ.data}
-              suspectsLoading={suspectsQ.isLoading}
-              acceptMutation={acceptMutation}
-              dismissMutation={dismissMutation}
-            />
-            {/* HEDIS strip co-located with HCC suspects — PCP sees both during visit */}
-            <PatientHedisStrip pid={pid} year={selectedYear} />
-          </>
         )}
         {activeTab === "documents" && (
           <DocumentsTab
