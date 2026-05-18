@@ -223,18 +223,18 @@ export default function V28ImpactPage() {
             />
             <KPI
               label="Total V24 RAF"
-              value={fmtRAF(data.total_v24_raf)}
-              subtitle={`avg ${fmtRAF(data.avg_v24_raf)}/pt`}
+              value={data.total_v24_raf > 0 ? fmtRAF(data.total_v24_raf) : "Awaiting analysis"}
+              subtitle={data.total_v24_raf > 0 ? `avg ${fmtRAF(data.avg_v24_raf)}/pt` : "Run Analysis above to compute"}
             />
             <KPI
               label="Total V28 RAF"
-              value={fmtRAF(data.total_v28_raf)}
-              subtitle={`avg ${fmtRAF(data.avg_v28_raf)}/pt`}
+              value={data.total_v28_raf > 0 ? fmtRAF(data.total_v28_raf) : "Awaiting analysis"}
+              subtitle={data.total_v28_raf > 0 ? `avg ${fmtRAF(data.avg_v28_raf)}/pt` : "Run Analysis above to compute"}
             />
             <KPI
               label="Annual Δ Revenue (V28 - V24)"
-              value={fmtMoney(data.total_revenue_delta)}
-              subtitle={`${data.raf_erosion_pct > 0 ? "+" : ""}${data.raf_erosion_pct.toFixed(2)}% ${data.raf_erosion_pct >= 0 ? "RAF uplift" : "RAF erosion"}`}
+              value={data.total_v24_raf === 0 ? "Awaiting analysis" : fmtMoney(data.total_revenue_delta)}
+              subtitle={data.total_v24_raf === 0 ? "Run Analysis above to compute" : `${data.raf_erosion_pct > 0 ? "+" : ""}${data.raf_erosion_pct.toFixed(2)}% ${data.raf_erosion_pct >= 0 ? "RAF uplift" : "RAF erosion"}`}
               accent={data.total_revenue_delta < 0 ? "#dc2626" : "#059669"}
               icon={
                 data.total_revenue_delta < 0 ? (
@@ -310,12 +310,13 @@ export default function V28ImpactPage() {
                 <ChartExportMenu
                   filename="v28-eroded-patients"
                   csvData={data.top_eroded_patients.map((r) => ({
+                    // Currency and pct as clean numbers so Excel SUM/charting works.
                     "PID": r.pid,
-                    "V24 RAF": fmtRAF(r.v24),
-                    "V28 RAF": fmtRAF(r.v28),
-                    "Delta RAF": fmtRAF(r.delta),
-                    "Delta %": `${r.delta_pct.toFixed(1)}%`,
-                    "Revenue Impact": fmtMoney(r.revenue),
+                    "V24 RAF": Number(r.v24.toFixed(3)),
+                    "V28 RAF": Number(r.v28.toFixed(3)),
+                    "Delta RAF": Number(r.delta.toFixed(3)),
+                    "Delta Pct": Number(r.delta_pct.toFixed(2)),
+                    "Revenue Impact": Math.round(r.revenue),
                     "Dropped HCCs": r.dropped_hccs.join(", "),
                   }))}
                   chartRef={erodedRef}

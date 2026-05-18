@@ -3,6 +3,7 @@
 import { ErrorBoundary } from "@/components/error-boundary";
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { usePaymentYear, useIsHistoricalPY, PAYMENT_YEARS } from "@/contexts/payment-year-context";
+import { useTenantBranding } from "@/lib/useTenantBranding";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -140,12 +141,12 @@ const C = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt$(v: number | null | undefined): string {
-  if (v == null) return "$0";
+  if (v == null) return "—";
   return "$" + Math.round(v).toLocaleString("en-US");
 }
 
 function fmtN(v: number | null | undefined, d = 2): string {
-  if (v == null) return "0";
+  if (v == null) return "—";
   return (v ?? 0).toFixed(d);
 }
 
@@ -323,6 +324,7 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsPage() {
   const router = useRouter();
+  const { branding } = useTenantBranding();
   const [year, setYear] = useState(new Date().getFullYear());
   const { paymentYear, setPaymentYear } = usePaymentYear();
   const isHistoricalPY = useIsHistoricalPY();
@@ -360,7 +362,7 @@ export default function ReportsPage() {
         id="report-print-header"
         className="print-header hidden border-b-2 border-foreground pb-3 mb-5"
       >
-        <div className="text-[10px] text-muted-foreground mb-1">RAF Intelligence</div>
+        <div className="text-[10px] text-muted-foreground mb-1">{branding.display_name}</div>
         <div className="text-lg font-bold">Analytics &amp; Reports — {activeTab}</div>
         <div className="text-[11px] text-muted-foreground mt-1">
           Year: {year} &nbsp;|&nbsp; Printed: {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -684,9 +686,9 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
                 if (isHistoricalPY || !top25.length) return;
                 downloadCSV(top25.map((p) => ({
                   "Patient": p.name,
-                  "Current RAF": p.billing_raf != null ? Number(p.billing_raf).toFixed(2) : "",
-                  "Analyzed RAF": p.ai_raf != null ? Number(p.ai_raf).toFixed(2) : "",
-                  "Gap": p.gap != null ? Number(p.gap).toFixed(2) : "",
+                  "Current RAF": p.billing_raf != null ? Number(p.billing_raf).toFixed(3) : "",
+                  "Analyzed RAF": p.ai_raf != null ? Number(p.ai_raf).toFixed(3) : "",
+                  "Gap": p.gap != null ? Number(p.gap).toFixed(3) : "",
                   "Revenue Opportunity": p.revenue_opportunity != null ? Math.round(p.revenue_opportunity) : "",
                   "HCCs Billing": p.hcc_count_billing,
                   "HCCs Analyzed": p.hcc_count_ai,
@@ -694,6 +696,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               }}
               disabled={isHistoricalPY}
               title={isHistoricalPY ? "Disabled in historical view" : undefined}
+              data-testid="export-csv-revenue"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
             >
               <FileDown size={14} />
@@ -702,13 +705,13 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
             <ChartExportMenu
               filename="revenue-opportunities"
               csvData={top25.map((p) => ({
-                patient: p.name,
-                billing_raf: p.billing_raf,
-                ai_raf: p.ai_raf,
-                gap: p.gap,
-                revenue_opportunity: p.revenue_opportunity,
-                hcc_count_billing: p.hcc_count_billing,
-                hcc_count_ai: p.hcc_count_ai,
+                "Patient": p.name,
+                "Current RAF": p.billing_raf != null ? Number(p.billing_raf).toFixed(3) : "",
+                "Analyzed RAF": p.ai_raf != null ? Number(p.ai_raf).toFixed(3) : "",
+                "Gap": p.gap != null ? Number(p.gap).toFixed(3) : "",
+                "Revenue Opportunity": p.revenue_opportunity != null ? Math.round(p.revenue_opportunity) : "",
+                "HCCs Billing": p.hcc_count_billing,
+                "HCCs Analyzed": p.hcc_count_ai,
               }) as Record<string, unknown>)}
               chartRef={revenueTableRef as React.RefObject<HTMLElement>}
               rawData={top25.map((p) => ({ patient: p.name, billing_raf: p.billing_raf, ai_raf: p.ai_raf, gap: p.gap, revenue: p.revenue_opportunity }) as Record<string, unknown>)}
@@ -869,6 +872,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
           }}
           disabled={isHistoricalPY}
           title={isHistoricalPY ? "Disabled in historical view" : undefined}
+          data-testid="export-csv-patient-scorecard"
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", flexShrink: 0, opacity: isHistoricalPY ? 0.6 : 1 }}
         >
           <FileDown size={14} />
@@ -997,6 +1001,7 @@ function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistribut
             onClick={() => { if (!isHistoricalPY && top20.length) downloadCSV(csvData, "hcc-distribution"); }}
             disabled={isHistoricalPY}
             title={isHistoricalPY ? "Disabled in historical view" : undefined}
+            data-testid="export-csv-hcc-distribution"
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
           >
             <FileDown size={14} />
@@ -1137,6 +1142,7 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
             }}
             disabled={isHistoricalPY}
             title={isHistoricalPY ? "Disabled in historical view" : undefined}
+            data-testid="export-csv-recapture-gaps"
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
           >
             <FileDown size={14} />

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPatients, getAuditPackages, generateAudit, getAuditDownloadUrl, getAuditChainStatus, verifyAuditChain } from "@/lib/api";
+import { downloadCSV } from "@/lib/csv-export";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { useToast } from "@/components/Toast";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
@@ -346,23 +347,25 @@ function AuditChainIntegrityCard() {
     }
   };
 
-  const handleExportCSV = async () => {
+  const handleExportCSV = () => {
     try {
-      // Build CSV from chain status data — lightweight client-side export
-      const rows = [["entry_count", "last_hash", "exported_at"]];
-      rows.push([
-        String(chainStatus?.total_entries ?? 0),
-        chainStatus?.last_hash ?? "",
-        new Date().toISOString(),
-      ]);
-      const csv = rows.map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `audit-chain-custody-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Use shared downloadCSV utility — handles BOM, quoting, filename pattern,
+      // and CSV injection prevention. Filename becomes raf-audit-chain-custody-YYYY-MM-DD.csv.
+      downloadCSV(
+        [
+          {
+            "Total Entries": chainStatus?.total_entries ?? 0,
+            "Last Entry Hash": chainStatus?.last_hash ?? "",
+            "Exported At": new Date().toISOString().slice(0, 10),
+            "Integrity Status": verifyResult
+              ? (verifyResult.ok ? "INTACT" : "BREACH DETECTED")
+              : "Not verified",
+            "Integrity Pct": verifyResult?.integrity_pct ?? "",
+            "First Break Line": verifyResult?.first_break_line ?? "",
+          },
+        ],
+        "audit-chain-custody"
+      );
     } catch {
       // silently fail — no toast dependency needed here
     }
@@ -420,6 +423,7 @@ function AuditChainIntegrityCard() {
               color: "#1D4ED8", fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}
             aria-label="Export chain of custody report"
+            data-testid="export-csv-audit-chain"
           >
             <Download size={14} /> Export Chain of Custody
           </button>

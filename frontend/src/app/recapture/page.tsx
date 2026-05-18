@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from "lucide-react";
 import { getRecaptureGapsReport, getRevenueOpportunity, useMetricFormula } from "@/lib/api";
+import { downloadCSV } from "@/lib/csv-export";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { MetricCard } from "@/components/ui/metric-card";
 import FeatureFlag from "@/components/FeatureFlag";
@@ -163,19 +164,19 @@ export default function RecapturePage() {
 
   function exportCSV() {
     if (!filtered.length) return;
-    const header = "Patient,Condition,ICD-10,Last Coded,Days Since,Priority\n";
-    const rows = filtered.map((g) =>
-      `"${g.last_name}, ${g.first_name}","${g.condition}","${g.icd_code}","${g.onset_date}",${g.days},${g.priority.label}`
-    ).join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `recapture-gaps-${year}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Use shared utility so filename pattern (raf-recapture-gaps-YYYY-MM-DD.csv),
+    // BOM, ICD-10 quoting, and CSV injection prevention are all handled centrally.
+    downloadCSV(
+      filtered.map((g) => ({
+        "Patient": `${g.last_name}, ${g.first_name}`,
+        "Condition": g.condition,
+        "ICD-10": g.icd_code,
+        "Last Coded": g.onset_date,
+        "Days Since": g.days,
+        "Priority": g.priority.label,
+      })),
+      "recapture-gaps"
+    );
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
@@ -790,6 +791,7 @@ export default function RecapturePage() {
           disabled={isHistoricalPY}
           aria-label="Export recapture gaps to CSV"
           title={isHistoricalPY ? "Disabled in historical view" : undefined}
+          data-testid="export-csv-recapture"
           className="btn-press"
           style={{
             display: "flex",

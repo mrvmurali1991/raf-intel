@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { PageHeader } from "@/components/healthcare-ui";
+import { HelpButton } from "@/components/HelpPanel";
 import { tokens } from "@/styles/tokens";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import api from "@/lib/api";
@@ -372,7 +373,7 @@ function WorklistBulkActionsBar({
           onClick={onExportCSV}
           disabled={exporting}
           aria-label={`Export ${selectedCount} patients to CSV`}
-          data-testid="bulk-export-csv-btn"
+          data-testid="export-csv-worklist"
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
         >
           {exporting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
@@ -559,7 +560,7 @@ export default function WorklistPage() {
       const url = URL.createObjectURL(new Blob([resp.data], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
-      a.download = `worklist_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `raf-worklist-export-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -753,7 +754,7 @@ export default function WorklistPage() {
             side="bottom"
           >
             <div data-testid="tile-open-gaps">
-              <SummaryTile label="Open gaps" value={summary.gaps} icon={<FileText size={18} />} color={tokens.riskHigh} />
+              <SummaryTile label="Open gaps" value={summary.gaps === 0 ? "0 — all clear" : summary.gaps} icon={<FileText size={18} />} color={tokens.riskHigh} />
             </div>
           </WT>
           <WT
@@ -761,7 +762,7 @@ export default function WorklistPage() {
             side="bottom"
           >
             <div data-testid="tile-revenue-at-risk">
-              <SummaryTile label="Revenue at risk" value={fmtCurrency(summary.revenue)} icon={<Activity size={18} />} color={tokens.warningStrong} />
+              <SummaryTile label="Revenue at risk" value={summary.revenue === 0 ? "—" : fmtCurrency(summary.revenue)} icon={<Activity size={18} />} color={tokens.warningStrong} />
             </div>
           </WT>
           <WT
@@ -771,7 +772,7 @@ export default function WorklistPage() {
             <div data-testid="tile-awv-due">
               <SummaryTile
                 label="AWV due/overdue"
-                value={summary.awvDue}
+                value={summary.awvDue === 0 ? "0 — all current" : summary.awvDue}
                 icon={<CalendarClock size={18} />}
                 color={tokens.danger}
               />

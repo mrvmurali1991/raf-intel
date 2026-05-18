@@ -398,13 +398,15 @@ function TeamView({
           <ChartExportMenu
             filename="coder-team-breakdown"
             csvData={sortedRows.map((r) => ({
+              // Clean numeric values — no % suffix or human-readable time strings —
+              // so Excel can SUM/sort columns correctly.
               "Coder": r.coder_name ?? `Coder ${r.coder_user_id}`,
               "Email": r.coder_email ?? "",
               "Charts Reviewed": r.charts_reviewed,
-              "Charts/hr": r.charts_per_hour,
-              "AI Accept %": `${r.ai_acceptance_rate_pct}%`,
-              "Avg Time on Chart": fmtSeconds(r.avg_time_on_chart_seconds),
-              "Force-accept no MEAT": r.suspects_force_accepted_no_meat,
+              "Charts Per Hour": r.charts_per_hour,
+              "AI Acceptance Rate": Number(r.ai_acceptance_rate_pct.toFixed(1)),
+              "Avg Time On Chart Seconds": r.avg_time_on_chart_seconds,
+              "Force Accept No MEAT": r.suspects_force_accepted_no_meat,
             }))}
             chartRef={tableRef as React.RefObject<HTMLElement>}
             rawData={sortedRows.map((r) => ({
