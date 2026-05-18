@@ -16,7 +16,7 @@
  * SummaryTab stays inline (default/first-paint tab).
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -176,6 +176,9 @@ function SummaryTab({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function QualityPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("Summary");
+  // ── 15-second load timeout guard ─────────────────────────────────────────
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Data queries ─────────────────────────────────────────────────────────
   const summaryQ = useQuery({
@@ -198,6 +201,32 @@ export default function QualityPage() {
     queryFn: () => getCareGaps({ limit: 500 }),
   });
 
+  // Derived: true while any of the four queries are in-flight (used for the 15 s deadline)
+  const anyFetching = summaryQ.isFetching || measuresQ.isFetching || starsQ.isFetching || gapsQ.isFetching;
+
+  // Start/reset the 15-second timeout whenever fetching begins.
+  // Clear it as soon as all loading finishes or an error is surfaced.
+  useEffect(() => {
+    if (anyFetching) {
+      // Reset previous timer so a refetch always gets a fresh 15 s window
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setLoadTimedOut(false);
+      timeoutRef.current = setTimeout(() => {
+        setLoadTimedOut(true);
+      }, 15_000);
+    } else {
+      // Requests settled — cancel any pending timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      setLoadTimedOut(false);
+    }
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [anyFetching]);
+
   // ── Derived values for the top header gauge ───────────────────────────────
   const currentStars = starsQ.data?.current_estimate ?? summaryQ.data?.stars_estimate ?? 0;
   const projectedStars = starsQ.data?.projected_estimate ?? currentStars;
@@ -205,6 +234,7 @@ export default function QualityPage() {
   const diffUp = diff >= 0;
 
   function refetchAll() {
+    setLoadTimedOut(false);
     summaryQ.refetch();
     measuresQ.refetch();
     starsQ.refetch();
@@ -214,20 +244,36 @@ export default function QualityPage() {
   // ── Render the active tab content ─────────────────────────────────────────
   function renderTabContent() {
     if (activeTab === "Summary") {
-      if (summaryQ.isLoading || measuresQ.isLoading)
+      if (summaryQ.isLoading || measuresQ.isLoading) {
+        if (loadTimedOut)
+          return (
+            <ErrorBox
+              message="Loading is taking longer than expected. The server may be busy — please retry."
+              onRetry={refetchAll}
+            />
+          );
         return <Spinner label="Loading quality summary..." />;
-      if (summaryQ.isError)
-        return <ErrorBox message="Failed to load quality summary." onRetry={() => summaryQ.refetch()} />;
-      if (!summaryQ.data) return <ErrorBox message="No summary data available." />;
+      }
+      if (summaryQ.isError || measuresQ.isError)
+        return <ErrorBox message={`Failed to load quality summary: ${
+          (summaryQ.error as Error | null)?.message ??
+          (measuresQ.error as Error | null)?.message ??
+          "Unknown error"
+        }`} onRetry={refetchAll} />;
+      if (!summaryQ.data) return <ErrorBox message="No quality summary data available for this tenant. Ensure the quality pipeline has run." onRetry={refetchAll} />;
       return (
         <SummaryTab summary={summaryQ.data} measures={measuresQ.data ?? []} />
       );
     }
 
     if (activeTab === "HEDIS Measures") {
-      if (measuresQ.isLoading) return <Spinner label="Loading HEDIS measures..." />;
+      if (measuresQ.isLoading) {
+        if (loadTimedOut)
+          return <ErrorBox message="Measures did not load in time. Please retry." onRetry={refetchAll} />;
+        return <Spinner label="Loading HEDIS measures..." />;
+      }
       if (measuresQ.isError)
-        return <ErrorBox message="Failed to load measures." onRetry={() => measuresQ.refetch()} />;
+        return <ErrorBox message={`Failed to load measures: ${(measuresQ.error as Error | null)?.message ?? "Unknown error"}`} onRetry={refetchAll} />;
       const measures = measuresQ.data ?? [];
       if (measures.length === 0)
         return (
@@ -260,9 +306,13 @@ export default function QualityPage() {
     }
 
     if (activeTab === "STARS Estimate") {
-      if (starsQ.isLoading) return <Spinner label="Loading STARS estimate..." />;
+      if (starsQ.isLoading) {
+        if (loadTimedOut)
+          return <ErrorBox message="STARS estimate did not load in time. Please retry." onRetry={refetchAll} />;
+        return <Spinner label="Loading STARS estimate..." />;
+      }
       if (starsQ.isError)
-        return <ErrorBox message="Failed to load STARS estimate." onRetry={() => starsQ.refetch()} />;
+        return <ErrorBox message={`Failed to load STARS estimate: ${(starsQ.error as Error | null)?.message ?? "Unknown error"}`} onRetry={refetchAll} />;
       if (!starsQ.data)
         return (
           <div
@@ -294,9 +344,13 @@ export default function QualityPage() {
     }
 
     if (activeTab === "Care Gaps") {
-      if (gapsQ.isLoading) return <Spinner label="Loading care gaps..." />;
+      if (gapsQ.isLoading) {
+        if (loadTimedOut)
+          return <ErrorBox message="Care gaps did not load in time. Please retry." onRetry={refetchAll} />;
+        return <Spinner label="Loading care gaps..." />;
+      }
       if (gapsQ.isError)
-        return <ErrorBox message="Failed to load care gaps." onRetry={() => gapsQ.refetch()} />;
+        return <ErrorBox message={`Failed to load care gaps: ${(gapsQ.error as Error | null)?.message ?? "Unknown error"}`} onRetry={refetchAll} />;
       return (
         <CareGapsTabDynamic
           gaps={gapsQ.data?.gaps ?? []}
