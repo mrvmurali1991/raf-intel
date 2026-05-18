@@ -21,6 +21,13 @@
 import * as React from "react";
 import { MoreHorizontal, Download, Image, Table } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,7 +147,7 @@ export function ChartExportMenu({
   }
 
   function handleViewRaw() {
-    setShowRaw((v) => !v);
+    setShowRaw(true);
     setOpen(false);
   }
 
@@ -195,59 +202,64 @@ export function ChartExportMenu({
           {hasRaw && (
             <MenuItem
               icon={<Table size={13} />}
-              label={showRaw ? "Hide Raw Data" : "View Raw Data"}
+              label="View Raw Data"
               onClick={handleViewRaw}
             />
           )}
         </div>
       )}
 
-      {/* Inline Raw Data table */}
-      {showRaw && rawData?.length && (
-        <div
-          aria-label="Raw chart data"
-          className="absolute right-0 top-[calc(100%+36px)] z-[49] bg-card border border-border rounded-lg shadow-lg max-h-[280px] overflow-y-auto min-w-[300px]"
-        >
-          <table className="w-full border-collapse text-xs">
-            <thead className="bg-muted sticky top-0">
-              <tr>
-                {rawHeaders.map((h) => (
-                  <th
-                    key={h}
-                    className="px-[10px] py-[6px] text-left font-semibold text-muted-foreground border-b border-border whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rawData.slice(0, 50).map((row, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  {rawHeaders.map((h) => (
-                    <td
-                      key={h}
-                      className="px-[10px] py-[5px] text-foreground tabular-nums"
-                    >
-                      {String(row[h] ?? "")}
-                    </td>
+      {/* Raw Data modal — portal-rendered so it never overflows narrow viewports */}
+      <Dialog open={showRaw} onOpenChange={setShowRaw}>
+        <DialogContent className="sm:max-w-2xl w-full p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="text-sm font-semibold">Raw chart data</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto max-h-[60vh] px-0">
+            {rawData?.length ? (
+              <table className="w-full border-collapse text-xs">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    {rawHeaders.map((h) => (
+                      <th
+                        key={h}
+                        className="px-[10px] py-[6px] text-left font-semibold text-muted-foreground border-b border-border whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawData.slice(0, 50).map((row, i) => (
+                    <tr key={i} className="border-b border-border/50">
+                      {rawHeaders.map((h) => (
+                        <td
+                          key={h}
+                          className="px-[10px] py-[5px] text-foreground tabular-nums"
+                        >
+                          {String(row[h] ?? "")}
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-              {rawData.length > 50 && (
-                <tr>
-                  <td
-                    colSpan={rawHeaders.length}
-                    className="px-[10px] py-[6px] text-muted-foreground text-center italic"
-                  >
-                    Showing first 50 of {rawData.length} rows
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  {rawData.length > 50 && (
+                    <tr>
+                      <td
+                        colSpan={rawHeaders.length}
+                        className="px-[10px] py-[6px] text-muted-foreground text-center italic"
+                      >
+                        Showing first 50 of {rawData.length} rows
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+          <DialogFooter showCloseButton className="px-4" />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

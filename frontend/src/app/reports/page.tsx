@@ -70,18 +70,32 @@ type DataQualityPayload = {
 const REVENUE_PER_RAF = 11_015.04;
 const YEARS = Array.from({length: 3}, (_, i) => new Date().getFullYear() - i);
 const CURRENT_PAYMENT_YEAR = new Date().getFullYear();
-const TABS = [
+type ReportGroup = "Clinical" | "Analytics";
+
+const CLINICAL_TABS = [
   "Revenue",
   "Patient Scorecard",
   "HCC Distribution",
-  "Recapture Gaps",
-  "Data Quality",
+  "Provider Performance",
+  "Quality",
+] as const;
+
+const ANALYTICS_TABS = [
   "Longitudinal Trends",
   "CMS Benchmarks",
   "Settlement Projection",
   "Scheduled Reports",
+  "Recapture Gaps",
 ] as const;
-type TabKey = (typeof TABS)[number];
+
+type ClinicalTab = (typeof CLINICAL_TABS)[number];
+type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
+type TabKey = ClinicalTab | AnalyticsTab;
+
+const GROUP_TABS: Record<ReportGroup, readonly TabKey[]> = {
+  Clinical: CLINICAL_TABS,
+  Analytics: ANALYTICS_TABS,
+};
 
 // ── CMS National Average RAF by year (from official CMS publications) ─────────
 const CMS_NATIONAL_AVG: { [year: number]: number } = { 2024: 1.08, 2025: 1.10, 2026: 1.12 };
@@ -312,7 +326,14 @@ export default function ReportsPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const { paymentYear, setPaymentYear } = usePaymentYear();
   const isHistoricalPY = useIsHistoricalPY();
+  const [activeGroup, setActiveGroup] = useState<ReportGroup>("Clinical");
   const [activeTab, setActiveTab] = useState<TabKey>("Revenue");
+
+  // When switching groups, select the first tab of that group
+  const handleGroupChange = (g: ReportGroup) => {
+    setActiveGroup(g);
+    setActiveTab(GROUP_TABS[g][0]);
+  };
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const { from, to } = presetToDates("30d");
     return { preset: "30d", from, to };
