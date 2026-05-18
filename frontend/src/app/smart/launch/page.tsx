@@ -47,7 +47,8 @@ const DEFAULT_SCOPE =
     "launch/patient",
     "patient/Patient.read",
     "patient/Condition.read",
-    "patient/Condition.write",
+    "patient/Encounter.read",
+    "patient/Observation.read",
   ].join(" ");
 
 function getRedirectUri(): string {

@@ -210,6 +210,10 @@ def smart_configuration(request: Request) -> dict[str, Any]:
         "registration_endpoint": f"{base_url}/api/smart/registrations",
         "scopes_supported": [
             "openid", "fhirUser", "launch", "launch/patient",
+            "patient/Patient.read",
+            "patient/Condition.read",
+            "patient/Encounter.read",
+            "patient/Observation.read",
             "patient/*.read", "user/*.read", "offline_access",
         ],
         "response_types_supported": ["code"],
@@ -580,6 +584,8 @@ def smart_configuration_well_known(request: Request) -> JSONResponse:
             "launch/patient",
             "patient/Patient.read",
             "patient/Condition.read",
+            "patient/Encounter.read",
+            "patient/Observation.read",
             "patient/Condition.write",
         ],
         "capabilities": [
@@ -691,7 +697,7 @@ def smart_launch_page(
     scope = os.environ.get(
         "SMART_DEFAULT_SCOPE",
         "openid fhirUser launch launch/patient patient/Patient.read "
-        "patient/Condition.read patient/Condition.write",
+        "patient/Condition.read patient/Encounter.read patient/Observation.read",
     )
     html = _LAUNCH_HTML.format(
         iss_json=json.dumps(iss or ""),

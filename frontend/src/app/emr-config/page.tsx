@@ -1542,6 +1542,252 @@ function LiveAutoSyncPanel() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Epic SMART on FHIR Wizard
+// ---------------------------------------------------------------------------
+
+interface EpicWizardStep { label: string }
+const EPIC_WIZARD_STEPS: EpicWizardStep[] = [
+  { label: "FHIR Base URL" },
+  { label: "App Credentials" },
+  { label: "Test Connection" },
+];
+
+function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [step, setStep] = useState(0);
+  const [fhirBaseUrl, setFhirBaseUrl]   = useState("https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4");
+  const [clientId, setClientId]         = useState("");
+  const [redirectUri, setRedirectUri]   = useState(typeof window !== "undefined" ? `${window.location.origin}/api/smart/callback` : "");
+  const [testStatus, setTestStatus]     = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [testMsg, setTestMsg]           = useState("");
+  const [saving, setSaving]             = useState(false);
+
+  async function handleTestConnection() {
+    if (!fhirBaseUrl) return;
+    setTestStatus("testing");
+    setTestMsg("");
+    try {
+      const cfgUrl = `${fhirBaseUrl.replace(/\/$/, "")}/.well-known/smart-configuration`;
+      const res = await fetch(cfgUrl, { credentials: "omit" });
+      if (res.ok) {
+        const cfg = await res.json();
+        const authEp = cfg.authorization_endpoint || "(not found)";
+        setTestStatus("ok");
+        setTestMsg(`SMART configuration discovered. Authorization endpoint: ${authEp}`);
+      } else {
+        setTestStatus("error");
+        setTestMsg(`Server returned HTTP ${res.status}. Check that the FHIR base URL points to an Epic sandbox or production endpoint.`);
+      }
+    } catch (e: unknown) {
+      setTestStatus("error");
+      setTestMsg(`Network error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async function handleSave() {
+    if (!clientId.trim()) return;
+    setSaving(true);
+    try {
+      await api.post("/api/smart/registrations", {
+        name: "Epic SMART on FHIR",
+        ehr_vendor: "epic",
+        client_id: clientId.trim(),
+        redirect_uri: redirectUri.trim() || `${window.location.origin}/api/smart/callback`,
+        scopes: "openid fhirUser launch launch/patient patient/Patient.read patient/Condition.read patient/Encounter.read patient/Observation.read",
+        fhir_base_url: fhirBaseUrl.trim(),
+        token_endpoint: `${fhirBaseUrl.trim().replace(/\/$/, "")}/oauth2/token`,
+        authorize_endpoint: `${fhirBaseUrl.trim().replace(/\/$/, "")}/oauth2/authorize`,
+        status: "active",
+      });
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      setTestStatus("error");
+      setTestMsg(`Save failed: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: `1px solid ${C.slate200}`, fontSize: 13, color: C.slate900,
+    backgroundColor: C.white, outline: "none", boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block", fontSize: 12, fontWeight: 600,
+    color: C.slate600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em",
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add Epic SMART on FHIR Connection"
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        backgroundColor: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: C.white, borderRadius: 16, width: "100%", maxWidth: 520,
+        padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+        position: "relative",
+      }}>
+        {/* Header */}
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", cursor: "pointer", color: C.slate400, padding: 4 }}
+        >
+          <X size={18} />
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#4F46E518", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Zap size={20} style={{ color: "#4F46E5" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.slate900 }}>Add Epic Connection</div>
+            <div style={{ fontSize: 12, color: C.slate500, marginTop: 2 }}>SMART on FHIR 2.0 with PKCE</div>
+          </div>
+          <span style={{
+            marginLeft: "auto", padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+            background: "#4F46E518", color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.06em",
+          }}>
+            Epic
+          </span>
+        </div>
+
+        {/* Step indicators */}
+        <div style={{ display: "flex", gap: 0, marginBottom: 28 }}>
+          {EPIC_WIZARD_STEPS.map((s, i) => (
+            <div key={s.label} style={{ flex: 1, display: "flex", alignItems: "center" }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, fontWeight: 700,
+                background: i <= step ? C.primary : C.slate200,
+                color: i <= step ? C.white : C.slate400,
+              }}>
+                {i < step ? <CheckCircle2 size={14} /> : i + 1}
+              </div>
+              <div style={{ flex: 1, height: 2, background: i < step ? C.primary : C.slate200, margin: "0 4px" }} />
+              {i === EPIC_WIZARD_STEPS.length - 1 && (
+                <div style={{ width: 24, height: 2, background: "transparent" }} />
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: C.slate500, marginTop: -18, marginBottom: 20, textAlign: "center" }}>
+          Step {step + 1} of {EPIC_WIZARD_STEPS.length}: {EPIC_WIZARD_STEPS[step].label}
+        </div>
+
+        {/* Step 0 — FHIR Base URL */}
+        {step === 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div>
+              <label style={labelStyle}>Epic FHIR Base URL</label>
+              <input
+                className="emr-input"
+                style={inputStyle}
+                value={fhirBaseUrl}
+                onChange={(e) => setFhirBaseUrl(e.target.value)}
+                placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
+              />
+              <div style={{ fontSize: 11, color: C.slate400, marginTop: 6 }}>
+                For Epic sandbox use <code style={{ background: C.slate100, padding: "1px 4px", borderRadius: 3 }}>https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4</code>
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Btn variant="primary" onClick={() => setStep(1)} disabled={!fhirBaseUrl.trim()}>
+                Next
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {/* Step 1 — App credentials */}
+        {step === 1 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div>
+              <label style={labelStyle}>Client ID</label>
+              <input
+                className="emr-input"
+                style={inputStyle}
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="From Epic App Orchard registration"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Redirect URI</label>
+              <input
+                className="emr-input"
+                style={inputStyle}
+                value={redirectUri}
+                onChange={(e) => setRedirectUri(e.target.value)}
+                placeholder={`${typeof window !== "undefined" ? window.location.origin : ""}/api/smart/callback`}
+              />
+              <div style={{ fontSize: 11, color: C.slate400, marginTop: 6 }}>
+                Register this exact URI in your Epic App Orchard application.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn variant="secondary" onClick={() => setStep(0)}>Back</Btn>
+              <Btn variant="primary" onClick={() => setStep(2)} disabled={!clientId.trim()}>
+                Next
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2 — Test + save */}
+        {step === 2 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ padding: "14px 16px", borderRadius: 10, background: C.slate50, border: `1px solid ${C.slate200}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.slate700, marginBottom: 8 }}>Summary</div>
+              <div style={{ fontSize: 12, color: C.slate600, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div><strong>FHIR URL:</strong> {fhirBaseUrl}</div>
+                <div><strong>Client ID:</strong> {clientId}</div>
+                <div><strong>Scopes:</strong> openid fhirUser launch patient/Patient.read patient/Condition.read patient/Encounter.read patient/Observation.read</div>
+              </div>
+            </div>
+
+            <Btn variant="secondary" onClick={handleTestConnection} disabled={testStatus === "testing"}>
+              {testStatus === "testing" ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <TestTube2 size={14} />}
+              {testStatus === "testing" ? "Testing…" : "Test Connection"}
+            </Btn>
+
+            {testStatus !== "idle" && (
+              <div style={{
+                padding: "12px 14px", borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                background: testStatus === "ok" ? C.emerald100 : testStatus === "error" ? C.red100 : C.blue100,
+                color: testStatus === "ok" ? C.emerald600 : testStatus === "error" ? C.red600 : C.blue600,
+                display: "flex", alignItems: "flex-start", gap: 8,
+              }}>
+                {testStatus === "ok" ? <CheckCircle2 size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  : testStatus === "error" ? <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  : <Loader2 size={14} style={{ flexShrink: 0, marginTop: 1, animation: "spin 1s linear infinite" }} />}
+                {testMsg}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn variant="secondary" onClick={() => setStep(1)}>Back</Btn>
+              <Btn variant="primary" onClick={handleSave} disabled={saving || !clientId.trim()}>
+                {saving ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <CheckCircle2 size={14} />}
+                {saving ? "Saving…" : "Save Connection"}
+              </Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Fallback vendors rendered when /api/emr/vendors is unavailable
 const FALLBACK_VENDORS: VendorPreset[] = [
   { id: "openemr",        vendor: "openemr",        name: "OpenEMR",           connection_type: "fhir_r4",   description: "OpenEMR FHIR R4 endpoint" },
@@ -1566,6 +1812,7 @@ export default function EmrConfigPage() {
   const qc = useQueryClient();
 
   const [showModal, setShowModal] = useState(false);
+  const [showEpicWizard, setShowEpicWizard] = useState(false);
   const [editTarget, setEditTarget] = useState<EmrConnection | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -1923,6 +2170,40 @@ export default function EmrConfigPage() {
           )}
         </div>
 
+        {/* Epic SMART on FHIR banner */}
+        <div className="premium-card animate-slide-up stagger-5" style={{
+          borderRadius: 14, marginBottom: 20, overflow: "hidden",
+          border: "1px solid #4F46E530",
+          background: "linear-gradient(135deg, #4F46E508 0%, #ffffff 100%)",
+        }}>
+          <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              background: "#4F46E518", display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Zap size={22} style={{ color: "#4F46E5" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.slate900 }}>Epic SMART on FHIR</span>
+                <span style={{
+                  padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+                  background: "#4F46E518", color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.06em",
+                }}>
+                  Available
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: C.slate500, marginTop: 3 }}>
+                Connect Epic via SMART 2.0 PKCE flow. Pulls patient demographics, conditions, encounters, and observations into the RAF pipeline.
+              </div>
+            </div>
+            <Btn variant="primary" onClick={() => setShowEpicWizard(true)}>
+              <Plus size={14} />
+              Add Epic Connection
+            </Btn>
+          </div>
+        </div>
+
         {/* Connection list */}
         <div className="premium-card animate-slide-up stagger-5" style={{
           overflow: "hidden",
@@ -2065,6 +2346,17 @@ export default function EmrConfigPage() {
           editTarget={editTarget}
           onClose={handleModalClose}
           onSaved={handleModalSaved}
+        />
+      )}
+
+      {/* Epic SMART on FHIR wizard */}
+      {showEpicWizard && (
+        <EpicSmartWizard
+          onClose={() => setShowEpicWizard(false)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["emr-connections"] });
+            showToast("Epic SMART connection registered.", "success");
+          }}
         />
       )}
 
