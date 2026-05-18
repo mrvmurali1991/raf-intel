@@ -40,6 +40,7 @@ import {
   MapPin,
   Filter,
   TrendingDown,
+  FileStack,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -115,6 +116,7 @@ const navGroups: NavGroup[] = [
   {
     title: "ADMIN",
     items: [
+      { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack },
       { href: "/users", label: "Users", icon: UsersRound },
       { href: "/system", label: "System Health", icon: Activity },
       { href: "/developer", label: "Developer", icon: Code },

@@ -2409,6 +2409,90 @@ export async function getProviderForecast(
   return data;
 }
 
+
+// ---------------------------------------------------------------------------
+// Document Ingestion Dashboard
+// ---------------------------------------------------------------------------
+
+export interface DocIngestionSource {
+  id: string;
+  name: string;
+  status: "active" | "idle" | "not_configured";
+  docs_24h: number;
+  suspects_24h: number;
+  last_activity: string | null;
+  config_path: string;
+}
+
+export interface DocIngestionRow {
+  source: string;
+  timestamp: string | null;
+  document_id: string | null;
+  patient_id: string | null;
+  filename: string | null;
+  mimetype: string | null;
+  suspects: number;
+  status: string;
+}
+
+export interface DocIngestionKpis {
+  total_docs_24h: number;
+  total_suspects_24h: number;
+  success_rate_pct: number | null;
+  active_sources: number;
+  window_hours: number;
+}
+
+export interface DocIngestionDashboard {
+  sources: DocIngestionSource[];
+  recent_documents: DocIngestionRow[];
+  kpis: DocIngestionKpis;
+  generated_at: string;
+}
+
+export async function getDocumentIngestionDashboard(
+  hours = 24
+): Promise<DocIngestionDashboard> {
+  const { data } = await api.get("/api/admin/document-ingestion/dashboard", {
+    params: { hours },
+  });
+  return data;
+}
+
+export interface DocIngestionDetail {
+  source: string;
+  document_id: string;
+  record: Record<string, unknown>;
+  suspects: Array<{
+    hcc_code: string;
+    icd10_code: string;
+    confidence_score: number;
+    evidence_sentence: string;
+  }>;
+}
+
+export async function getDocumentDetail(
+  sourceId: string,
+  documentId: string
+): Promise<DocIngestionDetail> {
+  const { data } = await api.get(
+    `/api/admin/document-ingestion/document/${encodeURIComponent(sourceId)}/${encodeURIComponent(documentId)}`
+  );
+  return data;
+}
+
+export async function reprocessDocument(
+  sourceId: string,
+  documentId: string,
+  engine: string
+): Promise<{ queued: boolean; job_id?: string }> {
+  const { data } = await api.post(
+    `/api/admin/document-ingestion/document/${encodeURIComponent(sourceId)}/${encodeURIComponent(documentId)}/reprocess`,
+    { engine }
+  );
+  return data;
+}
+
 export async function getTenantForecast(
   year?: number,
   tenantId?: string

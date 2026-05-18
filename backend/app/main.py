@@ -25,6 +25,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+<<<<<<< HEAD
 from app.db import check_connections, shutdown_db_executor
 from app.exception_handlers import register_exception_handlers
 from app.logging_config import configure_logging
@@ -33,6 +34,11 @@ from app.metrics import init_metrics
 from app.monitoring import init_monitoring
 from app.router_registry import register_routers
 from app.telemetry import init_telemetry, instrument_app
+=======
+from app.db import check_connections
+from app.routers import analysis, audit, patients, raf, reports, suspects
+from app.routers import document_ingestion_dashboard
+>>>>>>> 9c4121f (feat(doc-ingestion-ui): unified dashboard + drawer for 8 ingestion sources)
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -532,7 +538,17 @@ register_routers(app)
 try:
     import copy as _copy_for_edi
 
+<<<<<<< HEAD
     from app.routers import edi_generation as _edi_gen
+=======
+app.include_router(patients.router)
+app.include_router(raf.router)
+app.include_router(analysis.router)
+app.include_router(suspects.router)
+app.include_router(audit.router)
+app.include_router(reports.router)
+app.include_router(document_ingestion_dashboard.router)
+>>>>>>> 9c4121f (feat(doc-ingestion-ui): unified dashboard + drawer for 8 ingestion sources)
 
     app.include_router(_edi_gen.router, include_in_schema=False)
     _edi_v1 = _copy_for_edi.copy(_edi_gen.router)
