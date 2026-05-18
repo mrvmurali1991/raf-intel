@@ -29,7 +29,8 @@ import {
   GitMerge,
   RefreshCw,
 } from "lucide-react";
-import { StatCard, PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { tokens } from "@/styles/tokens";
 import {
@@ -93,33 +94,31 @@ function SummaryTab({
         className="qs-kpi-strip qs-fade-in"
         style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}
       >
-        <StatCard
+        <MetricCard
           label="Total Measures"
           value={summary.total_measures}
           subtitle={`Measurement year ${summary.year}`}
           icon={<Activity size={20} />}
-          color={C.blue}
         />
-        <StatCard
+        <MetricCard
           label="Above Benchmark"
           value={`${summary.measures_above_benchmark} / ${summary.total_measures}`}
           subtitle={`${aboveBenchmarkPct}% of tracked measures`}
           icon={<CheckCircle size={20} />}
-          color={aboveBenchmarkPct >= 50 ? C.emerald : C.amber}
+          intent={aboveBenchmarkPct >= 50 ? "success" : "warning"}
         />
-        <StatCard
+        <MetricCard
           label="Composite Score"
           value={`${((summary.composite_score ?? 0) * 100).toFixed(1)}%`}
           subtitle="Population-weighted avg"
           icon={<GitMerge size={20} />}
-          color={C.violet}
         />
-        <StatCard
+        <MetricCard
           label="STARS Estimate"
           value={(summary.stars_estimate ?? 0).toFixed(1)}
           subtitle={starsLabel(summary.stars_estimate ?? 0)}
           icon={<Star size={20} />}
-          color={starsColor(summary.stars_estimate ?? 0)}
+          intent={(summary.stars_estimate ?? 0) >= 4 ? "success" : (summary.stars_estimate ?? 0) >= 3 ? "warning" : "danger"}
         />
       </div>
 

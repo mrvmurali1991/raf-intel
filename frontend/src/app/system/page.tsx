@@ -23,10 +23,10 @@ import {
   Trash2,
 } from "lucide-react";
 import {
-  StatCard,
   PageHeader,
   SectionHeader,
 } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -358,29 +358,29 @@ export default function SystemHealthPage() {
           marginTop: 24,
         }}
       >
-        <StatCard
+        <MetricCard
           label="System Status"
           value={healthLoading ? "..." : overallStatus === "healthy" ? "Healthy" : overallStatus === "degraded" ? "Degraded" : "Offline"}
           icon={<Server style={{ width: 20, height: 20 }} />}
-          color={overallStatus === "healthy" ? tokens.riskLow : overallStatus === "degraded" ? tokens.warningStrong : tokens.riskHigh}
+          intent={overallStatus === "healthy" ? "success" : overallStatus === "degraded" ? "warning" : "danger"}
           loading={healthLoading}
         />
-        <StatCard
+        <MetricCard
           label="Total Users"
           value={userStats?.total ?? "..."}
           subtitle={`${userStats?.active ?? 0} active`}
           icon={<Users style={{ width: 20, height: 20 }} />}
-          color={tokens.riskLow}
+          intent="success"
         />
-        <StatCard
+        <MetricCard
           label="Error Count"
           value={totalErrors}
           subtitle="from monitoring"
           icon={<AlertTriangle style={{ width: 20, height: 20 }} />}
-          color={totalErrors > 0 ? tokens.riskHigh : tokens.riskLow}
+          intent={totalErrors > 0 ? "danger" : "success"}
           loading={healthLoading}
         />
-        <StatCard
+        <MetricCard
           label="Last Retention Sweep"
           value={
             health?.sync_scheduler?.last_retention_sweep
@@ -388,7 +388,6 @@ export default function SystemHealthPage() {
               : "Never"
           }
           icon={<Clock style={{ width: 20, height: 20 }} />}
-          color={tokens.accentPurple}
           loading={healthLoading}
         />
       </div>

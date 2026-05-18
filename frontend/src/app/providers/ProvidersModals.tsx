@@ -15,7 +15,7 @@ import api from "@/lib/api";
 import { tokens } from "@/styles/tokens";
 import { initialsColor } from "@/lib/ui-utils";
 import { fmtCurrencySmart } from "@/lib/format";
-import { StatCard, SectionHeader } from "@/components/healthcare-ui";
+import { SectionHeader } from "@/components/healthcare-ui";
 import FeatureFlag from "@/components/FeatureFlag";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
 import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";

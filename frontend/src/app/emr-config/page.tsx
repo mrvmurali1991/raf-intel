@@ -476,8 +476,8 @@ function formatDuration(seconds?: number): string {
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label style={{
-      fontSize: 12, fontWeight: 600, color: C.slate600, display: "block", marginBottom: 6,
+    <label className="text-muted-foreground" style={{
+      fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6,
       letterSpacing: "0.03em", textTransform: "uppercase",
     }}>
       {children}
@@ -501,12 +501,12 @@ function Input({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="emr-input"
+      className="emr-input text-foreground"
       style={{
         width: "100%", boxSizing: "border-box",
         padding: "9px 12px", borderRadius: 8,
         border: `1px solid ${C.slate200}`,
-        fontSize: 13, color: C.slate900,
+        fontSize: 13,
         background: disabled ? C.slate50 : C.white,
         transition: "border-color 200ms, box-shadow 200ms",
       }}
@@ -527,12 +527,12 @@ function Select({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="emr-input"
+      className="emr-input text-foreground"
       style={{
         width: "100%", boxSizing: "border-box",
         padding: "9px 12px", borderRadius: 8,
         border: `1px solid ${C.slate200}`,
-        fontSize: 13, color: C.slate900,
+        fontSize: 13,
         background: disabled ? C.slate50 : C.white,
         transition: "border-color 200ms, box-shadow 200ms",
       }}
@@ -546,7 +546,7 @@ function Select({
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.slate700 }}>
+    <label className="text-foreground" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
       <div
         role="switch"
         aria-checked={checked}
@@ -618,7 +618,7 @@ function SyncHistoryPanel({ connectionId }: { connectionId: string }) {
 
   if (isLoading) {
     return (
-      <div style={{ padding: "16px 20px", color: C.slate400, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="text-muted-foreground" style={{ padding: "16px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
         <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Loading history...
       </div>
     );
@@ -626,7 +626,7 @@ function SyncHistoryPanel({ connectionId }: { connectionId: string }) {
 
   if (history.length === 0) {
     return (
-      <div style={{ padding: "16px 20px", color: C.slate400, fontSize: 13 }}>
+      <div className="text-muted-foreground" style={{ padding: "16px 20px", fontSize: 13 }}>
         No sync history yet.
       </div>
     );
@@ -639,7 +639,7 @@ function SyncHistoryPanel({ connectionId }: { connectionId: string }) {
           <thead>
             <tr style={{ borderBottom: `1px solid ${C.slate100}` }}>
               {["Started", "Status", "Fetched", "Processed", "Failed", "Duration", "Error"].map((h) => (
-                <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: C.slate400, fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} className="text-muted-foreground" style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -669,7 +669,7 @@ function SyncHistoryPanel({ connectionId }: { connectionId: string }) {
 function FieldMappingTable({ mappings }: { mappings?: FieldMapping[] }) {
   if (!mappings || mappings.length === 0) {
     return (
-      <div style={{ padding: "12px 20px 16px", color: C.slate400, fontSize: 13 }}>
+      <div className="text-muted-foreground" style={{ padding: "12px 20px 16px", fontSize: 13 }}>
         No field mappings configured.
       </div>
     );
@@ -679,9 +679,9 @@ function FieldMappingTable({ mappings }: { mappings?: FieldMapping[] }) {
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${C.slate100}` }}>
-            <th style={{ padding: "6px 10px", textAlign: "left", color: C.slate400, fontWeight: 600 }}>Source Field</th>
-            <th style={{ padding: "6px 10px", textAlign: "left", color: C.slate400, fontWeight: 600 }}>Target Field</th>
-            <th style={{ padding: "6px 10px", textAlign: "left", color: C.slate400, fontWeight: 600 }}>Transform</th>
+            <th className="text-muted-foreground" style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600 }}>Source Field</th>
+            <th className="text-muted-foreground" style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600 }}>Target Field</th>
+            <th className="text-muted-foreground" style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600 }}>Transform</th>
           </tr>
         </thead>
         <tbody>
@@ -736,9 +736,9 @@ function ConnectionCard({ conn, onEdit, onDelete, onTest, onSync, onToggleActive
 
         {/* Info */}
         <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.slate900, marginBottom: 4 }}>{conn.name}</div>
+          <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{conn.name}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: C.slate500, textTransform: "capitalize" }}>{conn.vendor.replace(/_/g, " ")}</span>
+            <span className="text-muted-foreground" style={{ fontSize: 12, textTransform: "capitalize" }}>{conn.vendor.replace(/_/g, " ")}</span>
             <ConnectionTypeBadge type={conn.connection_type} />
           </div>
         </div>
@@ -961,7 +961,7 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
   function renderStep1() {
     return (
       <div>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: C.slate500 }}>
+        <p className="text-muted-foreground" style={{ margin: "0 0 16px", fontSize: 13 }}>
           Select a vendor preset to auto-fill defaults, then configure connection details.
         </p>
         {vendorsLoading ? (
@@ -1010,10 +1010,10 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
         <div style={{ color, marginBottom: 8 }}>
           {VENDOR_ICONS[v.vendor] ?? <Server size={20} />}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.slate900, marginBottom: 4 }}>{v.name}</div>
+        <div className="text-foreground" style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{v.name}</div>
         <ConnectionTypeBadge type={v.connection_type} />
         {v.description && (
-          <div style={{ fontSize: 11, color: C.slate400, marginTop: 6, lineHeight: 1.4 }}>{v.description}</div>
+          <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.4 }}>{v.description}</div>
         )}
       </button>
     );
@@ -1132,7 +1132,7 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="premium-card" style={{ padding: 16, borderRadius: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.slate900, marginBottom: 12 }}>Connection Summary</div>
+          <div className="text-foreground" style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Connection Summary</div>
           {[
             ["Name",       form.name],
             ["Vendor",     form.vendor.replace(/_/g, " ")],
@@ -1145,8 +1145,8 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
               : []),
           ].map(([label, value]) => (
             <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", borderBottom: `1px solid ${C.slate200}` }}>
-              <span style={{ color: C.slate500 }}>{label}</span>
-              <span style={{ color: C.slate800, fontWeight: 600, textAlign: "right", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</span>
+              <span className="text-muted-foreground">{label}</span>
+              <span className="text-foreground" style={{ fontWeight: 600, textAlign: "right", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</span>
             </div>
           ))}
         </div>
@@ -1217,10 +1217,10 @@ function ConnectionModal({ editTarget, onClose, onSaved }: ModalProps) {
           flexShrink: 0,
         }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.slate900 }}>
+            <div className="text-foreground" style={{ fontSize: 16, fontWeight: 700 }}>
               {isEdit ? "Edit Connection" : "Add EMR Connection"}
             </div>
-            <div style={{ fontSize: 12, color: C.slate400, marginTop: 2 }}>
+            <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 2 }}>
               {step === 1 ? "Step 1 — Select Vendor" : step === 2 ? "Step 2 — Connection Details" : "Step 3 — Test & Save"}
             </div>
           </div>
@@ -1375,8 +1375,8 @@ function LiveAutoSyncPanel() {
           <RefreshCw size={18} />
         </div>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.slate700 }}>Live Auto-Sync</div>
-          <div style={{ fontSize: 12, color: C.slate400, marginTop: 2 }}>Auto-sync not yet configured</div>
+          <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700 }}>Live Auto-Sync</div>
+          <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 2 }}>Auto-sync not yet configured</div>
         </div>
       </div>
     );
@@ -1437,7 +1437,7 @@ function LiveAutoSyncPanel() {
               backgroundColor: statusConfig.dot,
             }} />
           </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.slate900 }}>Live Auto-Sync</span>
+          <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Live Auto-Sync</span>
           {countdown && isEnabled && !hasError && (
             <span style={{
               fontSize: 11, fontWeight: 600,
@@ -1480,13 +1480,13 @@ function LiveAutoSyncPanel() {
           borderRight: `1px solid ${C.slate100}`,
           display: "flex", flexDirection: "column", gap: 4,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Status
           </div>
           <div style={{ fontSize: 20, fontWeight: 800, color: statusConfig.color, lineHeight: 1.2 }}>
             {statusConfig.label}
           </div>
-          <div style={{ fontSize: 11, color: C.slate400 }}>
+          <div className="text-muted-foreground" style={{ fontSize: 11 }}>
             {isRunning ? "Cycle in progress..." : isEnabled ? "Polling active" : "Sync paused"}
           </div>
         </div>
@@ -1497,13 +1497,13 @@ function LiveAutoSyncPanel() {
           borderRight: `1px solid ${C.slate100}`,
           display: "flex", flexDirection: "column", gap: 4,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Last Sync
           </div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.slate900, lineHeight: 1.2 }}>
+          <div className="text-foreground" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>
             {relTime}
           </div>
-          <div style={{ fontSize: 11, color: C.slate400 }}>
+          <div className="text-muted-foreground" style={{ fontSize: 11 }}>
             {status.new_patients_last_cycle > 0
               ? `+${status.new_patients_last_cycle} new patient${status.new_patients_last_cycle !== 1 ? "s" : ""}`
               : "No new patients"}
@@ -1515,13 +1515,13 @@ function LiveAutoSyncPanel() {
           padding: "16px 20px",
           display: "flex", flexDirection: "column", gap: 4,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Total Synced Today
           </div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.primary, lineHeight: 1.2 }}>
             {status.total_synced_today.toLocaleString()}
           </div>
-          <div style={{ fontSize: 11, color: C.slate400 }}>patients ingested</div>
+          <div className="text-muted-foreground" style={{ fontSize: 11 }}>patients ingested</div>
         </div>
       </div>
 
@@ -1650,8 +1650,8 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
             <Zap size={20} style={{ color: "#4F46E5" }} />
           </div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.slate900 }}>Add Epic Connection</div>
-            <div style={{ fontSize: 12, color: C.slate500, marginTop: 2 }}>SMART on FHIR 2.0 with PKCE</div>
+            <div className="text-foreground" style={{ fontSize: 16, fontWeight: 700 }}>Add Epic Connection</div>
+            <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 2 }}>SMART on FHIR 2.0 with PKCE</div>
           </div>
           <span style={{
             marginLeft: "auto", padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700,
@@ -1681,7 +1681,7 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11, color: C.slate500, marginTop: -18, marginBottom: 20, textAlign: "center" }}>
+        <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: -18, marginBottom: 20, textAlign: "center" }}>
           Step {step + 1} of {EPIC_WIZARD_STEPS.length}: {EPIC_WIZARD_STEPS[step].label}
         </div>
 
@@ -1697,7 +1697,7 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 onChange={(e) => setFhirBaseUrl(e.target.value)}
                 placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
               />
-              <div style={{ fontSize: 11, color: C.slate400, marginTop: 6 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: 6 }}>
                 For Epic sandbox use <code style={{ background: C.slate100, padding: "1px 4px", borderRadius: 3 }}>https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4</code>
               </div>
             </div>
@@ -1731,7 +1731,7 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 onChange={(e) => setRedirectUri(e.target.value)}
                 placeholder={`${typeof window !== "undefined" ? window.location.origin : ""}/api/smart/callback`}
               />
-              <div style={{ fontSize: 11, color: C.slate400, marginTop: 6 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: 6 }}>
                 Register this exact URI in your Epic App Orchard application.
               </div>
             </div>
@@ -1748,8 +1748,8 @@ function EpicSmartWizard({ onClose, onSaved }: { onClose: () => void; onSaved: (
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div style={{ padding: "14px 16px", borderRadius: 10, background: C.slate50, border: `1px solid ${C.slate200}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.slate700, marginBottom: 8 }}>Summary</div>
-              <div style={{ fontSize: 12, color: C.slate600, display: "flex", flexDirection: "column", gap: 4 }}>
+              <div className="text-foreground" style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Summary</div>
+              <div className="text-muted-foreground" style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
                 <div><strong>FHIR URL:</strong> {fhirBaseUrl}</div>
                 <div><strong>Client ID:</strong> {clientId}</div>
                 <div><strong>Scopes:</strong> openid fhirUser launch patient/Patient.read patient/Condition.read patient/Encounter.read patient/Observation.read</div>
@@ -1966,9 +1966,8 @@ export default function EmrConfigPage() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{
+    <div className="bg-background" style={{
       minHeight: "100vh",
-      backgroundColor: C.slate50,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     }}>
       {/* Inject keyframes for spinner + input focus */}
@@ -2074,10 +2073,10 @@ export default function EmrConfigPage() {
                 <Zap size={20} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: C.slate900 }}>
+                <div className="text-foreground" style={{ fontWeight: 700, fontSize: 15 }}>
                   AI Analysis Pipeline
                 </div>
-                <div style={{ fontSize: 12, color: C.slate500, marginTop: 2 }}>
+                <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 2 }}>
                   {pipelineSettings?.pipeline_mode === "auto_ai"
                     ? "Gemini AI runs automatically on every EMR sync (8-phase pipeline)"
                     : pipelineSettings?.pipeline_mode === "manual"
@@ -2185,7 +2184,7 @@ export default function EmrConfigPage() {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: C.slate900 }}>Epic SMART on FHIR</span>
+                <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Epic SMART on FHIR</span>
                 <span style={{
                   padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
                   background: "#4F46E518", color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.06em",
@@ -2193,7 +2192,7 @@ export default function EmrConfigPage() {
                   Available
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: C.slate500, marginTop: 3 }}>
+              <div className="text-muted-foreground" style={{ fontSize: 12, marginTop: 3 }}>
                 Connect Epic via SMART 2.0 PKCE flow. Pulls patient demographics, conditions, encounters, and observations into the RAF pipeline.
               </div>
             </div>
@@ -2263,10 +2262,10 @@ export default function EmrConfigPage() {
               }}>
                 <Database size={28} />
               </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.slate900, marginBottom: 6 }}>
+              <div className="text-foreground" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
                 No EMR connections yet
               </div>
-              <div style={{ fontSize: 13, color: C.slate500, marginBottom: 20, maxWidth: 380, margin: "0 auto 20px" }}>
+              <div className="text-muted-foreground" style={{ fontSize: 13, marginBottom: 20, maxWidth: 380, margin: "0 auto 20px" }}>
                 Connect your first EMR to start syncing patient data for RAF scoring. Supports FHIR R4 and REST API integrations.
               </div>
               <Btn variant="primary" onClick={handleAdd}>
@@ -2325,11 +2324,11 @@ export default function EmrConfigPage() {
                 <Trash2 size={18} />
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.slate900 }}>Delete Connection</div>
-                <div style={{ fontSize: 13, color: C.slate500, marginTop: 2 }}>This action cannot be undone.</div>
+                <div className="text-foreground" style={{ fontSize: 15, fontWeight: 700 }}>Delete Connection</div>
+                <div className="text-muted-foreground" style={{ fontSize: 13, marginTop: 2 }}>This action cannot be undone.</div>
               </div>
             </div>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: C.slate600, lineHeight: 1.5 }}>
+            <p className="text-muted-foreground" style={{ margin: "0 0 20px", fontSize: 13, lineHeight: 1.5 }}>
               Are you sure you want to delete this EMR connection? All sync history and configuration will be permanently removed.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>

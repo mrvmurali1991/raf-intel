@@ -14,7 +14,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Send, Target, Clock, DollarSign } from "lucide-react";
 
-import { StatCard } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { getOutreachSummary, type OutreachSummary } from "@/lib/api";
 
 const REVENUE_PER_CLOSURE = 3000;
@@ -115,12 +115,11 @@ export function OutreachSummaryCards({ year }: Props) {
       }}
     >
       {cards.map((c) => (
-        <StatCard
+        <MetricCard
           key={c.label}
           label={c.label}
           value={c.value}
           subtitle={c.subtitle}
-          color={c.color}
           icon={c.icon}
           loading={isLoading}
         />

@@ -34,7 +34,8 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-import { StatCard, PageHeader, SectionHeader, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { useAuth } from "@/contexts/auth-context";
 import { tokens } from "@/styles/tokens";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -1359,38 +1360,36 @@ export default function UsersPage() {
         }}
       >
         <div className="animate-fade-in stagger-1 hover-lift">
-          <StatCard
+          <MetricCard
             label="Total Users"
             value={stats.total}
             icon={<UsersRound size={18} />}
-            color={C.primary}
             loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-2 hover-lift">
-          <StatCard
+          <MetricCard
             label="Active Users"
             value={stats.active}
             icon={<Activity size={18} />}
-            color={C.emerald}
+            intent="success"
             loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-3 hover-lift">
-          <StatCard
+          <MetricCard
             label="Admin Users"
             value={stats.admins}
             icon={<ShieldCheck size={18} />}
-            color={C.red}
+            intent="warning"
             loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-4 hover-lift">
-          <StatCard
+          <MetricCard
             label="Sessions Today"
             value={stats.sessions}
             icon={<UserCheck size={18} />}
-            color={C.violet}
             loading={isLoading}
           />
         </div>

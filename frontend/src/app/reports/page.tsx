@@ -31,7 +31,6 @@ import {
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
 import { Clock, FileDown, Printer, Lock } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
-import { tokens } from "@/styles/tokens";
 import { ChartExportMenu } from "@/components/ui/chart-export-menu";
 import { DateRangePicker, presetToDates, type DateRange } from "@/components/charts/DateRangePicker";
 

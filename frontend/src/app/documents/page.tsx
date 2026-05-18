@@ -34,13 +34,13 @@ import NextImage from "next/image";
 import api from "@/lib/api";
 import {
   PageHeader,
-  StatCard,
   ProgressBar,
   EmptyState,
   ConfidencePill,
   MeatIndicator,
   DataRow,
 } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { searchPatients } from "@/lib/api";
 import { tokens } from "@/styles/tokens";
 
@@ -1834,35 +1834,37 @@ export default function DocumentsPage() {
         }}
       >
         <div className="animate-fade-in stagger-1">
-          <StatCard
+          <MetricCard
             label="Total Documents"
             value={isLoading ? "—" : stats.total.toLocaleString()}
-            icon={<FileImage size={18} color={c.primary} />}
-            color={c.primary}
+            icon={<FileImage size={18} />}
+            loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-2">
-          <StatCard
+          <MetricCard
             label="Documents Analyzed"
             value={isLoading ? "—" : stats.analyzed.toLocaleString()}
-            icon={<CheckCircle2 size={18} color={c.emerald500} />}
-            color={c.emerald500}
+            icon={<CheckCircle2 size={18} />}
+            intent="success"
+            loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-3">
-          <StatCard
+          <MetricCard
             label="HCC Codes Found"
             value={isLoading ? "—" : stats.hcc_count.toLocaleString()}
-            icon={<Zap size={18} color={c.violet500} />}
-            color={c.violet500}
+            icon={<Zap size={18} />}
+            loading={isLoading}
           />
         </div>
         <div className="animate-fade-in stagger-4">
-          <StatCard
+          <MetricCard
             label="Pending Review"
             value={isLoading ? "—" : stats.pending.toLocaleString()}
-            icon={<Clock size={18} color={c.amber500} />}
-            color={c.amber500}
+            icon={<Clock size={18} />}
+            intent="warning"
+            loading={isLoading}
           />
         </div>
       </div>
@@ -2375,9 +2377,9 @@ function OpenEMRDocumentsPanel() {
     <div>
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
-        <StatCard label="Total OpenEMR Docs" value={isLoading ? "—" : totalCount.toLocaleString("en-US")} icon={<Database size={18} color={c.primary} />} color={c.primary} />
-        <StatCard label="Already Imported" value={isLoading ? "—" : importedCount.toLocaleString("en-US")} icon={<CheckCircle2 size={18} color={c.emerald500} />} color={c.emerald500} />
-        <StatCard label="Pending Import" value={isLoading ? "—" : unimportedCount.toLocaleString("en-US")} icon={<Clock size={18} color={c.amber500} />} color={c.amber500} />
+        <MetricCard label="Total OpenEMR Docs" value={isLoading ? "—" : totalCount.toLocaleString("en-US")} icon={<Database size={18} />} loading={isLoading} />
+        <MetricCard label="Already Imported" value={isLoading ? "—" : importedCount.toLocaleString("en-US")} icon={<CheckCircle2 size={18} />} intent="success" loading={isLoading} />
+        <MetricCard label="Pending Import" value={isLoading ? "—" : unimportedCount.toLocaleString("en-US")} icon={<Clock size={18} />} intent="warning" loading={isLoading} />
       </div>
 
       {/* Filter bar */}

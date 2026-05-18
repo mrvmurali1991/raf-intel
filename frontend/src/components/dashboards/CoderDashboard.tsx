@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { CheckCircle, AlertTriangle, FileText, Activity } from "lucide-react";
-import { PageHeader, SectionHeader, StatCard } from "@/components/healthcare-ui";
+import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { getDashboardStats } from "@/lib/api";
 
@@ -62,41 +63,27 @@ export function CoderDashboard() {
         <KPISkeleton />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
-          <StatCard
+          <MetricCard
             label="Pending Suspects"
             value={stats?.total_suspects_open ?? "0"}
             subtitle="Requires Validation"
             icon={<AlertTriangle size={20} />}
-            color="#F59E0B"
+            intent="warning"
             href="/suspects"
-            emptyState={{
-              message: "No suspects pending — queue is clear.",
-              ctaLabel: "Scan for new suspects",
-              ctaHref: "/suspects",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Missing Documents"
             value={"0"}
             subtitle="Follow-up needed"
             icon={<FileText size={20} />}
-            color="#3B82F6"
-            emptyState={{
-              message: "No documents missing — all records complete.",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Analyzed Patients"
             value={stats?.patients_analyzed ?? "0"}
             subtitle="Total NLP Scanned"
             icon={<Activity size={20} />}
-            color="#10B981"
+            intent="success"
             href="/patients"
-            emptyState={{
-              message: "No patients analyzed yet.",
-              ctaLabel: "Start analysis",
-              ctaHref: "/analysis",
-            }}
           />
         </div>
       )}

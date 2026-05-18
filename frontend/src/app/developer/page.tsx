@@ -29,7 +29,8 @@ import {
   AlertTriangle,
   CheckCheck,
 } from "lucide-react";
-import { PageHeader, StatCard } from "@/components/healthcare-ui";
+import { PageHeader } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -968,16 +969,16 @@ function WebhooksTab() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="animate-fade-in stagger-1 hover-lift">
-          <StatCard label="Active Webhooks" value={isLoading ? "..." : activeCount} icon={<Webhook size={18} />} loading={isLoading} />
+          <MetricCard label="Active Webhooks" value={isLoading ? "..." : activeCount} icon={<Webhook size={18} />} loading={isLoading} />
         </div>
         <div className="animate-fade-in stagger-2 hover-lift">
-          <StatCard label="Events Delivered (24h)" value={isLoading ? "..." : totalDeliveries.toLocaleString()} icon={<Zap size={18} />} loading={isLoading} />
+          <MetricCard label="Events Delivered (24h)" value={isLoading ? "..." : totalDeliveries.toLocaleString()} icon={<Zap size={18} />} loading={isLoading} />
         </div>
         <div className="animate-fade-in stagger-3 hover-lift">
-          <StatCard label="Failed Deliveries" value={isLoading ? "..." : failedDeliveries} icon={<AlertTriangle size={18} />} loading={isLoading} />
+          <MetricCard label="Failed Deliveries" value={isLoading ? "..." : failedDeliveries} icon={<AlertTriangle size={18} />} intent={failedDeliveries > 0 ? "danger" : "success"} loading={isLoading} />
         </div>
         <div className="animate-fade-in stagger-4 hover-lift">
-          <StatCard label="Avg Response Time" value={isLoading ? "..." : avgResponseTime} icon={<Clock size={18} />} loading={isLoading} />
+          <MetricCard label="Avg Response Time" value={isLoading ? "..." : avgResponseTime} icon={<Clock size={18} />} loading={isLoading} />
         </div>
       </div>
 

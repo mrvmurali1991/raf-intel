@@ -47,9 +47,9 @@ import {
   type DisputeStatus,
 } from "@/lib/api";
 import {
-  StatCard,
   PageHeader,
 } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { useToast } from "@/components/Toast";
 
 /* ------------------------------------------------------------------ */
@@ -231,29 +231,27 @@ export default function DisputesPage() {
 
       {/* ── Metrics Strip ───────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <StatCard
+        <MetricCard
           label="Win Rate"
           value={metrics ? `${(metrics.win_rate * 100).toFixed(1)}%` : "--"}
           icon={<TrendingUp size={18} />}
-          color={T.emerald600}
+          intent="success"
         />
-        <StatCard
+        <MetricCard
           label="$ Recovered"
           value={metrics ? formatMoney(metrics.money_recovered) : "--"}
           icon={<DollarSign size={18} />}
-          color={T.blue600}
         />
-        <StatCard
+        <MetricCard
           label="$ At Risk (Open)"
           value={metrics ? formatMoney(metrics.money_at_risk) : "--"}
           icon={<DollarSign size={18} />}
-          color={T.amber600}
+          intent="warning"
         />
-        <StatCard
+        <MetricCard
           label="Avg Cycle (days)"
           value={metrics ? metrics.avg_cycle_time_days.toFixed(1) : "--"}
           icon={<Clock size={18} />}
-          color={T.purple600}
         />
       </div>
 
