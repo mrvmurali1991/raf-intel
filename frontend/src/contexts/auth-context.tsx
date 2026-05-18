@@ -105,6 +105,8 @@ interface AuthContextType {
 export interface LoginResult {
   mfa_required: boolean;
   mfa_token?: string;
+  /** Role of the authenticated user — populated when mfa_required is false. */
+  user?: Pick<User, "role">;
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +478,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setMustChangePassword(true);
         }
 
-        return { mfa_required: false };
+        return { mfa_required: false, user: { role: data.user.role } };
       } finally {
         isLoggingInRef.current = false;
       }

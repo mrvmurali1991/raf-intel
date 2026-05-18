@@ -468,12 +468,24 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const resetToken = searchParams.get("reset_token");
 
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
+
+  /** Resolve the post-login destination based on role, with `next` taking precedence. */
+  function resolveDestination(role?: string): string {
+    const dest: Record<string, string> = {
+      provider: "/md/today",
+      md: "/md/today",
+      coder: "/review-queue",
+      admin: "/",
+      manager: "/",
+    };
+    return searchParams.get("next") ?? dest[role ?? ""] ?? "/";
+  }
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.push("/");
+      router.push(resolveDestination(user?.role));
     }
   }, [isLoading, isAuthenticated, router]);
 
@@ -508,7 +520,7 @@ export default function LoginPage() {
         setStep("mfa");
       } else {
         // Use window.location for reliable navigation after auth state change
-        window.location.href = "/";
+        window.location.href = resolveDestination(result.user?.role);
       }
     } catch (err) {
       // Login error handled by UI state below
@@ -519,7 +531,8 @@ export default function LoginPage() {
   };
 
   const handleMfaSuccess = () => {
-    router.push("/");
+    // user state is populated by completeMfaVerify before this callback fires
+    router.push(resolveDestination(user?.role));
   };
 
   const handleMfaCancel = () => {
