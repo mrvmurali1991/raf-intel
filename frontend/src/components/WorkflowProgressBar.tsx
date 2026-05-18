@@ -15,9 +15,20 @@
 
 import React from "react";
 import Link from "next/link";
-import { ClipboardList, ClipboardCheck, ShieldCheck, FileText, ChevronRight } from "lucide-react";
+import {
+  ClipboardList,
+  ClipboardCheck,
+  ShieldCheck,
+  FileText,
+  ChevronRight,
+  CheckCircle2,
+} from "lucide-react";
 
-export type WorkflowStage = "suspects" | "attestations" | "pre-submission" | "edi-generation";
+export type WorkflowStage =
+  | "suspects"
+  | "attestations"
+  | "pre-submission"
+  | "edi-generation";
 
 interface StageConfig {
   id: WorkflowStage;
@@ -86,22 +97,31 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
         const isPast = idx < currentIdx;
         const isFuture = idx > currentIdx;
 
+        const stateAttr: "past" | "current" | "future" = isCurrent
+          ? "current"
+          : isPast
+          ? "past"
+          : "future";
+
         return (
           <React.Fragment key={stage.id}>
             <Link
               href={stage.href}
-              aria-current={isCurrent ? "page" : undefined}
+              aria-current={isCurrent ? "step" : undefined}
+              data-stage={stage.id}
+              data-state={stateAttr}
+              className={[
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap transition-colors",
+                isCurrent
+                  ? "font-bold opacity-100"
+                  : isPast
+                  ? "font-medium opacity-100"
+                  : "font-medium opacity-60",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 12px",
-                borderRadius: 7,
-                fontSize: 12,
-                fontWeight: isCurrent ? 700 : 500,
                 textDecoration: "none",
-                whiteSpace: "nowrap",
-                transition: "background 0.15s, color 0.15s",
                 background: isCurrent
                   ? "#0F766E"
                   : isPast
@@ -111,14 +131,14 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
                   ? "#FFFFFF"
                   : isPast
                   ? "#065F46"
-                  : isFuture
-                  ? "#94A3B8"
-                  : "#374151",
-                cursor: isFuture ? "pointer" : "pointer",
-                opacity: isFuture ? 0.6 : 1,
+                  : "#94A3B8",
               }}
             >
-              {stage.icon}
+              {isPast ? (
+                <CheckCircle2 size={14} aria-hidden className="text-emerald-600" />
+              ) : (
+                stage.icon
+              )}
               <span className="hidden sm:inline">{stage.label}</span>
               <span className="sm:hidden">{stage.shortLabel}</span>
             </Link>
