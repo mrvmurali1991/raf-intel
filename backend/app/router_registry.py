@@ -136,6 +136,7 @@ from app.routers import recapture_readiness as recapture_readiness_router
 from app.routers import recapture_recurring as recapture_recurring_router
 from app.routers import qa_reviews as qa_reviews_router
 from app.routers import review as review_router
+from app.routers import fhir_bulk_export as fhir_bulk_export_router
 from app.routers import smart_fhir as smart_fhir_router
 from app.routers import suspect_feedback as suspect_feedback_router
 from app.routers import pre_submission as pre_submission_router
@@ -266,6 +267,7 @@ def register_routers(app: FastAPI) -> None:
     _mount(app, chart_chase_v2_router.router)
     _mount(app, fhir_circuit_health_router.router)
     _mount(app, fhir_writeback_async_router.router)
+    _mount(app, fhir_bulk_export_router.router)
     _mount(app, soc2_evidence_router.router)
     _mount(app, hcc_evidence_router.router)
     _mount(app, openemr_doc_ingest_router.router)
