@@ -214,7 +214,7 @@ export default function QAReviewPage() {
       }}
     >
       <PageHeader
-        title="QA Review Queue"
+        title="QA Audit"
         subtitle="Multi-rater quality assurance. Each accepted suspect gets a second pair of eyes; disagreements escalate to tier-2 adjudication."
         icon={<ShieldCheck size={22} />}
       />

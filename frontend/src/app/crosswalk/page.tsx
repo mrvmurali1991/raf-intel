@@ -352,7 +352,7 @@ export default function CrosswalkPage() {
               letterSpacing: "-0.015em",
             }}
           >
-            RAF Score Calculator
+            HCC Crosswalk
           </h1>
           <p
             style={{
@@ -361,8 +361,8 @@ export default function CrosswalkPage() {
               margin: "4px 0 0 0",
             }}
           >
-            Score a patient instantly — pick a risk model, enter ICD-10 codes, and see the full RAF
-            build + MA payment.
+            Map ICD-10 diagnosis codes to CMS-HCC categories — pick a risk model, enter codes, and
+            see the full HCC mapping with RAF coefficients and estimated MA payment.
           </p>
         </div>
 

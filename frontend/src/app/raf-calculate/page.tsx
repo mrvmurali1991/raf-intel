@@ -421,9 +421,9 @@ export default function RAFCalculatePage() {
             <Calculator size={22} color={tokens.white} />
           </div>
           <div>
-            <h1 style={page.title}>RAF Score Calculator</h1>
+            <h1 style={page.title}>RAF Calculator</h1>
             <p style={page.subtitle}>
-              CMS-HCC V24/V28 blended · ESRD routing · New Enrollee · Frailty · Sweep Period
+              Per-patient CMS-HCC scoring — V24/V28 blended · ESRD routing · New Enrollee · Frailty · Sweep Period
             </p>
           </div>
         </div>

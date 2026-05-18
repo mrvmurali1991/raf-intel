@@ -286,7 +286,7 @@ export default function ReviewQueueClient() {
         </div>
         <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
-            Review Queue
+            Coder Review
           </h1>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: C.textSubtle }}>
             AI-generated work items pending coder review.
