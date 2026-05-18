@@ -279,12 +279,7 @@ export default function RecapturePage() {
         .recapture-bento-summary > div > div { height: 100%; }
         .recapture-bento-summary .recapture-hero-tile .tabular-nums { font-size: 40px !important; }
 
-        /* Responsive: stack both panels on narrow viewports */
-        @media (max-width: 900px) {
-          .recapture-main-row { grid-template-columns: 1fr !important; }
-          .recapture-top-conditions,
-          .recapture-worklist { grid-column: 1 / -1 !important; }
-        }
+        /* Responsive overrides handled by Tailwind lg: breakpoint on .recapture-main-row */
       `}</style>
       <div
         className="recapture-bento-summary"
@@ -329,65 +324,15 @@ export default function RecapturePage() {
           Velocity / CFO / bonus / outreach / audit sections render below this
           row, each in its own 12-col grid row.
           ════════════════════════════════════════════════════════════════════ */}
+      {/* grid-cols-1 below lg (tablet/mobile: stacked); lg:grid-cols-[2fr_1fr] at 1024px+ (worklist 2fr, top conditions 1fr) */}
       <div
-        className="recapture-main-row"
-        style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 16, marginBottom: 24, alignItems: "start" }}
+        className="recapture-main-row grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-6 items-start"
+        style={{ marginBottom: 24 }}
       >
-      {/* Right column: Top Conditions chart (4 cols). Listed first in source
-          but pinned to columns 9-12 by gridColumn so visual order is L->R. */}
-      {(data.top_conditions ?? []).length > 0 && (
-        <div className="recapture-top-conditions premium-card animate-slide-up stagger-4" style={{ padding: 24, gridColumn: "9 / span 4", minWidth: 0 }}>
-          <h3 className="gradient-text" style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
-            Most Common Uncaptured Conditions
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {(data.top_conditions ?? []).slice(0, 10).map((c, idx) => (
-              <div
-                key={c.icd_code}
-                className="hover-lift"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: idx % 2 === 0 ? colors.slate50 : "transparent",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <span style={{ width: 24, fontSize: 11, fontWeight: 700, color: colors.slate400, flexShrink: 0, textAlign: "center" }}>
-                  {idx + 1}
-                </span>
-                <span style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 220, fontSize: 13, color: colors.slate900, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {c.condition}
-                </span>
-                <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: colors.primary, fontFamily: "monospace" }}>
-                  {c.icd_code}
-                </span>
-                <div style={{ flex: 1, height: 8, borderRadius: 4, background: colors.slate200, overflow: "hidden" }}>
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${(c.gap_count / maxConditionCount) * 100}%`,
-                      borderRadius: 4,
-                      background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.infoBlue})`,
-                      transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-                    }}
-                  />
-                </div>
-                <span className="tabular-nums" style={{ width: 40, fontSize: 12, fontWeight: 700, color: colors.slate900, textAlign: "right", flexShrink: 0 }}>
-                  {c.gap_count}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Patient Worklist — spans 8 cols when Top Conditions panel is present, full 12 cols otherwise */}
+      {/* Left column: Patient Worklist — appears first in DOM so it stacks on top on mobile */}
       <div
         className="recapture-worklist premium-card animate-slide-up stagger-5"
-        style={{ padding: 24, gridColumn: (data.top_conditions ?? []).length > 0 ? "1 / span 8" : "1 / -1", minWidth: 0 }}
+        style={{ padding: 24, minWidth: 0 }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
           <h3 className="gradient-text" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
@@ -602,6 +547,57 @@ export default function RecapturePage() {
           </>
         )}
       </div>
+
+      {/* Right column: Top Conditions chart */}
+      {(data.top_conditions ?? []).length > 0 && (
+        <div className="recapture-top-conditions premium-card animate-slide-up stagger-4" style={{ padding: 24, minWidth: 0 }}>
+          <h3 className="gradient-text" style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
+            Most Common Uncaptured Conditions
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(data.top_conditions ?? []).slice(0, 10).map((c, idx) => (
+              <div
+                key={c.icd_code}
+                className="hover-lift"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  background: idx % 2 === 0 ? colors.slate50 : "transparent",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <span style={{ width: 24, fontSize: 11, fontWeight: 700, color: colors.slate400, flexShrink: 0, textAlign: "center" }}>
+                  {idx + 1}
+                </span>
+                <span style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 220, fontSize: 13, color: colors.slate900, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {c.condition}
+                </span>
+                <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: colors.primary, fontFamily: "monospace" }}>
+                  {c.icd_code}
+                </span>
+                <div style={{ flex: 1, height: 8, borderRadius: 4, background: colors.slate200, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${(c.gap_count / maxConditionCount) * 100}%`,
+                      borderRadius: 4,
+                      background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.infoBlue})`,
+                      transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                    }}
+                  />
+                </div>
+                <span className="tabular-nums" style={{ width: 40, fontSize: 12, fontWeight: 700, color: colors.slate900, textAlign: "right", flexShrink: 0 }}>
+                  {c.gap_count}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       </div>
       {/* ════════════════════════════════════════════════════════════════════
           END MAIN ROW. Below: secondary feature-flag sections, each in its
