@@ -93,4 +93,21 @@ restore:
 	@if [ -z "$(DB)" ]; then echo "ERROR: DB is required. Usage: make restore FILE=path/to/backup.sql.gz DB=raf|openemr"; exit 1; fi
 	./scripts/restore.sh $(FILE) --$(DB)
 
-.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore
+# ---- User Guide (Markdown -> optional MkDocs site) -----------------------
+
+# Copies docs/user-guide/*.md into docs-site/ as a static directory.
+# If `mkdocs` is on PATH, also builds a Material site under docs-site/site/.
+# Safe to run without MkDocs installed.
+user-guide:
+	@mkdir -p docs-site
+	@cp -R docs/user-guide/* docs-site/
+	@echo "Copied $(shell ls docs/user-guide/*.md | wc -l | tr -d ' ') markdown files to docs-site/"
+	@if command -v mkdocs >/dev/null 2>&1; then \
+	  echo "mkdocs detected — building static site"; \
+	  test -f docs-site/mkdocs.yml || printf "site_name: RAF Intelligence User Guide\ndocs_dir: .\ntheme:\n  name: material\n" > docs-site/mkdocs.yml; \
+	  ( cd docs-site && mkdocs build ); \
+	else \
+	  echo "mkdocs not installed — markdown is available under docs-site/. Install with: pip install mkdocs-material"; \
+	fi
+
+.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore user-guide

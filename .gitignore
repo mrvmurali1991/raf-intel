@@ -88,3 +88,6 @@ models/
 
 # Local upload artifacts (demos, test PDFs)
 backend/uploads/
+
+# User guide build output
+docs-site/
