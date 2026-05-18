@@ -1477,60 +1477,39 @@ export function AdminDashboard() {
             .kpi-strip-hero .tabular-nums { font-size: 36px !important; }
           `}</style>
           {/* Hero tile — Revenue Opportunity dominates the row. */}
-          <div className="kpi-strip-hero">
-            <StatCard
-              label="Revenue Opportunity"
-              value={revenueOpp > 0 ? <AnimatedNumber value={Math.abs(revenueOpp)} format="currency" /> : "--"}
-              subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
-              icon={<DollarSign size={20} />}
-              color={revenueOpp > 0 ? "#10B981" : "#94A3B8"}
-              href="/reports"
-              info="Total annual revenue impact across your entire population based on RAF score gaps. This includes recapture gaps (conditions billed last year but not this year), suspect conditions, and medication-implied diagnoses. A negative value means over-coding was detected."
-              emptyState={{
-                message: "Revenue opportunity will appear after analysis.",
-                ctaLabel: "Analyze patients",
-                ctaHref: "/analysis",
-              }}
-            />
-          </div>
-          <StatCard
+          <MetricCard
+            label="Revenue Opportunity"
+            value={revenueOpp > 0 ? `$${(revenueOpp / 1_000_000).toFixed(1)}M` : "--"}
+            subtitle={revenueOpp > 0 ? (rawRevenueOpp < 0 ? "Over-coded gap identified" : "Estimated annual capture") : "Run analysis to calculate"}
+            icon={<DollarSign size={20} />}
+            intent={revenueOpp > 0 ? "success" : "default"}
+            href="/reports"
+          />
+          <MetricCard
             label="Total Members"
-            value={<AnimatedNumber value={totalPop} format="number" />}
+            value={totalPop.toLocaleString()}
             subtitle="Patients in system"
             icon={<Users size={20} />}
-            color="#3B82F6"
+            intent="default"
             href="/patients"
-            info="Total number of patients imported from your connected EMR system. This includes all active patients regardless of analysis status."
-            emptyState={{
-              message: "No patients imported yet.",
-              ctaLabel: "Connect your EMR",
-              ctaHref: "/emr-config",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Patients Analyzed"
-            value={<AnimatedNumber value={analyzed} format="number" />}
+            value={analyzed.toLocaleString()}
             subtitle={totalPop > 0 ? `${Math.round((analyzed / totalPop) * 100)}% coverage` : "No data"}
             icon={<CheckCircle size={20} />}
-            color="#10B981"
-            trend={analyzedTrend}
+            intent="success"
+            delta={analyzedTrend?.value}
             href="/analysis"
-            info="Patients whose clinical encounters have been analyzed by the AI engine to identify HCC coding opportunities. 100% coverage means every patient has at least one analyzed encounter."
-            emptyState={{
-              message: "No patients analyzed yet.",
-              ctaLabel: "Run analysis",
-              ctaHref: "/analysis",
-            }}
           />
-          <StatCard
+          <MetricCard
             label="Average RAF Score"
-            value={avgRaf > 0 ? <AnimatedNumber value={avgRaf} format="raf" /> : "--"}
+            value={avgRaf > 0 ? avgRaf.toFixed(3) : "--"}
             subtitle={avgRaf === 0 ? "Pending analysis" : avgRaf < 1.0 ? "Below average acuity" : avgRaf < 1.5 ? "Moderate acuity" : "High acuity population"}
             icon={<TrendingUp size={20} />}
-            color={avgRaf === 0 ? "#94A3B8" : rafColor(avgRaf)}
-            trend={rafTrend}
+            intent={avgRaf === 0 ? "default" : avgRaf >= 2.0 ? "danger" : avgRaf >= 1.0 ? "warning" : "success"}
+            delta={rafTrend?.value}
             href="/reports?tab=raf-distribution"
-            info="The average CMS-HCC Risk Adjustment Factor across all patients. A score of 1.0 represents an average Medicare beneficiary. Higher scores indicate greater clinical complexity and higher expected healthcare costs."
           />
         </div>
       )}
