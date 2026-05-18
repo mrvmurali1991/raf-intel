@@ -4,15 +4,21 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { authApi } from "@/contexts/auth-context";
+import { useTenantBranding } from "@/lib/useTenantBranding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Shield, Loader2, Eye, EyeOff, AlertCircle,
   Activity, FileCheck, Lock, ChevronRight,
-  KeyRound, RotateCcw, HeartPulse, Stethoscope, FileText, Zap
+  KeyRound, RotateCcw, HeartPulse, Stethoscope, FileText, Zap, Building2
 } from "lucide-react";
 import { loginSchema } from "@/lib/validators";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+// ---------------------------------------------------------------------------
+// Enterprise-mode flag — set NEXT_PUBLIC_LOGIN_MODE=enterprise to activate
+// ---------------------------------------------------------------------------
+const IS_ENTERPRISE = process.env.NEXT_PUBLIC_LOGIN_MODE === "enterprise";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -446,6 +452,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const { branding } = useTenantBranding();
 
   // Validate a single field against the shared loginSchema. Stores per-field
   // error text in `fieldErrors` so we can render it directly under the input
@@ -559,118 +566,200 @@ export default function LoginPage() {
   return (
     <TooltipProvider delay={200}>
     <div className="min-h-screen flex">
-      {/* Left panel - Clinical Aesthetic with Aurora */}
-      <div
-        className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden aurora-bg"
-        style={{
-          borderRight: "1px solid rgba(20, 184, 166, 0.12)",
-        }}
-      >
-        {/* Glassmorphism gradient overlay for legibility */}
-        <div className="absolute inset-0 pointer-events-none bg-white/50 dark:bg-slate-950/60 backdrop-blur-[1px]" />
-
-        {/* Aurora orb accents — softly animated */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div
-            className="absolute top-[-15%] left-[-10%] w-[550px] h-[550px] rounded-full opacity-35 dark:opacity-20 blur-[90px] login-orb-1"
-            style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 65%)" }}
-          />
-          <div
-            className="absolute bottom-[-15%] right-[-12%] w-[650px] h-[650px] rounded-full opacity-25 dark:opacity-15 blur-[110px] login-orb-2"
-            style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 65%)" }}
-          />
-          <div
-            className="absolute top-[40%] right-[15%] w-[300px] h-[300px] rounded-full opacity-15 dark:opacity-10 blur-[70px] login-orb-3"
-            style={{ background: "radial-gradient(circle, #818cf8 0%, transparent 65%)" }}
-          />
-        </div>
-
-        {/* Clean minimal grid overlay */}
+      {/* Left panel — marketing mode (default) or enterprise mode (NEXT_PUBLIC_LOGIN_MODE=enterprise) */}
+      {IS_ENTERPRISE ? (
+        /* ---- Enterprise left panel: quiet, tenant-branded ---- */
         <div
-          className="absolute inset-0 opacity-[0.2] dark:opacity-[0.05]"
+          className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden"
           style={{
-            backgroundImage:
-              "linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)",
-            backgroundSize: "64px 64px",
+            background: "linear-gradient(160deg, #0f172a 0%, #1e293b 100%)",
+            borderRight: "1px solid rgba(255,255,255,0.06)",
           }}
-        />
-
-        {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-500 shadow-lg shadow-teal-500/20 text-white">
-            <HeartPulse className="h-6 w-6" aria-hidden="true" />
+        >
+          {/* Subdued aurora orbs — 0.04 opacity in enterprise mode */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div
+              className="absolute top-[-15%] left-[-10%] w-[550px] h-[550px] rounded-full blur-[90px] login-orb-1"
+              style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 65%)", opacity: 0.04 }}
+            />
+            <div
+              className="absolute bottom-[-15%] right-[-12%] w-[650px] h-[650px] rounded-full blur-[110px] login-orb-2"
+              style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 65%)", opacity: 0.04 }}
+            />
           </div>
-          <div>
-            <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">RAF Intelligence</p>
-            <p className="text-teal-600 dark:text-teal-400 text-[11px] font-bold uppercase tracking-[0.2em]">
+
+          {/* Tenant logo / name */}
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 border border-white/10 text-white">
+              <Building2 className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-white font-semibold text-lg tracking-tight">{branding.display_name}</p>
+              <p className="text-slate-400 text-[11px] uppercase tracking-[0.18em]">Secure Portal</p>
+            </div>
+          </div>
+
+          {/* Tagline */}
+          <div className="relative z-10 space-y-4">
+            <h1 className="text-3xl font-semibold text-white leading-snug tracking-tight">
               Clinical Intelligence
+              <br />
+              <span className="text-teal-400">You Can Trust</span>
+            </h1>
+            <p className="text-slate-400 text-[14px] leading-relaxed max-w-[380px]">
+              Precision risk adjustment and HCC gap management for value-based care programs.
+            </p>
+          </div>
+
+          {/* Trust badges */}
+          <div className="relative z-10 space-y-6">
+            <div className="flex flex-col gap-3 text-[13px] font-medium text-slate-400">
+              <Tooltip>
+                <TooltipTrigger>
+                  <span className="flex cursor-help items-center gap-2 hover:text-slate-200 transition-colors">
+                    <Shield className="h-4 w-4 text-teal-400 shrink-0" /> HIPAA Compliant
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Data handling adheres to HIPAA standards</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  <span className="flex cursor-help items-center gap-2 hover:text-slate-200 transition-colors">
+                    <Lock className="h-4 w-4 text-teal-400 shrink-0" /> SOC 2 Type II Certified
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Type II SOC 2 Certified for Security</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  <span className="flex cursor-help items-center gap-2 hover:text-slate-200 transition-colors">
+                    <FileCheck className="h-4 w-4 text-teal-400 shrink-0" /> BAA Ready
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Business Associate Agreements available</TooltipContent>
+              </Tooltip>
+            </div>
+
+            {/* Tenant footer */}
+            <p className="text-slate-600 text-[12px] border-t border-white/[0.06] pt-5">
+              &copy; 2026 {branding.display_name}. All rights reserved.
             </p>
           </div>
         </div>
+      ) : (
+        /* ---- Default marketing left panel ---- */
+        <div
+          className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden aurora-bg"
+          style={{
+            borderRight: "1px solid rgba(20, 184, 166, 0.12)",
+          }}
+        >
+          {/* Glassmorphism gradient overlay for legibility */}
+          <div className="absolute inset-0 pointer-events-none bg-white/50 dark:bg-slate-950/60 backdrop-blur-[1px]" />
 
-        {/* Hero content */}
-        <div className="relative z-10 space-y-10">
-          <div className="space-y-4">
+          {/* Aurora orb accents — softly animated */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div
+              className="absolute top-[-15%] left-[-10%] w-[550px] h-[550px] rounded-full opacity-35 dark:opacity-20 blur-[90px] login-orb-1"
+              style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 65%)" }}
+            />
+            <div
+              className="absolute bottom-[-15%] right-[-12%] w-[650px] h-[650px] rounded-full opacity-25 dark:opacity-15 blur-[110px] login-orb-2"
+              style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 65%)" }}
+            />
+            <div
+              className="absolute top-[40%] right-[15%] w-[300px] h-[300px] rounded-full opacity-15 dark:opacity-10 blur-[70px] login-orb-3"
+              style={{ background: "radial-gradient(circle, #818cf8 0%, transparent 65%)" }}
+            />
+          </div>
+
+          {/* Clean minimal grid overlay */}
+          <div
+            className="absolute inset-0 opacity-[0.2] dark:opacity-[0.05]"
+            style={{
+              backgroundImage:
+                "linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)",
+              backgroundSize: "64px 64px",
+            }}
+          />
+
+          {/* Logo */}
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-500 shadow-lg shadow-teal-500/20 text-white">
+              <HeartPulse className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">RAF Intelligence</p>
+              <p className="text-teal-600 dark:text-teal-400 text-[11px] font-bold uppercase tracking-[0.2em]">
+                Clinical Intelligence
+              </p>
+            </div>
+          </div>
+
+          {/* Hero content */}
+          <div className="relative z-10 space-y-10">
+            <div className="space-y-4">
+              <Tooltip>
+                <TooltipTrigger>
+                  <div className="inline-flex cursor-help items-center gap-2 rounded-full bg-white/80 dark:bg-slate-800/80 border border-teal-100 dark:border-teal-900 px-4 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-white dark:hover:bg-slate-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
+                    <span className="text-slate-700 dark:text-slate-300 text-xs font-semibold tracking-wide">
+                      Trusted by Healthcare Payers &amp; Providers
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>Trusted by 50+ leading healthcare organizations</TooltipContent>
+              </Tooltip>
+              <h1 className="text-4xl font-bold text-slate-900 dark:text-white leading-[1.15] tracking-tight">
+                Precision Risk Adjustment
+                <br />
+                <span className="text-teal-600 dark:text-teal-400">
+                  At Enterprise Scale
+                </span>
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400 text-[15px] leading-relaxed max-w-[440px]">
+                Securely automate HCC coding, visualize RAF score impacts, and generate fully compliant audit packages directly from patient charts.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              {features.map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="flex items-start gap-4 group bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm backdrop-blur-sm transition-all hover:bg-white dark:hover:bg-slate-900 hover:shadow-md hover:border-teal-100 dark:hover:border-teal-900">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 transition-transform group-hover:scale-110">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-slate-900 dark:text-slate-100 text-[15px] font-semibold">{title}</p>
+                    <p className="text-slate-600 dark:text-slate-500 text-[13px] mt-1 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom tagline */}
+          <div className="relative z-10 flex items-center gap-6 text-[13px] font-medium text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-6 pr-6">
             <Tooltip>
               <TooltipTrigger>
-                <div className="inline-flex cursor-help items-center gap-2 rounded-full bg-white/80 dark:bg-slate-800/80 border border-teal-100 dark:border-teal-900 px-4 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-white dark:hover:bg-slate-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
-                  <span className="text-slate-700 dark:text-slate-300 text-xs font-semibold tracking-wide">
-                    Trusted by Healthcare Payers & Providers
-                  </span>
-                </div>
+                <span className="flex cursor-help items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"><Shield className="h-4 w-4 text-teal-600 dark:text-teal-500" /> HIPAA Compliant</span>
               </TooltipTrigger>
-              <TooltipContent>Trusted by 50+ leading healthcare organizations</TooltipContent>
+              <TooltipContent>Data handling adheres to HIPAA standards</TooltipContent>
             </Tooltip>
-            <h1 className="text-4xl font-bold text-slate-900 dark:text-white leading-[1.15] tracking-tight">
-              Precision Risk Adjustment
-              <br />
-              <span className="text-teal-600 dark:text-teal-400">
-                At Enterprise Scale
-              </span>
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400 text-[15px] leading-relaxed max-w-[440px]">
-              Securely automate HCC coding, visualize RAF score impacts, and generate fully compliant audit packages directly from patient charts.
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            {features.map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="flex items-start gap-4 group bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm backdrop-blur-sm transition-all hover:bg-white dark:hover:bg-slate-900 hover:shadow-md hover:border-teal-100 dark:hover:border-teal-900">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 transition-transform group-hover:scale-110">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="text-slate-900 dark:text-slate-100 text-[15px] font-semibold">{title}</p>
-                  <p className="text-slate-600 dark:text-slate-500 text-[13px] mt-1 leading-relaxed">{desc}</p>
-                </div>
-              </div>
-            ))}
+            <Tooltip>
+              <TooltipTrigger>
+                <span className="flex cursor-help items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"><Lock className="h-4 w-4 text-teal-600 dark:text-teal-500" /> SOC 2 Certified</span>
+              </TooltipTrigger>
+              <TooltipContent>Type II SOC 2 Certified for Security</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger>
+                <span className="flex cursor-help items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"><FileCheck className="h-4 w-4 text-teal-600 dark:text-teal-500" /> BAA Ready</span>
+              </TooltipTrigger>
+              <TooltipContent>Business Associate Agreements available</TooltipContent>
+            </Tooltip>
           </div>
         </div>
-
-        {/* Bottom tagline */}
-        <div className="relative z-10 flex items-center gap-6 text-[13px] font-medium text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-6 pr-6">
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="flex cursor-help items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"><Shield className="h-4 w-4 text-teal-600 dark:text-teal-500" /> HIPAA Compliant</span>
-            </TooltipTrigger>
-            <TooltipContent>Data handling adheres to HIPAA standards</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="flex cursor-help items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"><Lock className="h-4 w-4 text-teal-600 dark:text-teal-500" /> SOC 2 Certified</span>
-            </TooltipTrigger>
-            <TooltipContent>Type II SOC 2 Certified for Security</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="flex cursor-help items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"><FileCheck className="h-4 w-4 text-teal-600 dark:text-teal-500" /> BAA Ready</span>
-            </TooltipTrigger>
-            <TooltipContent>Business Associate Agreements available</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+      )}
 
       {/* Right panel — aurora background */}
       <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 aurora-bg relative overflow-hidden">

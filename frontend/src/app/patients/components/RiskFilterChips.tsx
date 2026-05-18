@@ -42,6 +42,8 @@ export interface RiskFilterChipsProps {
   hasActiveColFilters: boolean;
   colFilters: ColFilters;
   onClearColFilters: () => void;
+  /** Patch a subset of colFilters — used by role-based chips */
+  onColFiltersChange: (patch: Partial<ColFilters>) => void;
   isLoading: boolean;
   page: number;
   total: number;
@@ -62,6 +64,7 @@ export function RiskFilterChips({
   hasActiveColFilters,
   colFilters,
   onClearColFilters,
+  onColFiltersChange,
   isLoading,
   page,
   total,
@@ -79,6 +82,85 @@ export function RiskFilterChips({
     colFilters.status !== "all",
   ].filter(Boolean).length;
 
+  // Role-based chip definitions — clinical job-to-be-done language.
+  // Each chip maps to a preset combination of riskFilter + colFilters.
+  const roleChips: {
+    id: string;
+    label: string;
+    count: number | null;
+    chipTitle: string;
+    dotColor: string | null;
+    isActive: boolean;
+    onActivate: () => void;
+  }[] = [
+    {
+      id: "all",
+      label: "All Patients",
+      count: stats.all,
+      chipTitle: "Show all patients",
+      dotColor: null,
+      isActive: riskFilter === "all" && !hasActiveColFilters,
+      onActivate: () => { onClearColFilters(); onRiskFilterChange("all"); },
+    },
+    {
+      id: "needs-analysis",
+      label: "Needs Analysis",
+      count: stats.unscored,
+      chipTitle: "Patients with no RAF score — pending documentation review",
+      dotColor: tokens.slate400,
+      isActive: riskFilter === "unscored" && !hasActiveColFilters,
+      onActivate: () => { onClearColFilters(); onRiskFilterChange("unscored"); },
+    },
+    {
+      id: "high-raf",
+      label: "High RAF",
+      count: stats.high,
+      chipTitle: "Patients with RAF ≥ 2.0 — highest complexity, highest cost impact",
+      dotColor: tokens.riskHigh,
+      isActive: riskFilter === "high" && colFilters.status === "all" && !colFilters.hccMin,
+      onActivate: () => { onClearColFilters(); onRiskFilterChange("high"); },
+    },
+    {
+      id: "missing-notes",
+      label: "Missing Notes",
+      count: stats.unscored,
+      chipTitle: "Patients without a calculated score — chart notes or encounter documentation are missing",
+      dotColor: "#D97706",
+      isActive: riskFilter === "all" && colFilters.status === "pending" && !colFilters.hccMin,
+      onActivate: () => {
+        onClearColFilters();
+        onRiskFilterChange("all");
+        onColFiltersChange({ status: "pending" });
+      },
+    },
+    {
+      id: "has-hccs",
+      label: "Has HCCs",
+      count: null,
+      chipTitle: "Patients with at least one captured Hierarchical Condition Category",
+      dotColor: tokens.infoBlue,
+      isActive: colFilters.hccMin === "1" && riskFilter === "all",
+      onActivate: () => {
+        onClearColFilters();
+        onRiskFilterChange("all");
+        onColFiltersChange({ hccMin: "1" });
+      },
+    },
+    {
+      id: "review-pending",
+      label: "Review Pending",
+      count: stats.high,
+      chipTitle: "High-RAF patients not yet scored — prioritise for coder sign-off",
+      dotColor: "#B91C1C",
+      isActive: riskFilter === "high" && colFilters.status === "pending",
+      onActivate: () => {
+        onClearColFilters();
+        onRiskFilterChange("high");
+        onColFiltersChange({ status: "pending" });
+      },
+    },
+  ];
+
   return (
     <div
       style={{
@@ -91,92 +173,64 @@ export function RiskFilterChips({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        {(
-          [
-            { key: "all" as const, label: "All Patients", count: stats.all, icon: null },
-            { key: "high" as const, label: "High Risk", count: stats.high, icon: "⚠" },
-            { key: "medium" as const, label: "Medium", count: stats.medium, icon: null },
-            { key: "low" as const, label: "Low", count: stats.low, icon: null },
-            { key: "unscored" as const, label: "Unscored", count: stats.unscored, icon: null },
-          ] as { key: RiskFilter; label: string; count: number; icon: string | null }[]
-        ).map(({ key, label, count, icon }) => {
-          const active = riskFilter === key;
-          const inactiveBg =
-            key === "high" ? tokens.riskHighSoft :
-            key === "medium" ? tokens.riskMediumSoft :
-            key === "low" ? tokens.riskLowSoft :
-            tokens.white;
-          const inactiveBorder =
-            key === "high" ? tokens.dangerBorder :
-            key === "medium" ? tokens.warningBorder :
-            key === "low" ? tokens.emerald100 :
-            C.border;
-          const inactiveColor =
-            key === "high" ? "#B91C1C" :
-            key === "medium" ? "#B45309" :
-            key === "low" ? "#047857" :
-            C.textMuted;
-          const dotColor =
-            key === "high" ? C.high :
-            key === "medium" ? C.medium :
-            key === "low" ? C.low :
-            key === "unscored" ? tokens.slate300 : null;
-
-          return (
-            <button
-              key={key}
-              onClick={() => onRiskFilterChange(key)}
-              className="rci-filter-pill"
-              aria-pressed={active}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                height: 34,
-                padding: "0 14px",
-                borderRadius: 999,
-                border: active ? "none" : `1px solid ${inactiveBorder}`,
-                backgroundColor: active ? tokens.slate800 : inactiveBg,
-                color: active ? tokens.white : inactiveColor,
-                fontSize: 12.5,
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                boxShadow: active ? "0 2px 8px rgba(15,23,42,0.18)" : "none",
-              }}
-            >
-              {icon && <span style={{ fontSize: 12 }}>{icon}</span>}
-              {dotColor && !icon && (
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    backgroundColor: dotColor,
-                    boxShadow: active ? "0 0 0 2px rgba(255,255,255,0.3)" : "none",
-                  }}
-                />
-              )}
-              {label}
+        {/* Role-based quick-filter chips */}
+        {roleChips.map(({ id, label, count, chipTitle, dotColor, isActive, onActivate }) => (
+          <button
+            key={id}
+            onClick={onActivate}
+            title={chipTitle}
+            aria-pressed={isActive}
+            className="rci-filter-pill"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              height: 34,
+              padding: "0 14px",
+              borderRadius: 999,
+              border: isActive ? "none" : `1px solid ${C.border}`,
+              backgroundColor: isActive ? tokens.slate800 : tokens.white,
+              color: isActive ? tokens.white : C.textMuted,
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              boxShadow: isActive ? "0 2px 8px rgba(15,23,42,0.18)" : "none",
+            }}
+          >
+            {dotColor && (
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  backgroundColor: isActive ? "rgba(255,255,255,0.7)" : dotColor,
+                }}
+              />
+            )}
+            {label}
+            {count !== null && (
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: active ? "rgba(255,255,255,0.65)" : inactiveColor,
+                  color: isActive ? "rgba(255,255,255,0.65)" : C.textMuted,
                   fontVariantNumeric: "tabular-nums",
                   marginLeft: -2,
                 }}
               >
                 {count}
               </span>
-            </button>
-          );
-        })}
+            )}
+          </button>
+        ))}
 
         <div style={{ width: 1, height: 20, backgroundColor: C.border, margin: "0 4px" }} />
 
+        {/* Advanced filters toggle — collapsed by default */}
         <button
-          title={showColumnFilters ? "Hide column filters" : "Show column filters"}
+          title={showColumnFilters ? "Hide advanced column filters" : "Show advanced column filters"}
           onClick={onToggleColumnFilters}
           aria-expanded={showColumnFilters}
           style={{
@@ -197,7 +251,7 @@ export function RiskFilterChips({
           }}
         >
           <Filter size={13} />
-          Filters
+          Advanced filters
           {hasActiveColFilters && (
             <span
               style={{

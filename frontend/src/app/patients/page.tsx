@@ -1125,6 +1125,7 @@ export default function PatientsPage() {
         hasActiveColFilters={!!hasActiveColFilters}
         colFilters={colFilters}
         onClearColFilters={() => { clearColFilters(); setPage(0); }}
+        onColFiltersChange={(patch) => { setColFilters((f) => ({ ...f, ...patch })); setPage(0); }}
         isLoading={isLoading}
         page={page}
         total={total}
@@ -1464,40 +1465,24 @@ export default function PatientsPage() {
           const location = formatLocation(p);
 
           return (
-            <div
+            // Semantic <tr role="row"> replaces <div role="button">.
+            // Checkbox owns its own <td> so screen readers announce:
+            //   "Checkbox, Smith John, link, row 3 of 14"
+            // not the broken "button, row 3, Smith John, Checkbox".
+            <tr
               key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
-              // role="button" instead of "row" — this element behaves as a
-              // single clickable card (Enter/Space navigates to the patient
-              // detail), not a grid row. Using `row` required ARIA-grid
-              // children semantics on every cell which axe rightly flagged.
-              role="button"
-              tabIndex={0}
+              role="row"
               aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
-              onClick={() => router.push(`/patients/${pid}`)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  router.push(`/patients/${pid}`);
-                }
-              }}
               onMouseEnter={() => setHoveredRow(pid)}
               onMouseLeave={() => setHoveredRow(null)}
               data-selected={selectedPids.has(Number(pid)) ? "true" : undefined}
-              className="worklist-grid worklist-row-anchor"
               style={{
-                display: "grid",
-                ...WORKLIST_GRID_VARS,
-                alignItems: "center",
-                // overflow: visible so the absolutely-positioned hover-card
-                // (activity tooltip) can extend below the row. The fixed
-                // row height + flex content already prevents intrinsic
-                // overflow from inflating the row.
+                display: "flex",
                 position: "relative",
                 height: ROW_HEIGHT,
                 minHeight: ROW_HEIGHT,
                 maxHeight: ROW_HEIGHT,
                 overflow: "visible",
-                padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
                 borderBottom: `1px solid ${C.rowDivider}`,
                 borderLeft: `3px solid ${accent}`,
                 backgroundColor: isHovered
@@ -1505,16 +1490,22 @@ export default function PatientsPage() {
                   : tone.label === "High"
                     ? tokens.riskHighSoft
                     : C.bgCard,
-                cursor: "pointer",
                 transition: "background-color 0.15s ease",
-                gap: WORKLIST_GAP,
                 animation: `fadeSlideIn 0.25s ease-out ${Math.min(rowIndex, 12) * 0.025}s both`,
               }}
-              onFocus={(e) => { e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.brandSoft}`; }}
-              onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }}
             >
-              {/* Patient: avatar + name + subtitle + bulk-select checkbox */}
-              <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {/* ── Checkbox cell — own focus stop, no row navigation ── */}
+              <td
+                role="gridcell"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  width: WORKLIST_PAD_X - 3,
+                  padding: 0,
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={typeof pid === "number" && selectedPids.has(pid)}
@@ -1523,20 +1514,8 @@ export default function PatientsPage() {
                     if (typeof pid === "number") togglePid(pid);
                   }}
                   onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    // Stop the row-level Enter/Space (navigation) from
-                    // firing when the checkbox itself has focus. Native
-                    // checkbox toggles on Space already; we just need to
-                    // halt the bubble.
-                    if (e.key === "Enter" || e.key === " ") e.stopPropagation();
-                  }}
                   aria-label={`Select ${fullName} for bulk actions`}
-                  // Always rendered + always tab-focusable so keyboard /
-                  // screen-reader users can multi-select. Visibility on
-                  // mouse-only sessions is faded until the row is hovered
-                  // or already-selected so the worklist stays clean for
-                  // single-row navigation. opacity instead of visibility
-                  // keeps the element in the focus order (UX review #1).
+                  // opacity instead of visibility keeps it in the focus order
                   style={{
                     width: 14,
                     height: 14,
@@ -1558,6 +1537,39 @@ export default function PatientsPage() {
                         : "0";
                   }}
                 />
+              </td>
+
+              {/* ── Content cell — Link is the sole navigation target ── */}
+              <td
+                role="gridcell"
+                style={{ flex: 1, minWidth: 0, padding: 0 }}
+              >
+                <Link
+                  href={`/patients/${pid}`}
+                  className="worklist-grid worklist-row-anchor"
+                  style={{
+                    display: "grid",
+                    ...WORKLIST_GRID_VARS,
+                    alignItems: "center",
+                    height: ROW_HEIGHT,
+                    // overflow: visible so the hover-card can extend below the row
+                    overflow: "visible",
+                    padding: `0 ${WORKLIST_PAD_X}px 0 8px`,
+                    gap: WORKLIST_GAP,
+                    cursor: "pointer",
+                    textDecoration: "none",
+                    color: "inherit",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.brandSoft}`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+              {/* Patient: avatar + name + subtitle */}
+              <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
                   background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
@@ -1814,7 +1826,9 @@ export default function PatientsPage() {
               {typeof pid === "number" && (
                 <WorklistRowHoverActivity patientId={pid} isHovered={isHovered} />
               )}
-            </div>
+                </Link>
+              </td>
+            </tr>
           );
         })}
 
