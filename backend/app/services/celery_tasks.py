@@ -143,6 +143,9 @@ celery_app.conf.task_routes = {
     "raf.sync_fhir":                     {"queue": "default",  "priority": 5},
     "raf.fhir_sync":                     {"queue": "default",  "priority": 5},
     "raf.archive_audit_log_hourly":      {"queue": "default",  "priority": 3},
+    # Reveleer bi-directional adapter
+    "raf.partners.reveleer_pull":        {"queue": "default",  "priority": 4},
+    "raf.partners.reveleer_push_daily":  {"queue": "default",  "priority": 3},
 }
 
 # Enforce JSON serialization (safer than default which allows pickle).
@@ -236,6 +239,18 @@ celery_app.conf.beat_schedule = {
         "task": "auto_sync.discover",
         "schedule": 60.0,
         "options": {"queue": "default"},
+    },
+    # Reveleer: pull ready charts every 30 minutes per active tenant.
+    "reveleer-pull-every-30m": {
+        "task": "raf.partners.reveleer_pull",
+        "schedule": 1800.0,
+        "options": {"queue": "default", "priority": 4},
+    },
+    # Reveleer: push accepted/open suspects daily at 22:00 UTC.
+    "reveleer-push-daily-22h": {
+        "task": "raf.partners.reveleer_push_daily",
+        "schedule": crontab(hour=22, minute=0),
+        "options": {"queue": "default", "priority": 3},
     },
 }
 
@@ -2065,3 +2080,70 @@ def task_openemr_scan_new_documents(
     """
     from app.services.openemr_document_ingest import scan_new_documents
     return scan_new_documents(tenant_id, limit=int(limit))
+
+
+# ---------------------------------------------------------------------------
+# Reveleer bi-directional adapter tasks
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.partners.reveleer_pull",
+    queue="default",
+    max_retries=3,
+    default_retry_delay=120,
+)
+def task_reveleer_pull(self, tenant_id: str, since: str | None = None) -> dict:
+    """Pull ready charts from Reveleer, run Gemini vision, persist suspects.
+
+    Beat fires this every 30 minutes per active tenant.
+    """
+    try:
+        from app.services.partners.reveleer_sync import pull_charts_from_reveleer
+        return pull_charts_from_reveleer(tenant_id=tenant_id, since=since)
+    except Exception as exc:
+        task_logger.error("reveleer_pull tenant=%s failed: %s", tenant_id, exc)
+        raise self.retry(exc=exc, countdown=120 * (self.request.retries + 1))
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.partners.reveleer_push_daily",
+    queue="default",
+    max_retries=2,
+    default_retry_delay=300,
+)
+def task_reveleer_push_daily(self, tenant_id: str) -> dict:
+    """Push open gemini_vision suspects to Reveleer for all active patients.
+
+    Beat fires this daily at 22:00 UTC.
+    """
+    from app.db import raf_cursor
+
+    try:
+        from app.services.partners.reveleer_sync import push_suspects_to_reveleer
+
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id FROM patients WHERE tenant_id=%s AND is_active=1",
+                (tenant_id,),
+            )
+            rows = cur.fetchall()
+
+        pushed_total = failed_total = 0
+        for row in rows:
+            pid = int(row["id"] if isinstance(row, dict) else row[0])
+            result = push_suspects_to_reveleer(tenant_id=tenant_id, raf_patient_id=pid)
+            pushed_total += result.get("pushed", 0)
+            failed_total += result.get("failed", 0)
+
+        return {
+            "tenant_id": tenant_id,
+            "patients_processed": len(rows),
+            "suspects_pushed": pushed_total,
+            "suspects_failed": failed_total,
+        }
+    except Exception as exc:
+        task_logger.error("reveleer_push_daily tenant=%s failed: %s", tenant_id, exc)
+        raise self.retry(exc=exc, countdown=300 * (self.request.retries + 1))

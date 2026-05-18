@@ -1,0 +1,1 @@
+# Partners integration adapters
