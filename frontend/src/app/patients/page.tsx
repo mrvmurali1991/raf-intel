@@ -32,7 +32,7 @@ import {
   Activity,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
-import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials, riskAccentColor, riskTone } from "@/lib/ui-utils";
+import { C, FONT_MONO, initialsColor, deriveInitials, riskAccentColor, riskTone } from "@/lib/ui-utils";
 import { tokens } from "@/styles/tokens";
 import {
   usePatientActivity,
@@ -112,29 +112,15 @@ function SortLabel({
     <button
       aria-label={`Sort by ${label}${sortSuffix}`}
       onClick={() => onSort(col)}
+      className="inline-flex items-center gap-1 bg-transparent border-none p-0 m-0 cursor-pointer font-sans text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap transition-colors duration-150"
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        background: "none",
-        border: "none",
-        padding: 0,
-        margin: 0,
-        cursor: "pointer",
-        fontFamily: FONT_SYS,
-        fontSize: 11.5,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
         color: active ? tokens.slate900 : tokens.slate500,
-        whiteSpace: "nowrap",
-        transition: "color 0.15s ease",
         justifySelf: align === "right" ? "end" : "start",
       }}
     >
       {label}
       {active && (
-        <span style={{ display: "inline-flex", marginLeft: 2 }}>
+        <span className="inline-flex ml-0.5">
           {sort.dir === "asc"
             ? <ChevronUp size={11} color={tokens.slate900} />
             : <ChevronDown size={11} color={tokens.slate900} />
@@ -357,40 +343,22 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
     }
   }
 
-  const OVERLAY: React.CSSProperties = {
-    position: "fixed", inset: 0, zIndex: 1000,
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    padding: 24,
-  };
-
-  const MODAL: React.CSSProperties = {
-    backgroundColor: tokens.white,
-    borderRadius: 20,
-    padding: 32,
-    width: "100%",
-    maxWidth: 640,
-    maxHeight: "90vh",
-    overflowY: "auto",
-    boxShadow: "0 25px 60px rgba(15, 23, 42, 0.25)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  };
-
   return (
     <div
-      style={OVERLAY}
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-slate-900/55"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
       role="presentation"
     >
       <FocusTrap>
-        <div style={MODAL} role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div
+          className="bg-white rounded-[20px] p-8 w-full max-w-[640px] max-h-[90vh] overflow-y-auto shadow-[0_25px_60px_rgba(15,23,42,0.25)] flex flex-col gap-5"
+          role="dialog" aria-modal="true" aria-labelledby="import-modal-title"
+        >
+        <div className="flex items-start justify-between">
           <div>
-            <h2 id="import-modal-title" style={{ margin: 0, fontSize: 20, fontWeight: 700, color: tokens.slate900 }}>Import Patients</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 14, color: tokens.slate500 }}>
+            <h2 id="import-modal-title" className="m-0 text-xl font-bold text-slate-900">Import Patients</h2>
+            <p className="mt-1 mb-0 text-sm text-slate-500">
               {format === "csv"
                 ? "Upload a CSV file to bulk-import patients into OpenEMR."
                 : "Upload a FHIR R4 Patient resource or Bundle to import patients."}
@@ -399,23 +367,13 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
           <button
             onClick={onClose}
             aria-label="Close"
-            style={{
-              background: "none", border: "none", padding: 10, cursor: "pointer",
-              color: tokens.slate400, borderRadius: 8,
-              width: 44, height: 44,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}
+            className="bg-transparent border-none p-2.5 cursor-pointer text-slate-400 rounded-lg w-11 h-11 inline-flex items-center justify-center shrink-0"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div style={{
-          display: "inline-flex", alignItems: "center",
-          backgroundColor: tokens.slate100, borderRadius: 10, padding: 4, gap: 2,
-          alignSelf: "flex-start",
-        }}>
+        <div className="inline-flex items-center bg-slate-100 rounded-[10px] p-1 gap-0.5 self-start">
           {(["csv", "fhir"] as const).map((f) => (
             <button
               key={f}
@@ -435,16 +393,10 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
           ))}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="flex items-center gap-2">
           <button
             onClick={handleDownloadTemplate}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "7px 14px", borderRadius: 8,
-              border: "1px solid rgba(15, 118, 110, 0.3)",
-              backgroundColor: "rgba(15, 118, 110, 0.06)",
-              color: tokens.teal700, fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
+            className="inline-flex items-center gap-1.5 py-[7px] px-3.5 rounded-lg border border-teal-700/30 bg-teal-700/[0.06] text-teal-700 text-[13px] font-semibold cursor-pointer"
           >
             <Download size={14} /> {format === "csv" ? "Download Template" : "Download FHIR Template"}
           </button>
@@ -463,18 +415,12 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                   alert("Failed to download Excel template.");
                 }
               }}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", borderRadius: 8,
-                border: "1px solid rgba(15, 118, 110, 0.3)",
-                backgroundColor: "rgba(15, 118, 110, 0.06)",
-                color: tokens.teal700, fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-1.5 py-[7px] px-3.5 rounded-lg border border-teal-700/30 bg-teal-700/[0.06] text-teal-700 text-[13px] font-semibold cursor-pointer"
             >
               <Download size={14} /> Download Excel Template
             </button>
           )}
-          <span style={{ fontSize: 12, color: tokens.slate400 }}>
+          <span className="text-xs text-slate-400">
             {format === "csv"
               ? "Required columns: first_name, last_name, dob, sex (CSV or Excel)"
               : "FHIR R4 Patient resource or Bundle"}
@@ -523,19 +469,19 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
               </div>
               {file ? (
                 <>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>{file.name}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: tokens.slate500 }}>
+                  <p className="m-0 text-sm font-semibold text-slate-900">{file.name}</p>
+                  <p className="m-0 text-xs text-slate-500">
                     {(file.size / 1024).toFixed(1)} KB — click to change
                   </p>
                 </>
               ) : (
                 <>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: tokens.slate900 }}>
+                  <p className="m-0 text-sm font-semibold text-slate-900">
                     {format === "csv"
                       ? "Drop a CSV or Excel file here or click to browse"
                       : "Drop a FHIR JSON file here or click to browse"}
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: tokens.slate400 }}>
+                  <p className="m-0 text-xs text-slate-400">
                     {format === "csv"
                       ? "Accepts .csv and .xlsx files up to 10 MB"
                       : "Accepts .json files up to 10 MB"}
@@ -548,7 +494,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
         {file && !result && (
           <div>
-            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: tokens.slate600 }}>
+            <p className="mt-0 mb-2.5 text-[13px] font-semibold text-slate-600">
               If a patient already exists in the system:
             </p>
             <div style={{ display: "flex", gap: 10 }}>
@@ -577,7 +523,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                       {label}
                     </span>
                   </div>
-                  <p style={{ margin: 0, fontSize: 12, color: tokens.slate500, lineHeight: 1.4 }}>
+                  <p className="m-0 text-xs text-slate-500 leading-[1.4]">
                     {desc}
                   </p>
                 </button>
@@ -619,21 +565,16 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
 
         {file && format === "csv" && headers.length > 0 && !result && (
           <div>
-            <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: tokens.slate600 }}>
+            <p className="mt-0 mb-2 text-[13px] font-semibold text-slate-600">
               Preview (first 5 rows)
             </p>
-            <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${tokens.slate200}` }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <div className="overflow-x-auto rounded-[10px] border border-slate-200">
+              <table className="w-full border-collapse text-xs">
                 <caption className="sr-only">CSV preview — first 5 rows</caption>
                 <thead>
-                  <tr style={{ backgroundColor: tokens.slate50 }}>
+                  <tr className="bg-slate-50">
                     {headers.map((h) => (
-                      <th key={h} scope="col" style={{
-                        padding: "8px 12px", textAlign: "left",
-                        fontWeight: 600, color: tokens.slate500,
-                        borderBottom: `1px solid ${tokens.slate200}`,
-                        whiteSpace: "nowrap",
-                      }}>{h}</th>
+                      <th key={h} scope="col" className="py-2 px-3 text-left font-semibold text-slate-500 border-b border-slate-200 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -641,7 +582,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                   {preview.map((row, ri) => (
                     <tr key={ri} style={{ borderBottom: ri < preview.length - 1 ? `1px solid ${tokens.slate100}` : "none" }}>
                       {headers.map((_, ci) => (
-                        <td key={ci} style={{ padding: "7px 12px", color: tokens.slate900, whiteSpace: "nowrap" }}>
+                        <td key={ci} className="py-[7px] px-3 text-slate-900 whitespace-nowrap">
                           {row[ci] ?? ""}
                         </td>
                       ))}
@@ -688,9 +629,9 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 ...(onDuplicate !== "replace" ? [{ label: onDuplicate === "update" ? "Unchanged" : "Skipped (dup)", value: result.duplicates_skipped, color: tokens.slate500 }] : []),
                 { label: "Errors", value: result.errors, color: result.errors > 0 ? tokens.dangerStrong : tokens.slate400 },
               ].map(({ label, value, color }) => (
-                <div key={label} style={{ textAlign: "center" }}>
+                <div key={label} className="text-center">
                   <div style={{ fontSize: 22, fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-                  <div style={{ fontSize: 11, color: tokens.slate400, marginTop: 2 }}>{label}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">{label}</div>
                 </div>
               ))}
             </div>
@@ -701,21 +642,17 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 border: `1px solid ${tokens.warningBorder}`,
               }}>
                 {result.error_details.map((e, i) => (
-                  <p key={`err-${i}`} style={{ margin: "0 0 4px", fontSize: 12, color: tokens.warningMuted }}>{e}</p>
+                  <p key={`err-${i}`} className="mb-1 mt-0 text-xs text-amber-900">{e}</p>
                 ))}
               </div>
             )}
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <div className="flex justify-end gap-2.5">
           <button
             onClick={onClose}
-            style={{
-              padding: "9px 20px", borderRadius: 10,
-              border: `1px solid ${tokens.slate200}`, backgroundColor: tokens.white,
-              fontSize: 14, fontWeight: 500, color: tokens.slate600, cursor: "pointer",
-            }}
+            className="py-[9px] px-5 rounded-[10px] border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer"
           >
             {result ? "Close" : "Cancel"}
           </button>
@@ -810,52 +747,30 @@ function WorklistRowHoverActivity({
       role="tooltip"
       aria-label="Recent activity for this patient"
       onClick={(e) => e.stopPropagation()}
-      style={{
-        position: "absolute",
-        top: "calc(100% - 4px)",
-        right: 16,
-        zIndex: 40,
-        minWidth: 260,
-        maxWidth: 320,
-        padding: "10px 12px",
-        borderRadius: 8,
-        backgroundColor: tokens.white,
-        border: `1px solid ${C.border}`,
-        boxShadow: "0 8px 24px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08)",
-        fontSize: 12,
-        color: C.text,
-        pointerEvents: "auto",
-      }}
+      className="absolute top-[calc(100%-4px)] right-4 z-40 min-w-[260px] max-w-[320px] py-2.5 px-3 rounded-lg bg-white border border-slate-200 shadow-[0_8px_24px_rgba(15,23,42,0.14),0_2px_6px_rgba(15,23,42,0.08)] text-xs text-slate-900 pointer-events-auto"
     >
-      <div style={{
-        fontSize: 10,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
-        color: C.textMuted,
-        marginBottom: 6,
-      }}>
+      <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-slate-600 mb-1.5">
         Recent activity
       </div>
       {isLoading && (
-        <div style={{ color: C.textMuted, fontSize: 11 }}>Loading…</div>
+        <div className="text-slate-600 text-[11px]">Loading…</div>
       )}
       {isError && !(error instanceof ActivityEndpointMissingError) && (
-        <div style={{ color: C.textMuted, fontSize: 11 }}>Unable to load activity.</div>
+        <div className="text-slate-600 text-[11px]">Unable to load activity.</div>
       )}
       {!isLoading && !isError && (!data || data.length === 0) && (
-        <div style={{ color: C.textMuted, fontSize: 11 }}>No activity recorded yet.</div>
+        <div className="text-slate-600 text-[11px]">No activity recorded yet.</div>
       )}
       {data && data.length > 0 && (
-        <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <ol className="list-none m-0 p-0 flex flex-col gap-2">
           {data.map((it) => (
-            <li key={it.id} style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
+            <li key={it.id} className="flex flex-col leading-[1.3]">
+              <span className="text-xs font-semibold text-slate-900">
                 {formatActionLabel(it.action)}
               </span>
-              <span style={{ fontSize: 11, color: C.textMuted }}>
+              <span className="text-[11px] text-slate-600">
                 {it.actor_email || "system"}
-                <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>
+                <span className="mx-1 text-slate-300">&middot;</span>
                 <span title={new Date(it.created_at).toLocaleString()}>
                   {formatRelativeTime(it.created_at)}
                 </span>
@@ -1479,36 +1394,26 @@ export default function PatientsPage() {
   // ---- EMR deactivated empty state ----
   if (isError && isEmrDeactivatedError(error)) {
     return (
-      <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, fontFamily: FONT_SYS }}>
-        <div style={{ borderRadius: 16, backgroundColor: tokens.warningSoft, padding: 20 }}>
+      <div role="status" className="flex flex-col items-center justify-center h-[60vh] gap-4 font-sans">
+        <div className="rounded-2xl bg-amber-50 p-5">
           <AlertTriangle size={40} color={tokens.riskMedium} />
         </div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>No patient data available</h2>
-        <p style={{ fontSize: 14, color: C.textSubtle, margin: 0, maxWidth: 440, textAlign: "center" }}>
+        <h2 className="text-lg font-bold text-slate-900 m-0">No patient data available</h2>
+        <p className="text-sm text-slate-600 m-0 max-w-[440px] text-center">
           Connect an EMR or upload a CSV/Excel file of patients to get started.
         </p>
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        <div className="flex gap-2.5 mt-2">
           <button
             type="button"
             onClick={() => router.push("/uploads")}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              borderRadius: 10, border: `1px solid ${C.brand}`, backgroundColor: C.brand,
-              padding: "8px 16px", fontSize: 14, fontWeight: 600, color: tokens.white,
-              cursor: "pointer",
-            }}
+            className="inline-flex items-center gap-2 rounded-[10px] border border-teal-700 bg-teal-700 py-2 px-4 text-sm font-semibold text-white cursor-pointer"
           >
             <Upload size={16} /> Upload a patient file
           </button>
           <button
             type="button"
             onClick={() => router.push("/emr-config")}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: tokens.white,
-              padding: "8px 16px", fontSize: 14, fontWeight: 500, color: C.textMuted,
-              cursor: "pointer",
-            }}
+            className="inline-flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white py-2 px-4 text-sm font-medium text-slate-600 cursor-pointer"
           >
             Go to EMR Configuration
           </button>
@@ -1520,20 +1425,15 @@ export default function PatientsPage() {
   // ---- Error state ----
   if (isError) {
     return (
-      <div role="alert" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, fontFamily: FONT_SYS }}>
-        <div style={{ borderRadius: 16, backgroundColor: tokens.dangerSoft, padding: 20 }}>
+      <div role="alert" className="flex flex-col items-center justify-center h-[60vh] gap-4 font-sans">
+        <div className="rounded-2xl bg-red-50 p-5">
           <AlertTriangle size={40} color={tokens.dangerMedium} />
         </div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>Failed to load patients</h2>
-        <p style={{ fontSize: 14, color: C.textSubtle, margin: 0 }}>Check that the server is running and try again.</p>
+        <h2 className="text-lg font-bold text-slate-900 m-0">Failed to load patients</h2>
+        <p className="text-sm text-slate-600 m-0">Check that the server is running and try again.</p>
         <button
           onClick={() => refetch()}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: tokens.white,
-            padding: "8px 16px", fontSize: 14, fontWeight: 500, color: C.textMuted,
-            cursor: "pointer",
-          }}
+          className="inline-flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white py-2 px-4 text-sm font-medium text-slate-600 cursor-pointer"
         >
           <RefreshCw size={16} /> Retry
         </button>
@@ -1552,39 +1452,30 @@ export default function PatientsPage() {
         role="status"
         aria-live="polite"
         aria-label={syncToast.msg}
-        style={{
-          position: "fixed", top: 20, right: 20, zIndex: 9999,
-          display: "flex", alignItems: "center", gap: 10,
-          backgroundColor: "#0f172a", color: "#f8fafc",
-          padding: "12px 16px", borderRadius: 10,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-          fontSize: 14, fontWeight: 500, fontFamily: FONT_SYS,
-          maxWidth: 380, animation: "slideInRight 0.25s ease",
-        }}
+        className="fixed top-5 right-5 z-[9999] flex items-center gap-2.5 bg-slate-900 text-slate-50 py-3 px-4 rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.25)] text-sm font-medium font-sans max-w-[380px] [animation:slideInRight_0.25s_ease]"
       >
-        <span style={{ fontSize: 18, flexShrink: 0 }}>🆕</span>
+        <span className="text-lg shrink-0">🆕</span>
         <span style={{ flex: 1 }}>{syncToast.msg}</span>
         <button
           onClick={() => setSyncToast(null)}
           aria-label="Dismiss notification"
-          style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: 2, display: "flex" }}
+          className="bg-transparent border-none text-slate-500 cursor-pointer p-0.5 flex"
         >
           <X size={14} />
         </button>
       </div>
     )}
-    <div style={{
-      display: "flex", flexDirection: "column", gap: 0,
-      background: tokens.bgSubtle,
-      minHeight: "100vh",
-      // Mobile: 16px gutter; restored to 40px desktop padding via the
-      // ``rci-page-pad-desktop`` className declared in globals.css.
-      padding: "20px 16px",
-      fontFamily: FONT_SYS,
-      color: C.text,
-      overflowX: "hidden",
-    }}
-    className="rci-page-pad-desktop"
+    <div
+      style={{
+        display: "flex", flexDirection: "column", gap: 0,
+        background: tokens.bgSubtle,
+        minHeight: "100vh",
+        // Mobile: 16px gutter; restored to 40px desktop padding via the
+        // ``rci-page-pad-desktop`` className declared in globals.css.
+        padding: "20px 16px",
+        overflowX: "hidden",
+      }}
+      className="rci-page-pad-desktop font-sans text-slate-900"
     >
       {/* ============================================================ */}
       {/* Page header                                                  */}
@@ -1596,14 +1487,7 @@ export default function PatientsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h1 style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 700,
-                color: C.text,
-                letterSpacing: "-0.02em",
-                lineHeight: 1.15,
-              }}>
+              <h1 className="m-0 text-xl font-bold text-slate-900 tracking-[-0.02em] leading-[1.15]">
                 Worklist
               </h1>
               {/* Auto-sync live indicator. role="status" both permits the
@@ -1645,7 +1529,6 @@ export default function PatientsPage() {
                     color: C.brand,
                     fontSize: 12,
                     fontWeight: 700,
-                    fontFamily: FONT_SYS,
                     fontVariantNumeric: "tabular-nums",
                     letterSpacing: "0.01em",
                     cursor: "pointer",
@@ -1662,12 +1545,7 @@ export default function PatientsPage() {
                 </select>
               </div>
             </div>
-            <p style={{
-              margin: "4px 0 0",
-              fontSize: 13,
-              color: C.textSubtle,
-              fontVariantNumeric: "tabular-nums",
-            }}>
+            <p className="mt-1 mb-0 text-[13px] text-slate-600 tabular-nums">
               {isLoading
                 ? "Loading registry…"
                 : `${totalPatients.toLocaleString()} patients in registry \u00B7 CMS-HCC V28 \u00B7 MY ${measurementYear}`}
@@ -1694,7 +1572,6 @@ export default function PatientsPage() {
                 backgroundColor: tokens.white,
                 paddingLeft: 38, paddingRight: 14,
                 fontSize: 13, color: C.text,
-                fontFamily: FONT_SYS,
                 transition: "border-color 0.15s, box-shadow 0.15s",
               }}
               onFocus={(e) => {
@@ -1724,7 +1601,6 @@ export default function PatientsPage() {
               height: 40, padding: "0 16px", borderRadius: 10,
               border: "none", backgroundColor: C.brand,
               color: tokens.white, fontSize: 13, fontWeight: 600,
-              fontFamily: FONT_SYS,
               cursor: "pointer", flexShrink: 0,
               boxShadow: "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
               transition: "all 0.15s ease",
@@ -2028,7 +1904,6 @@ export default function PatientsPage() {
                   backgroundColor: active ? tokens.slate800 : inactiveBg,
                   color: active ? tokens.white : inactiveColor,
                   fontSize: 12.5, fontWeight: 600,
-                  fontFamily: FONT_SYS,
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   boxShadow: active ? "0 2px 8px rgba(15,23,42,0.18)" : "none",
@@ -2067,7 +1942,6 @@ export default function PatientsPage() {
               backgroundColor: showColumnFilters || hasActiveColFilters ? C.brandSoft : tokens.white,
               color: showColumnFilters || hasActiveColFilters ? C.brand : C.textMuted,
               fontSize: 12, fontWeight: 600,
-              fontFamily: FONT_SYS,
               cursor: "pointer",
               transition: "all 0.15s ease",
             }}
@@ -2089,15 +1963,7 @@ export default function PatientsPage() {
           {hasActiveColFilters && (
             <button
               onClick={() => { clearColFilters(); setPage(0); }}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                height: 34, padding: "0 12px", borderRadius: 999,
-                background: "none",
-                border: `1px dashed ${C.border}`,
-                fontSize: 12, fontWeight: 500,
-                color: C.textSubtle, cursor: "pointer",
-                fontFamily: FONT_SYS,
-              }}
+              className="inline-flex items-center gap-1.5 h-[34px] px-3 rounded-full bg-transparent border border-dashed border-slate-200 text-xs font-medium text-slate-600 cursor-pointer font-sans"
             >
               <FilterX size={12} /> Clear
             </button>
@@ -2105,15 +1971,12 @@ export default function PatientsPage() {
         </div>
 
         {!isLoading && (
-          <span style={{
-            fontSize: 12, color: C.textSubtle, whiteSpace: "nowrap",
-            fontVariantNumeric: "tabular-nums",
-          }}>
+          <span className="text-xs text-slate-600 whitespace-nowrap tabular-nums">
             Showing{" "}
-            <strong style={{ color: C.text, fontWeight: 600 }}>
+            <strong className="text-slate-900 font-semibold">
               {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
             </strong>{" "}
-            of <strong style={{ color: C.text, fontWeight: 600 }}>{totalPatients.toLocaleString()}</strong>
+            of <strong className="text-slate-900 font-semibold">{totalPatients.toLocaleString()}</strong>
           </span>
         )}
       </div>
@@ -2131,13 +1994,7 @@ export default function PatientsPage() {
         aria-label="Patient worklist"
         aria-busy={isLoading}
         aria-live="polite"
-        style={{
-          backgroundColor: C.bgCard,
-          borderRadius: 16,
-          overflowX: "auto",
-          border: `1px solid ${C.borderSoft}`,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04)",
-        }}
+        className="bg-white rounded-2xl overflow-x-auto border border-[#EEF2F6] shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_16px_rgba(15,23,42,0.04)]"
       >
         {/* Bulk-select chip bar — PatternFly-style action affordance.
             Surfaces once at least one patient is selected (Cmd/Shift+click
@@ -2327,10 +2184,10 @@ export default function PatientsPage() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+              <h3 className="m-0 text-base font-bold text-slate-900">
                 Bulk request documentation
               </h3>
-              <p style={{ marginTop: 6, fontSize: 12, color: C.textMuted }}>
+              <p className="mt-1.5 text-xs text-slate-600">
                 Sends the same documentation request to <strong>{selectedPids.size}</strong> selected patient{selectedPids.size === 1 ? "" : "s"}. Each query is tracked Pending → Replied → Closed in the per-patient query log.
               </p>
               <textarea
@@ -2442,16 +2299,16 @@ export default function PatientsPage() {
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                <h3 className="m-0 text-base font-bold text-slate-900">
                   Reassign selected patients
                 </h3>
                 {/* Explicit destructive-action warning — same copy contract
                     as the other two bulk dialogs so the user always knows
                     the blast radius before confirming. */}
-                <p style={{ marginTop: 6, fontSize: 12, color: tokens.warningMuted, fontWeight: 600 }}>
+                <p className="mt-1.5 text-xs font-semibold text-amber-900">
                   This will affect <strong>{selectedPids.size}</strong> patient{selectedPids.size === 1 ? "" : "s"}.
                 </p>
-                <p style={{ marginTop: 4, fontSize: 12, color: C.textMuted }}>
+                <p className="mt-1 text-xs text-slate-600">
                   Pick a reviewer below (or paste a user id). The selected patients will be moved to their queue.
                 </p>
                 {bulkReassignUsers && bulkReassignUsers.length > 0 ? (
@@ -2577,13 +2434,13 @@ export default function PatientsPage() {
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                <h3 className="m-0 text-base font-bold text-slate-900">
                   Recalculate RAF scores
                 </h3>
-                <p style={{ marginTop: 6, fontSize: 12, color: tokens.warningMuted, fontWeight: 600 }}>
+                <p className="mt-1.5 text-xs font-semibold text-amber-900">
                   This will affect <strong>{selectedPids.size}</strong> patient{selectedPids.size === 1 ? "" : "s"}.
                 </p>
-                <p style={{ marginTop: 4, fontSize: 12, color: C.textMuted }}>
+                <p className="mt-1 text-xs text-slate-600">
                   Re-runs the CMS-HCC V28 model against the latest claims & encounter data for each selected patient. Existing scores will be overwritten; previous values remain in audit history.
                 </p>
                 <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -2665,13 +2522,13 @@ export default function PatientsPage() {
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                <h3 className="m-0 text-base font-bold text-slate-900">
                   Mark patients as reviewed
                 </h3>
-                <p style={{ marginTop: 6, fontSize: 12, color: tokens.warningMuted, fontWeight: 600 }}>
+                <p className="mt-1.5 text-xs font-semibold text-amber-900">
                   This will affect <strong>{selectedPids.size}</strong> patient{selectedPids.size === 1 ? "" : "s"}.
                 </p>
-                <p style={{ marginTop: 4, fontSize: 12, color: C.textMuted }}>
+                <p className="mt-1 text-xs text-slate-600">
                   Add a brief note that will be attached to each patient&apos;s review log entry. Note is optional but recommended for audit.
                 </p>
                 <textarea
@@ -2742,22 +2599,13 @@ export default function PatientsPage() {
           gap: WORKLIST_GAP,
         }}>
           <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
-          <span style={{
-            fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: tokens.slate500,
-          }}>Risk Level</span>
+          <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">Risk Level</span>
           <span title="Risk Adjustment Factor (RAF): CMS-HCC V28 score. 1.0 = average cost. Higher = more complex patient.">
             <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
           </span>
-          <span className="risk-factors-cell" style={{
-            fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: tokens.slate500,
-          }}>Risk Factors</span>
+          <span className="risk-factors-cell text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">Risk Factors</span>
           <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
-          <span style={{
-            fontSize: 11.5, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: "0.08em", color: tokens.slate500, paddingLeft: 8,
-          }}>Status</span>
+          <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 pl-2">Status</span>
           <span aria-hidden="true" />
         </div>
 
@@ -2784,7 +2632,6 @@ export default function PatientsPage() {
                   border: colFilters.sex !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
                   backgroundColor: colFilters.sex !== "all" ? C.brandSoft : "#fff",
                   color: C.textMuted, padding: "0 4px", cursor: "pointer",
-                  fontFamily: FONT_SYS,
                 }}
               >
                 <option value="all">Sex</option>
@@ -2820,7 +2667,7 @@ export default function PatientsPage() {
             </div>
 
             {/* Risk Level col — no filter (derived from RAF) */}
-            <span style={{ fontSize: 10, color: C.label, fontStyle: "italic" }}>auto</span>
+            <span className="text-[10px] text-slate-600 italic">auto</span>
 
             {/* RAF Score col */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -2909,7 +2756,6 @@ export default function PatientsPage() {
                 border: colFilters.status !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
                 backgroundColor: colFilters.status !== "all" ? C.brandSoft : "#fff",
                 color: C.textMuted, padding: "0 4px", cursor: "pointer",
-                fontFamily: FONT_SYS,
               }}
             >
               <option value="all">All</option>
@@ -2959,28 +2805,16 @@ export default function PatientsPage() {
 
         {/* ---- Empty State ---- */}
         {!isLoading && rows.length === 0 && (
-          <div style={{ padding: "72px 24px", textAlign: "center" }}>
-            <div style={{
-              width: 72, height: 72, borderRadius: 18, margin: "0 auto 18px",
-              background: `linear-gradient(135deg, ${tokens.slate50} 0%, ${tokens.slate100} 100%)`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              border: `1px dashed ${C.border}`,
-            }}>
+          <div className="py-[72px] px-6 text-center">
+            <div className="w-[72px] h-[72px] rounded-[18px] mx-auto mb-[18px] bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center border border-dashed border-slate-200">
               <Users size={28} color={C.label} strokeWidth={1.75} />
             </div>
-            <h3 style={{
-              fontSize: 16, fontWeight: 600, color: C.text,
-              margin: "0 0 6px",
-              letterSpacing: "-0.01em",
-            }}>
+            <h3 className="text-base font-semibold text-slate-900 mt-0 mb-1.5 tracking-[-0.01em]">
               {riskFilter === "high" ? "No high-risk patients right now" :
                riskFilter === "unscored" ? "No unscored patients" :
                "No patients match your criteria"}
             </h3>
-            <p style={{
-              fontSize: 13, color: C.textSubtle,
-              margin: "0 auto 18px", maxWidth: 380,
-            }}>
+            <p className="text-[13px] text-slate-600 mx-auto mb-[18px] mt-0 max-w-[380px]">
               {riskFilter === "high"
                 ? "Check Unscored patients for pending analysis — they may need a risk calculation."
                 : "Try broadening your search or adjusting the risk filter to see more results."}
@@ -2988,17 +2822,9 @@ export default function PatientsPage() {
             {(riskFilter !== "all" || debouncedSearch || hasActiveColFilters) && (
               <button
                 onClick={() => { setRiskFilter("all"); setSearch(""); clearColFilters(); setPage(0); }}
-                style={{
-                  padding: "8px 18px", borderRadius: 10,
-                  border: `1px solid ${C.border}`,
-                  backgroundColor: tokens.white,
-                  color: C.brand,
-                  fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  fontFamily: FONT_SYS,
-                  transition: "all 0.15s ease",
-                }}
+                className="py-2 px-[18px] rounded-[10px] border border-slate-200 bg-white text-teal-700 text-[13px] font-semibold cursor-pointer font-sans transition-all duration-150"
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.brand; e.currentTarget.style.backgroundColor = C.brandSoft; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.backgroundColor = tokens.white; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; e.currentTarget.style.backgroundColor = ""; }}
               >
                 Clear all filters
               </button>
@@ -3217,7 +3043,6 @@ export default function PatientsPage() {
                     fontSize: 20,
                     fontWeight: 700,
                     color: C.text,
-                    fontFamily: FONT_SYS,
                     fontVariantNumeric: "tabular-nums",
                     lineHeight: 1,
                     letterSpacing: "-0.025em",
@@ -3364,24 +3189,16 @@ export default function PatientsPage() {
 
         {/* ---- Pagination ---- */}
         {!isLoading && totalPages > 1 && (
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            gap: 8, padding: "14px 20px",
-            borderTop: `1px solid ${C.border}`,
-            backgroundColor: tokens.bgFaintCard,
-          }}>
-            <span style={{
-              fontSize: 12, color: C.textSubtle,
-              fontVariantNumeric: "tabular-nums",
-            }}>
+          <div className="flex items-center justify-between gap-2 py-3.5 px-5 border-t border-slate-200 bg-[#FAFBFC]">
+            <span className="text-xs text-slate-600 tabular-nums">
               Showing{" "}
-              <strong style={{ color: C.text, fontWeight: 600 }}>
+              <strong className="text-slate-900 font-semibold">
                 {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
               </strong>{" "}
-              of <strong style={{ color: C.text, fontWeight: 600 }}>{total.toLocaleString()}</strong>
+              of <strong className="text-slate-900 font-semibold">{total.toLocaleString()}</strong>
             </span>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div className="flex items-center gap-1.5">
               <button
                 disabled={page === 0}
                 onClick={() => setPage((p) => p - 1)}
@@ -3393,7 +3210,7 @@ export default function PatientsPage() {
                   color: page === 0 ? tokens.slate300 : C.textMuted,
                   cursor: page === 0 ? "not-allowed" : "pointer",
                   opacity: page === 0 ? 0.6 : 1,
-                  fontFamily: FONT_SYS,
+                  fontFamily: "inherit",
                   transition: "all 0.15s ease",
                 }}
                 aria-label="Previous page"
@@ -3424,7 +3241,6 @@ export default function PatientsPage() {
                       backgroundColor: isActive ? C.brand : "transparent",
                       color: isActive ? tokens.white : C.textSubtle,
                       fontSize: 12, fontWeight: isActive ? 600 : 500,
-                      fontFamily: FONT_SYS,
                       fontVariantNumeric: "tabular-nums",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
@@ -3449,7 +3265,7 @@ export default function PatientsPage() {
                   color: page >= totalPages - 1 ? tokens.slate300 : C.textMuted,
                   cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                   opacity: page >= totalPages - 1 ? 0.6 : 1,
-                  fontFamily: FONT_SYS,
+                  fontFamily: "inherit",
                   transition: "all 0.15s ease",
                 }}
                 aria-label="Next page"
