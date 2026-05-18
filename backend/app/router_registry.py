@@ -409,3 +409,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Inovalon Electronic Record On Demand — admin pull management
     _mount(app, inovalon_admin_router.router)
+
+    # HIE (CommonWell + Carequality) sync
+    _mount(app, hie_sync_router.router)
