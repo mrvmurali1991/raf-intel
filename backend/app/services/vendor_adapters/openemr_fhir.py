@@ -846,6 +846,145 @@ class OpenEMRFhirAdapter:
         return notes
 
     # ------------------------------------------------------------------
+    # DocumentReference + Binary — FHIR document ingest pipeline
+    # ------------------------------------------------------------------
+
+    def list_document_references(
+        self,
+        patient_emr_pid: str,
+        *,
+        since: str | None = None,
+        category: str | None = None,
+        _count: int = 50,
+    ) -> list[dict]:
+        """GET /DocumentReference?subject=Patient/{pid}&_count=50&date=ge{since}.
+
+        Returns raw FHIR Bundle entry list.  Each item is
+        ``{"resource": {DocumentReference}, "fullUrl": ...}``.
+        Honors the per-tenant circuit breaker via get_breaker().
+        """
+        from app.services.circuit_breaker import get_breaker, CircuitBreakerError
+
+        cb_key = f"fhir_doc_ref:{self.connection_id}:{self.base_url}"
+        breaker = get_breaker(cb_key, failure_threshold=3, recovery_timeout=90.0)
+
+        params: dict[str, str] = {
+            "subject": f"Patient/{patient_emr_pid}",
+            "_count": str(_count),
+        }
+        if since:
+            params["date"] = f"ge{since}"
+        if category:
+            params["category"] = category
+
+        try:
+            current_state = breaker.state
+            from app.services.circuit_breaker import CircuitState
+            if current_state == CircuitState.OPEN:
+                import time as _time
+                elapsed = _time.time() - breaker._last_failure_time
+                retry_after = max(0.0, breaker.recovery_timeout - elapsed)
+                raise CircuitBreakerError(cb_key, retry_after)
+
+            entries = self._fhir_get_all(
+                "DocumentReference", params=params, max_pages=20
+            )
+            breaker.record_success()
+            return [e for e in entries if e.get("resource", {}).get("resourceType") == "DocumentReference"]
+        except CircuitBreakerError:
+            raise
+        except Exception as exc:
+            breaker.record_failure()
+            logger.warning(
+                "list_document_references patient=%s failed: %s",
+                patient_emr_pid, exc,
+            )
+            raise
+
+    def fetch_binary(self, binary_id_or_url: str) -> tuple[bytes, str]:
+        """Fetch raw bytes for a FHIR Binary resource.
+
+        Accepts either:
+          - a bare reference like ``Binary/abc123``
+          - a full URL like ``https://ehr.example.com/fhir/Binary/abc123``
+
+        Sends ``Accept: application/pdf,application/fhir+json`` so both
+        Epic/Cerner (raw bytes) and base64-wrapped servers work.
+        Returns ``(bytes, mime_type)``.
+        Honors the per-tenant circuit breaker.
+        """
+        import base64 as _b64
+        from app.services.circuit_breaker import get_breaker, CircuitBreakerError, CircuitState
+
+        cb_key = f"fhir_binary:{self.connection_id}:{self.base_url}"
+        breaker = get_breaker(cb_key, failure_threshold=3, recovery_timeout=90.0)
+
+        # Resolve to full URL
+        if binary_id_or_url.startswith("http://") or binary_id_or_url.startswith("https://"):
+            url = binary_id_or_url
+        elif binary_id_or_url.startswith("Binary/"):
+            url = f"{self.base_url}/{binary_id_or_url}"
+        else:
+            url = f"{self.base_url}/Binary/{binary_id_or_url}"
+
+        current_state = breaker.state
+        if current_state == CircuitState.OPEN:
+            import time as _time
+            elapsed = _time.time() - breaker._last_failure_time
+            retry_after = max(0.0, breaker.recovery_timeout - elapsed)
+            raise CircuitBreakerError(cb_key, retry_after)
+
+        headers = {
+            "Authorization": f"Bearer {self._get_access_token()}",
+            "Accept": "application/pdf,application/fhir+json;q=0.9,*/*;q=0.8",
+            "User-Agent": _BROWSER_UA,
+        }
+
+        @_fhir_retry
+        def _do_fetch() -> httpx.Response:
+            with httpx.Client(timeout=_TIMEOUT, verify=True) as client:
+                resp = client.get(url, headers=headers)
+                if resp.status_code in _FHIR_RETRYABLE_STATUS:
+                    resp.raise_for_status()
+                return resp
+
+        try:
+            resp = _do_fetch()
+            if resp.status_code == 401:
+                self._force_refresh()
+                headers["Authorization"] = f"Bearer {self._get_access_token()}"
+                resp = _do_fetch()
+            if resp.status_code != 200:
+                raise httpx.HTTPStatusError(
+                    f"Binary fetch {url} -> {resp.status_code}",
+                    request=resp.request,
+                    response=resp,
+                )
+
+            content_type = resp.headers.get("content-type", "application/octet-stream")
+            mime_type = content_type.split(";")[0].strip()
+
+            # FHIR JSON-wrapped Binary (base64 encoded data field)
+            if "fhir+json" in mime_type or mime_type == "application/json":
+                body = resp.json()
+                b64_data = body.get("data", "")
+                raw_bytes = _b64.b64decode(b64_data) if b64_data else b""
+                wrapped_mime = body.get("contentType", "application/octet-stream")
+                breaker.record_success()
+                return raw_bytes, wrapped_mime
+
+            # Raw bytes (Epic, Cerner style)
+            breaker.record_success()
+            return resp.content, mime_type
+
+        except CircuitBreakerError:
+            raise
+        except Exception as exc:
+            breaker.record_failure()
+            logger.warning("fetch_binary %s failed: %s", url, exc)
+            raise
+
+    # ------------------------------------------------------------------
     # Normalizers
     # ------------------------------------------------------------------
 

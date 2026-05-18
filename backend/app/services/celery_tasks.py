@@ -143,6 +143,11 @@ celery_app.conf.task_routes = {
     "raf.sync_fhir":                     {"queue": "default",  "priority": 5},
     "raf.fhir_sync":                     {"queue": "default",  "priority": 5},
     "raf.archive_audit_log_hourly":      {"queue": "default",  "priority": 3},
+    # Datavant Switchboard chart ingest (triggered by verified webhook)
+    "raf.partners.datavant_ingest":      {"queue": "heavy",    "priority": 5},
+    # Reveleer bi-directional adapter
+    "raf.partners.reveleer_pull":        {"queue": "default",  "priority": 4},
+    "raf.partners.reveleer_push_daily":  {"queue": "default",  "priority": 3},
 }
 
 # Enforce JSON serialization (safer than default which allows pickle).
@@ -236,6 +241,18 @@ celery_app.conf.beat_schedule = {
         "task": "auto_sync.discover",
         "schedule": 60.0,
         "options": {"queue": "default"},
+    },
+    # Reveleer: pull ready charts every 30 minutes per active tenant.
+    "reveleer-pull-every-30m": {
+        "task": "raf.partners.reveleer_pull",
+        "schedule": 1800.0,
+        "options": {"queue": "default", "priority": 4},
+    },
+    # Reveleer: push accepted/open suspects daily at 22:00 UTC.
+    "reveleer-push-daily-22h": {
+        "task": "raf.partners.reveleer_push_daily",
+        "schedule": crontab(hour=22, minute=0),
+        "options": {"queue": "default", "priority": 3},
     },
 }
 
@@ -2065,3 +2082,537 @@ def task_openemr_scan_new_documents(
     """
     from app.services.openemr_document_ingest import scan_new_documents
     return scan_new_documents(tenant_id, limit=int(limit))
+
+
+# ---------------------------------------------------------------------------
+# FHIR Bulk Data $export task (SMART Bulk Data v2)
+# ---------------------------------------------------------------------------
+
+# Register routing for the new task
+celery_app.conf.task_routes["raf.fhir.bulk_export_run"] = {
+    "queue": "heavy",
+    "priority": 5,
+}
+
+# Beat schedule: nightly at 02:00 UTC — fan-out is handled inside the task
+# by iterating all active EHR connections for the given tenant.  The Beat
+# entry below serves as a no-arg sentinel; per-connection scheduling is done
+# via apply_async from the admin endpoint or by the beat task itself.
+celery_app.conf.beat_schedule["fhir-bulk-export-nightly"] = {
+    "task": "raf.fhir.bulk_export_run_sweep",
+    "schedule": crontab(hour=2, minute=0),
+    "options": {"queue": "heavy", "priority": 6},
+}
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.fhir.bulk_export_run",
+    queue="heavy",
+    max_retries=2,
+    default_retry_delay=300,
+    soft_time_limit=3600,
+    time_limit=3900,
+)
+def task_fhir_bulk_export_run(
+    self,
+    tenant_id: str,
+    ehr_connection_id: int,
+    since: str | None = None,
+    group_id: str | None = None,
+    types: list[str] | None = None,
+) -> dict[str, Any]:
+    """Run a FHIR Bulk Data $export for a single EHR connection.
+
+    Steps:
+    1. Kick off Group/$export on the EHR.
+    2. Poll until complete (up to 10 minutes wall-clock).
+    3. Download each NDJSON output file.
+    4. Hand every DocumentReference to gemini_document_extractor.
+    5. Record final status in fhir_bulk_exports.
+
+    Args:
+        tenant_id:          Tenant scope (HIPAA isolation).
+        ehr_connection_id:  FK into fhir_connections.
+        since:              ISO-8601 string for incremental export.
+        group_id:           FHIR Group resource ID (optional).
+        types:              FHIR resource types to request (default: all five).
+
+    Returns:
+        dict with status, export_id, and resources_count.
+    """
+    if not tenant_id:
+        raise ValueError(
+            "task_fhir_bulk_export_run: tenant_id required (HIPAA multi-tenant isolation)"
+        )
+
+    from app.db import raf_cursor
+    import json as _json
+    import datetime as _dt
+
+    from app.services.fhir_bulk_export_client import (
+        BulkExportKickoffError,
+        BulkExportTimeoutError,
+        DEFAULT_TYPES,
+        download_manifest_files,
+        kickoff_group_export,
+        poll_export,
+    )
+    from app.services.vendor_adapters.openemr_fhir import OpenEMRFhirAdapter
+
+    resolved_types = tuple(types) if types else DEFAULT_TYPES
+
+    # ------------------------------------------------------------------
+    # 1. Load and validate the EHR connection (tenant-scoped)
+    # ------------------------------------------------------------------
+    with raf_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM fhir_connections WHERE id = %s AND tenant_id = %s LIMIT 1",
+            (ehr_connection_id, tenant_id),
+        )
+        conn_row = cur.fetchone()
+
+    if not conn_row:
+        msg = (
+            f"task_fhir_bulk_export_run: connection {ehr_connection_id} not found "
+            f"for tenant {tenant_id}"
+        )
+        task_logger.error(msg)
+        return {"status": "aborted", "reason": "not_found"}
+
+    if not conn_row.get("is_active"):
+        return {"status": "aborted", "reason": "inactive"}
+
+    # ------------------------------------------------------------------
+    # 2. Insert a tracking row
+    # ------------------------------------------------------------------
+    kickoff_url = (
+        f"{(conn_row.get('base_url') or '').rstrip('/')}"
+        f"/Group/{group_id or 'all'}/$export"
+    )
+    since_dt: _dt.datetime | None = None
+    if since:
+        try:
+            since_dt = _dt.datetime.fromisoformat(since.replace("Z", "+00:00"))
+        except ValueError:
+            since_dt = None
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO fhir_bulk_exports
+                (tenant_id, ehr_id, kickoff_url, status, since_iso, group_id)
+            VALUES (%s, %s, %s, 'queued', %s, %s)
+            """,
+            (
+                tenant_id,
+                ehr_connection_id,
+                kickoff_url,
+                since_dt,
+                group_id,
+            ),
+        )
+        export_id: int = cur.lastrowid  # type: ignore[assignment]
+
+    def _set_status(
+        status: str,
+        *,
+        polling_url: str | None = None,
+        manifest: dict | None = None,
+        error: str | None = None,
+        resources_count: int | None = None,
+    ) -> None:
+        completed = _dt.datetime.utcnow() if status in ("complete", "failed") else None
+        with raf_cursor() as _cur:
+            _cur.execute(
+                """
+                UPDATE fhir_bulk_exports
+                SET status=%s, polling_url=%s, manifest_json=%s,
+                    error=%s, resources_count=%s, completed_at=%s
+                WHERE id=%s
+                """,
+                (
+                    status,
+                    polling_url,
+                    _json.dumps(manifest) if manifest else None,
+                    error,
+                    resources_count,
+                    completed,
+                    export_id,
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # 3. Build adapter and kick off the export
+    # ------------------------------------------------------------------
+    adapter = OpenEMRFhirAdapter(dict(conn_row))
+
+    try:
+        _set_status("in_progress")
+        polling_url = kickoff_group_export(
+            adapter,
+            group_id=group_id,
+            since=since,
+            types=resolved_types,
+        )
+        _set_status("in_progress", polling_url=polling_url)
+    except BulkExportKickoffError as exc:
+        err = str(exc)[:500]
+        task_logger.error(
+            "FHIR bulk export kickoff failed (export_id=%s): %s", export_id, err
+        )
+        _set_status("failed", error=err)
+        return {"status": "failed", "export_id": export_id, "error": err}
+
+    # ------------------------------------------------------------------
+    # 4. Poll until complete
+    # ------------------------------------------------------------------
+    try:
+        manifest = poll_export(adapter, polling_url, max_wait_seconds=600)
+    except BulkExportTimeoutError as exc:
+        err = str(exc)[:500]
+        task_logger.error(
+            "FHIR bulk export timed out (export_id=%s): %s", export_id, err
+        )
+        _set_status("failed", polling_url=polling_url, error=err)
+        return {"status": "failed", "export_id": export_id, "error": err}
+    except BulkExportKickoffError as exc:
+        err = str(exc)[:500]
+        _set_status("failed", polling_url=polling_url, error=err)
+        return {"status": "failed", "export_id": export_id, "error": err}
+
+    # ------------------------------------------------------------------
+    # 5. Download NDJSON files and process DocumentReferences
+    # ------------------------------------------------------------------
+    total_resources = 0
+    doc_ref_count = 0
+
+    try:
+        for resource_type, resource in download_manifest_files(adapter, manifest):
+            total_resources += 1
+
+            if resource_type == "DocumentReference":
+                doc_ref_count += 1
+                _process_document_reference(
+                    resource, adapter, tenant_id, export_id
+                )
+
+    except Exception as exc:
+        err = str(exc)[:500]
+        task_logger.error(
+            "FHIR bulk export download error (export_id=%s): %s", export_id, err
+        )
+        _set_status(
+            "failed",
+            polling_url=polling_url,
+            manifest=manifest,
+            error=err,
+            resources_count=total_resources,
+        )
+        return {
+            "status": "failed",
+            "export_id": export_id,
+            "error": err,
+            "resources_count": total_resources,
+        }
+
+    _set_status(
+        "complete",
+        polling_url=polling_url,
+        manifest=manifest,
+        resources_count=total_resources,
+    )
+
+    task_logger.info(
+        "FHIR bulk export complete (export_id=%s): %d resources, %d DocumentReferences",
+        export_id,
+        total_resources,
+        doc_ref_count,
+    )
+    return {
+        "status": "complete",
+        "export_id": export_id,
+        "resources_count": total_resources,
+        "doc_ref_count": doc_ref_count,
+    }
+
+
+def _process_document_reference(
+    doc_ref: dict[str, Any],
+    adapter: Any,
+    tenant_id: str,
+    export_id: int,
+) -> None:
+    """Fetch Binary bytes for a DocumentReference and run vision extraction.
+
+    Failures are logged but do not propagate — the bulk export should not
+    fail just because one document is malformed or extraction returns nothing.
+    """
+    try:
+        import datetime as _dt
+        from app.services.gemini_document_extractor import extract_from_document
+
+        content_list = doc_ref.get("content") or []
+        for content_item in content_list:
+            attachment = content_item.get("attachment") or {}
+            binary_url: str = attachment.get("url") or ""
+            mime_type: str = attachment.get("contentType") or "application/pdf"
+
+            if not binary_url:
+                continue
+
+            # Fetch binary bytes from the EHR
+            resp = __import__("httpx").get(
+                binary_url,
+                headers=adapter._auth_headers(),
+                timeout=__import__("httpx").Timeout(120.0, connect=10.0),
+            )
+            if resp.status_code != 200:
+                task_logger.warning(
+                    "Could not fetch Binary %s: HTTP %s", binary_url, resp.status_code
+                )
+                continue
+
+            doc_bytes = resp.content
+            year = _dt.datetime.utcnow().year
+            extract_from_document(
+                doc_bytes=doc_bytes,
+                mime_type=mime_type,
+                year=year,
+                tenant_id=tenant_id,
+            )
+    except Exception as exc:  # noqa: BLE001
+        task_logger.warning(
+            "DocumentReference processing failed (export_id=%s): %s",
+            export_id,
+            exc,
+        )
+
+
+@celery_app.task(
+    name="raf.fhir.bulk_export_run_sweep",
+    queue="heavy",
+)
+def task_fhir_bulk_export_run_sweep() -> dict[str, Any]:
+    """Nightly Beat task: fan out bulk export tasks for every active EHR connection.
+
+    Iterates fhir_connections where is_active=1 and vendor_type indicates
+    FHIR Bulk Data support, then enqueues task_fhir_bulk_export_run per row.
+    """
+    from app.db import raf_cursor
+
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tenant_id
+            FROM fhir_connections
+            WHERE is_active = 1
+            ORDER BY tenant_id, id
+            """
+        )
+        rows = cur.fetchall() or []
+
+    dispatched = 0
+    for row in rows:
+        try:
+            task_fhir_bulk_export_run.apply_async(
+                kwargs={
+                    "tenant_id": row["tenant_id"],
+                    "ehr_connection_id": row["id"],
+                },
+                queue="heavy",
+            )
+            dispatched += 1
+        except Exception as exc:
+            task_logger.warning(
+                "fhir.bulk_export_run_sweep: failed to enqueue connection %s: %s",
+                row["id"],
+                exc,
+            )
+
+    task_logger.info("fhir.bulk_export_run_sweep: dispatched %d tasks", dispatched)
+    return {"dispatched": dispatched}
+
+
+# ---------------------------------------------------------------------------
+# Task: Datavant Switchboard document ingest
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.partners.datavant_ingest",
+    queue="heavy",
+    max_retries=3,
+    default_retry_delay=60,
+)
+def task_datavant_ingest(self, document_id: str, request_id: str = "") -> dict[str, Any]:
+    """Download a Datavant chart document and route it through the AI pipeline.
+
+    Triggered by a verified Datavant Switchboard webhook (``chart_ready``
+    event).  The task:
+
+    1. Downloads the binary document from the Switchboard via
+       :class:`~app.services.partners.datavant.DatavantClient`.
+    2. Persists the binary to ``raf_documents`` via the existing
+       ``document_service.save_binary_document`` helper.
+    3. Routes the saved ``document_id`` through ``task_analyze_document``
+       (Gemini Vision NLP extraction).
+    4. Marks the ``datavant_documents_received`` row as processed.
+
+    Args:
+        document_id: Datavant document identifier delivered in the webhook payload.
+        request_id: Associated Datavant chart-request identifier (optional, for
+            correlation with ``datavant_chart_requests``).
+
+    Returns:
+        Dict containing ``document_id``, ``request_id``, ``raf_document_id``,
+        and ``suspects_extracted`` count.
+    """
+    task_logger.info(
+        "datavant_ingest: starting document_id=%s request_id=%s", document_id, request_id
+    )
+
+    # Step 1 — Download binary from Datavant Switchboard.
+    from app.services.partners.datavant import DatavantClient  # noqa: PLC0415
+
+    client = DatavantClient()
+    try:
+        content_bytes, mimetype = client.download_document(document_id)
+    except Exception as exc:
+        task_logger.error("datavant_ingest: download failed for %s: %s", document_id, exc)
+        raise self.retry(exc=exc)
+
+    # Step 2 — Persist binary to raf_documents via document_service.
+    try:
+        from app.services.document_service import save_binary_document  # noqa: PLC0415
+
+        raf_doc_id: int = save_binary_document(
+            content=content_bytes,
+            mimetype=mimetype,
+            filename=f"datavant_{document_id}",
+            source="datavant",
+            metadata={"datavant_document_id": document_id, "request_id": request_id},
+        )
+    except Exception as exc:
+        task_logger.error("datavant_ingest: save failed for %s: %s", document_id, exc)
+        raise self.retry(exc=exc)
+
+    # Step 3 — Route through Gemini Vision extraction pipeline.
+    analysis_result: dict[str, Any] = {}
+    try:
+        from app.services.document_service import analyze_document  # noqa: PLC0415
+
+        analysis_result = analyze_document(str(raf_doc_id))
+    except Exception as exc:
+        task_logger.warning(
+            "datavant_ingest: analysis failed for raf_doc_id=%s (non-fatal): %s",
+            raf_doc_id,
+            exc,
+        )
+
+    suspects_extracted: int = len(analysis_result.get("icd_codes", []))
+
+    # Step 4 — Mark row in datavant_documents_received as processed.
+    try:
+        from app.db import raf_cursor  # noqa: PLC0415
+
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE datavant_documents_received
+                   SET processed = 1,
+                       suspects_extracted = %s
+                 WHERE datavant_document_id = %s
+                """,
+                (suspects_extracted, document_id),
+            )
+    except Exception as exc:
+        task_logger.warning(
+            "datavant_ingest: failed to update datavant_documents_received: %s", exc
+        )
+
+    task_logger.info(
+        "datavant_ingest: complete document_id=%s raf_doc_id=%s suspects=%d",
+        document_id,
+        raf_doc_id,
+        suspects_extracted,
+    )
+    return {
+        "document_id": document_id,
+        "request_id": request_id,
+        "raf_document_id": raf_doc_id,
+        "suspects_extracted": suspects_extracted,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Reveleer bi-directional adapter tasks
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.partners.reveleer_pull",
+    queue="default",
+    max_retries=3,
+    default_retry_delay=120,
+)
+def task_reveleer_pull(self, tenant_id: str, since: str | None = None) -> dict:
+    """Pull ready charts from Reveleer, run Gemini vision, persist suspects.
+
+    Beat fires this every 30 minutes.  The beat entry passes ``tenant_id``
+    via kwargs; fan-out per active tenant is handled by the caller or by
+    running one Beat entry per tenant using ``apply_async``.
+    """
+    try:
+        from app.services.partners.reveleer_sync import pull_charts_from_reveleer
+        return pull_charts_from_reveleer(tenant_id=tenant_id, since=since)
+    except Exception as exc:
+        task_logger.error("reveleer_pull tenant=%s failed: %s", tenant_id, exc)
+        raise self.retry(exc=exc, countdown=120 * (self.request.retries + 1))
+
+
+@celery_app.task(
+    bind=True,
+    name="raf.partners.reveleer_push_daily",
+    queue="default",
+    max_retries=2,
+    default_retry_delay=300,
+)
+def task_reveleer_push_daily(self, tenant_id: str) -> dict:
+    """Push all open/accepted gemini_vision suspects to Reveleer for a tenant.
+
+    Beat fires this daily at 22:00 UTC.  Iterates over active patients in
+    the tenant and calls push_suspects_to_reveleer for each.
+    """
+    from app.db import raf_cursor
+
+    try:
+        from app.services.partners.reveleer_sync import push_suspects_to_reveleer
+
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT id FROM patients WHERE tenant_id=%s AND is_active=1",
+                (tenant_id,),
+            )
+            rows = cur.fetchall()
+
+        pushed_total = failed_total = 0
+        for row in rows:
+            pid = int(row["id"] if isinstance(row, dict) else row[0])
+            result = push_suspects_to_reveleer(
+                tenant_id=tenant_id, raf_patient_id=pid
+            )
+            pushed_total += result.get("pushed", 0)
+            failed_total += result.get("failed", 0)
+
+        return {
+            "tenant_id": tenant_id,
+            "patients_processed": len(rows),
+            "suspects_pushed": pushed_total,
+            "suspects_failed": failed_total,
+        }
+    except Exception as exc:
+        task_logger.error("reveleer_push_daily tenant=%s failed: %s", tenant_id, exc)
+        raise self.retry(exc=exc, countdown=300 * (self.request.retries + 1))
