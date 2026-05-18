@@ -23,6 +23,7 @@ from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.provider_worklist_service import (
     get_patient_action_items,
     get_provider_worklist,
+    get_provider_workload,
     get_worklist_summary,
 )
 
@@ -191,3 +192,61 @@ def worklist_summary(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# GET /api/worklist/provider-workload
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/provider-workload",
+    summary="Per-provider workload heatmap data (admin/manager only)",
+)
+def provider_workload(
+    measurement_year: int = Query(
+        default=2026,
+        ge=2020,
+        le=2030,
+        description="RAF measurement year (default: current programme year 2026)",
+    ),
+    target_capacity: int = Query(
+        default=30,
+        ge=1,
+        le=500,
+        description="Target gaps per provider used to compute capacity_pct (default: 30)",
+    ),
+    current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("worklist", "manage")),
+) -> dict[str, Any]:
+    """
+    Returns per-provider workload for the heatmap widget.
+
+    Requires ``worklist:manage`` (admin / manager roles).
+
+    Each item in ``providers`` includes:
+    - ``provider_id``, ``provider_name``
+    - ``open_gaps``, ``awv_due``, ``suspect_count``, ``total_workload``
+    - ``capacity_pct`` — 0–100; green <70, amber 70–90, red >90
+    """
+    try:
+        rows = get_provider_workload(
+            tenant_id=tenant_id,
+            measurement_year=measurement_year,
+            target_capacity=target_capacity,
+        )
+    except ValueError as exc:
+        logger.warning("provider_workload validation error tenant=%s: %s", tenant_id, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("provider_workload tenant=%s: %s", tenant_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    total_open = sum(r["open_gaps"] for r in rows)
+    return {
+        "providers": rows,
+        "total_open_gaps": total_open,
+        "target_capacity": target_capacity,
+        "measurement_year": measurement_year,
+    }
