@@ -47,7 +47,7 @@ function relativeTime(iso: string | null | undefined): string {
 }
 
 function fmtDollars(n: number | null | undefined): string {
-  if (!n) return "—";
+  if (n == null) return "—";
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
@@ -103,7 +103,7 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
         <span className="text-[11px] font-semibold tabular-nums">{meta.payment_year ?? "—"}</span>
       </div>
 
-      {/* Revenue per RAF point — always show; fmtDollars returns "—" for 0/null */}
+      {/* Revenue per RAF point — always show; fmtDollars returns "—" for null/undefined, "$0" for zero */}
       <div className="flex justify-between items-center">
         <span className="text-[11px] opacity-70">Revenue / RAF pt</span>
         <span className="text-[11px] font-semibold tabular-nums">
