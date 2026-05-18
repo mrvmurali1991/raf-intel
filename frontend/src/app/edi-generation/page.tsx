@@ -118,7 +118,7 @@ function parsePatientIds(raw: string): number[] {
   );
 }
 
-export default function EdiGenerationPage(): JSX.Element {
+export default function EdiGenerationPage(): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>("837");
 
   return (
@@ -190,7 +190,7 @@ export default function EdiGenerationPage(): JSX.Element {
 // 837 form
 // ---------------------------------------------------------------------------
 
-function Generate837(): JSX.Element {
+function Generate837(): React.JSX.Element {
   const [paymentYear, setPaymentYear] = useState<number>(
     new Date().getFullYear(),
   );
@@ -365,7 +365,7 @@ function Generate837(): JSX.Element {
 // 834 form
 // ---------------------------------------------------------------------------
 
-function Generate834(): JSX.Element {
+function Generate834(): React.JSX.Element {
   const [planYear, setPlanYear] = useState<number>(new Date().getFullYear());
   const [patientIdsRaw, setPatientIdsRaw] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
@@ -477,7 +477,7 @@ function OverridePrompt(props: {
   onForce: () => void;
   onCancel: () => void;
   busy: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
   const { block, confirm, setConfirm, reason, setReason, onForce, onCancel, busy } = props;
   const ready = confirm.trim() === "OVERRIDE" && reason.trim().length >= 10;
   return (
@@ -573,7 +573,7 @@ function OverridePrompt(props: {
   );
 }
 
-function ResultPanel({ result }: { result: GenerateResponse }): JSX.Element {
+function ResultPanel({ result }: { result: GenerateResponse }): React.JSX.Element {
   return (
     <div
       style={{
