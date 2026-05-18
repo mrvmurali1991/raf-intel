@@ -581,10 +581,12 @@ function OnboardingCard({
   emrConnected,
   demoLoading,
   onTryDemo,
+  "data-testid": testId = "onboarding-card",
 }: {
   emrConnected: boolean;
   demoLoading: boolean;
   onTryDemo: () => void;
+  "data-testid"?: string;
 }) {
   const steps = [
     {
@@ -630,6 +632,7 @@ function OnboardingCard({
       }}
       role="region"
       aria-label="Getting started"
+      data-testid={testId}
     >
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
@@ -826,7 +829,9 @@ export function AdminDashboard() {
     }
   };
 
-  // Show dashboard content when EMR is connected OR uploaded patient data exists
+  // Show dashboard content when EMR is connected OR uploaded patient data exists.
+  // Anchored to total_patients only — if API returns 0, hasData is false and
+  // the OnboardingCard will render regardless of other loading flags.
   const hasData = (stats?.total_patients ?? 0) > 0;
 
   // Cmd+K / Ctrl+K → open tour
@@ -1453,8 +1458,12 @@ export function AdminDashboard() {
           ROW 1: KPI Strip — replaced by OnboardingCard when no data yet
           ══════════════════════════════════════════════════════════════════════ */}
       <div className="fade-in-up fade-in-up-1">
-      {!statsL && !revL && !hasData ? (
+      {/* Show OnboardingCard whenever patient count is 0, even while loading flags
+          are still pending — this prevents the card from being hidden behind a
+          skeleton when the API has already settled to zero patients. */}
+      {!hasData && !statsL ? (
         <OnboardingCard
+          data-testid="onboarding-card"
           emrConnected={emrConnected}
           demoLoading={demoLoading}
           onTryDemo={() => setShowDemoConfirm(true)}
