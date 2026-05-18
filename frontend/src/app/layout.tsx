@@ -10,8 +10,15 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { AuthedFeatureFlagProvider } from "@/components/FeatureFlagContext";
 import { TenantBrandingProvider } from "@/lib/TenantBrandingProvider";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+// Inter with display:swap and variable font features for a 2025-caliber
+// typographic baseline. The cv02/cv03/cv11 OpenType features (elegant Inter
+// cuts) are applied in globals.css via font-feature-settings.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "RAF Intelligence", template: "%s | RAF Intelligence" },
