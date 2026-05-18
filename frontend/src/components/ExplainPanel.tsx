@@ -338,7 +338,7 @@ export function ExplainPanel({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 animate-in fade-in bg-black/75 duration-150"
+      className="fixed inset-0 z-[9999] animate-in fade-in bg-black/40 duration-150"
       onClick={onClose}
       aria-hidden="true"
     >
