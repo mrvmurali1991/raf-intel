@@ -15,7 +15,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles, Brain, BookOpen } from "lucide-react";
 import api from "@/lib/api";
-import { C } from "./shared";
+import { C, WithTooltip } from "./shared";
 
 interface HighlightDx {
   icd10_code: string;
@@ -129,17 +129,21 @@ export function ClinicalHighlightsPanel({ pid }: { pid: string }) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <Brain size={15} style={{ color: "#0284C7" }} />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: "#0369A1",
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
-            Clinical Highlights
-          </span>
+          <WithTooltip tip="AI-extracted summary from the most recent analyzed clinical note. Diagnoses, confidence scores, and key findings are identified by Gemini via NLP. This is a decision aid — clinician attestation is required before billing any highlighted condition.">
+            <span
+              data-testid="clinical-highlights-title"
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#0369A1",
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                cursor: "help",
+              }}
+            >
+              Clinical Highlights
+            </span>
+          </WithTooltip>
           {!isFallback && data.encounter_date && (
             <span
               style={{

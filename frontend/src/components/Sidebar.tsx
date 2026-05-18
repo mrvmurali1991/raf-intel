@@ -891,7 +891,7 @@ export function Sidebar() {
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  {branding.logo_text || "RAF Intelligence"}
+                  {branding.logo_text || "Acme Health"}
                 </span>
               </div>
               <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 600, marginTop: -2, textTransform: "uppercase", letterSpacing: "0.05em" }}>

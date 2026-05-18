@@ -32,13 +32,15 @@ export interface TenantBranding {
   logo_text: string;
 }
 
-/** Defaults must match the ``:root`` block in ``globals.css``. */
+/** Defaults must match the ``:root`` block in ``globals.css``.
+ *  For the Acme Health demo tenant these are the canonical display values.
+ *  Any production tenant will override these via GET /api/tenant/branding. */
 const DEFAULT_BRANDING: TenantBranding = {
   tenant_id: "",
-  display_name: "RAF Intelligence",
+  display_name: "Acme Health",
   brand_primary: "#0F766E",
   brand_secondary: "#134E4A",
-  logo_text: "RAF Intel",
+  logo_text: "Acme Health",
 };
 
 function applyBrandingToRoot(b: TenantBranding): void {

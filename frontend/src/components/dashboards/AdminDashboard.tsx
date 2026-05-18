@@ -437,6 +437,7 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
 export function AdminDashboard() {
   const qc = useQueryClient();
   const router = useRouter();
+  const { branding } = useTenantBranding();
   const { paymentYear } = usePaymentYear();
   const [demoLoading, setDemoLoading] = useState(false);
   const [showDemoConfirm, setShowDemoConfirm] = useState(false);
@@ -986,7 +987,7 @@ export function AdminDashboard() {
               </div>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed mb-2 mt-0">
-              This will connect to the bundled <strong>OpenEMR</strong> demo instance with sample patient data. You can use this to explore all features of RAF Intelligence.
+              This will connect to the bundled <strong>OpenEMR</strong> demo instance with sample patient data. You can use this to explore all features of {branding.display_name}.
             </p>
             <div style={{
               background: "#F0FDF4",
@@ -1059,7 +1060,7 @@ export function AdminDashboard() {
             <Stethoscope size={48} color="#0D9488" />
           </div>
           <h2 className="text-foreground text-[22px] font-bold mb-2 mt-0">
-            Welcome to RAF Intelligence
+            Welcome to {branding.display_name}
           </h2>
           <p className="text-muted-foreground text-[15px] leading-relaxed max-w-[480px] mx-auto mb-6 mt-0">
             Connect your EMR system to start analyzing patient data, identifying HCC coding gaps, and uncovering revenue opportunities.

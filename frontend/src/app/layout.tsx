@@ -21,8 +21,10 @@ const inter = Inter({
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "RAF Intelligence", template: "%s | RAF Intelligence" },
-  description: "HCC coding and risk adjustment intelligence",
+  // "Acme Health" is the tenant name shown in the tab. The product name
+  // "RAF Intelligence" is intentionally kept out of tenant-facing tab titles.
+  title: { default: "Acme Health", template: "%s · Acme Health" },
+  description: "HCC coding and risk adjustment intelligence for Acme Health",
 };
 
 export default function RootLayout({

@@ -68,20 +68,59 @@ import type {
   ProblemItem,
   RecaptureGapItem,
 } from "./components/shared";
+import nextDynamic from "next/dynamic";
 import { OverviewTab } from "./components/OverviewTab";
-import { RAFTab } from "./components/RAFTab";
-import { ClinicalTab } from "./components/ClinicalTab";
-import { EncountersTab } from "./components/EncountersTab";
-import { SuspectsTab } from "./components/SuspectsTab";
-import { AuditTab } from "./components/AuditTab";
-import { ActivityTab } from "./components/ActivityTab";
-import { DocumentsTab } from "./components/DocumentsTab";
-import { RAFCentralTab } from "./components/RAFCentralTab";
-import { PatientV28ImpactPanel } from "./components/PatientV28ImpactPanel";
-import { PatientHedisStrip } from "./components/PatientHedisStrip";
 import { HeroStrip } from "./components/HeroStrip";
 import { RiskSummaryCard } from "./components/RiskSummaryCard";
 import { ActionItemsPanel } from "./components/ActionItemsPanel";
+import { useTenantBranding } from "@/lib/useTenantBranding";
+
+// perf(demo): non-default tabs are lazy-loaded so first paint only ships
+// OverviewTab. Each tab loads on demand when the user clicks it.
+const RAFTab = nextDynamic(
+  () => import("./components/RAFTab").then((m) => m.RAFTab),
+  { ssr: false },
+);
+const ClinicalTab = nextDynamic(
+  () => import("./components/ClinicalTab").then((m) => m.ClinicalTab),
+  { ssr: false },
+);
+const EncountersTab = nextDynamic(
+  () => import("./components/EncountersTab").then((m) => m.EncountersTab),
+  { ssr: false },
+);
+const SuspectsTab = nextDynamic(
+  () => import("./components/SuspectsTab").then((m) => m.SuspectsTab),
+  { ssr: false },
+);
+const AuditTab = nextDynamic(
+  () => import("./components/AuditTab").then((m) => m.AuditTab),
+  { ssr: false },
+);
+const ActivityTab = nextDynamic(
+  () => import("./components/ActivityTab").then((m) => m.ActivityTab),
+  { ssr: false },
+);
+const DocumentsTab = nextDynamic(
+  () => import("./components/DocumentsTab").then((m) => m.DocumentsTab),
+  { ssr: false },
+);
+const RAFCentralTab = nextDynamic(
+  () => import("./components/RAFCentralTab").then((m) => m.RAFCentralTab),
+  { ssr: false },
+);
+const PatientV28ImpactPanel = nextDynamic(
+  () =>
+    import("./components/PatientV28ImpactPanel").then(
+      (m) => m.PatientV28ImpactPanel,
+    ),
+  { ssr: false },
+);
+const PatientHedisStrip = nextDynamic(
+  () =>
+    import("./components/PatientHedisStrip").then((m) => m.PatientHedisStrip),
+  { ssr: false },
+);
 
 // ===========================================================================
 // MAIN PAGE COMPONENT
@@ -94,6 +133,7 @@ export default function PatientDetailPage({
 }) {
   const { pid } = use(params);
   const toast = useToast();
+  const { branding } = useTenantBranding();
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -742,7 +782,7 @@ export default function PatientDetailPage({
 
       {/* Print-only patient header */}
       <div className="print-header" style={{ display: "none" }}>
-        <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>RAF Intelligence \u2014 Patient Record</div>
+        <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{branding.display_name} — Patient Record</div>
         <div style={{ fontSize: 18, fontWeight: 700 }}>{patientName}</div>
         <div style={{ fontSize: 12, marginTop: 4 }}>
           PID: {pid}

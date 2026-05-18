@@ -34,6 +34,7 @@ import {
 import { PageHeader } from "@/components/healthcare-ui";
 import { fmtCurrencyCompact, fmtCurrencyFull } from "@/lib/format";
 import { tokens } from "@/styles/tokens";
+import { useTenantBranding } from "@/lib/useTenantBranding";
 
 // ─── Lazy-loaded chart (below-the-fold SVG — deferred to cut initial JS parse)
 function ChartSkeleton() {
@@ -663,6 +664,7 @@ const inputStyle: React.CSSProperties = {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ROICalculatorPage() {
+  const { branding } = useTenantBranding();
   const [inputs, setInputs] = useState<Inputs>({
     orgName: "",
     members: 50000,
@@ -734,7 +736,7 @@ export default function ROICalculatorPage() {
 
   function handleDownload() {
     const lines = [
-      `RAF Intelligence — ROI Analysis`,
+      `${branding.display_name} — ROI Analysis`,
       inputs.orgName ? `Organization: ${inputs.orgName}` : "",
       `Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
       ``,
@@ -759,7 +761,7 @@ export default function ROICalculatorPage() {
       `Payback Period: ${results.paybackMonths} months`,
       `3-Year NPV (10% discount): ${fmtFull$(results.npv3yr)}`,
       ``,
-      `RAF Intelligence | rafIntelligence.ai`,
+      `${branding.display_name} | Powered by RAF Intelligence`,
     ]
       .filter((l) => l !== undefined)
       .join("\n");
@@ -768,7 +770,7 @@ export default function ROICalculatorPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ROI-Analysis-${inputs.orgName || "RAF-Intelligence"}.txt`;
+    a.download = `ROI-Analysis-${inputs.orgName || branding.display_name.replace(/\s+/g, "-")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -898,7 +900,7 @@ export default function ROICalculatorPage() {
       {/* ── Page Header ── */}
       <PageHeader
         title="ROI Calculator"
-        subtitle="Estimate your revenue opportunity and return on investment with RAF Intelligence"
+        subtitle={`Estimate your revenue opportunity and return on investment with ${branding.display_name}`}
         icon={<Calculator size={24} />}
         actions={
           <div style={{ display: "flex", gap: 10 }}>
@@ -1427,7 +1429,7 @@ export default function ROICalculatorPage() {
                   Total Annual Opportunity
                 </div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 1 }}>
-                  Achievable with RAF Intelligence
+                  Achievable with {branding.display_name}
                 </div>
               </div>
               <AnimatedNumber
@@ -1895,7 +1897,7 @@ export default function ROICalculatorPage() {
             in revenue?
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: "rgba(255,255,255,0.65)", maxWidth: 480 }}>
-            Join leading health plans and medical groups using RAF Intelligence to close
+            Join leading health plans and medical groups using {branding.display_name} to close
             documentation gaps and optimize risk adjustment revenue.
           </p>
         </div>

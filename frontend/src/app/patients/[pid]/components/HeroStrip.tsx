@@ -42,7 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { C, formatDate } from "./shared";
+import { C, formatDate, WithTooltip } from "./shared";
 import { calculateAge } from "@/lib/utils";
 import type { Patient } from "@/types";
 import type { PatientProfile } from "@/lib/api";
@@ -68,24 +68,28 @@ function DataQualityChip({ pct }: { pct: number }) {
   const bg =
     pct >= 80 ? "#d1fae5" : pct >= 50 ? "#fef3c7" : "#fee2e2";
   return (
-    <span
-      aria-label={`Data quality ${pct}%`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 700,
-        color,
-        background: bg,
-        border: `1px solid ${color}40`,
-        whiteSpace: "nowrap",
-      }}
-    >
-      DQ {pct}%
-    </span>
+    <WithTooltip tip="Composite score of EMR data completeness across vitals / labs / notes / billing. Higher scores mean more complete clinical documentation for accurate RAF risk adjustment.">
+      <span
+        aria-label={`Data quality ${pct}%`}
+        data-testid="data-quality-chip"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "2px 8px",
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 700,
+          color,
+          background: bg,
+          border: `1px solid ${color}40`,
+          whiteSpace: "nowrap",
+          cursor: "help",
+        }}
+      >
+        DQ {pct}%
+      </span>
+    </WithTooltip>
   );
 }
 
@@ -290,12 +294,20 @@ export function HeroStrip({
     boxShadow: "0 2px 8px rgba(15,118,110,0.3)",
   };
 
-  const PrimaryBtn = () =>
-    primaryAction.href ? (
+  const primaryBtnTip = {
+    empty: "No clinical notes on file. Upload encounters to begin RAF analysis.",
+    unanalyzed: "Clinical notes are loaded but not yet processed. Run Gemini AI analysis to extract diagnoses and populate the RAF score.",
+    review: `${suspectCount} AI-detected suspect condition${suspectCount !== 1 ? "s" : ""} awaiting clinician attestation. Open the review queue to accept or dismiss each suspect before billing.`,
+    complete: "All encounters analyzed and suspects resolved. Generate a CMS-ready audit package with attestation documentation.",
+  }[patientState];
+
+  const PrimaryBtn = () => {
+    const btn = primaryAction.href ? (
       <Link
         href={primaryAction.href}
         style={primaryBtnStyle}
         aria-label={primaryAction.label}
+        data-testid="hero-primary-cta"
         onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
         onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
       >
@@ -307,6 +319,7 @@ export function HeroStrip({
         type="button"
         style={primaryBtnStyle}
         aria-label={primaryAction.label}
+        data-testid="hero-primary-cta"
         onClick={primaryAction.handler}
         onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
         onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
@@ -315,6 +328,12 @@ export function HeroStrip({
         {primaryAction.label}
       </button>
     );
+    return (
+      <WithTooltip tip={primaryBtnTip} side="bottom">
+        {btn}
+      </WithTooltip>
+    );
+  };
 
   // ---- More dropdown items ----
   // "Generate Audit" only appears in More menu when it is NOT the primary CTA
@@ -405,20 +424,24 @@ export function HeroStrip({
               </span>
 
               {rafScore != null && (
-                <span
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 12,
-                    color: C.blue600,
-                    background: "#dbeafe",
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                    whiteSpace: "nowrap",
-                  }}
-                  aria-label={`RAF score ${Number(rafScore).toFixed(3)}`}
-                >
-                  RAF {Number(rafScore).toFixed(3)}
-                </span>
+                <WithTooltip tip="CMS-HCC V28 model output for current measurement year. This risk score drives Medicare Advantage premium payments — higher scores reflect greater predicted medical complexity.">
+                  <span
+                    data-testid="raf-score-pill"
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 12,
+                      color: C.blue600,
+                      background: "#dbeafe",
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      whiteSpace: "nowrap",
+                      cursor: "help",
+                    }}
+                    aria-label={`RAF score ${Number(rafScore).toFixed(3)}`}
+                  >
+                    RAF {Number(rafScore).toFixed(3)}
+                  </span>
+                </WithTooltip>
               )}
 
               {dataQuality != null && <DataQualityChip pct={dataQuality} />}

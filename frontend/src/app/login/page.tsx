@@ -433,6 +433,39 @@ const features = [
 ];
 
 // ---------------------------------------------------------------------------
+// TenantLogoMark — teal-circle initial avatar used when no logo URL is set.
+// "A" for Acme Health; adapts to the first character of any display_name.
+// ---------------------------------------------------------------------------
+
+function TenantLogoMark({ displayName, size = 48 }: { displayName: string; size?: number }) {
+  const initial = (displayName || "A").charAt(0).toUpperCase();
+  const borderRadius = Math.round(size * 0.22);
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: size,
+        height: size,
+        borderRadius,
+        background: "linear-gradient(135deg, #0F766E 0%, #0D9488 60%, #2DD4BF 100%)",
+        boxShadow: `0 4px ${Math.round(size * 0.25)}px rgba(15,118,110,0.28)`,
+        flexShrink: 0,
+        color: "#fff",
+        fontWeight: 800,
+        fontSize: Math.round(size * 0.42),
+        letterSpacing: "-0.03em",
+        userSelect: "none",
+      }}
+    >
+      {initial}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main login page
 // ---------------------------------------------------------------------------
 
@@ -685,11 +718,9 @@ export default function LoginPage() {
 
           {/* Logo */}
           <div className="relative z-10 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-500 shadow-lg shadow-teal-500/20 text-white">
-              <HeartPulse className="h-6 w-6" aria-hidden="true" />
-            </div>
+            <TenantLogoMark displayName={branding.display_name} size={48} />
             <div>
-              <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">RAF Intelligence</p>
+              <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">{branding.display_name}</p>
               <p className="text-teal-600 dark:text-teal-400 text-[11px] font-bold uppercase tracking-[0.2em]">
                 Clinical Intelligence
               </p>
@@ -786,11 +817,9 @@ export default function LoginPage() {
 
         {/* Mobile logo */}
         <div className="lg:hidden flex flex-col items-center gap-3 mb-10 text-center relative z-10">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 via-teal-400 to-blue-500 shadow-lg shadow-teal-500/30 text-white ring-4 ring-teal-500/10">
-            <HeartPulse className="h-7 w-7" aria-hidden="true" />
-          </div>
+          <TenantLogoMark displayName={branding.display_name} size={56} />
           <div>
-             <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">RAF Intelligence</p>
+             <p className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">{branding.display_name}</p>
              <p className="text-teal-600 dark:text-teal-400 text-[11px] font-bold uppercase tracking-[0.2em]">
                Clinical Intelligence
              </p>
@@ -803,11 +832,9 @@ export default function LoginPage() {
           }`}
         >
           <div className="space-y-8 glass-frosted shadow-2xl shadow-slate-200/40 dark:shadow-black/40 p-9 sm:p-11 rounded-2xl">
-            {/* Brand area inside card */}
-            <div className="flex flex-col items-center lg:items-start gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 via-teal-400 to-blue-500 shadow-lg shadow-teal-500/25 text-white ring-4 ring-teal-500/10 lg:hidden">
-                <HeartPulse className="h-7 w-7" aria-hidden="true" />
-              </div>
+            {/* Brand area inside card — only visible on small screens where the left panel is hidden */}
+            <div className="flex flex-col items-center lg:items-start gap-4 lg:hidden">
+              <TenantLogoMark displayName={branding.display_name} size={56} />
             </div>
 
           {resetToken ? (

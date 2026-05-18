@@ -31,6 +31,7 @@ import {
   SkeletonDataRows,
   SkeletonChecklist,
   PanelWithTimeout,
+  WithTooltip,
 } from "./shared";
 import type {
   ExtendedRafBreakdown,
@@ -553,7 +554,10 @@ export function OverviewTab({
                 {/* Rows */}
                 {problemItems
                   .slice(0, 15)
-                  .map((p: ProblemItem, i: number) => (
+                  .map((p: ProblemItem, i: number) => {
+                    const icdCode = p.icd10_code || p.diagnosis_code || "\u2014";
+                    const condLabel = p.title || p.condition || p.diagnosis || "\u2014";
+                    return (
                     <div
                       key={p.icd10_code || p.diagnosis_code || p.title || i}
                       style={{
@@ -574,25 +578,32 @@ export function OverviewTab({
                       <span
                         className="text-sm font-medium text-foreground"
                       >
-                        {p.title || p.condition || p.diagnosis || "\u2014"}
+                        {condLabel}
                       </span>
                       <span>
-                        <span
-                          className="text-xs font-semibold font-mono bg-muted text-foreground border border-border"
-                          style={{
-                            display: "inline-block",
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                          }}
+                        <WithTooltip
+                          tip={`ICD-10: ${icdCode} \u2014 ${condLabel}. HCC-mapped codes contribute to the patient's V28 RAF risk score. Onset: ${formatDate(p.begdate || p.onset_date || p.date)}.`}
                         >
-                          {p.icd10_code || p.diagnosis_code || "\u2014"}
-                        </span>
+                          <span
+                            data-testid={`hcc-chip-${icdCode}`}
+                            className="text-xs font-semibold font-mono bg-muted text-foreground border border-border"
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 8px",
+                              borderRadius: 4,
+                              cursor: "help",
+                            }}
+                          >
+                            {icdCode}
+                          </span>
+                        </WithTooltip>
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {formatDate(p.begdate || p.onset_date || p.date)}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
             </PanelWithTimeout>
@@ -646,8 +657,13 @@ export function OverviewTab({
                 {encounters.encounters.slice(0, 5).map((enc: EncounterItem) => {
                   const hasNotes = !!enc.notes || !!enc.has_notes;
                   return (
-                    <div
+                    <WithTooltip
                       key={enc.encounter_id}
+                      tip={`Click to see full encounter details and billing codes. ${hasNotes ? "Clinical notes available — run Analyze to extract diagnoses." : "No clinical notes attached to this encounter."}`}
+                      side="left"
+                    >
+                    <div
+                      data-testid={`encounter-row-${enc.encounter_id}`}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -732,6 +748,7 @@ export function OverviewTab({
                         </button>
                       </div>
                     </div>
+                    </WithTooltip>
                   );
                 })}
               </div>
@@ -782,9 +799,18 @@ export function OverviewTab({
             ) : (
               <div>
                 {recaptureItems.map(
-                  (gap: RecaptureGapItem, i: number) => (
-                    <div
+                  (gap: RecaptureGapItem, i: number) => {
+                    const gapCode = gap.icd10_code || gap.hcc_code || gap.hcc || "\u2014";
+                    const gapLabel = gap.condition || gap.hcc_label || gap.description || "\u2014";
+                    const priority = gap.coefficient != null && Number(gap.coefficient) >= 0.3 ? "High" : "Medium";
+                    return (
+                    <WithTooltip
                       key={gap.hcc_code || gap.icd10_code || gap.hcc || `gap-${i}`}
+                      tip={`${priority}-priority recapture gap. ${gapLabel} (${gapCode}) was documented in a prior year but has not been recaptured this measurement year. Recapturing this HCC restores the RAF coefficient to this year's risk score.`}
+                      side="left"
+                    >
+                    <div
+                      data-testid={`recapture-gap-row-${gapCode}`}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -797,10 +823,7 @@ export function OverviewTab({
                         <div
                           className="text-sm font-medium text-foreground"
                         >
-                          {gap.condition ||
-                            gap.hcc_label ||
-                            gap.description ||
-                            "\u2014"}
+                          {gapLabel}
                         </div>
                         <div
                           style={{
@@ -818,10 +841,7 @@ export function OverviewTab({
                               borderRadius: 4,
                             }}
                           >
-                            {gap.icd10_code ||
-                              gap.hcc_code ||
-                              gap.hcc ||
-                              "\u2014"}
+                            {gapCode}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {formatDate(gap.onset_date || gap.begdate)}
@@ -829,7 +849,9 @@ export function OverviewTab({
                         </div>
                       </div>
                     </div>
-                  )
+                    </WithTooltip>
+                    );
+                  }
                 )}
               </div>
             )}

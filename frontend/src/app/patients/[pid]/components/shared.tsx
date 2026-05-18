@@ -27,6 +27,12 @@ import {
   EmptyState,
   ProgressBar,
 } from "@/components/healthcare-ui";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Local Types
@@ -621,53 +627,75 @@ export function Card({
 type MeatEvidence = MEATEvidence | Record<string, string | boolean | null | undefined>;
 export function MeatDots({ evidence }: { evidence?: MeatEvidence | null }) {
   const letters = [
-    { key: "monitor" as const, alt: ["M", "m"], label: "M", full: "Monitor",  color: C.blue600 },
-    { key: "evaluate" as const, alt: ["E", "e"], label: "E", full: "Evaluate", color: C.purple600 },
-    { key: "assess" as const,   alt: ["A", "a"], label: "A", full: "Addressed", color: C.amber600 },
-    { key: "treat" as const,    alt: ["T", "t"], label: "T", full: "Treat",    color: C.emerald600 },
+    { key: "monitor" as const, alt: ["M", "m"], label: "M", full: "Monitor",  color: C.blue600,
+      tip: "Monitored — patient's condition is being tracked (vitals, labs, symptoms)" },
+    { key: "evaluate" as const, alt: ["E", "e"], label: "E", full: "Evaluate", color: C.purple600,
+      tip: "Evaluated — clinician assessed status, ordered tests, or reviewed results" },
+    { key: "assess" as const,   alt: ["A", "a"], label: "A", full: "Assessed", color: C.amber600,
+      tip: "Assessed — diagnosis addressed in the clinical note or exam findings" },
+    { key: "treat" as const,    alt: ["T", "t"], label: "T", full: "Treat",    color: C.emerald600,
+      tip: "Treated — active intervention: prescription, procedure, or care plan" },
   ];
   const e = evidence as Record<string, string | boolean | null | undefined> | undefined | null;
   const rawExcerpt: string | undefined =
     e ? (e.raw_note_excerpt as string | undefined) || (e.rawNoteExcerpt as string | undefined) || (e.excerpt as string | undefined) : undefined;
   return (
-    <div style={{ display: "inline-flex", gap: 4 }}>
-      {letters.map(({ key, alt, label, full, color }) => {
-        const rawVal = e && (e[key] || alt.map((a) => e[a]).find(Boolean));
-        const filled = !!rawVal;
-        const phrase = typeof rawVal === "string" ? rawVal : undefined;
-        const tooltipText =
-          [
-            `${full}: ${filled ? (phrase || "present") : "not documented"}`,
-            rawExcerpt ? `\nSource note:\n“${rawExcerpt}”` : "",
-          ]
-            .filter(Boolean)
-            .join("");
-        return (
-          <span
-            key={key}
-            title={tooltipText}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 26,
-              height: 26,
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 800,
-              backgroundColor: filled ? `${color}20` : "transparent",
-              color: filled ? color : C.gray400,
-              border: `2px solid ${filled ? color : C.gray200}`,
-              transition: "all 0.2s",
-              boxShadow: filled ? `0 2px 6px ${color}25` : "none",
-              cursor: "help",
-            }}
-          >
-            {label}
-          </span>
-        );
-      })}
-    </div>
+    <TooltipProvider delay={200}>
+      <div style={{ display: "inline-flex", gap: 4 }}>
+        {letters.map(({ key, alt, label, full, color, tip }) => {
+          const rawVal = e && (e[key] || alt.map((a) => e[a]).find(Boolean));
+          const filled = !!rawVal;
+          const phrase = typeof rawVal === "string" ? rawVal : undefined;
+          const dotStyle: React.CSSProperties = {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 800,
+            backgroundColor: filled ? `${color}20` : "transparent",
+            color: filled ? color : C.gray400,
+            border: `2px solid ${filled ? color : C.gray200}`,
+            transition: "all 0.2s",
+            boxShadow: filled ? `0 2px 6px ${color}25` : "none",
+            cursor: "help",
+            fontFamily: "inherit",
+            background: filled ? `${color}20` : "transparent",
+          };
+          const tipContent = (
+            <span>
+              <strong>{full}</strong>{" — "}
+              {filled ? (phrase || "present") : "not documented"}
+              {". "}
+              {tip}
+              {rawExcerpt && (
+                <><br /><em className="opacity-70">Note excerpt: &ldquo;{rawExcerpt}&rdquo;</em></>
+              )}
+            </span>
+          );
+          return (
+            <Tooltip key={key}>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    style={dotStyle}
+                    aria-label={`${full}: ${filled ? (phrase || "present") : "not documented"} — CMS MEAT evidence standard`}
+                  >
+                    {label}
+                  </button>
+                }
+              />
+              <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                {tipContent}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -901,4 +929,41 @@ export function segmentLabel(code?: string | null): string {
 
 export function segmentCodeUpper(code?: string | null): string {
   return (code ?? "CNA").toString().toUpperCase();
+}
+
+// ---------------------------------------------------------------------------
+// WithTooltip — 200 ms delay, keyboard accessible, WCAG 2.1 AA
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps any inline element with a shadcn Tooltip (200 ms open delay).
+ *
+ * Usage:
+ *   <WithTooltip tip="Explain this chip">
+ *     <span>Some chip</span>
+ *   </WithTooltip>
+ *
+ * The child is rendered via `render` prop on TooltipTrigger so it keeps its
+ * original DOM semantics (button, span, div, etc.). A `tabIndex` and
+ * `aria-describedby` are added automatically by base-ui.
+ */
+export function WithTooltip({
+  tip,
+  side = "top",
+  children,
+}: {
+  tip: React.ReactNode;
+  side?: "top" | "bottom" | "left" | "right";
+  children: React.ReactElement;
+}) {
+  return (
+    <TooltipProvider delay={200}>
+      <Tooltip>
+        <TooltipTrigger render={children} />
+        <TooltipContent side={side} className="max-w-xs text-xs leading-relaxed">
+          {tip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }

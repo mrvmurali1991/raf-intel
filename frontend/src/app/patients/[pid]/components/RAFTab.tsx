@@ -30,6 +30,7 @@ import {
   MeatDots,
   segmentLabel,
   segmentCodeUpper,
+  WithTooltip,
 } from "./shared";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import type {
@@ -178,7 +179,15 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
         {/* Demographic base */}
         <div style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.slate100}` }}>
           <div>
-            <div className="text-[13px] font-semibold text-slate-700">Demographic Base</div>
+            <WithTooltip tip="Demographic component of the V28 RAF score. Derived from the patient's age, sex, and enrollment segment (e.g. Community Non-Dual Aged). This baseline score exists even when no HCC conditions are documented.">
+              <span
+                data-testid="raf-segment-demographic"
+                className="text-[13px] font-semibold text-slate-700"
+                style={{ cursor: "help" }}
+              >
+                Demographic Base
+              </span>
+            </WithTooltip>
             <div className="text-xs text-muted-foreground" style={{ marginTop: 1 }}>Age/sex coefficient</div>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -189,9 +198,15 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
 
         {/* Diagnosis section */}
         {hccDetails.length > 0 && (
-          <div className="text-muted-foreground" style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Diagnosis ({hccDetails.length})
-          </div>
+          <WithTooltip tip="Disease component of the V28 RAF score. Each HCC (Hierarchical Condition Category) maps one or more ICD-10 codes to a fixed coefficient. The sum of all HCC coefficients is the disease score. HCCs must be documented and attested annually under CMS guidelines.">
+            <div
+              data-testid="raf-segment-disease"
+              className="text-muted-foreground"
+              style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "help" }}
+            >
+              Diagnosis ({hccDetails.length})
+            </div>
+          </WithTooltip>
         )}
         {hccDetails.map((hcc: HCCDetail, i: number) => {
           const code = hcc.hcc_code;
@@ -226,9 +241,15 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
         })}
 
         {/* Interactions */}
-        <div className="text-muted-foreground" style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Disease Interactions ({triggeredInteractions.length})
-        </div>
+        <WithTooltip tip="Interaction component of the V28 RAF score. CMS adds extra coefficients when specific HCC pairs or triplets co-occur in the same patient (e.g. Diabetes + Heart Failure). These additive adjustments reflect the compounded clinical complexity of comorbidities.">
+          <div
+            data-testid="raf-segment-interaction"
+            className="text-muted-foreground"
+            style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "help" }}
+          >
+            Disease Interactions ({triggeredInteractions.length})
+          </div>
+        </WithTooltip>
         {triggeredInteractions.length > 0 ? (
           triggeredInteractions.map(inter => (
             <div key={inter.name} style={{
@@ -1036,9 +1057,19 @@ export function RAFTab({
               ))}
             </div>
             {recaptureItems.map(
-              (gap: RecaptureGapItem, i: number) => (
-                <div
+              (gap: RecaptureGapItem, i: number) => {
+                const gapLabel = gap.condition || gap.hcc_label || gap.description || "\u2014";
+                const gapHcc = gap.hcc_code || gap.hcc || "\u2014";
+                const lastYear = gap.prior_year || gap.last_captured_year;
+                const daysSince = lastYear ? (new Date().getFullYear() - Number(lastYear)) * 365 : null;
+                return (
+                <WithTooltip
                   key={gap.hcc_code || gap.icd10_code || gap.hcc || `gap-${i}`}
+                  tip={`Recapture gap: ${gapLabel} (${gapHcc}). Last billed in ${lastYear ?? "unknown"}${daysSince ? ` (~${daysSince} days ago)` : ""}. Documenting this condition this year recovers${gap.coefficient != null ? ` +${Number(gap.coefficient).toFixed(3)} RAF` : " the HCC coefficient"} for the current measurement period.`}
+                  side="left"
+                >
+                <div
+                  data-testid={`raf-recapture-row-${gapHcc}`}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 100px 100px 100px",
@@ -1055,10 +1086,7 @@ export function RAFTab({
                   }
                 >
                   <span className="text-sm font-medium text-foreground">
-                    {gap.condition ||
-                      gap.hcc_label ||
-                      gap.description ||
-                      "\u2014"}
+                    {gapLabel}
                   </span>
                   <span>
                     <span
@@ -1069,11 +1097,11 @@ export function RAFTab({
                         borderRadius: 4,
                       }}
                     >
-                      {gap.hcc_code || gap.hcc || "\u2014"}
+                      {gapHcc}
                     </span>
                   </span>
                   <span className="text-[13px] text-muted-foreground">
-                    {gap.prior_year || gap.last_captured_year || "\u2014"}
+                    {lastYear ?? "\u2014"}
                   </span>
                   <span
                     className="text-sm font-mono font-semibold text-primary"
@@ -1083,7 +1111,9 @@ export function RAFTab({
                       : "\u2014"}
                   </span>
                 </div>
-              )
+                </WithTooltip>
+                );
+              }
             )}
           </div>
         )}

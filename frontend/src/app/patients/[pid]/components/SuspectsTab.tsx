@@ -11,6 +11,7 @@ import {
   SectionLoader,
   Card,
   MeatDots,
+  WithTooltip,
 } from "./shared";
 import type { SuspectItem } from "./shared";
 import {
@@ -113,17 +114,27 @@ export function SuspectsTab({
                     </span>
                   )}
                   {(s.suspect_hcc != null) && (
-                    <span style={{
-                      display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                      fontSize: 11, fontWeight: 600, fontFamily: "monospace",
-                      background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`,
-                    }}>
-                      HCC {s.suspect_hcc}
-                    </span>
+                    <WithTooltip tip={`HCC ${s.suspect_hcc}${s.hcc_coefficient ? ` — RAF coefficient: +${Number(s.hcc_coefficient).toFixed(3)}` : ""}${s.hcc_coefficient ? `. Estimated annual revenue uplift: $${Math.round(Number(s.hcc_coefficient) * 10000).toLocaleString()} (at $10,000/RAF point). Accepting and attesting this condition adds this coefficient to the patient's total RAF score.` : ""}`}>
+                      <span
+                        data-testid={`suspect-hcc-chip-${s.suspect_hcc}`}
+                        style={{
+                          display: "inline-block", padding: "2px 8px", borderRadius: 4,
+                          fontSize: 11, fontWeight: 600, fontFamily: "monospace",
+                          background: C.blue50, color: C.blue600, border: `1px solid ${C.blue100}`,
+                          cursor: "help",
+                        }}
+                      >
+                        HCC {s.suspect_hcc}
+                      </span>
+                    </WithTooltip>
                   )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                  <ConfidencePill value={confidence} />
+                  <WithTooltip tip={`AI confidence score: ${Math.round(confidence * 100)}%. Reflects the model's certainty that this condition is clinically present based on available evidence (notes, labs, medications, prior codes). Scores ≥80% are high confidence; 50–79% require closer review.`}>
+                    <span data-testid={`suspect-confidence-${s.id}`} style={{ cursor: "help", display: "inline-flex" }}>
+                      <ConfidencePill value={confidence} />
+                    </span>
+                  </WithTooltip>
                   <span className="text-xs text-muted-foreground">
                     Confidence: {Math.round(confidence * 100)}%
                   </span>
