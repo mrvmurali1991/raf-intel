@@ -1,0 +1,172 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false   # never cancel an in-progress deploy
+
+permissions:
+  id-token: write   # required for OIDC AWS role assumption
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  # TODO: set these in GitHub org/repo secrets or environment variables
+  # ECR_REGISTRY is derived dynamically from the OIDC role below
+  ECR_BACKEND_REPO: raf-intelligence/backend
+  ECR_FRONTEND_REPO: raf-intelligence/frontend
+  ECS_CLUSTER: raf-staging
+  ECS_BACKEND_SERVICE: raf-backend-staging
+  ECS_FRONTEND_SERVICE: raf-frontend-staging
+
+jobs:
+  build-and-push:
+    name: Build + Push to ECR
+    runs-on: ubuntu-22.04
+    outputs:
+      backend-image: ${{ steps.meta-backend.outputs.tags }}
+      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
+      ecr-registry: ${{ steps.login-ecr.outputs.registry }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # OIDC-based auth — no long-lived AWS credentials stored in GitHub
+      # TODO: replace STAGING_DEPLOY_ROLE_ARN with the actual IAM role ARN created
+      #       for GitHub Actions OIDC (trust policy: token.actions.githubusercontent.com)
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Backend image ──
+      - name: Docker metadata (backend)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}
+          tags: |
+            type=sha,prefix=git-
+            type=raw,value=staging-latest
+
+      - name: Build + push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Frontend image ──
+      - name: Docker metadata (frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}
+          tags: |
+            type=sha,prefix=git-
+            type=raw,value=staging-latest
+
+      - name: Build + push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-ecs:
+    name: ECS Service Update
+    runs-on: ubuntu-22.04
+    needs: build-and-push
+    environment: staging   # ties to GitHub environment with optional approval gate
+
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Force ECS backend service update
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_BACKEND_SERVICE" \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+
+      - name: Force ECS frontend service update
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_FRONTEND_SERVICE" \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_BACKEND_SERVICE"
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_FRONTEND_SERVICE"
+
+      # ── Slack notification (env-gated: only runs if secret is set) ──
+      # TODO: add SLACK_DEPLOY_WEBHOOK to org/repo secrets
+      - name: Notify Slack on success
+        if: success() && secrets.SLACK_DEPLOY_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":white_check_mark: *Staging deployed* — `${{ github.repository }}` @ `${{ github.sha }}`",
+              "attachments": [{
+                "color": "good",
+                "fields": [
+                  {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
+                  {"title": "Actor", "value": "${{ github.actor }}", "short": true},
+                  {"title": "Run", "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>", "short": true}
+                ]
+              }]
+            }
+
+      - name: Notify Slack on failure
+        if: failure() && secrets.SLACK_DEPLOY_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":x: *Staging deploy FAILED* — `${{ github.repository }}` @ `${{ github.sha }}`",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
+                  {"title": "Actor", "value": "${{ github.actor }}", "short": true},
+                  {"title": "Run", "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>", "short": true}
+                ]
+              }]
+            }
