@@ -105,7 +105,7 @@ export default function WorkflowProgressBar({ currentStage }: Props) {
                   ? "bg-primary text-primary-foreground font-bold"
                   : isPast
                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium"
-                  : "text-muted-foreground font-medium opacity-60",
+                  : "text-[hsl(var(--muted-future))] font-medium",
               ]
                 .filter(Boolean)
                 .join(" ")}

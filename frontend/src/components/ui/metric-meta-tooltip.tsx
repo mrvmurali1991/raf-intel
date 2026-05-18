@@ -89,7 +89,7 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
     >
       {/* Formula */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60 mb-0.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mb-0.5">
           Formula
         </p>
         <code className="block font-mono text-[11px] leading-snug bg-white/10 rounded px-1.5 py-1 break-all">
@@ -99,13 +99,13 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
 
       {/* Payment year */}
       <div className="flex justify-between items-center">
-        <span className="text-[11px] opacity-70">Payment year</span>
+        <span className="text-[11px] text-white/80">Payment year</span>
         <span className="text-[11px] font-semibold tabular-nums">{meta.payment_year ?? "—"}</span>
       </div>
 
       {/* Revenue per RAF point — always show; fmtDollars returns "—" for null/undefined, "$0" for zero */}
       <div className="flex justify-between items-center">
-        <span className="text-[11px] opacity-70">Revenue / RAF pt</span>
+        <span className="text-[11px] text-white/80">Revenue / RAF pt</span>
         <span className="text-[11px] font-semibold tabular-nums">
           {fmtDollars(meta.revenue_per_raf_point)}
         </span>
@@ -114,7 +114,7 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
       {/* Total RAF points */}
       {meta.total_raf_points != null && (
         <div className="flex justify-between items-center">
-          <span className="text-[11px] opacity-70">Total RAF pts</span>
+          <span className="text-[11px] text-white/80">Total RAF pts</span>
           <span className="text-[11px] font-semibold tabular-nums">
             {meta.total_raf_points.toLocaleString("en-US", { maximumFractionDigits: 2 })}
           </span>
@@ -124,14 +124,14 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
       {/* Scope */}
       {meta.scope && (
         <div className="flex justify-between items-center">
-          <span className="text-[11px] opacity-70">Scope</span>
+          <span className="text-[11px] text-white/80">Scope</span>
           <span className="text-[11px] font-semibold">{meta.scope}</span>
         </div>
       )}
 
       {/* Last computed */}
       <div className="flex justify-between items-center border-t border-white/20 pt-1.5 mt-0.5">
-        <span className="text-[10px] opacity-60">Last computed</span>
+        <span className="text-[10px] text-white/70">Last computed</span>
         <span
           className="text-[10px] opacity-80 tabular-nums"
           title={meta.last_computed_at ?? undefined}
@@ -149,7 +149,7 @@ export function MetricMetaTooltip({ meta, side = "top" }: MetricMetaTooltipProps
     <div
       role="tooltip"
       data-testid="metric-meta-tooltip-content"
-      className="text-[11px] opacity-70 min-w-[120px] text-left"
+      className="text-[11px] text-white/80 min-w-[120px] text-left"
     >
       No formula metadata available yet
     </div>
