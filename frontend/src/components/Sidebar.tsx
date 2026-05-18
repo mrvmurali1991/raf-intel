@@ -44,6 +44,12 @@ import { useTenantBranding } from "@/lib/useTenantBranding";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { hasUsedKeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { Building2, ChevronDown } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,6 +66,8 @@ interface NavItem {
   shortcut?: string;
   /** When set, the item is only shown to users whose `role` matches one of these values. */
   visibleToRoles?: string[];
+  /** Rich tooltip shown on hover (both collapsed and expanded). */
+  tooltip?: string;
 }
 
 interface NavCluster {
@@ -92,22 +100,22 @@ const navGroups: NavGroup[] = [
   {
     title: "DAILY WORK",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
-      { href: "/worklist", label: "Today's Worklist", nonAdminLabel: "My Worklist", icon: Stethoscope, shortcut: "g w" },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h", tooltip: "Population Health Intelligence — CMS Sweep deadline, KPIs, provider workload, EMR coverage" },
+      { href: "/worklist", label: "Today's Worklist", nonAdminLabel: "My Worklist", icon: Stethoscope, shortcut: "g w", tooltip: "Daily prioritized patient queue — bulk-attest, AWV scheduling, evidence preview" },
       { href: "/md/today", label: "Provider Prep (MD)", icon: HeartPulse, shortcut: "g m", visibleToRoles: ["provider", "md"] },
-      { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
+      { href: "/patients", label: "Patients", icon: Users, shortcut: "g p", tooltip: "Full patient roster — risk filters, RAF column, bulk actions" },
     ],
   },
   {
     title: "HCC WORKFLOW",
     items: [
-      { href: "/suspects", label: "Suspects", icon: ClipboardCheck },
-      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock },
-      { href: "/attestations", label: "Attestations", icon: ClipboardCheck },
-      { href: "/review-queue", label: "Coder Review", icon: ClipboardCheck, shortcut: "g s" },
-      { href: "/qa", label: "QA Audit", icon: ShieldCheck },
-      { href: "/pre-submission", label: "Pre-submission", icon: ShieldCheck },
-      { href: "/goals", label: "Quarterly Goals", icon: Target },
+      { href: "/suspects", label: "Suspects", icon: ClipboardCheck, tooltip: "AI-flagged HCC diagnoses awaiting coder review — Accept/Reject with reason codes" },
+      { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock, tooltip: "Prior-year HCCs not yet documented this payment year" },
+      { href: "/attestations", label: "Attestations", icon: ClipboardCheck, tooltip: "Provider sign-off workflow for accepted suspects" },
+      { href: "/review-queue", label: "Coder Review", icon: ClipboardCheck, shortcut: "g s", tooltip: "Queue assigned to coding team" },
+      { href: "/qa", label: "QA Audit", icon: ShieldCheck, tooltip: "QA team's review queue for completed attestations" },
+      { href: "/pre-submission", label: "Pre-submission", icon: ShieldCheck, tooltip: "5-tier validation gate before CMS EDI submission" },
+      { href: "/goals", label: "Quarterly Goals", icon: Target, tooltip: "Goal-vs-actual RAF capture tracking" },
     ],
   },
   {
@@ -117,21 +125,21 @@ const navGroups: NavGroup[] = [
       {
         label: "Analytics & Insights",
         items: [
-          { href: "/reports", label: "Reports", icon: BarChart3, shortcut: "g r" },
-          { href: "/population/heatmap", label: "Population", icon: MapPin },
-          { href: "/coder-analytics", label: "Coder Analytics", icon: BarChart3 },
-          { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
-          { href: "/v28-impact", label: "V28 Impact", icon: TrendingDown },
-          { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
+          { href: "/reports", label: "Reports", icon: BarChart3, shortcut: "g r", tooltip: "Revenue, scorecards, HCC distribution, CMS benchmarks" },
+          { href: "/population/heatmap", label: "Population", icon: MapPin, tooltip: "ZIP-level risk heat map and bar chart" },
+          { href: "/coder-analytics", label: "Coder Analytics", icon: BarChart3, tooltip: "Throughput, accuracy, productivity per coder" },
+          { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck, tooltip: "Per-provider capture rate, MEAT score, revenue contribution" },
+          { href: "/v28-impact", label: "V28 Impact", icon: TrendingDown, tooltip: "CMS-HCC V28 model portfolio impact analysis" },
+          { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a", tooltip: "Free-form clinical note → AI-extracted HCC suspects" },
           ...(DEMO_MODE ? [{ href: "/demo", label: "Pipeline Demo", icon: Workflow }] : []),
         ],
       },
       {
         label: "Reference Tools",
         items: [
-          { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
-          { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
-          { href: "/roi", label: "ROI Calculator", icon: Calculator },
+          { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c", tooltip: "Per-patient RAF scoring with V24/V28 toggle" },
+          { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight, tooltip: "ICD-10 → HCC mapping reference tool" },
+          { href: "/roi", label: "ROI Calculator", icon: Calculator, tooltip: "Customer ROI projection with NPV and payback period" },
         ],
       },
     ],
@@ -143,17 +151,17 @@ const navGroups: NavGroup[] = [
       {
         label: "Setup",
         items: [
-          { href: "/settings", label: "Settings", icon: Settings },
-          { href: "/users", label: "Users", icon: UsersRound },
-          { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
-          { href: "/uploads", label: "Data Uploads", icon: Upload },
+          { href: "/settings", label: "Settings", icon: Settings, tooltip: "Profile, security, EMR connections, team, API keys" },
+          { href: "/users", label: "Users", icon: UsersRound, tooltip: "Team member management with role-based permissions" },
+          { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e", tooltip: "Connect Epic, Cerner, Athena, or OpenEMR via FHIR" },
+          { href: "/uploads", label: "Data Uploads", icon: Upload, tooltip: "Bulk patient/claims/encounter ingest from CSV" },
         ],
       },
       {
         label: "Compliance",
         items: [
-          { href: "/audit", label: "Audit", icon: ShieldCheck },
-          { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
+          { href: "/audit", label: "Audit", icon: ShieldCheck, tooltip: "Immutable SHA-256 audit chain with integrity verify" },
+          { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck, tooltip: "CMS RADV audit run management, chart requests, exposure modeling" },
           { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack, visibleToRoles: ["admin"] },
         ],
       },
@@ -525,13 +533,16 @@ export function Sidebar() {
       transform: hovered && !active ? "scale(1.12)" : active ? "scale(1.05)" : "scale(1)",
     };
 
-    return (
+    // The title attribute always carries the rich description for screen-readers
+    // and as a native fallback tooltip. The shadcn Tooltip provides richer hover UI.
+    const titleAttr = item.tooltip ?? resolvedLabel;
+
+    const linkEl = (
       <Link
         key={item.href}
         href={item.href}
         style={itemStyle}
-        // Tooltip shown in collapsed mode instead of label text
-        title={collapsed ? resolvedLabel : undefined}
+        title={titleAttr}
         aria-current={active ? "page" : undefined}
         onMouseEnter={() => setHoveredItem(item.href)}
         onMouseLeave={() => setHoveredItem(null)}
@@ -601,6 +612,22 @@ export function Sidebar() {
         )}
       </Link>
     );
+
+    // Always wrap in Tooltip so it works both when collapsed (icon-only)
+    // and when focused via keyboard in expanded mode.
+    // item.tooltip already contains the full "Label — description" string.
+    if (item.tooltip) {
+      return (
+        <Tooltip key={item.href}>
+          <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            {item.tooltip}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return linkEl;
   }
 
   // ----- Sub-cluster label (not collapsible; appears inside an expanded section) -----
@@ -990,13 +1017,15 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav
-        style={{ flex: 1, overflowY: "auto", paddingTop: 4, paddingBottom: 8 }}
-        role="navigation"
-        aria-label="Main navigation"
-      >
-        {navGroups.map((group, i) => renderNavGroup(group, i))}
-      </nav>
+      <TooltipProvider delay={300}>
+        <nav
+          style={{ flex: 1, overflowY: "auto", paddingTop: 4, paddingBottom: 8 }}
+          role="navigation"
+          aria-label="Main navigation"
+        >
+          {navGroups.map((group, i) => renderNavGroup(group, i))}
+        </nav>
+      </TooltipProvider>
 
       {/* Keyboard shortcut affordance hint — shown only when sidebar is expanded */}
       {!collapsed && (
