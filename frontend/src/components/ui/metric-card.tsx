@@ -72,8 +72,10 @@ export interface MetricCardProps {
   /**
    * MetricMeta block from the backend _meta field. When provided, renders
    * a small (i) info button in the card header that opens a formula tooltip.
+   * Pass `null` to always show the (i) icon with a "Loading..." placeholder
+   * (layout-stable, Playwright-reachable). Omit entirely to suppress the icon.
    */
-  meta?: MetricMeta;
+  meta?: MetricMeta | null;
   /** data-testid placed on the label span — for smoke-test parity selectors */
   labelTestId?: string;
   /** data-testid placed on the value span — for smoke-test parity selectors */
@@ -246,7 +248,9 @@ export function MetricCard({
             data-testid={labelTestId}
           >
             {label}
-            {meta && <MetricMetaTooltip meta={meta} />}
+            {/* Render the (i) icon whenever meta is explicitly provided,
+                including null (loading state). Omitting the prop suppresses it. */}
+            {meta !== undefined && <MetricMetaTooltip meta={meta} />}
           </span>
           {icon && (
             <span
