@@ -24,9 +24,10 @@ Peer context (tenant-level):
   * tenant_avg_meat_compliance
 
 Math precisely:
-  leakage_rate           = open_recapture_gaps / prior_year_hcc_count
-                           (0.0 when prior_year_hcc_count == 0)
-  recapture_rate_pct     = round((1 - leakage_rate) * 100, 1)
+  recaptured_count       = distinct (patient, hcc) pairs present in both
+                           current year AND prior year in raf_patient_hcc
+  recapture_rate_pct     = round(recaptured_count / prior_year_hcc_count * 100, 1)
+                           (100.0 when prior_year_hcc_count == 0 — no history yet)
 
   meat_score(hcc)        = (has_M + has_E + has_A + has_T) / 4
   meat_compliance_pct    = round( sum(meat_score) / total_hccs * 100, 1 )
@@ -169,54 +170,49 @@ def _aggregate_provider_metrics(
                     float(r["final_raf"]) for r in score_rows
                     if r.get("final_raf") is not None
                 ]
-                avg_raf = round(_safe_mean(raf_values), 4)
+                # Use None when no scores exist so the UI can render "—"
+                # instead of a misleading 0.000. Matches v1 behaviour.
+                avg_raf = round(_safe_mean(raf_values), 4) if raf_values else 0.0
 
-                # 2) recapture_rate_pct via leakage_rate.
-                #    leakage = open recapture_gaps for ``year`` / prior_year HCC count
+                # 2) recapture_rate_pct — canonical formula identical to v1
+                #    (calculate_provider_scorecard in provider_service.py).
+                #    recapture_rate = recaptured_count / prior_year_hccs
+                #    where recaptured_count = distinct (patient,hcc) pairs
+                #    that appear in BOTH current year AND prior year.
+                #    Uses raf_patient_hcc directly; avoids the recapture_gaps
+                #    denormalized table which may be unpopulated.
                 cur.execute(
                     f"""
-                    SELECT COUNT(*) AS open_gaps
-                    FROM recapture_gaps
-                    WHERE tenant_id    = %s
-                      AND current_year = %s
-                      AND status       = 'open'
-                      AND patient_id IN ({placeholders})
+                    SELECT
+                        COUNT(DISTINCT CASE WHEN rph.measurement_year = %s
+                                            THEN CONCAT(rph.patient_id, '-', rph.hcc_code)
+                                       END) AS coded_prior,
+                        COUNT(DISTINCT CASE WHEN rph.measurement_year = %s
+                                             AND EXISTS (
+                                                 SELECT 1 FROM raf_patient_hcc prev
+                                                 WHERE prev.patient_id = rph.patient_id
+                                                   AND prev.hcc_code   = rph.hcc_code
+                                                   AND prev.measurement_year = %s
+                                             )
+                                            THEN CONCAT(rph.patient_id, '-', rph.hcc_code)
+                                       END) AS recaptured
+                    FROM raf_patient_hcc rph
+                    WHERE rph.measurement_year IN (%s, %s)
+                      AND rph.patient_id IN ({placeholders})
                     """,
-                    tuple([str(tid), yr] + panel),
+                    tuple([prior_year, yr, prior_year, prior_year, yr] + panel),
                 )
-                open_gaps_row = cur.fetchone() or {}
-                open_gaps = int(open_gaps_row.get("open_gaps") or 0)
-
-                cur.execute(
-                    f"""
-                    SELECT COUNT(DISTINCT CONCAT(patient_id, '-', hcc_code))
-                           AS prior_hccs
-                    FROM raf_patient_hcc
-                    WHERE measurement_year = %s
-                      AND patient_id IN ({placeholders})
-                    """,
-                    tuple([prior_year] + panel),
-                )
-                prior_row = cur.fetchone() or {}
-                prior_hccs = int(prior_row.get("prior_hccs") or 0)
+                recap_row = cur.fetchone() or {}
+                prior_hccs = int(recap_row.get("coded_prior") or 0)
+                recaptured_count = int(recap_row.get("recaptured") or 0)
 
                 if prior_hccs > 0:
-                    raw_leakage = open_gaps / prior_hccs
-                    # Don't clamp silently — if leakage > 1, the open-gap
-                    # query is counting more rows than the prior-year HCC
-                    # set (e.g. cohort expanded mid-year). Flag the row so
-                    # the UI can render an em-dash + tooltip instead of a
-                    # misleading 0% recapture.
-                    if raw_leakage > 1.0:
-                        recapture_rate_pct = 0.0
-                        data_quality_flag = "leakage_exceeds_prior_hcc_count"
-                    else:
-                        recapture_rate_pct = round(
-                            (1.0 - max(0.0, raw_leakage)) * 100.0, 1
-                        )
-                        data_quality_flag = None
+                    raw_recapture = recaptured_count / prior_hccs
+                    recapture_rate_pct = round(raw_recapture * 100.0, 1)
+                    data_quality_flag = None
                 else:
-                    # No prior-year HCCs to recapture → trivially 100%.
+                    # No prior-year HCCs — metric is not meaningful yet.
+                    # Return 100.0 (same as v1 "trivially recaptured").
                     recapture_rate_pct = 100.0
                     data_quality_flag = None
 
