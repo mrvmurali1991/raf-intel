@@ -146,11 +146,14 @@ const card: React.CSSProperties = {
 
 const hoverCard = (e: React.MouseEvent<HTMLDivElement>, enter: boolean) => {
   if (enter) {
-    e.currentTarget.style.boxShadow = "0 8px 25px rgba(0,0,0,0.08)";
-    e.currentTarget.style.transform = "translateY(-2px)";
+    // Multi-layer soft shadow for 2025-style depth
+    e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.06)";
+    e.currentTarget.style.transform = "translateY(-2px) scale(1.005)";
+    e.currentTarget.style.transition = "all 220ms cubic-bezier(0.34, 1.56, 0.64, 1)";
   } else {
     e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
-    e.currentTarget.style.transform = "translateY(0)";
+    e.currentTarget.style.transform = "translateY(0) scale(1)";
+    e.currentTarget.style.transition = "all 200ms ease";
   }
 };
 
@@ -161,13 +164,11 @@ const hoverCard = (e: React.MouseEvent<HTMLDivElement>, enter: boolean) => {
 function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
   return (
     <div
+      className="shimmer"
       style={{
         width: w,
         height: h,
         borderRadius: r,
-        background: "linear-gradient(90deg, #E2E8F0 25%, #EDF2F7 50%, #E2E8F0 75%)",
-        backgroundSize: "200% 100%",
-        animation: "shimmer 1.5s ease-in-out infinite",
       }}
     />
   );

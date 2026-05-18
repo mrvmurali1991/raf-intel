@@ -107,7 +107,7 @@ export function StatCard({ label, value, subtitle, icon, trend, accentClassName 
 
   const cardContent = (
     <div
-      className={`animate-fade-in hover-lift stat-card-gradient-border bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col gap-3 ${href ? "cursor-pointer" : ""}`}
+      className={`animate-fade-in kpi-card-lift stat-card-gradient-border bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col gap-3 ${href ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
