@@ -4,14 +4,20 @@ import path from "path";
 /**
  * Playwright configuration for RAF Intelligence E2E tests.
  *
- * Base URL targets the live staging deployment at raf.comercioit.com by
- * default. Override with E2E_BASE_URL env var for local dev server runs.
+ * Base URL targets the live staging deployment at raf.comercioit.com.
+ * Override with E2E_BASE_URL env var for local or CI environments.
  *
- * Run the new E2E suite:
- *   cd frontend && E2E_BASE_URL=http://localhost:3001 npx playwright test --project=e2e
- * Or use the helper script:
- *   bash frontend/scripts/e2e.sh
+ * Tag-based execution:
+ *   PW_GREP=@smoke   npx playwright test   — fast subset (Tests A + B); default on CI
+ *   PW_GREP=@full    npx playwright test   — complete suite; runs nightly
+ *
+ * Retry policy:
+ *   @smoke  → retries: 1 (set via SMOKE mode default)
+ *   @full   → retries: 2 (nightly tolerance for transient flakes)
  */
+
+const isFullRun = (process.env.PW_GREP ?? "@smoke") === "@full";
+
 export default defineConfig({
   testDir: "./tests",
   testMatch: [
@@ -22,17 +28,23 @@ export default defineConfig({
     "*.spec.ts",
   ],
 
+  // Match all .spec.ts files under tests/ and tests/e2e/
+  testMatch: ["**/*.spec.ts"],
+
+  // Grep on the tag env var; defaults to @smoke so CI is always fast.
+  grep: new RegExp(process.env.PW_GREP ?? "@smoke"),
+
   // Maximum time for one full test (pipeline can take up to 2 minutes).
   timeout: 180_000,
+
+  // Retry policy: 1 for smoke runs, 2 for full nightly runs.
+  retries: isFullRun ? 2 : 1,
 
   // Fail the suite immediately when a test worker crashes.
   fullyParallel: false,
 
-  // Retry failed tests once to guard against transient network blips.
-  retries: 1,
-
-  // Two parallel workers for the local e2e suite; 1 for live staging.
-  workers: process.env.E2E_BASE_URL ? 2 : 1,
+  // Run tests sequentially — the live backend has limited capacity.
+  workers: 1,
 
   // Rich HTML report for post-run review.
   reporter: [
