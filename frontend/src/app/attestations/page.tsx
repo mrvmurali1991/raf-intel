@@ -18,6 +18,8 @@
 
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import WorkflowProgressBar from "@/components/WorkflowProgressBar";
+import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
 import {
   ClipboardCheck,
   CheckCircle2,
@@ -189,6 +191,13 @@ export default function AttestationsPage() {
         fontFamily: tokens.font?.sans ?? "system-ui, sans-serif",
       }}
     >
+      <WorkflowProgressBar currentStage="attestations" />
+      <WorkflowHandoffBanner
+        count={stats?.attested ?? 0}
+        message="{count} attestations validated — ready for pre-submission checks"
+        ctaLabel="Run Pre-submission"
+        ctaHref="/pre-submission"
+      />
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <PageHeader

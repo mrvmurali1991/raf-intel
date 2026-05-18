@@ -27,6 +27,8 @@ import { AlertTriangle, AlertCircle, Info, ShieldCheck, ExternalLink } from "luc
 
 import api from "@/lib/api";
 import { PageHeader, StatCard, EmptyState } from "@/components/healthcare-ui";
+import WorkflowProgressBar from "@/components/WorkflowProgressBar";
+import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,8 +115,26 @@ export default function PreSubmissionPage() {
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
 
+  // Non-blocking items that passed (total minus high-severity blockers).
+  // When high === 0 every HCC is clean and the full total passed.
+  const passedChecks = !isLoading && data ? total - high : 0;
+
   return (
     <main id="main-content" className="p-6 space-y-6">
+      <WorkflowProgressBar currentStage="pre-submission" />
+      {!isLoading && !isError && (
+        <WorkflowHandoffBanner
+          count={passedChecks}
+          message={
+            high === 0
+              ? "All {count} pre-checks passed — ready to generate EDI 837"
+              : "{count} non-blocking items — resolve HIGH severity issues first"
+          }
+          ctaLabel="Generate EDI 837"
+          ctaHref="/edi-generation"
+          hideWhenZero={false}
+        />
+      )}
       <PageHeader
         title="Pre-submission validation"
         subtitle="Catch coding-rule violations before the 837/EDPS file ships — Edifecs-RAEM-style."
