@@ -27,10 +27,30 @@ from app.services.coder_analytics import (
     compute_leaderboard,
     compute_team_metrics,
 )
+from app.services.redis_cache import cached as redis_cached
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/coder-analytics", tags=["coder-analytics"])
+
+
+# 5-minute TTL: coder productivity is interactive but doesn't need to be
+# real-time. Key includes user_id + tenant + date window so each user gets
+# an isolated cache entry.
+@redis_cached(
+    key_builder=lambda user_id, tenant_id, date_from, date_to: (
+        f"raf:coder_analytics:me:{tenant_id}:{user_id}:{date_from or 'def'}:{date_to or 'def'}"
+    ),
+    ttl_seconds=300,
+    tenant_aware=True,
+)
+def _cached_coder_metrics(
+    user_id: int,
+    tenant_id: str,
+    date_from: str | None,
+    date_to: str | None,
+) -> dict[str, Any]:
+    return compute_coder_metrics(user_id, tenant_id, date_from, date_to)
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +67,9 @@ def my_coder_metrics(
                                   description="Window start YYYY-MM-DD"),
     date_to: str | None = Query(default=None, alias="to",
                                 description="Window end YYYY-MM-DD"),
+    force_refresh: bool = Query(
+        default=False, description="Bypass Redis cache (admin debug)."
+    ),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("reports", "read")),
@@ -59,7 +82,13 @@ def my_coder_metrics(
     if not user_id:
         # Should never hit — get_current_user already enforces this.
         return {"error": "no user id on token"}
-    return compute_coder_metrics(int(user_id), tenant_id, date_from, date_to)
+    return _cached_coder_metrics(
+        int(user_id),
+        tenant_id,
+        date_from,
+        date_to,
+        force_refresh=force_refresh,
+    )
 
 
 # ---------------------------------------------------------------------------

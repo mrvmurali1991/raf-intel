@@ -25,8 +25,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.db import raf_cursor
+from app.auth import get_current_user
+from app.services.redis_cache import cached as redis_cached
 
 logger = logging.getLogger(__name__)
 
@@ -338,9 +340,25 @@ def _query_source(
 # Dashboard endpoint
 # ---------------------------------------------------------------------------
 
+@redis_cached(
+    key_builder=lambda tenant_id, hours: (
+        f"raf:doc_dashboard:{tenant_id}:{hours}"
+    ),
+    ttl_seconds=60,
+    tenant_aware=True,
+)
+def _cached_doc_dashboard(tenant_id: str, hours: int) -> dict[str, Any]:
+    """Heavy 8-source aggregation memoised for 60 s."""
+    return _build_doc_dashboard(hours)
+
+
 @router.get("/dashboard", summary="Document ingestion unified dashboard")
 def get_dashboard(
     hours: int = Query(24, ge=1, le=168, description="Look-back window in hours"),
+    force_refresh: bool = Query(
+        False, description="Bypass Redis cache (admin debug)."
+    ),
+    current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Returns a unified view across all 8 ingestion paths:
@@ -348,6 +366,11 @@ def get_dashboard(
       - recent_documents : merged chronological list of recent docs
       - kpis     : aggregate KPIs for the requested window
     """
+    tenant_id = str((current_user or {}).get("tenant_id") or "global")
+    return _cached_doc_dashboard(tenant_id, hours, force_refresh=force_refresh)
+
+
+def _build_doc_dashboard(hours: int) -> dict[str, Any]:
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     source_cards = []

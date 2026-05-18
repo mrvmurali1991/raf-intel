@@ -550,3 +550,24 @@ def api_verify_audit_chain(
         "valid": ok,
         "errors": errors,
     }
+
+
+# ---------------------------------------------------------------------------
+# /api/admin/cache/stats — Redis read-through cache observability
+# ---------------------------------------------------------------------------
+
+
+@router.get("/cache/stats", summary="Redis read-through cache statistics")
+def api_cache_stats(
+    current_user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """Return hit/miss/invalidation/error counters for the hot-path cache.
+
+    Counters are in-memory and reset whenever the backend process restarts,
+    so this view is best read alongside the Prometheus ``cache_hits_total``
+    series for long-term trending.  Useful at-a-glance for an SRE checking
+    "is Redis actually helping us?"
+    """
+    from app.services.redis_cache import get_cache_stats
+
+    return get_cache_stats()

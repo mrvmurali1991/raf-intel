@@ -35,6 +35,7 @@ from app.auth import get_current_user, require_permission
 from app.rate_limit import limiter
 from app.services.audit_logger import log_phi_access
 from app.services.patient_service import patient_is_accessible
+from app.services.redis_cache import cached as redis_cached
 from app.services.v28_transition_calculator import (
     portfolio_v28_impact,
     refresh_portfolio_cache,
@@ -51,6 +52,26 @@ def _resolve_tenant(current_user: dict) -> str:
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for this user")
     return str(tenant_id)
+
+
+# Cached compute layer used by the GET /portfolio endpoint.
+# Keyed by tenant + year + top_n so different drill-down depths don't collide.
+@redis_cached(
+    key_builder=lambda tenant_id, year, top_n: (
+        f"raf:v28:portfolio:{tenant_id}:{year}:{top_n}"
+    ),
+    ttl_seconds=3600,
+    tenant_aware=True,
+)
+def _cached_portfolio_impact(tenant_id: str, year: int, top_n: int) -> dict[str, Any]:
+    # ``use_cache=False`` on the inner calculator prevents a double-cache
+    # layer fighting over the same key space.
+    return portfolio_v28_impact(
+        tenant_id=tenant_id,
+        year=year,
+        use_cache=False,
+        top_n=top_n,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +91,10 @@ def get_portfolio_impact(
         default=False,
         description="If true, bypass Redis cache and recompute synchronously",
     ),
+    force_refresh: bool = Query(
+        default=False,
+        description="Alias for ?refresh=true (Redis cache bypass).",
+    ),
     top_n: int = Query(default=20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("raf", "read")),
@@ -77,11 +102,11 @@ def get_portfolio_impact(
     tenant_id = _resolve_tenant(current_user)
     measurement_year = year or date.today().year
     try:
-        payload = portfolio_v28_impact(
-            tenant_id=tenant_id,
-            year=measurement_year,
-            use_cache=not refresh,
-            top_n=top_n,
+        payload = _cached_portfolio_impact(
+            tenant_id,
+            measurement_year,
+            top_n,
+            force_refresh=refresh or force_refresh,
         )
     except Exception as exc:
         logger.exception(

@@ -127,3 +127,78 @@ Re-run cadence:
 - Before every major release
 - After any change to a hot-path endpoint (suspects, v28-impact, hedis, md/today)
 - Monthly via `security-monthly` GitHub Actions workflow (planned)
+
+---
+
+## After Redis caching — `perf/redis-cache-hot-endpoints` (2026-05-18)
+
+The bottleneck identified above (`/api/v28-impact/portfolio` at P95 1.3 s)
+plus the four other hottest reads now flow through a tenant-aware
+read-through cache in `app/services/redis_cache.py`. Each endpoint also
+exposes a `?force_refresh=true` query param for admin debugging.
+
+### Endpoints wired
+
+| Endpoint | TTL | Key shape |
+|---|---|---|
+| `GET /api/v28-impact/portfolio` | 1 h | `raf:v28:portfolio:{tenant}:{year}:{top_n}` |
+| `GET /api/hedis/measures` | 24 h | `raf:hedis:measures:{year}` (static) |
+| `GET /api/hedis/scores` | 30 min | `raf:hedis:scores:{tenant}:{year}` |
+| `GET /api/coder-analytics/me` | 5 min | `raf:coder_analytics:me:{tenant}:{user}:{from}:{to}` |
+| `GET /api/admin/document-ingestion/dashboard` | 60 s | `raf:doc_dashboard:{tenant}:{hours}` |
+
+### Invalidation hooks
+
+| Write | Evicts |
+|---|---|
+| `PUT /api/suspects/{id}/accept` (and bulk-update accept) | `raf:v28:portfolio:{tenant}:*` + `raf:hedis:scores:{tenant}:*` |
+| `POST /api/radv/audit-runs/{id}/simulate` | `raf:radv:audit_runs:{tenant}:*` |
+| `PUT /api/documents/{id}/diagnoses/{diag_id}/confirm` | `raf:doc_dashboard:{tenant}:*` |
+
+### Expected after-cache numbers (50u / 60s, warm cache)
+
+| Endpoint | P95 cold | P95 warm (target) | Notes |
+|---|---|---|---|
+| `/api/v28-impact/portfolio` | 1,300 ms | **< 100 ms** | Single Redis JSON GET — was the bottleneck |
+| `/api/hedis/measures` | 60 ms / P99 510 | **< 20 ms P95** | Static metadata, 24h TTL — first call only |
+| `/api/hedis/scores` | n/a (added) | **< 80 ms P95** | 30 min TTL — survives a full Locust run |
+| `/api/coder-analytics/me` | 130 ms / P99 610 | **< 30 ms P95** | Per-user 5 min TTL |
+| `/api/admin/document-ingestion/dashboard` | n/a (added) | **< 50 ms P95** | 60 s TTL — covers an entire 60 s Locust run |
+
+Aggregate P99 target: **< 250 ms** (down from 990 ms), driven entirely by
+removing the v28 long tail.
+
+### Observability
+
+* `GET /api/admin/cache/stats` (admin-only) — JSON snapshot of
+  `cache_hits`, `cache_misses`, `cache_invalidations`, `cache_errors`,
+  `cache_forced_refresh`, plus the live Redis connection state and the
+  rolling hit-rate %.
+* Redis-down → decorator silently falls through to the wrapped
+  function; never breaks a read path.
+* All writes that mutate the cached data evict the relevant keys via
+  `invalidate_*` helpers in `app/services/redis_cache.py`.
+
+### How to verify the warm-cache P95
+
+```bash
+# 1. Boot Redis (if not already) and the backend.
+docker compose up -d redis backend
+
+# 2. Pre-warm the v28 cache for the demo tenant.
+curl -s -H "Authorization: Bearer $TOKEN" \
+     "http://localhost:8500/api/v28-impact/portfolio?year=2026" > /dev/null
+
+# 3. Re-run the 50u/60s Locust workload — every v28 hit is now a Redis GET.
+cd backend
+.venv/bin/locust -f tests/load/locustfile_raf.py \
+    --headless --users 50 --spawn-rate 10 --run-time 60s \
+    --host http://localhost:8500 --csv=/tmp/raf-perf-50u-warm
+
+# 4. Inspect the cache stats endpoint.
+curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+     http://localhost:8500/api/admin/cache/stats | jq
+```
+
+Production numbers will replace this section after the first warm
+Locust run on the AWS-Fargate staging cluster.
