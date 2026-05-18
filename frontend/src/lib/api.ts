@@ -1999,6 +1999,7 @@ export async function getRevenueOpportunity(
 ): Promise<RevenueOpportunityReport> {
   const { data } = await api.get("/api/reports/revenue-opportunity", {
     params: { ...(year ? { year } : {}), ...(paymentYear ? { payment_year: paymentYear } : {}) },
+    timeout: 15_000,
   });
   return data;
 }

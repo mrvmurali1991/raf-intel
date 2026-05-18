@@ -320,11 +320,11 @@ export default function ReportsPage() {
   const isHistoricalPY = paymentYear !== CURRENT_PAYMENT_YEAR;
 
   // ── Data Queries ──────────────────────────────────────────────────────────
-  const revenue = useQuery({ queryKey: ["revenue", year, paymentYear], queryFn: () => getRevenueOpportunity(year, paymentYear), staleTime: 60_000 });
-  const scorecard = useQuery({ queryKey: ["scorecard", year, paymentYear], queryFn: () => getPatientScorecard(year, paymentYear), staleTime: 60_000 });
-  const hccDist = useQuery({ queryKey: ["hcc-dist", year, paymentYear], queryFn: () => getHccDistribution(year, paymentYear), staleTime: 60_000 });
-  const recapture = useQuery({ queryKey: ["recapture", year, paymentYear], queryFn: () => getRecaptureGapsReport(year, paymentYear), staleTime: 60_000 });
-  const dataQuality = useQuery({ queryKey: ["data-quality"], queryFn: () => getDataCompleteness(), staleTime: 60_000 });
+  const revenue = useQuery({ queryKey: ["revenue", year, paymentYear], queryFn: () => getRevenueOpportunity(year, paymentYear), staleTime: 60_000, retry: 1, gcTime: 0 });
+  const scorecard = useQuery({ queryKey: ["scorecard", year, paymentYear], queryFn: () => getPatientScorecard(year, paymentYear), staleTime: 60_000, retry: 1, gcTime: 0 });
+  const hccDist = useQuery({ queryKey: ["hcc-dist", year, paymentYear], queryFn: () => getHccDistribution(year, paymentYear), staleTime: 60_000, retry: 1 });
+  const recapture = useQuery({ queryKey: ["recapture", year, paymentYear], queryFn: () => getRecaptureGapsReport(year, paymentYear), staleTime: 60_000, retry: 1 });
+  const dataQuality = useQuery({ queryKey: ["data-quality"], queryFn: () => getDataCompleteness(), staleTime: 60_000, retry: 1 });
 
   const handlePrint = () => {
     const printHeader = document.getElementById("report-print-header");
@@ -493,7 +493,7 @@ export default function ReportsPage() {
 
       {/* ── Tab Content ──────────────────────────────────────────────────── */}
       <TabFade tabKey={activeTab}>
-        {activeTab === "Revenue" && <RevenueTab revenue={revenue} scorecard={scorecard} router={router} />}
+        {activeTab === "Revenue" && <RevenueTab revenue={revenue} scorecard={scorecard} router={router} paymentYear={paymentYear} />}
         {activeTab === "Patient Scorecard" && <ScorecardTab scorecard={scorecard} router={router} />}
         {activeTab === "HCC Distribution" && <HccTab hccDist={hccDist} />}
         {activeTab === "Recapture Gaps" && <RecaptureTab recapture={recapture} router={router} />}
@@ -509,9 +509,10 @@ export default function ReportsPage() {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 1: REVENUE OPPORTUNITY
 // ══════════════════════════════════════════════════════════════════════════════
-function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<RevenueOpportunityReport>; scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void } }) {
+function RevenueTab({ revenue, scorecard, router, paymentYear }: { revenue: QueryResult<RevenueOpportunityReport>; scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void }; paymentYear?: number }) {
   const r = revenue.data;
   const patients: PatientRow[] = scorecard.data ?? [];
+  const revenueTableRef = React.useRef<HTMLDivElement | null>(null);
   // Formula provenance for CFO tooltip
   const revMeta = useMetricFormula(r as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? r?._meta ?? null;
 
@@ -525,10 +526,44 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
   }, [patients]);
 
   if (revenue.isLoading || scorecard.isLoading) return <Spinner label="Loading revenue data..." />;
-  if (revenue.isError) return <ErrorBox message="Failed to load revenue data" onRetry={revenue.refetch} />;
+  if (revenue.isError || scorecard.isError) return (
+    <ErrorBox
+      message={revenue.isError ? "Failed to load revenue data. The server may be slow or unavailable." : "Failed to load patient scorecard."}
+      onRetry={() => { revenue.refetch?.(); scorecard.refetch?.(); }}
+    />
+  );
 
   const totalRevenue = r?.estimated_annual_revenue ?? 0;
   const totalGap = r?.total_gap ?? 0;
+  const isEmpty = !r || (r.total_patients_analyzed === 0 && totalRevenue === 0 && totalGap === 0 && top25.length === 0);
+
+  if (isEmpty) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", textAlign: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 14, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: C.text }}>No revenue data available</h3>
+        <p style={{ fontSize: 14, color: C.textMuted, maxWidth: 400, margin: "0 0 28px", lineHeight: 1.6 }}>
+          No patients have been analyzed for payment year {paymentYear}. Connect your EMR to start analyzing RAF gaps, or load demo data to preview the reports.
+        </p>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+          <button
+            onClick={() => router.push("/connect")}
+            style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: C.primary, color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+          >
+            Connect EMR
+          </button>
+          <button
+            onClick={() => router.push("/demo")}
+            style={{ padding: "10px 22px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.white, color: C.text, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+          >
+            Try Demo Data
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -581,30 +616,46 @@ function RevenueTab({ revenue, scorecard, router }: { revenue: QueryResult<Reven
       </div>
 
       {/* Revenue Table */}
-      <div className="premium-shadow" style={cardStyle}>
+      <div ref={revenueTableRef} className="premium-shadow" style={cardStyle}>
         <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
           <div>
             <h3 className="gradient-text" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Top 25 Revenue Opportunities</h3>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: C.textMuted }}>Patients sorted by estimated revenue opportunity</p>
           </div>
-          <button
-            onClick={() => {
-              if (!top25.length) return;
-              downloadCSV(top25.map((p) => ({
-                "Patient": p.name,
-                "Current RAF": p.billing_raf != null ? Number(p.billing_raf).toFixed(2) : "",
-                "Analyzed RAF": p.ai_raf != null ? Number(p.ai_raf).toFixed(2) : "",
-                "Gap": p.gap != null ? Number(p.gap).toFixed(2) : "",
-                "Revenue Opportunity": p.revenue_opportunity != null ? Math.round(p.revenue_opportunity) : "",
-                "HCCs Billing": p.hcc_count_billing,
-                "HCCs Analyzed": p.hcc_count_ai,
-              })), "revenue-opportunities");
-            }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-          >
-            <FileDown size={14} />
-            Export CSV
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={() => {
+                if (!top25.length) return;
+                downloadCSV(top25.map((p) => ({
+                  "Patient": p.name,
+                  "Current RAF": p.billing_raf != null ? Number(p.billing_raf).toFixed(2) : "",
+                  "Analyzed RAF": p.ai_raf != null ? Number(p.ai_raf).toFixed(2) : "",
+                  "Gap": p.gap != null ? Number(p.gap).toFixed(2) : "",
+                  "Revenue Opportunity": p.revenue_opportunity != null ? Math.round(p.revenue_opportunity) : "",
+                  "HCCs Billing": p.hcc_count_billing,
+                  "HCCs Analyzed": p.hcc_count_ai,
+                })), "revenue-opportunities");
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              <FileDown size={14} />
+              Export CSV
+            </button>
+            <ChartExportMenu
+              filename="revenue-opportunities"
+              csvData={top25.map((p) => ({
+                patient: p.name,
+                billing_raf: p.billing_raf,
+                ai_raf: p.ai_raf,
+                gap: p.gap,
+                revenue_opportunity: p.revenue_opportunity,
+                hcc_count_billing: p.hcc_count_billing,
+                hcc_count_ai: p.hcc_count_ai,
+              }) as Record<string, unknown>)}
+              chartRef={revenueTableRef as React.RefObject<HTMLElement>}
+              rawData={top25.map((p) => ({ patient: p.name, billing_raf: p.billing_raf, ai_raf: p.ai_raf, gap: p.gap, revenue: p.revenue_opportunity }) as Record<string, unknown>)}
+            />
+          </div>
         </div>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table aria-label="Revenue opportunities" style={{ width: "100%", borderCollapse: "collapse" }}>
