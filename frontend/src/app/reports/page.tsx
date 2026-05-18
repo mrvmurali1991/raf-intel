@@ -6,12 +6,13 @@ import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { tokens } from "@/styles/tokens";
 
 const ReportsHeavyTabs = dynamic(() => import("./ReportsHeavyTabs"), {
   ssr: false,
   loading: () => (
-    <div style={{ padding: "60px 24px", textAlign: "center", color: "#64748B", fontSize: 13 }}>
-      <div style={{ width: 32, height: 32, border: "3px solid #E2E8F0", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+    <div className="text-muted-foreground" style={{ padding: "60px 24px", textAlign: "center", fontSize: 13 }}>
+      <div style={{ width: 32, height: 32, border: `3px solid ${tokens.slate200}`, borderTopColor: tokens.primary, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
       Loading...
     </div>
   ),

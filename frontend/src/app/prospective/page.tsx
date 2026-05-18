@@ -36,7 +36,8 @@ import {
   getRevenueOpportunity,
   useMetricFormula,
 } from "@/lib/api";
-import { StatCard, PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import { fmtCurrencyFull, fmtCurrencyCompact } from "@/lib/format";
 import { tokens } from "@/styles/tokens";
 // ── Dynamic import: defer Pre-Visit Summary modal (~35 kB) ──
@@ -690,29 +691,29 @@ export default function ProspectivePage() {
       {/* Stats Row */}
       <div className="animate-fade-in" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 28 }}>
         <div className="animate-slide-up stagger-1 card-glow-rose">
-          <StatCard
+          <MetricCard
             label="Not Seen This Year"
             value={stats.notSeenThisYear.toLocaleString()}
             subtitle="patients requiring outreach"
-            color={C.red600}
+            intent="danger"
             icon={<Users size={18} />}
           />
         </div>
         <div className="animate-slide-up stagger-2 card-glow-amber">
-          <StatCard
+          <MetricCard
             label="Open Suspect Conditions"
             value={stats.totalSuspects.toLocaleString()}
             subtitle="across all patients"
-            color={C.amber500}
+            intent="warning"
             icon={<AlertTriangle size={18} />}
           />
         </div>
         <div className="animate-slide-up stagger-3 card-glow-emerald">
-          <StatCard
+          <MetricCard
             label="Revenue at Risk"
             value={fmtCurrencyCompact(stats.totalRevenue)}
             subtitle="estimated opportunity"
-            color={C.emerald500}
+            intent="success"
             icon={<TrendingUp size={18} />}
             meta={revenueAtRiskMeta ?? undefined}
             labelTestId="revenue-at-risk-label"
@@ -720,20 +721,18 @@ export default function ProspectivePage() {
           />
         </div>
         <div className="animate-slide-up stagger-4 card-glow-blue">
-          <StatCard
+          <MetricCard
             label="AWV Opportunities"
             value={stats.awvOpportunities.toLocaleString()}
             subtitle="eligible patients"
-            color={C.purple600}
             icon={<Calendar size={18} />}
           />
         </div>
         <div className="animate-slide-up stagger-5 card-glow-blue">
-          <StatCard
+          <MetricCard
             label="High Priority Patients"
             value={stats.highPriority.toLocaleString()}
             subtitle="requiring immediate action"
-            color={C.primary}
             icon={<Star size={18} />}
           />
         </div>

@@ -15,12 +15,29 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
 import type { MetricMeta } from "@/lib/api";
+
+// ---------------------------------------------------------------------------
+// relativeTime helper — "<1m" / "Xm" / "Xh" / "Xd"
+// ---------------------------------------------------------------------------
+
+function relativeTime(iso: string): string | null {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return null;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "<1m";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,8 +95,8 @@ export interface MetricCardProps {
   meta?: MetricMeta | null;
   /**
    * ISO-8601 timestamp of the last time this metric was computed.
-   * When provided, renders "Last refreshed Xm ago" below the value.
-   * Silently omitted if null/undefined or an invalid date.
+   * When provided, renders "Last refreshed Xm ago" below the value with a
+   * Clock icon. Silently omitted if null/undefined or an invalid date.
    */
   freshness?: string;
   /** data-testid placed on the label span — for smoke-test parity selectors */
@@ -192,6 +209,24 @@ function Spark({ data, colour }: { data: number[]; colour: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// LastRefreshed — inline freshness indicator
+// ---------------------------------------------------------------------------
+
+function LastRefreshed({ freshness }: { freshness: string }) {
+  const rel = relativeTime(freshness);
+  if (!rel) return null;
+  return (
+    <span
+      data-testid="last-refreshed"
+      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 leading-none"
+    >
+      <Clock size={11} aria-hidden />
+      Last refreshed {rel} ago
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // MetricCard
 // ---------------------------------------------------------------------------
 
@@ -283,19 +318,8 @@ export function MetricCard({
           {delta !== undefined && <DeltaBadge delta={delta} intent={intent} />}
         </div>
 
-        {/* Last-refreshed freshness row */}
-        {freshness && (() => {
-          const rel = relativeTime(freshness);
-          return rel ? (
-            <span
-              data-testid="last-refreshed"
-              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 leading-none"
-            >
-              <Clock size={11} aria-hidden />
-              Last refreshed {rel} ago
-            </span>
-          ) : null;
-        })()}
+        {/* Last-refreshed freshness indicator */}
+        {freshness && <LastRefreshed freshness={freshness} />}
 
         {/* Subtitle */}
         {subtitle && (

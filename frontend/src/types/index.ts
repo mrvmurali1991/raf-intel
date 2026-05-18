@@ -388,6 +388,8 @@ export interface RevenueOpportunityReport {
   average_raf_score: number;
   /** Backend _meta block — formula provenance for CFO tooltip */
   _meta?: import("@/lib/api").MetricMeta;
+  /** ISO-8601 timestamp of when this metric was last computed */
+  last_computed_at?: string;
 }
 
 export interface JobStatusResponse {

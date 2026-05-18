@@ -61,7 +61,6 @@ import {
 } from "@/lib/api";
 import { MetricTrend } from "@/components/charts/MetricTrend";
 import {
-  StatCard,
   RiskBadge,
   ProgressBar,
   SectionHeader,
@@ -1058,10 +1057,10 @@ export function AdminDashboard() {
         <div style={{ background: "#FEF2F2", borderRadius: 16, padding: 24 }}>
           <AlertCircle size={48} color="#EF4444" />
         </div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1E293B" }}>
+        <h2 className="text-foreground" style={{ fontSize: 20, fontWeight: 700 }}>
           Unable to Load Dashboard
         </h2>
-        <p style={{ fontSize: 14, color: "#64748B", maxWidth: 400 }}>
+        <p className="text-muted-foreground" style={{ fontSize: 14, maxWidth: 400 }}>
           The analytics service is not responding. Please verify the backend is running and try again.
         </p>
         <button
