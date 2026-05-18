@@ -1410,6 +1410,7 @@ export default function SuspectsPage() {
         ))}
       </div>
 
+      {/* a11y: role=grid + rowgroup/columnheader + aria-sort; @keyframes guarded by prefers-reduced-motion */}
       <div
         role="grid"
         aria-label="Suspected conditions"
