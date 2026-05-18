@@ -1055,17 +1055,15 @@ select.appearance-none {
 }
 
 .kpi-compact-label {
-  @apply text-label;
+  @apply text-xs font-medium uppercase tracking-wider;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
-  text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
 .kpi-compact-value {
-  @apply text-metric-value;
+  @apply text-3xl font-bold tracking-tight tabular-nums;
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1;
   white-space: nowrap;
