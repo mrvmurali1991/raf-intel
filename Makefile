@@ -2,32 +2,6 @@
 # RAF Intelligence — Makefile
 # ---------------------------------------------------------------------------
 
-# ---- Pilot / Demo Targets ------------------------------------------------
-
-pilot-ready:
-	bash scripts/pilot-ready.sh
-
-pilot-ready-fast:
-	bash scripts/pilot-ready.sh --skip-tests
-
-pilot-teardown:
-	bash scripts/pilot-teardown.sh
-
-pilot-doctor:
-	bash scripts/pilot-doctor.sh
-
-smoke:
-	@echo "==> 5-endpoint smoke test"
-	@BACKEND=http://localhost:8500; \
-	for EP in /health /api/auth/me /api/dashboard/stats /docs /api/suspects; do \
-	  CODE=$$(curl -s -o /dev/null -w "%{http_code}" "$$BACKEND$$EP" 2>/dev/null || echo 000); \
-	  if [ "$$CODE" = "200" ] || [ "$$CODE" = "401" ] || [ "$$CODE" = "422" ]; then \
-	    printf "  \033[0;32m[OK]\033[0m  $$BACKEND$$EP  (HTTP $$CODE)\n"; \
-	  else \
-	    printf "  \033[0;31m[FAIL]\033[0m $$BACKEND$$EP  (HTTP $$CODE)\n"; \
-	  fi; \
-	done
-
 REMOTE_HOST   := ubuntu@10.1.1.66
 REMOTE_DIR    := /home/ubuntu/raf-intelligence
 SSH_OPTS      := -o StrictHostKeyChecking=accept-new
@@ -119,14 +93,21 @@ restore:
 	@if [ -z "$(DB)" ]; then echo "ERROR: DB is required. Usage: make restore FILE=path/to/backup.sql.gz DB=raf|openemr"; exit 1; fi
 	./scripts/restore.sh $(FILE) --$(DB)
 
-# ---- Frontend E2E Testing ------------------------------------------------
+# ---- User Guide (Markdown -> optional MkDocs site) -----------------------
 
-e2e:
-	@echo "Running Playwright E2E suite (spawns local dev server)..."
-	bash frontend/scripts/e2e.sh
+# Copies docs/user-guide/*.md into docs-site/ as a static directory.
+# If `mkdocs` is on PATH, also builds a Material site under docs-site/site/.
+# Safe to run without MkDocs installed.
+user-guide:
+	@mkdir -p docs-site
+	@cp -R docs/user-guide/* docs-site/
+	@echo "Copied $(shell ls docs/user-guide/*.md | wc -l | tr -d ' ') markdown files to docs-site/"
+	@if command -v mkdocs >/dev/null 2>&1; then \
+	  echo "mkdocs detected — building static site"; \
+	  test -f docs-site/mkdocs.yml || printf "site_name: RAF Intelligence User Guide\ndocs_dir: .\ntheme:\n  name: material\n" > docs-site/mkdocs.yml; \
+	  ( cd docs-site && mkdocs build ); \
+	else \
+	  echo "mkdocs not installed — markdown is available under docs-site/. Install with: pip install mkdocs-material"; \
+	fi
 
-e2e-staging:
-	@echo "Running Playwright E2E suite against staging (https://raf.comercioit.com)..."
-	cd frontend && npx playwright test --project=e2e
-
-.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore e2e e2e-staging pilot-ready pilot-ready-fast pilot-teardown pilot-doctor smoke
+.PHONY: dev dev-frontend dev-backend local-up local-down deploy deploy-frontend deploy-backend deploy-prod logs logs-backend logs-frontend logs-worker status restart shell-backend backup backup-raf backup-openemr restore user-guide

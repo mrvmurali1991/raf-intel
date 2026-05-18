@@ -41,6 +41,7 @@ import {
   Filter,
   TrendingDown,
   FileStack,
+  Sparkles,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -116,6 +117,7 @@ const navGroups: NavGroup[] = [
   {
     title: "ADMIN",
     items: [
+      { href: "/admin/demo", label: "Demo Mode", icon: Sparkles, visibleToRoles: ["admin", "manager"] },
       { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack },
       { href: "/users", label: "Users", icon: UsersRound },
       { href: "/system", label: "System Health", icon: Activity },
