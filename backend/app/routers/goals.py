@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from app.auth import get_current_user, get_tenant_id
-from app.db import get_db_connection
+from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ def _days_remaining(period: str) -> int:
 # SQL helpers (plain DB, no ORM to match project conventions)
 # ---------------------------------------------------------------------------
 
-def _fetch_goals(tenant_id: str, conn) -> list[dict]:
-    rows = conn.execute(
+def _fetch_goals(tenant_id: str, cur) -> list[dict]:
+    cur.execute(
         """
         SELECT id, tenant_id, period, metric, CAST(target_value AS CHAR) AS target_value,
                owner_user_id, created_at
@@ -74,12 +74,12 @@ def _fetch_goals(tenant_id: str, conn) -> list[dict]:
         ORDER BY period DESC, id DESC
         """,
         (tenant_id,),
-    ).fetchall()
-    return [dict(r._mapping) for r in rows]
+    )
+    return cur.fetchall() or []
 
 
-def _fetch_goal(goal_id: int, tenant_id: str, conn) -> dict | None:
-    row = conn.execute(
+def _fetch_goal(goal_id: int, tenant_id: str, cur) -> dict | None:
+    cur.execute(
         """
         SELECT id, tenant_id, period, metric, CAST(target_value AS CHAR) AS target_value,
                owner_user_id, created_at
@@ -87,15 +87,15 @@ def _fetch_goal(goal_id: int, tenant_id: str, conn) -> dict | None:
         WHERE id = %s AND tenant_id = %s
         """,
         (goal_id, tenant_id),
-    ).fetchone()
-    return dict(row._mapping) if row else None
+    )
+    return cur.fetchone()
 
 
-def _compute_actual(metric: str, period: str, tenant_id: str, conn) -> float:
+def _compute_actual(metric: str, period: str, tenant_id: str, cur) -> float:
     start, end = _quarter_bounds(period)
 
     if metric == "raf_capture_count":
-        row = conn.execute(
+        cur.execute(
             """
             SELECT COUNT(*) AS cnt
             FROM hcc_suspects
@@ -104,11 +104,12 @@ def _compute_actual(metric: str, period: str, tenant_id: str, conn) -> float:
               AND DATE(updated_at) BETWEEN %s AND %s
             """,
             (tenant_id, start.isoformat(), end.isoformat()),
-        ).fetchone()
-        return float(row.cnt if row else 0)
+        )
+        row = cur.fetchone()
+        return float(row["cnt"] if row else 0)
 
     if metric == "gaps_closed":
-        row = conn.execute(
+        cur.execute(
             """
             SELECT COUNT(*) AS cnt
             FROM care_gaps
@@ -117,11 +118,12 @@ def _compute_actual(metric: str, period: str, tenant_id: str, conn) -> float:
               AND DATE(closed_at) BETWEEN %s AND %s
             """,
             (tenant_id, start.isoformat(), end.isoformat()),
-        ).fetchone()
-        return float(row.cnt if row else 0)
+        )
+        row = cur.fetchone()
+        return float(row["cnt"] if row else 0)
 
     if metric == "revenue":
-        row = conn.execute(
+        cur.execute(
             """
             SELECT COALESCE(SUM(revenue_impact), 0) AS total
             FROM hcc_suspects
@@ -130,8 +132,9 @@ def _compute_actual(metric: str, period: str, tenant_id: str, conn) -> float:
               AND DATE(updated_at) BETWEEN %s AND %s
             """,
             (tenant_id, start.isoformat(), end.isoformat()),
-        ).fetchone()
-        return float(row.total if row else 0)
+        )
+        row = cur.fetchone()
+        return float(row["total"] if row else 0)
 
     return 0.0
 
@@ -179,13 +182,13 @@ def list_goals(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ) -> list[dict[str, Any]]:
-    with get_db_connection() as conn:
-        goals = _fetch_goals(tenant_id, conn)
+    with raf_cursor() as cur:
+        goals = _fetch_goals(tenant_id, cur)
         if period:
             goals = [g for g in goals if g["period"] == period]
         result = []
         for g in goals:
-            actual = _compute_actual(g["metric"], g["period"], tenant_id, conn)
+            actual = _compute_actual(g["metric"], g["period"], tenant_id, cur)
             target = float(g["target_value"])
             pct = round(min(actual / target * 100, 100), 1) if target else 0
             result.append(
@@ -206,8 +209,8 @@ def create_goal(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    with get_db_connection() as conn:
-        result = conn.execute(
+    with raf_cursor() as cur:
+        cur.execute(
             """
             INSERT INTO raf_goals (tenant_id, period, metric, target_value, owner_user_id, created_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
@@ -220,12 +223,11 @@ def create_goal(
                 body.owner_user_id,
             ),
         )
-        conn.connection.commit()
-        new_id = result.lastrowid
-        goal = _fetch_goal(new_id, tenant_id, conn)
+        new_id = cur.lastrowid
+        goal = _fetch_goal(new_id, tenant_id, cur)
         if not goal:
             raise HTTPException(status_code=500, detail="Goal creation failed")
-        actual = _compute_actual(goal["metric"], goal["period"], tenant_id, conn)
+        actual = _compute_actual(goal["metric"], goal["period"], tenant_id, cur)
         target = float(goal["target_value"])
         pct = round(min(actual / target * 100, 100), 1) if target else 0
         return {
@@ -243,11 +245,11 @@ def goal_progress(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    with get_db_connection() as conn:
-        goal = _fetch_goal(goal_id, tenant_id, conn)
+    with raf_cursor() as cur:
+        goal = _fetch_goal(goal_id, tenant_id, cur)
         if not goal:
             raise HTTPException(status_code=404, detail="Goal not found")
-        actual = _compute_actual(goal["metric"], goal["period"], tenant_id, conn)
+        actual = _compute_actual(goal["metric"], goal["period"], tenant_id, cur)
         target = float(goal["target_value"])
         pct = round(min(actual / target * 100, 100), 1) if target else 0
         _, end = _quarter_bounds(goal["period"])
