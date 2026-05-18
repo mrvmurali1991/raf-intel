@@ -57,7 +57,13 @@ def _check_migration_022() -> bool:
     if _MIGRATION_022_PRESENT is not None:
         return _MIGRATION_022_PRESENT
 
+    # Probe outcomes:
+    #   present=True  → column exists; gate is active
+    #   present=False → column definitively absent (query succeeded, 0 rows)
+    #   probe_failed=True → DB unreachable during the probe; do NOT cache,
+    #     and do NOT crash the app on import. Retry on next call.
     present = False
+    probe_failed = False
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -71,12 +77,17 @@ def _check_migration_022() -> bool:
             )
             present = cur.fetchone() is not None
     except Exception as exc:
+        probe_failed = True
         logger.warning(
             "_check_migration_022: information_schema probe failed (%s); "
-            "treating column as missing for safety.",
+            "will retry on next call. Skipping fail-fast in import-time check.",
             exc,
         )
-        present = False
+
+    if probe_failed:
+        # Connection wasn't ready yet (common during container startup race).
+        # Don't crash — return False without caching so the next call retries.
+        return False
 
     if not present:
         env = (os.getenv("APP_ENV") or "").lower()
@@ -97,8 +108,16 @@ def _check_migration_022() -> bool:
     return present
 
 
-# Run the check once at import time so prod fails fast on a misconfigured DB.
-_check_migration_022()
+# Probe at import time so a real misconfiguration fails fast — but the probe
+# is now fail-soft on connection errors (will retry on first runtime call).
+try:
+    _check_migration_022()
+except Exception as _exc:  # noqa: BLE001
+    logger.warning(
+        "_check_migration_022 import-time probe deferred (%s); "
+        "will retry on first attestation call.",
+        _exc,
+    )
 
 # ---------------------------------------------------------------------------
 # Signature helpers
