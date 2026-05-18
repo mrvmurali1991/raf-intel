@@ -11,6 +11,7 @@ import { RefreshCw, Download, Calendar, Search, ChevronLeft, ChevronRight, Arrow
 import { getRecaptureGapsReport, getRevenueOpportunity, useMetricFormula } from "@/lib/api";
 import { downloadCSV } from "@/lib/csv-export";
 import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { HelpButton } from "@/components/HelpPanel";
 import { MetricCard } from "@/components/ui/metric-card";
 import FeatureFlag from "@/components/FeatureFlag";
 import DataQualityBanner from "@/components/DataQualityBanner";
@@ -116,6 +117,9 @@ export default function RecapturePage() {
   const { data, isLoading, isError, refetch } = useQuery<RecaptureReport>({
     queryKey: ["recapture-gaps", year],
     queryFn: () => getRecaptureGapsReport(year) as unknown as Promise<RecaptureReport>,
+    // perf(demo): 60s staleTime keeps the recapture table cached so the
+    // recapture -> dashboard -> recapture demo flow paints instantly.
+    staleTime: 60_000,
   });
 
   // Revenue meta — stale-while-revalidate; provides formula tooltip for CFO.
@@ -258,25 +262,28 @@ export default function RecapturePage() {
           subtitle="Chronic conditions documented in prior years that must be re-coded annually to maintain RAF score accuracy and revenue"
           icon={<RefreshCw size={22} />}
           actions={
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              aria-label="Measurement year"
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: `1px solid ${colors.slate200}`,
-                fontSize: 13,
-                fontWeight: 600,
-                color: colors.slate900,
-                background: colors.white,
-                cursor: "pointer",
-              }}
-            >
-              {Array.from({length: 3}, (_, i) => new Date().getFullYear() - i).map(yr => (
-                <option key={yr} value={yr}>{yr}</option>
-              ))}
-            </select>
+            <>
+              <select
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                aria-label="Measurement year"
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: `1px solid ${colors.slate200}`,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: colors.slate900,
+                  background: colors.white,
+                  cursor: "pointer",
+                }}
+              >
+                {Array.from({length: 3}, (_, i) => new Date().getFullYear() - i).map(yr => (
+                  <option key={yr} value={yr}>{yr}</option>
+                ))}
+              </select>
+              <HelpButton />
+            </>
           }
         />
       </div>
@@ -298,8 +305,8 @@ export default function RecapturePage() {
         <div className="animate-fade-in stagger-1">
           <MetricCard
             label="Estimated Revenue at Risk"
-            value={formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
-            subtitle="Unrecaptured chronic conditions × prior-year RAF dollars"
+            value={(data.total_gaps ?? 0) === 0 ? "Awaiting data ingestion" : formatCurrency((data.total_gaps ?? 0) * REVENUE_PER_GAP)}
+            subtitle={(data.total_gaps ?? 0) === 0 ? "No open recapture gaps detected yet" : "Unrecaptured chronic conditions × prior-year RAF dollars"}
             intent="danger"
             icon={<ArrowUpDown size={18} />}
             meta={revenueAtRiskMeta ?? undefined}
@@ -312,7 +319,8 @@ export default function RecapturePage() {
         <div className="animate-fade-in stagger-2">
           <MetricCard
             label="Total Recapture Gaps"
-            value={(data.total_gaps ?? 0).toLocaleString()}
+            value={(data.total_gaps ?? 0) === 0 ? "0 — all clear" : (data.total_gaps ?? 0).toLocaleString()}
+            subtitle={(data.total_gaps ?? 0) === 0 ? "All chronic conditions recaptured this year" : undefined}
             intent="warning"
             icon={<RefreshCw size={18} />}
             labelTooltip="Number of chronic conditions documented in a prior year that have not yet been re-coded in the current measurement year. Each gap requires a qualifying encounter."
@@ -321,7 +329,8 @@ export default function RecapturePage() {
         <div className="animate-fade-in stagger-3">
           <MetricCard
             label="Patients Affected"
-            value={(data.patients_affected ?? 0).toLocaleString()}
+            value={(data.patients_affected ?? 0) === 0 ? "0 — none yet" : (data.patients_affected ?? 0).toLocaleString()}
+            subtitle={(data.patients_affected ?? 0) === 0 ? "Begin by importing patient encounter data" : undefined}
             icon={<Calendar size={18} />}
             labelTooltip="Distinct patients who have at least one open recapture gap this measurement year. One patient may have multiple gaps across different HCC categories."
           />

@@ -16,6 +16,7 @@ import { useRef } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { HelpButton } from "@/components/HelpPanel";
 import {
   Loader2,
   AlertTriangle,
@@ -166,6 +167,7 @@ export default function V28ImpactPage() {
             {runAnalysis.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             Run Analysis
           </button>
+          <HelpButton />
         </div>
       </header>
 

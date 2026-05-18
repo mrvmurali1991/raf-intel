@@ -52,8 +52,15 @@ import { downloadCSV } from "@/lib/csv-export";
 import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import FeatureFlag from "@/components/FeatureFlag";
+import { HelpButton } from "@/components/HelpPanel";
 import { KgGapBadge } from "@/components/kg/KgGapBadge";
 import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 // ── Dynamic import: defer SuspectDrawer expanded-row detail (~30 kB) ──
 // Only loaded when the user clicks a row to expand it.
 const SuspectDrawerDynamic = dynamic(
@@ -194,7 +201,7 @@ function getCoefficient(s: DBSuspect): number {
 }
 
 function formatCurrency(n: number): string {
-  if (!isFinite(n)) return "$0";
+  if (!isFinite(n) || n === 0) return "Awaiting data ingestion";
   return `$${Math.round(n).toLocaleString()}`;
 }
 
@@ -655,6 +662,7 @@ export default function SuspectsPage() {
   /* ============================================================== */
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div
       className="suspects-page-wrap"
       style={{
@@ -795,6 +803,8 @@ export default function SuspectsPage() {
               >
                 Suspect Conditions
               </h1>
+              <Tooltip>
+                <TooltipTrigger asChild>
               <div
                 style={{
                   display: "inline-flex",
@@ -842,6 +852,11 @@ export default function SuspectsPage() {
                   ))}
                 </select>
               </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Measurement year — affects HCC code set (V28 for 2026+)
+                </TooltipContent>
+              </Tooltip>
             </div>
             <p
               style={{
@@ -858,6 +873,10 @@ export default function SuspectsPage() {
           </div>
         </div>
 
+        {/* Help button — top-right of page header */}
+        <div style={{ marginLeft: "auto", flexShrink: 0 }}>
+          <HelpButton />
+        </div>
       </div>
 
       {/* ============================================================ */}
@@ -881,22 +900,22 @@ export default function SuspectsPage() {
           },
           {
             label: "Est. RAF Uplift",
-            value: isLoading ? "\u2014" : `+${heroStats.totalUplift.toFixed(2)}`,
-            sub: "Sum of coefficients",
+            value: isLoading ? "\u2014" : heroStats.totalUplift > 0 ? `+${heroStats.totalUplift.toFixed(2)}` : "Not yet started",
+            sub: heroStats.totalUplift > 0 ? "Sum of coefficients" : "Accept suspects to calculate uplift",
             icon: TrendingUp,
             tone: C.brand,
           },
           {
             label: "Est. Annual Revenue",
             value: isLoading ? "\u2014" : formatCurrency(heroStats.totalRevenue),
-            sub: `at $${REVENUE_PER_RAF.toLocaleString()}/RAF point`,
+            sub: heroStats.totalRevenue > 0 ? `at $${REVENUE_PER_RAF.toLocaleString()}/RAF point` : "Not yet started — accept suspects to calculate",
             icon: DollarSign,
             tone: C.low,
           },
           {
             label: "Avg Confidence",
-            value: isLoading ? "\u2014" : `${(heroStats.avgConf * 100).toFixed(0)}%`,
-            sub: "Across open suspects",
+            value: isLoading ? "\u2014" : heroStats.avgConf > 0 ? `${(heroStats.avgConf * 100).toFixed(0)}%` : "\u2014",
+            sub: heroStats.openCount > 0 ? "Across open suspects" : "No open suspects",
             icon: Activity,
             tone: C.medium,
           },
@@ -1055,24 +1074,35 @@ export default function SuspectsPage() {
               <div className="suspects-filter-chip-group" style={groupStyle} role="group" aria-label="Status filter">
                 {STATUS_TABS.filter((t) => PRIMARY_STATUS.includes(t.value)).map(({ value, label, dot }) => {
                   const active = statusFilter === value;
+                  const chipTooltip: Record<string, string> = {
+                    all: "Show all suspects regardless of status",
+                    open: "Suspects not yet reviewed — requires coder action",
+                    accepted: "Suspects accepted and written to OpenEMR",
+                  };
                   return (
-                    <button
-                      key={value}
-                      onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      aria-pressed={active}
-                      style={primaryChipStyle(active)}
-                    >
-                      {dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot, boxShadow: active ? "0 0 0 1.5px rgba(255,255,255,0.25)" : "none" }} />}
-                      {label}
-                      <span style={{ fontSize: 11, fontWeight: 600, color: active ? "rgba(255,255,255,0.7)" : C.label, fontVariantNumeric: "tabular-nums" }}>{statusCounts[value]}</span>
-                    </button>
+                    <Tooltip key={value}>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          aria-pressed={active}
+                          style={primaryChipStyle(active)}
+                        >
+                          {dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot, boxShadow: active ? "0 0 0 1.5px rgba(255,255,255,0.25)" : "none" }} />}
+                          {label}
+                          <span style={{ fontSize: 11, fontWeight: 600, color: active ? "rgba(255,255,255,0.7)" : C.label, fontVariantNumeric: "tabular-nums" }}>{statusCounts[value]}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{chipTooltip[value]}</TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>
 
               {/* "More filters" trigger + popover */}
               <div style={{ position: "relative" }}>
+                <Tooltip>
+                <TooltipTrigger asChild>
                 <button
                   ref={moreTriggerRef}
                   id={`${moreMenuId}-btn`}
@@ -1106,6 +1136,9 @@ export default function SuspectsPage() {
                   )}
                   <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: moreOpen ? "rotate(180deg)" : "none" }} />
                 </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Filter by status (Dismissed / Coded), evidence source, or confidence signal</TooltipContent>
+                </Tooltip>
 
                 {moreOpen && (
                   <div
@@ -1246,18 +1279,29 @@ export default function SuspectsPage() {
               })()}
 
               {/* Sort — always visible */}
-              <button
-                onClick={() => setSortField((f) => f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence")}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  height: 36, padding: "0 14px", borderRadius: 10,
-                  border: `1px solid ${C.border}`, backgroundColor: tokens.white,
-                  color: C.textMuted, fontSize: 12, fontWeight: 600,
-                  fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
-                }}
-              >
-                Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setSortField((f) => f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence")}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      height: 36, padding: "0 14px", borderRadius: 10,
+                      border: `1px solid ${C.border}`, backgroundColor: tokens.white,
+                      color: C.textMuted, fontSize: 12, fontWeight: 600,
+                      fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
+                    }}
+                  >
+                    Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {sortField === "confidence"
+                    ? "Sorted by AI confidence score — highest signal first. Click to switch to RAF lift."
+                    : sortField === "raf"
+                    ? "Sorted by RAF coefficient — highest revenue impact first. Click to switch to patient name."
+                    : "Sorted alphabetically by patient name. Click to switch to confidence."}
+                </TooltipContent>
+              </Tooltip>
 
               {hasActiveFilters && (
                 <button
@@ -1460,8 +1504,22 @@ export default function SuspectsPage() {
           <div role="columnheader">Suspected Condition</div>
           <div role="columnheader">Evidence</div>
           <div role="columnheader" aria-sort={sortField === "confidence" ? "descending" : "none"}>Confidence</div>
-          <div role="columnheader" aria-sort={sortField === "raf" ? "descending" : "none"} style={{ justifySelf: "end" }}>RAF Lift</div>
-          <div role="columnheader" style={{ justifySelf: "end" }}>Revenue</div>
+          <div role="columnheader" aria-sort={sortField === "raf" ? "descending" : "none"} style={{ justifySelf: "end" }}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>RAF Lift</span>
+              </TooltipTrigger>
+              <TooltipContent side="top">Estimated RAF score increase if this HCC is documented this year</TooltipContent>
+            </Tooltip>
+          </div>
+          <div role="columnheader" style={{ justifySelf: "end" }}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Revenue</span>
+              </TooltipTrigger>
+              <TooltipContent side="top">Estimated $ = RAF lift × ${MA_PAYMENT_PER_RAF.toLocaleString()} (CMS V28 per-point rate, 2026)</TooltipContent>
+            </Tooltip>
+          </div>
           <div role="columnheader" style={{ justifySelf: "end" }}>Status</div>
           <div role="columnheader" style={{ justifySelf: "end" }}>Actions</div>
         </div>
@@ -1732,31 +1790,50 @@ export default function SuspectsPage() {
 
               {/* Evidence pill */}
               <div>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    height: 22,
-                    padding: "0 10px",
-                    borderRadius: 999,
-                    backgroundColor: C.bgBand,
-                    border: `1px solid ${C.border}`,
-                    color: C.textMuted,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {evidenceIcon(s.evidence_type, 11)}
-                  {evidenceLabelShort(s.evidence_type)}
-                </span>
+                {(() => {
+                  const evidenceTooltips: Record<string, string> = {
+                    medication: "Medication — a prescribed drug suggests this condition may be active",
+                    lab: "Lab — a lab result or abnormal value flagged this condition",
+                    imaging: "Imaging — a radiology report or scan referenced this diagnosis",
+                    referral: "Referral — a specialist referral indicates this condition was suspected",
+                    historical: "Historical — condition was documented in a prior measurement year",
+                  };
+                  const tipText = evidenceTooltips[s.evidence_type ?? ""] ?? "Clinical — evidence detected in chart notes";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            height: 22,
+                            padding: "0 10px",
+                            borderRadius: 999,
+                            backgroundColor: C.bgBand,
+                            border: `1px solid ${C.border}`,
+                            color: C.textMuted,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            textTransform: "capitalize",
+                            cursor: "help",
+                          }}
+                        >
+                          {evidenceIcon(s.evidence_type, 11)}
+                          {evidenceLabelShort(s.evidence_type)}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">{tipText}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
               </div>
 
               {/* Confidence bar — numeric score shown as tooltip; label uses signal-strength words */}
+              <Tooltip>
+                <TooltipTrigger asChild>
               <div
-                title={`Internal signal score: ${(conf * 100).toFixed(0)}% (not a calibrated probability — relative ranking only)`}
-                style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}
+                style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, cursor: "help" }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div
@@ -1780,7 +1857,6 @@ export default function SuspectsPage() {
                     />
                   </div>
                   <span
-                    title={`Internal signal score: ${(conf * 100).toFixed(0)}% (not a calibrated probability)`}
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
@@ -1797,7 +1873,6 @@ export default function SuspectsPage() {
                 {/* Calibrated chip — shown when Platt scaling has been applied */}
                 {isCalibrated && (
                   <span
-                    title={`Raw: ${((s.confidence_score ?? 0) * 100).toFixed(0)}% → Calibrated: ${(conf * 100).toFixed(0)}%`}
                     style={{
                       fontSize: 9,
                       fontWeight: 600,
@@ -1814,8 +1889,20 @@ export default function SuspectsPage() {
                   </span>
                 )}
               </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px]">
+                  {conf >= 0.85
+                    ? `Strong: ≥0.85 score · High confidence this HCC is undocumented (raw: ${(conf * 100).toFixed(0)}%)`
+                    : conf >= 0.65
+                    ? `Moderate: 0.65–0.85 score · Reasonable evidence, coder review recommended (raw: ${(conf * 100).toFixed(0)}%)`
+                    : `Weak: <0.65 score · AI-uncertain — requires careful coder review (raw: ${(conf * 100).toFixed(0)}%)`}
+                  {isCalibrated ? ` · Platt-calibrated from ${((s.confidence_score ?? 0) * 100).toFixed(0)}%` : ""}
+                </TooltipContent>
+              </Tooltip>
 
               {/* RAF lift */}
+              <Tooltip>
+                <TooltipTrigger asChild>
               <div
                 style={{
                   justifySelf: "end",
@@ -1823,6 +1910,7 @@ export default function SuspectsPage() {
                   flexDirection: "column",
                   alignItems: "flex-end",
                   gap: 1,
+                  cursor: "help",
                 }}
               >
                 <span
@@ -1848,19 +1936,32 @@ export default function SuspectsPage() {
                   RAF
                 </span>
               </div>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Estimated RAF score increase of +{coef.toFixed(3)} if this HCC is documented this year
+                </TooltipContent>
+              </Tooltip>
 
               {/* Revenue */}
-              <div
-                style={{
-                  justifySelf: "end",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: C.text,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {formatCurrency(revenue)}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    style={{
+                      justifySelf: "end",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: C.text,
+                      fontVariantNumeric: "tabular-nums",
+                      cursor: "help",
+                    }}
+                  >
+                    {formatCurrency(revenue)}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Estimated $ = RAF lift ({coef.toFixed(3)}) × ${MA_PAYMENT_PER_RAF.toLocaleString()} (CMS V28 per-point rate, 2026)
+                </TooltipContent>
+              </Tooltip>
 
               {/* Status pill */}
               <div style={{ justifySelf: "end" }}>
@@ -1905,60 +2006,70 @@ export default function SuspectsPage() {
               >
                 {isOpen ? (
                   <>
-                    <button
-                      className="row-action-btn"
-                      disabled={acceptMut.isPending}
-                      onClick={() => acceptMut.mutate(s.id)}
-                      aria-label="Push to EMR"
-                      title="Push to EMR"
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        border: `1px solid ${C.low}`,
-                        backgroundColor: "transparent",
-                        color: C.low,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = C.lowSoft;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "transparent";
-                      }}
-                    >
-                      <Check size={15} strokeWidth={2.5} />
-                    </button>
-                    <button
-                      className="row-action-btn"
-                      disabled={dismissMut.isPending}
-                      onClick={() => dismissMut.mutate(s.id)}
-                      aria-label="Dismiss suspect"
-                      title="Dismiss"
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        border: `1px solid ${C.high}`,
-                        backgroundColor: "transparent",
-                        color: C.high,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = C.highSoft;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "transparent";
-                      }}
-                    >
-                      <X size={15} strokeWidth={2.5} />
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="row-action-btn"
+                          disabled={acceptMut.isPending}
+                          onClick={() => acceptMut.mutate(s.id)}
+                          aria-label="Accept suspect — push to OpenEMR (keyboard: A)"
+                          title="Accept suspect — push to OpenEMR (keyboard: A)"
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            border: `1px solid ${C.low}`,
+                            backgroundColor: "transparent",
+                            color: C.low,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = C.lowSoft;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                          }}
+                        >
+                          <Check size={15} strokeWidth={2.5} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Accept &amp; write to OpenEMR · keyboard <kbd>A</kbd></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="row-action-btn"
+                          disabled={dismissMut.isPending}
+                          onClick={() => dismissMut.mutate(s.id)}
+                          aria-label="Dismiss suspect — mark not applicable (keyboard: D)"
+                          title="Dismiss suspect — mark not applicable (keyboard: D)"
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            border: `1px solid ${C.high}`,
+                            backgroundColor: "transparent",
+                            color: C.high,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = C.highSoft;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                          }}
+                        >
+                          <X size={15} strokeWidth={2.5} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Dismiss — condition not applicable · keyboard <kbd>D</kbd></TooltipContent>
+                    </Tooltip>
                   </>
                 ) : (
                   <span
@@ -1975,14 +2086,27 @@ export default function SuspectsPage() {
                     {s.status === "coded" && <CheckCircle2 size={13} color={C.brand} />}
                   </span>
                 )}
-                <ChevronRight
-                  size={14}
-                  color={isExpanded || hoveredId === s.id ? C.brand : tokens.slate300}
-                  style={{
-                    transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                    transition: "transform 0.18s ease",
-                  }}
-                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      aria-label={isExpanded ? "Collapse row" : "Expand row — open chart (keyboard: R)"}
+                      title={isExpanded ? "Collapse row" : "Expand row — open chart (keyboard: R)"}
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      <ChevronRight
+                        size={14}
+                        color={isExpanded || hoveredId === s.id ? C.brand : tokens.slate300}
+                        style={{
+                          transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                          transition: "transform 0.18s ease",
+                        }}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isExpanded ? "Collapse detail" : "Expand — view evidence · keyboard  R  opens chart"}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
             {isExpanded && (
@@ -2132,70 +2256,92 @@ export default function SuspectsPage() {
             }}
           />
 
-          <button
-            disabled={bulkMut.isPending}
-            onClick={() => { setBulkAction("accept"); bulkMut.mutate({ action: "accept" }); }}
-            style={{
-              height: 36,
-              padding: "0 18px",
-              borderRadius: 10,
-              border: "none",
-              backgroundColor: C.low,
-              color: tokens.white,
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: bulkMut.isPending ? "not-allowed" : "pointer",
-              opacity: bulkMut.isPending ? 0.6 : 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              boxShadow: "0 2px 8px rgba(5, 150, 105, 0.3)",
-            }}
-          >
-            <Check size={14} strokeWidth={2.5} />
-            {bulkMut.isPending && bulkAction === "accept" ? "Accepting\u2026" : "Accept all"}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                disabled={bulkMut.isPending}
+                onClick={() => { setBulkAction("accept"); bulkMut.mutate({ action: "accept" }); }}
+                aria-label={`Accept all ${selected.size} selected suspects and write to OpenEMR`}
+                style={{
+                  height: 36,
+                  padding: "0 18px",
+                  borderRadius: 10,
+                  border: "none",
+                  backgroundColor: C.low,
+                  color: tokens.white,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: bulkMut.isPending ? "not-allowed" : "pointer",
+                  opacity: bulkMut.isPending ? 0.6 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  boxShadow: "0 2px 8px rgba(5, 150, 105, 0.3)",
+                }}
+              >
+                <Check size={14} strokeWidth={2.5} />
+                {bulkMut.isPending && bulkAction === "accept" ? "Accepting\u2026" : "Accept all"}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Accept all {selected.size} selected suspects — writes each to OpenEMR
+            </TooltipContent>
+          </Tooltip>
 
-          <button
-            disabled={bulkMut.isPending}
-            onClick={() => { setBulkAction("dismiss"); bulkMut.mutate({ action: "dismiss" }); }}
-            style={{
-              height: 36,
-              padding: "0 18px",
-              borderRadius: 10,
-              border: `1px solid rgba(255,255,255,0.2)`,
-              backgroundColor: "transparent",
-              color: tokens.white,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: bulkMut.isPending ? "not-allowed" : "pointer",
-              opacity: bulkMut.isPending ? 0.6 : 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <X size={14} strokeWidth={2.5} />
-            {bulkMut.isPending && bulkAction === "dismiss" ? "Dismissing\u2026" : "Dismiss all"}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                disabled={bulkMut.isPending}
+                onClick={() => { setBulkAction("dismiss"); bulkMut.mutate({ action: "dismiss" }); }}
+                aria-label={`Dismiss all ${selected.size} selected suspects`}
+                style={{
+                  height: 36,
+                  padding: "0 18px",
+                  borderRadius: 10,
+                  border: `1px solid rgba(255,255,255,0.2)`,
+                  backgroundColor: "transparent",
+                  color: tokens.white,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: bulkMut.isPending ? "not-allowed" : "pointer",
+                  opacity: bulkMut.isPending ? 0.6 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <X size={14} strokeWidth={2.5} />
+                {bulkMut.isPending && bulkAction === "dismiss" ? "Dismissing\u2026" : "Dismiss all"}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Mark all {selected.size} selected suspects as not applicable
+            </TooltipContent>
+          </Tooltip>
 
-          <button
-            onClick={() => setSelected(new Set())}
-            style={{
-              marginLeft: "auto",
-              height: 36,
-              padding: "0 14px",
-              borderRadius: 10,
-              border: "none",
-              backgroundColor: "transparent",
-              color: "rgba(255,255,255,0.7)",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Clear
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setSelected(new Set())}
+                aria-label="Clear selection — no changes will be saved"
+                style={{
+                  marginLeft: "auto",
+                  height: 36,
+                  padding: "0 14px",
+                  borderRadius: 10,
+                  border: "none",
+                  backgroundColor: "transparent",
+                  color: "rgba(255,255,255,0.7)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Clear
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Deselect all — no changes will be saved</TooltipContent>
+          </Tooltip>
         </div>
       )}
 
@@ -2216,6 +2362,7 @@ export default function SuspectsPage() {
         onClose={() => setWriteBackSuspect(null)}
       />
     </div>
+    </TooltipProvider>
   );
 }
 

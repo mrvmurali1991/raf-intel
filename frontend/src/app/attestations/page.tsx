@@ -258,20 +258,21 @@ export default function AttestationsPage() {
       >
         <MetricCard
           label="Total"
-          value={statsLoading ? "—" : String(stats?.total ?? 0)}
+          value={statsLoading ? "—" : (stats?.total ?? 0) === 0 ? "None yet" : String(stats!.total)}
+          subtitle={(stats?.total ?? 0) === 0 && !statsLoading ? "Accept suspects to create attestations" : undefined}
           icon={<ClipboardCheck size={18} />}
           loading={statsLoading}
         />
         <MetricCard
           label="Pending"
-          value={statsLoading ? "—" : String(stats?.pending ?? 0)}
+          value={statsLoading ? "—" : (stats?.pending ?? 0) === 0 ? "0 of " + String(stats?.total ?? 0) : String(stats!.pending)}
           icon={<Clock size={18} />}
           intent="warning"
           loading={statsLoading}
         />
         <MetricCard
           label="Attested"
-          value={statsLoading ? "—" : String(stats?.attested ?? 0)}
+          value={statsLoading ? "—" : (stats?.attested ?? 0) === 0 ? "0 of " + String(stats?.total ?? 0) : String(stats!.attested)}
           icon={<CheckCircle2 size={18} />}
           intent="success"
           loading={statsLoading}
@@ -291,7 +292,8 @@ export default function AttestationsPage() {
         />
         <MetricCard
           label="Attestation Rate"
-          value={statsLoading ? "—" : `${((stats?.attestation_rate ?? 0) * 100).toFixed(1)}%`}
+          value={statsLoading ? "—" : (stats?.total ?? 0) === 0 ? "Not yet started" : `${((stats?.attestation_rate ?? 0) * 100).toFixed(1)}%`}
+          subtitle={(stats?.total ?? 0) === 0 && !statsLoading ? "Begin by accepting suspects" : undefined}
           icon={<CheckCircle2 size={18} />}
           intent="success"
           loading={statsLoading}

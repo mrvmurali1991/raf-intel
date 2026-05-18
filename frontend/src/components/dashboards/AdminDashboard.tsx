@@ -578,7 +578,7 @@ export function AdminDashboard() {
       return { count: res.data.total ?? (res.data.runs?.length ?? 0) };
     },
     staleTime: 120_000,
-    retry: 1,
+    retry: false, // best-effort: don't retry on 500 to avoid double error logs
   });
   const onboardingAttestCount = attestationCountQ.data?.total ?? 0;
   const onboardingAuditCount = auditRunCountQ.data?.count ?? 0;

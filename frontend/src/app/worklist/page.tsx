@@ -680,6 +680,7 @@ export default function WorklistPage() {
         <PageHeader
           title="Today's worklist"
           subtitle={`${summary.patients} patient${summary.patients === 1 ? "" : "s"} prioritized for ${measurementYear}`}
+          actions={<HelpButton />}
         />
 
         {/* Provider Workload Heatmap — elevated roles only */}

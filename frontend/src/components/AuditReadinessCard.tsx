@@ -62,7 +62,9 @@ function Stat({ label, value }: { label: string; value: number }) {
         border: `1px solid ${tokens.slate200}`,
       }}
     >
-      <div style={{ fontSize: 22, fontWeight: 700, color: tokens.slate900 }}>{value}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: tokens.slate900 }}>
+        {value === 0 ? "—" : value}
+      </div>
       <div
         style={{
           fontSize: 11,
@@ -323,7 +325,9 @@ export function AuditReadinessCard() {
             />
           </svg>
           <div style={{ position: "absolute", textAlign: "center" }}>
-            <div style={{ fontSize: 36, fontWeight: 700, color }}>{pct.toFixed(1)}%</div>
+            <div style={{ fontSize: pct === 0 ? 18 : 36, fontWeight: 700, color }}>
+              {pct === 0 ? "Not yet started" : `${pct.toFixed(1)}%`}
+            </div>
             <div
               style={{
                 fontSize: 11,
@@ -332,7 +336,7 @@ export function AuditReadinessCard() {
                 letterSpacing: "0.05em",
               }}
             >
-              Audit Ready
+              {pct === 0 ? "Begin audit review" : "Audit Ready"}
             </div>
           </div>
         </div>
