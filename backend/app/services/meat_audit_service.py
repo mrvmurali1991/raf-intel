@@ -438,11 +438,13 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
       * dual_signed    — audit_status = 'approved' AND has both coder ids
       * audit_ready    — dual_signed (the strict definition)
     """
-    # primary_coder_label / secondary_coder_label were added in migration 029.
-    # We use COALESCE so this query still works on pre-migration instances where
-    # the columns may not yet exist — MySQL raises an error on unknown columns,
-    # so we fall back gracefully in the except block below.
-    sql = """
+    # Columns added by migrations may not exist on all deployed instances.
+    # We try progressively simpler queries:
+    #   1. Full query with IRR-label columns (migration 029)
+    #   2. Without IRR-label columns (pre-029)
+    #   3. Base-only (status + revenue_impact — works if audit workflow columns absent)
+    # Each fallback strips one layer of optional columns.
+    sql_full = """
         SELECT
             id,
             patient_id,
@@ -459,18 +461,42 @@ def compute_audit_readiness(tenant_id: str) -> dict[str, Any]:
         WHERE tenant_id = %s
           AND status IN ('open', 'recaptured')
     """
-    try:
-        with raf_cursor() as cur:
-            cur.execute(sql, (tenant_id,))
-            rows = cur.fetchall() or []
-    except Exception:
-        # Fallback: query without the new IRR-label columns (pre-migration instances).
-        sql_compat = sql.replace(
-            ",\n            primary_coder_label,\n            secondary_coder_label", ""
-        )
-        with raf_cursor() as cur:
-            cur.execute(sql_compat, (tenant_id,))
-            rows = cur.fetchall() or []
+    sql_no_irr = """
+        SELECT
+            id,
+            patient_id,
+            hcc_code,
+            evidence_phrase,
+            meat_element,
+            audit_status,
+            primary_coder_id,
+            secondary_coder_id,
+            revenue_impact
+        FROM recapture_gaps
+        WHERE tenant_id = %s
+          AND status IN ('open', 'recaptured')
+    """
+    sql_base = """
+        SELECT
+            id,
+            patient_id,
+            hcc_code,
+            revenue_impact
+        FROM recapture_gaps
+        WHERE tenant_id = %s
+          AND status IN ('open', 'recaptured')
+    """
+    rows: list[dict[str, Any]] = []
+    for _sql in (sql_full, sql_no_irr, sql_base):
+        try:
+            with raf_cursor() as cur:
+                cur.execute(_sql, (tenant_id,))
+                rows = cur.fetchall() or []
+            break  # success — stop trying
+        except Exception as _exc:
+            logger.warning(
+                "compute_audit_readiness: query attempt failed (%s); trying simpler query", _exc
+            )
 
     total = len(rows)
     with_evidence = 0

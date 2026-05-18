@@ -321,15 +321,15 @@ export function NotificationCenter({ collapsed = false }: NotificationCenterProp
         };
 
         // When the backend refuses the connection (e.g. 423 from emr_gate, or
-        // auth expiry), EventSource will otherwise retry forever. Close it so
-        // the browser doesn't hammer the server in an infinite loop.
+        // auth expiry), EventSource will otherwise retry forever. Close it
+        // immediately on any error so the browser does not hammer the server.
+        // The component will pick up fresh notifications on next mount/re-render.
         es.onerror = () => {
-          if (es && es.readyState === EventSource.CLOSED) return;
           es?.close();
         };
       } catch {
         // SSE ticket endpoint not yet available — SSE disabled until backend is ready.
-        logger.error("NotificationCenter", "SSE ticket endpoint unavailable; real-time notifications disabled");
+        logger.warn("NotificationCenter", "SSE ticket endpoint unavailable; real-time notifications disabled");
       }
     })();
 

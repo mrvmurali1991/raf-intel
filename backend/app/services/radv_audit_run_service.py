@@ -462,8 +462,35 @@ def create_audit_run(
     return get_audit_run(run_id, tenant_id=tenant_id)
 
 
+def _has_audit_runs_table() -> bool:
+    """Return True if raf_radv_audit_runs exists (migration 030 applied)."""
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'raf_radv_audit_runs'
+                """
+            )
+            row = cur.fetchone()
+            return bool(row and int(row.get("cnt") or 0) > 0)
+    except Exception as exc:
+        logger.warning("radv: table existence probe failed (%s); assuming absent", exc)
+        return False
+
+
 def list_audit_runs(*, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
-    """Return run headers + per-run counts for the tenant."""
+    """Return run headers + per-run counts for the tenant.
+
+    Returns an empty list when migration 030 has not yet been applied to the
+    target schema, so the endpoint returns 200 {runs: []} instead of 500.
+    """
+    if not _has_audit_runs_table():
+        logger.warning("radv: raf_radv_audit_runs table absent — migration 030 not yet applied")
+        return []
+
     # v2 columns (migration 033) are optional — omit them when absent so the
     # query doesn't fail on schemas that haven't run that migration yet.
     v2_cols = (

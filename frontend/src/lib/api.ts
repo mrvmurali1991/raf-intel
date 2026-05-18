@@ -231,7 +231,10 @@ api.interceptors.response.use(
     }
 
     logger.api(method, url, status, duration);
-    logger.error("API", `Request failed: ${method.toUpperCase()} ${url}`, {
+    // Use warn for 4xx (expected states — auth/refresh 401, resource 404, etc.)
+    // and error only for 5xx (genuine server failures) or network errors (status 0).
+    const logFn = status >= 500 || status === 0 ? logger.error : logger.warn;
+    logFn("API", `Request failed: ${method.toUpperCase()} ${url}`, {
       status,
       data: error?.response?.data,
       message: error?.message,

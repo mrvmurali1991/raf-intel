@@ -167,8 +167,13 @@ def list_runs(
     current_user: dict = Depends(require_permission("radv", "read")),
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict:
+    try:
+        runs = svc.list_audit_runs(tenant_id=tenant_id)
+    except Exception as exc:
+        logger.error("radv.list_runs failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list audit runs")
     return {
-        "runs": svc.list_audit_runs(tenant_id=tenant_id),
+        "runs": runs,
         "extrapolation_enforced": extrapolation_enforced,
         "extrapolation_note": (
             None

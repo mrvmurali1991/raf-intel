@@ -55,7 +55,10 @@ export const logger = {
   api: (method: string, url: string, status?: number, duration?: number) => {
     const statusStr = status ? ` -> ${status}` : "";
     const durationStr = duration ? ` (${duration}ms)` : "";
-    const level: LogLevel = status && status >= 400 ? "error" : "info";
+    // 5xx → error, 4xx → warn (expected states like 401/404 should not pollute
+    // the DevTools console.error channel), 2xx/3xx → info
+    const level: LogLevel =
+      status && status >= 500 ? "error" : status && status >= 400 ? "warn" : "info";
     log(level, "API", `${method.toUpperCase()} ${url}${statusStr}${durationStr}`);
   },
 };
