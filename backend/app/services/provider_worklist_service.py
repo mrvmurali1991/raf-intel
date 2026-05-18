@@ -35,12 +35,14 @@ from typing import Any
 
 from app.db import raf_cursor
 from app.services.cache_strategy import TTL_WORKLIST, tenant_cached
+from app.services.metrics_service import revenue_at_risk as _canonical_revenue_at_risk
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Revenue assumed per open recapture gap when recapture_gaps.revenue_impact
-# is NULL or the table does not exist.
+# is NULL or the table does not exist (used only for per-patient row estimates
+# in the worklist, NOT for the KPI summary total).
 # ---------------------------------------------------------------------------
 _DEFAULT_REVENUE_PER_GAP: float = 3_000.00
 
@@ -738,6 +740,7 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
         "total_patients_needing_attention": 0,
         "total_raf_impact_at_risk": 0.0,
         "total_revenue_at_risk": 0.0,
+        "total_revenue_at_risk_meta": None,
         "top_conditions": [],
         "provider_performance": [],
         "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
@@ -745,14 +748,13 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
 
     recapture_exists = _table_exists("recapture_gaps")
 
-    # ---- Patients needing attention + revenue totals ----
+    # ---- Patients needing attention ----
     if recapture_exists:
         try:
             with raf_cursor() as cur:
                 cur.execute(
                     """
-                    SELECT COUNT(DISTINCT rg.patient_id)    AS patients_with_gaps,
-                           COALESCE(SUM(rg.revenue_impact), 0) AS total_revenue
+                    SELECT COUNT(DISTINCT rg.patient_id) AS patients_with_gaps
                     FROM   recapture_gaps rg
                     JOIN   patients p ON p.id = rg.patient_id
                     WHERE  rg.tenant_id    = %s
@@ -766,17 +768,14 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                 row = cur.fetchone()
                 if row:
                     summary["total_patients_needing_attention"] = int(row["patients_with_gaps"] or 0)
-                    summary["total_revenue_at_risk"] = float(row["total_revenue"] or 0)
         except Exception as exc:
-            logger.debug("get_worklist_summary: recapture totals query failed: %s", exc)
+            logger.debug("get_worklist_summary: patient count query failed: %s", exc)
     else:
-        # Derive from raf_patient_hcc
         try:
             with raf_cursor() as cur:
                 cur.execute(
                     """
-                    SELECT COUNT(DISTINCT ph.patient_id) AS patients_with_gaps,
-                           COALESCE(SUM(ph.raf_coefficient * %s), 0) AS total_revenue
+                    SELECT COUNT(DISTINCT ph.patient_id) AS patients_with_gaps
                     FROM   raf_patient_hcc ph
                     JOIN   patients p ON p.id = ph.patient_id
                     WHERE  ph.tenant_id        = %s
@@ -792,14 +791,21 @@ def get_worklist_summary(tenant_id: str) -> dict[str, Any]:
                              AND  cy.tenant_id        = %s
                       )
                     """,
-                    (_DEFAULT_REVENUE_PER_GAP, tenant_id, prior_year, tenant_id, current_year, tenant_id),
+                    (tenant_id, prior_year, tenant_id, current_year, tenant_id),
                 )
                 row = cur.fetchone()
                 if row:
                     summary["total_patients_needing_attention"] = int(row["patients_with_gaps"] or 0)
-                    summary["total_revenue_at_risk"] = float(row["total_revenue"] or 0)
         except Exception as exc:
-            logger.debug("get_worklist_summary: derived totals query failed: %s", exc)
+            logger.debug("get_worklist_summary: derived patient count query failed: %s", exc)
+
+    # ---- Revenue-at-Risk: canonical single source ----
+    try:
+        rar = _canonical_revenue_at_risk(tenant_id, payment_year=current_year, scope="recapture")
+        summary["total_revenue_at_risk"] = rar["value"]
+        summary["total_revenue_at_risk_meta"] = rar["_meta"]
+    except Exception as exc:
+        logger.debug("get_worklist_summary: canonical revenue_at_risk failed: %s", exc)
 
     # ---- Total RAF impact at risk ----
     try:

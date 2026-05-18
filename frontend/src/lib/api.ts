@@ -4621,3 +4621,69 @@ export async function getGoalProgress(id: number): Promise<RafGoal> {
   const { data } = await api.get<RafGoal>(`/api/v1/goals/${id}/progress`);
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Canonical metric formula metadata
+//
+// Every Revenue-at-Risk value returned by the backend includes a
+// `_meta` / `*_meta` sibling field that describes exactly how the number
+// was computed.  These types model that payload and the hook below makes
+// the formula available for tooltips without any additional API calls.
+// ---------------------------------------------------------------------------
+
+/** Metadata block returned alongside every canonical metric value. */
+export interface MetricMeta {
+  formula: string;
+  version: string;
+  last_computed_at: string;
+  payment_year: number;
+  revenue_per_raf_point?: number;
+  total_raf_points?: number;
+  scope?: string;
+  /** Any additional fields the backend attaches */
+  [key: string]: unknown;
+}
+
+/**
+ * Extract a MetricMeta object from an API response payload.
+ *
+ * Looks for common meta field patterns:
+ *   - `total_revenue_at_risk_meta`
+ *   - `estimated_annual_revenue_meta`
+ *   - `<metricName>_meta`
+ *
+ * Returns null when no meta block is present (backwards compatible with
+ * older backend responses that predate metrics_service).
+ *
+ * Usage (in a component):
+ *   const meta = useMetricFormula(summaryData, "total_revenue_at_risk");
+ *   // then pass meta?.formula to a Tooltip content prop
+ */
+export function useMetricFormula(
+  payload: Record<string, unknown> | null | undefined,
+  metricName: string,
+): MetricMeta | null {
+  if (!payload) return null;
+
+  // Try exact suffixed key first
+  const suffixedKey = `${metricName}_meta`;
+  if (payload[suffixedKey] && typeof payload[suffixedKey] === "object") {
+    return payload[suffixedKey] as MetricMeta;
+  }
+
+  // Generic fallback: any key ending in _meta that is an object with a formula field
+  for (const key of Object.keys(payload)) {
+    if (key.endsWith("_meta")) {
+      const candidate = payload[key];
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        "formula" in (candidate as object)
+      ) {
+        return candidate as MetricMeta;
+      }
+    }
+  }
+
+  return null;
+}

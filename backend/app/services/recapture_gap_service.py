@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.db import raf_cursor
+from app.services.metrics_service import revenue_at_risk as _canonical_revenue_at_risk
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +292,8 @@ def get_gap_stats(tenant_id: str) -> dict[str, Any]:
             "open": int,
             "recaptured": int,
             "dismissed": int,
-            "total_revenue_at_risk": float,
+            "total_revenue_at_risk": float,   # canonical RAF-coefficient * CMS rate
+            "total_revenue_at_risk_meta": dict,  # formula, version, last_computed_at
         }
     """
     sql = """
@@ -299,9 +301,7 @@ def get_gap_stats(tenant_id: str) -> dict[str, Any]:
             COUNT(*)                                          AS total_gaps,
             SUM(status = 'open')                             AS open_count,
             SUM(status = 'recaptured')                       AS recaptured_count,
-            SUM(status = 'dismissed')                        AS dismissed_count,
-            COALESCE(SUM(CASE WHEN status = 'open'
-                              THEN revenue_impact END), 0)   AS total_revenue_at_risk
+            SUM(status = 'dismissed')                        AS dismissed_count
         FROM recapture_gaps
         WHERE tenant_id = %s
     """
@@ -310,12 +310,16 @@ def get_gap_stats(tenant_id: str) -> dict[str, Any]:
         cursor.execute(sql, (tenant_id,))
         row = cursor.fetchone()
 
+    # Canonical Revenue-at-Risk from metrics_service
+    rar = _canonical_revenue_at_risk(tenant_id, scope="recapture")
+
     return {
-        "total_gaps":             int(row["total_gaps"] or 0),
-        "open":                   int(row["open_count"] or 0),
-        "recaptured":             int(row["recaptured_count"] or 0),
-        "dismissed":              int(row["dismissed_count"] or 0),
-        "total_revenue_at_risk":  float(row["total_revenue_at_risk"] or 0.0),
+        "total_gaps":                  int(row["total_gaps"] or 0),
+        "open":                        int(row["open_count"] or 0),
+        "recaptured":                  int(row["recaptured_count"] or 0),
+        "dismissed":                   int(row["dismissed_count"] or 0),
+        "total_revenue_at_risk":       rar["value"],
+        "total_revenue_at_risk_meta":  rar["_meta"],
     }
 
 
@@ -448,9 +452,7 @@ def get_gap_summary(tenant_id: str) -> dict[str, Any]:
         }
     """
     stats_sql = """
-        SELECT
-            COUNT(*)                                                    AS total_open_gaps,
-            COALESCE(SUM(revenue_impact), 0)                           AS total_raf_at_risk
+        SELECT COUNT(*) AS total_open_gaps
         FROM recapture_gaps
         WHERE tenant_id = %s
           AND status    = 'open'
@@ -458,13 +460,18 @@ def get_gap_summary(tenant_id: str) -> dict[str, Any]:
 
     hcc_sql = """
         SELECT
-            hcc_code,
-            COUNT(*)                  AS gap_count,
-            COALESCE(SUM(revenue_impact), 0) AS raf_at_risk
-        FROM recapture_gaps
-        WHERE tenant_id = %s
-          AND status    = 'open'
-        GROUP BY hcc_code
+            rg.hcc_code,
+            COUNT(*)                                                    AS gap_count,
+            COALESCE(SUM(ph.raf_coefficient), COUNT(*) * 0.15)         AS raf_at_risk
+        FROM recapture_gaps rg
+        LEFT JOIN raf_patient_hcc ph
+               ON ph.patient_id       = rg.patient_id
+              AND ph.hcc_code         = rg.hcc_code
+              AND ph.measurement_year = rg.prior_year
+              AND ph.tenant_id        = rg.tenant_id
+        WHERE rg.tenant_id = %s
+          AND rg.status    = 'open'
+        GROUP BY rg.hcc_code
         ORDER BY raf_at_risk DESC
         LIMIT 20
     """
@@ -473,11 +480,16 @@ def get_gap_summary(tenant_id: str) -> dict[str, Any]:
         SELECT
             rg.patient_id,
             CONCAT(COALESCE(pt.first_name, ''), ' ', COALESCE(pt.last_name, '')) AS patient_name,
-            COUNT(*)                            AS open_gaps,
-            COALESCE(SUM(rg.revenue_impact), 0) AS raf_at_risk
+            COUNT(*)                                                    AS open_gaps,
+            COALESCE(SUM(ph.raf_coefficient), COUNT(*) * 0.15)         AS raf_at_risk
         FROM recapture_gaps rg
         LEFT JOIN patients pt
                ON pt.id = rg.patient_id AND pt.tenant_id = rg.tenant_id
+        LEFT JOIN raf_patient_hcc ph
+               ON ph.patient_id       = rg.patient_id
+              AND ph.hcc_code         = rg.hcc_code
+              AND ph.measurement_year = rg.prior_year
+              AND ph.tenant_id        = rg.tenant_id
         WHERE rg.tenant_id = %s
           AND rg.status    = 'open'
         GROUP BY rg.patient_id, patient_name
@@ -495,9 +507,14 @@ def get_gap_summary(tenant_id: str) -> dict[str, Any]:
         cursor.execute(patients_sql, (tenant_id,))
         patient_rows = cursor.fetchall()
 
+    # Canonical Revenue-at-Risk from metrics_service
+    rar = _canonical_revenue_at_risk(tenant_id, scope="recapture")
+
     return {
         "total_open_gaps": int(stats_row["total_open_gaps"] or 0),
-        "total_raf_at_risk": float(stats_row["total_raf_at_risk"] or 0.0),
+        "total_raf_at_risk": rar["_meta"]["total_raf_points"],
+        "total_revenue_at_risk": rar["value"],
+        "total_revenue_at_risk_meta": rar["_meta"],
         "gaps_by_hcc": [
             {
                 "hcc_code": r["hcc_code"],

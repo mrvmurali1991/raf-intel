@@ -41,7 +41,13 @@ def _ensure_awv_table() -> None:
     _awv_table_ensured = True
 
 
-# CMS per-member per-year benchmark rate (MA) — read from settings (env: CMS_REVENUE_PER_RAF_POINT)
+# ---------------------------------------------------------------------------
+# Revenue-at-Risk: delegate to canonical metrics_service — do NOT recompute.
+# ---------------------------------------------------------------------------
+from app.services.metrics_service import revenue_at_risk as _canonical_revenue_at_risk  # noqa: E402
+
+# Legacy module-level constant kept for AWV ($250/AWV) and worklist
+# revenue_opportunity calculations that are NOT Revenue-at-Risk KPIs.
 _REVENUE_PER_RAF_POINT = settings.cms_revenue_per_raf_point
 
 # AWV CPT codes — initial (G0438), subsequent (G0439), and preventive E/M
@@ -953,7 +959,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
 
         patients_not_seen = max(0, total_patients - seen_this_year)
 
-        # Open suspects (total count + revenue) — only active patients
+        # Open suspects count (kept for informational display)
         _sf, _sp = active_patients_subquery(tid)
         with raf_cursor() as cur:
             cur.execute(
@@ -969,10 +975,12 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
             )
             susp_row = cur.fetchone()
         total_open_suspects = _coerce_int(susp_row["cnt"]) if susp_row else 0
-        total_raf_at_risk = (
-            _coerce_float(susp_row["total_raf_at_risk"]) if susp_row else 0.0
-        )
-        total_revenue_at_risk = round(total_raf_at_risk * _REVENUE_PER_RAF_POINT, 2)
+
+        # Revenue-at-Risk: delegate to canonical metrics_service (scope=prospective)
+        _rar = _canonical_revenue_at_risk(tenant_id, payment_year=calc_year, scope="prospective")
+        total_raf_at_risk = _rar["_meta"]["total_raf_points"]
+        total_revenue_at_risk = _rar["value"]
+        _revenue_at_risk_meta = _rar["_meta"]
 
         # AWV opportunities — only active patients
         awv_placeholders = ",".join(["%s"] * len(_AWV_CPT_CODES))
@@ -1044,6 +1052,7 @@ def get_prospective_summary(tenant_id: str, year: int) -> dict[str, Any]:
             "total_open_suspects": total_open_suspects,
             "total_raf_at_risk": round(total_raf_at_risk, 4),
             "total_revenue_at_risk": total_revenue_at_risk,
+            "total_revenue_at_risk_meta": _revenue_at_risk_meta,
             "awv_completed_this_year": awv_done,
             "awv_opportunities": awv_opportunities,
             "awv_revenue_opportunity": round(awv_opportunities * 250.0, 2),

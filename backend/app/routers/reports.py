@@ -29,6 +29,7 @@ from app.services.cache_strategy import (
     get_active_connection_id as _active_connection_id,
 )
 from app.services.emr_manager import active_patients_subquery
+from app.services.metrics_service import revenue_at_risk as _canonical_revenue_at_risk
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +255,10 @@ def revenue_opportunity(year: int = Query(default=None),
     else:
         total_gap = round(total_ai_raf - total_billing_raf, 4)
 
-    estimated_annual_revenue = round(total_gap * settings.cms_revenue_per_raf_point, 2)
+    # Revenue-at-Risk: canonical single source (scope=recapture — matches /recapture page)
+    _rar = _canonical_revenue_at_risk(tenant_id, payment_year=calc_year, scope="recapture")
+    estimated_annual_revenue = _rar["value"]
+    _revenue_meta = _rar["_meta"]
 
     # Average across the AI/calculated RAF per patient — billing-only RAF is
     # often empty for demo data because there are no submitted claims yet, so
@@ -271,6 +275,7 @@ def revenue_opportunity(year: int = Query(default=None),
         "total_ai_raf": total_ai_raf if total_ai_raf > 0 else round(total_billing_raf + total_gap, 4),
         "total_gap": total_gap,
         "estimated_annual_revenue": estimated_annual_revenue,
+        "estimated_annual_revenue_meta": _revenue_meta,
         "average_raf_score": average_raf_score,
     }
     cache_set(_cache_key, result, ttl=300)
