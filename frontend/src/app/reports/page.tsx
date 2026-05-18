@@ -28,7 +28,7 @@ import {
   type HccDistributionRow,
 } from "@/lib/api";
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
-import { FileDown, Printer, Lock } from "lucide-react";
+import { Clock, FileDown, Printer, Lock } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import { tokens } from "@/styles/tokens";
 import { ChartExportMenu } from "@/components/ui/chart-export-menu";
@@ -813,7 +813,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
         </div>
         <button
           onClick={() => {
-            if (!filtered.length) return;
+            if (isHistoricalPY || !filtered.length) return;
             downloadCSV(filtered.map((p) => ({
               "Patient": p.name,
               "Age": p.age,
@@ -827,7 +827,9 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
               "Status": p.analyzed ? "Analyzed" : "Pending",
             })), "patient-scorecard");
           }}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+          disabled={isHistoricalPY}
+          title={isHistoricalPY ? "Disabled in historical view" : undefined}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", flexShrink: 0, opacity: isHistoricalPY ? 0.6 : 1 }}
         >
           <FileDown size={14} />
           Export CSV
@@ -952,8 +954,10 @@ function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistribut
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
-            onClick={() => { if (top20.length) downloadCSV(csvData, "hcc-distribution"); }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            onClick={() => { if (!isHistoricalPY && top20.length) downloadCSV(csvData, "hcc-distribution"); }}
+            disabled={isHistoricalPY}
+            title={isHistoricalPY ? "Disabled in historical view" : undefined}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
           >
             <FileDown size={14} />
             Export CSV
