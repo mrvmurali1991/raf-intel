@@ -223,11 +223,11 @@ export function MetricCard({
         className,
       )}
     >
-      {/* 160 px min-height + 24 px padding per KPI card spec */}
-      <CardContent className="flex flex-col gap-2" style={{ minHeight: 160, padding: 24 }}>
+      {/* sizing driven by CSS tokens --kpi-card-min-h / --kpi-card-pad */}
+      <CardContent className="flex flex-col gap-2 min-h-[var(--kpi-card-min-h)] p-[var(--kpi-card-pad)]">
         {/* Header row: label + icon badge */}
         <div className="flex items-start justify-between gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground leading-none">
+          <span className="text-label leading-none">
             {label}
           </span>
           {icon && (
@@ -245,7 +245,7 @@ export function MetricCard({
 
         {/* Value row */}
         <div className="flex items-end gap-2">
-          <span className="text-2xl font-bold tabular-nums leading-none tracking-tight text-foreground">
+          <span className="text-metric-value leading-none text-foreground">
             {value}
           </span>
           {delta !== undefined && <DeltaBadge delta={delta} intent={intent} />}
