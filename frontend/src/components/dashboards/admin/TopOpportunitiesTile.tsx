@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Target, ChevronRight, CheckCircle } from "lucide-react";
 import type { TopOpportunity } from "@/lib/api";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Shared card style
@@ -81,6 +87,7 @@ export function TopOpportunitiesTile({
   const router = useRouter();
 
   return (
+    <TooltipProvider delay={200}>
     <div
       style={{
         ...card,
@@ -243,41 +250,65 @@ export function TopOpportunitiesTile({
                 {opp.condition}
               </span>
 
-              <ConfidenceDots score={opp.confidence_score} />
+              <Tooltip>
+                <TooltipTrigger
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                  data-testid={`tooltip-opportunity-confidence-${opp.patient_id}`}
+                >
+                  <ConfidenceDots score={opp.confidence_score} />
+                </TooltipTrigger>
+                <TooltipContent>AI confidence that this condition is clinically present and uncoded. {Math.round(opp.confidence_score * 100)}% confidence based on clinical note evidence.</TooltipContent>
+              </Tooltip>
 
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "#065F46",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {fmt$(opp.revenue_at_risk)}
-              </span>
+              <Tooltip>
+                <TooltipTrigger
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                  data-testid={`tooltip-opportunity-revenue-${opp.patient_id}`}
+                >
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#065F46",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {fmt$(opp.revenue_at_risk)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Estimated annual revenue at risk if this condition is not coded: RAF lift &times; $11,015 per RAF point, weighted by confidence score.</TooltipContent>
+              </Tooltip>
 
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "3px 10px",
-                  borderRadius: 10,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                  background: opp.days_remaining < 7 ? "#FEF3C7" : "#D1FAE5",
-                  color: opp.days_remaining < 7 ? "#92400E" : "#065F46",
-                  border:
-                    opp.days_remaining < 7
-                      ? "1px solid #FDE68A"
-                      : "1px solid #A7F3D0",
-                  width: "fit-content",
-                }}
-                aria-label={`${opp.days_remaining} days remaining`}
-              >
-                {opp.days_remaining}d
-              </span>
+              <Tooltip>
+                <TooltipTrigger
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                  data-testid={`tooltip-opportunity-days-${opp.patient_id}`}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "3px 10px",
+                      borderRadius: 10,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      background: opp.days_remaining < 7 ? "#FEF3C7" : "#D1FAE5",
+                      color: opp.days_remaining < 7 ? "#92400E" : "#065F46",
+                      border:
+                        opp.days_remaining < 7
+                          ? "1px solid #FDE68A"
+                          : "1px solid #A7F3D0",
+                      width: "fit-content",
+                    }}
+                    aria-label={`${opp.days_remaining} days remaining`}
+                  >
+                    {opp.days_remaining}d
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Days until the next CMS submission window closes. Code this condition before then to capture the revenue this payment year.</TooltipContent>
+              </Tooltip>
             </div>
           ))}
 
@@ -298,5 +329,6 @@ export function TopOpportunitiesTile({
         </>
       )}
     </div>
+    </TooltipProvider>
   );
 }

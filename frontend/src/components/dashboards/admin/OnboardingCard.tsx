@@ -6,6 +6,12 @@ import {
   Heart, Upload, Play, CheckCircle, ChevronRight,
   RefreshCw, Database, FileSearch, Package, X, BookOpen,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Shared card style (local copy — avoids cross-file coupling)
@@ -77,6 +83,7 @@ export function OnboardingCard({
       number: 1,
       title: "Connect EMR",
       description: "Link OpenEMR, Epic, or any FHIR source to import patient records automatically.",
+      tooltip: "Connecting your EMR enables automatic patient sync so RAF Intelligence always has up-to-date clinical data for scoring and gap detection.",
       icon: <Heart size={20} color={emrConnected ? "#10B981" : "#3B82F6"} />,
       ctaLabel: "Go to EMR Config",
       ctaHref: "/emr-config" as string | undefined,
@@ -87,6 +94,7 @@ export function OnboardingCard({
       number: 2,
       title: "Import / Sync Patients",
       description: "No EMR? Upload a CSV directly — or sync via your connected source.",
+      tooltip: "Patient records are required before analysis can run. Import via FHIR sync or CSV upload to populate the roster.",
       icon: <Upload size={20} color={patientCount > 0 ? "#10B981" : "#8B5CF6"} />,
       ctaLabel: demoLoading ? "Connecting..." : "Try Demo Data",
       ctaHref: undefined as string | undefined,
@@ -97,6 +105,7 @@ export function OnboardingCard({
       number: 3,
       title: "Run First Clinical Analysis",
       description: "Trigger an AI analysis run to score patients and surface HCC coding gaps.",
+      tooltip: "The AI engine reads clinical notes, diagnoses, and vitals to assign RAF scores and identify HCC codes that may be missing or under-documented.",
       icon: <Database size={20} color={analysisRunCount > 0 ? "#10B981" : "#F59E0B"} />,
       ctaLabel: "Go to Analysis",
       ctaHref: "/analysis",
@@ -107,6 +116,7 @@ export function OnboardingCard({
       number: 4,
       title: "Review First Gaps",
       description: "Open the review queue, attest or dismiss your first suggested gap.",
+      tooltip: "Attesting a gap confirms the AI suggestion and queues it for coding submission to CMS. Dismissing it removes false positives from your workflow.",
       icon: <FileSearch size={20} color={attestationCount > 0 ? "#10B981" : "#EF4444"} />,
       ctaLabel: "Go to Review Queue",
       ctaHref: "/review-queue",
@@ -117,6 +127,7 @@ export function OnboardingCard({
       number: 5,
       title: "Generate First Audit Package",
       description: "Bundle evidence into a HIPAA-ready audit package for your payer.",
+      tooltip: "Audit packages compile clinical evidence, attestations, and HCC documentation into a single file you can submit to your payer or retain for CMS RADV audits.",
       icon: <Package size={20} color={auditPackageCount > 0 ? "#10B981" : "#6366F1"} />,
       ctaLabel: "Go to Audit",
       ctaHref: "/radv",
@@ -131,6 +142,7 @@ export function OnboardingCard({
   if (hiddenByUser) return null;
 
   return (
+    <TooltipProvider delay={200}>
     <div
       style={{
         ...card,
@@ -228,8 +240,12 @@ export function OnboardingCard({
           }
         `}</style>
         {steps.map((s) => (
+          <Tooltip key={s.number}>
+            <TooltipTrigger
+              style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "default" }}
+              data-testid={`tooltip-onboarding-step-${s.number}`}
+            >
           <div
-            key={s.number}
             style={{
               background: s.complete ? "#F0FDF4" : "#FFFFFF",
               border: s.complete ? "1px solid #BBF7D0" : "1px solid #E2E8F0",
@@ -345,8 +361,12 @@ export function OnboardingCard({
               </button>
             )}
           </div>
+            </TooltipTrigger>
+            <TooltipContent>{s.tooltip}</TooltipContent>
+          </Tooltip>
         ))}
       </div>
     </div>
+    </TooltipProvider>
   );
 }

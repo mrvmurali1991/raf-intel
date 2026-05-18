@@ -2,6 +2,12 @@
 
 import { TrendingUp, Users, Activity, ShieldCheck } from "lucide-react";
 import { tokens } from "@/styles/tokens";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +47,7 @@ const C = {
 
 export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps) {
   return (
+    <TooltipProvider delay={200}>
     <div
       className="kpi-full-grid rci-population-overview"
       style={{
@@ -79,17 +86,25 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <TrendingUp size={16} color={tokens.riskHigh} />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: C.textSubtle,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Need Review
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              style={{ background: "none", border: "none", padding: 0, cursor: "inherit" }}
+              data-testid="tooltip-kpi-need-review"
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: C.textSubtle,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                Need Review
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Patients with RAF score &ge; 2.0 flagged as high-risk. Click to filter the patient list to this group.</TooltipContent>
+          </Tooltip>
         </div>
         <div
           style={{
@@ -138,17 +153,25 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Users size={16} color={tokens.slate400} />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: C.textSubtle,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Unscored
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              style={{ background: "none", border: "none", padding: 0, cursor: "inherit" }}
+              data-testid="tooltip-kpi-unscored"
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: C.textSubtle,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                Unscored
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Patients imported from EMR who have not yet had an AI analysis run. Click to queue them for scoring.</TooltipContent>
+          </Tooltip>
         </div>
         <div
           style={{
@@ -182,17 +205,25 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Activity size={16} color={tokens.success} />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: C.textSubtle,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Average RAF
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              style={{ background: "none", border: "none", padding: 0, cursor: "default" }}
+              data-testid="tooltip-kpi-avg-raf"
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: C.textSubtle,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                Average RAF
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Mean Risk Adjustment Factor score across all scored patients. A score of 1.0 equals average population risk; values above 1.5 indicate a high-acuity panel.</TooltipContent>
+          </Tooltip>
         </div>
         <div
           style={{
@@ -230,17 +261,25 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ShieldCheck size={16} color={tokens.infoBlue} />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: C.textSubtle,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            HCCs Captured
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              style={{ background: "none", border: "none", padding: 0, cursor: "default" }}
+              data-testid="tooltip-kpi-hccs-captured"
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: C.textSubtle,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                HCCs Captured
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Total Hierarchical Condition Categories coded and confirmed across all patients. Higher counts reflect more complete chronic-condition documentation.</TooltipContent>
+          </Tooltip>
         </div>
         <div
           style={{
@@ -261,5 +300,6 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         </div>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

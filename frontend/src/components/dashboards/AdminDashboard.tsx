@@ -82,10 +82,32 @@ import {
   ExportButton,
 } from "@/components/dashboard-charts";
 import { tokens } from "@/styles/tokens";
-import { TourModal } from "./admin/TourModal";
-import { OnboardingCard } from "./admin/OnboardingCard";
+import dynamic from "next/dynamic";
 import { TopOpportunitiesTile } from "./admin/TopOpportunitiesTile";
 import { V28HeroCard } from "./admin/V28HeroCard";
+import { useTenantBranding } from "@/lib/useTenantBranding";
+
+// perf(demo): TourModal is only shown when the user explicitly opens the
+// guided tour; defer its bundle until then.
+const TourModal = dynamic(
+  () => import("./admin/TourModal").then((m) => m.TourModal),
+  { ssr: false },
+);
+
+// perf(demo): OnboardingCard sits below-the-fold on the dashboard; defer it
+// so the KPI strip renders first.
+const OnboardingCard = dynamic(
+  () => import("./admin/OnboardingCard").then((m) => m.OnboardingCard),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="rounded-xl border border-border bg-card animate-pulse h-64"
+        aria-hidden
+      />
+    ),
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -361,6 +383,7 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
       </div>
 
       {/* Center: days remaining + progress bar */}
+      <TooltipProvider delay={200}>
       <div style={{ padding: "0 28px", borderLeft: "1px solid rgba(255,255,255,0.08)", borderRight: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: "#2DD4BF", letterSpacing: "0.03em", textTransform: "uppercase" }}>
@@ -368,18 +391,27 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
           </span>
           <span style={{ fontSize: 11, color: "rgba(248,250,252,0.5)", fontWeight: 500 }}>June 30th</span>
         </div>
-        <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
-          <div
-            style={{
-              height: "100%",
-              width: `${progress}%`,
-              background: "linear-gradient(90deg, #0D9488 0%, #2DD4BF 100%)",
-              borderRadius: 4,
-              transition: "width 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          />
-        </div>
+        <Tooltip>
+          <TooltipTrigger
+            style={{ background: "none", border: "none", padding: 0, cursor: "default", width: "100%", display: "block" }}
+            data-testid="tooltip-cms-sweep-progress"
+          >
+            <div style={{ height: 7, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${progress}%`,
+                  background: "linear-gradient(90deg, #0D9488 0%, #2DD4BF 100%)",
+                  borderRadius: 4,
+                  transition: "width 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>Days remaining until the CMS mid-year V24/V28 submission window closes on June 30. All HCC gaps must be coded and submitted before this date.</TooltipContent>
+        </Tooltip>
       </div>
+      </TooltipProvider>
 
       {/* Right: pending opportunity */}
       <div style={{ textAlign: "right", paddingLeft: 28 }}>
@@ -387,7 +419,7 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
           Pending Opportunity
         </div>
         <div style={{ fontSize: 26, fontWeight: 900, color: "#F8FAFC", letterSpacing: "-0.025em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-          {revenueOpp > 0 ? fmt$(revenueOpp) : "$0"}
+          {revenueOpp > 0 ? fmt$(revenueOpp) : "Awaiting analysis"}
         </div>
       </div>
     </div>
@@ -797,13 +829,18 @@ export function AdminDashboard() {
             <BookOpen size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
             Tour
           </button>
-          <DateRangeSelector
-            value={dateRange}
-            onChange={setDateRange}
-            customStart={customStart}
-            customEnd={customEnd}
-            onCustomChange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}
-          />
+          <Tooltip>
+            <TooltipTrigger style={{ background: "none", border: "none", padding: 0 }} data-testid="tooltip-date-range-picker">
+              <DateRangeSelector
+                value={dateRange}
+                onChange={setDateRange}
+                customStart={customStart}
+                customEnd={customEnd}
+                onCustomChange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}
+              />
+            </TooltipTrigger>
+            <TooltipContent>Filter all dashboard data to this time window. Changing the range refreshes KPIs, trends, and opportunity lists accordingly.</TooltipContent>
+          </Tooltip>
           <button
             onClick={handleRefresh}
             aria-label="Refresh dashboard"
@@ -1102,7 +1139,12 @@ export function AdminDashboard() {
           {/* TOTAL MEMBERS */}
           <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Members</span>
+              <Tooltip>
+                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-total-members">
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Members</span>
+                </TooltipTrigger>
+                <TooltipContent>Total number of patients currently loaded in the system from all connected EMR sources and CSV uploads.</TooltipContent>
+              </Tooltip>
               <div style={{ background: "#F1F5F9", borderRadius: 8, padding: 6 }}>
                 <Users size={16} color="#64748B" />
               </div>
@@ -1116,7 +1158,12 @@ export function AdminDashboard() {
           {/* PATIENTS ANALYZED */}
           <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Patients Analyzed</span>
+              <Tooltip>
+                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-patients-analyzed">
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Patients Analyzed</span>
+                </TooltipTrigger>
+                <TooltipContent>Patients who have had at least one AI analysis run. The percentage shows how much of your total roster has been scored for RAF and HCC gaps.</TooltipContent>
+              </Tooltip>
               <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
                 <CheckCircle size={16} color="#10B981" />
               </div>
@@ -1132,7 +1179,12 @@ export function AdminDashboard() {
           {/* AVERAGE RAF SCORE */}
           <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Average RAF Score</span>
+              <Tooltip>
+                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-avg-raf-score">
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Average RAF Score</span>
+                </TooltipTrigger>
+                <TooltipContent>Mean Risk Adjustment Factor across all scored patients. 1.0 equals average national risk; above 1.5 signals a high-acuity panel that may be under-reimbursed.</TooltipContent>
+              </Tooltip>
               <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
                 <TrendingUp size={16} color="#10B981" />
               </div>
@@ -1148,7 +1200,12 @@ export function AdminDashboard() {
           {/* REVENUE OPPORTUNITY */}
           <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Revenue Opportunity</span>
+              <Tooltip>
+                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-revenue-opportunity">
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Revenue Opportunity</span>
+                </TooltipTrigger>
+                <TooltipContent>Estimated annual revenue recoverable by closing all identified HCC coding gaps. Calculated as RAF gap &times; $11,015 per RAF point per patient.</TooltipContent>
+              </Tooltip>
               <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
                 <DollarSign size={16} color="#10B981" />
               </div>
@@ -1278,12 +1335,16 @@ export function AdminDashboard() {
             {/* Tier cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
               {[
-                { label: "High Risk", desc: "RAF >= 2.0", count: tiers.high, color: "#E11D48", bg: "#FFF1F2", border: "#FECDD3", filter: "high" },
-                { label: "Medium Risk", desc: "RAF 1.0 - 2.0", count: tiers.med, color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", filter: "medium" },
-                { label: "Low Risk", desc: "RAF < 1.0", count: tiers.low, color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", filter: "low" },
+                { label: "High Risk", desc: "RAF >= 2.0", count: tiers.high, color: "#E11D48", bg: "#FFF1F2", border: "#FECDD3", filter: "high", tip: "Patients with RAF score 2.0 or above. These are the most complex patients and represent the highest revenue capture opportunity — prioritize for clinical review." },
+                { label: "Medium Risk", desc: "RAF 1.0 - 2.0", count: tiers.med, color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", filter: "medium", tip: "Patients with RAF score between 1.0 and 2.0. Above average complexity — review for missing chronic conditions that could be coded." },
+                { label: "Low Risk", desc: "RAF < 1.0", count: tiers.low, color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", filter: "low", tip: "Patients with RAF score below 1.0. Lower complexity; verify these patients have been fully analyzed before assuming no gaps exist." },
               ].map((t) => (
+                <Tooltip key={t.label}>
+                  <TooltipTrigger
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+                    data-testid={`tooltip-risk-tier-${t.filter}`}
+                  >
                 <Link
-                  key={t.label}
                   href={`/patients?risk=${t.filter}`}
                   style={{ textDecoration: "none", color: "inherit" }}
                 >
@@ -1326,6 +1387,9 @@ export function AdminDashboard() {
                   <div className="text-muted-foreground text-[10px] mt-0.5">{t.desc}</div>
                 </div>
                 </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>{t.tip}</TooltipContent>
+                </Tooltip>
               ))}
             </div>
           </div>
@@ -1379,7 +1443,9 @@ export function AdminDashboard() {
                 {/* Top suspects list */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                   {(suspectsData ?? []).slice(0, 5).map((s, i: number) => (
-                    <Link key={`${s.patient_id}-${i}`} href={`/patients/${s.patient_id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                    <Tooltip key={`${s.patient_id}-${i}`}>
+                      <TooltipTrigger style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }} data-testid={`tooltip-suspect-row-${i}`}>
+                    <Link href={`/patients/${s.patient_id}`} style={{ textDecoration: "none", color: "inherit" }}>
                       <div
                         style={{
                           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1410,6 +1476,9 @@ export function AdminDashboard() {
                         </div>
                       </div>
                     </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>AI-flagged HCC suspect diagnosis awaiting coder review. Click to open the patient record and attest or dismiss this gap.</TooltipContent>
+                    </Tooltip>
                   ))}
                 </div>
               </div>
@@ -1467,8 +1536,9 @@ export function AdminDashboard() {
                   const absGap = Math.abs((p.gap as number) ?? 0);
                   const revOpp = Math.abs((p.revenue_opportunity as number) ?? absGap * 12000);
                   return (
+                    <Tooltip key={p.pid}>
+                      <TooltipTrigger style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }} data-testid={`tooltip-top-opp-row-${i}`}>
                     <Link
-                      key={p.pid}
                       href={`/patients/${p.pid}`}
                       style={{ textDecoration: "none", color: "inherit" }}
                     >
@@ -1547,6 +1617,9 @@ export function AdminDashboard() {
                         <ChevronRight size={14} color="#CBD5E1" style={{ marginLeft: 4 }} />
                       </div>
                     </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>RAF gap of +{absGap.toFixed(2)} points — estimated {fmt$(revOpp)} annual revenue if all missing HCC codes are captured and submitted.</TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>
@@ -1585,11 +1658,16 @@ export function AdminDashboard() {
               </div>
             ) : (
               <div>
-                <WaterfallChart
-                  data={waterfallData}
-                  totalLabel="Total Opportunity"
-                  height={36}
-                />
+                <Tooltip>
+                  <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default", display: "block", width: "100%" }} data-testid="tooltip-revenue-waterfall">
+                    <WaterfallChart
+                      data={waterfallData}
+                      totalLabel="Total Opportunity"
+                      height={36}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Each bar represents an HCC category. Bar length = patient count &times; HCC RAF coefficient &times; $12,000 base rate. Taller bars are higher-priority coding opportunities.</TooltipContent>
+                </Tooltip>
                 <div className="text-muted-foreground mt-4 text-[11px] leading-snug">
                   Revenue estimated as patient count x coefficient x $12,000 base rate per condition category.
                 </div>
@@ -1651,24 +1729,34 @@ export function AdminDashboard() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className="text-muted-foreground" style={{ fontSize: 12, width: 32, textAlign: "center" }}>{prov.patients}</span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: rafColor(parseFloat(prov.avgRaf)),
-                      background: `${rafColor(parseFloat(prov.avgRaf))}1A`,
-                      padding: "3px 8px",
-                      borderRadius: 6,
-                    }}
-                  >
-                    {prov.avgRaf}
-                  </span>
-                  <Sparkline
-                    data={generateSparklineData(parseFloat(prov.avgRaf), 7)}
-                    width={60}
-                    height={24}
-                    color={rafColor(parseFloat(prov.avgRaf))}
-                  />
+                  <Tooltip>
+                    <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid={`tooltip-provider-raf-${idx}`}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: rafColor(parseFloat(prov.avgRaf)),
+                          background: `${rafColor(parseFloat(prov.avgRaf))}1A`,
+                          padding: "3px 8px",
+                          borderRadius: 6,
+                        }}
+                      >
+                        {prov.avgRaf}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Average RAF score for {prov.name}&apos;s patient panel. Values above 1.5 indicate a complex, high-acuity patient population.</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid={`tooltip-provider-sparkline-${idx}`}>
+                      <Sparkline
+                        data={generateSparklineData(parseFloat(prov.avgRaf), 7)}
+                        width={60}
+                        height={24}
+                        color={rafColor(parseFloat(prov.avgRaf))}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>RAF score trend over the last 7 data points. An upward slope means this provider&apos;s panel acuity is increasing.</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             ))}
@@ -1743,7 +1831,9 @@ export function AdminDashboard() {
             ].map((item, idx) => {
               const Icon = item.icon;
               return (
-                <Link key={idx} href={item.href} style={{ textDecoration: "none", color: "inherit" }}>
+                <Tooltip key={idx}>
+                  <TooltipTrigger style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }} data-testid={`tooltip-workflow-${idx}`}>
+                <Link href={item.href} style={{ textDecoration: "none", color: "inherit" }}>
                   <div
                     style={{
                       display: "flex",
@@ -1791,6 +1881,9 @@ export function AdminDashboard() {
                     </div>
                   </div>
                 </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>{item.count} pending — click to review and action this queue.</TooltipContent>
+                </Tooltip>
               );
             })}
           </div>
@@ -1839,23 +1932,33 @@ export function AdminDashboard() {
               }));
               return (
                 <div style={{ display: "flex", gap: 32, alignItems: "center" }}>
-                  <div style={{ flexShrink: 0 }}>
-                    <CircularGauge
-                      value={overall}
-                      size={100}
-                      strokeWidth={8}
-                      color={completenessColor(overall)}
-                      label="Overall"
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <MiniBarChart
-                      data={barData}
-                      height={22}
-                      showValues
-                      animate
-                    />
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-emr-coverage-gauge">
+                      <div style={{ flexShrink: 0 }}>
+                        <CircularGauge
+                          value={overall}
+                          size={100}
+                          strokeWidth={8}
+                          color={completenessColor(overall)}
+                          label="Overall"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Overall data completeness score across all record types. 100% means every patient has billing, problems, notes, vitals, immunization, and insurance records.</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default", flex: 1, display: "block" }} data-testid="tooltip-emr-coverage-bars">
+                      <div style={{ flex: 1 }}>
+                        <MiniBarChart
+                          data={barData}
+                          height={22}
+                          showValues
+                          animate
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Percentage of patients who have each record type ingested. 100% = all expected sources connected. Low bars indicate missing data that may reduce RAF scoring accuracy.</TooltipContent>
+                  </Tooltip>
                 </div>
               );
             })()}
@@ -2023,16 +2126,16 @@ function ChartRequestsKpiBanner() {
     let cancelled = false;
     void (async () => {
       try {
-        const runsRes = await fetch("/api/radv/audit-runs", { credentials: "include" });
-        if (!runsRes.ok || cancelled) return;
-        const { runs } = (await runsRes.json()) as { runs: { id: number }[] };
+        const runsRes = await api.get<{ runs: { id: number }[] }>("/api/radv/audit-runs");
+        if (cancelled) return;
+        const runs = runsRes.data?.runs;
         if (!runs?.length || cancelled) return;
         // Only look at the 3 most-recent runs to avoid N+1 on large tenants
         const slice = runs.slice(0, 3);
         const results = await Promise.allSettled(
           slice.map((r) =>
-            fetch(`/api/radv/${r.id}/chart-requests`, { credentials: "include" })
-              .then((res) => res.json() as Promise<{ summary: { open: number; overdue: number } }>)
+            api.get<{ summary: { open: number; overdue: number } }>(`/api/radv/${r.id}/chart-requests`)
+              .then((res) => res.data)
           )
         );
         if (cancelled) return;

@@ -2,6 +2,12 @@
 
 import Link from "next/link";
 import { TrendingUp, ArrowUpRight } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +32,7 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
   if (!v28Summary && !isLoading) return null;
 
   return (
+    <TooltipProvider delay={200}>
     <div
       data-testid="v28-hero-card"
       className="fade-in-up fade-in-up-1"
@@ -96,19 +103,27 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
           />
         ) : v28Summary ? (
           <>
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 900,
-                color: v28Summary.total_revenue_delta >= 0 ? "#059669" : "#dc2626",
-                lineHeight: 1.1,
-                marginTop: 2,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              {v28Summary.total_revenue_delta >= 0 ? "+" : "−"}
-              {`$${(Math.abs(v28Summary.total_revenue_delta) / 1_000_000).toFixed(2)}M`}
-            </div>
+            <Tooltip>
+              <TooltipTrigger
+                style={{ background: "none", border: "none", padding: 0, cursor: "default", textAlign: "left" }}
+                data-testid="tooltip-v28-delta"
+              >
+                <div
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 900,
+                    color: v28Summary.total_revenue_delta >= 0 ? "#059669" : "#dc2626",
+                    lineHeight: 1.1,
+                    marginTop: 2,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {v28Summary.total_revenue_delta >= 0 ? "+" : "−"}
+                  {`$${(Math.abs(v28Summary.total_revenue_delta) / 1_000_000).toFixed(2)}M`}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Portfolio-wide annual revenue impact of the CMS-HCC V28 model vs V24, summed across all {v28Summary.computed_patient_count} patients. Negative means V28 reduces risk scores; positive means V28 increases them.</TooltipContent>
+            </Tooltip>
             <div style={{ fontSize: 12, color: "#78350f", marginTop: 3, fontWeight: 500 }}>
               {(() => {
                 const eroded = (v28Summary.top_eroded_patients ?? []).filter(
@@ -146,8 +161,10 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
       </div>
 
       {/* CTA */}
-      <Link
-        href="/v28-impact"
+      <Tooltip>
+        <TooltipTrigger style={{ background: "none", border: "none", padding: 0 }} data-testid="tooltip-v28-cta">
+          <Link
+            href="/v28-impact"
         style={{
           background: "#f59e0b",
           color: "#fff",
@@ -169,6 +186,10 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
         Open V28 Impact Analysis
         <ArrowUpRight size={14} />
       </Link>
+        </TooltipTrigger>
+        <TooltipContent>Open the full V28 patient-by-patient impact report showing which patients gained or lost revenue under the new CMS model.</TooltipContent>
+      </Tooltip>
     </div>
+    </TooltipProvider>
   );
 }
