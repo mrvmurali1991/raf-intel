@@ -65,6 +65,10 @@ interface NavItem {
 interface NavCluster {
   label: string;
   items: NavItem[];
+  /** When true, the cluster starts collapsed by default (independent of section collapse) */
+  defaultCollapsed?: boolean;
+  /** When set, the cluster is only visible to users whose role matches */
+  visibleToRoles?: string[];
 }
 
 interface NavGroup {
@@ -108,6 +112,7 @@ const navGroups: NavGroup[] = [
   },
   {
     title: "ANALYSIS",
+    defaultCollapsed: true,
     clusters: [
       {
         label: "Analytics & Insights",
@@ -133,6 +138,7 @@ const navGroups: NavGroup[] = [
   },
   {
     title: "ADMIN",
+    defaultCollapsed: true,
     clusters: [
       {
         label: "Setup",
@@ -149,7 +155,14 @@ const navGroups: NavGroup[] = [
           { href: "/audit", label: "Audit", icon: ShieldCheck },
           { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
           { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack, visibleToRoles: ["admin"] },
-          { href: "/ehr-writeback", label: "EHR Write-Back Queue", icon: Activity, visibleToRoles: ["admin", "manager"] },
+        ],
+      },
+      {
+        label: "Power user",
+        defaultCollapsed: true,
+        visibleToRoles: ["admin"],
+        items: [
+          { href: "/ehr-writeback", label: "EHR Write-Back Queue", icon: Activity, visibleToRoles: ["admin"] },
           { href: "/system", label: "System Health", icon: Activity, visibleToRoles: ["admin"] },
           { href: "/developer", label: "Developer", icon: Code, visibleToRoles: ["admin"] },
         ],
@@ -378,14 +391,31 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-  // Per-section collapse state — keyed by section title, persisted in localStorage
+  // Per-section collapse state — keyed by section title, persisted in localStorage.
+  // On first load (no localStorage key yet) fall back to each group's defaultCollapsed flag.
   const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>(() => {
     try {
       const saved = typeof window !== "undefined" ? localStorage.getItem("raf-nav-sections") : null;
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
+      if (saved) return JSON.parse(saved);
+    } catch { /* noop */ }
+    // Build defaults from the nav structure so ANALYSIS + ADMIN start collapsed
+    return Object.fromEntries(
+      navGroups
+        .filter((g) => g.defaultCollapsed)
+        .map((g) => [g.title, true])
+    );
+  });
+
+  // Per-cluster collapse state — keyed by cluster label, for tertiary sub-clusters.
+  // Not persisted; respects each cluster's defaultCollapsed on first render.
+  const [clusterCollapsed, setClusterCollapsed] = useState<Record<string, boolean>>(() => {
+    const defaults: Record<string, boolean> = {};
+    for (const group of navGroups) {
+      for (const cluster of group.clusters ?? []) {
+        if (cluster.defaultCollapsed) defaults[cluster.label] = true;
+      }
     }
+    return defaults;
   });
 
   function toggleSection(title: string) {
@@ -394,6 +424,10 @@ export function Sidebar() {
       try { localStorage.setItem("raf-nav-sections", JSON.stringify(next)); } catch { /* noop */ }
       return next;
     });
+  }
+
+  function toggleCluster(label: string) {
+    setClusterCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
   }
   // Only show shortcut hint badges after the user has triggered at least one shortcut
   const [showShortcutHints, setShowShortcutHints] = useState(false);
@@ -605,13 +639,95 @@ export function Sidebar() {
   function renderNavGroup(group: NavGroup, index: number) {
     // In collapsed (icon-only) sidebar mode, never hide items — no room for toggles
     const isSectionCollapsed = !collapsed && !!sectionCollapsed[group.title];
+    const role = (user as { role?: string } | null)?.role ?? "";
 
     function filterItems(items: NavItem[]): NavItem[] {
       return items.filter((it) => {
         if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
-        const role = (user as { role?: string } | null)?.role ?? "";
         return it.visibleToRoles.includes(role);
       });
+    }
+
+    function renderCluster(cluster: NavCluster, ci: number) {
+      // Cluster-level role gate (e.g. Power user is admin-only)
+      if (cluster.visibleToRoles && !cluster.visibleToRoles.includes(role)) return null;
+
+      const filteredItems = filterItems(cluster.items);
+      if (filteredItems.length === 0) return null;
+
+      // Collapsible tertiary cluster — has its own toggle chevron
+      if (cluster.defaultCollapsed !== undefined) {
+        const isClusterCollapsed = !collapsed && !!clusterCollapsed[cluster.label];
+        return (
+          <div key={cluster.label}>
+            {!collapsed && (
+              <div
+                style={{
+                  marginTop: ci === 0 ? 2 : 10,
+                  marginBottom: 2,
+                  marginLeft: 16,
+                  marginRight: 16,
+                  borderTop: ci === 0
+                    ? "none"
+                    : `1px solid ${isDark ? "rgba(51,65,85,0.45)" : "rgba(226,232,240,0.9)"}`,
+                  paddingTop: ci === 0 ? 0 : 7,
+                }}
+              >
+                <button
+                  onClick={() => toggleCluster(cluster.label)}
+                  aria-expanded={!isClusterCollapsed}
+                  aria-controls={`nav-cluster-${cluster.label}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      color: isDark ? "#475569" : "#94a3b8",
+                    }}
+                  >
+                    {cluster.label}
+                  </span>
+                  <ChevronDown
+                    style={{
+                      width: 11,
+                      height: 11,
+                      color: isDark ? "#475569" : "#94a3b8",
+                      flexShrink: 0,
+                      transform: isClusterCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                      transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+                    }}
+                  />
+                </button>
+              </div>
+            )}
+            {!isClusterCollapsed && (
+              <div id={`nav-cluster-${cluster.label}`}>
+                {filteredItems.map(renderNavItem)}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // Non-collapsible cluster — static divider label
+      return (
+        <div key={cluster.label}>
+          {renderClusterLabel(cluster.label, ci === 0)}
+          {filteredItems.map(renderNavItem)}
+        </div>
+      );
     }
 
     return (
@@ -695,12 +811,7 @@ export function Sidebar() {
         {!isSectionCollapsed && (
           <div id={`nav-section-${group.title}`}>
             {group.clusters
-              ? group.clusters.map((cluster, ci) => (
-                  <div key={cluster.label}>
-                    {renderClusterLabel(cluster.label, ci === 0)}
-                    {filterItems(cluster.items).map(renderNavItem)}
-                  </div>
-                ))
+              ? group.clusters.map((cluster, ci) => renderCluster(cluster, ci))
               : filterItems(group.items ?? []).map(renderNavItem)}
           </div>
         )}
@@ -727,7 +838,7 @@ export function Sidebar() {
       >
         {collapsed ? (
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -4, borderRadius: 12, background: `radial-gradient(circle, ${ACCENT}40, transparent 70%)`, filter: "blur(6px)" }} />
+            <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -4, borderRadius: 10, background: `radial-gradient(circle, ${ACCENT}40, transparent 70%)`, filter: "blur(6px)" }} />
             <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff" }}>
               <HeartPulse size={18} />
             </div>
