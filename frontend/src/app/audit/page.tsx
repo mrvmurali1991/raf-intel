@@ -8,6 +8,8 @@ import { PageHeader, EmptyState } from "@/components/healthcare-ui";
 import { useToast } from "@/components/Toast";
 import AuditReadinessCard from "@/components/AuditReadinessCard";
 import { Shield, FileDown, Loader2, CheckCircle2, Search, X, ChevronDown, Package, Hash, RefreshCw, AlertTriangle, Download } from "lucide-react";
+import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 
 const RadvScenariosCard = dynamic(() => import("./AuditRadvScenariosCard"), {
   ssr: false,
@@ -46,7 +48,6 @@ const fmtDate = (iso?: string) =>
       })
     : "\u2014";
 
-const yearOptions = [2026, 2025, 2024, 2023, 2022];
 
 /* ------------------------------------------------------------------ */
 /*  Patient Search Dropdown                                           */
@@ -517,8 +518,8 @@ function AuditChainIntegrityCard() {
 export default function AuditPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { paymentYear: selectedYear, setPaymentYear: setSelectedYear } = usePaymentYear();
   const [selectedPid, setSelectedPid] = useState("");
-  const [selectedYear, setSelectedYear] = useState(2026);
   const [includeSuspects, setIncludeSuspects] = useState(false);
   const [recalculate, setRecalculate] = useState(false);
 
@@ -553,6 +554,7 @@ export default function AuditPage() {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
+      <HistoricalPYBanner paymentYear={selectedYear} />
       <PageHeader
         title="Compliance & Audit"
         subtitle="Generate and download audit documentation packages"
@@ -598,7 +600,7 @@ export default function AuditPage() {
                   cursor: "pointer",
                 }}
               >
-                {yearOptions.map((y) => (
+                {PAYMENT_YEARS.map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>

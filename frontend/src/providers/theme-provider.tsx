@@ -30,7 +30,15 @@ function getClientSnapshot(): Theme {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const stored = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
-  const [theme, setTheme] = useState<Theme>(stored);
+  // Initialise from the client snapshot so the state matches what the
+  // blocking script already applied to <html>.  Using a lazy initialiser
+  // means React reads localStorage once on mount (client only) rather than
+  // starting from the server-snapshot "light" value and then correcting,
+  // which removed the `dark` class the blocking script had already set.
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "light";
+    return (localStorage.getItem("raf-theme") as Theme) || "light";
+  });
 
   // Sync when stored value changes (e.g. another tab)
   useEffect(() => {

@@ -12,7 +12,7 @@
  * Backed by GET /api/v28-impact/portfolio.
  */
 
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { ChartExportMenu } from "@/components/ui/chart-export-menu";
 import { downloadCSV } from "@/lib/csv-export";
+import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 
 // ---------- Types ----------
 
@@ -78,7 +80,7 @@ function fmtRAF(n: number): string {
 
 export default function V28ImpactPage() {
   const queryClient = useQueryClient();
-  const [year, setYear] = useState<number>(2026);
+  const { paymentYear: year, setPaymentYear: setYear } = usePaymentYear();
   const histogramRef = useRef<HTMLElement | null>(null);
   const erodedRef = useRef<HTMLElement | null>(null);
   const hccBreakdownRef = useRef<HTMLElement | null>(null);
@@ -112,6 +114,7 @@ export default function V28ImpactPage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 1400, margin: "0 auto" }}>
+      <HistoricalPYBanner paymentYear={year} />
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: 0 }}>
@@ -137,10 +140,9 @@ export default function V28ImpactPage() {
                 fontSize: 12,
               }}
             >
-              <option value={2024}>2024 (67% V24 / 33% V28)</option>
-              <option value={2025}>2025 (33% V24 / 67% V28)</option>
-              <option value={2026}>2026 (100% V28)</option>
-              <option value={2027}>2027 (100% V28)</option>
+              {PAYMENT_YEARS.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
             </select>
           </label>
           <button

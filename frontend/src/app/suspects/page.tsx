@@ -23,6 +23,7 @@ import {
 import type { DBSuspect } from "@/types";
 import { useToast } from "@/components/Toast";
 import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
+import { HistoricalPYBanner } from "@/components/HistoricalPYBanner";
 import {
   ClipboardList,
   TrendingUp,
@@ -664,6 +665,7 @@ export default function SuspectsPage() {
         overflowX: "hidden",
       }}
     >
+      <HistoricalPYBanner paymentYear={measurementYear} />
       <DataQualityBanner />
       <WorkflowProgressBar currentStage="suspects" />
       <WorkflowHandoffBanner
