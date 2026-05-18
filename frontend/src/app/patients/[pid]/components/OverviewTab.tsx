@@ -356,7 +356,7 @@ export function OverviewTab({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {/* Total AI Diagnoses */}
             <div style={{
-              background: C.white, borderRadius: 8, padding: "12px 16px",
+              background: "hsl(var(--card))", borderRadius: 8, padding: "12px 16px",
               border: `1px solid ${C.slate200}`,
             }}>
               <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
@@ -372,7 +372,7 @@ export function OverviewTab({
 
             {/* New codes not in billing */}
             <div style={{
-              background: C.white, borderRadius: 8, padding: "12px 16px",
+              background: "hsl(var(--card))", borderRadius: 8, padding: "12px 16px",
               border: `1px solid ${aiAnalysis.aiOnlyCount > 0 ? C.emerald100 : C.slate200}`,
             }}>
               <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
@@ -388,7 +388,7 @@ export function OverviewTab({
 
             {/* Code source breakdown */}
             <div style={{
-              background: C.white, borderRadius: 8, padding: "12px 16px",
+              background: "hsl(var(--card))", borderRadius: 8, padding: "12px 16px",
               border: `1px solid ${C.slate200}`,
             }}>
               <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>

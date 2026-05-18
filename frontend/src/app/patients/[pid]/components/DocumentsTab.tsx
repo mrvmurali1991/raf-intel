@@ -253,7 +253,7 @@ export function DocumentsTab({
                 style={{
                   padding: "6px 14px", borderRadius: 14,
                   border: `1.5px solid ${reportType === rt ? C.blue600 : C.slate300}`,
-                  background: reportType === rt ? C.blue50 : C.white,
+                  background: reportType === rt ? C.blue50 : "hsl(var(--card))",
                   color: reportType === rt ? C.blue600 : C.slate600,
                   fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s ease",
                 }}
@@ -399,7 +399,7 @@ export function DocumentsTab({
                               style={{
                                 padding: "6px 12px", borderRadius: 8,
                                 border: `1px solid ${isAnalysisOpen ? C.blue600 : C.slate300}`,
-                                background: isAnalysisOpen ? C.blue50 : C.white,
+                                background: isAnalysisOpen ? C.blue50 : "hsl(var(--card))",
                                 color: isAnalysisOpen ? C.blue600 : C.slate600,
                                 fontSize: 12, fontWeight: 600, cursor: "pointer",
                                 display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
@@ -413,7 +413,7 @@ export function DocumentsTab({
                               style={{
                                 padding: "6px 12px", borderRadius: 8,
                                 border: `1px solid ${isDraftOpen ? C.emerald600 : C.slate300}`,
-                                background: isDraftOpen ? C.emerald50 : C.white,
+                                background: isDraftOpen ? C.emerald50 : "hsl(var(--card))",
                                 color: isDraftOpen ? C.emerald600 : C.slate600,
                                 fontSize: 12, fontWeight: 600, cursor: "pointer",
                                 display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",

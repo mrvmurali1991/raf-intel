@@ -198,7 +198,7 @@ export default function SuspectDrawer({
           <div style={{ fontSize: 10, fontWeight: 700, color: C.label, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
             Why we flagged this
           </div>
-          <div style={{ fontSize: 14, lineHeight: 1.55, color: C.text, fontStyle: "italic", padding: "12px 14px", borderRadius: 10, backgroundColor: C.white, border: `1px solid ${C.borderSoft}` }}>
+          <div style={{ fontSize: 14, lineHeight: 1.55, color: C.text, fontStyle: "italic", padding: "12px 14px", borderRadius: 10, backgroundColor: "hsl(var(--card))", border: `1px solid ${C.borderSoft}` }}>
             &ldquo;{rationale}&rdquo;
           </div>
         </div>
@@ -208,7 +208,7 @@ export default function SuspectDrawer({
             <div style={{ fontSize: 10, fontWeight: 700, color: C.label, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
               Supporting evidence
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, padding: 12, borderRadius: 10, backgroundColor: C.white, border: `1px solid ${C.borderSoft}` }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, padding: 12, borderRadius: 10, backgroundColor: "hsl(var(--card))", border: `1px solid ${C.borderSoft}` }}>
               {evidenceLines.map((ln, i) => (
                 <div key={i} style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 10, color: C.label, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 2 }}>
@@ -288,7 +288,7 @@ export default function SuspectDrawer({
 
       {/* RIGHT — Code card + actions */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ padding: 16, borderRadius: 10, backgroundColor: C.white, border: `1px solid ${C.border}` }}>
+        <div style={{ padding: 16, borderRadius: 10, backgroundColor: "hsl(var(--card))", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.label, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
             Suspected Code
           </div>

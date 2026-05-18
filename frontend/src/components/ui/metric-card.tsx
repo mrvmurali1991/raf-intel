@@ -15,9 +15,17 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
+
+// perf(demo): defer recharts (~95 KB gzipped) until a card actually needs
+// to render a sparkline. KPI strips without `trend` never load recharts,
+// which trims first-paint JS on the dashboard / worklist / suspects pages.
+const Spark = dynamic(() => import("./metric-card-spark"), {
+  ssr: false,
+  loading: () => <div className="w-full h-9 mt-1" aria-hidden />,
+});
 import { cn } from "@/lib/utils";
 import { MetricMetaTooltip } from "@/components/ui/metric-meta-tooltip";
 import {
@@ -192,30 +200,6 @@ function DeltaBadge({ delta, intent }: { delta: number; intent: MetricCardIntent
       <Icon size={12} aria-hidden />
       {sign}{delta.toFixed(1)}%
     </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sparkline
-// ---------------------------------------------------------------------------
-
-function Spark({ data, colour }: { data: number[]; colour: string }) {
-  const pts = data.map((v, i) => ({ i, v }));
-  return (
-    <div className="w-full h-9 mt-1" aria-hidden>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={pts}>
-          <Line
-            type="monotone"
-            dataKey="v"
-            stroke={colour}
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
   );
 }
 

@@ -13,7 +13,7 @@ export const C = {
   borderSoft: "#EEF2F6",
   rowDivider: tokens.slate100,
   bgPage: tokens.slate50,
-  bgCard: tokens.white,
+  bgCard: "hsl(var(--card))",
   bgSubtle: tokens.slate50,
   bgBand: "#FAFBFC",
   bgBandHover: tokens.slate100,

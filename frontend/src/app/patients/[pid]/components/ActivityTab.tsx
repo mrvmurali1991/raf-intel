@@ -167,7 +167,7 @@ function ActorAvatar({
         fontSize: 12,
         fontWeight: 700,
         flexShrink: 0,
-        border: `2px solid ${C.white}`,
+        border: `2px solid hsl(var(--card))`,
         boxShadow: `0 0 0 2px ${C.slate200}`,
         zIndex: 1,
       }}

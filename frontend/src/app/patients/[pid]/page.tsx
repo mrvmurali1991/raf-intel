@@ -800,7 +800,7 @@ export default function PatientDetailPage({
       {/* YEAR SELECTOR ROW */}
       <div
         style={{
-          background: C.white,
+          background: "hsl(var(--card))",
           borderBottom: `1px solid ${C.slate100}`,
           display: "flex",
           alignItems: "center",
@@ -857,7 +857,7 @@ export default function PatientDetailPage({
             aria-label="V24 to V28 impact breakdown"
             style={{
               position: "fixed", right: 0, top: 0, bottom: 0, width: 480,
-              background: C.white, boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
+              background: "hsl(var(--card))", boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
               zIndex: 201, overflowY: "auto",
             }}
             onKeyDown={(e) => { if (e.key === "Escape") setV28DrawerOpen(false); }}
@@ -903,7 +903,7 @@ export default function PatientDetailPage({
       </div>
 
       {/* TAB NAVIGATION */}
-      <div style={{ background: C.white, borderBottom: `1px solid ${C.slate200}`, padding: "0 24px" }}>
+      <div style={{ background: "hsl(var(--card))", borderBottom: `1px solid ${C.slate200}`, padding: "0 24px" }}>
         <div
           className="raf-tabbar-scroll"
           style={{
@@ -999,7 +999,7 @@ export default function PatientDetailPage({
                   style={{
                     padding: "6px 16px", fontSize: 12, fontWeight: rafSubTab === pill.id ? 700 : 500,
                     color: rafSubTab === pill.id ? C.white : C.slate600,
-                    background: rafSubTab === pill.id ? C.blue600 : C.white,
+                    background: rafSubTab === pill.id ? C.blue600 : "hsl(var(--card))",
                     border: `1px solid ${rafSubTab === pill.id ? C.blue600 : C.slate200}`,
                     borderRadius: 14, cursor: "pointer", transition: "all 0.15s",
                   }}

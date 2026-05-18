@@ -318,11 +318,11 @@ function WorklistBulkActionsBar({
       <span style={{ display: "inline-flex", alignItems: "center", background: brand, color: tokens.white, borderRadius: 999, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
         {selectedCount} selected
       </span>
-      <button type="button" onClick={onClear} aria-label="Clear selection" style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
+      <button type="button" onClick={onClear} aria-label="Clear selection" style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
         Clear
       </button>
       {selectedCount < totalCount && (
-        <button type="button" onClick={onSelectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
+        <button type="button" onClick={onSelectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
           Select all {totalCount}
         </button>
       )}
@@ -356,7 +356,7 @@ function WorklistBulkActionsBar({
           onClick={onScheduleAWV}
           aria-label={`Schedule AWV for ${selectedCount} patients`}
           data-testid="bulk-schedule-awv-btn"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${brand}`, background: tokens.white, color: brand, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${brand}`, background: "hsl(var(--card))", color: brand, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
         >
           <CalendarClock size={13} />
           Schedule AWV
@@ -374,7 +374,7 @@ function WorklistBulkActionsBar({
           disabled={exporting}
           aria-label={`Export ${selectedCount} patients to CSV`}
           data-testid="export-csv-worklist"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
         >
           {exporting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
           {exporting ? "Exporting…" : "Export CSV"}
@@ -409,7 +409,7 @@ function AWVBatchModal({ selectedCount, onClose }: { selectedCount: number; onCl
       onClick={onClose}
     >
       <div
-        style={{ background: tokens.white, borderRadius: 12, boxShadow: "0 12px 48px rgba(15,23,42,0.25)", width: "100%", maxWidth: 480, padding: 24 }}
+        style={{ background: "hsl(var(--card))", borderRadius: 12, boxShadow: "0 12px 48px rgba(15,23,42,0.25)", width: "100%", maxWidth: 480, padding: 24 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -425,7 +425,7 @@ function AWVBatchModal({ selectedCount, onClose }: { selectedCount: number; onCl
           appointment slots for all {selectedCount} selected patient{selectedCount === 1 ? "" : "s"}.
         </p>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: tokens.white, color: tokens.slate700, fontSize: 13, cursor: "pointer" }}>
+          <button type="button" onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 13, cursor: "pointer" }}>
             Cancel
           </button>
           <Link href="/appointments" style={{ padding: "7px 16px", borderRadius: 6, background: "#0F766E", color: tokens.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
@@ -628,7 +628,7 @@ export default function WorklistPage() {
             type="button"
             onClick={() => refetch()}
             aria-label="Retry loading worklist"
-            style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${tokens.dangerBorder}`, background: tokens.white, color: tokens.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${tokens.dangerBorder}`, background: "hsl(var(--card))", color: tokens.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
             Retry
           </button>
@@ -648,7 +648,7 @@ export default function WorklistPage() {
             No prioritized patients to see this week.
           </p>
           <div style={{ marginTop: 16, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/patients" style={{ padding: "8px 16px", borderRadius: 8, background: tokens.white, color: tokens.successDark, border: `1px solid ${tokens.success}`, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            <Link href="/patients" style={{ padding: "8px 16px", borderRadius: 8, background: "hsl(var(--card))", color: tokens.successDark, border: `1px solid ${tokens.success}`, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
               View full panel
             </Link>
             <Link href="/recapture" style={{ padding: "8px 16px", borderRadius: 8, background: tokens.successDark, color: tokens.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
@@ -686,10 +686,10 @@ export default function WorklistPage() {
         {/* Provider Workload Heatmap — elevated roles only */}
         {isElevated && (
           <section
-            style={{ marginTop: 20, borderRadius: 10, border: `1px solid ${tokens.slate200}`, background: tokens.white, overflow: "hidden" }}
+            style={{ marginTop: 20, borderRadius: 10, border: `1px solid ${tokens.slate200}`, background: "hsl(var(--card))", overflow: "hidden" }}
             aria-label="Provider workload heatmap"
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: heatmapOpen ? `1px solid ${tokens.slate100}` : "none", background: tokens.slate50 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: heatmapOpen ? `1px solid ${tokens.slate100}` : "none", background: "hsl(var(--muted))" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Users size={16} color={tokens.slate600} />
                 <span style={{ fontWeight: 700, fontSize: 14, color: tokens.slate800 }}>Provider Workload</span>
@@ -704,7 +704,7 @@ export default function WorklistPage() {
                 aria-expanded={heatmapOpen}
                 aria-label={heatmapOpen ? "Collapse workload heatmap" : "Expand workload heatmap"}
                 onClick={() => setHeatmapOpen((v) => !v)}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate200}`, background: tokens.white, color: tokens.slate600, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate200}`, background: "hsl(var(--card))", color: tokens.slate600, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
               >
                 {heatmapOpen ? <><ChevronUp size={13} /> Collapse</> : <><ChevronDown size={13} /> Expand</>}
               </button>
@@ -901,7 +901,7 @@ function ProviderPill({ label, count, active, onClick }: { label: string; count:
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 999, border: `1.5px solid ${active ? tokens.primary : tokens.slate200}`, background: active ? tokens.primarySoft : tokens.white, color: active ? tokens.primary : tokens.slate600, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", whiteSpace: "nowrap" }}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 999, border: `1.5px solid ${active ? tokens.primary : tokens.slate200}`, background: active ? tokens.primarySoft : "hsl(var(--card))", color: active ? tokens.primary : tokens.slate600, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", whiteSpace: "nowrap" }}
     >
       {label}
       {count !== null && (
@@ -919,7 +919,7 @@ function ProviderPill({ label, count, active, onClick }: { label: string; count:
 
 function SummaryTile({ label, value, icon, color }: { label: string; value: string | number; icon: React.ReactNode; color: string }) {
   return (
-    <div style={{ padding: "14px 16px", borderRadius: 10, background: tokens.white, border: `1px solid ${tokens.slate200}`, display: "flex", alignItems: "center", gap: 12, cursor: "default" }}>
+    <div style={{ padding: "14px 16px", borderRadius: 10, background: "hsl(var(--card))", border: `1px solid ${tokens.slate200}`, display: "flex", alignItems: "center", gap: 12, cursor: "default" }}>
       <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}1A`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {icon}
       </div>
@@ -985,7 +985,7 @@ function PatientCard({
             height: 16,
             borderRadius: 4,
             border: isSelected ? `2px solid ${brand}` : `2px solid ${tokens.slate300}`,
-            background: isSelected ? brand : tokens.white,
+            background: isSelected ? brand : "hsl(var(--card))",
             cursor: "pointer",
             padding: 0,
             display: "flex",
@@ -1010,7 +1010,7 @@ function PatientCard({
           display: "block",
           padding: "16px 16px 16px 34px",
           borderRadius: 10,
-          background: isSelected ? "rgba(15,118,110,0.06)" : tokens.white,
+          background: isSelected ? "rgba(15,118,110,0.06)" : "hsl(var(--card))",
           border: isSelected ? `1.5px solid ${brand}` : `1px solid ${tokens.slate200}`,
           textDecoration: "none",
           color: "inherit",

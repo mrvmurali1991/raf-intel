@@ -2481,7 +2481,7 @@ function SuspectDrawer({
               fontStyle: "italic",
               padding: "12px 14px",
               borderRadius: 10,
-              backgroundColor: C.white,
+              backgroundColor: "hsl(var(--card))",
               border: `1px solid ${C.borderSoft}`,
             }}
           >
@@ -2510,7 +2510,7 @@ function SuspectDrawer({
                 gap: 8,
                 padding: 12,
                 borderRadius: 10,
-                backgroundColor: C.white,
+                backgroundColor: "hsl(var(--card))",
                 border: `1px solid ${C.borderSoft}`,
               }}
             >
@@ -2572,7 +2572,7 @@ function SuspectDrawer({
           style={{
             padding: 16,
             borderRadius: 10,
-            backgroundColor: C.white,
+            backgroundColor: "hsl(var(--card))",
             border: `1px solid ${C.border}`,
           }}
         >

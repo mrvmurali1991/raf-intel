@@ -34,9 +34,9 @@ export interface KPIStripProps {
 // ---------------------------------------------------------------------------
 
 const C = {
-  bgCard: tokens.white,
-  borderSoft: "#EEF2F6",
-  text: tokens.slate900,
+  bgCard: "hsl(var(--card))",
+  borderSoft: "hsl(var(--border))",
+  text: "hsl(var(--card-foreground))",
   textSubtle: tokens.slate500,
   brand: tokens.teal700,
 };

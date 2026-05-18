@@ -230,7 +230,7 @@ export default function RecapturePage() {
             type="button"
             onClick={() => refetch()}
             aria-label="Retry loading recapture data"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${tokens.dangerBorder}`, background: tokens.white, color: tokens.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${tokens.dangerBorder}`, background: "hsl(var(--card))", color: tokens.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
             <RefreshCw size={14} aria-hidden="true" /> Retry
           </button>

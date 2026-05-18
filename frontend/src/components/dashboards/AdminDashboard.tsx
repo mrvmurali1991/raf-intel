@@ -178,8 +178,8 @@ function generateSparklineData(center: number, count: number): number[] {
 // ---------------------------------------------------------------------------
 
 const card: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
   borderRadius: 14,
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
   padding: 24,
@@ -307,8 +307,8 @@ function InfoMetricBox({ bg, valueColor, labelColor, value, label, tooltip }: {
       {show && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
-          background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8,
-          padding: "10px 12px", fontSize: 11, lineHeight: 1.6, color: "#475569",
+          background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8,
+          padding: "10px 12px", fontSize: 11, lineHeight: 1.6, color: "hsl(var(--muted-foreground))",
           textAlign: "left", boxShadow: "0 4px 12px rgba(0,0,0,0.1)", marginTop: 4,
         }}>
           {tooltip}
@@ -738,8 +738,8 @@ export function AdminDashboard() {
             padding: "10px 20px",
             border: "1px solid #E5E7EB",
             borderRadius: 8,
-            background: "#FFFFFF",
-            color: "#1E293B",
+            background: "hsl(var(--card))",
+            color: "hsl(var(--foreground))",
             fontSize: 14,
             fontWeight: 500,
             cursor: "pointer",
@@ -895,7 +895,7 @@ export function AdminDashboard() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ background: "#FFF", borderRadius: 10, padding: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            <div style={{ background: "hsl(var(--card))", borderRadius: 10, padding: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
               <AlertCircle size={24} color="#F59E0B" />
             </div>
             <div>
@@ -938,8 +938,8 @@ export function AdminDashboard() {
                 padding: "9px 18px",
                 border: "1px solid #E5E7EB",
                 borderRadius: 8,
-                background: "#FFFFFF",
-                color: "#1E293B",
+                background: "hsl(var(--card))",
+                color: "hsl(var(--foreground))",
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: "none",
@@ -970,7 +970,7 @@ export function AdminDashboard() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#FFFFFF",
+              background: "hsl(var(--card))",
               borderRadius: 14,
               padding: "32px",
               maxWidth: 460,
@@ -1015,7 +1015,7 @@ export function AdminDashboard() {
                   padding: "10px 20px",
                   border: "1px solid #E5E7EB",
                   borderRadius: 8,
-                  background: "#FFFFFF",
+                  background: "hsl(var(--card))",
                   color: "#64748B",
                   fontSize: 14,
                   fontWeight: 500,
@@ -1098,8 +1098,8 @@ export function AdminDashboard() {
                 padding: "12px 24px",
                 border: "1px solid #E5E7EB",
                 borderRadius: 8,
-                background: "#FFFFFF",
-                color: "#1E293B",
+                background: "hsl(var(--card))",
+                color: "hsl(var(--foreground))",
                 fontSize: 14,
                 fontWeight: 600,
                 textDecoration: "none",
@@ -1148,11 +1148,11 @@ export function AdminDashboard() {
                 </TooltipTrigger>
                 <TooltipContent>Total number of patients currently loaded in the system from all connected EMR sources and CSV uploads.</TooltipContent>
               </Tooltip>
-              <div style={{ background: "#F1F5F9", borderRadius: 8, padding: 6 }}>
+              <div style={{ background: "hsl(var(--muted))", borderRadius: 8, padding: 6 }}>
                 <Users size={16} color="#64748B" />
               </div>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
               {fmtN(totalPop)}
             </div>
             <div style={{ fontSize: 12, color: "#64748B" }}>Patients in system</div>
@@ -1171,7 +1171,7 @@ export function AdminDashboard() {
                 <CheckCircle size={16} color="#10B981" />
               </div>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
               {analyzed > 0 ? fmtN(analyzed) : fmtN(totalPop)}
             </div>
             <div style={{ fontSize: 12, color: "#64748B" }}>
@@ -1192,7 +1192,7 @@ export function AdminDashboard() {
                 <TrendingUp size={16} color="#10B981" />
               </div>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
               {avgRaf > 0 ? avgRaf.toFixed(3) : "--"}
             </div>
             <div style={{ fontSize: 12, color: "#64748B" }}>
@@ -1213,7 +1213,7 @@ export function AdminDashboard() {
                 <DollarSign size={16} color="#10B981" />
               </div>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}
+            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}
               data-testid="revenue-at-risk-value"
             >
               {revenueOpp > 0 ? fmt$(revenueOpp) : "--"}
@@ -1259,7 +1259,7 @@ export function AdminDashboard() {
                     height: 36,
                     borderRadius: 10,
                     overflow: "hidden",
-                    background: "#F1F5F9",
+                    background: "hsl(var(--muted))",
                   }}
                 >
                   {tiers.high > 0 && (
@@ -1453,17 +1453,17 @@ export function AdminDashboard() {
                         style={{
                           display: "flex", alignItems: "center", justifyContent: "space-between",
                           padding: "10px 8px", borderRadius: 6, cursor: "pointer",
-                          borderBottom: i < 4 ? "1px solid #F1F5F9" : "none",
+                          borderBottom: i < 4 ? "1px solid hsl(var(--border))" : "none",
                           transition: "background 0.15s",
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--muted))")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", background: "#FFFBEB", padding: "2px 6px", borderRadius: 4, flexShrink: 0 }}>
                             HCC {(s.hcc_code as string) ?? "--"}
                           </span>
-                          <span style={{ fontSize: 12, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {s.icd10_code as string}
                           </span>
                         </div>
@@ -1552,10 +1552,10 @@ export function AdminDashboard() {
                           padding: "11px 8px",
                           borderRadius: 8,
                           cursor: "pointer",
-                          borderBottom: i < topOpps.length - 1 ? "1px solid #F8FAFC" : "none",
+                          borderBottom: i < topOpps.length - 1 ? "1px solid hsl(var(--border))" : "none",
                           transition: "background 0.15s",
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--muted))")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
                         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -1564,7 +1564,7 @@ export function AdminDashboard() {
                               width: 24,
                               height: 24,
                               borderRadius: 8,
-                              background: i < 3 ? "#F0FDFA" : "#F8FAFC",
+                              background: i < 3 ? "#F0FDFA" : "hsl(var(--muted))",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -1580,7 +1580,7 @@ export function AdminDashboard() {
                             style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: "#1E293B",
+                              color: "hsl(var(--foreground))",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -1592,7 +1592,7 @@ export function AdminDashboard() {
                         <span className="text-muted-foreground" style={{ width: 70, fontSize: 12, fontWeight: 500, textAlign: "center" }}>
                           {(p.billing_raf as number) != null ? (p.billing_raf as number).toFixed(2) : "--"}
                         </span>
-                        <span style={{ width: 70, fontSize: 12, fontWeight: 600, color: "#1E293B", textAlign: "center" }}>
+                        <span style={{ width: 70, fontSize: 12, fontWeight: 600, color: "hsl(var(--foreground))", textAlign: "center" }}>
                           {(p.ai_raf as number) != null ? (p.ai_raf as number).toFixed(2) : "--"}
                         </span>
                         <span
@@ -1705,7 +1705,7 @@ export function AdminDashboard() {
                   display: "flex",
                   alignItems: "center",
                   padding: "12px 0",
-                  borderBottom: idx < providers.length - 1 ? "1px solid #F8FAFC" : "none",
+                  borderBottom: idx < providers.length - 1 ? "1px solid hsl(var(--border))" : "none",
                 }}
               >
                 <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
@@ -1714,7 +1714,7 @@ export function AdminDashboard() {
                       width: 34,
                       height: 34,
                       borderRadius: 10,
-                      background: ["#F0FDFA", "#F1F5F9", "#FFF7ED", "#F0FDF4"][idx % 4],
+                      background: ["#F0FDFA", "hsl(var(--muted))", "#FFF7ED", "#F0FDF4"][idx % 4],
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1844,11 +1844,11 @@ export function AdminDashboard() {
                       gap: 12,
                       padding: "12px 8px",
                       borderRadius: 10,
-                      borderBottom: idx < 4 ? "1px solid #F8FAFC" : "none",
+                      borderBottom: idx < 4 ? "1px solid hsl(var(--border))" : "none",
                       cursor: "pointer",
                       transition: "background 0.15s",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--muted))")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <div
@@ -2046,13 +2046,13 @@ export function AdminDashboard() {
                       role="button"
                       tabIndex={0}
                       style={{ cursor: "pointer", transition: "background 0.15s" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--muted))")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       onClick={() => router.push(`/patients/${p.pid}`)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/patients/${p.pid}`); } }}
                     >
                       <td className="text-muted-foreground p-3 text-xs font-semibold border-b border-slate-100">{idx + 1}</td>
-                      <td style={{ padding: "12px", borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "12px", borderBottom: "1px solid hsl(var(--border))" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span className="text-foreground text-[13px] font-semibold">{p.name as string}</span>
                           <Sparkline
@@ -2063,29 +2063,29 @@ export function AdminDashboard() {
                           />
                         </div>
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, color: "#475569", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>{(p.age as number) ?? "--"}</td>
-                      <td style={{ padding: "12px", fontSize: 13, color: "#475569", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>{(p.sex as string) ?? "--"}</td>
-                      <td style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "12px", fontSize: 13, color: "hsl(var(--muted-foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>{(p.age as number) ?? "--"}</td>
+                      <td style={{ padding: "12px", fontSize: 13, color: "hsl(var(--muted-foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>{(p.sex as string) ?? "--"}</td>
+                      <td style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
                         <RiskBadge score={aiRaf} size="sm" />
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 500, color: "#475569", textAlign: "center", borderBottom: "1px solid #F1F5F9", fontVariantNumeric: "tabular-nums" }}>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 500, color: "hsl(var(--muted-foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))", fontVariantNumeric: "tabular-nums" }}>
                         {(p.billing_raf as number) != null ? (p.billing_raf as number).toFixed(3) : "--"}
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 600, color: "#1E293B", textAlign: "center", borderBottom: "1px solid #F1F5F9", fontVariantNumeric: "tabular-nums" }}>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 600, color: "hsl(var(--foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))", fontVariantNumeric: "tabular-nums" }}>
                         {(p.ai_raf as number) != null ? (p.ai_raf as number).toFixed(3) : "--"}
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#EF4444", textAlign: "center", borderBottom: "1px solid #F1F5F9", fontVariantNumeric: "tabular-nums" }}>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#EF4444", textAlign: "center", borderBottom: "1px solid hsl(var(--border))", fontVariantNumeric: "tabular-nums" }}>
                         +{(absGap ?? 0).toFixed(3)}
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#10B981", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#10B981", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
                         {fmt$(revOpp)}
                       </td>
-                      <td style={{ padding: "12px", fontSize: 12, color: "#475569", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "12px", fontSize: 12, color: "hsl(var(--muted-foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: "#0F766E", background: "#F0FDFA", padding: "2px 8px", borderRadius: 4 }}>
                           {((p.hcc_count_ai ?? p.hcc_count_billing ?? 0) as number)}
                         </span>
                       </td>
-                      <td style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid #F1F5F9" }}>
+                      <td style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
                         <span style={{
                           fontSize: 11,
                           fontWeight: 600,

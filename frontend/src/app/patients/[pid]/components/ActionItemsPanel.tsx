@@ -192,7 +192,7 @@ function DocDrawer({
           top: 0,
           bottom: 0,
           width: 380,
-          background: C.white,
+          background: "hsl(var(--card))",
           boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
           zIndex: 201,
           display: "flex",

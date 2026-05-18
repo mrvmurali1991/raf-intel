@@ -18,8 +18,8 @@ import {
 // ---------------------------------------------------------------------------
 
 const card: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
   borderRadius: 14,
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
   padding: 24,
@@ -148,8 +148,6 @@ export function OnboardingCard({
         ...card,
         padding: "28px 32px",
         marginBottom: 24,
-        background: "linear-gradient(135deg, #FAFBFF 0%, #F0F4FF 100%)",
-        border: "1px solid #DBEAFE",
         position: "relative",
       }}
       role="region"
@@ -247,8 +245,8 @@ export function OnboardingCard({
             >
           <div
             style={{
-              background: s.complete ? "#F0FDF4" : "#FFFFFF",
-              border: s.complete ? "1px solid #BBF7D0" : "1px solid #E2E8F0",
+              background: s.complete ? "hsl(var(--success-soft))" : "hsl(var(--card))",
+              border: s.complete ? "1px solid hsl(var(--success-base))" : "1px solid hsl(var(--border))",
               borderRadius: 10,
               padding: "16px 16px 14px",
               display: "flex",

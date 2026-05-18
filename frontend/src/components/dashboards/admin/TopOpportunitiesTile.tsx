@@ -16,8 +16,8 @@ import {
 // ---------------------------------------------------------------------------
 
 const card: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
   borderRadius: 14,
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
   padding: 24,
@@ -92,8 +92,6 @@ export function TopOpportunitiesTile({
       style={{
         ...card,
         marginBottom: 24,
-        background: "linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)",
-        border: "1px solid #A7F3D0",
       }}
       role="region"
       aria-label="Top 5 RAF Capture Opportunities"

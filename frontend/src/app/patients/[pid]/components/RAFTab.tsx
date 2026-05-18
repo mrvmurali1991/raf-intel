@@ -122,7 +122,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
 
       {/* RAF Score + Payment */}
       <div style={{
-        background: `linear-gradient(135deg, ${C.blue50} 0%, ${C.white} 100%)`,
+        background: `linear-gradient(135deg, ${C.blue50} 0%, hsl(var(--card)) 100%)`,
         borderRadius: 14, border: `1px solid ${C.blue100}`,
         padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
       }}>

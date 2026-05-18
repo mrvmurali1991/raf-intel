@@ -108,7 +108,7 @@ export function TourModal({ onClose }: TourModalProps) {
     >
       <div
         style={{
-          background: "#FFFFFF",
+          background: "hsl(var(--card))",
           borderRadius: 14,
           padding: "36px 36px 28px",
           maxWidth: 480,
