@@ -568,16 +568,50 @@ export function Sidebar() {
     );
   }
 
+  // ----- Sub-cluster label (not collapsible; appears inside an expanded section) -----
+  function renderClusterLabel(label: string, isFirst: boolean) {
+    if (collapsed) return null;
+    return (
+      <div
+        key={label}
+        style={{
+          marginTop: isFirst ? 2 : 10,
+          marginBottom: 2,
+          marginLeft: 16,
+          marginRight: 16,
+          borderTop: isFirst
+            ? "none"
+            : `1px solid ${isDark ? "rgba(51,65,85,0.45)" : "rgba(226,232,240,0.9)"}`,
+          paddingTop: isFirst ? 0 : 7,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: isDark ? "#475569" : "#94a3b8",
+          }}
+        >
+          {label}
+        </span>
+      </div>
+    );
+  }
+
   // ----- Nav group renderer -----
   function renderNavGroup(group: NavGroup, index: number) {
     // In collapsed (icon-only) sidebar mode, never hide items — no room for toggles
     const isSectionCollapsed = !collapsed && !!sectionCollapsed[group.title];
 
-    const filteredItems = group.items.filter((it) => {
-      if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
-      const role = (user as { role?: string } | null)?.role ?? "";
-      return it.visibleToRoles.includes(role);
-    });
+    function filterItems(items: NavItem[]): NavItem[] {
+      return items.filter((it) => {
+        if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
+        const role = (user as { role?: string } | null)?.role ?? "";
+        return it.visibleToRoles.includes(role);
+      });
+    }
 
     return (
       <div key={group.title}>
@@ -659,7 +693,14 @@ export function Sidebar() {
         )}
         {!isSectionCollapsed && (
           <div id={`nav-section-${group.title}`}>
-            {filteredItems.map(renderNavItem)}
+            {group.clusters
+              ? group.clusters.map((cluster, ci) => (
+                  <div key={cluster.label}>
+                    {renderClusterLabel(cluster.label, ci === 0)}
+                    {filterItems(cluster.items).map(renderNavItem)}
+                  </div>
+                ))
+              : filterItems(group.items ?? []).map(renderNavItem)}
           </div>
         )}
       </div>
