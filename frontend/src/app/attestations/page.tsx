@@ -567,7 +567,7 @@ function paginationBtnStyle(disabled: boolean): React.CSSProperties {
     padding: "6px 12px",
     borderRadius: 6,
     border: "1px solid #E5E7EB",
-    background: disabled ? "#F9FAFB" : "#fff",
+    background: disabled ? "var(--muted)" : "var(--card)",
     color: disabled ? "#D1D5DB" : "#374151",
     cursor: disabled ? "not-allowed" : "pointer",
     fontSize: 12,

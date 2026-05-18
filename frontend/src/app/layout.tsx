@@ -35,6 +35,16 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${mono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Blocking inline script — must run before any paint so the `dark`
+            class is present on <html> on first render, preventing the
+            light-mode flash on page navigation. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('raf-theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body
         className="min-h-full bg-background text-foreground tracking-tight"
         suppressHydrationWarning
