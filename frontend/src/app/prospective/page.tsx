@@ -711,11 +711,15 @@ export default function ProspectivePage() {
         <div className="animate-slide-up stagger-3 card-glow-emerald">
           <MetricCard
             label="Revenue at Risk"
-            value={fmtCurrencyCompact(stats.totalRevenue)}
+            value={fmtCurrencyCompact(
+              (revenueData as { estimated_annual_revenue?: number } | null)?.estimated_annual_revenue
+                ?? stats.totalRevenue
+            )}
             subtitle="estimated opportunity"
             intent="success"
             icon={<TrendingUp size={18} />}
             meta={revenueAtRiskMeta ?? undefined}
+            freshness={(revenueData as { last_computed_at?: string } | null)?.last_computed_at ?? undefined}
             labelTestId="revenue-at-risk-label"
             valueTestId="revenue-at-risk-value"
           />
