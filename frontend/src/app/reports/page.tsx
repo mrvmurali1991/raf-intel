@@ -512,7 +512,7 @@ export default function ReportsPage() {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 1: REVENUE OPPORTUNITY
 // ══════════════════════════════════════════════════════════════════════════════
-function RevenueTab({ revenue, scorecard, router, paymentYear }: { revenue: QueryResult<RevenueOpportunityReport>; scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void }; paymentYear?: number }) {
+function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }: { revenue: QueryResult<RevenueOpportunityReport>; scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void }; paymentYear?: number; isHistoricalPY?: boolean }) {
   const r = revenue.data;
   const patients: PatientRow[] = scorecard.data ?? [];
   const revenueTableRef = React.useRef<HTMLDivElement | null>(null);
@@ -628,7 +628,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear }: { revenue: Quer
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               onClick={() => {
-                if (!top25.length) return;
+                if (isHistoricalPY || !top25.length) return;
                 downloadCSV(top25.map((p) => ({
                   "Patient": p.name,
                   "Current RAF": p.billing_raf != null ? Number(p.billing_raf).toFixed(2) : "",
@@ -639,7 +639,9 @@ function RevenueTab({ revenue, scorecard, router, paymentYear }: { revenue: Quer
                   "HCCs Analyzed": p.hcc_count_ai,
                 })), "revenue-opportunities");
               }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              disabled={isHistoricalPY}
+              title={isHistoricalPY ? "Disabled in historical view" : undefined}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
             >
               <FileDown size={14} />
               Export CSV
@@ -742,7 +744,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear }: { revenue: Quer
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 2: PATIENT SCORECARD
 // ══════════════════════════════════════════════════════════════════════════════
-function ScorecardTab({ scorecard, router }: { scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void } }) {
+function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void }; isHistoricalPY?: boolean }) {
   const [search, setSearch] = useState("");
   const [limit, setLimit] = useState(100);
   const patients: PatientRow[] = scorecard.data ?? [];
