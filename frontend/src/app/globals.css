@@ -32,25 +32,39 @@
 .login-orb-1 {
   top: -10%;
   right: -5%;
-  animation: login-float-1 18s ease-in-out infinite;
 }
 
 .login-orb-2 {
   bottom: 10%;
   left: -8%;
-  animation: login-float-2 22s ease-in-out infinite;
 }
 
 .login-orb-3 {
   top: 40%;
   right: 20%;
-  animation: login-float-3 15s ease-in-out infinite;
 }
 
 .login-heartbeat {
   stroke-dasharray: 2400;
   stroke-dashoffset: 2400;
-  animation: login-heartbeat-draw 4s ease-in-out forwards, login-heartbeat-draw 4s ease-in-out 6s infinite alternate;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .login-orb-1 {
+    animation: login-float-1 18s ease-in-out infinite;
+  }
+
+  .login-orb-2 {
+    animation: login-float-2 22s ease-in-out infinite;
+  }
+
+  .login-orb-3 {
+    animation: login-float-3 15s ease-in-out infinite;
+  }
+
+  .login-heartbeat {
+    animation: login-heartbeat-draw 4s ease-in-out forwards, login-heartbeat-draw 4s ease-in-out 6s infinite alternate;
+  }
 }
 
 .login-input-focus:focus {
@@ -301,9 +315,30 @@
     border-radius: 4px;
   }
 
-  /* Theme transition */
+  /* Theme transition — scoped to semantic nodes only, not every compositor layer */
   @media (prefers-reduced-motion: no-preference) {
-    html, html * {
+    html,
+    body,
+    main,
+    header,
+    nav,
+    aside,
+    footer,
+    section,
+    article,
+    div,
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    label,
+    p,
+    span,
+    h1, h2, h3, h4, h5, h6,
+    li,
+    td,
+    th {
       transition: background-color 0.2s ease, color 0.15s ease, border-color 0.2s ease;
     }
   }

@@ -669,11 +669,11 @@ export default function LoginPage() {
       <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 aurora-bg relative overflow-hidden">
         {/* Animated floating gradient orbs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="login-orb login-orb-1 absolute w-[480px] h-[480px] rounded-full opacity-25 dark:opacity-12 blur-[100px]"
+          <div className="login-orb login-orb-1 absolute w-[480px] h-[480px] rounded-full opacity-25 dark:opacity-[0.12] blur-[100px]"
             style={{ background: "radial-gradient(circle, #2dd4bf 0%, transparent 65%)" }} />
           <div className="login-orb login-orb-2 absolute w-[400px] h-[400px] rounded-full opacity-20 dark:opacity-10 blur-[90px]"
             style={{ background: "radial-gradient(circle, #818cf8 0%, transparent 65%)" }} />
-          <div className="login-orb login-orb-3 absolute w-[350px] h-[350px] rounded-full opacity-18 dark:opacity-08 blur-[80px]"
+          <div className="login-orb login-orb-3 absolute w-[350px] h-[350px] rounded-full opacity-[0.18] dark:opacity-[0.08] blur-[80px]"
             style={{ background: "radial-gradient(circle, #3b82f6 0%, transparent 65%)" }} />
         </div>
 
