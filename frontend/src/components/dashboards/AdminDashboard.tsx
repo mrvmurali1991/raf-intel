@@ -2,11 +2,12 @@
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
+import { QProgressCard } from "@/components/QProgressCard";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import {
   Users,
   CheckCircle,
@@ -36,10 +37,16 @@ import {
   Target,
   Info,
   AlertTriangle,
+  Upload,
+  Play,
+  X,
+  BookOpen,
+  MapPin,
 } from "lucide-react";
 import {
   getDashboardStats,
   getDashboardTrends,
+  getKpiTrends,
   getPopulationSummary,
   getRevenueOpportunity,
   getDataCompleteness,
@@ -51,6 +58,7 @@ import {
   getWorkflowSummary,
   isEmrDeactivatedError,
 } from "@/lib/api";
+import { MetricTrend } from "@/components/charts/MetricTrend";
 import {
   StatCard,
   RiskBadge,
@@ -58,6 +66,7 @@ import {
   SectionHeader,
   PageHeader,
 } from "@/components/healthcare-ui";
+import { MetricCard } from "@/components/ui/metric-card";
 import {
   AnimatedNumber,
   Sparkline,
@@ -328,6 +337,450 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
 }
 
 // ---------------------------------------------------------------------------
+// Tour Modal — step-by-step guided walkthrough (Cmd+K invokable)
+// ---------------------------------------------------------------------------
+
+const TOUR_STEPS = [
+  {
+    title: "Population Health Intelligence",
+    body: "The dashboard shows your full patient population. KPI tiles at the top surface revenue opportunity, member count, analyzed patients, and average RAF score at a glance.",
+    icon: <BarChart3 size={28} color="#3B82F6" />,
+    cta: null as string | null,
+    ctaHref: null as string | null,
+  },
+  {
+    title: "Connect your EMR",
+    body: "Go to EMR Config to connect OpenEMR, Epic, or any FHIR-compatible source. Once connected, patients sync automatically and analysis runs on the next scheduled cycle.",
+    icon: <Heart size={28} color="#EF4444" />,
+    cta: "Go to EMR Config",
+    ctaHref: "/emr-config",
+  },
+  {
+    title: "Upload a Patient CSV",
+    body: "No EMR? Upload a CSV of patient records directly from the Uploads page. The system maps columns automatically and ingests data within minutes.",
+    icon: <Upload size={28} color="#8B5CF6" />,
+    cta: "Go to Uploads",
+    ctaHref: "/uploads",
+  },
+  {
+    title: "Run RAF Analysis",
+    body: "After patients are loaded, trigger an analysis run from the Analysis page. The AI engine scores each patient, surfaces HCC coding gaps, and calculates revenue opportunity.",
+    icon: <Brain size={28} color="#10B981" />,
+    cta: "Go to Analysis",
+    ctaHref: "/analysis",
+  },
+  {
+    title: "Review Reports",
+    body: "Explore the Reports section for per-patient scorecards, HCC gap lists, provider leaderboards, and CMS sweep deadline tracking.",
+    icon: <FileBarChart size={28} color="#F59E0B" />,
+    cta: "Go to Reports",
+    ctaHref: "/reports",
+  },
+];
+
+function TourModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(0);
+  const router = useRouter();
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const total = TOUR_STEPS.length;
+  const current = TOUR_STEPS[step];
+
+  const handleKey = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") onClose();
+    if (e.key === "ArrowRight" && step < total - 1) setStep((s) => s + 1);
+    if (e.key === "ArrowLeft" && step > 0) setStep((s) => s - 1);
+  }, [step, total, onClose]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [handleKey]);
+
+  return (
+    <div
+      ref={overlayRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Product tour"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9998,
+        backdropFilter: "blur(2px)",
+      }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+    >
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 20,
+          padding: "36px 36px 28px",
+          maxWidth: 480,
+          width: "90%",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+          position: "relative",
+        }}
+      >
+        {/* Close */}
+        <button
+          onClick={onClose}
+          aria-label="Close tour"
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            border: "none",
+            background: "#F1F5F9",
+            borderRadius: 8,
+            padding: 6,
+            cursor: "pointer",
+            color: "#64748B",
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <X size={16} />
+        </button>
+
+        {/* Step indicator */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+          {TOUR_STEPS.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setStep(i)}
+              aria-label={`Go to step ${i + 1}`}
+              style={{
+                flex: 1,
+                height: 4,
+                borderRadius: 2,
+                border: "none",
+                cursor: "pointer",
+                background: i <= step ? "#3B82F6" : "#E2E8F0",
+                transition: "background 0.2s",
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Icon */}
+        <div style={{
+          background: "#F8FAFC",
+          borderRadius: 14,
+          padding: 16,
+          display: "inline-flex",
+          marginBottom: 18,
+          border: "1px solid #E2E8F0",
+        }}>
+          {current.icon}
+        </div>
+
+        {/* Content */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+          Step {step + 1} of {total}
+        </div>
+        <h3 style={{ fontSize: 19, fontWeight: 700, color: "#0F172A", margin: "0 0 10px", letterSpacing: "-0.02em" }}>
+          {current.title}
+        </h3>
+        <p style={{ fontSize: 14, color: "#475569", lineHeight: 1.65, margin: "0 0 24px" }}>
+          {current.body}
+        </p>
+
+        {/* Nav */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <button
+            onClick={() => setStep((s) => s - 1)}
+            disabled={step === 0}
+            style={{
+              padding: "9px 18px",
+              border: "1px solid #E2E8F0",
+              borderRadius: 8,
+              background: "#FFFFFF",
+              color: "#64748B",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: step === 0 ? "default" : "pointer",
+              opacity: step === 0 ? 0.35 : 1,
+            }}
+          >
+            Back
+          </button>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            {current.cta && current.ctaHref && (
+              <button
+                onClick={() => { onClose(); router.push(current.ctaHref!); }}
+                style={{
+                  padding: "9px 18px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#F1F5F9",
+                  color: "#1E293B",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {current.cta}
+              </button>
+            )}
+            {step < total - 1 ? (
+              <button
+                onClick={() => setStep((s) => s + 1)}
+                style={{
+                  padding: "9px 20px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#3B82F6",
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                style={{
+                  padding: "9px 20px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#10B981",
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Finish
+              </button>
+            )}
+          </div>
+        </div>
+
+        <p style={{ textAlign: "center", fontSize: 11, color: "#CBD5E1", marginTop: 16, marginBottom: 0 }}>
+          Use arrow keys to navigate &middot; Esc to close
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OnboardingCard — replaces KPI strip when patientCount === 0
+// ---------------------------------------------------------------------------
+
+function OnboardingCard({
+  emrConnected,
+  demoLoading,
+  onTryDemo,
+}: {
+  emrConnected: boolean;
+  demoLoading: boolean;
+  onTryDemo: () => void;
+}) {
+  const steps = [
+    {
+      number: 1,
+      title: "Connect your EMR",
+      description: "Link OpenEMR, Epic, or any FHIR source to import patient records automatically.",
+      icon: <Heart size={20} color={emrConnected ? "#10B981" : "#3B82F6"} />,
+      ctaLabel: "Go to EMR Config",
+      ctaHref: "/emr-config" as string | undefined,
+      ctaAction: undefined as (() => void) | undefined,
+      complete: emrConnected,
+    },
+    {
+      number: 2,
+      title: "Or upload a patient CSV",
+      description: "No EMR? Upload a CSV directly. The system maps columns and ingests data in minutes.",
+      icon: <Upload size={20} color="#8B5CF6" />,
+      ctaLabel: "Go to Uploads",
+      ctaHref: "/uploads" as string | undefined,
+      ctaAction: undefined as (() => void) | undefined,
+      complete: false,
+    },
+    {
+      number: 3,
+      title: "Or try with sample data",
+      description: "Explore all features instantly using the bundled OpenEMR demo with 9 real-looking patients.",
+      icon: <Play size={20} color="#F59E0B" />,
+      ctaLabel: demoLoading ? "Connecting..." : "Try Demo",
+      ctaHref: undefined as string | undefined,
+      ctaAction: onTryDemo,
+      complete: false,
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        ...card,
+        padding: "32px 36px",
+        marginBottom: 24,
+        background: "linear-gradient(135deg, #FAFBFF 0%, #F0F4FF 100%)",
+        border: "1px solid #DBEAFE",
+      }}
+      role="region"
+      aria-label="Getting started"
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
+        <div style={{
+          background: "#EFF6FF",
+          borderRadius: 12,
+          padding: 12,
+          border: "1px solid #BFDBFE",
+        }}>
+          <BookOpen size={24} color="#3B82F6" />
+        </div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.02em" }}>
+            Get started in 3 steps
+          </h2>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+            Complete any one step to populate your dashboard
+          </p>
+        </div>
+      </div>
+
+      {/* Steps */}
+      <div
+        className="onboarding-steps"
+        style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}
+      >
+        <style>{`
+          @media (max-width: 768px) {
+            .onboarding-steps { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
+        {steps.map((s) => (
+          <div
+            key={s.number}
+            style={{
+              background: s.complete ? "#F0FDF4" : "#FFFFFF",
+              border: s.complete ? "1px solid #BBF7D0" : "1px solid #E2E8F0",
+              borderRadius: 14,
+              padding: "20px 20px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            {/* Step number + icon */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: s.complete ? "#10B981" : "#EFF6FF",
+                border: s.complete ? "none" : "1px solid #BFDBFE",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 13,
+                fontWeight: 700,
+                color: s.complete ? "#FFFFFF" : "#3B82F6",
+                flexShrink: 0,
+              }}>
+                {s.complete ? <CheckCircle size={16} color="#FFFFFF" strokeWidth={2.5} /> : s.number}
+              </div>
+              <div style={{ opacity: 0.75 }}>{s.icon}</div>
+            </div>
+
+            {/* Text */}
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 4 }}>
+                {s.title}
+              </div>
+              <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.55 }}>
+                {s.description}
+              </div>
+            </div>
+
+            {/* CTA */}
+            {!s.complete ? (
+              s.ctaHref ? (
+                <Link
+                  href={s.ctaHref}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: "auto",
+                    padding: "8px 14px",
+                    border: "1px solid #BFDBFE",
+                    borderRadius: 8,
+                    background: "#EFF6FF",
+                    color: "#1D4ED8",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    width: "fit-content",
+                  }}
+                >
+                  {s.ctaLabel}
+                  <ChevronRight size={12} />
+                </Link>
+              ) : (
+                <button
+                  onClick={s.ctaAction}
+                  disabled={demoLoading}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: "auto",
+                    padding: "8px 14px",
+                    border: "none",
+                    borderRadius: 8,
+                    background: "#FEF3C7",
+                    color: "#92400E",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: demoLoading ? "wait" : "pointer",
+                    width: "fit-content",
+                    opacity: demoLoading ? 0.7 : 1,
+                  }}
+                >
+                  {demoLoading
+                    ? <RefreshCw size={12} style={{ animation: "spin 1s linear infinite" }} />
+                    : <Play size={12} />}
+                  {s.ctaLabel}
+                </button>
+              )
+            ) : (
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "6px 12px",
+                borderRadius: 8,
+                background: "#D1FAE5",
+                color: "#065F46",
+                fontSize: 12,
+                fontWeight: 600,
+                width: "fit-content",
+                marginTop: "auto",
+              }}>
+                <CheckCircle size={12} strokeWidth={2.5} />
+                Done
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Dashboard
 // ---------------------------------------------------------------------------
 
@@ -336,6 +789,7 @@ export function AdminDashboard() {
   const router = useRouter();
   const [demoLoading, setDemoLoading] = useState(false);
   const [showDemoConfirm, setShowDemoConfirm] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const [dateRange, setDateRange] = useState("ytd");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -374,13 +828,26 @@ export function AdminDashboard() {
   // Show dashboard content when EMR is connected OR uploaded patient data exists
   const hasData = (stats?.total_patients ?? 0) > 0;
 
+  // Cmd+K / Ctrl+K → open tour
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowTour((v) => !v);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
   // ---- Batch 2: Analytics (secondary) ----
-  const [revQ, dcQ, scorecardQ, trendsQ] = useQueries({
+  const [revQ, dcQ, scorecardQ, trendsQ, kpiTrendsQ] = useQueries({
     queries: [
       { queryKey: ["revenue-opportunity", new Date().getFullYear()], queryFn: () => getRevenueOpportunity(new Date().getFullYear()), retry: 1, staleTime: 60_000 },
       { queryKey: ["data-completeness"], queryFn: getDataCompleteness, retry: 1, staleTime: 60_000 },
       { queryKey: ["patient-scorecard"], queryFn: () => getPatientScorecard(), retry: 1, staleTime: 60_000 },
       { queryKey: ["dashboard-trends"], queryFn: getDashboardTrends, retry: 1, staleTime: 60_000 },
+      { queryKey: ["kpi-trends-12w"], queryFn: () => getKpiTrends(12), retry: 1, staleTime: 300_000 },
     ],
   });
   const rev = revQ.data;
@@ -391,6 +858,7 @@ export function AdminDashboard() {
   const scorecard = scorecardQ.data;
   const scL = scorecardQ.isLoading;
   const trends = trendsQ.data;
+  const kpiTrends = kpiTrendsQ.data;
 
   // ---- Batch 3: Lists (tertiary) ----
   const [providersQ, suspectsQ, workflowQ] = useQueries({
@@ -576,6 +1044,8 @@ export function AdminDashboard() {
   return (
     <ErrorBoundary fallbackTitle="Dashboard failed to load">
     <TooltipProvider delay={200}>
+    <>
+    {showTour && <TourModal onClose={() => setShowTour(false)} />}
     <div className="admin-dash-outer" style={{ background: "#F8FAFC", minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
       <DataQualityBanner />
       <style>{`
@@ -636,6 +1106,28 @@ export function AdminDashboard() {
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
             <span style={{ fontSize: 13, color: "#64748B" }}>{dateStr}</span>
+            <button
+              onClick={() => setShowTour(true)}
+              aria-label="Take the product tour"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 12px",
+                border: "1px solid #BFDBFE",
+                borderRadius: 20,
+                background: "#EFF6FF",
+                color: "#1D4ED8",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#DBEAFE"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#EFF6FF"; }}
+            >
+              <BookOpen size={12} />
+              Take the tour
+            </button>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -955,10 +1447,16 @@ export function AdminDashboard() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ROW 1: KPI Strip
+          ROW 1: KPI Strip — replaced by OnboardingCard when no data yet
           ══════════════════════════════════════════════════════════════════════ */}
       <div className="fade-in-up fade-in-up-1">
-      {(statsL && revL) ? (
+      {!statsL && !revL && !hasData ? (
+        <OnboardingCard
+          emrConnected={emrConnected}
+          demoLoading={demoLoading}
+          onTryDemo={() => setShowDemoConfirm(true)}
+        />
+      ) : (statsL && revL) ? (
         <KPISkeleton />
       ) : (
         <div
@@ -1031,11 +1529,16 @@ export function AdminDashboard() {
             icon={<TrendingUp size={20} />}
             color={avgRaf === 0 ? "#94A3B8" : rafColor(avgRaf)}
             trend={rafTrend}
-            href="/reports"
+            href="/reports?tab=raf-distribution"
             info="The average CMS-HCC Risk Adjustment Factor across all patients. A score of 1.0 represents an average Medicare beneficiary. Higher scores indicate greater clinical complexity and higher expected healthcare costs."
           />
         </div>
       )}
+      </div>
+
+      {/* Q-Progress: most-tracked active quarterly goal */}
+      <div className="mb-6 max-w-sm">
+        <QProgressCard />
       </div>
 
       <CmsSweepWidget revenueOpp={revenueOpp} />
@@ -1844,6 +2347,7 @@ export function AdminDashboard() {
 
       </>}
     </div>
+    </>
     </TooltipProvider>
     </ErrorBoundary>
   );

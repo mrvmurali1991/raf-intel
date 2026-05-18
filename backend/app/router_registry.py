@@ -152,6 +152,7 @@ from app.routers import reveleer_admin as reveleer_admin_router
 from app.routers import direct_inbound as direct_inbound_router
 from app.routers import document_ingestion_dashboard as document_ingestion_dashboard_router
 from app.routers import demo_reset as demo_reset_router
+from app.routers import goals as goals_router
 
 
 # ---------------------------------------------------------------------------
@@ -423,3 +424,6 @@ def register_routers(app: FastAPI) -> None:
 
     # Executive demo mode (reset + live stats + NLP suspects for /admin/demo)
     _mount(app, demo_reset_router.router)
+
+    # Quarterly RAF capture goals (goal-vs-actual tracking)
+    _mount(app, goals_router.router)

@@ -98,6 +98,7 @@ const navGroups: NavGroup[] = [
   {
     title: "ANALYSIS",
     items: [
+      { href: "/goals", label: "Quarterly Goals", icon: Target },
       { href: "/reports", label: "Reports", icon: BarChart3, shortcut: "g r" },
       { href: "/population/heatmap", label: "Population", icon: MapPin },
       { href: "/coder-analytics", label: "Coder Analytics", icon: BarChart3 },
