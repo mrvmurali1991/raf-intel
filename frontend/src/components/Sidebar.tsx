@@ -52,6 +52,8 @@ import { Building2, ChevronDown } from "lucide-react";
 interface NavItem {
   href: string;
   label: string;
+  /** Alternative label shown to non-admin users. Admin always sees `label`. */
+  nonAdminLabel?: string;
   icon: React.ComponentType<{ className?: string; style?: CSSProperties }>;
   badge?: string | number;
   /** Keyboard shortcut hint, e.g. "g h". Shown when sidebar is expanded and user has used shortcuts before. */
@@ -60,9 +62,17 @@ interface NavItem {
   visibleToRoles?: string[];
 }
 
+interface NavCluster {
+  label: string;
+  items: NavItem[];
+}
+
 interface NavGroup {
   title: string;
-  items: NavItem[];
+  /** Flat item list — used when there are no sub-clusters */
+  items?: NavItem[];
+  /** Sub-clusters with divider labels — used instead of `items` */
+  clusters?: NavCluster[];
   /** When true, section starts collapsed by default */
   defaultCollapsed?: boolean;
 }
@@ -79,8 +89,8 @@ const navGroups: NavGroup[] = [
     title: "DAILY WORK",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, shortcut: "g h" },
-      { href: "/worklist", label: "Today's Worklist", icon: Stethoscope, shortcut: "g w" },
-      { href: "/md/today", label: "Pre-visit Huddle", icon: HeartPulse, shortcut: "g m" },
+      { href: "/worklist", label: "Today's Worklist", nonAdminLabel: "My Worklist", icon: Stethoscope, shortcut: "g w" },
+      { href: "/md/today", label: "Provider Prep (MD)", icon: HeartPulse, shortcut: "g m", visibleToRoles: ["provider", "md", "admin"] },
       { href: "/patients", label: "Patients", icon: Users, shortcut: "g p" },
     ],
   },
@@ -93,36 +103,56 @@ const navGroups: NavGroup[] = [
       { href: "/review-queue", label: "Coder Review", icon: ClipboardCheck, shortcut: "g s" },
       { href: "/qa", label: "QA Audit", icon: ShieldCheck },
       { href: "/pre-submission", label: "Pre-submission", icon: ShieldCheck },
+      { href: "/goals", label: "Quarterly Goals", icon: Target },
     ],
   },
   {
     title: "ANALYSIS",
-    items: [
-      { href: "/goals", label: "Quarterly Goals", icon: Target },
-      { href: "/reports", label: "Reports", icon: BarChart3, shortcut: "g r" },
-      { href: "/population/heatmap", label: "Population", icon: MapPin },
-      { href: "/coder-analytics", label: "Coder Analytics", icon: BarChart3 },
-      { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
-      { href: "/v28-impact", label: "V28 Impact", icon: TrendingDown },
-      { href: "/roi", label: "ROI Calculator", icon: Calculator },
-      { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
-      { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
-      { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
-      ...(DEMO_MODE ? [{ href: "/demo", label: "Pipeline Demo", icon: Workflow }] : []),
+    clusters: [
+      {
+        label: "Analytics & Insights",
+        items: [
+          { href: "/reports", label: "Reports", icon: BarChart3, shortcut: "g r" },
+          { href: "/population/heatmap", label: "Population", icon: MapPin },
+          { href: "/coder-analytics", label: "Coder Analytics", icon: BarChart3 },
+          { href: "/providers/scorecard", label: "Provider Scorecards", icon: UserCheck },
+          { href: "/v28-impact", label: "V28 Impact", icon: TrendingDown },
+          { href: "/analysis", label: "Clinical Analysis", icon: Microscope, shortcut: "g a" },
+          ...(DEMO_MODE ? [{ href: "/demo", label: "Pipeline Demo", icon: Workflow }] : []),
+        ],
+      },
+      {
+        label: "Reference Tools",
+        items: [
+          { href: "/raf-calculate", label: "RAF Calculator", icon: Calculator, shortcut: "g c" },
+          { href: "/crosswalk", label: "HCC Crosswalk", icon: ArrowLeftRight },
+          { href: "/roi", label: "ROI Calculator", icon: Calculator },
+        ],
+      },
     ],
   },
   {
     title: "ADMIN",
-    items: [
-      { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/users", label: "Users", icon: UsersRound },
-      { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
-      { href: "/uploads", label: "Data Uploads", icon: Upload },
-      { href: "/audit", label: "Audit", icon: ShieldCheck },
-      { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
-      { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack, visibleToRoles: ["admin"] },
-      { href: "/system", label: "System Health", icon: Activity, visibleToRoles: ["admin"] },
-      { href: "/developer", label: "Developer", icon: Code, visibleToRoles: ["admin"] },
+    clusters: [
+      {
+        label: "Setup",
+        items: [
+          { href: "/settings", label: "Settings", icon: Settings },
+          { href: "/users", label: "Users", icon: UsersRound },
+          { href: "/emr-config", label: "EMR Config", icon: Database, shortcut: "g e" },
+          { href: "/uploads", label: "Data Uploads", icon: Upload },
+        ],
+      },
+      {
+        label: "Compliance",
+        items: [
+          { href: "/audit", label: "Audit", icon: ShieldCheck },
+          { href: "/radv", label: "RADV Audit Defense", icon: ShieldCheck },
+          { href: "/admin/document-ingestion", label: "Doc Ingestion", icon: FileStack, visibleToRoles: ["admin"] },
+          { href: "/system", label: "System Health", icon: Activity, visibleToRoles: ["admin"] },
+          { href: "/developer", label: "Developer", icon: Code, visibleToRoles: ["admin"] },
+        ],
+      },
     ],
   },
 ];
@@ -411,6 +441,11 @@ export function Sidebar() {
 
   // ----- Nav item renderer -----
   function renderNavItem(item: NavItem) {
+    const role = (user as { role?: string } | null)?.role ?? "";
+    const isAdmin = role === "admin";
+    // Non-admin users see the personalized label when one is provided
+    const resolvedLabel = (!isAdmin && item.nonAdminLabel) ? item.nonAdminLabel : item.label;
+
     const active = isActive(item.href);
     const hovered = hoveredItem === item.href;
 
@@ -461,7 +496,7 @@ export function Sidebar() {
         href={item.href}
         style={itemStyle}
         // Tooltip shown in collapsed mode instead of label text
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? resolvedLabel : undefined}
         aria-current={active ? "page" : undefined}
         onMouseEnter={() => setHoveredItem(item.href)}
         onMouseLeave={() => setHoveredItem(null)}
@@ -477,7 +512,7 @@ export function Sidebar() {
                 whiteSpace: "nowrap",
               }}
             >
-              {item.label}
+              {resolvedLabel}
             </span>
             {item.badge !== undefined && (
               <span
