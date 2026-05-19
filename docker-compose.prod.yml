@@ -429,6 +429,8 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+        NEXT_PUBLIC_BUILD_ID: ${GIT_SHA:-dev}
+        NEXT_PUBLIC_BUILD_TIME: ${BUILD_TIME:-}
     image: raf-frontend:${IMAGE_TAG:-latest}
     container_name: raf-frontend
     restart: unless-stopped

@@ -4,6 +4,11 @@ import { execSync } from "child_process";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const commitSha = (() => {
+  // Prefer the build-arg injected by Docker (or CI) — set before next.config.ts
+  // is evaluated. Fall back to git for local dev builds.
+  if (process.env.NEXT_PUBLIC_BUILD_ID && process.env.NEXT_PUBLIC_BUILD_ID !== "dev") {
+    return process.env.NEXT_PUBLIC_BUILD_ID;
+  }
   try {
     return execSync("git rev-parse --short HEAD").toString().trim();
   } catch {
@@ -13,7 +18,9 @@ const commitSha = (() => {
 
 // Expose build identity to the browser so the user can verify the live deploy.
 process.env.NEXT_PUBLIC_BUILD_ID = commitSha ?? "dev";
-process.env.NEXT_PUBLIC_BUILD_TIME = new Date().toISOString();
+if (!process.env.NEXT_PUBLIC_BUILD_TIME) {
+  process.env.NEXT_PUBLIC_BUILD_TIME = new Date().toISOString();
+}
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -58,7 +65,9 @@ const nextConfig: NextConfig = {
       // HTML / RSC payloads: NEVER cache. Cloudflare + browser must always
       // revalidate. This is what lets new deploys appear without hard-refresh.
       // The hashed _next/static chunks above carry the actual immutability.
-      source: "/:path*",
+      // Exclude /_next/static and /_next/image so the immutable cache headers
+      // set above are NOT overwritten by this catch-all.
+      source: "/((?!_next/static|_next/image).*)",
       headers: [
         { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" },
         { key: "Pragma", value: "no-cache" },

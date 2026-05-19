@@ -12,6 +12,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=http://localhost:8500
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Build identity — passed from docker-compose build args so the sidebar
+# shows the real commit SHA instead of "dev".
+ARG NEXT_PUBLIC_BUILD_ID=dev
+ARG NEXT_PUBLIC_BUILD_TIME
+ENV NEXT_PUBLIC_BUILD_ID=${NEXT_PUBLIC_BUILD_ID}
+ENV NEXT_PUBLIC_BUILD_TIME=${NEXT_PUBLIC_BUILD_TIME}
+
 RUN npm run build
 
 FROM node:22-alpine AS runner

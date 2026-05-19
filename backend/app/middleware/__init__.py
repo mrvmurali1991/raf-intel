@@ -64,11 +64,13 @@ def _build_cors_origins() -> list[str]:
             "http://localhost:3500",
             "http://localhost:3000",
             "http://localhost:3001",
+            "http://localhost:3099",  # Next.js dev server alt port (--webpack -p 3099)
             "http://localhost:3444",
             "http://localhost:3445",  # Next.js dev server alt port
             "http://127.0.0.1:3500",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:3001",
+            "http://127.0.0.1:3099",
             "http://127.0.0.1:3444",
             "http://127.0.0.1:3445",
         ]

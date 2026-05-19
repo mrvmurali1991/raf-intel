@@ -38,6 +38,17 @@ log "Ensuring data directories exist..."
 mkdir -p "${SCRIPT_DIR}/data/redis" "${SCRIPT_DIR}/data/uploads" "${SCRIPT_DIR}/data/logs" "${SCRIPT_DIR}/data/submissions"
 
 # ---------------------------------------------------------------------------
+# Build identity — export so docker-compose.prod.yml can pass as build args.
+# GIT_SHA: 7-char short commit hash for the sidebar version footer.
+# BUILD_TIME: ISO-8601 timestamp baked into the image for traceability.
+# ---------------------------------------------------------------------------
+export GIT_SHA
+GIT_SHA=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")
+export BUILD_TIME
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+log "Build identity: GIT_SHA=${GIT_SHA}  BUILD_TIME=${BUILD_TIME}"
+
+# ---------------------------------------------------------------------------
 # Build images
 # ---------------------------------------------------------------------------
 log "Building images..."

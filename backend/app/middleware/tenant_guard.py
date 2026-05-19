@@ -34,6 +34,10 @@ _EXEMPT_PREFIXES = (
     "/docs",
     "/redoc",
     "/openapi.json",
+    # SSE stream uses a query-string ticket because EventSource cannot send
+    # Authorization headers. The route handler validates the signed ticket
+    # (incl. session liveness and tenant_id resolution) itself.
+    "/api/notifications/stream",
 )
 
 

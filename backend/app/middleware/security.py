@@ -37,13 +37,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "camera=(), microphone=(), geolocation=()"
         )
         # Content-Security-Policy: restrict resource loading to same-origin.
+        # static.cloudflareinsights.com is allowlisted because Cloudflare's
+        # edge auto-injects the Web Analytics beacon on proxied sites. The
+        # cleaner long-term fix is to disable CF Web Analytics for this
+        # hostname (HIPAA-aligned: no third-party tracker touches PHI pages),
+        # but the allowlist keeps the console quiet in the meantime.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
+            "script-src 'self' https://static.cloudflareinsights.com; "
             "style-src 'self'; "
             "img-src 'self' data: blob:; "
             "font-src 'self'; "
-            f"connect-src 'self' {os.environ.get('FRONTEND_URL', '')} {os.environ.get('NEXT_PUBLIC_API_URL', '')}; "
+            f"connect-src 'self' {os.environ.get('FRONTEND_URL', '')} {os.environ.get('NEXT_PUBLIC_API_URL', '')} https://cloudflareinsights.com; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self'"
