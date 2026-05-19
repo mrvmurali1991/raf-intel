@@ -140,13 +140,62 @@ export function SuspectsTab({
                   </span>
                 </div>
                 {(s.evidence_detail || s.evidence || s.rationale) && (
-                  <div className="text-sm text-muted-foreground" style={{
-                    marginTop: 8, lineHeight: 1.5,
-                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-                  }}>
-                    {typeof s.evidence_detail === "object" && s.evidence_detail
-                      ? `Prior ${(s.evidence_detail as { prior_icd?: string; prior_year?: string | number }).prior_icd || ""} (${(s.evidence_detail as { prior_icd?: string; prior_year?: string | number }).prior_year || ""})`
-                      : (typeof s.evidence_detail === "string" ? s.evidence_detail : null) || s.evidence || s.rationale}
+                  <div style={{ marginTop: 8 }}>
+                    {/* Render evidence_detail with excerpt key first */}
+                    {(() => {
+                      const ed = s.evidence_detail;
+                      // Try to surface excerpt / text from structured JSON
+                      let excerpt: string | null = null;
+                      if (typeof ed === "object" && ed !== null) {
+                        const edObj = ed as Record<string, unknown>;
+                        excerpt = (
+                          (typeof edObj.excerpt === "string" ? edObj.excerpt : null) ||
+                          (typeof edObj.text === "string" ? edObj.text : null) ||
+                          (typeof edObj.snippet === "string" ? edObj.snippet : null) ||
+                          (typeof edObj.summary === "string" ? edObj.summary : null) ||
+                          (typeof edObj.rationale === "string" ? edObj.rationale : null) ||
+                          // Legacy: prior_icd recap shape
+                          (edObj.prior_icd ? `Prior ${edObj.prior_icd} (${edObj.prior_year || ""})` : null)
+                        );
+                      } else if (typeof ed === "string") {
+                        // Try JSON parse first
+                        try {
+                          const parsed = JSON.parse(ed) as Record<string, unknown>;
+                          excerpt = (typeof parsed.excerpt === "string" ? parsed.excerpt : null)
+                            || (typeof parsed.text === "string" ? parsed.text : null)
+                            || (typeof parsed.summary === "string" ? parsed.summary : null)
+                            || ed;
+                        } catch {
+                          excerpt = ed;
+                        }
+                      }
+                      const displayText = excerpt || s.evidence || s.rationale || "";
+                      if (!displayText) return null;
+                      return (
+                        <WithTooltip
+                          tip={displayText.length > 120 ? displayText : ""}
+                          side="left"
+                        >
+                          <div
+                            className="text-sm text-muted-foreground"
+                            style={{
+                              lineHeight: 1.5,
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              background: "hsl(var(--muted))",
+                              borderLeft: "3px solid hsl(var(--primary) / 0.3)",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              cursor: displayText.length > 120 ? "help" : "default",
+                            }}
+                          >
+                            {displayText}
+                          </div>
+                        </WithTooltip>
+                      );
+                    })()}
                   </div>
                 )}
                 {s.meat_evidence && (

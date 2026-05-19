@@ -458,6 +458,11 @@ export interface PatientEncountersResponse {
     reason?: string;
     provider_fname?: string;
     provider_lname?: string;
+    facility?: string;
+    /** Raw SOAP note text returned by the server — first 200 chars shown in overview */
+    note_text?: string;
+    notes?: string;
+    has_notes?: boolean;
   }>;
 }
 

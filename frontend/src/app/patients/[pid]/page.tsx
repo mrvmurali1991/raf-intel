@@ -702,6 +702,24 @@ export default function PatientDetailPage({
     return sorted[0]?.encounter_date || sorted[0]?.date || null;
   })();
 
+  // Pipeline runs — latest completed_at for AI Analysis badge on Overview
+  // Falls back gracefully if pipeline:read permission isn't provisioned yet.
+  const pipelineRunsQ = useQuery({
+    queryKey: ["pipeline-runs", "latest"],
+    queryFn: async () => {
+      const { default: api } = await import("@/lib/api");
+      const res = await api.get("/api/pipeline/runs", { params: { status: "completed", limit: 1 } });
+      return res.data as Array<{ finished_at?: string | null; completed_at?: string | null; created_at: string }>;
+    },
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+  const pipelineCompletedAt: string | null = (() => {
+    const runs = pipelineRunsQ.data ?? [];
+    if (!runs.length) return null;
+    return runs[0].finished_at ?? runs[0].completed_at ?? runs[0].created_at ?? null;
+  })();
+
   // V28 delta — derive from v28-impact query (lazy: only needed for risk card)
   const v28ImpactQ = useQuery({
     queryKey: ["v28-impact", "patient", pid, selectedYear],
@@ -976,11 +994,13 @@ export default function PatientDetailPage({
             selectedYear={selectedYear}
             meds={medsQ.data}
             labSuspects={labSuspectsQ.data}
+            labSuspectsLoading={labSuspectsQ.isLoading}
             vitalsSuspects={vitalsSuspectsQ.data}
             onRetryProblems={() => queryClient.refetchQueries({ queryKey: ["patient-problems", pid, selectedYear] })}
             onRetryEncounters={() => queryClient.refetchQueries({ queryKey: ["patient-encounters", pid] })}
             onRetryRecapture={() => queryClient.refetchQueries({ queryKey: ["patient-recapture", pid, selectedYear] })}
             onRetryProfile={() => queryClient.refetchQueries({ queryKey: ["patient-profile", pid] })}
+            pipelineCompletedAt={pipelineCompletedAt}
           />
         )}
         {activeTab === "raf" && (

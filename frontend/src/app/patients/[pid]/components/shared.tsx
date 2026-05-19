@@ -91,7 +91,11 @@ export interface EncounterItem {
   reason?: string;
   provider_fname?: string;
   provider_lname?: string;
+  /** Facility / clinic name from form_encounter.facility */
+  facility?: string;
   notes?: string;
+  /** Raw SOAP note text — first ~200 chars shown in encounter row */
+  note_text?: string;
   has_notes?: boolean;
   analyzed_at?: string;
   has_analysis?: boolean;
