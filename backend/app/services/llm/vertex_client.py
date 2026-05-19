@@ -141,7 +141,10 @@ def _prompt_hash(text: str) -> str:
 
 _VERTEX_SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 _DEFAULT_LOCATION = "us-central1"
-_DEFAULT_MODEL = "gemini-2.0-flash"
+# Read GEMINI_MODEL at import time so callers that rely on the module-level
+# default automatically use whatever model the operator has configured.
+# Falls back to gemini-2.0-flash when the env var is absent.
+_DEFAULT_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
 _REQUEST_TIMEOUT_SEC = 60
 
 
