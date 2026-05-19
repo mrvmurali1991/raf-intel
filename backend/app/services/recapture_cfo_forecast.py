@@ -296,7 +296,8 @@ def get_executive_summary(
     # code source which raises RADV-style audit exposure.
     dual_coded = sum(
         1 for r in rows
-        if (r.get("icd10_code") or "").strip() and (r.get("hcc_code") or "").strip()
+        if str(r.get("icd10_code") or "").strip()
+        and str(r.get("hcc_code") or "").strip()
     )
     total_rows = len(rows)
     audit_risk_flag = False
