@@ -92,7 +92,7 @@ def _emit(event_type: str, *, tenant_id: str, actor_user_id: int,
 def _assert_run_owned(run_id: int, tenant_id: str) -> None:
     with raf_cursor() as cur:
         cur.execute(
-            "SELECT id FROM radv_audit_runs WHERE id = %s AND tenant_id = %s",
+            "SELECT id FROM raf_radv_audit_runs WHERE id = %s AND tenant_id = %s",
             (run_id, tenant_id),
         )
         if not cur.fetchone():
