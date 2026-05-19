@@ -58,7 +58,9 @@ docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --pull
 # Deploy (rolling restart)
 # ---------------------------------------------------------------------------
 log "Starting services..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
+# NOTE: --remove-orphans would delete raf-mysql (it lives outside this compose
+# file — it serves OpenEMR's DB and is managed manually). Stay explicit.
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
 # ---------------------------------------------------------------------------
 # Wait for health checks
