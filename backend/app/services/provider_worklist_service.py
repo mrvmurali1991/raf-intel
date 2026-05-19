@@ -241,33 +241,49 @@ def get_provider_worklist(
         logger.debug("get_provider_worklist: could not resolve NPI for provider %s: %s", provider_id, exc)
 
     # ---- Fetch patients assigned to this provider ----
-    # Strategy: patients who have at least one encounter with this provider's NPI
-    # (or provider_id used as a fallback NPI string) OR who have an open recapture
-    # gap linked to this provider's NPI.  We always scope to tenant.
-    npi_filter = provider_npi if provider_npi else str(provider_id)
-
+    # Strategy:
+    #   - If provider_npi resolved → patients with encounters from that NPI
+    #   - If provider_npi did NOT resolve (admin/manager without a provider
+    #     record) → ALL active tenant patients. This lets admin views render
+    #     a populated worklist without per-provider scoping.
     try:
         with raf_cursor() as cur:
-            cur.execute(
-                """
-                SELECT DISTINCT
-                       p.id         AS patient_id,
-                       p.first_name AS first_name,
-                       p.last_name  AS last_name,
-                       p.dob
-                FROM   patients p
-                WHERE  p.tenant_id  = %s
-                  AND  p.is_active  = 1
-                  AND  p.id IN (
-                       SELECT ne.patient_id
-                       FROM   normalized_encounters ne
-                       WHERE  ne.tenant_id    = %s
-                         AND  ne.provider_npi = %s
-                  )
-                ORDER BY p.last_name, p.first_name
-                """,
-                (tenant_id, tenant_id, npi_filter),
-            )
+            if provider_npi:
+                cur.execute(
+                    """
+                    SELECT DISTINCT
+                           p.id         AS patient_id,
+                           p.first_name AS first_name,
+                           p.last_name  AS last_name,
+                           p.dob
+                    FROM   patients p
+                    WHERE  p.tenant_id  = %s
+                      AND  p.is_active  = 1
+                      AND  p.id IN (
+                           SELECT ne.patient_id
+                           FROM   normalized_encounters ne
+                           WHERE  ne.tenant_id    = %s
+                             AND  ne.provider_npi = %s
+                      )
+                    ORDER BY p.last_name, p.first_name
+                    """,
+                    (tenant_id, tenant_id, provider_npi),
+                )
+            else:
+                # Admin / unmapped-provider fallback: every active tenant patient.
+                cur.execute(
+                    """
+                    SELECT p.id         AS patient_id,
+                           p.first_name AS first_name,
+                           p.last_name  AS last_name,
+                           p.dob
+                    FROM   patients p
+                    WHERE  p.tenant_id = %s
+                      AND  p.is_active = 1
+                    ORDER BY p.last_name, p.first_name
+                    """,
+                    (tenant_id,),
+                )
             patients = cur.fetchall()
     except Exception as exc:
         logger.error("get_provider_worklist: patient query failed: %s", exc)
