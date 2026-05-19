@@ -460,29 +460,67 @@ def _sync_conditions(local_pid: int, emr_pid: int) -> int:
 
 
 def _fire_pipeline_chain(local_pid: int) -> None:
-    """Trigger the 8-phase pipeline chain for tenant '1' after auto-sync.
+    """Trigger AI analysis + RAF scoring after auto-sync data commit.
 
-    Uses connection_id=8 (the active OpenEMR direct-DB connection).
-    Uses a unique sync_id derived from local_pid + timestamp so repeated
-    syncs for the same patient each create a fresh pipeline run.
+    auto_sync already wrote encounters, notes, and conditions directly into
+    RAF tables via _sync_encounters / _sync_notes / _sync_conditions so the
+    encounter-normalization step in _handle_emr_sync_completed is redundant
+    and would fail for connections without direct-DB credentials.
+
+    We jump straight to _handle_normalization_completed which routes to AI
+    analysis (PIPELINE_AI_ENABLED=true) → RAF calculation → suspects → gaps.
+
+    A unique sync_id is used per call so repeated syncs for the same patient
+    each create a distinct pipeline_runs tracking row.
 
     All errors are caught and logged; the chain must never crash the sync.
     """
     import time as _time
 
     try:
-        from app.services.pipeline_chain import _handle_emr_sync_completed
+        from app.services.pipeline_chain import (
+            _create_run,
+            _handle_normalization_completed,
+            _update_run,
+        )
+        from datetime import datetime, timezone
 
         sync_id = f"auto_sync_{local_pid}_{int(_time.time())}"
-        _handle_emr_sync_completed({
+
+        # Create a tracking row so we have an auditable pipeline_runs entry.
+        run_id = _create_run(
+            tenant_id="1",
+            trigger_event="emr_sync_completed",
+            connection_id=8,
+            sync_type="auto_sync",
+            sync_id=sync_id,
+        )
+        if run_id == -1:
+            # Duplicate — another sync fired for this patient at the same second
+            logger.info(
+                "auto_sync.pipeline_dup_skipped pid=%s sync_id=%s",
+                local_pid,
+                sync_id,
+            )
+            return
+
+        _update_run(
+            run_id,
+            status="running",
+            current_step="normalization_completed",
+            started_at=datetime.now(timezone.utc),
+        )
+
+        # Jump directly to Phase ② — data is already normalized by auto_sync
+        _handle_normalization_completed({
             "tenant_id": "1",
-            "connection_id": 8,   # active OpenEMR direct-DB connection
-            "sync_id": sync_id,
-            "sync_type": "auto_sync",
+            "patient_ids": [str(local_pid)],
+            "pipeline_run_id": run_id,
         })
+
         logger.info(
             "auto_sync.pipeline_fired",
-            extra={"local_pid": local_pid, "sync_id": sync_id},
+            extra={"local_pid": local_pid, "sync_id": sync_id, "run_id": run_id},
         )
     except Exception as chain_exc:
         logger.error(
