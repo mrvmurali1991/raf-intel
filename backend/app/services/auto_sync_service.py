@@ -158,18 +158,17 @@ def _sync_encounters(local_pid: int, emr_pid: int) -> int:
     upserted = 0
     with raf_cursor() as cur:
         for r in rows:
-            enc_id = f"EMR_{emr_pid}_enc_{r['encounter_id']}"
             enc_date = r["encounter_date"]
             if hasattr(enc_date, "date"):
                 enc_date = enc_date.date()
             cur.execute(
                 """
                 INSERT IGNORE INTO normalized_encounters
-                    (encounter_id, patient_id, tenant_id, encounter_date,
-                     encounter_type, facility_name)
+                    (openemr_encounter_id, patient_id, tenant_id, encounter_date,
+                     encounter_type, facility)
                 VALUES (%s, %s, '1', %s, 'office_visit', %s)
                 """,
-                (enc_id, local_pid, str(enc_date), r["facility_name"] or None),
+                (int(r["encounter_id"]), local_pid, str(enc_date), r["facility_name"] or None),
             )
             upserted += cur.rowcount
 
