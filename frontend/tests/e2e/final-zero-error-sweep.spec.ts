@@ -131,7 +131,8 @@ function attachCollectors(page: Page, errors: ConsoleEntry[], warnings: ConsoleE
 
 async function login(page: Page): Promise<void> {
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.waitForSelector('input[type="email"]', { state: "visible", timeout: 20_000 });
+  // Client-side React app — wait for JS to hydrate the form (up to 45s)
+  await page.waitForSelector('input[type="email"]', { state: "visible", timeout: 45_000 });
   await page.fill('input[type="email"]', EMAIL);
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');

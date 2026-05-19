@@ -191,7 +191,7 @@ export default function MDTodayPage() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   }, []);
 
-  const { data, isLoading, isError, refetch } = useQuery<MDTodayResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<MDTodayResponse>({
     queryKey: ["md-today"],
     queryFn: async () => {
       const res = await api.get<MDTodayResponse>("/api/md/today", {
@@ -201,7 +201,23 @@ export default function MDTodayPage() {
     },
     refetchInterval: 60_000,
     staleTime: 30_000,
+    // 403 means "no provider mapping" — don't hammer the endpoint on the
+    // 60s refetch loop; the user has to take action (link account / pick a
+    // provider) before a retry could possibly succeed.
+    retry: (count, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 401) return false;
+      return count < 2;
+    },
   });
+
+  const errorStatus = (error as { response?: { status?: number } } | null)
+    ?.response?.status;
+  const isNoProviderMapping = errorStatus === 403;
+  const isAdminLike =
+    user?.role === "admin" ||
+    user?.role === "manager" ||
+    user?.role === "superadmin";
 
   const accept = useMutation({
     mutationFn: async (vars: {
@@ -514,8 +530,12 @@ export default function MDTodayPage() {
         {/* Loading skeleton */}
         {isLoading && <HuddleSkeleton />}
 
-        {/* Error state */}
-        {isError && (
+        {/* Error state — 403 (no provider mapping) gets a friendly,
+            role-aware empty state instead of a red error banner. */}
+        {isError && isNoProviderMapping && (
+          <NoProviderMappingState isAdminLike={isAdminLike} router={router} />
+        )}
+        {isError && !isNoProviderMapping && (
           <div
             role="alert"
             className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800"
@@ -610,6 +630,102 @@ export default function MDTodayPage() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ---------- No-provider-mapping state ----------
+// Shown when /api/md/today returns 403 because the caller has no provider_id
+// link. The huddle is per-provider by design (backend refuses to default to
+// any provider to avoid leaking PHI). Give the user actionable guidance
+// rather than a generic red error banner.
+
+function NoProviderMappingState({
+  isAdminLike,
+  router,
+}: {
+  isAdminLike: boolean;
+  router: ReturnType<typeof useRouter>;
+}) {
+  return (
+    <div
+      className="huddle-card-anim"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "56px 24px",
+        background: "#fff",
+        border: "1px solid #e2e8f0",
+        borderRadius: 14,
+        textAlign: "center",
+        gap: 12,
+      }}
+      role="status"
+      data-testid="no-provider-mapping"
+    >
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          background: "#F1F5F9",
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        aria-hidden="true"
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#64748b"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" y1="8" x2="19" y2="14" />
+          <line x1="22" y1="11" x2="16" y2="11" />
+        </svg>
+      </div>
+
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+        No clinical provider linked to this account
+      </h2>
+
+      <p style={{ fontSize: 14, color: "#64748b", margin: 0, maxWidth: 480 }}>
+        {isAdminLike
+          ? "The huddle is built per-provider. To preview a provider's huddle, open the providers admin and pass ?provider_id= in the URL, or link an account to a clinical provider."
+          : "Your account isn't linked to a clinical provider yet. Ask an admin to link your account so today's huddle can show your schedule."}
+      </p>
+
+      {isAdminLike && (
+        <button
+          type="button"
+          onClick={() => router.push("/providers")}
+          className="huddle-btn-press huddle-focus"
+          style={{
+            marginTop: 8,
+            padding: "10px 22px",
+            borderRadius: 8,
+            border: "1px solid #0EA5E9",
+            background: "#F0F9FF",
+            color: "#0369A1",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "background 0.15s",
+          }}
+        >
+          Open providers admin
+        </button>
+      )}
     </div>
   );
 }
