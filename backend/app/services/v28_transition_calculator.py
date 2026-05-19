@@ -328,26 +328,29 @@ def _list_tenant_patient_ids(tenant_id: str) -> list[int]:
         for r in (cur.fetchall() or []):
             _add(int(r["id"]))
 
-        # FHIR-only rows (mirror of calculate_raf_for_all_patients)
+        # FHIR-only rows (mirror of calculate_raf_for_all_patients).
+        # NB: the join key is `epm.patient_id` (the canonical raf patient id),
+        # NOT `epm.id` (the join row's own auto-increment). Using `epm.id`
+        # produced phantom IDs (e.g. 17132+) inflating the patient count.
         try:
             cur.execute(
                 """
-                SELECT DISTINCT epm.id
+                SELECT DISTINCT epm.patient_id
                 FROM emr_patient_matches epm
                 JOIN emr_connections ec ON ec.id = epm.connection_id
                 WHERE ec.is_active = 1
                   AND ec.connection_type IN ('fhir_r4', 'rest_api')
                   AND ec.tenant_id = %s
-                  AND epm.id NOT IN (
+                  AND epm.patient_id NOT IN (
                       SELECT id FROM patients
                       WHERE is_active = 1 AND tenant_id = %s
                   )
-                ORDER BY epm.id
+                ORDER BY epm.patient_id
                 """,
                 (tenant_id, tenant_id),
             )
             for r in (cur.fetchall() or []):
-                _add(int(r["id"]))
+                _add(int(r["patient_id"]))
         except Exception as exc:
             # FHIR side is best-effort; some deployments don't have the tables.
             logger.debug("FHIR patient enumeration skipped: %s", exc)
