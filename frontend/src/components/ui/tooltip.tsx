@@ -1,17 +1,26 @@
 "use client"
 
+import * as React from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * TooltipProvider
+ *
+ * Accepts both base-ui's native `delay` and Radix's legacy `delayDuration`
+ * so callers using either API work without code changes. Native `delay`
+ * wins when both are passed.
+ */
 function TooltipProvider({
   delay = 0,
+  delayDuration,
   ...props
-}: TooltipPrimitive.Provider.Props) {
+}: TooltipPrimitive.Provider.Props & { delayDuration?: number }) {
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
-      delay={delay}
+      delay={delay ?? delayDuration ?? 0}
       {...props}
     />
   )
@@ -21,8 +30,34 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
-function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+/**
+ * TooltipTrigger
+ *
+ * Adds `asChild` translation for callers used to the Radix API.
+ * When `asChild` is true, the single React child is forwarded to base-ui's
+ * `render` prop so the trigger inherits the child's tag (avoiding the
+ * default `<button>` wrapper, which can produce invalid HTML when the
+ * child is itself interactive).
+ */
+function TooltipTrigger({
+  asChild,
+  children,
+  ...props
+}: TooltipPrimitive.Trigger.Props & { asChild?: boolean }) {
+  if (asChild && React.isValidElement(children)) {
+    return (
+      <TooltipPrimitive.Trigger
+        data-slot="tooltip-trigger"
+        render={children as React.ReactElement<Record<string, unknown>>}
+        {...props}
+      />
+    )
+  }
+  return (
+    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props}>
+      {children}
+    </TooltipPrimitive.Trigger>
+  )
 }
 
 function TooltipContent({
