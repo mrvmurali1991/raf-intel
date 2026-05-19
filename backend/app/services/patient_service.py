@@ -460,9 +460,12 @@ def _list_fhir_patients(
             where += " AND p.tenant_id = %s"
             params.append(tenant_id)
         if search:
-            where += " AND (p.first_name LIKE %s OR p.last_name LIKE %s OR CAST(p.id AS CHAR) LIKE %s)"
+            where += (
+                " AND (p.first_name LIKE %s OR p.last_name LIKE %s"
+                " OR CAST(p.id AS CHAR) LIKE %s OR p.mrn LIKE %s)"
+            )
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like])
 
         cur.execute(
             f"SELECT COUNT(*) AS cnt FROM patients p {where}",
