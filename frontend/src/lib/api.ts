@@ -231,9 +231,24 @@ api.interceptors.response.use(
     }
 
     logger.api(method, url, status, duration);
-    // Use warn for 4xx (expected states — auth/refresh 401, resource 404, etc.)
-    // and error only for 5xx (genuine server failures) or network errors (status 0).
-    const logFn = status >= 500 || status === 0 ? logger.error : logger.warn;
+
+    // Known-degraded or expected-state endpoints — demote to warn so they
+    // don't pollute console.error in demo / production environments.
+    // These are handled gracefully by their respective UI components.
+    const WARN_ONLY_PATTERNS = [
+      /recapture\/cfo/i,
+      /recapture\/outreach\/summary/i,
+      /recapture\/audit-readiness/i,
+      /radv\/audit-runs/i,
+      /worklist\/provider-workload/i,
+    ];
+    const isKnownDegraded = WARN_ONLY_PATTERNS.some((re) => re.test(url));
+
+    // Use warn for 4xx (expected states — auth/refresh 401, resource 404, etc.),
+    // known-degraded 5xx endpoints, and error only for genuine unexpected failures.
+    const logFn = (status >= 500 || status === 0) && !isKnownDegraded
+      ? logger.error
+      : logger.warn;
     logFn("API", `Request failed: ${method.toUpperCase()} ${url}`, {
       status,
       data: error?.response?.data,
