@@ -42,7 +42,7 @@ def _current_year() -> int:
 
 
 def _check_local_patient(emr_pid: int) -> Optional[int]:
-    """Return local RAF patient id if *emr_pid* exists in the patients VIEW, else None."""
+    """Return local RAF patient id if *emr_pid* exists, else None."""
     with raf_cursor() as cur:
         cur.execute(
             "SELECT id FROM patients WHERE emr_pid = %s LIMIT 1",
@@ -50,6 +50,81 @@ def _check_local_patient(emr_pid: int) -> Optional[int]:
         )
         row = cur.fetchone()
     return int(row["id"]) if row else None
+
+
+def _insert_local_patient(emr_pid: int) -> Optional[int]:
+    """Create a RAF patient row from openemr.patient_data and return its id.
+
+    Returns None when the emr_pid does not exist in openemr.patient_data.
+    Idempotent: re-runs return the existing id instead of inserting a duplicate.
+    """
+    with openemr_cursor() as cur:
+        cur.execute(
+            """
+            SELECT pid, fname, lname, mname, DOB, sex, race, ethnicity,
+                   language, street, city, state, postal_code,
+                   COALESCE(NULLIF(phone_cell, ''), phone_home) AS phone,
+                   email, pubpid
+            FROM   patient_data
+            WHERE  pid = %s
+            LIMIT  1
+            """,
+            (emr_pid,),
+        )
+        src = cur.fetchone()
+
+    if not src:
+        return None
+
+    with raf_cursor() as cur:
+        # Recheck under the same connection in case a concurrent sync inserted
+        # the row between _check_local_patient and here.
+        cur.execute(
+            "SELECT id FROM patients WHERE emr_pid = %s LIMIT 1",
+            (str(emr_pid),),
+        )
+        existing = cur.fetchone()
+        if existing:
+            return int(existing["id"])
+
+        cur.execute(
+            """
+            INSERT INTO patients (
+                tenant_id, first_name, middle_name, last_name, dob, sex,
+                race, ethnicity, preferred_language, address, city, state, zip,
+                phone, email, mrn, emr_pid, data_source, is_active
+            ) VALUES (
+                '1', %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, 'openemr', 1
+            )
+            """,
+            (
+                src.get("fname") or "",
+                src.get("mname"),
+                src.get("lname") or "",
+                src.get("DOB"),
+                src.get("sex"),
+                src.get("race"),
+                src.get("ethnicity"),
+                src.get("language"),
+                src.get("street"),
+                src.get("city"),
+                src.get("state"),
+                src.get("postal_code"),
+                src.get("phone"),
+                src.get("email"),
+                src.get("pubpid"),
+                str(emr_pid),
+            ),
+        )
+        new_id = cur.lastrowid
+
+    logger.info(
+        "auto_sync.patient_inserted",
+        extra={"emr_pid": emr_pid, "local_pid": new_id},
+    )
+    return int(new_id) if new_id else None
 
 
 def _sync_encounters(local_pid: int, emr_pid: int) -> int:
@@ -203,19 +278,22 @@ def sync_patient_from_openemr(emr_pid: int) -> Optional[int]:
         local_pid = _check_local_patient(emr_pid)
 
         if local_pid is not None:
-            # Patient already present in the VIEW — still sync child records
-            # so repeated calls are fully idempotent at every layer.
+            # Patient already exists in RAF — still re-sync child records so
+            # repeated calls are fully idempotent at every layer.
             logger.info(
                 "auto_sync.synced",
                 extra={"emr_pid": emr_pid, "local_pid": local_pid, "action": "existing"},
             )
         else:
-            # pid not in openemr.patient_data → not exposed by VIEW
-            logger.info(
-                "auto_sync.not_found",
-                extra={"emr_pid": emr_pid},
-            )
-            return None
+            # First time we've seen this OpenEMR pid — create the RAF patient
+            # row from openemr.patient_data before syncing child records.
+            local_pid = _insert_local_patient(emr_pid)
+            if local_pid is None:
+                logger.info(
+                    "auto_sync.not_found",
+                    extra={"emr_pid": emr_pid},
+                )
+                return None
 
         _sync_encounters(local_pid, emr_pid)
         _sync_conditions(local_pid, emr_pid)
