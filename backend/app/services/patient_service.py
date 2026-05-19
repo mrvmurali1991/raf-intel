@@ -447,12 +447,14 @@ def _list_fhir_patients(
 ) -> tuple[list[dict], int]:
     """List patients for FHIR/REST connections from the patients table.
 
-    FHIR patients now have proper rows in the patients table (data_source='fhir',
-    emr_connection_id set).  Using the patients table avoids duplicate counting
-    that occurs with emr_patient_matches.
+    Returns every active patient in the tenant — FHIR-synced, uploaded, or seeded.
+    Restricting to data_source='fhir' here would make /api/patients return a
+    small subset (only the rows the active FHIR connection has touched) while
+    every other endpoint reports the full active-patient count, producing
+    visibly inconsistent numbers across the dashboard / V28 / worklist.
     """
     with raf_cursor() as cur:
-        where = "WHERE p.is_active = 1 AND p.data_source = 'fhir'"
+        where = "WHERE p.is_active = 1"
         params: list = []
         if tenant_id is not None:
             where += " AND p.tenant_id = %s"
