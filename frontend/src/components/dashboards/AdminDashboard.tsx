@@ -321,7 +321,7 @@ function InfoMetricBox({ bg, valueColor, labelColor, value, label, tooltip }: {
 // ---------------------------------------------------------------------------
 // CMS Sweep Deadline Widget — Dark navy 3-column focal card
 // ---------------------------------------------------------------------------
-function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
+function CmsSweepWidget({ revenueOpp, loading }: { revenueOpp: number; loading?: boolean }) {
   const [daysRemaining, setDaysRemaining] = useState(0);
   const [progress, setProgress] = useState(0);
 
@@ -420,7 +420,7 @@ function CmsSweepWidget({ revenueOpp }: { revenueOpp: number }) {
           Pending Opportunity
         </div>
         <div style={{ fontSize: 26, fontWeight: 900, color: "#F8FAFC", letterSpacing: "-0.025em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-          {revenueOpp > 0 ? fmt$(revenueOpp) : "Awaiting analysis"}
+          {loading ? "—" : revenueOpp > 0 ? fmt$(revenueOpp) : "Awaiting analysis"}
         </div>
       </div>
     </div>
@@ -1126,7 +1126,7 @@ export function AdminDashboard() {
           ROW 1: 5-step onboarding checklist (always shown until hidden) + KPI Strip
           ══════════════════════════════════════════════════════════════════════ */}
       {/* ── CMS Sweep Deadline Hero ── */}
-      <CmsSweepWidget revenueOpp={revenueOpp} />
+      <CmsSweepWidget revenueOpp={revenueOpp} loading={revL} />
 
       {/* ── 4-KPI Strip ── */}
       <div className="fade-in-up fade-in-up-1">
