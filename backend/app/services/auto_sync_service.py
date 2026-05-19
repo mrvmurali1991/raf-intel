@@ -52,6 +52,45 @@ def _check_local_patient(emr_pid: int) -> Optional[int]:
     return int(row["id"]) if row else None
 
 
+def _age_band(dob, measurement_year: int) -> str:
+    """Map DOB to a CMS-HCC age band string."""
+    if not dob:
+        return "65-69"
+    age = measurement_year - dob.year
+    bands = [
+        (35, "0-34"), (45, "35-44"), (55, "45-54"), (60, "55-59"),
+        (65, "60-64"), (70, "65-69"), (75, "70-74"), (80, "75-79"),
+        (85, "80-84"), (90, "85-89"), (95, "90-94"),
+    ]
+    for upper, label in bands:
+        if age < upper:
+            return label
+    return "95+"
+
+
+def _ensure_demographics(local_pid: int, dob, sex: str | None) -> None:
+    """Make sure raf_patient_demographics has a row for the current measurement
+    year, satisfying the FK constraint that raf_suspect_conditions depends on."""
+    measurement_year = _current_year()
+    sex_norm = "F" if (sex or "").strip().lower().startswith("f") else "M"
+    age_band = _age_band(dob, measurement_year)
+    with raf_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO raf_patient_demographics
+                (patient_id, measurement_year, age_band, sex, dual_status,
+                 dual_type, disabled, orec, institutional, enrollment_source,
+                 model_segment, tenant_id)
+            VALUES (%s, %s, %s, %s, 0, 'non_dual', 0, '0', 0, 'derived',
+                    'CNA', '1')
+            ON DUPLICATE KEY UPDATE
+                age_band = VALUES(age_band),
+                sex      = VALUES(sex)
+            """,
+            (local_pid, measurement_year, age_band, sex_norm),
+        )
+
+
 def _insert_local_patient(emr_pid: int) -> Optional[int]:
     """Create a RAF patient row from openemr.patient_data and return its id.
 
@@ -293,6 +332,17 @@ def sync_patient_from_openemr(emr_pid: int) -> Optional[int]:
                     extra={"emr_pid": emr_pid},
                 )
                 return None
+
+        # Ensure raf_patient_demographics row exists for the current
+        # measurement year — _sync_conditions has a FK on (patient_id,
+        # measurement_year) referencing this table.
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT dob, sex FROM patients WHERE id = %s LIMIT 1",
+                (local_pid,),
+            )
+            row = cur.fetchone() or {}
+        _ensure_demographics(local_pid, row.get("dob"), row.get("sex"))
 
         _sync_encounters(local_pid, emr_pid)
         _sync_conditions(local_pid, emr_pid)
