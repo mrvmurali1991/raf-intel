@@ -52,13 +52,30 @@ function formatValue(metric: GoalMetric, value: number): string {
 // Progress bar
 // ---------------------------------------------------------------------------
 
-function GoalProgressBar({ pct, onTrack }: { pct: number; onTrack?: boolean }) {
-  const color =
-    pct >= 100
-      ? "bg-green-500"
-      : onTrack === false
-      ? "bg-amber-400"
-      : "bg-primary";
+/**
+ * Color thresholds (relative to expected pace):
+ *   >= 80 % of pace → green (on track)
+ *   50 – 79 % of pace → amber (slight lag)
+ *   < 50 % of pace → red (behind pace)
+ *   >= 100 % complete → green regardless
+ */
+function paceColor(pct: number, pace: number): string {
+  if (pct >= 100) return "bg-green-500";
+  if (pace === 0) return "bg-green-500"; // quarter hasn't started yet
+  const ratio = pct / pace; // e.g. 0.9 = 90% of what we should have hit
+  if (ratio >= 0.8) return "bg-green-500";
+  if (ratio >= 0.5) return "bg-amber-400";
+  return "bg-red-500";
+}
+
+function GoalProgressBar({
+  pct,
+  pace,
+}: {
+  pct: number;
+  pace: number;
+}) {
+  const color = paceColor(pct, pace);
   return (
     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
       <div
@@ -79,6 +96,11 @@ function GoalProgressBar({ pct, onTrack }: { pct: number; onTrack?: boolean }) {
 
 function GoalCard({ goal }: { goal: RafGoal }) {
   const isComplete = goal.percent_complete >= 100;
+  const pace = goal.pace_expected ?? 0;
+  const ratio = pace > 0 ? goal.percent_complete / pace : 1;
+  const isRed = !isComplete && ratio < 0.5;
+  const isAmber = !isComplete && !isRed && ratio < 0.8;
+
   return (
     <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
@@ -96,11 +118,11 @@ function GoalCard({ goal }: { goal: RafGoal }) {
       <div className="space-y-1.5">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Progress</span>
-          <span className={`font-semibold ${isComplete ? "text-green-600" : "text-foreground"}`}>
+          <span className={`font-semibold ${isComplete ? "text-green-600" : isRed ? "text-red-600" : isAmber ? "text-amber-600" : "text-foreground"}`}>
             {goal.percent_complete}%
           </span>
         </div>
-        <GoalProgressBar pct={goal.percent_complete} onTrack={goal.on_track} />
+        <GoalProgressBar pct={goal.percent_complete} pace={pace} />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{formatValue(goal.metric, goal.actual_value)} actual</span>
           <span>{formatValue(goal.metric, goal.target_value)} target</span>
@@ -112,16 +134,28 @@ function GoalCard({ goal }: { goal: RafGoal }) {
           <Calendar className="h-3.5 w-3.5" />
           {goal.days_remaining > 0 ? `${goal.days_remaining}d remaining` : "Quarter ended"}
         </span>
-        {goal.on_track === false && !isComplete && (
-          <span className="flex items-center gap-1 text-amber-600 font-medium">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Behind pace
-          </span>
-        )}
         {isComplete && (
           <span className="flex items-center gap-1 text-green-600 font-medium">
             <CheckCircle className="h-3.5 w-3.5" />
             Goal met
+          </span>
+        )}
+        {isRed && (
+          <span className="flex items-center gap-1 text-red-600 font-medium">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Behind pace
+          </span>
+        )}
+        {isAmber && (
+          <span className="flex items-center gap-1 text-amber-600 font-medium">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Slightly behind
+          </span>
+        )}
+        {!isComplete && !isRed && !isAmber && (
+          <span className="flex items-center gap-1 text-green-600 font-medium">
+            <CheckCircle className="h-3.5 w-3.5" />
+            On track
           </span>
         )}
       </div>

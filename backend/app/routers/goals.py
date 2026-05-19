@@ -191,6 +191,8 @@ def list_goals(
             actual = _compute_actual(g["metric"], g["period"], tenant_id, cur)
             target = float(g["target_value"])
             pct = round(min(actual / target * 100, 100), 1) if target else 0
+            pace = _pace_expected(g["period"])
+            on_track = pct >= pace * 0.8  # within 80% of expected pace = on track
             result.append(
                 {
                     **g,
@@ -198,6 +200,8 @@ def list_goals(
                     "actual_value": actual,
                     "percent_complete": pct,
                     "days_remaining": _days_remaining(g["period"]),
+                    "on_track": on_track,
+                    "pace_expected": pace,
                 }
             )
         return result

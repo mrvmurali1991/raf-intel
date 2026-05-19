@@ -4629,6 +4629,7 @@ export interface RafGoal {
   created_at: string;
   quarter_end?: string;
   on_track?: boolean;
+  pace_expected?: number;
 }
 
 export interface GoalCreatePayload {

@@ -88,11 +88,15 @@ export function QProgressCard() {
 
   const pct = Math.min(featured.percent_complete, 100);
   const isComplete = pct >= 100;
+  const pace = featured.pace_expected ?? 0;
+  const ratio = pace > 0 ? pct / pace : 1;
   const barColor = isComplete
     ? "bg-green-500"
-    : featured.on_track === false
+    : ratio < 0.5
+    ? "bg-red-500"
+    : ratio < 0.8
     ? "bg-amber-400"
-    : "bg-blue-500";
+    : "bg-green-500";
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-sm">
@@ -154,10 +158,15 @@ export function QProgressCard() {
             <CheckCircle className="h-3.5 w-3.5" />
             Goal met
           </span>
-        ) : featured.on_track === false ? (
-          <span className="flex items-center gap-1 text-amber-600 font-semibold">
+        ) : ratio < 0.5 ? (
+          <span className="flex items-center gap-1 text-red-600 font-semibold">
             <AlertTriangle className="h-3.5 w-3.5" />
             Behind pace
+          </span>
+        ) : ratio < 0.8 ? (
+          <span className="flex items-center gap-1 text-amber-600 font-semibold">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Slightly behind
           </span>
         ) : (
           <span className="text-green-600 font-semibold">On track</span>
