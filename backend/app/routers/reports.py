@@ -668,13 +668,22 @@ def recapture_gaps_report(year: int = Query(default=None),
             names = emr_pid_to_name.get(emr_pid, {})
             first_name = names.get("first_name") or (row.get("fname") or "")
             last_name = names.get("last_name") or (row.get("lname") or "")
+            # Skip rows where patient name could not be resolved from either
+            # raf_intelligence.patients or OpenEMR patient_data — these are
+            # orphaned EMR records with no valid patient context.
+            if not first_name and not last_name:
+                continue
             raf_patient_id = emr_pid_to_id.get(emr_pid, emr_pid)
+            # OpenEMR lists.diagnosis stores codes as "ICD10:E11.65"; strip
+            # the "ICD10:" type prefix so UI displays clean codes like "E11.65".
+            raw_diag = row.get("diagnosis") or ""
+            icd_code = raw_diag.split(":", 1)[1] if ":" in raw_diag else raw_diag
             gaps.append({
                 "pid": raf_patient_id,
                 "first_name": first_name,
                 "last_name": last_name,
                 "condition": row.get("title") or "",
-                "icd_code": row.get("diagnosis") or "",
+                "icd_code": icd_code,
                 "onset_date": row["begdate"].isoformat() if hasattr(row.get("begdate"), "isoformat") else (row.get("begdate") or ""),
             })
     except NoActiveEMRConnection:
