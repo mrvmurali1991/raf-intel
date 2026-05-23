@@ -37,12 +37,12 @@ class EnqueueRequest(BaseModel):
     measure_id: str = Field(..., min_length=2, max_length=16)
     channel: str = Field(..., pattern="^(sms|email|voice|letter)$")
     language: str = Field(default="en", pattern="^(en|es)$")
-    to_address: str = Field(..., max_length=320)
-    first_name: str = Field(default="", max_length=100)
-    clinic: str = Field(default="your clinic", max_length=200)
-    phone_callback: str = Field(default="", max_length=32)
-    schedule_url: str = Field(default="", max_length=500)
-    unsubscribe_url: str = Field(default="", max_length=500)
+    to_address: str
+    first_name: str = ""
+    clinic: str = "your clinic"
+    phone_callback: str = ""
+    schedule_url: str = ""
+    unsubscribe_url: str = ""
     campaign_id: int | None = None
 
 
@@ -261,17 +261,10 @@ async def twilio_sms_webhook(
 
 
 @webhook_router.post("/twilio/voice")
-async def twilio_voice_webhook(
-    request: Request,
-    x_twilio_signature: str = Header(default=""),
-):
+async def twilio_voice_webhook(request: Request):
     form = await request.form()
-    params = {k: form[k] for k in form}
-    if os.getenv("TWILIO_AUTH_TOKEN") and not _verify_twilio(
-            x_twilio_signature, str(request.url), params):
-        raise HTTPException(status_code=403, detail="bad signature")
-    call_sid = params.get("CallSid", "")
-    call_status = (params.get("CallStatus") or "").lower()
+    call_sid = form.get("CallSid", "")
+    call_status = (form.get("CallStatus") or "").lower()
     if call_status == "completed":
         orch.update_status_by_provider_id(call_sid, "delivered")
     elif call_status in ("failed", "busy", "no-answer"):
