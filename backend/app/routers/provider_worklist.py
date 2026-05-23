@@ -68,14 +68,22 @@ def provider_worklist(
     Providers may only query their own worklist unless they have the
     ``worklist:manage`` permission (manager / admin roles).
     """
-    caller_id: int = int(current_user["id"])
+    caller_user_id: int = int(current_user["id"])
+    caller_provider_id = current_user.get("provider_id")
     role: str = current_user.get("role", "provider")
 
     # Providers can only see their own worklist; admins/managers can see any.
-    if role not in ("admin", "super_admin", "manager") and caller_id != provider_id:
+    # Compare against the linked provider_id (not the user's row id) — the
+    # frontend passes the provider table id, not the user table id.
+    is_self = (
+        caller_provider_id is not None
+        and int(caller_provider_id) == int(provider_id)
+    )
+    if role not in ("admin", "super_admin", "manager") and not is_self:
         raise HTTPException(
             status_code=403,
-            detail="Providers may only view their own worklist. "
+            detail=f"Providers may only view their own worklist (user {caller_user_id} "
+                   f"linked to provider {caller_provider_id}, asked for {provider_id}). "
                    "Request the 'worklist:manage' permission to view other providers.",
         )
 
