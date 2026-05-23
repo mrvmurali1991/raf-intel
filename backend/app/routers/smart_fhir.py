@@ -865,18 +865,26 @@ def smart_callback_public(
     state: str | None = Query(None),
     error: str | None = Query(None),
 ) -> HTMLResponse:
-    """Minimal callback landing — used for local end-to-end testing."""
+    """Minimal callback landing — used for local end-to-end testing.
+
+    All reflected query parameters are HTML-escaped before insertion
+    into the response body — otherwise this becomes a reflected-XSS
+    vector since the endpoint is mounted unconditionally.
+    """
+    import html as _html
     if error:
         return HTMLResponse(
-            content=f"<h1>SMART error</h1><p>{error}</p>",
+            content=f"<h1>SMART error</h1><p>{_html.escape(error)}</p>",
             status_code=400,
         )
+    safe_code = _html.escape(code or "")
+    safe_state = _html.escape(state or "")
     return HTMLResponse(
         content=(
             "<!doctype html><html><body>"
             "<h1>SMART callback</h1>"
-            f"<p>code: <code>{code}</code></p>"
-            f"<p>state: <code>{state}</code></p>"
+            f"<p>code: <code>{safe_code}</code></p>"
+            f"<p>state: <code>{safe_state}</code></p>"
             "<p>Exchange this code at <code>POST /smart/token</code> with the "
             "matching <code>code_verifier</code> (stored in sessionStorage on /smart/launch).</p>"
             "</body></html>"

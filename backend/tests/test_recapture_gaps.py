@@ -328,16 +328,30 @@ class TestListGaps:
 # ===========================================================================
 
 class TestGetGapStats:
+    # get_gap_stats uses _canonical_revenue_at_risk (the metrics_service helper)
+    # to compute total_revenue_at_risk, not the SQL row. These tests have to
+    # mock both the cursor and that helper to avoid touching live infra.
+
+    _FAKE_RAR_18K = {
+        "value": 18000.00,
+        "_meta": {"total_raf_points": 6.0, "formula": "test"},
+    }
+    _FAKE_RAR_ZERO = {
+        "value": 0.0,
+        "_meta": {"total_raf_points": 0.0, "formula": "test"},
+    }
+
     def test_stats_mapped_correctly(self) -> None:
         stats_row = {
             "total_gaps": 10,
             "open_count": 6,
             "recaptured_count": 3,
             "dismissed_count": 1,
-            "total_revenue_at_risk": 18000.00,
         }
         cm, _ = _make_cursor_cm(rows=[stats_row])
-        with patch("app.services.recapture_gap_service.raf_cursor", cm):
+        with patch("app.services.recapture_gap_service.raf_cursor", cm), \
+             patch("app.services.recapture_gap_service._canonical_revenue_at_risk",
+                   return_value=self._FAKE_RAR_18K):
             result = get_gap_stats(tenant_id="1")
         assert result["total_gaps"] == 10
         assert result["open"] == 6
@@ -351,10 +365,11 @@ class TestGetGapStats:
             "open_count": None,
             "recaptured_count": None,
             "dismissed_count": None,
-            "total_revenue_at_risk": None,
         }
         cm, _ = _make_cursor_cm(rows=[stats_row])
-        with patch("app.services.recapture_gap_service.raf_cursor", cm):
+        with patch("app.services.recapture_gap_service.raf_cursor", cm), \
+             patch("app.services.recapture_gap_service._canonical_revenue_at_risk",
+                   return_value=self._FAKE_RAR_ZERO):
             result = get_gap_stats(tenant_id="1")
         assert result["total_gaps"] == 0
         assert result["open"] == 0

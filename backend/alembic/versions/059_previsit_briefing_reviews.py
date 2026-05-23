@@ -34,6 +34,15 @@ def _has_column(table: str, column: str) -> bool:
     return any(c["name"] == column for c in insp.get_columns(table))
 
 
+def _has_unique_key(table: str, key_name: str) -> bool:
+    insp = sa.inspect(op.get_bind())
+    if not insp.has_table(table):
+        return False
+    return any(
+        idx.get("name") == key_name for idx in insp.get_indexes(table)
+    )
+
+
 def upgrade() -> None:
     if not _has_table("previsit_briefing_reviews"):
         op.execute(
@@ -70,6 +79,20 @@ def upgrade() -> None:
                 sa.text(
                     "ALTER TABLE previsit_briefing_reviews "
                     "ALTER COLUMN tenant_id DROP DEFAULT"
+                )
+            )
+        # Add the tenant-scoped unique key so ON DUPLICATE KEY UPDATE in
+        # md_today_mark_reviewed deduplicates correctly. Without this key
+        # concurrent double-taps create duplicate review rows.
+        if not _has_unique_key(
+            "previsit_briefing_reviews",
+            "uq_pbr_tenant_provider_patient_date",
+        ):
+            op.execute(
+                sa.text(
+                    "ALTER TABLE previsit_briefing_reviews "
+                    "ADD UNIQUE KEY uq_pbr_tenant_provider_patient_date "
+                    "(tenant_id, provider_id, patient_id, reviewed_date)"
                 )
             )
 

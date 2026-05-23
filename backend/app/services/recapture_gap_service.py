@@ -495,18 +495,23 @@ def close_gap(gap_id: int, tenant_id: str) -> None:
         ValueError: If the gap does not exist or belongs to a different tenant.
     """
     check_sql = "SELECT id FROM recapture_gaps WHERE id = %s AND tenant_id = %s"
+    # tenant_id is on the UPDATE as well as the SELECT — defence-in-depth so
+    # that any future refactor that separates the SELECT from the UPDATE
+    # still cannot mutate a row belonging to a different tenant.
     update_sql = """
         UPDATE recapture_gaps
            SET status      = 'recaptured',
                resolved_at = %s,
                resolved_by = 'system'
-         WHERE id = %s
+         WHERE id = %s AND tenant_id = %s
     """
     with raf_cursor() as cursor:
         cursor.execute(check_sql, (gap_id, tenant_id))
         if not cursor.fetchone():
             raise ValueError(f"Gap {gap_id} not found for tenant {tenant_id}")
-        cursor.execute(update_sql, (datetime.now(timezone.utc), gap_id))
+        cursor.execute(
+            update_sql, (datetime.now(timezone.utc), gap_id, tenant_id)
+        )
     logger.info("close_gap: gap_id=%d tenant=%s", gap_id, tenant_id)
 
 

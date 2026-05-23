@@ -108,7 +108,7 @@ def md_today(
     total_supporting_labs = 0
     for b in briefings:
         emr_pid = int(b.get("patient_id") or b.get("emr_pid") or 0)
-        gaps = b.get("hcc_gaps") or b.get("top_gaps") or []
+        gaps = b.get("top_hccs") or []
         if emr_pid and gaps:
             try:
                 evidence_for_gaps(emr_pid, gaps)
@@ -122,7 +122,7 @@ def md_today(
                 logger.warning("lab evidence enrichment failed pid=%s: %s",
                                emr_pid, exc)
 
-    open_hcc_total = sum(len(b.get("hcc_gaps") or []) for b in briefings)
+    open_hcc_total = sum(len(b.get("top_hccs") or []) for b in briefings)
     reviewed_count = sum(1 for b in briefings if b.get("reviewed"))
 
     return {
