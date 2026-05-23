@@ -97,6 +97,11 @@ def list_candidates(
         # Wrapped in try/except so a missing table doesn't fail the whole call.
         if kind in (None, "suspect"):
             try:
+                # Join the patient name from raf_intelligence.patients (where
+                # auto_sync mirrors first_name/last_name from OpenEMR) instead
+                # of cross-DB joining openemr.patient_data — the latter
+                # silently returns NULL when the MySQL user lacks cross-schema
+                # SELECT grants.
                 cur.execute(
                     """
                     SELECT s.id, s.patient_id, s.suspect_hcc AS hcc,
@@ -105,9 +110,9 @@ def list_candidates(
                            s.confidence_score AS confidence,
                            s.trigger_value AS evidence_snippet,
                            s.status, s.created_at,
-                           CONCAT_WS(' ', p.fname, p.lname) AS patient_name
+                           CONCAT_WS(' ', p.first_name, p.last_name) AS patient_name
                       FROM form_suspects s
-                      LEFT JOIN patient_data p ON p.pid = s.patient_id
+                      LEFT JOIN patients p ON p.id = s.patient_id
                      WHERE (%s IS NULL OR s.status = %s)
                        AND s.patient_id IN (
                            SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s
@@ -139,6 +144,7 @@ def list_candidates(
         # ai_hcc_candidates has no tenant_id column; scope via patients subquery
         if kind in (None, "hcc_candidate"):
             try:
+                # See note above on suspect query — same cross-DB hazard.
                 cur.execute(
                     """
                     SELECT c.id, c.patient_id, c.hcc, c.icd10,
@@ -149,9 +155,9 @@ def list_candidates(
                            c.meat_monitor, c.meat_evaluate,
                            c.meat_assess, c.meat_treat,
                            c.status, c.created_at,
-                           CONCAT_WS(' ', p.fname, p.lname) AS patient_name
+                           CONCAT_WS(' ', p.first_name, p.last_name) AS patient_name
                       FROM ai_hcc_candidates c
-                      LEFT JOIN patient_data p ON p.pid = c.patient_id
+                      LEFT JOIN patients p ON p.id = c.patient_id
                      WHERE (%s IS NULL OR c.status = %s)
                        AND c.patient_id IN (
                            SELECT id FROM patients WHERE is_active = 1 AND tenant_id = %s

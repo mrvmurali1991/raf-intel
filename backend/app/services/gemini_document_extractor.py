@@ -151,9 +151,12 @@ def extract_from_document(
     payload = _build_payload(doc_bytes, mime_type, year)
 
     try:
+        # Use the configured "blind" model (env: LLM_MODEL_BLIND) so document
+        # extraction follows the same routing as the rest of the LLM stack.
+        from app.config import settings as _settings
         resp = llm_generate_content(
             payload,
-            model="gemini-2.0-flash",
+            model=_settings.llm_model_blind,
             timeout=90,
             tenant_id=tenant_id,
         )

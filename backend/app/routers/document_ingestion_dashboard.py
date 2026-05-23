@@ -245,12 +245,23 @@ def _query_source(
             "recent_rows": [],
         }
 
-    # Optional sub-filter for tables shared between two logical sources
+    # Optional sub-filter for tables shared between two logical sources.
+    # source_filter_col comes from the in-process SOURCES dict today, but
+    # allowlist enforcement guarantees the value can never be tenant-supplied
+    # text — defense in depth against future config sources (DB/JSON/yaml).
+    _ALLOWED_FILTER_COLS = {"export_type"}
     filter_clause = ""
     filter_params: list[Any] = [since]
-    if src.get("source_filter") and src.get("source_filter_col"):
-        filter_clause = f" AND {src['source_filter_col']} = %s"
-        filter_params.append(src["source_filter"])
+    col = src.get("source_filter_col")
+    if src.get("source_filter") and col:
+        if col not in _ALLOWED_FILTER_COLS:
+            logger.warning(
+                "document_ingestion_dashboard: rejected non-allowlisted "
+                "filter column %r", col,
+            )
+        else:
+            filter_clause = f" AND {col} = %s"
+            filter_params.append(src["source_filter"])
 
     try:
         cursor.execute(

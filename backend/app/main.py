@@ -86,6 +86,35 @@ tags_metadata = [
 ]
 
 
+def _check_permission_resource_coverage() -> None:
+    """At boot, verify every canonical resource has a `role_default_permissions`
+    row for the admin role. Catches schema drift (the ENUM-too-narrow bug
+    that silently 403'd clinicians for weeks)."""
+    from app.db import raf_cursor
+    from app.permission_resources import RESOURCE_NAMES
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT resource FROM role_default_permissions"
+            )
+            in_db = {r["resource"] for r in cur.fetchall() or []}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("permission_resource coverage probe skipped: %s", exc)
+        return
+    missing = sorted(RESOURCE_NAMES - in_db)
+    extra = sorted(in_db - RESOURCE_NAMES - {""})
+    if missing:
+        logger.warning(
+            "permission resources MISSING from DB (will 403 silently): %s",
+            ", ".join(missing) or "(none)",
+        )
+    if extra:
+        logger.info(
+            "DB has extra permission resources not in code allowlist: %s",
+            ", ".join(extra),
+        )
+
+
 # ---------------------------------------------------------------------------
 # Lifespan – startup / shutdown
 # ---------------------------------------------------------------------------
@@ -134,6 +163,15 @@ async def lifespan(app: FastAPI):
 
     logger.info("RAF Intelligence backend ready on port %s", settings.app_port)
     logger.info("NER mode: Gemini API (no local models needed)")
+
+    # Coverage check: every resource used in require_permission(...) must
+    # exist in role_default_permissions, and every canonical resource must
+    # also be granted to at least the admin role. Catches the 24-missing-
+    # resource bug class at boot instead of in production 403s.
+    try:
+        _check_permission_resource_coverage()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("permission resource coverage check failed: %s", exc)
 
     from app.services.pipeline_chain import setup_pipeline_chain
     from app.services.sync_scheduler import start_scheduler, stop_scheduler

@@ -14,6 +14,7 @@ import {
 import ExplainPanel from "@/components/ExplainPanel";
 import { cn } from "@/lib/utils";
 import { confidenceTier, needsAcceptGate } from "@/lib/confidence";
+import { api } from "@/lib/api";
 import type { SuspectCard, SuspectMeat } from "../_shared";
 import {
   AcceptConfirmDialog,
@@ -249,27 +250,16 @@ export function SuspectCardView({
   };
 
   // Send clinician sentiment to the backend and disable buttons after one click.
+  // Use the shared `api` client so the Bearer token and X-Active-Tenant header
+  // are injected by the interceptor (raw fetch skipped both — broke for any
+  // tenant other than the default).
   const sendFeedback = async (sentiment: "helpful" | "incorrect" | "irrelevant") => {
     if (feedbackSent) return;
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
     try {
-      const res = await fetch(
-        `${API_BASE}/api/suspects/${suspect.id}/feedback`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sentiment }),
-        }
+      await api.post(
+        `/api/suspects/${suspect.id}/feedback`,
+        { sentiment },
       );
-      if (res.status === 409) {
-        toast.error("Feedback already submitted", "You have already rated this suspect today.");
-        setFeedbackSent(true);
-        return;
-      }
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
       setFeedbackSent(true);
       const label =
         sentiment === "helpful"
@@ -278,7 +268,13 @@ export function SuspectCardView({
           ? "Marked as incorrect"
           : "Marked as irrelevant";
       toast.success("Feedback noted", label);
-    } catch {
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        toast.error("Feedback already submitted", "You have already rated this suspect today.");
+        setFeedbackSent(true);
+        return;
+      }
       toast.error("Feedback failed", "Could not save your feedback. Please try again.");
     }
   };
@@ -591,29 +587,20 @@ export function SuspectCardView({
                   if (queryText.trim().length < 10) return;
                   setQuerySubmitting(true);
                   try {
-                    const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
-                    const res = await fetch(`${API_BASE}/api/clinical-queries`, {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        patient_id: patientId,
-                        suspect_id: suspect.id,
-                        hcc_code: String(suspect.hcc),
-                        icd10_code: suspect.icd10,
-                        query_text: queryText.trim(),
-                      }),
+                    await api.post("/api/clinical-queries", {
+                      patient_id: patientId,
+                      suspect_id: suspect.id,
+                      hcc_code: String(suspect.hcc),
+                      icd10_code: suspect.icd10,
+                      query_text: queryText.trim(),
                     });
-                    if (res.ok) {
-                      toast.success("Query sent", "PCP will be notified to respond.");
-                      setQueryText("");
-                      setQueryDialogOpen(false);
-                    } else {
-                      const body = await res.json().catch(() => ({}));
-                      toast.error("Could not send", body.detail || `HTTP ${res.status}`);
-                    }
-                  } catch (e) {
-                    toast.error("Network error", String(e));
+                    toast.success("Query sent", "PCP will be notified to respond.");
+                    setQueryText("");
+                    setQueryDialogOpen(false);
+                  } catch (err: unknown) {
+                    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+                    const status = (err as { response?: { status?: number } })?.response?.status;
+                    toast.error("Could not send", detail || `HTTP ${status ?? "?"}`);
                   } finally {
                     setQuerySubmitting(false);
                   }

@@ -205,10 +205,10 @@ SELECT q.id, q.tenant_id, q.suspect_id, q.raf_patient_hcc_id,
        s.patient_id,
        CONCAT_WS(' · ', s.suspect_hcc, s.suspect_icd10, s.suspected_condition)
            AS suspect_label,
-       CONCAT_WS(' ', p.fname, p.lname) AS patient_name
+       CONCAT_WS(' ', p.first_name, p.last_name) AS patient_name
   FROM raf_qa_reviews q
   LEFT JOIN form_suspects s ON s.id = q.suspect_id
-  LEFT JOIN patient_data p ON p.pid = s.patient_id
+  LEFT JOIN patients p ON p.id = s.patient_id
 """
 
 

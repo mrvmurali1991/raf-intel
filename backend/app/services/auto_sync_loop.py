@@ -72,7 +72,9 @@ def _get_new_emr_pids() -> list[int]:
 
     try:
         with openemr_cursor() as cur:
-            cur.execute("SELECT pid FROM patient_data WHERE pid > 0 ORDER BY pid")
+            # pid=1 is the OpenEMR admin/system user, not a real patient —
+            # syncing it pollutes raf_intelligence.patients with a fake row.
+            cur.execute("SELECT pid FROM patient_data WHERE pid > 1 ORDER BY pid")
             emr_pids = {row["pid"] for row in cur.fetchall()}
     except Exception as exc:
         logger.warning("auto_sync: failed to query openemr.patient_data: %s", exc)
