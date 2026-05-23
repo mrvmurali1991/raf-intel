@@ -444,7 +444,14 @@ function AWVBatchModal({ selectedCount, onClose }: { selectedCount: number; onCl
 export default function WorklistPage() {
   const { user, isLoading: authLoading } = useAuth();
   const measurementYear = new Date().getFullYear();
-  const providerId = user?.id ? Number(user.id) : null;
+  // Use the linked clinical provider_id (not the user table id) so the
+  // ownership check on /api/worklist/provider/:id matches.
+  const userAny = user as (typeof user & { provider_id?: number | null }) | null;
+  const providerId = userAny?.provider_id
+    ? Number(userAny.provider_id)
+    : userAny?.id
+      ? Number(userAny.id)
+      : null;
   const isElevated = Boolean(user?.role && ELEVATED_ROLES.has(user.role));
 
   const [heatmapOpen, setHeatmapOpen] = useState(true);
