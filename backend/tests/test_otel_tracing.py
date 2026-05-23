@@ -10,6 +10,8 @@ Tests:
 from __future__ import annotations
 
 import os
+from typing import Any
+
 import pytest
 
 
@@ -18,7 +20,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def _make_in_memory_provider():
+def _make_in_memory_provider() -> tuple[Any, Any]:
     """Return (provider, exporter) with InMemorySpanExporter."""
     from opentelemetry.sdk.resources import Resource, SERVICE_NAME
     from opentelemetry.sdk.trace import TracerProvider
@@ -41,7 +43,7 @@ def _make_in_memory_provider():
 class TestFastAPIAutoInstrumentation:
     """Verify that FastAPI requests produce spans with correct service.name."""
 
-    def test_hedis_route_produces_span_with_service_name(self, client, admin_headers):
+    def test_hedis_route_produces_span_with_service_name(self, client, admin_headers) -> None:
         """
         Hit /api/hedis/measures and confirm the in-memory exporter captured
         a span whose resource carries service.name=raf-intelligence-backend.
@@ -95,7 +97,7 @@ class TestAcceptSuspectSpan:
     via app.telemetry.get_tracer (instrumentation pending).
     """
 
-    def test_accept_suspect_span_has_tenant_id(self):
+    def test_accept_suspect_span_has_tenant_id(self) -> None:
         """Mock DB and inject InMemorySpanExporter; call accept_suspect; assert span."""
         from unittest.mock import MagicMock, patch
         from opentelemetry import trace as otel_trace
@@ -169,7 +171,7 @@ class TestAcceptSuspectSpan:
 class TestSafeAttrs:
     """Verify _safe_attrs strips PHI keys and preserves non-PHI keys."""
 
-    def test_phi_keys_are_removed(self):
+    def test_phi_keys_are_removed(self) -> None:
         from app.telemetry import _safe_attrs
 
         dirty = {
@@ -192,7 +194,7 @@ class TestSafeAttrs:
         assert clean.get("tenant_id") == "t1"
         assert clean.get("suspects_returned") == 3
 
-    def test_compound_phi_key_is_removed(self):
+    def test_compound_phi_key_is_removed(self) -> None:
         """Keys that contain a PHI token as a substring are also stripped."""
         from app.telemetry import _safe_attrs
 
@@ -206,12 +208,12 @@ class TestSafeAttrs:
         assert "mbi_number" not in clean
         assert clean.get("model_name") == "gemini-2.0-flash"
 
-    def test_empty_dict_returns_empty(self):
+    def test_empty_dict_returns_empty(self) -> None:
         from app.telemetry import _safe_attrs
 
         assert _safe_attrs({}) == {}
 
-    def test_all_safe_dict_passes_through(self):
+    def test_all_safe_dict_passes_through(self) -> None:
         from app.telemetry import _safe_attrs
 
         safe = {
@@ -228,7 +230,7 @@ class TestSafeAttrs:
 
 
 class TestTelemetryStatus:
-    def test_status_has_required_keys(self):
+    def test_status_has_required_keys(self) -> None:
         from app.telemetry import get_telemetry_status
 
         status = get_telemetry_status()

@@ -17,12 +17,12 @@ import pytest
 # ---------------------------------------------------------------------------
 
 class TestPerTenantCircuitBreaker:
-    def setup_method(self):
+    def setup_method(self) -> None:
         # Reset the keyed registry between tests
         from app.services import circuit_breaker as cb_mod
         cb_mod._keyed_breakers.clear()
 
-    def test_separate_breakers_per_tenant_isolated(self):
+    def test_separate_breakers_per_tenant_isolated(self) -> None:
         from app.services.circuit_breaker import get_breaker
         cb_a = get_breaker("fhir:tenant_a:url", failure_threshold=3)
         cb_b = get_breaker("fhir:tenant_b:url", failure_threshold=3)
@@ -31,7 +31,7 @@ class TestPerTenantCircuitBreaker:
         assert cb_a.state.value == "open"
         assert cb_b.state.value == "closed"
 
-    def test_5_consecutive_failures_opens_circuit(self):
+    def test_5_consecutive_failures_opens_circuit(self) -> None:
         from app.services.circuit_breaker import (
             CircuitBreakerError,
             get_breaker,
@@ -49,7 +49,7 @@ class TestPerTenantCircuitBreaker:
         with pytest.raises(CircuitBreakerError):
             wrapped()  # 6th attempt fails fast
 
-    def test_circuit_half_open_after_recovery_timeout(self):
+    def test_circuit_half_open_after_recovery_timeout(self) -> None:
         from app.services.circuit_breaker import (
             CircuitState,
             get_breaker,
@@ -62,7 +62,7 @@ class TestPerTenantCircuitBreaker:
         # Reading state property transitions to HALF_OPEN once timeout elapses
         assert cb.state == CircuitState.HALF_OPEN
 
-    def test_record_success_closes_circuit(self):
+    def test_record_success_closes_circuit(self) -> None:
         from app.services.circuit_breaker import (
             CircuitState,
             get_breaker,
@@ -75,7 +75,7 @@ class TestPerTenantCircuitBreaker:
         assert cb._state == CircuitState.CLOSED
         assert cb._failure_count == 0
 
-    def test_all_breakers_status_snapshot(self):
+    def test_all_breakers_status_snapshot(self) -> None:
         from app.services.circuit_breaker import all_breakers_status, get_breaker
         get_breaker("fhir:t_aa:url", failure_threshold=2).record_failure()
         get_breaker("fhir:t_bb:url", failure_threshold=2)
@@ -92,7 +92,7 @@ class TestPerTenantCircuitBreaker:
 # ---------------------------------------------------------------------------
 
 class TestOutreachTemplatePhiSafety:
-    def test_sms_templates_have_no_diagnosis_terms(self):
+    def test_sms_templates_have_no_diagnosis_terms(self) -> None:
         from app.services.outreach.templates import (
             template_is_phi_safe,
         )
@@ -101,19 +101,19 @@ class TestOutreachTemplatePhiSafety:
                 f"SMS template for {measure} contains a banned diagnosis term"
             )
 
-    def test_voice_templates_have_no_diagnosis_terms(self):
+    def test_voice_templates_have_no_diagnosis_terms(self) -> None:
         from app.services.outreach.templates import template_is_phi_safe
         for measure in ("AWV", "BCS", "CCS", "HBD", "CBP", "FUM"):
             assert template_is_phi_safe(measure, "voice"), (
                 f"Voice template for {measure} contains a banned diagnosis term"
             )
 
-    def test_sms_template_includes_opt_out_footer(self):
+    def test_sms_template_includes_opt_out_footer(self) -> None:
         from app.services.outreach.templates import get_template
         body = get_template("AWV", "sms")
         assert "STOP" in body.upper()
 
-    def test_email_template_has_unsubscribe_token(self):
+    def test_email_template_has_unsubscribe_token(self) -> None:
         from app.services.outreach.templates import get_template
         html = get_template("AWV", "email")
         assert "{unsubscribe_url}" in html
@@ -125,7 +125,7 @@ class TestOutreachTemplatePhiSafety:
 
 @pytest.mark.integration
 class TestOutreachDLQ:
-    def setup_method(self):
+    def setup_method(self) -> None:
         from app.db import raf_cursor
         with raf_cursor() as cur:
             cur.execute(
@@ -135,10 +135,10 @@ class TestOutreachDLQ:
                 "DELETE FROM outreach_consents WHERE patient_id BETWEEN 90001 AND 90099"
             )
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         self.setup_method()
 
-    def test_enqueue_sms_without_twilio_creds_marks_failed(self):
+    def test_enqueue_sms_without_twilio_creds_marks_failed(self) -> None:
         from app.services.outreach.orchestrator import enqueue_outreach
         with patch.dict("os.environ", {}, clear=False) as env:
             env.pop("TWILIO_ACCOUNT_SID", None)
@@ -153,7 +153,7 @@ class TestOutreachDLQ:
             )
         assert r["status"] == "failed"
 
-    def test_enqueue_email_without_sendgrid_marks_failed(self):
+    def test_enqueue_email_without_sendgrid_marks_failed(self) -> None:
         from app.services.outreach.orchestrator import enqueue_outreach
         with patch.dict("os.environ", {}, clear=False) as env:
             env.pop("SENDGRID_API_KEY", None)
@@ -167,7 +167,7 @@ class TestOutreachDLQ:
             )
         assert r["status"] == "failed"
 
-    def test_replay_failed_message_creates_new_attempt(self):
+    def test_replay_failed_message_creates_new_attempt(self) -> None:
         from app.services.outreach.orchestrator import (
             enqueue_outreach,
             replay_message,
@@ -185,7 +185,7 @@ class TestOutreachDLQ:
         assert r2.get("replayed_message_id") and \
                r2["replayed_message_id"] != r1["message_id"]
 
-    def test_replay_respects_opt_out(self):
+    def test_replay_respects_opt_out(self) -> None:
         from app.services.outreach.orchestrator import (
             enqueue_outreach,
             record_opt_out,
@@ -203,7 +203,7 @@ class TestOutreachDLQ:
         r2 = replay_message("1", int(r1["message_id"]), actor_user_id=1)
         assert r2["status"] == "opted_out"
 
-    def test_health_probe_shows_unconfigured_when_creds_missing(self):
+    def test_health_probe_shows_unconfigured_when_creds_missing(self) -> None:
         from app.services.outreach.orchestrator import (
             enqueue_outreach,
             outreach_health,
