@@ -51,8 +51,11 @@ def replay_failed(
     # Lazy-import the celery task so importing this router doesn't pull celery
     try:
         from app.services.celery_tasks import task_fhir_writeback_async
-    except Exception:
-        logger.debug("swallowed exception", exc_info=True)
+    except ImportError:
+        logger.warning(
+            "fhir_writeback replay: celery task unavailable, all suspects will be skipped",
+            exc_info=True,
+        )
         task_fhir_writeback_async = None  # type: ignore
 
     user_id = int(current_user.get("id") or current_user.get("user_id") or 0)
