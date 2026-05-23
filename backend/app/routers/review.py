@@ -368,7 +368,7 @@ def post_decision(
         tenant_id=tenant_id,
         action=action,
         actor_type="user",
-        actor_id=_actor_id(current_user),
+        actor_id=reviewer,
         target_type=kind,
         target_id=numeric_id,
         before=before,

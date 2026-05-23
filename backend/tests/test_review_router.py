@@ -7,14 +7,17 @@ a live DB or auth backend.
 """
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
+from fastapi.testclient import TestClient
 
 
 # ---------------------------------------------------------------------------
 # Pure-Python helpers — no DB / no FastAPI dependency overrides needed
 # ---------------------------------------------------------------------------
 
-def test_split_id_parses_known_kinds():
+def test_split_id_parses_known_kinds() -> None:
     from app.routers.review import _split_id
 
     for kind in ("suspect", "hcc_candidate", "provider_query"):
@@ -23,7 +26,7 @@ def test_split_id_parses_known_kinds():
         assert out_id == 123
 
 
-def test_split_id_rejects_unknown_kind():
+def test_split_id_rejects_unknown_kind() -> None:
     from app.routers.review import _split_id
     from fastapi import HTTPException
 
@@ -36,7 +39,7 @@ def test_split_id_rejects_unknown_kind():
     assert exc.value.status_code == 400
 
 
-def test_split_id_rejects_non_numeric_suffix():
+def test_split_id_rejects_non_numeric_suffix() -> None:
     from app.routers.review import _split_id
     from fastapi import HTTPException
 
@@ -45,7 +48,7 @@ def test_split_id_rejects_non_numeric_suffix():
     assert exc.value.status_code == 400
 
 
-def test_actor_id_prefers_username_then_email_then_sub():
+def test_actor_id_prefers_username_then_email_then_sub() -> None:
     from app.routers.review import _actor_id
 
     assert _actor_id({"username": "alice", "email": "a@x", "sub": "1"}) == "alice"
@@ -59,20 +62,19 @@ def test_actor_id_prefers_username_then_email_then_sub():
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def client_with_admin():
+def client_with_admin() -> Generator[TestClient, None, None]:
     """TestClient where get_current_user yields an admin (all perms)."""
-    from fastapi.testclient import TestClient
     from app.main import app
     from app.auth import get_current_user, get_tenant_id
 
-    def fake_user():
+    def fake_user() -> dict[str, object]:
         return {
             "id": 1, "email": "admin@raf.health", "role": "admin",
             "tenant_id": "1", "provider_id": None,
             "username": "admin",
         }
 
-    def fake_tenant():
+    def fake_tenant() -> str:
         return "1"
 
     app.dependency_overrides[get_current_user] = fake_user
@@ -83,7 +85,7 @@ def client_with_admin():
         app.dependency_overrides.clear()
 
 
-def test_list_candidates_returns_200_for_admin(client_with_admin):
+def test_list_candidates_returns_200_for_admin(client_with_admin: TestClient) -> None:
     """Admin should get a structured response (items may be empty)."""
     resp = client_with_admin.get("/api/review/candidates")
     # Either 200 with shape, or a tolerated 500 if DB is unreachable in CI.
@@ -94,7 +96,7 @@ def test_list_candidates_returns_200_for_admin(client_with_admin):
         assert isinstance(body["items"], list)
 
 
-def test_decision_rejects_edit_without_edited_icd10(client_with_admin):
+def test_decision_rejects_edit_without_edited_icd10(client_with_admin: TestClient) -> None:
     """The edit-invariant must remain enforced at runtime, not just in source."""
     resp = client_with_admin.post(
         "/api/review/decision",

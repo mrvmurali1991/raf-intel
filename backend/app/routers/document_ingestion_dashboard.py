@@ -32,6 +32,8 @@ from app.auth import get_current_user, require_permission
 from app.db import raf_cursor
 from app.services.redis_cache import cached as redis_cached
 
+logger = logging.getLogger(__name__)
+
 # Module-level identifier guard — see _safe_ident below. Pre-compiled so the
 # regex is built once per process, not per query.
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -56,7 +58,6 @@ def _safe_ident(value: str, field_name: str) -> str:
         )
     return value
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/admin/document-ingestion",
@@ -228,7 +229,7 @@ SOURCES = [
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _table_exists(cursor, table_name: str) -> bool:
+def _table_exists(cursor: Any, table_name: str) -> bool:
     """Return True if *table_name* exists in the RAF database."""
     try:
         cursor.execute(
@@ -248,8 +249,8 @@ def _table_exists(cursor, table_name: str) -> bool:
 
 
 def _query_source(
-    cursor,
-    src: dict,
+    cursor: Any,
+    src: dict[str, Any],
     since: datetime,
 ) -> dict[str, Any]:
     """
