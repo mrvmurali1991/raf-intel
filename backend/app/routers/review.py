@@ -84,7 +84,13 @@ class DecisionResponse(BaseModel):
 @router.get("/candidates", response_model=CandidatesResponse)
 def list_candidates(
     kind: ItemKind | None = Query(default=None),
-    status: str = Query(default="open"),
+    status: str | None = Query(
+        default="open",
+        description=(
+            "Filter by status (open|accepted|rejected|edited). "
+            "Pass empty string or omit to return every status."
+        ),
+    ),
     limit: int = Query(default=200, ge=1, le=1000),
     sort_by: str | None = Query(default=None, description="Ignored — reserved for future use"),
     current_user: dict = Depends(get_current_user),

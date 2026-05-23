@@ -22,12 +22,30 @@ All tables may not exist yet; the router degrades gracefully per source.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
+
+# Module-level identifier guard — see _safe_ident below. Pre-compiled so the
+# regex is built once per process, not per query.
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_ident(value: str, field_name: str) -> str:
+    """Reject anything that isn't a bare SQL identifier before string-
+    interpolating it into a query. Today the values come from the in-process
+    SOURCES dict, but this guard makes injection impossible if SOURCES ever
+    becomes DB- or YAML-driven."""
+    if not isinstance(value, str) or not _IDENT_RE.fullmatch(value):
+        raise ValueError(
+            f"document_ingestion_dashboard: refusing non-identifier "
+            f"{field_name}={value!r}"
+        )
+    return value
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.db import raf_cursor
-from app.auth import get_current_user
+from app.auth import get_current_user, require_permission
 from app.services.redis_cache import cached as redis_cached
 
 logger = logging.getLogger(__name__)
@@ -213,6 +231,11 @@ def _table_exists(cursor, table_name: str) -> bool:
         row = cursor.fetchone()
         return bool(row and row["cnt"])
     except Exception:
+        # Permission denied / connection drop should be visible in logs even
+        # though the caller treats False as "skip this source".
+        logger.debug(
+            "_table_exists check failed for %s", table_name, exc_info=True,
+        )
         return False
 
 
@@ -226,21 +249,10 @@ def _query_source(
     Returns a dict with docs_24h, suspects_24h, last_activity, status,
     and recent_rows (up to 200 most-recent rows).
     """
-    # Defense in depth: every identifier we string-interpolate into SQL below
-    # is sourced from the in-process SOURCES dict today, but if SOURCES ever
-    # becomes DB- or YAML-driven the value will reach this code untrusted.
-    # Validate now so the contract is explicit and future regressions blow up
-    # loudly instead of becoming an injection vector.
-    import re
-    _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-    def _safe_ident(value: str, field_name: str) -> str:
-        if not isinstance(value, str) or not _IDENT_RE.fullmatch(value):
-            raise ValueError(
-                f"document_ingestion_dashboard: refusing non-identifier "
-                f"{field_name}={value!r}"
-            )
-        return value
-
+    # _safe_ident is module-level (defined at top of file) so the regex is
+    # compiled once per process, not per query. The guard exists so that if
+    # SOURCES ever becomes DB- or YAML-driven the value cannot become an
+    # injection vector.
     table = _safe_ident(src["table"], "table")
     ts = _safe_ident(src["ts_col"], "ts_col")
     doc = _safe_ident(src["doc_col"], "doc_col")
@@ -385,6 +397,7 @@ def get_dashboard(
         False, description="Bypass Redis cache (admin debug)."
     ),
     current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("admin", "read")),
 ) -> dict[str, Any]:
     """
     Returns a unified view across all 8 ingestion paths:
@@ -468,16 +481,26 @@ def _build_doc_dashboard(hours: int) -> dict[str, Any]:
     "/document/{source_id}/{document_id}",
     summary="Fetch full detail for a single ingested document",
 )
-def get_document_detail(source_id: str, document_id: str) -> dict[str, Any]:
+def get_document_detail(
+    source_id: str,
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("admin", "read")),
+) -> dict[str, Any]:
     """
     Used by the frontend drawer.  Returns full document record plus suspects table.
+    Auth: requires admin:read; previously this endpoint was completely open
+    and would return SELECT * from any ingestion table to any network-
+    reachable caller.
     """
     src = next((s for s in SOURCES if s["id"] == source_id), None)
     if src is None:
         raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
 
-    table = src["table"]
-    doc_col = src["doc_col"]
+    # Apply the same identifier guard the aggregate query uses so an
+    # externally-driven SOURCES dict cannot become an injection vector.
+    table = _safe_ident(src["table"], "table")
+    doc_col = _safe_ident(src["doc_col"], "doc_col")
 
     row: dict | None = None
     suspects: list[dict] = []
@@ -496,7 +519,17 @@ def get_document_detail(source_id: str, document_id: str) -> dict[str, Any]:
             )
             raw = cursor.fetchone()
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            # Don't leak raw MySQL error text (which can include schema info)
+            # to the HTTP response. Log the original cause for ops.
+            logger.exception(
+                "document_ingestion_dashboard.get_document_detail "
+                "query failed for source=%s document=%s",
+                source_id, document_id,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Internal error querying document source",
+            ) from exc
 
         if raw is None:
             raise HTTPException(
@@ -518,8 +551,13 @@ def get_document_detail(source_id: str, document_id: str) -> dict[str, Any]:
             )
             suspects = [dict(r) for r in cursor.fetchall()]
         except Exception:
-            # table may not exist yet — return empty list
-            pass
+            # form_suspects may not exist yet in this env — log at debug
+            # so the empty list is explained instead of silently dropped.
+            logger.debug(
+                "document_ingestion_dashboard: form_suspects query skipped "
+                "for source=%s document=%s",
+                source_id, document_id, exc_info=True,
+            )
 
     # Convert datetime objects to ISO strings for JSON serialisation
     for key, val in row.items():
