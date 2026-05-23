@@ -22,7 +22,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor
 from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.services import audit as audit_svc
@@ -89,6 +89,7 @@ def list_candidates(
     sort_by: str | None = Query(default=None, description="Ignored — reserved for future use"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("suspects", "read")),
 ) -> CandidatesResponse:
     items: list[ReviewItem] = []
     with raf_cursor() as cur:
@@ -199,15 +200,17 @@ def list_candidates(
         # --- provider queries ------------------------------------------------
         if kind in (None, "provider_query"):
             try:
+                # Same cross-DB hazard as suspects/hcc_candidates above — use
+                # the raf_intelligence.patients table for the name join.
                 cur.execute(
                     """
                     SELECT q.id, q.patient_id, q.hcc, q.icd10,
                            q.question AS `condition`,
                            q.confidence, q.context_snippet AS evidence_snippet,
                            q.status, q.created_at,
-                           CONCAT_WS(' ', p.fname, p.lname) AS patient_name
+                           CONCAT_WS(' ', p.first_name, p.last_name) AS patient_name
                       FROM provider_queries q
-                      LEFT JOIN patient_data p ON p.pid = q.patient_id
+                      LEFT JOIN patients p ON p.id = q.patient_id
                      WHERE (%s IS NULL OR q.status = %s)
                        AND q.tenant_id = %s
                      ORDER BY q.created_at DESC
@@ -269,6 +272,7 @@ def post_decision(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _idem: None = Depends(idempotency_key_dependency()),
+    _perm: None = Depends(require_permission("suspects", "write")),
 ) -> DecisionResponse:
     kind, numeric_id = _split_id(body.candidate_id)
     if body.decision == "edit" and not body.edited_icd10:

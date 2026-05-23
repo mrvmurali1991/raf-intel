@@ -16,6 +16,7 @@ When adding a new resource:
 """
 from __future__ import annotations
 
+import typing
 from typing import Final, Literal
 
 ResourceName = Literal[
@@ -58,16 +59,8 @@ ResourceName = Literal[
     "users",
 ]
 
-# Plain set for runtime membership checks (Literal types are not iterable).
-RESOURCE_NAMES: Final[frozenset[str]] = frozenset({
-    "admin", "adt", "attestations", "audit", "care_gaps", "chart_chase",
-    "claims", "cohorts", "documents", "encounters", "fhir", "jobs", "meat",
-    "patients", "pipeline", "providers", "qa_review", "radv", "raf",
-    "raf_scores", "recapture", "reports", "submissions", "suspects",
-    "webhooks", "worklist", "dashboard", "huddle", "qa", "v28",
-    "pre_submission", "quality", "goals", "settings", "users",
-})
+# Derive the runtime set from the Literal so the two cannot drift.
+RESOURCE_NAMES: Final[frozenset[str]] = frozenset(typing.get_args(ResourceName))
 
-ACTIONS: Final[frozenset[str]] = frozenset({
-    "read", "write", "delete", "export", "admin", "manage",
-})
+ActionName = Literal["read", "write", "delete", "export", "admin", "manage"]
+ACTIONS: Final[frozenset[str]] = frozenset(typing.get_args(ActionName))

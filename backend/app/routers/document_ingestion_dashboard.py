@@ -226,14 +226,29 @@ def _query_source(
     Returns a dict with docs_24h, suspects_24h, last_activity, status,
     and recent_rows (up to 200 most-recent rows).
     """
-    table = src["table"]
-    ts = src["ts_col"]
-    doc = src["doc_col"]
-    patient = src["patient_col"]
-    filename = src["filename_col"]
-    mime = src["mime_col"]
-    status_col = src["status_col"]
-    suspects_col = src["suspects_col"]
+    # Defense in depth: every identifier we string-interpolate into SQL below
+    # is sourced from the in-process SOURCES dict today, but if SOURCES ever
+    # becomes DB- or YAML-driven the value will reach this code untrusted.
+    # Validate now so the contract is explicit and future regressions blow up
+    # loudly instead of becoming an injection vector.
+    import re
+    _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    def _safe_ident(value: str, field_name: str) -> str:
+        if not isinstance(value, str) or not _IDENT_RE.fullmatch(value):
+            raise ValueError(
+                f"document_ingestion_dashboard: refusing non-identifier "
+                f"{field_name}={value!r}"
+            )
+        return value
+
+    table = _safe_ident(src["table"], "table")
+    ts = _safe_ident(src["ts_col"], "ts_col")
+    doc = _safe_ident(src["doc_col"], "doc_col")
+    patient = _safe_ident(src["patient_col"], "patient_col")
+    filename = _safe_ident(src["filename_col"], "filename_col")
+    mime = _safe_ident(src["mime_col"], "mime_col")
+    status_col = _safe_ident(src["status_col"], "status_col")
+    suspects_col = _safe_ident(src["suspects_col"], "suspects_col")
     source_id = src["id"]
 
     if not _table_exists(cursor, table):
