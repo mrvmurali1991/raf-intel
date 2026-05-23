@@ -311,9 +311,16 @@ def smart_callback(
     calls.
     """
     if error:
+        # error_description is supplied by the external EHR — log it for
+        # operators but never reflect raw third-party text back to the
+        # browser. Only the short, controlled `error` code goes in detail.
+        logger.warning(
+            "SMART callback EHR auth error: %s — %s",
+            error, error_description,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"EHR authorization error: {error} — {error_description or ''}",
+            detail=f"EHR authorization failed: {error}",
         )
 
     try:
@@ -459,7 +466,7 @@ def create_registration(
 )
 def list_registrations(
     tenant_id: str = Depends(get_tenant_id),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("admin", "superadmin")),
 ) -> dict[str, Any]:
     """Return all SMART app registrations for this tenant.  Secrets are never returned."""
     try:
@@ -739,8 +746,20 @@ def smart_authorize(
 
     NOTE: this MVP auto-approves the request — full Epic App Orchard
     certification additionally requires an interactive login + consent
-    screen, which is intentionally out of scope for this MVP.
+    screen, which is intentionally out of scope for this MVP. Because the
+    auto-approve flow has no user-identity step, the endpoint is disabled
+    by default in production; flip SMART_ENABLE_AUTHORIZE=true after
+    wiring a real login + consent screen.
     """
+    if os.getenv("SMART_ENABLE_AUTHORIZE", "false").lower() != "true":
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "SMART /authorize is disabled in this environment. "
+                "Enable SMART_ENABLE_AUTHORIZE=true only after wiring an "
+                "interactive login + consent flow with state CSRF binding."
+            ),
+        )
     if response_type != "code":
         raise HTTPException(status_code=400, detail="unsupported_response_type")
     if code_challenge_method != "S256":
@@ -795,6 +814,14 @@ async def smart_token(request: Request) -> dict[str, Any]:
 
     grant_type = body.get("grant_type")
     if grant_type == "client_credentials":
+        # Disabled unless explicitly enabled in this environment.
+        # The current implementation does NOT validate client_id /
+        # client_secret against smart_registrations — it would mint a
+        # bearer token for any caller. Until that validation lands, the
+        # only safe default is off; backend-to-backend SMART trust must
+        # be opt-in.
+        if os.getenv("SMART_ENABLE_CLIENT_CREDENTIALS", "false").lower() != "true":
+            raise HTTPException(status_code=400, detail="unsupported_grant_type")
         return {
             "access_token": secrets.token_urlsafe(32),
             "token_type": "Bearer",

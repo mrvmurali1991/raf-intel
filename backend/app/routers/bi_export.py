@@ -228,9 +228,6 @@ def api_update_dataset(
     _perm: None = Depends(require_permission("bi_export", "write")),
 ) -> dict[str, Any]:
     updates = body.model_dump(exclude_none=True)
-    # Rename 'format' to avoid Python keyword collision in service layer
-    if "format" in updates:
-        updates["format"] = updates.pop("format")
     ok = update_dataset(dataset_id, updates, tenant_id)
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found or no changes")

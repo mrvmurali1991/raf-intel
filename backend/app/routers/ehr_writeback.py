@@ -14,7 +14,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id, require_permission
@@ -127,7 +127,7 @@ _ALLOWED_WRITEBACK_STATUSES = frozenset({"queued", "sent", "failed"})
 )
 def list_writeback_queue(
     status: Optional[str] = None,
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=1000),
     tenant_id: str = Depends(get_tenant_id),
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("fhir", "write")),

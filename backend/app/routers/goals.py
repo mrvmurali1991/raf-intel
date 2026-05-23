@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from math import floor
 from typing import Any
 
@@ -48,9 +48,7 @@ def _quarter_bounds(period: str) -> tuple[date, date]:
     # last day of end_month
     next_m = end_month % 12 + 1
     next_y = int(year) if end_month < 12 else int(year) + 1
-    end = date(next_y, next_m, 1)
-    from datetime import timedelta
-    end = end - timedelta(days=1)
+    end = date(next_y, next_m, 1) - timedelta(days=1)
     return start, end
 
 

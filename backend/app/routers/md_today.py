@@ -16,7 +16,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor
 from app.services.audit_logger import log_phi_access
 from app.services.previsit_briefing import get_upcoming_briefings
@@ -67,6 +67,8 @@ def md_today(
     days: int = Query(default=1, ge=0, le=7),
     limit_per_patient: int = Query(default=3, ge=1, le=10),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("huddle", "read")),
 ) -> dict:
     pid = _resolve_provider_id(current_user, provider_id)
 
@@ -75,6 +77,7 @@ def md_today(
             provider_id=pid,
             days_ahead=days,
             limit_per_patient=limit_per_patient,
+            tenant_id=tenant_id,
         )
     except Exception as exc:
         logger.error("md_today provider=%s: %s", pid, exc, exc_info=True)
@@ -85,8 +88,10 @@ def md_today(
         with raf_cursor() as cur:
             cur.execute(
                 """SELECT patient_id FROM previsit_briefing_reviews
-                   WHERE provider_id = %s AND reviewed_date = %s""",
-                (pid, date.today()),
+                   WHERE tenant_id = %s
+                     AND provider_id = %s
+                     AND reviewed_date = %s""",
+                (tenant_id, pid, date.today()),
             )
             reviewed_pids = {int(r[0]) for r in cur.fetchall() or []}
     except Exception:
@@ -144,6 +149,8 @@ def md_today(
 def md_today_mark_reviewed(
     patient_id: int,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("huddle", "write")),
 ) -> dict:
     pid = _resolve_provider_id(current_user, None)
     user_id = int(current_user.get("id") or current_user.get("user_id") or 0)
@@ -151,10 +158,11 @@ def md_today_mark_reviewed(
     with raf_cursor() as cur:
         cur.execute(
             """INSERT INTO previsit_briefing_reviews
-                 (provider_id, patient_id, reviewed_date, reviewed_by_user_id)
-               VALUES (%s, %s, %s, %s)
+                 (tenant_id, provider_id, patient_id, reviewed_date,
+                  reviewed_by_user_id)
+               VALUES (%s, %s, %s, %s, %s)
                ON DUPLICATE KEY UPDATE reviewed_by_user_id = VALUES(reviewed_by_user_id)""",
-            (pid, patient_id, date.today(), user_id),
+            (tenant_id, pid, patient_id, date.today(), user_id),
         )
 
     log_phi_access(

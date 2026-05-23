@@ -27,6 +27,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import time
 from base64 import b64decode, b64encode
@@ -683,8 +684,6 @@ def _run_query(
     the placeholders before sending to the driver.
     """
     # Convert :param_name → %(param_name)s
-    import re
-
     def _rewrite(m: re.Match) -> str:
         return f"%({m.group(1)})s"
 

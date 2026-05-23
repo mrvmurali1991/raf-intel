@@ -92,13 +92,18 @@ def _hcc_label(hcc_code: str | int) -> str:
 # Visit retrieval
 # ---------------------------------------------------------------------------
 
-def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
+def _upcoming_visits(
+    provider_id: int,
+    days_ahead: int,
+    tenant_id: str | None = None,
+) -> list[dict[str, Any]]:
     """Return upcoming form_encounter rows for a provider in [today, today+N].
 
     Encounters are joined to ``raf_intelligence.patients`` so the caller has
-    fname / lname / dob / mrn / sex without a second hop.  Only patients with
-    an active row in the patients table are returned (matches everywhere else
-    in the codebase).
+    fname / lname / dob / mrn / sex without a second hop. The patients join
+    is tenant-scoped when ``tenant_id`` is supplied — without that scope,
+    provider_id integers from two different tenants could surface each
+    other's patient cards.
     """
     today = date.today()
     horizon = today + timedelta(days=days_ahead)
@@ -109,10 +114,17 @@ def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
     try:
         from app.db import raf_cursor
         with raf_cursor() as cur:
-            cur.execute(
-                "SELECT openemr_user_id FROM providers WHERE id = %s",
-                (provider_id,),
-            )
+            if tenant_id is None:
+                cur.execute(
+                    "SELECT openemr_user_id FROM providers WHERE id = %s",
+                    (provider_id,),
+                )
+            else:
+                cur.execute(
+                    "SELECT openemr_user_id FROM providers "
+                    "WHERE id = %s AND tenant_id = %s",
+                    (provider_id, tenant_id),
+                )
             row = cur.fetchone()
             if row and row.get("openemr_user_id"):
                 emr_uid = int(row["openemr_user_id"])
@@ -149,6 +161,8 @@ def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
     patient_lookup: dict[int, dict[str, Any]] = {}
     if pids:
         placeholders = ",".join(["%s"] * len(pids))
+        tenant_clause = " AND tenant_id = %s" if tenant_id is not None else ""
+        params = tuple(pids) + ((tenant_id,) if tenant_id is not None else ())
         try:
             with raf_cursor() as cur:
                 cur.execute(
@@ -163,8 +177,9 @@ def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
                     FROM patients
                     WHERE emr_pid IN ({placeholders})
                       AND is_active = 1
+                      {tenant_clause}
                     """,
-                    tuple(pids),
+                    params,
                 )
                 for row in cur.fetchall() or []:
                     if row.get("emr_pid") is not None:
@@ -412,6 +427,7 @@ def get_upcoming_briefings(
     days_ahead: int = DEFAULT_DAYS_AHEAD,
     limit_per_patient: int = DEFAULT_LIMIT_PER_PATIENT,
     measurement_year: int | None = None,
+    tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Build pre-visit huddle cards for a provider's upcoming visits.
 
@@ -439,7 +455,7 @@ def get_upcoming_briefings(
     if limit_per_patient < 1:
         limit_per_patient = 1
 
-    visits = _upcoming_visits(provider_id, days_ahead)
+    visits = _upcoming_visits(provider_id, days_ahead, tenant_id=tenant_id)
     if not visits:
         return []
 

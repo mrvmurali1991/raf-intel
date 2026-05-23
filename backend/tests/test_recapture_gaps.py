@@ -224,23 +224,32 @@ class TestResolveGap:
     def test_recaptured_transition(self) -> None:
         cm, cursor = _make_cursor_cm(rowcount=1)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
-            success = resolve_gap(gap_id=1, status="recaptured", resolved_by="user@raf.health")
+            success = resolve_gap(
+                gap_id=1, status="recaptured",
+                resolved_by="user@raf.health", tenant_id="1",
+            )
         assert success is True
 
     def test_dismissed_transition(self) -> None:
         cm, cursor = _make_cursor_cm(rowcount=1)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
-            success = resolve_gap(gap_id=1, status="dismissed", resolved_by="admin")
+            success = resolve_gap(
+                gap_id=1, status="dismissed",
+                resolved_by="admin", tenant_id="1",
+            )
         assert success is True
 
     def test_invalid_status_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="Invalid status"):
-            resolve_gap(gap_id=1, status="pending", resolved_by="user")
+            resolve_gap(gap_id=1, status="pending", resolved_by="user", tenant_id="1")
 
     def test_gap_not_found_returns_false(self) -> None:
         cm, cursor = _make_cursor_cm(rowcount=0)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
-            success = resolve_gap(gap_id=9999, status="recaptured", resolved_by="user")
+            success = resolve_gap(
+                gap_id=9999, status="recaptured",
+                resolved_by="user", tenant_id="1",
+            )
         assert success is False
 
 

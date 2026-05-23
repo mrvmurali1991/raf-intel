@@ -202,16 +202,24 @@ def detect_and_persist_gaps(
 # 2. resolve_gap
 # ---------------------------------------------------------------------------
 
-def resolve_gap(gap_id: int, status: str, resolved_by: str) -> bool:
+def resolve_gap(
+    gap_id: int,
+    status: str,
+    resolved_by: str,
+    tenant_id: str,
+) -> bool:
     """Transition a gap to 'recaptured' or 'dismissed'.
 
     Args:
         gap_id:      Primary key of the recapture_gaps row.
         status:      Target status — must be 'recaptured' or 'dismissed'.
         resolved_by: Username or user ID performing the resolution.
+        tenant_id:   Tenant scope — UPDATE is constrained to this tenant
+            so a caller cannot mutate another tenant's gap by guessing IDs.
 
     Returns:
-        True if the row was found and updated, False if gap_id did not exist.
+        True if the row was found and updated, False if gap_id did not exist
+        within this tenant.
 
     Raises:
         ValueError: If status is not an accepted terminal value.
@@ -225,11 +233,14 @@ def resolve_gap(gap_id: int, status: str, resolved_by: str) -> bool:
            SET status      = %s,
                resolved_at = %s,
                resolved_by = %s
-         WHERE id = %s
+         WHERE id = %s AND tenant_id = %s
     """
 
     with raf_cursor() as cursor:
-        cursor.execute(sql, (status, datetime.now(timezone.utc), resolved_by, gap_id))
+        cursor.execute(
+            sql,
+            (status, datetime.now(timezone.utc), resolved_by, gap_id, tenant_id),
+        )
         updated = cursor.rowcount
 
     if not updated:
