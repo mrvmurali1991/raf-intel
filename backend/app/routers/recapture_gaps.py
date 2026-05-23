@@ -31,6 +31,7 @@ from app.services.recapture_gap_service import (
     detect_gaps,
     get_gap_summary,
     get_patient_gaps,
+    count_gaps,
     list_gaps,
 )
 
@@ -210,24 +211,34 @@ def list_recapture_gaps(
     try:
         if patient_id is not None:
             gaps = get_patient_gaps(patient_id=patient_id, tenant_id=tenant_id)
-            # Optionally post-filter by hcc_code
             if hcc_code is not None:
                 gaps = [g for g in gaps if str(g.get("hcc_code", "")) == hcc_code]
-            # Manual pagination for the patient-scoped path
             total = len(gaps)
             gaps = gaps[offset : offset + limit]
-        else:
+        elif hcc_code is not None:
+            # hcc_code is a post-filter applied in Python — we still need to
+            # over-fetch so the slice is correct, but cap it to a safe ceiling
+            # instead of leaking an unbounded LIMIT to the DB.
             all_gaps = list_gaps(
                 tenant_id=tenant_id,
                 status=status,
-                limit=limit + offset,  # over-fetch so we can slice
+                limit=min(limit + offset, 1000),
                 offset=0,
             )
-            # Post-filter by hcc_code if requested
-            if hcc_code is not None:
-                all_gaps = [g for g in all_gaps if str(g.get("hcc_code", "")) == hcc_code]
+            all_gaps = [g for g in all_gaps if str(g.get("hcc_code", "")) == hcc_code]
             total = len(all_gaps)
             gaps = all_gaps[offset : offset + limit]
+        else:
+            # True pagination — let the DB count + slice.
+            total = count_gaps(tenant_id=tenant_id, status=status)
+            gaps = list_gaps(
+                tenant_id=tenant_id,
+                status=status,
+                limit=limit,
+                offset=offset,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         logger.error(
             "list_recapture_gaps error tenant=%s: %s", tenant_id, exc, exc_info=True

@@ -39,6 +39,23 @@ from app.services.metrics_service import revenue_at_risk as _canonical_revenue_a
 
 logger = logging.getLogger(__name__)
 
+
+# CMS HCC model version per measurement year. Update when the next CMS
+# cutover is announced — the year-ranges are ordered most-recent-first so
+# new tiers can be prepended cleanly.
+_MODEL_VERSION_BY_YEAR_FLOOR: tuple[tuple[int, str], ...] = (
+    (2025, "V28"),
+    (0,    "V24"),
+)
+
+
+def _model_version_for_year(year: int) -> str:
+    """Return the CMS HCC model_version string that applies to *year*."""
+    for floor, model in _MODEL_VERSION_BY_YEAR_FLOOR:
+        if year >= floor:
+            return model
+    return "V24"
+
 # Revenue assumed per open recapture gap (adjustable via config in future)
 _REVENUE_IMPACT_PER_GAP: float = 3000.00
 
@@ -77,13 +94,16 @@ def detect_and_persist_gaps(
     # model_version column (V24 | V28) in migration 028.  The same HCC number
     # means different clinical content under V24 vs V28, so gap detection MUST
     # restrict both sides to the same model version.  For payment years >= 2025
-    # CMS mandates V28; pre-2025 rows used V24.
+    # CMS HCC model is bound to measurement year. Keep new versions in one
+    # place so the next CMS cutover (V30 ?) only edits this map.
     #
     # icd10_codes is a JSON array; we extract the first element for the gap
     # record.  The column is named measurement_year (not model_year) per the
     # canonical schema (see database/schema.sql).
-    prior_model_clause = " AND ph.model_version = 'V28'" if prior_year >= 2025 else " AND ph.model_version = 'V24'"
-    current_model_clause = " AND c.model_version = 'V28'" if current_year >= 2025 else " AND c.model_version = 'V24'"
+    prior_model = _model_version_for_year(prior_year)
+    current_model = _model_version_for_year(current_year)
+    prior_model_clause = f" AND ph.model_version = '{prior_model}'"
+    current_model_clause = f" AND c.model_version = '{current_model}'"
 
     detect_sql = f"""
         SELECT
@@ -222,6 +242,9 @@ def resolve_gap(gap_id: int, status: str, resolved_by: str) -> bool:
 # 3. list_gaps
 # ---------------------------------------------------------------------------
 
+_ALLOWED_GAP_STATUSES = frozenset({"open", "recaptured", "dismissed"})
+
+
 def list_gaps(
     tenant_id: str,
     status: str | None = None,
@@ -238,7 +261,17 @@ def list_gaps(
 
     Returns:
         List of gap dicts.
+
+    Raises:
+        ValueError: If *status* is not in _ALLOWED_GAP_STATUSES. Callers
+            should let FastAPI translate this to a 422 instead of letting
+            unknown values silently return an empty result set.
     """
+    if status is not None and status not in _ALLOWED_GAP_STATUSES:
+        raise ValueError(
+            f"Invalid status '{status}'. Allowed: "
+            f"{sorted(_ALLOWED_GAP_STATUSES)}"
+        )
     params: list[Any] = [tenant_id]
     status_clause = ""
     if status is not None:
@@ -277,6 +310,34 @@ def list_gaps(
     with raf_cursor() as cursor:
         cursor.execute(sql, params)
         return cursor.fetchall()
+
+
+def count_gaps(tenant_id: str, status: str | None = None) -> int:
+    """Return the total row count matching the same filter as list_gaps.
+
+    Used by paginated endpoints so the response 'total' field reflects the
+    true count rather than the over-fetch cap.
+    """
+    if status is not None and status not in _ALLOWED_GAP_STATUSES:
+        raise ValueError(
+            f"Invalid status '{status}'. Allowed: "
+            f"{sorted(_ALLOWED_GAP_STATUSES)}"
+        )
+    params: list[Any] = [tenant_id]
+    status_clause = ""
+    if status is not None:
+        status_clause = "AND status = %s"
+        params.append(status)
+    sql = (
+        f"SELECT COUNT(*) AS n FROM recapture_gaps "
+        f"WHERE tenant_id = %s {status_clause}"
+    )
+    with raf_cursor() as cursor:
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        if not row:
+            return 0
+        return int(row["n"] if isinstance(row, dict) else row[0])
 
 
 # ---------------------------------------------------------------------------

@@ -19,7 +19,8 @@ from typing import Any
 from fastapi import Depends, APIRouter, HTTPException, Query
 
 from app.services.openemr_connector import get_patient
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id, require_permission
+from app.services.patient_service import patient_is_accessible
 from app.services.raf_forecast import (
     calculate_patient_forecast,
     calculate_provider_forecast,
@@ -42,6 +43,8 @@ router = APIRouter(prefix="/api/forecast", tags=["forecast"], dependencies=[Depe
 def patient_forecast(
     patient_id: int,
     year: int = Query(default=None, description="Measurement year (defaults to current)"),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("forecast", "read")),
 ) -> dict[str, Any]:
     """
     Project the $ revenue impact if this patient's open suspects are accepted
@@ -49,6 +52,8 @@ def patient_forecast(
 
     Response shape – see ``raf_forecast.calculate_patient_forecast`` docstring.
     """
+    if not patient_is_accessible(patient_id, tenant_id):
+        raise HTTPException(status_code=404, detail="Patient not found")
     try:
         patient = get_patient(patient_id)
     except Exception as exc:
@@ -86,6 +91,8 @@ def patient_forecast(
 def provider_forecast(
     provider_id: int,
     year: int = Query(default=None, description="Measurement year (defaults to current)"),
+    tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("forecast", "read")),
 ) -> dict[str, Any]:
     """
     Aggregate forecast for the panel of patients assigned to *provider_id*.
@@ -119,11 +126,12 @@ def provider_forecast(
 )
 def tenant_forecast(
     year: int = Query(default=None, description="Measurement year (defaults to current)"),
-    tenant_id: str = Query(default=None, description="Tenant identifier (single-tenant deployments may omit)"),
+    tenant_id: str = Depends(get_tenant_id),
     patient_limit: int = Query(
         default=None, ge=1, le=10_000,
         description="Cap the number of patients aggregated (sample mode)",
     ),
+    _perm: None = Depends(require_permission("forecast", "read")),
 ) -> dict[str, Any]:
     """
     Population-wide RAF financial forecast.  Use this on the Reports / CFO

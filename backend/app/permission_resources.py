@@ -57,6 +57,8 @@ ResourceName = Literal[
     "goals",
     "settings",
     "users",
+    "bi_export",
+    "forecast",
 ]
 
 # Derive the runtime set from the Literal so the two cannot drift.

@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.bi_export_service import (
     PREBUILT_DATASETS,
     _get_connection_api_key,
@@ -162,6 +162,7 @@ def _require_connection(connection_id: int, tenant_id: str) -> dict[str, Any]:
 def api_list_datasets(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> dict[str, Any]:
     # Seed pre-built datasets on first access (idempotent)
     try:
@@ -184,6 +185,7 @@ def api_create_dataset(
     body: DatasetCreateRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "write")),
 ) -> dict[str, Any]:
     new_id = create_dataset(
         name=body.name,
@@ -206,6 +208,7 @@ def api_get_dataset(
     dataset_id: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> dict[str, Any]:
     return _require_dataset(dataset_id, tenant_id)
 
@@ -219,6 +222,7 @@ def api_update_dataset(
     body: DatasetUpdateRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "write")),
 ) -> dict[str, Any]:
     updates = body.model_dump(exclude_none=True)
     # Rename 'format' to avoid Python keyword collision in service layer
@@ -238,6 +242,7 @@ def api_refresh_dataset(
     dataset_id: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "write")),
 ) -> dict[str, Any]:
     _require_dataset(dataset_id, tenant_id)  # 404 guard
     result = refresh_dataset(dataset_id, tenant_id)
@@ -264,6 +269,7 @@ def api_download_dataset(
     anonymise: bool = Query(default=False, description="Strip PHI columns"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> Response:
     ds = _require_dataset(dataset_id, tenant_id)
     t0 = time.perf_counter()
@@ -304,6 +310,7 @@ def api_preview_dataset(
     anonymise: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> dict[str, Any]:
     ds = _require_dataset(dataset_id, tenant_id)
     try:
@@ -333,6 +340,7 @@ def api_dataset_schema(
     dataset_id: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> dict[str, Any]:
     ds = _require_dataset(dataset_id, tenant_id)
     tableau_schema = build_tableau_wdc_schema(ds)
@@ -362,6 +370,7 @@ def api_create_connection(
     body: ConnectionCreateRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "write")),
 ) -> dict[str, Any]:
     new_id = create_connection(
         name=body.name,
@@ -381,6 +390,7 @@ def api_create_connection(
 def api_list_connections(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> dict[str, Any]:
     connections = list_connections(tenant_id)
     return {"count": len(connections), "connections": connections}
@@ -401,6 +411,7 @@ def api_push_to_connection(
     body: PushRequest,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "write")),
 ) -> dict[str, Any]:
     conn = _require_connection(connection_id, tenant_id)
     ds = get_dataset(body.dataset_id, tenant_id)
@@ -481,6 +492,7 @@ def api_export_log(
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> dict[str, Any]:
     rows = list_export_log(tenant_id, dataset_id=dataset_id, limit=limit, offset=offset)
     # Serialise datetime fields
@@ -540,6 +552,7 @@ def api_odata_feed(
     request: Request = None,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> Response:
     # Resolve dataset by type name
     with __import__("app.db", fromlist=["raf_cursor"]).raf_cursor() as cur:

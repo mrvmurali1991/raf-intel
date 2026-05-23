@@ -163,6 +163,12 @@ def update_connection(
     if not updates:
         return get_connection(connection_id, tenant_id)
 
+    # Defence-in-depth: even though the dict-comp above already restricts
+    # keys to `allowed`, any future refactor that loosens the input must
+    # still trip on this assert before user-controlled strings reach the
+    # f-string SQL template.
+    for col in updates:
+        assert col in allowed, f"unsafe column name reached SQL: {col!r}"
     set_clause = ", ".join(f"{col} = %s" for col in updates)
     values = list(updates.values()) + [connection_id, tenant_id]
 

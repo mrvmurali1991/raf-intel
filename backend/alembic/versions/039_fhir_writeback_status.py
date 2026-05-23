@@ -30,6 +30,12 @@ def _column_exists(table: str, column: str) -> bool:
 
 
 def upgrade() -> None:
+    # MySQL DDL is auto-committed per statement, so the multi-clause ALTER
+    # below is NOT transactional — if the connection drops between the
+    # ADD COLUMNs and the ADD INDEX, re-running this migration would see
+    # the first column already present and skip the rest, leaving the
+    # table with columns but no index. If you hit a partial state in prod,
+    # ALTER manually to add idx_rsc_writeback_status before retrying.
     if not _column_exists("raf_suspect_conditions", "fhir_writeback_status"):
         op.execute(
             sa.text(
@@ -44,11 +50,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Drop columns first — MySQL drops the secondary index implicitly when
+    # its only column is dropped, so we don't need an explicit DROP INDEX.
+    # The previous version DROP'd the index first; if DROP INDEX failed
+    # (e.g. it was already removed by a partial run) the columns would
+    # never be dropped at all.
     if _column_exists("raf_suspect_conditions", "fhir_writeback_status"):
         op.execute(
             sa.text(
                 """ALTER TABLE raf_suspect_conditions
-                   DROP INDEX idx_rsc_writeback_status,
                    DROP COLUMN fhir_writeback_status,
                    DROP COLUMN fhir_writeback_attempts,
                    DROP COLUMN fhir_writeback_last_error,

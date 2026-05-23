@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.edi import (
     generate_834_enrollment,
     generate_837_batch,
@@ -176,6 +176,7 @@ def generate_837(
     body: Generate837Request,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("submissions", "write")),
 ) -> GenerateResponse:
     """Generate an 837 file for the given patients/payment year."""
     user_id = current_user.get("id") or current_user.get("user_id")
@@ -337,6 +338,7 @@ def generate_834(
     body: Generate834Request,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("submissions", "write")),
 ) -> GenerateResponse:
     """Generate an 834 enrollment file for the given patients/plan year."""
     user_id = current_user.get("id") or current_user.get("user_id")
@@ -398,6 +400,7 @@ def download_edi_file(
     file_id: str,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("submissions", "read")),
 ):
     """Download a previously generated EDI file."""
     row = get_edi_file(file_id=file_id, tenant_id=tenant_id)

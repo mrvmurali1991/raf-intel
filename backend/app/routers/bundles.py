@@ -32,7 +32,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.bundle_export_service import (
     export_all_bundles,
     export_audit_log,
@@ -171,6 +171,7 @@ def _xlsx_response(wb: Any, filename: str) -> StreamingResponse:
 def list_bundles(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     return {
         "count": len(BUNDLE_METADATA),
@@ -190,6 +191,7 @@ def list_bundles(
 def download_patient_master(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_patient_master(tenant_id)
@@ -211,6 +213,7 @@ def download_patient_master(
 def download_encounter_diagnosis(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_encounter_diagnosis(tenant_id)
@@ -232,6 +235,7 @@ def download_encounter_diagnosis(
 def download_raf_score(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_raf_score(tenant_id)
@@ -253,6 +257,7 @@ def download_raf_score(
 def download_meat_compliance(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_meat_compliance(tenant_id)
@@ -274,6 +279,7 @@ def download_meat_compliance(
 def download_suspects(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_suspects(tenant_id)
@@ -295,6 +301,7 @@ def download_suspects(
 def download_recapture_gaps(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_recapture_gaps(tenant_id)
@@ -316,6 +323,7 @@ def download_recapture_gaps(
 def download_provider_performance(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_provider_performance(tenant_id)
@@ -341,6 +349,7 @@ def download_cms_submission(
     batch_id: str | None = Query(default=None, description="Filter to a specific CMS submission batch ID"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("submissions", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_cms_submission(tenant_id, batch_id=batch_id)
@@ -367,6 +376,7 @@ def download_audit_log(
     days: int = Query(default=90, ge=1, le=730, description="Number of days of audit history to include"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("audit", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_audit_log(tenant_id, days=days)
@@ -388,6 +398,7 @@ def download_audit_log(
 def download_historical_raf(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_historical_raf(tenant_id)
@@ -409,6 +420,7 @@ def download_historical_raf(
 def download_revenue_opportunity(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         wb = export_revenue_opportunity(tenant_id)
@@ -434,6 +446,7 @@ def download_revenue_opportunity(
 def download_all_bundles(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> StreamingResponse:
     try:
         bundles: dict[str, bytes] = export_all_bundles(tenant_id)

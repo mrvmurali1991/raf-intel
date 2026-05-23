@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
@@ -181,6 +181,7 @@ def list_goals(
     period: str | None = Query(None, description="Filter by YYYY-QN period"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("goals", "read")),
 ) -> list[dict[str, Any]]:
     with raf_cursor() as cur:
         goals = _fetch_goals(tenant_id, cur)
@@ -212,6 +213,7 @@ def create_goal(
     body: GoalCreate,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("goals", "write")),
 ) -> dict[str, Any]:
     with raf_cursor() as cur:
         cur.execute(
@@ -248,6 +250,7 @@ def goal_progress(
     goal_id: int,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("goals", "read")),
 ) -> dict[str, Any]:
     with raf_cursor() as cur:
         goal = _fetch_goal(goal_id, tenant_id, cur)

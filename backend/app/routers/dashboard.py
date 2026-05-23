@@ -12,7 +12,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import get_current_user, get_tenant_id
+from app.auth import get_current_user, get_tenant_id, require_permission
+from app.db import raf_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def dashboard_kpi_trends(
     weeks: int = Query(default=12, ge=2, le=52, description="Number of weekly buckets to return"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
     Returns per-week series (oldest -> newest) for four dashboard KPIs:
@@ -44,7 +46,6 @@ def dashboard_kpi_trends(
     Weeks are ISO-Monday-anchored so the most recent bucket is always the
     current (partial) week.
     """
-    from app.db import raf_cursor
 
     today = date.today()
     start_of_current_week = today - timedelta(days=today.weekday())
@@ -185,6 +186,7 @@ def dashboard_top_opportunities(
     days: int = Query(default=14, ge=1, le=90, description="Closing window in days"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("reports", "read")),
 ) -> dict[str, Any]:
     """
     Returns up to 5 patients ranked by ``estimated_raf_lift * confidence_score``
@@ -198,7 +200,6 @@ def dashboard_top_opportunities(
     - revenue_at_risk  (USD, lift × $10 000 per RAF point)
     - days_remaining
     """
-    from app.db import raf_cursor
 
     cutoff = date.today() + timedelta(days=days)
 

@@ -127,11 +127,8 @@ def list_writeback_queue(
     limit: int = 100,
     tenant_id: str = Depends(get_tenant_id),
     current_user: dict = Depends(get_current_user),
+    _perm: None = Depends(require_permission("fhir", "write")),
 ):
-    role = (current_user.get("role") or "").lower()
-    if role not in {"admin", "manager"}:
-        raise HTTPException(status_code=403, detail="Admin/manager only")
-
     where = "WHERE tenant_id = %s"
     args: list = [tenant_id]
     if status:
