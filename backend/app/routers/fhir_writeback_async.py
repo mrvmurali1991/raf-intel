@@ -81,12 +81,23 @@ def replay_failed(
                 exc_info=True,
             )
             # Restore 'failed' so the row stays visible to future replays
-            # instead of being orphaned in 'pending'.
-            svc.mark_writeback_failed(
-                tenant_id=tenant_id,
-                suspect_id=int(r["id"]),
-                error=f"enqueue error: {exc}",
-            )
+            # instead of being orphaned in 'pending'. Wrap the recovery in
+            # its own try/except — if the DB write itself errors we must
+            # continue the loop instead of leaking out a 500 that abandons
+            # every remaining suspect mid-batch.
+            try:
+                svc.mark_writeback_failed(
+                    tenant_id=tenant_id,
+                    suspect_id=int(r["id"]),
+                    error=f"enqueue error: {exc}",
+                )
+            except Exception:
+                logger.error(
+                    "fhir_writeback replay: could not restore 'failed' status "
+                    "for suspect_id=%s — row may be orphaned in 'pending'",
+                    r["id"],
+                    exc_info=True,
+                )
             skipped += 1
     return {"replayed_count": replayed, "skipped_count": skipped,
             "failed_total": len(failed)}

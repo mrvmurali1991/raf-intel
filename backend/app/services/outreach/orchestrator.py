@@ -299,8 +299,9 @@ def enqueue_outreach(
         cl = _twilio_client()
         if cl:
             try:
+                import html as _html
                 call = cl.calls.create(
-                    twiml=f"<Response><Say>{body}</Say></Response>",
+                    twiml=f"<Response><Say>{_html.escape(body)}</Say></Response>",
                     from_=os.getenv("TWILIO_FROM_NUMBER"),
                     to=to_address,
                 )
