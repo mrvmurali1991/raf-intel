@@ -111,6 +111,7 @@ def _load_v28_chains_from_hccinfhir() -> list[tuple[int, ...]] | None:
     try:
         from hccinfhir.defaults import hierarchies_default
     except Exception:  # pragma: no cover — hccinfhir always installed in prod
+        logger.debug("swallowed exception", exc_info=True)
         return None
     chains: list[tuple[int, ...]] = []
     for (hcc, model), trumped in hierarchies_default.items():

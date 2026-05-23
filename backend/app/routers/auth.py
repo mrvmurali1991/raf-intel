@@ -420,6 +420,7 @@ async def _stash_login_email(request: Request) -> None:
     except Exception:
         # Malformed body — let pydantic raise 422. Use empty string so the
         # IP-only bucket still applies.
+        logger.debug("swallowed exception", exc_info=True)
         pass
     request.state._login_email = ""
 
@@ -1031,6 +1032,7 @@ def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileRespons
                 and int(counts.get("patient_count") or 0) > 0
             )
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             onboarding_complete = False
 
     row["onboarding_complete"] = onboarding_complete

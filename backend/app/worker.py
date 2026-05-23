@@ -40,6 +40,7 @@ def _redis_url() -> str:
         from app.config import settings
         return settings.redis_url
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         return os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 

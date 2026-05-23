@@ -337,6 +337,7 @@ def _mask_credentials(conn: dict[str, Any]) -> dict[str, Any]:
                     ec[key] = "***"
             out["extra_config"] = ec
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             out["extra_config"] = "***"
     # Add frontend-friendly aliases
     if "display_name" in out:
@@ -692,8 +693,8 @@ def update_connection(
             invalidate_all_for_tenant(tenant_id)
             cache_delete_pattern("report:*")
             cache_delete_pattern("analytics:*")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         # Auto-trigger sync + RAF calc pipeline
         try:
             from app.services.celery_tasks import task_emr_activate_pipeline
@@ -810,8 +811,8 @@ def reactivate_connection(
         invalidate_all_for_tenant(tenant_id)
         cache_delete_pattern("report:*")
         cache_delete_pattern("analytics:*")
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     # P1: Auto-trigger sync + RAF calc in background after activation
     sync_triggered = False
@@ -1040,6 +1041,7 @@ def oauth2_callback(
         try:
             extra_config = _json.loads(extra_config)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             extra_config = {}
     jwks_private_key_pem = extra_config.get("jwks_private_key_pem") or ""
 

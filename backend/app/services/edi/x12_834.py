@@ -86,7 +86,8 @@ def _load_patient_mbi(patient_id: int) -> str:
             )
             row = cur.fetchone() or {}
             return clean(row.get("hicn_mbi"))
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return ""
 
 

@@ -541,8 +541,8 @@ def get_unmatched_patients(
         if isinstance(ed, str):
             try:
                 item["external_data"] = json.loads(ed)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         # Normalize date/datetime to strings for JSON serialization.
         for field in ("dob", "reviewed_at", "created_at"):
             v = item.get(field)

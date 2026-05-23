@@ -175,8 +175,8 @@ def _get_job(job_id: str) -> dict[str, Any] | None:
         if isinstance(result.get(key), str):
             try:
                 result[key] = json.loads(result[key])
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
     return result
 
 
@@ -279,8 +279,8 @@ def _audit(action: str, job_id: str, detail: str = "") -> None:
             resource_id=str(job_id),
             detail=detail,
         )
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +352,7 @@ def task_calculate_raf_batch(
                 score = calculate_raf_score(pid, year, tenant_id=tenant_id)
                 results.append({"patient_id": pid, "raf_score": score})
             except Exception as exc:  # noqa: BLE001
+                logger.debug("swallowed exception", exc_info=True)
                 task_logger.warning(
                     "RAF calculation failed for patient %s: %s", pid, exc
                 )
@@ -706,6 +707,7 @@ def task_scan_suspects_all(self, tenant_id: int, year: int) -> dict[str, Any]:
                     1 for s in suspects if s.get("confidence", 0) >= 0.8
                 )
             except Exception as exc:  # noqa: BLE001
+                logger.debug("swallowed exception", exc_info=True)
                 task_logger.warning("Suspect scan failed for patient %s: %s", pid, exc)
 
             if i % 25 == 0 or i == total:
@@ -785,6 +787,7 @@ def task_calculate_provider_scorecards(
                 calculate_provider_scorecard(provider["id"], year, tenant_id=tenant_id)
                 processed += 1
             except Exception as exc:  # noqa: BLE001
+                logger.debug("swallowed exception", exc_info=True)
                 task_logger.warning(
                     "Scorecard failed for provider %s: %s", provider.get("id"), exc
                 )

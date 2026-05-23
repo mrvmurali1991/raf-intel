@@ -145,8 +145,8 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
             try:
                 payload = decode_token(auth_header[len("Bearer "):])
                 user_id = str(payload.get("sub", "")) or None
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
         extra = {
             "request_id": request_id,

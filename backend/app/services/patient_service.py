@@ -56,7 +56,8 @@ def _has_active_emr_connection() -> bool:
         with raf_cursor() as cur:
             cur.execute("SELECT 1 FROM emr_connections WHERE is_active = 1 LIMIT 1")
             return cur.fetchone() is not None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -69,7 +70,8 @@ def _active_connection_type() -> str | None:
             )
             row = cur.fetchone()
             return row["connection_type"] if row else None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -97,7 +99,8 @@ def _patient_belongs_to_tenant(pid: int, tenant_id: str) -> bool:
                 (pid, tenant_id),
             )
             return cur.fetchone() is not None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -128,7 +131,8 @@ def _patient_in_active_connection(pid: int, tenant_id: str | None = None) -> boo
                     cur.execute("SELECT 1 FROM patients WHERE id = %s", (pid,))
                 return cur.fetchone() is not None
         return False
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -225,7 +229,8 @@ def _patient_in_fhir_matches(pid: int, tenant_id: str | None = None) -> bool:
                     (pid, pid),
                 )
             return cur.fetchone() is not None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -273,7 +278,8 @@ def _get_fhir_patient_row(pid: int, tenant_id: str | None = None) -> dict | None
                 "match_status": row.get("match_status") or "",
                 "data_source": "fhir",
             }
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -1622,14 +1628,14 @@ def svc_get_comprehensive_profile(
                     codes = []
                     try:
                         codes = _json.loads(r.get("icd10_codes") or "[]")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     icd = codes[0] if codes else ""
                     hcc_codes = []
                     try:
                         hcc_codes = _json.loads(r.get("hcc_codes") or "[]")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     problem_list.append(
                         {
                             "title": r.get("title") or "",
@@ -2142,8 +2148,8 @@ def svc_get_allergies(pid: int, tenant_id: str) -> dict[str, Any]:
                             "status": row.get("status") or "active",
                             "begdate": str(row["onset_date"]) if row.get("onset_date") else "",
                         })
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
     return {"pid": pid, "count": len(allergies), "allergies": allergies}
 
 

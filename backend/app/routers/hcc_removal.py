@@ -99,6 +99,7 @@ def audit_removals(
     try:
         patient = get_patient(patient_id)
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         patient = None
     # Skip patient existence check (patients table optional in this deployment)
 
@@ -154,6 +155,7 @@ def list_removal_candidates(
     try:
         patient = get_patient(patient_id)
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         patient = None
     # Skip patient existence check (patients table optional in this deployment)
 

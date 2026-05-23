@@ -90,6 +90,7 @@ def md_today(
             )
             reviewed_pids = {int(r[0]) for r in cur.fetchall() or []}
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         reviewed_pids = set()
 
     for b in briefings:

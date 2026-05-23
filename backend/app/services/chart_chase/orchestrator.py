@@ -415,6 +415,7 @@ def bulk_create_from_rows(
             )
             created.append(int(req["id"]))
         except Exception as e:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append({"row": i, "error": str(e)[:200]})
     return {
         "created_count": len(created),

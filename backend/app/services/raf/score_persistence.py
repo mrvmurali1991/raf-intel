@@ -94,6 +94,7 @@ def _store_patient_hccs(
                     "ALTER TABLE raf_patient_hcc ADD COLUMN is_chronic TINYINT(1) DEFAULT 1"
                 )
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 pass  # Column already exists
 
             # Prune only HCCs that are no longer present in the new hcc_list.

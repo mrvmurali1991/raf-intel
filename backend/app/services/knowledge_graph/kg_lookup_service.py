@@ -364,6 +364,7 @@ def get_related_hccs(
             try:
                 attrs = json.loads(attrs)
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 attrs = {}
         if isinstance(attrs, dict):
             icd_codes.extend(attrs.get("icd10_codes") or [])
@@ -779,8 +780,8 @@ def explain_hcc(hcc_code: str) -> dict[str, Any]:
             label = labels_default.get((hcc_code, "CMS-HCC Model V28"))
             if label:
                 definition = {"label": label, "model": "CMS-HCC Model V28"}
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
 
     out = {
         "hcc": hcc_code,
@@ -865,15 +866,18 @@ def patient_full_inference(
         try:
             drugs = emr.get_medications(patient_id) or []
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             drugs = []
         try:
             labs = emr.get_lab_results(patient_id) or []
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             labs = []
         try:
             billing = emr.get_billing_codes(patient_id) or []
             icd_codes = [str(b.get("code") or "").strip() for b in billing if b.get("code")]
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             icd_codes = []
     except Exception as exc:
         logger.debug("openemr_connector unavailable: %s", exc)

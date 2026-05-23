@@ -310,6 +310,7 @@ def _delete_document_object(file_path: str) -> None:
             storage.delete(file_path)
             return
     except Exception:  # noqa: BLE001 — best-effort
+        logger.debug("swallowed exception", exc_info=True)
         pass
     p = Path(file_path)
     if p.exists():
@@ -409,8 +410,8 @@ def _ensure_tables() -> None:
                 try:
                     cur.execute(f"ALTER TABLE `{fk['TABLE_NAME']}` DROP FOREIGN KEY `{fk['CONSTRAINT_NAME']}`")
                     logger.info("Dropped FK %s on %s", fk["CONSTRAINT_NAME"], fk["TABLE_NAME"])
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
                 # Also alter the referencing column to VARCHAR(36)
                 try:
                     cur.execute(
@@ -421,8 +422,8 @@ def _ensure_tables() -> None:
                     ref_cols = cur.fetchall()
                     for rc in ref_cols:
                         cur.execute(f"ALTER TABLE `{fk['TABLE_NAME']}` MODIFY COLUMN `{rc['COLUMN_NAME']}` VARCHAR(36) NULL")
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
             cur.execute("ALTER TABLE documents MODIFY COLUMN id VARCHAR(36) NOT NULL")
         # Also fix document_analysis.id and document_analysis.document_id
         for tbl, col in [("document_analysis", "id"), ("document_analysis", "document_id"),
@@ -445,8 +446,8 @@ def _ensure_tables() -> None:
                     for fk2 in cur.fetchall():
                         try:
                             cur.execute(f"ALTER TABLE `{tbl}` DROP FOREIGN KEY `{fk2['CONSTRAINT_NAME']}`")
-                        except Exception:
-                            pass
+                        except Exception:  # noqa: BLE001 — best-effort guard
+                            logger.debug("swallowed exception", exc_info=True)
                     cur.execute(f"ALTER TABLE `{tbl}` MODIFY COLUMN `{col}` VARCHAR(36) NULL")
                     logger.info("Migrated %s.%s to VARCHAR(36)", tbl, col)
             except Exception as e:
@@ -620,6 +621,7 @@ def _get_existing_patient_hccs(patient_id: str) -> set[str]:
         return {r["hcc_code"] for r in rows if r.get("hcc_code")}
     except Exception:
         # Table may not exist in all deployments — silently skip
+        logger.debug("swallowed exception", exc_info=True)
         return set()
 
 

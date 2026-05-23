@@ -255,6 +255,7 @@ def revenue_opportunity(year: int = Query(default=None),
                 row = cur.fetchone()
                 suspect_gap = float(row["total_gap"] or 0) if row else 0.0
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             suspect_gap = 0.0
         total_gap = round(suspect_gap, 4)
     else:
@@ -389,8 +390,8 @@ def patient_scorecard(year: int = Query(default=None),
                 )
                 for r in cur.fetchall():
                     suspect_by_pid[int(r["patient_id"])] = r
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
 
     scorecard: list[dict[str, Any]] = []
     for p in patients:
@@ -819,8 +820,8 @@ def data_completeness(
                 (tenant_id,),
             )
             _mapped_emr_pids = [int(r["emr_pid"]) for r in cur.fetchall()]
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     # Build a PID filter for OpenEMR queries.  If no mapped PIDs exist, we
     # fall back to counting all OpenEMR patients (upload-only tenants won't

@@ -462,6 +462,7 @@ class OpenEMRFhirAdapter:
                     "latency_ms": latency,
                 }
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             latency = int((time.time() - t0) * 1000)
             return {"success": False, "message": str(exc)[:300], "latency_ms": latency}
 
@@ -491,6 +492,7 @@ class OpenEMRFhirAdapter:
                 "OpenEMR FHIR: fetched %d Patient entries", len(patient_entries)
             )
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"Patient fetch failed: {exc}")
             patient_entries = []
 
@@ -504,6 +506,7 @@ class OpenEMRFhirAdapter:
                 self._upsert_demographics(patient)
                 patients_synced += 1
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"Patient {resource.get('id')}: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -515,6 +518,7 @@ class OpenEMRFhirAdapter:
                 "OpenEMR FHIR: fetched %d Condition entries", len(condition_entries)
             )
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"Condition fetch failed: {exc}")
             condition_entries = []
 
@@ -534,6 +538,7 @@ class OpenEMRFhirAdapter:
                     )
                     conditions_skipped += 1
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"Condition {resource.get('id')}: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -552,8 +557,10 @@ class OpenEMRFhirAdapter:
                     self._upsert_encounter(resource)
                     encounters_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"Encounter {resource.get('id')}: {exc}")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"Encounter fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -573,8 +580,10 @@ class OpenEMRFhirAdapter:
                     self._upsert_medication(resource)
                     medications_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"MedicationRequest {resource.get('id')}: {exc}")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"MedicationRequest fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -594,14 +603,17 @@ class OpenEMRFhirAdapter:
                     self._upsert_document_reference(resource)
                     documents_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"DocumentReference {resource.get('id')}: {exc}")
                 try:
                     self._upsert_clinical_note_from_ref(resource)
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(
                         f"DocumentReference note {resource.get('id')}: {exc}"
                     )
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"DocumentReference fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -621,8 +633,10 @@ class OpenEMRFhirAdapter:
                     self._upsert_observation(resource)
                     observations_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"Observation {resource.get('id')}: {exc}")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"Observation fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -642,8 +656,10 @@ class OpenEMRFhirAdapter:
                     self._upsert_immunization(resource)
                     immunizations_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"Immunization {resource.get('id')}: {exc}")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"Immunization fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -663,8 +679,10 @@ class OpenEMRFhirAdapter:
                     self._upsert_allergy(resource)
                     allergies_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"AllergyIntolerance {resource.get('id')}: {exc}")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"AllergyIntolerance fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -684,8 +702,10 @@ class OpenEMRFhirAdapter:
                     self._upsert_diagnostic_report(resource)
                     diagnostic_reports_synced += 1
                 except Exception as exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     errors.append(f"DiagnosticReport {resource.get('id')}: {exc}")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"DiagnosticReport fetch failed: {exc}")
 
         # ------------------------------------------------------------------ #
@@ -694,6 +714,7 @@ class OpenEMRFhirAdapter:
         try:
             raf_scores_calculated = self._calculate_raf_scores()
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             errors.append(f"RAF score calculation failed: {exc}")
 
         logger.info(
@@ -812,6 +833,7 @@ class OpenEMRFhirAdapter:
                                 raw_date.replace("Z", "+00:00")
                             ).date().isoformat()
                         except Exception:
+                            logger.debug("swallowed exception", exc_info=True)
                             note_date = raw_date[:10] or None
                     type_obj = resource.get("type") or {}
                     coding = type_obj.get("coding") or []
@@ -1273,6 +1295,7 @@ class OpenEMRFhirAdapter:
                     "ALTER TABLE patients ADD COLUMN deceased_date DATE DEFAULT NULL"
                 )
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 pass  # Column already exists — this is expected after first run
             # --- Check if a patient with the same name+DOB already exists
             #     (handles OpenEMR creating multiple FHIR resources for
@@ -1889,6 +1912,7 @@ class OpenEMRFhirAdapter:
                     ),
                 )
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 pass  # fhir_encounters is optional UI metadata
 
     # ------------------------------------------------------------------
@@ -2412,6 +2436,7 @@ class OpenEMRFhirAdapter:
                     raw_date.replace("Z", "+00:00")
                 ).date().isoformat()
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 note_date = raw_date[:10] or None
         type_obj = resource.get("type") or {}
         coding = type_obj.get("coding") or []

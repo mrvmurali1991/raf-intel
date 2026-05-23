@@ -567,6 +567,7 @@ def _on_message_received(
         mrn = demo.get("mrn", "")
         patient_name = f"{demo.get('last_name', '')}, {demo.get('first_name', '')}".strip(", ")
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         mrn = ""
         patient_name = ""
 

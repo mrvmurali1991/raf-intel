@@ -200,6 +200,7 @@ def _hcc_label(hcc_code: str | int) -> str:
             return label
         return label or f"HCC {code}"
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         return f"HCC {code}"
 
 
@@ -213,7 +214,8 @@ def _days_open(created_at: Any, now: datetime | None = None) -> int:
     else:
         try:
             ca = datetime.fromisoformat(str(created_at))
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
             return 0
     # Normalise both to naive UTC for comparison.
     if ca.tzinfo is not None:

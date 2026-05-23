@@ -150,8 +150,8 @@ def get_patient_impact(
             tenant_id=tenant_id,
             details=f"year={measurement_year}",
         )
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     try:
         return score_delta_v24_to_v28(

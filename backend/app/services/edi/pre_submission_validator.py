@@ -66,7 +66,8 @@ def _patient_mbi(patient_id: int) -> str | None:
             )
             row = cur.fetchone() or {}
             return (row.get("hicn_mbi") or "").strip() or None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -83,7 +84,8 @@ def _patient_hcc_rows(patient_id: int, payment_year: int) -> list[dict[str, Any]
                 (patient_id, payment_year),
             )
             return cur.fetchall() or []
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return []
 
 
@@ -103,7 +105,8 @@ def _patient_encounter(patient_id: int) -> dict[str, Any] | None:
                 (patient_id,),
             )
             return cur.fetchone()
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -121,6 +124,7 @@ def _extract_icd10s(rows: list[dict[str, Any]]) -> list[str]:
                 try:
                     items = json.loads(stripped)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     items = [x.strip() for x in stripped.split(",")]
             else:
                 items = [x.strip() for x in stripped.split(",")]

@@ -116,6 +116,7 @@ def generate_audit(
                        ORDER BY sc.confidence_score DESC""", (pid, tenant_id))
                 suspects = [dict(r) for r in _susp_cur.fetchall()]
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             suspects = get_suspects_for_patient(patient_id=pid, tenant_id=tenant_id)
     encounters = emr.get_encounters(pid)
     medications = emr.get_medications(pid)
@@ -388,8 +389,8 @@ def chain_status(
                 try:
                     entry = json.loads(raw)
                     last_hash = entry.get("current_hash")
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
     except Exception as exc:
         logger.warning("chain_status read error: %s", exc)
 
@@ -612,6 +613,7 @@ def _build_audit_pdf(
                 if not provider_display or provider_display == "N/A":
                     provider_display = f"Provider #{_prov_id}"
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             provider_display = f"Provider #{_prov_id}"
 
     gen_ts = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")

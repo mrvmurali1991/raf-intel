@@ -271,6 +271,7 @@ def enqueue_outreach(
                 provider_id = getattr(msg, "sid", None)
                 status = "sent"
             except Exception as e:
+                logger.debug("swallowed exception", exc_info=True)
                 status, failure_reason = "failed", str(e)[:500]
         else:
             status, failure_reason = "failed", "twilio_unconfigured"
@@ -289,6 +290,7 @@ def enqueue_outreach(
                 provider_id = resp.headers.get("X-Message-Id") if hasattr(resp, "headers") else None
                 status = "sent"
             except Exception as e:
+                logger.debug("swallowed exception", exc_info=True)
                 status, failure_reason = "failed", str(e)[:500]
         else:
             status, failure_reason = "failed", "sendgrid_unconfigured"
@@ -305,6 +307,7 @@ def enqueue_outreach(
                 provider_id = getattr(call, "sid", None)
                 status = "sent"
             except Exception as e:
+                logger.debug("swallowed exception", exc_info=True)
                 status, failure_reason = "failed", str(e)[:500]
         else:
             status, failure_reason = "failed", "twilio_unconfigured"

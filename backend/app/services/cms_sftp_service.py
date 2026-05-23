@@ -490,6 +490,7 @@ def transmit_submission(submission_id: int, tenant_id: str) -> dict:
                 remote_stat = sftp2.stat(remote_path)
                 bytes_transferred = remote_stat.st_size or bytes_transferred
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 pass  # Callback value is good enough
 
         transmission_id = _log_transmission(

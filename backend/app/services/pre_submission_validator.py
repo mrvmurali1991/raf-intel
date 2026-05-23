@@ -83,7 +83,8 @@ def _parse_icd_list(value: Any) -> list[str]:
     if isinstance(value, (bytes, bytearray)):
         try:
             value = value.decode("utf-8")
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
             return []
     if isinstance(value, str):
         try:
@@ -92,6 +93,7 @@ def _parse_icd_list(value: Any) -> list[str]:
                 return [str(c) for c in parsed if c]
         except Exception:
             # Fall back to single-code-as-string treatment.
+            logger.debug("swallowed exception", exc_info=True)
             stripped = value.strip()
             if stripped and stripped not in ("[]", "null"):
                 return [stripped]

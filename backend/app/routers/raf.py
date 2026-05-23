@@ -526,8 +526,8 @@ def calculate_all(
             _ct_cur.execute("SELECT connection_type FROM emr_connections WHERE is_active = 1 AND tenant_id = %s LIMIT 1", (tenant_id,))
             _ct_r = _ct_cur.fetchone()
             _conn_type = _ct_r["connection_type"] if _ct_r else None
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     if _conn_type in ("fhir_r4", "rest_api"):
         try:
@@ -1000,8 +1000,8 @@ def population_summary(
             _row = _cur.fetchone()
             has_active = bool(_row and _row["cnt"] > 0)
             _conn_type = _row["ct"] if _row else None
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     if has_active:
         try:
@@ -1036,6 +1036,7 @@ def population_summary(
                 )
                 total_patients = _cur_up.fetchone()["cnt"]
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             total_patients = 0
 
     # Scope RAF scores to the correct patient set based on connection type.
@@ -1154,8 +1155,8 @@ def population_summary(
             patients_with_gaps = cur.fetchone()["cnt"]
             if total_patients:
                 hcc_capture_rate = round(patients_with_scores / total_patients * 100, 1)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     return PopulationSummaryResponse(
         year=calc_year,
@@ -2002,8 +2003,8 @@ def icd10_to_hcc_crosswalk(
         for hcc, dxs in rx_raw.items():
             for dx in dxs:
                 rx_map.setdefault(dx.upper(), set()).add(hcc)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     # DB crosswalk for richer ICD descriptions
     db_map: dict[str, dict] = {}
@@ -2028,8 +2029,8 @@ def icd10_to_hcc_crosswalk(
                     "hcc_label": row["hcc_label"],
                     "icd_description": row.get("icd10_description") or "",
                 }
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     def _hcc_detail(hcc_code: str | None, model: str, seg_key: str) -> dict | None:
         """Look up label + CNA coefficient + chronic flag for an HCC code."""
@@ -2173,6 +2174,7 @@ def get_raf_dashboard(
             "connection_type": _active.get("connection_type") if _active else None,
         }
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         dashboard["active_emr"] = None
 
     # Blend weights — _BLEND_WEIGHTS stores tuples (v24_weight, v28_weight)

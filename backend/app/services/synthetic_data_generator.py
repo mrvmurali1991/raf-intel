@@ -296,7 +296,8 @@ def _demo_data_exists() -> bool:
             )
             row = cur.fetchone()
             return (row["cnt"] if row else 0) >= 25
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -313,6 +314,7 @@ def _current_stats() -> dict[str, Any]:
             "encounters_created": e_row["cnt"] if e_row else 0,
         }
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         return {"patients_created": 0, "encounters_created": 0}
 
 

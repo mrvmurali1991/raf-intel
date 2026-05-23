@@ -121,7 +121,8 @@ def _last_hash_from_jsonl() -> str | None:
             return None
         last = json.loads(lines[-1])
         return last.get("current_hash")
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -140,7 +141,8 @@ def _db_last_hash() -> str | None:
         if row:
             return row.get("hash_self") or row.get("current_hash")
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 

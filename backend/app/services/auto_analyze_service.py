@@ -90,7 +90,8 @@ def _count_suspects(local_pid: int) -> int:
             )
             row = cur.fetchone() or {}
             return int(row.get("n", 0))
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return 0
 
 
@@ -104,7 +105,8 @@ def _count_gaps(local_pid: int) -> int:
             )
             row = cur.fetchone() or {}
             return int(row.get("n", 0))
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return 0
 
 

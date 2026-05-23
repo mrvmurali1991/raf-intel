@@ -302,8 +302,8 @@ def _fetch_meat_letters(
             cols = {str(r["column_name"]).lower() for r in cur.fetchall() or []}
         _have_offsets = "meat_m_offsets" in cols
         _have_source_enc = "source_encounter_id" in cols
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     # Build the optional column lists. The latest_id sub-query gives us
     # the most-recent evidence row per patient_hcc id; we LEFT-JOIN back
@@ -389,7 +389,8 @@ def _fetch_meat_letters(
                 import json as _json
                 parsed = _json.loads(val)
                 return parsed if isinstance(parsed, list) else None
-            except Exception:
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
                 return None
 
         # Parse icd10_codes — JSON array or comma string.
@@ -405,8 +406,8 @@ def _fetch_meat_letters(
                     parsed = _json.loads(s)
                     if isinstance(parsed, list):
                         icd_list = [str(x).strip() for x in parsed if x]
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
             if not icd_list:
                 icd_list = [c.strip() for c in s.split(",") if c.strip()]
 
@@ -459,6 +460,7 @@ def _fetch_meat_letters(
             from app.config import settings as _settings
             _enabled = bool(getattr(_settings, "lazy_meat_extraction", False))
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             _enabled = False
         if _enabled:
             try:
@@ -754,6 +756,7 @@ def _build_suspects(pid: int, year: int, tenant_id: str) -> list[SuspectCard]:
             try:
                 icd_label = (_icd_desc(icd10) or "").strip()
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 icd_label = ""
 
         # If the engine emitted hcc=0 but the ICD-10 is valid, derive the
@@ -764,6 +767,7 @@ def _build_suspects(pid: int, year: int, tenant_id: str) -> list[SuspectCard]:
             try:
                 mapping = _icd_to_hcc(icd10)
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 mapping = None
             if mapping and mapping.get("hcc_code"):
                 try:
@@ -1336,6 +1340,7 @@ def action_accept_suspect(
                 try:
                     _ed = _json.loads(_ed)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     _ed = {}
             _meat_completeness = (_ed or {}).get("meat_completeness") if isinstance(_ed, dict) else None
             _meat_status = (_ed or {}).get("meat_status") if isinstance(_ed, dict) else None
@@ -2288,6 +2293,7 @@ def _parse_evidence_detail_raw(evidence_detail: Any) -> Any:
         try:
             return _json.loads(raw)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             return raw
     return raw
 

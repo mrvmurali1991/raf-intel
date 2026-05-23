@@ -84,6 +84,7 @@ class ActiveTenantMiddleware(BaseHTTPMiddleware):
         try:
             user = await _resolve_user(request)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             user = None
 
         if user is None:

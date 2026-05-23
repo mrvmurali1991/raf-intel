@@ -119,6 +119,7 @@ def log_phi_access(
                 ),
             )
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         _app_logger.error("Failed to persist PHI access log to database", exc_info=True)
 
     # Write to immutable hash-chain audit log (tamper-evident file)
@@ -138,4 +139,5 @@ def log_phi_access(
             },
         )
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         _app_logger.error("Failed to write immutable audit entry", exc_info=True)

@@ -498,8 +498,8 @@ def _icd10_display(icd10: str) -> str:
             desc = helper(icd10)
             if desc:
                 return str(desc)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     fallback = {
         "J44.9": "Chronic obstructive pulmonary disease, unspecified",
         "E11.9": "Type 2 diabetes mellitus without complications",

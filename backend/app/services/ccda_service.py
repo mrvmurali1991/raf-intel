@@ -162,6 +162,7 @@ def _snomed_to_icd10(snomed_code: str) -> str | None:
                 return row["icd10_code"]
     except Exception:
         # Table does not exist or query failed — degrade gracefully
+        logger.debug("swallowed exception", exc_info=True)
         pass
 
     return None
@@ -962,6 +963,7 @@ def store_ccda_upload(
         root = ET.fromstring(xml_bytes)
         header = _parse_header(root)
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         header = {"document_type": "ccd", "doc_date": None, "author_name": None,
                   "author_npi": None, "custodian_org": None}
 

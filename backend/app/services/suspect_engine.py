@@ -163,8 +163,8 @@ def _apply_context_filter(
         from app.config import settings as _settings
         if not getattr(_settings, "use_context_detector", True):
             return True, base_confidence, {"context_detector": "disabled"}
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     lower_snippet = snippet.lower()
     needle = target_text.lower().strip()
@@ -1443,6 +1443,7 @@ def accept_suspect(
                                     except (ValueError, TypeError):
                                         continue
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     _encounter_ids = []
 
                 if not _encounter_ids and _icd:

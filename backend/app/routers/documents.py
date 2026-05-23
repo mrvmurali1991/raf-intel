@@ -267,6 +267,7 @@ def _do_approve_and_score(
         raf_result = calculate_raf_score(patient_id, year, tenant_id=tenant_id)
         new_raf = raf_result.get("raf_score") or raf_result.get("final_raf", 0)
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         new_raf = None
 
     with raf_cursor() as cur:
@@ -518,6 +519,7 @@ def list_documents_endpoint(
                         _pr = _pc.fetchone()
                     doc["patient_name"] = _pr["name"] if _pr else ""
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 doc["patient_name"] = ""
 
         analysis = get_analysis(str(doc["id"]))
@@ -530,6 +532,7 @@ def list_documents_endpoint(
                 try:
                     raw_dx = _j.loads(raw_dx)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     raw_dx = []
             diagnoses = []
             for d in raw_dx:
@@ -563,6 +566,7 @@ def list_documents_endpoint(
                 try:
                     raw_meds = _j.loads(raw_meds)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     raw_meds = []
 
             raw_labs = analysis.get("extracted_labs") or []
@@ -572,6 +576,7 @@ def list_documents_endpoint(
                 try:
                     raw_labs = _j.loads(raw_labs)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     raw_labs = []
 
             raw_meat = analysis.get("meat_evidence")
@@ -581,6 +586,7 @@ def list_documents_endpoint(
                 try:
                     raw_meat = _j.loads(raw_meat)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     raw_meat = None
 
             doc["analysis_results"] = {
@@ -867,6 +873,7 @@ def list_document_extracts(
                     if not isinstance(ed, dict):
                         ed = {}
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     ed = {}
 
             src_doc_id = ed.get("source_document_id")

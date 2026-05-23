@@ -163,6 +163,7 @@ def _write_to_file_log(records: list[dict[str, Any]]) -> None:
         try:
             _phi_file_logger.info(json.dumps(rec, default=str))
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             _app_logger.error("PHI file logger write failed", exc_info=True)
 
 
@@ -176,6 +177,7 @@ def _write_to_db(records: list[dict[str, Any]]) -> bool:
             cur.executemany(_INSERT_SQL, rows)
         return True
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         _app_logger.error(
             "PHI DB write failed (%d rows), falling back to overflow file", len(records),
             exc_info=True,
@@ -195,6 +197,7 @@ def _write_overflow(records: list[dict[str, Any]]) -> None:
             for rec in records:
                 fh.write(json.dumps(rec, default=str) + "\n")
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         _app_logger.error("PHI overflow file write failed — records may be lost!", exc_info=True)
 
 
@@ -406,8 +409,8 @@ class PHIAccessLoggingMiddleware:
                     payload = decode_token(auth_header[len("Bearer "):])
                     user_id = str(payload.get("sub", "anonymous"))
                     user_email = payload.get("email")
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
             client = scope.get("client")
             ip_address = client[0] if client else None
@@ -445,6 +448,7 @@ class PHIAccessLoggingMiddleware:
             _enqueue(record)
 
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             _app_logger.error("PHI access middleware logging failed", exc_info=True)
 
 
@@ -558,5 +562,6 @@ async def _get_current_user_safe(request: Request) -> dict[str, Any] | None:
             "email": payload.get("email"),
             "tenant_id": getattr(request.state, "tenant_id", None),
         }
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None

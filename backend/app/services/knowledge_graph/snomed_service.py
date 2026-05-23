@@ -54,6 +54,7 @@ try:  # pragma: no cover - import-only
 
     _HAS_RAPIDFUZZ = True
 except Exception:  # pragma: no cover - covered by tests via monkeypatch
+    logger.debug("swallowed exception", exc_info=True)
     _rf_fuzz = None  # type: ignore[assignment]
     _rf_process = None  # type: ignore[assignment]
     _HAS_RAPIDFUZZ = False
@@ -66,6 +67,7 @@ except Exception:  # pragma: no cover - covered by tests via monkeypatch
 try:  # pragma: no cover - import-only
     from app.services.hccinfhir_utils import get_hcc_coefficient as _get_hcc_coefficient
 except Exception:  # pragma: no cover
+    logger.debug("swallowed exception", exc_info=True)
     _get_hcc_coefficient = None  # type: ignore[assignment]
 
 
@@ -251,7 +253,8 @@ def _coefficient_for(hcc_code: int, model_version: str) -> float | None:
         return None
     try:
         return float(_get_hcc_coefficient(int(hcc_code), model_version) or 0.0) or None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 

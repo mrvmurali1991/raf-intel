@@ -172,6 +172,7 @@ def map_icd_to_hcc(
     try:
         from app.services.hcc_mapping_service import map_icd10_to_hcc as _canonical
     except Exception:  # pragma: no cover - import safety
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
     try:

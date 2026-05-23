@@ -777,8 +777,8 @@ def store_analysis_meat(
                     r = cur.fetchone()
                     if r and r.get("text"):
                         raw_excerpt = str(r["text"])[:500]
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         # Fallback 2: stitch MEAT phrases together so the excerpt is never
         # empty when we have any MEAT signal.
         if not raw_excerpt:
@@ -917,8 +917,8 @@ def update_hcc_meat_status(
     try:
         from app.config import settings as _settings
         _gate_enabled = bool(getattr(_settings, "use_clinical_billing_gate", True))
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     # ---------------------------------------------------------------------------
     # Lazy import of immutable_audit — if unavailable we degrade gracefully but

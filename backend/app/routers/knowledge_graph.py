@@ -53,6 +53,7 @@ def _resolve_admin_dep() -> Callable[..., Any]:
 
         return require_role("admin")
     except Exception:  # pragma: no cover — fallback for older worktrees
+        logger.debug("swallowed exception", exc_info=True)
         async def _noop() -> dict[str, Any]:
             return {"role": "admin", "stub": True}
 

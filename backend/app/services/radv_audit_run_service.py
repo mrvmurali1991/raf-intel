@@ -557,6 +557,7 @@ def get_audit_run(run_id: int, *, tenant_id: str) -> dict[str, Any]:
         try:
             hcc_codes = json.loads(r.get("sampled_hcc_codes") or "[]")
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             hcc_codes = []
         records.append({**r, "sampled_hcc_codes": hcc_codes})
 
@@ -726,6 +727,7 @@ def get_record(*, record_id: int, tenant_id: str) -> dict[str, Any]:
     try:
         row["sampled_hcc_codes"] = json.loads(row.get("sampled_hcc_codes") or "[]")
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         row["sampled_hcc_codes"] = []
     return row
 
@@ -955,6 +957,7 @@ def build_resubmission_batch(*, run_id: int, tenant_id: str) -> dict[str, Any]:
         try:
             hcc_codes = json.loads(r.get("sampled_hcc_codes") or "[]")
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             hcc_codes = []
         items.append(
             {

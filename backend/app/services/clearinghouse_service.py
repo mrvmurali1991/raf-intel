@@ -1236,4 +1236,5 @@ def test_connection(connection_id: int, tenant_id: str) -> dict[str, Any]:
             "http_status": resp.status_code,
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return {"success": False, "message": str(exc)}

@@ -453,8 +453,8 @@ async def stream_job(
             try:
                 pubsub.unsubscribe(channel)
                 pubsub.close()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
     return StreamingResponse(
         _gen(),

@@ -115,6 +115,7 @@ def cc8_1_change_management() -> dict[str, Any]:
             r = cur.fetchone()
             head = (r["version_num"] if isinstance(r, dict) else r[0]) if r else None
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             head = None
 
     from pathlib import Path
@@ -219,6 +220,7 @@ def fetch_latest(control_id: str) -> dict[str, Any] | None:
         try:
             d["evidence"] = json.loads(d["evidence_json"])
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             d["evidence"] = None
         d.pop("evidence_json", None)
         return d

@@ -40,6 +40,7 @@ def active_connection_type(tenant_id: str) -> str:
             row = cur.fetchone()
             return row["connection_type"] if row else "direct_db"
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         return "direct_db"
 
 

@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 try:
     from hccinfhir.defaults import labels_default as _labels_default
 except Exception:
+    logger.debug("swallowed exception", exc_info=True)
     _labels_default = {}
 
 _V28_MODEL = "CMS-HCC Model V28"
@@ -94,8 +95,8 @@ def _fetch_patient_hccs(patient_id: int, year: int, tenant_id: str) -> list[dict
                     parsed = json.loads(s)
                     if isinstance(parsed, list):
                         icds = [str(x).strip() for x in parsed if x]
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
             if not icds:
                 icds = [c.strip() for c in s.split(",") if c.strip()]
         hcc_code = str(r.get("hcc_code") or "")

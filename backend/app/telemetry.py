@@ -40,6 +40,7 @@ def init_telemetry(app=None) -> None:
         endpoint: str = _settings.otel_exporter_otlp_endpoint or ""
         app_env: str = _settings.app_env
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
         app_env = os.getenv("APP_ENV", "production")
 

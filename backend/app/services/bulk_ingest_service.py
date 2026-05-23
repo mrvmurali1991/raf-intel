@@ -451,6 +451,7 @@ class _BatchAccumulator:
                         self.counts["Patient"] += 1
                         self.ingested += 1
                 except Exception as exc:  # noqa: BLE001
+                    logger.debug("swallowed exception", exc_info=True)
                     self._record_error(f"Patient {row.get('fhir_id', '?')}: {exc}")
         self.patients.clear()
 
@@ -506,6 +507,7 @@ class _BatchAccumulator:
                 self.counts["Condition"] += 1
                 self.ingested += 1
             except Exception as exc:  # noqa: BLE001
+                logger.debug("swallowed exception", exc_info=True)
                 self._record_error(f"Condition: {exc}")
 
         if rows_to_insert:
@@ -618,6 +620,7 @@ class _BatchAccumulator:
             except Exception as exc:  # noqa: BLE001
                 # RAF failures are tracked but never fail the ingest itself —
                 # the user can re-run the calculator from the admin tools.
+                logger.debug("swallowed exception", exc_info=True)
                 self._record_error(f"RAF calc patient_id={pid}: {exc}")
 
 
@@ -687,6 +690,7 @@ def _ingest_ndjson_stream(
             elif rtype == "Observation":
                 acc.observations.append(resource)
         except Exception as exc:  # noqa: BLE001
+            logger.debug("swallowed exception", exc_info=True)
             acc._record_error(f"{rtype} {resource.get('id', '?')}: {exc}")
 
         acc.maybe_flush(force=False)

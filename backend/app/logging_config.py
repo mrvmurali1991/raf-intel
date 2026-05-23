@@ -152,8 +152,8 @@ class JSONFormatter(logging.Formatter):
             if ctx and ctx.trace_id:
                 log_entry["trace_id"] = format(ctx.trace_id, "032x")
                 log_entry["span_id"] = format(ctx.span_id, "016x")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
 
         # Promote well-known extra fields to top-level keys.
         for key in self._EXTRA_FIELDS:

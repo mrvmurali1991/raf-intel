@@ -158,6 +158,7 @@ def rotate_key(
                     try:
                         raw = base64.urlsafe_b64decode(old_val.encode("ascii"))
                     except Exception:
+                        logger.debug("swallowed exception", exc_info=True)
                         raw = b""
 
                     active_version = VERSION_KMS if isinstance(provider, AwsKmsProvider) else VERSION_FERNET

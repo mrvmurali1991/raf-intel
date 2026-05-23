@@ -132,7 +132,8 @@ def _load_patient_mbi(patient_id: int) -> str:
             )
             row = cur.fetchone() or {}
             return clean(row.get("hicn_mbi"))
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return ""
 
 
@@ -229,6 +230,7 @@ def _load_hcc_icd10s_for_patient(patient_id: int, payment_year: int | None = Non
                 try:
                     items = json.loads(stripped)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     items = [x.strip() for x in stripped.split(",")]
             else:
                 items = [x.strip() for x in stripped.split(",")]

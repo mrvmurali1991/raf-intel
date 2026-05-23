@@ -122,8 +122,8 @@ class BaseVendorAdapter(ABC):
 
             try:
                 self._extra = json.loads(raw_extra)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
     # ------------------------------------------------------------------
     # HTTP helpers shared by all adapters

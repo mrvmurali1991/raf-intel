@@ -89,8 +89,8 @@ def _fetch_cohort(cur, cohort_id: int) -> dict[str, Any] | None:
     if row and isinstance(row.get("criteria"), str):
         try:
             row["criteria"] = json.loads(row["criteria"])
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
     return row
 
 
@@ -446,8 +446,8 @@ def list_cohorts(
         if isinstance(row.get("criteria"), str):
             try:
                 row["criteria"] = json.loads(row["criteria"])
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
     return rows
 
 
@@ -823,6 +823,7 @@ def take_snapshot(cohort_id: int, tenant_id: str) -> dict[str, Any]:
                     try:
                         codes = json.loads(codes)
                     except Exception:
+                        logger.debug("swallowed exception", exc_info=True)
                         codes = []
                 if isinstance(codes, list):
                     for code in codes:
@@ -892,8 +893,8 @@ def take_snapshot(cohort_id: int, tenant_id: str) -> dict[str, Any]:
         if snap_row and isinstance(snap_row.get(col), str):
             try:
                 snap_row[col] = json.loads(snap_row[col])
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
     logger.info(
         "cohort_service: snapshot id=%s for cohort=%s on %s",
@@ -932,8 +933,8 @@ def get_cohort_trends(
             if isinstance(row.get(col), str):
                 try:
                     row[col] = json.loads(row[col])
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
     return rows
 
 
@@ -1235,8 +1236,8 @@ def compare_cohorts(
         if comp_row and isinstance(comp_row.get(col), str):
             try:
                 comp_row[col] = json.loads(comp_row[col])
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
     logger.info(
         "cohort_service: comparison id=%s cohort_a=%s cohort_b=%s",
@@ -1257,8 +1258,8 @@ def get_comparison(comparison_id: int) -> dict[str, Any] | None:
         if isinstance(row.get(col), str):
             try:
                 row[col] = json.loads(row[col])
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
     return row
 
 

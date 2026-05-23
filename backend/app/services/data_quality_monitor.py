@@ -58,7 +58,8 @@ def _is_fhir_active(cursor: Cursor) -> bool:
             "LIMIT 1"
         )
         return cursor.fetchone() is not None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -139,6 +140,7 @@ def check_patients_without_icd(cursor: Cursor, tenant_id: int) -> dict[str, Any]
             ),
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -190,6 +192,7 @@ def check_hccs_missing_meat(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
             ),
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -244,6 +247,7 @@ def check_raf_score_outliers(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
             ),
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -291,6 +295,7 @@ def check_future_dob(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
             "details": "Patients with DOB in the future — data entry / import defect.",
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -365,6 +370,7 @@ def check_duplicate_patients(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
             ),
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -402,6 +408,7 @@ def check_stale_crosswalk(cursor: Cursor) -> dict[str, Any]:
             f"hcc_icd10_crosswalk effective_year={max_year} is current.",
         )
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -454,6 +461,7 @@ def check_orphaned_hccs(cursor: Cursor, tenant_id: int) -> dict[str, Any]:
             ),
         }
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return _error_result(check, exc)
 
 
@@ -490,11 +498,13 @@ def run_all_checks(cursor: Cursor, tenant_id: int) -> list[dict[str, Any]]:
         try:
             report.append(fn(cursor, tenant_id))
         except Exception as exc:  # noqa: BLE001
+            logger.debug("swallowed exception", exc_info=True)
             report.append(_error_result(fn.__name__, exc))
     for gfn in _GLOBAL_CHECKS:
         try:
             report.append(gfn(cursor))
         except Exception as exc:  # noqa: BLE001
+            logger.debug("swallowed exception", exc_info=True)
             report.append(_error_result(gfn.__name__, exc))
     return report
 

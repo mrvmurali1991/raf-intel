@@ -349,6 +349,7 @@ async def credentials_check(
             reachable = resp.status_code < 500
             detail = f"HTTP {resp.status_code}"
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         detail = f"Unreachable: {exc}"
 
     return CredentialsCheckResponse(

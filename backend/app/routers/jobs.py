@@ -177,6 +177,7 @@ def _get_celery_meta(job_id: str) -> dict[str, Any] | None:
         meta = result.info if isinstance(result.info, dict) else {}
         return {"state": state, **meta}
     except Exception:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 

@@ -1106,6 +1106,7 @@ def _lookup_hcc_bulk(icd_codes: list[str]) -> dict[str, dict[str, Any]]:
                             label = test_result.hcc_details[0].label or ""
                         result[code] = {"hcc_code": hcc_val, "hcc_label": label}
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     pass  # Code has no HCC mapping; leave as None
         except ImportError:
             logger.warning("hccinfhir not available for HCC fallback mapping")

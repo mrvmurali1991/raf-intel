@@ -797,7 +797,8 @@ def _get_connection_api_key(connection_id: int, tenant_id: str) -> str | None:
         return None
     try:
         return _decrypt_value(row["api_key_encrypted"])
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -1319,6 +1320,7 @@ def push_to_powerbi(
             "rows_pushed": len(rows),
         }
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         return {"success": False, "error": str(exc)}
 
 

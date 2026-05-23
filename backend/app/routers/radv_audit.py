@@ -222,8 +222,8 @@ def get_audit_integrity(
         if _AUDIT_FILE.exists():
             with open(_AUDIT_FILE, encoding="utf-8") as f:
                 chain_length = sum(1 for line in f if line.strip())
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     # Extract first broken line number from error messages ("Line N: ...")
     first_broken_id: int | None = None

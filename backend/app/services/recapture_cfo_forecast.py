@@ -99,6 +99,7 @@ def _hcc_label(hcc_code: str) -> str:
         from app.services.recapture_gap_service import _hcc_description
         return _hcc_description(str(hcc_code))
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         return f"HCC {hcc_code}"
 
 

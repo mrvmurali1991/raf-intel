@@ -48,7 +48,8 @@ def get_active_connection_id(tenant_id: str | None = None) -> int:
                 cur.execute("SELECT id FROM emr_connections WHERE is_active = 1 LIMIT 1")
             row = cur.fetchone()
             return row["id"] if row else 0
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return 0
 
 # ---------------------------------------------------------------------------
@@ -72,6 +73,7 @@ def _acquire_lock(key: str) -> bool:
     try:
         return bool(r.set(lock_key, "1", nx=True, ex=_LOCK_TTL))
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         return True  # on error, allow recompute
 
 
@@ -82,8 +84,8 @@ def _release_lock(key: str) -> None:
         return
     try:
         r.delete(f"__lock__:{key}")
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
 # ---------------------------------------------------------------------------
 # TTL constants (seconds)
@@ -264,8 +266,8 @@ def warm_raf_scores(tenant_id: str) -> int:
             try:
                 get_raf_breakdown(pid, year, tenant_id=tenant_id)
                 warmed += 1
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         logger.info(
             "cache warm: raf_scores for %d/%d patients [tenant=%s]",
             warmed, len(pids), tenant_id,

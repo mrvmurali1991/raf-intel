@@ -141,6 +141,7 @@ def _get_redis() -> Any:
             # Celery not configured or broker unreachable — fall through
             # to a direct REDIS_URL connection.  This is the common dev
             # path (no Celery worker running).
+            logger.debug("swallowed exception", exc_info=True)
             pass
 
         redis_url = os.getenv("REDIS_URL")
@@ -221,8 +222,8 @@ def invalidate_pattern(pattern: str) -> int:
         for key in r.scan_iter(match=pattern, count=200):
             try:
                 deleted += int(r.delete(key) or 0)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         if deleted:
             _incr("cache_invalidations", deleted)
     except Exception as exc:

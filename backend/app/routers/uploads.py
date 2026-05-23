@@ -528,6 +528,7 @@ def _import_multi_sheet(
                 pid_to_demo[pid] = (dob, sex or "")
                 pid_to_year[pid] = measurement_year
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"Patients row {idx}: {exc}")
 
         # 3) HCC Conditions -------------------------------------------------
@@ -646,6 +647,7 @@ def _import_multi_sheet(
                 bucket["disease"] += raf_coef
                 bucket["count"] += 1
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"HCC_Conditions row {idx}: {exc}")
 
         # 4) MEAT Evidence --------------------------------------------------
@@ -702,6 +704,7 @@ def _import_multi_sheet(
                 )
                 meat_inserted += 1
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"MEAT_Evidence row {idx}: {exc}")
 
         # 5) Suspect Conditions --------------------------------------------
@@ -751,6 +754,7 @@ def _import_multi_sheet(
                 )
                 suspects_inserted += 1
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"Suspect_Conditions row {idx}: {exc}")
 
         # 6) RAF scores -----------------------------------------------------
@@ -797,6 +801,7 @@ def _import_multi_sheet(
                 )
                 scores_computed += 1
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors.append(f"raf_scores (pid={pid}, year={year}): {exc}")
 
         # 7) Finalise upload row -------------------------------------------
@@ -1116,8 +1121,8 @@ async def upload_patients(
         # Otherwise fall through to the legacy single-sheet XLSX path.
         try:
             wb.close()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
 
     # ---- Legacy single-sheet / CSV path ----------------------------------
     from app.services.patient_import_service import (
@@ -1162,6 +1167,7 @@ async def upload_patients(
             row = cur.fetchone()
             since_id = int(row["max_id"]) if row else 0
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         since_id = 0
 
     uploader_name = (

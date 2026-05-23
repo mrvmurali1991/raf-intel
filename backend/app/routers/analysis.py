@@ -262,6 +262,7 @@ def analyze_encounter(
                 logger.info("Returning cached analysis for encounter %s", encounter_id)
                 return cached
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         pass  # cache miss — run fresh analysis
 
     # Fetch encounter metadata
@@ -329,6 +330,7 @@ def analyze_encounter(
             try:
                 patient_age = _calculate_age(str(dob)[:10], enc_year)
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 patient_age = None
             patient_sex = patient.get("sex", "")
 
@@ -803,6 +805,7 @@ def _run_batch_job(job_id: str, pid: int, save_results: bool, tenant_id: str | N
                 try:
                     patient_age: int | None = _calculate_age(str(dob)[:10], note_year)
                 except Exception:
+                    logger.debug("swallowed exception", exc_info=True)
                     patient_age = None
 
                 result = _run_pipeline(

@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 try:
     from hccinfhir.defaults import labels_default as _labels_default
 except Exception:  # pragma: no cover — defensive
+    logger.debug("swallowed exception", exc_info=True)
     _labels_default = {}
 
 _V28_MODEL = "CMS-HCC Model V28"

@@ -128,7 +128,8 @@ def cache_get(key: str) -> Any | None:
     try:
         val = r.get(key)
         return json.loads(val) if val else None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 
@@ -139,8 +140,8 @@ def cache_set(key: str, value: Any, ttl: int = 300) -> None:
         return
     try:
         r.setex(key, ttl, json.dumps(value, default=str))
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
 
 def cache_delete_pattern(pattern: str) -> None:
@@ -151,8 +152,8 @@ def cache_delete_pattern(pattern: str) -> None:
     try:
         for key in r.scan_iter(match=pattern):
             r.delete(key)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
 
 def cached(prefix: str, ttl: int = 300):

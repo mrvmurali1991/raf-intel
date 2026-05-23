@@ -36,8 +36,8 @@ async def add_process_time_header(request: Request, call_next):
         request.app.state.request_count = (
             getattr(request.app.state, "request_count", 0) + 1
         )
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return response
 
 

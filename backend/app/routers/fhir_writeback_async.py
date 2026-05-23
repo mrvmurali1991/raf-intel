@@ -52,6 +52,7 @@ def replay_failed(
     try:
         from app.services.celery_tasks import task_fhir_writeback_async
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         task_fhir_writeback_async = None  # type: ignore
 
     user_id = int(current_user.get("id") or current_user.get("user_id") or 0)
@@ -68,6 +69,7 @@ def replay_failed(
                 )
                 replayed += 1
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 skipped += 1
         else:
             skipped += 1

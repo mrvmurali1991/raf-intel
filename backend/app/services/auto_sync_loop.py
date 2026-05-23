@@ -137,6 +137,7 @@ def _is_loop_enabled() -> bool:
         return bool(row.get("enabled", 1))
     except Exception:
         # Column may not exist yet (pre-migration); treat as enabled.
+        logger.debug("swallowed exception", exc_info=True)
         return True
 
 
@@ -212,7 +213,8 @@ def _read_total_synced_today() -> int:
             cur.execute("SELECT total_synced_today FROM auto_sync_status WHERE id = 1 LIMIT 1")
             row = cur.fetchone()
         return int(row["total_synced_today"]) if row else 0
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return 0
 
 

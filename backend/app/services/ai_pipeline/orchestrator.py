@@ -94,8 +94,8 @@ def _to_jsonable(obj: Any) -> Any:
     if hasattr(obj, "to_dict"):
         try:
             return obj.to_dict()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
     if is_dataclass(obj):
         return asdict(obj)
     if hasattr(obj, "__dict__"):
@@ -136,6 +136,7 @@ def run_for_patient(
             summary["stages"]["eligibility"] = "skipped_over_limit"
             return summary
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         _log_run_error(None, "eligibility", exc)
         summary["stages"]["eligibility"] = f"error: {exc}"
         return summary
@@ -149,6 +150,7 @@ def run_for_patient(
         )
         summary["run_id"] = run_id
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         _log_run_error(None, "record_run_start", exc)
         return summary
 
@@ -160,14 +162,15 @@ def run_for_patient(
         bundle = context_bundle.assemble_bundle(patient_id)
         summary["stages"]["context_bundle"] = "ok"
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         _log_run_error(run_id, "context_bundle", exc)
         final_status = "failed"
 
     if bundle is None:
         try:
             eligibility.record_run_finish(run_id=run_id, status="failed")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         return summary
 
     demo = getattr(bundle, "demographics", None)
@@ -226,6 +229,7 @@ def run_for_patient(
                     "source": "contextual",
                 })
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             _log_run_error(run_id, f"extract:note={note_id}", exc)
     summary["stages"]["extract"] = {"candidates": len(all_candidates)}
 
@@ -243,6 +247,7 @@ def run_for_patient(
             )
             entry["meat"] = evidence
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             _log_run_error(run_id, f"meat:{getattr(cand, 'icd10', '?')}", exc)
             entry["meat"] = None
 
@@ -253,6 +258,7 @@ def run_for_patient(
         suspects = suspect_engine.detect_suspects(bundle_dict, use_llm=True) or []
         summary["stages"]["suspects"] = len(suspects)
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         _log_run_error(run_id, "suspect_engine", exc)
 
     # --- (g) map ICD->HCC for any candidate missing hcc ----------------
@@ -271,6 +277,7 @@ def run_for_patient(
                     hcc_label = m.label
                     mapper_source = m.source
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 _log_run_error(run_id, f"map:{icd10}", exc)
         entry["hcc"] = hcc
         entry["hcc_label"] = hcc_label
@@ -288,6 +295,7 @@ def run_for_patient(
         )
         summary["stages"]["persist"] = "ok"
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         _log_run_error(run_id, "persist", exc)
         final_status = "failed"
 
@@ -302,6 +310,7 @@ def run_for_patient(
                                     None, pq)
             pq_count += 1
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             _log_run_error(run_id, f"provider_query:{getattr(cand, 'icd10', '?')}", exc)
     for sid, susp in zip(suspect_id_list, suspects):
         try:
@@ -309,6 +318,7 @@ def run_for_patient(
             _persist_provider_query(run_id, patient_id, None, sid, pq)
             pq_count += 1
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             _log_run_error(run_id, f"provider_query:suspect:{getattr(susp, 'icd10', '?')}", exc)
     summary["stages"]["provider_queries"] = pq_count
 
@@ -316,6 +326,7 @@ def run_for_patient(
     try:
         eligibility.record_run_finish(run_id=run_id, status=final_status)
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         _log_run_error(run_id, "record_run_finish", exc)
 
     return summary

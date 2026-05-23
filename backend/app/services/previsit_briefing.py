@@ -83,6 +83,7 @@ def _hcc_label(hcc_code: str | int) -> str:
         if v28_label:
             return v28_label
     except Exception:  # pragma: no cover — optional dep
+        logger.debug("swallowed exception", exc_info=True)
         pass
     return f"HCC {code_clean}"
 
@@ -115,8 +116,8 @@ def _upcoming_visits(provider_id: int, days_ahead: int) -> list[dict[str, Any]]:
             row = cur.fetchone()
             if row and row.get("openemr_user_id"):
                 emr_uid = int(row["openemr_user_id"])
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     try:
         with openemr_cursor() as cur:
@@ -456,6 +457,7 @@ def get_upcoming_briefings(
         try:
             segment = _resolve_segment(pid, year)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             segment = DEFAULT_MODEL_SEGMENT
 
         candidates: list[dict[str, Any]] = []

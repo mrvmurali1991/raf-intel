@@ -47,6 +47,7 @@ try:
     from pydantic import BaseModel, Field
     _HAS_PYDANTIC = True
 except Exception:  # pragma: no cover
+    logger.debug("swallowed exception", exc_info=True)
     _HAS_PYDANTIC = False
     BaseModel = object  # type: ignore
 
@@ -235,6 +236,7 @@ def _load_demographics(cur, patient_id) -> tuple[Demographics, str | None]:
             today = date.today()
             age = today.year - d.year - ((today.month, today.day) < (d.month, d.day))
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             age = None
 
     demo = Demographics(

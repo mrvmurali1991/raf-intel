@@ -759,6 +759,7 @@ def check_specificity(stage2_diagnoses: list[dict]) -> list[dict]:
         try:
             children = cm.get_children(code) or []
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             children = []
 
         if children:
@@ -775,8 +776,8 @@ def check_specificity(stage2_diagnoses: list[dict]) -> list[dict]:
                                 leaf_examples.append(grandchild)
                     if len(leaf_examples) >= 5:
                         break
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
             examples_str = (
                 ", ".join(leaf_examples[:5]) if leaf_examples else "(see ICD-10-CM index)"

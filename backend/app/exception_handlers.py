@@ -78,6 +78,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         try:
             raw_errors = exc.errors()
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             raw_errors = []
         logger.error(
             "Validation error on %s %s: %s",
@@ -125,6 +126,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         try:
             errors = exc.errors()
         except Exception:  # pragma: no cover — defensive
+            logger.debug("swallowed exception", exc_info=True)
             errors = [{"msg": str(exc)}]
         logger.error(
             "Response model validation failed on %s %s [request_id=%s] errors=%s",
@@ -167,6 +169,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         try:
             errors = exc.errors()
         except Exception:  # pragma: no cover
+            logger.debug("swallowed exception", exc_info=True)
             errors = [{"msg": str(exc)}]
         logger.error(
             "Pydantic validation failed on %s %s [request_id=%s] errors=%s",

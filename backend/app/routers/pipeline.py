@@ -82,6 +82,7 @@ def _coerce_run(row: dict) -> PipelineRunSummary:
         try:
             steps = _json.loads(steps)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             steps = None
     stats = row.get("stats")
     if isinstance(stats, str):
@@ -89,6 +90,7 @@ def _coerce_run(row: dict) -> PipelineRunSummary:
         try:
             stats = _json.loads(stats)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             stats = None
 
     return PipelineRunSummary(

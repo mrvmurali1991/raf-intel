@@ -99,8 +99,8 @@ def _last_successful_query(network: str) -> str | None:
                 val = row.get("last_ok") if isinstance(row, dict) else row[0]
                 if val:
                     return val.isoformat() if hasattr(val, "isoformat") else str(val)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return None
 
 

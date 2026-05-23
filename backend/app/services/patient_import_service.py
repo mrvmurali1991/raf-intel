@@ -333,6 +333,7 @@ def parse_patient_csv(file_bytes: bytes) -> tuple[list[dict[str, str]], list[str
         try:
             text = file_bytes.decode("latin-1")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             return [], [f"Could not decode file: {exc}"]
 
     try:
@@ -365,6 +366,7 @@ def parse_patient_csv(file_bytes: bytes) -> tuple[list[dict[str, str]], list[str
             row["_source"] = "csv"
             rows.append(row)
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             parse_errors.append(f"Row {line_num}: could not parse — {exc}")
 
     return rows, parse_errors
@@ -398,6 +400,7 @@ def parse_patient_xlsx(file_bytes: bytes) -> tuple[list[dict[str, str]], list[st
             data_only=True,
         )
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         return [], [f"Could not open Excel file: {exc}"]
 
     sheet = workbook.worksheets[0]
@@ -471,6 +474,7 @@ def parse_patient_xlsx(file_bytes: bytes) -> tuple[list[dict[str, str]], list[st
             row["_source"] = "xlsx"
             rows.append(row)
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             parse_errors.append(f"Row {sheet_line}: could not parse — {exc}")
 
     return rows, parse_errors
@@ -715,6 +719,7 @@ def parse_fhir_patients(file_bytes: bytes) -> tuple[list[dict[str, str]], list[s
         try:
             text = file_bytes.decode("latin-1")
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             return [], [f"Could not decode file: {exc}"]
 
     try:

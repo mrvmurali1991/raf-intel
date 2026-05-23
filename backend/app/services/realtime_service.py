@@ -387,8 +387,8 @@ def get_alerts(
         if isinstance(d.get("metadata"), str):
             try:
                 d["metadata"] = json.loads(d["metadata"])
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         # Serialize datetimes
         for key in ("created_at", "read_at"):
             if isinstance(d.get(key), datetime):
@@ -542,8 +542,8 @@ def list_dashboard_configs(user_id: int, tenant_id: str) -> list[dict[str, Any]]
             if isinstance(d.get(key), str):
                 try:
                     d[key] = json.loads(d[key])
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
         for key in ("created_at", "updated_at"):
             if isinstance(d.get(key), datetime):
                 d[key] = d[key].isoformat()
@@ -672,8 +672,8 @@ def get_live_kpi(tenant_id: str) -> dict[str, Any]:
                     "SELECT COUNT(*) AS cnt FROM care_gap_tasks WHERE status NOT IN ('closed','resolved')"
                 )
                 kpi["open_gaps"] = int((cur.fetchone() or {}).get("cnt", 0))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
             # Pending provider attestations
             try:
@@ -681,8 +681,8 @@ def get_live_kpi(tenant_id: str) -> dict[str, Any]:
                     "SELECT COUNT(*) AS cnt FROM provider_attestations WHERE status = 'pending'"
                 )
                 kpi["pending_attestations"] = int((cur.fetchone() or {}).get("cnt", 0))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
             # Unreviewed suspects
             try:
@@ -690,8 +690,8 @@ def get_live_kpi(tenant_id: str) -> dict[str, Any]:
                     "SELECT COUNT(*) AS cnt FROM suspect_conditions WHERE status = 'pending'"
                 )
                 kpi["suspects_unreviewed"] = int((cur.fetchone() or {}).get("cnt", 0))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
             # Claims last 30 days
             try:
@@ -700,8 +700,8 @@ def get_live_kpi(tenant_id: str) -> dict[str, Any]:
                     "WHERE service_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
                 )
                 kpi["claims_last_30d"] = int((cur.fetchone() or {}).get("cnt", 0))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
             # AWV due this calendar month
             try:
@@ -712,8 +712,8 @@ def get_live_kpi(tenant_id: str) -> dict[str, Any]:
                     "  AND status NOT IN ('completed','cancelled')"
                 )
                 kpi["awv_due_this_month"] = int((cur.fetchone() or {}).get("cnt", 0))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
             # Unread alerts (across all users for the tenant — aggregate metric)
             try:
@@ -723,8 +723,8 @@ def get_live_kpi(tenant_id: str) -> dict[str, Any]:
                     (tenant_id,),
                 )
                 kpi["unread_alerts"] = int((cur.fetchone() or {}).get("cnt", 0))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
 
     except Exception as exc:
         logger.error("realtime: get_live_kpi error: %s", exc)

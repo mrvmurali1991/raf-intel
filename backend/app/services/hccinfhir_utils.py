@@ -498,6 +498,7 @@ def calculate_raf_from_fhir_eob(
 
     except Exception:
         # --- Fallback path: manual ICD-10 extraction from EOB dicts ---
+        logger.debug("swallowed exception", exc_info=True)
         icd_codes = _extract_icd10_from_eobs(eob_resources)
         fallback = calculate_full_raf(
             icd_codes=icd_codes,

@@ -49,6 +49,7 @@ def _output_dir() -> Path:
 
         d = Path(getattr(settings, "submission_output_dir", _DEFAULT_OUTPUT_DIR))
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         d = Path(_DEFAULT_OUTPUT_DIR)
     if str(d).startswith("/tmp"):
         logger.warning(
@@ -853,6 +854,7 @@ def validate_submission(batch_id: str) -> dict[str, Any]:
             )
             batch_meta = cur.fetchone()
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         batch_meta = None
     payment_year = int((batch_meta or {}).get("payment_year", date.today().year))
 

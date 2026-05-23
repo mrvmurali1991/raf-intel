@@ -59,7 +59,8 @@ def _table_exists(name: str) -> bool:
                 (name,),
             )
             return cur.fetchone() is not None
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 

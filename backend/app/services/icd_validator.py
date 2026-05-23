@@ -108,6 +108,7 @@ def normalize_code(code: str) -> str | None:
             if cm.is_valid_item(cand):
                 valid_variants.append(cand)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             continue
 
     if len(valid_variants) > 1:
@@ -154,7 +155,8 @@ def validate_icd10_code(code: str) -> bool:
     norm = normalize_code(code)
     try:
         return cm.is_valid_item(norm) and cm.is_leaf(norm)
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -170,7 +172,8 @@ def code_exists(code: str) -> bool:
         return False
     try:
         return cm.is_valid_item(normalize_code(code))
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return False
 
 
@@ -184,7 +187,8 @@ def get_description(code: str) -> str:
         return ""
     try:
         return cm.get_description(normalize_code(code)) or ""
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return ""
 
 
@@ -224,7 +228,8 @@ def get_children(code: str) -> list[str]:
         return []
     try:
         return cm.get_children(normalize_code(code)) or []
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return []
 
 
@@ -234,7 +239,8 @@ def get_ancestors(code: str) -> list[str]:
         return []
     try:
         return cm.get_ancestors(normalize_code(code)) or []
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return []
 
 
@@ -244,7 +250,8 @@ def get_parent(code: str) -> str:
         return ""
     try:
         return cm.get_parent(normalize_code(code)) or ""
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return ""
 
 
@@ -318,6 +325,7 @@ def get_children_with_descriptions(code: str) -> list[dict[str, Any]]:
         try:
             desc = cm.get_description(child) or ""
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             desc = ""
         out.append(
             {
@@ -372,6 +380,7 @@ def search_codes(query: str, max_results: int = 20) -> list[dict[str, Any]]:
             try:
                 desc = cm.get_description(code) or ""
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 continue
             if query_lower in desc.lower():
                 results.append(
@@ -482,8 +491,8 @@ def check_excludes1(code1: str, code2: str) -> bool:
         excludes1_of_1 = cm.get_excludes1(norm1) or []
         if any(norm2.startswith(exc.strip()) for exc in excludes1_of_1):
             return True
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     try:
         # Also check code2's Excludes1 list for code1 (relationship is symmetric
@@ -491,8 +500,8 @@ def check_excludes1(code1: str, code2: str) -> bool:
         excludes1_of_2 = cm.get_excludes1(norm2) or []
         if any(norm1.startswith(exc.strip()) for exc in excludes1_of_2):
             return True
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     return False
 

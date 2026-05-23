@@ -373,6 +373,7 @@ def validate_sender_certificate(
                     )
                     return True
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 continue
 
         logger.warning(

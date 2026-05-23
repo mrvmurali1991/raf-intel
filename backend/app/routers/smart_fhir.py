@@ -95,8 +95,8 @@ def _pkce_delete(code: str) -> None:
     if r:
         try:
             r.delete(key)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
     _pkce_mem.pop(key, None)
 
 
@@ -785,10 +785,12 @@ async def smart_token(request: Request) -> dict[str, Any]:
         try:
             body = await request.json()
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             try:
                 form = await request.form()
                 body = {k: v for k, v in form.items()}
             except Exception:
+                logger.debug("swallowed exception", exc_info=True)
                 body = {}
 
     grant_type = body.get("grant_type")

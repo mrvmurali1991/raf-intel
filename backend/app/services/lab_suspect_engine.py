@@ -273,8 +273,8 @@ def _confidence(rule: dict[str, Any], value: float) -> float:
         elif op in ("<=", "<") and value < threshold:
             ratio = (threshold - value) / max(threshold, 1)
             base = min(0.98, base + ratio * 0.15)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
 
     return round(base, 4)
 

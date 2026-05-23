@@ -458,6 +458,7 @@ def _recapture_raf_sum(tenant_id: str, prior_year: int, current_year: int) -> fl
             if total > 0:
                 return total
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             pass  # table may not exist yet — fall through
 
         # Fallback

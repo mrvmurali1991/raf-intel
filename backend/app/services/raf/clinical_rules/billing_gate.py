@@ -71,7 +71,8 @@ def _parse_date(val: Any) -> date | None:
         return val if not isinstance(val, datetime) else val.date()
     try:
         return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return None
 
 

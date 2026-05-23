@@ -226,8 +226,8 @@ def _parse_capability_statement(cs: dict[str, Any]) -> dict[str, Any]:
                             auth_url = sub.get("valueUri")
                         elif sub.get("url") == "token":
                             token_url = sub.get("valueUri")
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return {
         "authorization_endpoint": auth_url,
         "token_endpoint": token_url,
@@ -466,7 +466,8 @@ def _decode_id_token_claims(id_token: str) -> dict[str, Any]:
         # Add padding for base64 decoding
         padded = parts[1] + "=" * (-len(parts[1]) % 4)
         return json.loads(base64.urlsafe_b64decode(padded))
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return {}
 
 
@@ -706,6 +707,7 @@ def _load_registration_full(registration_id: int, tenant_id: str) -> dict[str, A
         try:
             row["_client_secret_plain"] = decrypt(row["client_secret_encrypted"])
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             row["_client_secret_plain"] = None
     row.pop("client_secret_encrypted", None)
     return row

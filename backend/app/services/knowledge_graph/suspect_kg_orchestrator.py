@@ -134,6 +134,7 @@ def _gemini_suspect_runner():
         try:
             mod = __import__(mod_path, fromlist=["*"])
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             continue
         for fn_name in (
             "run_kg_assisted_suspect_pass",
@@ -575,6 +576,7 @@ def _apply_calibration(
             if not rule["match"](demo):
                 continue
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             continue
         if _hcc_matches_prefix(candidate["suspect_hcc"], rule["hcc_prefix"]):
             demo_mult *= rule["multiplier"]

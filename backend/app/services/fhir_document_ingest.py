@@ -244,6 +244,7 @@ def ingest_patient_documents(
             emr_pid, since=since, _count=50
         )
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         return {
             "tenant_id": tenant_id,
             "raf_patient_id": raf_patient_id,

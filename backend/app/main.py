@@ -247,6 +247,7 @@ def _check_alembic_migrations() -> None:
         except subprocess.TimeoutExpired as exc:
             return 124, "", f"alembic {subcmd} timed out: {exc}"
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             return 1, "", f"alembic {subcmd} failed: {exc}"
 
     def _parse_revisions(output: str) -> set[str]:
@@ -453,6 +454,7 @@ async def emr_gate(request: Request, call_next):
         from app.auth import _resolve_user
         user = await _resolve_user(request)
     except Exception:
+        logger.debug("swallowed exception", exc_info=True)
         user = None
 
     if user is None:

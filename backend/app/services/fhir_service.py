@@ -1673,6 +1673,7 @@ async def test_connection_async(connection: dict[str, Any]) -> dict[str, Any]:
         result["status_code"] = 401
         result["message"] = str(exc)
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         result["message"] = str(exc)
 
     return result

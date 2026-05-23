@@ -382,6 +382,7 @@ def get_top_slow_movers(
     try:
         from app.services.recapture_gap_service import _hcc_description
     except Exception:  # pragma: no cover — defensive
+        logger.debug("swallowed exception", exc_info=True)
         def _hcc_description(c: str) -> str:
             return f"HCC {c}"
 

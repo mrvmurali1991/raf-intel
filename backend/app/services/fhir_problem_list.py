@@ -454,8 +454,8 @@ def push_problem_list_condition(
                 details=f"circuit_open retry_after={cb_err.retry_after:.0f}s",
                 tenant_id=str(tenant_id),
             )
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         raise RuntimeError(
             f"FHIR write-back unavailable (circuit open). Retry in "
             f"{cb_err.retry_after:.0f} seconds."
@@ -691,8 +691,8 @@ def reverse_problem_list_condition(
                 details=f"circuit_open reversal retry_after={cb_err.retry_after:.0f}s",
                 tenant_id=str(tenant_id),
             )
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         raise RuntimeError(
             f"FHIR reversal unavailable (circuit open). Retry in "
             f"{cb_err.retry_after:.0f} seconds."

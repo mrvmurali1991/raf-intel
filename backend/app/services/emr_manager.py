@@ -859,6 +859,7 @@ def _test_hl7v2(connection: dict) -> dict:
         try:
             extra = json.loads(raw_extra)
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             extra = {}
 
     host: str = (
@@ -1113,6 +1114,7 @@ def _test_rest_api(connection: dict) -> dict:
         except httpx.HTTPStatusError as exc:
             last_exc = f"HTTP {exc.response.status_code} from {url}"
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             last_exc = str(exc)
 
     latency_ms = int((time.monotonic() - start) * 1000)
@@ -1542,8 +1544,8 @@ def _upsert_patient_hcc(pid: int, icd_codes: list[str], measurement_year: int) -
             if hcc_code is not None:
                 try:
                     raf_coefficient = _hcc_coefficient(int(hcc_code), model_version="V28", segment="CNA")
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
             cur.execute(
                 "SELECT id, icd10_codes FROM raf_patient_hcc "
@@ -1913,6 +1915,7 @@ def store_oauth2_state(connection_id: int, state_key: str, code_verifier: str, r
                 (state_key, connection_id, code_verifier, redirect_uri),
             )
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             cur.execute(
                 "INSERT INTO emr_oauth2_state (state_key, connection_id, code_verifier) VALUES (%s, %s, %s)",
                 (state_key, connection_id, code_verifier),

@@ -2806,5 +2806,6 @@ def read_document_bytes(url: str) -> bytes:
                 with open(p, "rb") as fh:
                     return fh.read()
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             continue
     return b""

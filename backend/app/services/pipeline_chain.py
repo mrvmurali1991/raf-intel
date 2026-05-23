@@ -429,8 +429,8 @@ def _get_pipeline_settings(tenant_id: str) -> dict:
             row = cur.fetchone()
             if row:
                 return {**defaults, **{k: v for k, v in row.items() if v is not None}}
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return defaults
 
 
@@ -841,8 +841,8 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                             if dob_raw:
                                 patient_age = _calculate_age(str(dob_raw)[:10])
                             patient_sex = fhir_row.get("sex") or ""
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 # Resolve emr_pid for OpenEMR lookups
                 emr_pid = patient_id
@@ -859,8 +859,8 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                                 emr_pid = int(float(_raw))
                             except (ValueError, TypeError):
                                 emr_pid = str(_raw)  # FHIR UUID
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 # Gather additional context — all best-effort
                 medications = None
@@ -872,24 +872,24 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                     medications = [
                         m.get("drug", "") for m in (get_medications(emr_pid, tenant_id=tenant_id) or [])
                     ]
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
                 try:
                     problem_list = get_problem_list(emr_pid, tenant_id=tenant_id)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
                 try:
                     recapture_gaps = get_recapture_gaps(emr_pid, date.today().year, tenant_id=tenant_id)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
                 try:
                     latest_vitals = get_latest_vitals(emr_pid, tenant_id=tenant_id)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
                 try:
                     med_diagnoses = get_medication_diagnoses(emr_pid, tenant_id=tenant_id)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 # Existing HCCs for context
                 existing_hccs: list[str] = []
@@ -901,8 +901,8 @@ def _handle_analysis_requested(payload: dict[str, Any]) -> None:
                             (patient_id, date.today().year),
                         )
                         existing_hccs = [str(r["hcc_code"]) for r in cur.fetchall()]
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 # Run the AI pipeline
                 result = run_verified_pipeline(

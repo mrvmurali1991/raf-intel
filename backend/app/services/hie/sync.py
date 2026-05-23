@@ -229,6 +229,7 @@ def sync_patient_from_hie(
             "discover_patient", "success", latency,
         )
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         latency = int((time.monotonic() - t0) * 1000)
         _log_hie_query(
             tenant_id, network, raf_patient_id,
@@ -259,6 +260,7 @@ def sync_patient_from_hie(
             documents_returned=len(doc_refs),
         )
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         latency = int((time.monotonic() - t0) * 1000)
         _log_hie_query(
             tenant_id, network, raf_patient_id,
@@ -298,6 +300,7 @@ def sync_patient_from_hie(
                 "fetch_binary", "success", latency, documents_returned=1,
             )
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             latency = int((time.monotonic() - t0) * 1000)
             _log_hie_query(
                 tenant_id, network, raf_patient_id,

@@ -289,6 +289,7 @@ async def websocket_endpoint(
                         raw = task.result()
                         msg = json.loads(raw)
                     except Exception:
+                        logger.debug("swallowed exception", exc_info=True)
                         msg = {}
 
                     if msg.get("type") == "ping":

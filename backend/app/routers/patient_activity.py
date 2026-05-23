@@ -110,13 +110,15 @@ def _coerce_metadata(raw: Any) -> dict[str, Any]:
     if isinstance(raw, (bytes, bytearray)):
         try:
             raw = raw.decode("utf-8", errors="replace")
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
             return {}
     if isinstance(raw, str):
         try:
             parsed = json.loads(raw)
             return parsed if isinstance(parsed, dict) else {"value": parsed}
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             return {"raw": raw}
     return {}
 

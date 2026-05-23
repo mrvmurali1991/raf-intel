@@ -537,6 +537,7 @@ def _get_icd_codes(
                     try:
                         analysis = _json.loads(analysis)
                     except Exception:
+                        logger.debug("swallowed exception", exc_info=True)
                         continue
                 if not isinstance(analysis, dict):
                     continue
@@ -1046,8 +1047,8 @@ def _get_hcc_coefficient_v28(hcc_code: str, segment: str = "CNA") -> float:
         for (k, model), v in cm.items():
             if k.lower() == target and "V28" in model:
                 return float(v)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return 0.0
 
 
@@ -1086,7 +1087,8 @@ def _enrich_hcc_details(
             for d in result.hcc_details
         }
         return detail_map
-    except Exception:
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
         return {}
 
 
@@ -2123,8 +2125,8 @@ def get_raf_breakdown(
         _stored_icd_codes: list[str] = []
         try:
             _stored_icd_codes = _get_icd_codes(patient_id, year=year, tenant_id=tenant_id)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
 
         # Get patient demographics for engine_input display
         _pat = _get_patient(patient_id, tenant_id=tenant_id)

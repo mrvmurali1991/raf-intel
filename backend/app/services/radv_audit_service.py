@@ -67,8 +67,8 @@ def _parse_icd_list(raw: str | list | bytes | None) -> list[str]:
                 parsed = _json.loads(s)
                 if isinstance(parsed, list):
                     return [str(c).strip() for c in parsed if c]
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         # CSV / single value fallback.
         return [c.strip() for c in s.split(",") if c.strip()]
     return []
@@ -216,6 +216,7 @@ def get_hcc_audit_trail(
             import json as _json
             source_encounters = _json.loads(_src_raw) if _src_raw.strip() else []
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             source_encounters = []
     elif isinstance(_src_raw, list):
         source_encounters = _src_raw

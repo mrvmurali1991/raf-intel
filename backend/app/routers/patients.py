@@ -1248,8 +1248,8 @@ def get_lab_suspects(
                             for r in rows
                         ]
                         return LabSuspectsResponse(pid=pid, suspects=[], count=0, labs={"results": lab_results, "source": "fhir"})
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         return LabSuspectsResponse(pid=pid, suspects=[], count=0, note="Lab data not yet synced for FHIR patients")
 
     try:
@@ -1342,8 +1342,8 @@ def get_family_history(
                         rel = r.get("relation", "unknown").lower().replace(" ", "_")
                         fh[f"history_{rel}"] = r.get("condition_name", "")
                     return FamilyHistoryResponse(pid=pid, family_history=fh, source="raf_db")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         return FamilyHistoryResponse(pid=pid, family_history={}, note="Family history not yet synced for FHIR patients")
 
     return FamilyHistoryResponse(**svc.svc_get_family_history(pid=pid, tenant_id=_tid))
@@ -1470,8 +1470,8 @@ def get_immunizations(
                         for r in rows
                     ]
                     return ImmunizationListResponse(pid=pid, count=len(imms), immunizations=imms, source="raf_db")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — best-effort guard
+            logger.debug("swallowed exception", exc_info=True)
         return ImmunizationListResponse(pid=pid, count=0, immunizations=[], note="Immunization data not yet synced for FHIR patients")
 
     try:
@@ -1537,8 +1537,8 @@ def get_hedis_compliance(
                         dob = p["dob"] if isinstance(p["dob"], _d2) else _d2.fromisoformat(str(p["dob"])[:10])
                         today = _d2.today()
                         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
 
                 vaccines_lower = [(r.get("vaccine_name", "").lower(), r.get("administered_date")) for r in imm_rows]
 

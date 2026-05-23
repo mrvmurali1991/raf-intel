@@ -301,8 +301,10 @@ def task_drain_raf_inbox(self) -> dict[str, Any]:
             except (ImportError, AttributeError) as pub_exc:
                 task_logger.info("drain_raf_inbox: publish skipped: %s", pub_exc)
             except Exception as pub_exc:
+                logger.debug("swallowed exception", exc_info=True)
                 task_logger.warning("drain_raf_inbox: publish failed (non-fatal): %s", pub_exc)
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             raf_inbox.mark_failed(row["id"], repr(exc))
             errored += 1
             task_logger.warning("drain_raf_inbox: row %d failed: %s", row["id"], exc)
@@ -504,6 +506,7 @@ def task_sync_emr_connection(
                     "sync_id": result.get("sync_id"),
                 })
             except Exception as chain_exc:
+                logger.debug("swallowed exception", exc_info=True)
                 task_logger.error(
                     "sync_emr_connection: pipeline chain failed: %s", chain_exc, exc_info=True
                 )
@@ -817,8 +820,8 @@ def task_analyze_encounters_batch(
                                 emr_pid = int(float(_raw))
                             except (ValueError, TypeError):
                                 emr_pid = str(_raw)  # FHIR UUID
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 # Gather enrichment data (all best-effort, free local DB queries)
                 medications = None
@@ -832,24 +835,24 @@ def task_analyze_encounters_batch(
                         medications = [
                             m.get("drug", "") for m in (get_medications(emr_pid, tenant_id=tenant_id) or [])
                         ]
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         problem_list = get_problem_list(emr_pid, tenant_id=tenant_id)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         recapture_gaps = get_recapture_gaps(emr_pid, date.today().year, tenant_id=tenant_id)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         latest_vitals = get_latest_vitals(emr_pid, tenant_id=tenant_id)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         med_diagnoses = get_medication_diagnoses(emr_pid, tenant_id=tenant_id)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                 try:
                     with raf_cursor() as cur:
                         cur.execute(
@@ -858,8 +861,8 @@ def task_analyze_encounters_batch(
                             (patient_id, date.today().year),
                         )
                         existing_hccs = [str(r["hcc_code"]) for r in cur.fetchall()]
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 # Append structured EHR context to note text for Gemini
                 # Save original note before enrichment (used for Z-code validation)
@@ -872,40 +875,40 @@ def task_analyze_encounters_batch(
                         if imm:
                             imm_text = "; ".join(f"{v.get('vaccine_name','')} ({v.get('administered_date','')})" for v in imm[:20])
                             extra_sections.append(f"IMMUNIZATIONS: {imm_text}")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         from app.services.openemr_connector import get_allergies
                         allergies = get_allergies(emr_pid)
                         if allergies:
                             allergy_text = "; ".join(a.get("title", "") for a in allergies[:20])
                             extra_sections.append(f"ALLERGIES: {allergy_text}")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         from app.services.openemr_connector import get_family_history
                         fhx = get_family_history(emr_pid)
                         if fhx and any(v for v in fhx.values() if v):
                             fhx_items = [f"{k}: {v}" for k, v in fhx.items() if v and k != "pid"]
                             extra_sections.append(f"FAMILY HISTORY: {'; '.join(fhx_items[:15])}")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         from app.services.openemr_connector import get_sdoh_data
                         sdoh = get_sdoh_data(emr_pid)
                         if sdoh and any(v for v in sdoh.values() if v):
                             sdoh_items = [f"{k}: {v}" for k, v in sdoh.items() if v and k != "pid"]
                             extra_sections.append(f"SOCIAL HISTORY: {'; '.join(sdoh_items[:15])}")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                     try:
                         from app.services.openemr_connector import get_referrals
                         refs = get_referrals(emr_pid)
                         if refs:
                             ref_text = "; ".join(f"{r.get('refer_to','')} - {r.get('reason','')}" for r in refs[:10])
                             extra_sections.append(f"REFERRALS: {ref_text}")
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 — best-effort guard
+                        logger.debug("swallowed exception", exc_info=True)
                 if extra_sections:
                     note_text += "\n\n--- EHR STRUCTURED DATA ---\n" + "\n".join(extra_sections)
 
@@ -941,8 +944,8 @@ def task_analyze_encounters_batch(
                         if c:
                             _stage1_codes.add(c)
                             _stage1_categories.add(c[:3])
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 — best-effort guard
+                    logger.debug("swallowed exception", exc_info=True)
 
                 def _has_note_evidence(dx: dict) -> bool:
                     """Check if a Gemini diagnosis has evidence in this encounter."""
@@ -1022,12 +1025,14 @@ def task_analyze_encounters_batch(
                     store_analysis_meat(patient_id, date.today().year, gemini_compat)
                     update_hcc_meat_status(patient_id, date.today().year)
                 except Exception as meat_exc:
+                    logger.debug("swallowed exception", exc_info=True)
                     task_logger.warning("MEAT storage failed enc=%d: %s", encounter_id, meat_exc)
 
                 analyzed += 1
                 _mark_progress(self, i + 1, total, f"Analyzed {analyzed}/{total}")
 
             except Exception as exc:
+                logger.debug("swallowed exception", exc_info=True)
                 errors += 1
                 task_logger.warning(
                     "analyze_encounters_batch: encounter %d failed: %s", encounter_id, exc
@@ -1476,6 +1481,7 @@ def task_refresh_meat_for_patient(
         try:
             cache_delete_pattern(f"raf-central:{tenant_id}:*:{patient_id}:*")
         except Exception as cache_exc:
+            logger.debug("swallowed exception", exc_info=True)
             task_logger.warning(
                 "refresh_meat_for_patient: cache invalidation failed (non-fatal): %s", cache_exc
             )
@@ -1566,8 +1572,8 @@ def task_emr_activate_pipeline(
         for pid in patient_ids:
             try:
                 apply_hierarchy_to_patient(pid, tenant_id=tenant_id)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         result["hierarchy"] = {"status": "completed", "patients": len(patient_ids)}
         logger.info("emr_activate_pipeline: hierarchy done for %d patients", len(patient_ids))
     except Exception as exc:
@@ -1639,6 +1645,7 @@ def verify_audit_chain_task(self) -> dict[str, Any]:
             },
         )
     except Exception as emit_exc:
+        logger.debug("swallowed exception", exc_info=True)
         task_logger.warning("verify_audit_chain_task: failed to emit audit event: %s", emit_exc)
 
     return result
@@ -1789,6 +1796,7 @@ def discover_loop_task() -> dict[str, Any]:
     try:
         new_pids = _get_new_emr_pids()
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         task_logger.warning("auto_sync.discover: _get_new_emr_pids failed: %s", exc)
         return {"dispatched": 0, "error": str(exc)}
 
@@ -1799,6 +1807,7 @@ def discover_loop_task() -> dict[str, Any]:
             sync_patient_task.delay(tenant_id, pid)
             dispatched.append(pid)
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             task_logger.warning(
                 "auto_sync.discover: failed to enqueue pid=%s: %s", pid, exc
             )

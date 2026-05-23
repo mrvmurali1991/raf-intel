@@ -35,8 +35,8 @@ def _base_dir() -> Path:
         candidate = getattr(settings, "edi_output_dir", None)
         if candidate:
             return Path(candidate)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return Path(_DEFAULT_BASE)
 
 

@@ -70,8 +70,8 @@ def _pool_utilisation() -> dict[str, Any]:
         if conn is not None:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
     return result
 
 
@@ -134,6 +134,7 @@ def _replication_lag() -> dict[str, Any] | None:
         try:
             cursor.execute("SHOW REPLICA STATUS")
         except Exception:
+            logger.debug("swallowed exception", exc_info=True)
             cursor.execute("SHOW SLAVE STATUS")  # noqa: S603 — legacy alias
         row = cursor.fetchone()
         if row is None:
@@ -162,13 +163,13 @@ def _replication_lag() -> dict[str, Any] | None:
         if cursor is not None:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
         if conn is not None:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 — best-effort guard
+                logger.debug("swallowed exception", exc_info=True)
     return result
 
 

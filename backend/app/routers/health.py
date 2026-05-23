@@ -37,6 +37,7 @@ def _check_raf_db() -> dict[str, Any]:
         latency_ms = round((time.monotonic() - start) * 1000, 1)
         return {"status": "up", "latency_ms": latency_ms}
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         return {"status": "down", "error": str(exc)}
     finally:
         if conn is not None:
@@ -57,6 +58,7 @@ def _check_openemr_db() -> dict[str, Any]:
         latency_ms = round((time.monotonic() - start) * 1000, 1)
         return {"status": "up", "latency_ms": latency_ms}
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         return {"status": "down", "error": str(exc)}
     finally:
         if conn is not None:
@@ -76,6 +78,7 @@ def _check_redis() -> dict[str, Any]:
     except ImportError:
         return {"status": "unavailable", "error": "redis package not installed"}
     except Exception as exc:
+        logger.debug("swallowed exception", exc_info=True)
         return {"status": "down", "error": str(exc)}
 
 
@@ -751,6 +754,7 @@ def _probe_gemini() -> dict[str, Any]:
         llm_generate("ping", model=model, temperature=0.0)
         return {"ok": True, "model": model}
     except Exception as exc:  # noqa: BLE001
+        logger.debug("swallowed exception", exc_info=True)
         return {"ok": False, "reason": str(exc)[:200], "model": model}
 
 

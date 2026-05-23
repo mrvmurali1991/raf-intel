@@ -133,8 +133,8 @@ def _verify_source_key(source_key: str) -> dict[str, Any]:
                 "UPDATE hl7v2_sources SET last_seen_at = %s WHERE id = %s",
                 (datetime.now(timezone.utc), source["id"]),
             )
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — best-effort guard
+        logger.debug("swallowed exception", exc_info=True)
     return source
 
 

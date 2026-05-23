@@ -127,6 +127,7 @@ def _hcc_label(hcc_code: str) -> str:
 
         return _get_hcc_label_v28(str(hcc_code))
     except Exception:  # pragma: no cover — defensive fallback
+        logger.debug("swallowed exception", exc_info=True)
         return f"HCC {hcc_code}"
 
 

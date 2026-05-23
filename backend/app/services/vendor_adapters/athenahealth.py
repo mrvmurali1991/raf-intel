@@ -91,6 +91,7 @@ class AthenahealthAdapter(BaseVendorAdapter):
         try:
             auth = self.authenticate()
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             latency_ms = int((time.monotonic() - start) * 1000)
             return {"success": False, "message": f"Auth failed: {exc}", "latency_ms": latency_ms}
 
@@ -110,6 +111,7 @@ class AthenahealthAdapter(BaseVendorAdapter):
                 "latency_ms": latency_ms,
             }
         except Exception as exc:
+            logger.debug("swallowed exception", exc_info=True)
             latency_ms = int((time.monotonic() - start) * 1000)
             return {"success": False, "message": str(exc), "latency_ms": latency_ms}
 
