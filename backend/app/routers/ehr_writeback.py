@@ -117,6 +117,9 @@ def enqueue_writeback(
     }
 
 
+_ALLOWED_WRITEBACK_STATUSES = frozenset({"queued", "sent", "failed"})
+
+
 @router.get(
     "/problem-list-write-back",
     summary="List EHR write-back queue (admin)",
@@ -129,6 +132,11 @@ def list_writeback_queue(
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("fhir", "write")),
 ):
+    if status is not None and status not in _ALLOWED_WRITEBACK_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid status. Allowed: {sorted(_ALLOWED_WRITEBACK_STATUSES)}",
+        )
     where = "WHERE tenant_id = %s"
     args: list = [tenant_id]
     if status:

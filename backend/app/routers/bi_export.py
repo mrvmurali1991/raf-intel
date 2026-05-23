@@ -25,6 +25,7 @@ Authentication: all endpoints require a valid Bearer JWT.
 """
 # Do NOT use 'from __future__ import annotations' — breaks FastAPI schema generation.
 
+import json
 import logging
 import time
 from typing import Any, Literal
@@ -34,9 +35,11 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.db import raf_cursor
 from app.services.bi_export_service import (
     PREBUILT_DATASETS,
     _get_connection_api_key,
+    _resolve_query,
     build_odata_metadata,
     build_odata_response,
     build_tableau_wdc_html,
@@ -545,17 +548,16 @@ def api_tableau_wdc(
 )
 def api_odata_feed(
     dataset_name: str,
+    request: Request,
     metadata: bool = Query(default=False, alias="$metadata", description="Return CSDL metadata XML"),
     top: int | None = Query(default=None, alias="$top", description="OData $top — row limit"),
     skip: int = Query(default=0, alias="$skip", description="OData $skip — row offset"),
     anonymise: bool = Query(default=False),
-    request: Request = None,
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("bi_export", "read")),
 ) -> Response:
-    # Resolve dataset by type name
-    with __import__("app.db", fromlist=["raf_cursor"]).raf_cursor() as cur:
+    with raf_cursor() as cur:
         cur.execute(
             "SELECT * FROM bi_datasets WHERE dataset_type = %s AND tenant_id = %s LIMIT 1",
             (dataset_name, tenant_id),
@@ -579,7 +581,6 @@ def api_odata_feed(
     else:
         ds = dict(row)
 
-    from app.services.bi_export_service import _resolve_query
     _, columns = _resolve_query(ds)
 
     if metadata:
@@ -594,7 +595,7 @@ def api_odata_feed(
         logger.error("OData feed query failed (%s): %s", dataset_name, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Query execution failed")
 
-    odata_base = str(request.base_url).rstrip("/") + "/api/bi/odata" if request else ""
+    odata_base = str(request.base_url).rstrip("/") + "/api/bi/odata"
     payload = build_odata_response(rows, ds.get("name", dataset_name), odata_base)
 
     log_export(
@@ -607,6 +608,6 @@ def api_odata_feed(
     )
 
     return Response(
-        content=__import__("json").dumps(payload, default=str),
+        content=json.dumps(payload, default=str),
         media_type="application/json;odata.metadata=minimal",
     )

@@ -172,6 +172,14 @@ class GoalCreate(BaseModel):
         return v
 
 
+def _pace_expected(period: str) -> float:
+    """% of target we should have hit by today given linear burn."""
+    start, end = _quarter_bounds(period)
+    total_days = (end - start).days or 1
+    elapsed = (date.today() - start).days
+    return round(min(max(elapsed / total_days * 100, 0), 100), 1)
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -269,11 +277,3 @@ def goal_progress(
             "quarter_end": end.isoformat(),
             "on_track": pct >= _pace_expected(goal["period"]),
         }
-
-
-def _pace_expected(period: str) -> float:
-    """% of target we should have hit by today given linear burn."""
-    start, end = _quarter_bounds(period)
-    total_days = (end - start).days or 1
-    elapsed = (date.today() - start).days
-    return round(min(max(elapsed / total_days * 100, 0), 100), 1)

@@ -102,10 +102,8 @@ def detect_and_persist_gaps(
     # canonical schema (see database/schema.sql).
     prior_model = _model_version_for_year(prior_year)
     current_model = _model_version_for_year(current_year)
-    prior_model_clause = f" AND ph.model_version = '{prior_model}'"
-    current_model_clause = f" AND c.model_version = '{current_model}'"
 
-    detect_sql = f"""
+    detect_sql = """
         SELECT
             p.prior_patient_id          AS patient_id,
             p.prior_hcc_code            AS hcc_code,
@@ -121,14 +119,14 @@ def detect_and_persist_gaps(
             FROM raf_patient_hcc ph
             WHERE ph.tenant_id       = %s
               AND ph.measurement_year = %s
-              {prior_model_clause}
+              AND ph.model_version    = %s
         ) p
         LEFT JOIN raf_patient_hcc c
                ON c.patient_id       = p.prior_patient_id
               AND c.hcc_code         = p.prior_hcc_code
               AND c.tenant_id        = %s
               AND c.measurement_year = %s
-              {current_model_clause}
+              AND c.model_version    = %s
         LEFT JOIN provider_patient_panel ppp
                ON ppp.patient_id = p.prior_patient_id
         LEFT JOIN providers pr
@@ -154,7 +152,11 @@ def detect_and_persist_gaps(
     new_gaps = 0
 
     with raf_cursor() as cursor:
-        cursor.execute(detect_sql, (tenant_id, prior_year, tenant_id, current_year))
+        cursor.execute(
+            detect_sql,
+            (tenant_id, prior_year, prior_model,
+             tenant_id, current_year, current_model),
+        )
         rows = cursor.fetchall()
 
         batch: list[tuple] = []

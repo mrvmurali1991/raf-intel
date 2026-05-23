@@ -40,10 +40,10 @@ def writeback_status(
 def replay_failed(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
+    _perm: None = Depends(require_permission("fhir", "write")),
 ) -> dict[str, Any]:
+    # role string is still forwarded to the celery task for audit context
     role = (current_user.get("role") or "").lower()
-    if role not in {"admin", "manager"}:
-        raise HTTPException(status_code=403, detail="Admin/manager only")
 
     failed = svc.list_failed_writebacks(tenant_id, limit=1000)
     # Lazy-import the celery task so importing this router doesn't pull celery.
