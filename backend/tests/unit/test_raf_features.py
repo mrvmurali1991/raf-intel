@@ -35,36 +35,36 @@ class TestESRDSegments:
         defaults.update(kwargs)
         return determine_model_segment(**defaults)
 
-    def test_community_non_aged_non_dual(self):
+    def test_community_non_aged_non_dual(self) -> None:
         seg = self._get_segment(orec="0", dual_status="non_dual")
         assert seg == "CNA", f"Expected CNA, got {seg}"
 
-    def test_esrd_dialysis_segment(self):
+    def test_esrd_dialysis_segment(self) -> None:
         """OREC=2 + dialysis ICD → ESRD_DLY segment."""
         seg = self._get_segment(orec="2", icd_codes=["Z992"])
         assert seg == "ESRD_DLY", f"Expected ESRD_DLY, got {seg}"
 
-    def test_esrd_functioning_graft(self):
+    def test_esrd_functioning_graft(self) -> None:
         """OREC=2 + transplant ICD → ESRD_FG segment."""
         seg = self._get_segment(orec="2", icd_codes=["Z940"])
         assert seg == "ESRD_FG", f"Expected ESRD_FG, got {seg}"
 
-    def test_esrd_new_enrollee(self):
+    def test_esrd_new_enrollee(self) -> None:
         """OREC=2 or 3 + enrollment_months<12 → ESRD_NE segment."""
         seg = self._get_segment(orec="2", enrollment_months=6, icd_codes=[])
         assert seg == "ESRD_NE", f"Expected ESRD_NE, got {seg}"
 
-    def test_orec3_esrd_new_enrollee(self):
+    def test_orec3_esrd_new_enrollee(self) -> None:
         """OREC=3 (disabled+ESRD) + no Part B months → ESRD_NE."""
         seg = self._get_segment(orec="3", enrollment_months=3, icd_codes=[])
         assert seg == "ESRD_NE", f"Expected ESRD_NE, got {seg}"
 
-    def test_institutional_segment(self):
+    def test_institutional_segment(self) -> None:
         """Institutional flag → INS segment."""
         seg = self._get_segment(institutional=True)
         assert seg == "INS", f"Expected INS, got {seg}"
 
-    def test_community_full_dual(self):
+    def test_community_full_dual(self) -> None:
         seg = self._get_segment(dual_status="full_dual")
         assert seg in ("CFD", "CFA"), f"Expected CFD/CFA, got {seg}"
 
@@ -98,19 +98,19 @@ class TestNewEnrolleeModel:
         score = _NE_DEMO_SCORES.get((age_band, sex, seg), 0.0)
         return {"is_new_enrollee": is_ne, "segment": seg, "ne_demo_score": score}
 
-    def test_ne_flag_triggered_at_11_months(self):
+    def test_ne_flag_triggered_at_11_months(self) -> None:
         r = self._ne_result(months=11)
         assert r["is_new_enrollee"] is True, "Should be NE with 11 months"
 
-    def test_ne_flag_not_triggered_at_12_months(self):
+    def test_ne_flag_not_triggered_at_12_months(self) -> None:
         r = self._ne_result(months=12)
         assert r["is_new_enrollee"] is False, "Should NOT be NE with 12 months"
 
-    def test_ne_segment_assigned(self):
+    def test_ne_segment_assigned(self) -> None:
         r = self._ne_result(months=6)
         assert r["segment"].startswith("NE"), f"Expected NE* segment, got {r['segment']}"
 
-    def test_ne_demo_scores_populated(self):
+    def test_ne_demo_scores_populated(self) -> None:
         """_NE_DEMO_SCORES table should have entries."""
         from app.services.raf_calculator import _NE_DEMO_SCORES
         assert len(_NE_DEMO_SCORES) > 0, "_NE_DEMO_SCORES table empty"
@@ -126,36 +126,36 @@ class TestNewEnrolleeModel:
 class TestSweepPeriods:
     """Verify CMS sweep window logic."""
 
-    def test_initial_sweep_includes_q1(self):
+    def test_initial_sweep_includes_q1(self) -> None:
         from app.services.sweep_periods import get_sweep_window
         win = get_sweep_window(2026, "initial")
         assert win["start"].month == 1
         assert win["end"].month == 3
 
-    def test_midyear_sweep_ends_june(self):
+    def test_midyear_sweep_ends_june(self) -> None:
         from app.services.sweep_periods import get_sweep_window
         win = get_sweep_window(2026, "midyear")
         assert win["end"].month == 6
 
-    def test_final_sweep_ends_december(self):
+    def test_final_sweep_ends_december(self) -> None:
         from app.services.sweep_periods import get_sweep_window
         win = get_sweep_window(2026, "final")
         assert win["end"].month == 12
 
-    def test_icd_code_inside_window_passes(self):
+    def test_icd_code_inside_window_passes(self) -> None:
         from app.services.sweep_periods import filter_codes_by_sweep
         code = {"icd_code": "E11.9", "date_of_service": "2026-02-15"}
         result = filter_codes_by_sweep([code], payment_year=2026, sweep="initial")
         assert len(result) == 1
 
-    def test_icd_code_outside_window_filtered(self):
+    def test_icd_code_outside_window_filtered(self) -> None:
         from app.services.sweep_periods import filter_codes_by_sweep
         # April code should be excluded from initial sweep (Jan-Mar only)
         code = {"icd_code": "E11.9", "date_of_service": "2026-04-10"}
         result = filter_codes_by_sweep([code], payment_year=2026, sweep="initial")
         assert len(result) == 0
 
-    def test_no_sweep_returns_all_codes(self):
+    def test_no_sweep_returns_all_codes(self) -> None:
         from app.services.sweep_periods import filter_codes_by_sweep
         codes = [
             {"icd_code": "E11.9", "date_of_service": "2026-01-15"},
@@ -164,7 +164,7 @@ class TestSweepPeriods:
         result = filter_codes_by_sweep(codes, payment_year=2026, sweep=None)
         assert len(result) == 2
 
-    def test_codes_without_dos_pass_through(self):
+    def test_codes_without_dos_pass_through(self) -> None:
         """Codes missing date_of_service should pass through (avoid dropping valid data)."""
         from app.services.sweep_periods import filter_codes_by_sweep
         code = {"icd_code": "I50.9"}  # no date_of_service
@@ -192,44 +192,44 @@ class TestFrailtyAdjuster:
         }
         return compute_frailty_adjustment(adl_data, plan_type, payment_year)
 
-    def test_no_adls_no_frailty(self):
+    def test_no_adls_no_frailty(self) -> None:
         r = self._calc(0)
         assert r["frailty_addend"] == 0.0
         assert r["is_frail"] is False
 
-    def test_two_adls_no_frailty(self):
+    def test_two_adls_no_frailty(self) -> None:
         """CMS frailty threshold is ≥3 ADLs."""
         r = self._calc(2)
         assert r["frailty_addend"] == 0.0
         assert r["is_frail"] is False
 
-    def test_three_adls_triggers_frailty(self):
+    def test_three_adls_triggers_frailty(self) -> None:
         r = self._calc(3)
         assert r["is_frail"] is True
         assert r["frailty_addend"] > 0.0
 
-    def test_six_adls_max_addend(self):
+    def test_six_adls_max_addend(self) -> None:
         r3 = self._calc(3)
         r6 = self._calc(6)
         assert r6["frailty_addend"] >= r3["frailty_addend"]
 
-    def test_ma_plan_no_frailty(self):
+    def test_ma_plan_no_frailty(self) -> None:
         """Standard MA plans do not receive frailty adjustments."""
         r = self._calc(6, plan_type="MA")
         assert r["frailty_addend"] == 0.0
         assert r["is_frail"] is False
 
-    def test_fide_snp_receives_frailty(self):
+    def test_fide_snp_receives_frailty(self) -> None:
         r = self._calc(4, plan_type="FIDE_SNP")
         assert r["is_frail"] is True
         assert r["frailty_addend"] > 0.0
 
-    def test_addend_is_positive_float(self):
+    def test_addend_is_positive_float(self) -> None:
         r = self._calc(5)
         assert isinstance(r["frailty_addend"], float)
         assert r["frailty_addend"] > 0.0
 
-    def test_adl_count_returned(self):
+    def test_adl_count_returned(self) -> None:
         r = self._calc(4)
         assert r["adl_count"] == 4
 
@@ -241,27 +241,27 @@ class TestFrailtyAdjuster:
 class TestCoefficientTableCompleteness:
     """Ensure all coefficient tables have the required minimum number of entries."""
 
-    def test_rxhcc_icd_map_minimum_size(self):
+    def test_rxhcc_icd_map_minimum_size(self) -> None:
         from app.services.multi_model_calculator import _RXHCC_ICD_MAP
         assert len(_RXHCC_ICD_MAP) >= 80, \
             f"_RXHCC_ICD_MAP has only {len(_RXHCC_ICD_MAP)} entries, expected ≥80"
 
-    def test_rxhcc_coefficients_minimum_size(self):
+    def test_rxhcc_coefficients_minimum_size(self) -> None:
         from app.services.multi_model_calculator import _RXHCC_COEFFICIENTS
         assert len(_RXHCC_COEFFICIENTS) >= 50, \
             f"_RXHCC_COEFFICIENTS has only {len(_RXHCC_COEFFICIENTS)} entries"
 
-    def test_hhshcc_icd_map_minimum_size(self):
+    def test_hhshcc_icd_map_minimum_size(self) -> None:
         from app.services.multi_model_calculator import _HHSHCC_ICD_MAP
         assert len(_HHSHCC_ICD_MAP) >= 80, \
             f"_HHSHCC_ICD_MAP has only {len(_HHSHCC_ICD_MAP)} entries"
 
-    def test_hhshcc_coefficients_minimum_size(self):
+    def test_hhshcc_coefficients_minimum_size(self) -> None:
         from app.services.multi_model_calculator import _HHSHCC_COEFFICIENTS
         assert len(_HHSHCC_COEFFICIENTS) >= 50, \
             f"_HHSHCC_COEFFICIENTS has only {len(_HHSHCC_COEFFICIENTS)} entries"
 
-    def test_hhshcc_coefficients_have_required_fields(self):
+    def test_hhshcc_coefficients_have_required_fields(self) -> None:
         from app.services.multi_model_calculator import _HHSHCC_COEFFICIENTS
         for hcc_id, entry in _HHSHCC_COEFFICIENTS.items():
             assert "description" in entry, f"HCC {hcc_id} missing 'description'"
@@ -270,7 +270,7 @@ class TestCoefficientTableCompleteness:
             assert isinstance(entry["adult"], float), \
                 f"HCC {hcc_id} 'adult' should be float"
 
-    def test_rxhcc_coefficients_have_required_fields(self):
+    def test_rxhcc_coefficients_have_required_fields(self) -> None:
         from app.services.multi_model_calculator import _RXHCC_COEFFICIENTS
         for rxhcc, entry in _RXHCC_COEFFICIENTS.items():
             assert "NLI_F" in entry, f"RxHCC {rxhcc} missing 'NLI_F'"
@@ -278,7 +278,7 @@ class TestCoefficientTableCompleteness:
             assert "LI_F"  in entry, f"RxHCC {rxhcc} missing 'LI_F'"
             assert "LI_M"  in entry, f"RxHCC {rxhcc} missing 'LI_M'"
 
-    def test_critical_rxhcc_present(self):
+    def test_critical_rxhcc_present(self) -> None:
         """Key high-cost RxHCCs must always be present."""
         from app.services.multi_model_calculator import _RXHCC_COEFFICIENTS
         critical = [1, 5, 72, 77, 80, 112, 130, 211, 212, 253]
@@ -286,14 +286,14 @@ class TestCoefficientTableCompleteness:
             assert hcc in _RXHCC_COEFFICIENTS, \
                 f"Critical RxHCC {hcc} missing from coefficient table"
 
-    def test_critical_hhshcc_present(self):
+    def test_critical_hhshcc_present(self) -> None:
         from app.services.multi_model_calculator import _HHSHCC_COEFFICIENTS
         critical = [1, 8, 18, 41, 57, 67, 73, 77, 82, 110, 132]
         for hcc in critical:
             assert hcc in _HHSHCC_COEFFICIENTS, \
                 f"Critical HHS-HCC {hcc} missing from coefficient table"
 
-    def test_icd_maps_no_zero_hcc(self):
+    def test_icd_maps_no_zero_hcc(self) -> None:
         """No ICD should map to HCC 0."""
         from app.services.multi_model_calculator import _HHSHCC_ICD_MAP, _RXHCC_ICD_MAP
         for icd, hcc in _RXHCC_ICD_MAP.items():
@@ -309,7 +309,7 @@ class TestCoefficientTableCompleteness:
 class TestAPIRequestModel:
     """Validate that CalculateRequest Pydantic model accepts new fields."""
 
-    def test_default_request_valid(self):
+    def test_default_request_valid(self) -> None:
         from app.routers.raf import CalculateRequest
         req = CalculateRequest()
         assert req.enrollment_months == 12
@@ -317,7 +317,7 @@ class TestAPIRequestModel:
         assert req.sweep_period is None
         assert req.adl_data is None
 
-    def test_enrollment_months_bounds(self):
+    def test_enrollment_months_bounds(self) -> None:
         import pydantic
         from app.routers.raf import CalculateRequest
         with pytest.raises((pydantic.ValidationError, ValueError)):
@@ -325,13 +325,13 @@ class TestAPIRequestModel:
         with pytest.raises((pydantic.ValidationError, ValueError)):
             CalculateRequest(enrollment_months=13)
 
-    def test_sweep_period_valid_values(self):
+    def test_sweep_period_valid_values(self) -> None:
         from app.routers.raf import CalculateRequest
         for v in ("initial", "midyear", "final", "none", None):
             req = CalculateRequest(sweep_period=v)
             assert req.sweep_period == v
 
-    def test_adl_data_model_defaults_false(self):
+    def test_adl_data_model_defaults_false(self) -> None:
         from app.routers.raf import ADLDataModel
         adl = ADLDataModel()
         assert adl.bathing is False
@@ -341,7 +341,7 @@ class TestAPIRequestModel:
         assert adl.transferring is False
         assert adl.continence is False
 
-    def test_adl_data_round_trip(self):
+    def test_adl_data_round_trip(self) -> None:
         from app.routers.raf import ADLDataModel
         adl = ADLDataModel(bathing=True, eating=True, continence=True)
         d = adl.model_dump()

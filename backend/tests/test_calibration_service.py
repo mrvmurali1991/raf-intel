@@ -34,7 +34,7 @@ def _reset() -> None:
 # load_calibration
 # ---------------------------------------------------------------------------
 
-def test_load_calibration_returns_floats_from_seeded_artefact():
+def test_load_calibration_returns_floats_from_seeded_artefact() -> None:
     """The repo ships ``platt_v1.json`` — load it and assert (a, b) are finite floats."""
     # Make sure we're not seeing a stale identity tuple from another test.
     _reset()
@@ -51,7 +51,7 @@ def test_load_calibration_returns_floats_from_seeded_artefact():
     )
 
 
-def test_load_calibration_caches_result(monkeypatch):
+def test_load_calibration_caches_result(monkeypatch) -> None:
     """Second call should hit the module-level cache (no disk read)."""
     _reset()
     a1, b1 = calibration_service.load_calibration()
@@ -66,7 +66,7 @@ def test_load_calibration_caches_result(monkeypatch):
     assert (a1, b1) == (a2, b2)
 
 
-def test_load_calibration_falls_back_to_identity_when_artefact_missing(tmp_path, monkeypatch):
+def test_load_calibration_falls_back_to_identity_when_artefact_missing(tmp_path, monkeypatch) -> None:
     """Point the loader at a non-existent path and confirm identity fallback."""
     monkeypatch.setattr(
         calibration_service, "ARTEFACT_PATH",
@@ -78,7 +78,7 @@ def test_load_calibration_falls_back_to_identity_when_artefact_missing(tmp_path,
     assert calibration_service.is_identity(a, b)
 
 
-def test_load_calibration_falls_back_on_malformed_json(tmp_path, monkeypatch):
+def test_load_calibration_falls_back_on_malformed_json(tmp_path, monkeypatch) -> None:
     bad = tmp_path / "platt_bad.json"
     bad.write_text("{not valid json")
     monkeypatch.setattr(calibration_service, "ARTEFACT_PATH", bad)
@@ -87,7 +87,7 @@ def test_load_calibration_falls_back_on_malformed_json(tmp_path, monkeypatch):
     assert (a, b) == (1.0, 0.0)
 
 
-def test_load_calibration_falls_back_on_missing_keys(tmp_path, monkeypatch):
+def test_load_calibration_falls_back_on_missing_keys(tmp_path, monkeypatch) -> None:
     bad = tmp_path / "platt_missing.json"
     bad.write_text(json.dumps({"trained_on_charts": 52}))  # no a / b
     monkeypatch.setattr(calibration_service, "ARTEFACT_PATH", bad)
@@ -96,7 +96,7 @@ def test_load_calibration_falls_back_on_missing_keys(tmp_path, monkeypatch):
     assert (a, b) == (1.0, 0.0)
 
 
-def test_load_calibration_falls_back_on_non_finite(tmp_path, monkeypatch):
+def test_load_calibration_falls_back_on_non_finite(tmp_path, monkeypatch) -> None:
     bad = tmp_path / "platt_nan.json"
     bad.write_text(json.dumps({"a": "Infinity", "b": "NaN"}))
     monkeypatch.setattr(calibration_service, "ARTEFACT_PATH", bad)
@@ -112,49 +112,49 @@ def test_load_calibration_falls_back_on_non_finite(tmp_path, monkeypatch):
 # apply_calibration
 # ---------------------------------------------------------------------------
 
-def test_apply_calibration_sigmoid_at_zero_with_identity_params():
+def test_apply_calibration_sigmoid_at_zero_with_identity_params() -> None:
     """sigmoid(1*0.5 + 0) ≈ 0.6225 — the classic logistic point."""
     out = calibration_service.apply_calibration(0.5, 1.0, 0.0)
     assert out == pytest.approx(0.6224593, rel=1e-5)
 
 
-def test_apply_calibration_clamps_huge_negative_to_zero():
+def test_apply_calibration_clamps_huge_negative_to_zero() -> None:
     """A huge negative z should not return a tiny negative number — clamp at 0."""
     out = calibration_service.apply_calibration(-1e9, 1.0, 0.0)
     assert out == pytest.approx(0.0, abs=1e-12)
     assert 0.0 <= out <= 1.0
 
 
-def test_apply_calibration_clamps_huge_positive_to_one():
+def test_apply_calibration_clamps_huge_positive_to_one() -> None:
     out = calibration_service.apply_calibration(1e9, 1.0, 0.0)
     assert out == pytest.approx(1.0, abs=1e-12)
     assert 0.0 <= out <= 1.0
 
 
-def test_apply_calibration_identity_when_params_are_none():
+def test_apply_calibration_identity_when_params_are_none() -> None:
     """``a=None`` or ``b=None`` should pass through (clipped to [0,1])."""
     assert calibration_service.apply_calibration(0.42, None, None) == pytest.approx(0.42)
     assert calibration_service.apply_calibration(0.42, 1.5, None) == pytest.approx(0.42)
     assert calibration_service.apply_calibration(0.42, None, 0.1) == pytest.approx(0.42)
 
 
-def test_apply_calibration_clips_when_passthrough_is_out_of_range():
+def test_apply_calibration_clips_when_passthrough_is_out_of_range() -> None:
     """Pass-through still clips to [0, 1] for safety."""
     assert calibration_service.apply_calibration(2.5, None, None) == pytest.approx(1.0)
     assert calibration_service.apply_calibration(-0.3, None, None) == pytest.approx(0.0)
 
 
-def test_apply_calibration_handles_none_input():
+def test_apply_calibration_handles_none_input() -> None:
     """A ``None`` raw should not raise — return 0."""
     assert calibration_service.apply_calibration(None, 1.0, 0.0) == 0.0
 
 
-def test_apply_calibration_handles_non_numeric_input():
+def test_apply_calibration_handles_non_numeric_input() -> None:
     """A non-castable raw should not raise — return 0."""
     assert calibration_service.apply_calibration("not a number", 1.0, 0.0) == 0.0  # type: ignore[arg-type]
 
 
-def test_apply_calibration_with_seeded_params_lifts_low_confidence():
+def test_apply_calibration_with_seeded_params_lifts_low_confidence() -> None:
     """The seeded artefact's (a, b) should map a 0.5 raw confidence to a
     value in (0, 1) — i.e. it actually computes a sigmoid, not pass-through."""
     _reset()
@@ -167,7 +167,7 @@ def test_apply_calibration_with_seeded_params_lifts_low_confidence():
 # Metadata + helpers
 # ---------------------------------------------------------------------------
 
-def test_get_metadata_returns_dict_with_artefact_keys():
+def test_get_metadata_returns_dict_with_artefact_keys() -> None:
     _reset()
     meta = calibration_service.get_metadata()
     assert isinstance(meta, dict)
@@ -177,13 +177,13 @@ def test_get_metadata_returns_dict_with_artefact_keys():
     assert "ece_after" in meta
 
 
-def test_is_identity_returns_true_for_default():
+def test_is_identity_returns_true_for_default() -> None:
     assert calibration_service.is_identity(1.0, 0.0)
     assert not calibration_service.is_identity(1.0341, 0.1189)
     assert not calibration_service.is_identity(0.9, 0.0)
 
 
-def test_reload_calibration_picks_up_disk_change(tmp_path, monkeypatch):
+def test_reload_calibration_picks_up_disk_change(tmp_path, monkeypatch) -> None:
     """Write artefact A, load, swap to artefact B, reload, confirm B values."""
     a_path = tmp_path / "a.json"
     a_path.write_text(json.dumps({"a": 2.0, "b": 0.5}))

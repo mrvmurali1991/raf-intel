@@ -82,7 +82,7 @@ def fake_db():
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_registry_contains_all_nine_provider_flags():
+def test_registry_contains_all_nine_provider_flags() -> None:
     """The 9 keys other agents will reference must be present and stable."""
     from app.services.feature_flag_service import FEATURE_REGISTRY
 
@@ -100,7 +100,7 @@ def test_registry_contains_all_nine_provider_flags():
     assert expected.issubset(FEATURE_REGISTRY.keys())
 
 
-def test_list_flags_returns_registry_defaults_when_no_overrides(fake_db):
+def test_list_flags_returns_registry_defaults_when_no_overrides(fake_db) -> None:
     """With no DB rows, every flag falls back to its default_enabled value."""
     from app.services.feature_flag_service import FEATURE_REGISTRY, list_flags
 
@@ -115,7 +115,7 @@ def test_list_flags_returns_registry_defaults_when_no_overrides(fake_db):
             assert k in item
 
 
-def test_set_flag_persists_override(fake_db):
+def test_set_flag_persists_override(fake_db) -> None:
     """set_flag should upsert a row and the next list_flags should reflect it."""
     from app.services.feature_flag_service import list_flags, set_flag
 
@@ -127,7 +127,7 @@ def test_set_flag_persists_override(fake_db):
     assert items["provider_peer_percentile"]["enabled"] is True
 
 
-def test_set_flag_overwrites_existing_override(fake_db):
+def test_set_flag_overwrites_existing_override(fake_db) -> None:
     """set_flag is idempotent — re-applying changes the stored value."""
     from app.services.feature_flag_service import list_flags, set_flag
 
@@ -138,7 +138,7 @@ def test_set_flag_overwrites_existing_override(fake_db):
     assert items["provider_yoy_trend"]["enabled"] is True
 
 
-def test_set_flag_rejects_unknown_key(fake_db):
+def test_set_flag_rejects_unknown_key(fake_db) -> None:
     """Unknown flag keys must raise — we refuse to persist typos."""
     from app.services.feature_flag_service import set_flag
 
@@ -146,7 +146,7 @@ def test_set_flag_rejects_unknown_key(fake_db):
         set_flag(user_id=7, key="not_a_real_flag", enabled=True)
 
 
-def test_reset_user_flags_removes_only_that_users_overrides(fake_db):
+def test_reset_user_flags_removes_only_that_users_overrides(fake_db) -> None:
     """Resetting user A must not affect user B's overrides."""
     from app.services.feature_flag_service import (
         list_flags,
@@ -169,7 +169,7 @@ def test_reset_user_flags_removes_only_that_users_overrides(fake_db):
     assert items_2["provider_pdf_report"]["enabled"] is False
 
 
-def test_list_flags_requires_user_id(fake_db):
+def test_list_flags_requires_user_id(fake_db) -> None:
     """user_id is mandatory; passing None must error rather than silently default."""
     from app.services.feature_flag_service import list_flags
 
@@ -177,7 +177,7 @@ def test_list_flags_requires_user_id(fake_db):
         list_flags(user_id=None)  # type: ignore[arg-type]
 
 
-def test_list_flags_preserves_registry_order(fake_db):
+def test_list_flags_preserves_registry_order(fake_db) -> None:
     """Registry insertion order is the rendering order — keep it stable."""
     from app.services.feature_flag_service import FEATURE_REGISTRY, list_flags
 

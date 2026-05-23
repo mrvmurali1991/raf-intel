@@ -111,7 +111,7 @@ def _stateful_cursor_factory(fetchone_seq=None, fetchall_seq=None):
 
 
 class TestGetOrCreateConfig:
-    def test_returns_existing_row_with_all_12_months(self):
+    def test_returns_existing_row_with_all_12_months(self) -> None:
         # First select returns the row
         cm = _stateful_cursor_factory(fetchone_seq=[_config_row()])
         with patch.object(svc, "raf_cursor", cm):
@@ -123,7 +123,7 @@ class TestGetOrCreateConfig:
         assert cfg["month_multipliers"][1] == 2.0
         assert cfg["month_multipliers"][12] == 0.3
 
-    def test_seeds_default_when_missing(self):
+    def test_seeds_default_when_missing(self) -> None:
         # First fetchone returns None (no row), insert then second fetchone
         # returns a freshly-seeded row.
         cm = _stateful_cursor_factory(fetchone_seq=[None, _config_row()])
@@ -133,7 +133,7 @@ class TestGetOrCreateConfig:
         assert cfg["active"] is True
         assert cfg["month_multipliers"][1] == 2.0
 
-    def test_corrupt_multipliers_falls_back_to_defaults(self):
+    def test_corrupt_multipliers_falls_back_to_defaults(self) -> None:
         row = _config_row()
         row["month_multipliers"] = "not-json{{"
         cm = _stateful_cursor_factory(fetchone_seq=[row])
@@ -148,7 +148,7 @@ class TestGetOrCreateConfig:
 
 
 class TestCurrentMonthMultiplier:
-    def test_may_returns_next_drop_to_september(self):
+    def test_may_returns_next_drop_to_september(self) -> None:
         cm = _stateful_cursor_factory(fetchone_seq=[_config_row()])
         with patch.object(svc, "raf_cursor", cm):
             out = current_month_multiplier("1", today=date(2026, 5, 15))
@@ -159,7 +159,7 @@ class TestCurrentMonthMultiplier:
         assert out["delta"] == 0.0
         assert out["days_until_next_month"] == 17  # May 15 -> June 1
 
-    def test_december_wraps_to_january(self):
+    def test_december_wraps_to_january(self) -> None:
         cm = _stateful_cursor_factory(fetchone_seq=[_config_row()])
         with patch.object(svc, "raf_cursor", cm):
             out = current_month_multiplier("1", today=date(2026, 12, 20))
@@ -176,7 +176,7 @@ class TestCurrentMonthMultiplier:
 
 
 class TestBonusForClosingNow:
-    def test_open_gap_in_may_yields_25_dollars(self):
+    def test_open_gap_in_may_yields_25_dollars(self) -> None:
         # bonus_for_closing_now calls:
         #   1. get_or_create_config (config row)
         #   2. current_month_multiplier -> get_or_create_config (config row again)
@@ -199,7 +199,7 @@ class TestBonusForClosingNow:
         # May = 1.0x → 25 * 1.0 = 25
         assert out["bonus"] == 25.00
 
-    def test_already_closed_gap_returns_zero_with_reason(self):
+    def test_already_closed_gap_returns_zero_with_reason(self) -> None:
         cm = _stateful_cursor_factory(fetchone_seq=[
             _config_row(),
             _config_row(),
@@ -211,7 +211,7 @@ class TestBonusForClosingNow:
         assert "recaptured" in out["reason"]
         assert out["bonus"] == 0.0
 
-    def test_missing_gap_returns_zero(self):
+    def test_missing_gap_returns_zero(self) -> None:
         cm = _stateful_cursor_factory(fetchone_seq=[
             _config_row(),
             _config_row(),
@@ -229,7 +229,7 @@ class TestBonusForClosingNow:
 
 
 class TestComputeCoderEarnings:
-    def test_three_may_closures_yield_75_dollars(self):
+    def test_three_may_closures_yield_75_dollars(self) -> None:
         # Sequence inside compute_coder_earnings:
         #   - get_or_create_config:   fetchone (config row)
         #   - current_month_multiplier -> get_or_create_config: fetchone (config row)
@@ -262,7 +262,7 @@ class TestComputeCoderEarnings:
         # 12 monthly buckets returned
         assert len(out["monthly_breakdown"]) == 12
 
-    def test_zero_closures_returns_zeros(self):
+    def test_zero_closures_returns_zeros(self) -> None:
         cm = _stateful_cursor_factory(
             fetchone_seq=[
                 _config_row(),
@@ -279,7 +279,7 @@ class TestComputeCoderEarnings:
         assert out["bonus_earned"] == 0.0
         assert out["bonus_at_risk"] == 0.0
 
-    def test_january_closures_get_2x_multiplier(self):
+    def test_january_closures_get_2x_multiplier(self) -> None:
         # 2 closures in January → 2 * $25 * 2.0 = $100
         cm = _stateful_cursor_factory(
             fetchone_seq=[
@@ -303,7 +303,7 @@ class TestComputeCoderEarnings:
 
 
 class TestComputeLeaderboard:
-    def test_ordering_by_closures_then_dollars(self):
+    def test_ordering_by_closures_then_dollars(self) -> None:
         # Coders A and B; A has more closures, B has more dollars.
         cm = _stateful_cursor_factory(
             fetchone_seq=[_config_row()],
@@ -338,7 +338,7 @@ class TestComputeLeaderboard:
         assert board[0]["win_rate"] == pytest.approx(0.7143, abs=1e-3)
         assert board[1]["win_rate"] == 0.3
 
-    def test_zero_closures_returns_empty(self):
+    def test_zero_closures_returns_empty(self) -> None:
         cm = _stateful_cursor_factory(
             fetchone_seq=[_config_row()],
             fetchall_seq=[[], [], []],
@@ -347,7 +347,7 @@ class TestComputeLeaderboard:
             board = compute_leaderboard("1", 2026, limit=10)
         assert board == []
 
-    def test_filters_out_system_resolved(self):
+    def test_filters_out_system_resolved(self) -> None:
         # The SQL excludes 'system' — we mimic that here by NOT returning
         # any row with resolved_by='system'. This is a contract test that
         # the leaderboard never surfaces auto-closures.
@@ -374,13 +374,13 @@ class TestComputeLeaderboard:
 
 
 class TestUpdateConfig:
-    def test_rejects_negative_bonus(self):
+    def test_rejects_negative_bonus(self) -> None:
         cm = _stateful_cursor_factory(fetchone_seq=[_config_row()])
         with patch.object(svc, "raf_cursor", cm):
             with pytest.raises(ValueError, match=">= 0"):
                 update_config("1", bonus_per_closure_default=-5)
 
-    def test_ignores_unknown_fields(self):
+    def test_ignores_unknown_fields(self) -> None:
         # Two get_or_create_config calls (start + final return) plus one UPDATE.
         cm = _stateful_cursor_factory(fetchone_seq=[
             _config_row(),  # initial get_or_create_config
@@ -397,7 +397,7 @@ class TestUpdateConfig:
 # ---------------------------------------------------------------------------
 
 
-def test_acceptance_three_may_closures_equal_seventy_five_dollars():
+def test_acceptance_three_may_closures_equal_seventy_five_dollars() -> None:
     cm = _stateful_cursor_factory(
         fetchone_seq=[
             _config_row(),

@@ -49,12 +49,12 @@ def _make_patients(n: int, raf_values: list[float] | None = None) -> list[dict]:
 
 
 class TestStratifiedRafDecile:
-    def test_returns_exactly_201(self):
+    def test_returns_exactly_201(self) -> None:
         patients = _make_patients(1000)
         result = _sample_stratified_raf_decile(patients, 201)
         assert len(result) == 201
 
-    def test_covers_all_deciles(self):
+    def test_covers_all_deciles(self) -> None:
         """Each of the 10 deciles should contribute at least 1 patient."""
         patients = _make_patients(1000)
         # Sort by raf_score to re-derive decile membership.
@@ -70,22 +70,22 @@ class TestStratifiedRafDecile:
         # All 10 deciles should be represented (1000 patients, 201 requested).
         assert len(sampled_deciles) == 10
 
-    def test_hard_cap_enforced(self):
+    def test_hard_cap_enforced(self) -> None:
         """Hard cap: never return more than n."""
         patients = _make_patients(500)
         for n in (1, 50, 100, 200, 201):
             result = _sample_stratified_raf_decile(patients, n)
             assert len(result) <= n, f"Expected <= {n}, got {len(result)}"
 
-    def test_fewer_patients_than_n_returns_all(self):
+    def test_fewer_patients_than_n_returns_all(self) -> None:
         patients = _make_patients(50)
         result = _sample_stratified_raf_decile(patients, 201)
         assert len(result) == 50
 
-    def test_empty_patients_returns_empty(self):
+    def test_empty_patients_returns_empty(self) -> None:
         assert _sample_stratified_raf_decile([], 201) == []
 
-    def test_top_decile_gets_extra_record(self):
+    def test_top_decile_gets_extra_record(self) -> None:
         """For n=201 (remainder=1), top decile should have >= base quota."""
         patients = _make_patients(1000)
         sorted_pts = sorted(patients, key=lambda c: c["raf_score"])
@@ -108,7 +108,7 @@ class TestStratifiedRafDecile:
 
 
 class TestStratifiedHccUsesHighestRaf:
-    def test_highest_raf_hcc_is_stratum_key(self):
+    def test_highest_raf_hcc_is_stratum_key(self) -> None:
         """
         Construct patients where hcc_codes[0] (alpha sort) != highest_raf_hcc.
         Verify that buckets formed by _sample use highest_raf_hcc.
@@ -147,7 +147,7 @@ class TestStratifiedHccUsesHighestRaf:
         for p in result:
             assert p["highest_raf_hcc"] in ("HCC200", "HCC300")
 
-    def test_alpha_first_hcc_not_used_as_stratum(self):
+    def test_alpha_first_hcc_not_used_as_stratum(self) -> None:
         """
         If alpha-first HCC were used (old bug), all patients would fall in "HCC001" bucket.
         With highest_raf_hcc: patients go to separate HCC200 and HCC300 buckets.
@@ -182,7 +182,7 @@ class TestStratifiedHccUsesHighestRaf:
 
 
 class TestFFSAdjusterExtrapolation:
-    def test_known_value(self):
+    def test_known_value(self) -> None:
         """
         10 failures / 201 sample / 50,000 enrolled / $1,100 PMPM / 12 months / 0.97 adjuster.
         Expected: 10 * (50000/201) * (1100*12) * 0.97
@@ -208,7 +208,7 @@ class TestFFSAdjusterExtrapolation:
         # Verify rough magnitude (~$31.9M).
         assert 31_000_000 < result["extrapolated_exposure_dollars"] < 33_000_000
 
-    def test_methodology_flag(self):
+    def test_methodology_flag(self) -> None:
         result = compute_extrapolated_exposure(
             failed_records=5,
             sample_size=201,
@@ -217,7 +217,7 @@ class TestFFSAdjusterExtrapolation:
         assert result["methodology"] == "ffs_adjuster_with_wilson_lcb_v1"
         assert "not an official CMS" in result["methodology_note"]
 
-    def test_zero_failures_returns_zero(self):
+    def test_zero_failures_returns_zero(self) -> None:
         result = compute_extrapolated_exposure(
             failed_records=0,
             sample_size=201,
@@ -225,7 +225,7 @@ class TestFFSAdjusterExtrapolation:
         )
         assert result["extrapolated_exposure_dollars"] == 0.0
 
-    def test_invalid_sample_size_raises(self):
+    def test_invalid_sample_size_raises(self) -> None:
         with pytest.raises(ValueError, match="sample_size"):
             compute_extrapolated_exposure(
                 failed_records=1,
@@ -233,7 +233,7 @@ class TestFFSAdjusterExtrapolation:
                 members_enrolled=50_000,
             )
 
-    def test_invalid_members_enrolled_raises(self):
+    def test_invalid_members_enrolled_raises(self) -> None:
         with pytest.raises(ValueError, match="members_enrolled"):
             compute_extrapolated_exposure(
                 failed_records=1,
@@ -241,7 +241,7 @@ class TestFFSAdjusterExtrapolation:
                 members_enrolled=0,
             )
 
-    def test_invalid_ffs_adjuster_raises(self):
+    def test_invalid_ffs_adjuster_raises(self) -> None:
         with pytest.raises(ValueError, match="ffs_adjuster"):
             compute_extrapolated_exposure(
                 failed_records=1,
@@ -257,7 +257,7 @@ class TestFFSAdjusterExtrapolation:
 
 
 class TestWilsonLCB:
-    def test_lcb_less_than_point_estimate(self):
+    def test_lcb_less_than_point_estimate(self) -> None:
         """Wilson LCB must be strictly less than the point estimate when failed > 0."""
         result = compute_extrapolated_exposure(
             failed_records=10,
@@ -266,7 +266,7 @@ class TestWilsonLCB:
         )
         assert result["lower_confidence_bound_dollars"] < result["extrapolated_exposure_dollars"]
 
-    def test_lcb_zero_when_no_failures(self):
+    def test_lcb_zero_when_no_failures(self) -> None:
         """With zero failures the error rate is 0 and LCB should be 0.0."""
         result = compute_extrapolated_exposure(
             failed_records=0,
@@ -275,7 +275,7 @@ class TestWilsonLCB:
         )
         assert result["lower_confidence_bound_dollars"] == 0.0
 
-    def test_methodology_contains_wilson_lcb(self):
+    def test_methodology_contains_wilson_lcb(self) -> None:
         """methodology field must reference wilson_lcb to satisfy reviewer requirement."""
         result = compute_extrapolated_exposure(
             failed_records=5,
@@ -291,7 +291,7 @@ class TestWilsonLCB:
 
 
 class TestLegacyConstantRemoved:
-    def test_legacy_avg_hcc_payment_dollars_is_gone(self):
+    def test_legacy_avg_hcc_payment_dollars_is_gone(self) -> None:
         """_LEGACY_AVG_HCC_PAYMENT_DOLLARS must not exist — single-source-of-truth rule."""
         import importlib
         import app.services.radv_audit_run_service as svc_mod
@@ -307,7 +307,7 @@ class TestLegacyConstantRemoved:
 
 
 class TestAssumedFailRateValidation:
-    def test_fail_rate_above_1_raises(self):
+    def test_fail_rate_above_1_raises(self) -> None:
         """simulate_exposure must reject assumed_fail_rate > 1.0."""
         from app.services.radv_audit_run_service import simulate_exposure
 
@@ -319,7 +319,7 @@ class TestAssumedFailRateValidation:
                 assumed_fail_rate=1.5,
             )
 
-    def test_fail_rate_exactly_1_is_valid(self):
+    def test_fail_rate_exactly_1_is_valid(self) -> None:
         """assumed_fail_rate == 1.0 is valid (100% fail rate scenario)."""
         # Just confirm the guard doesn't raise; DB call will fail in unit test
         # context — we only care about the guard logic here.
@@ -334,7 +334,7 @@ class TestAssumedFailRateValidation:
         # Should NOT raise ValueError about assumed_fail_rate.
         assert "assumed_fail_rate" not in str(exc_info.value)
 
-    def test_fail_rate_negative_raises(self):
+    def test_fail_rate_negative_raises(self) -> None:
         from app.services.radv_audit_run_service import simulate_exposure
 
         with pytest.raises(ValueError, match="assumed_fail_rate"):
@@ -352,7 +352,7 @@ class TestAssumedFailRateValidation:
 
 class TestHardCap:
     @pytest.mark.parametrize("method", ["random", "stratified_hcc", "stratified_raf_decile", "high_risk_first"])
-    def test_never_exceeds_n(self, method):
+    def test_never_exceeds_n(self, method) -> None:
         patients = _make_patients(500)
         for n in (1, 50, 100, 200, 201, 300):
             result = _sample(patients, sample_size=n, method=method)
@@ -360,7 +360,7 @@ class TestHardCap:
                 f"method={method} n={n}: got {len(result)} records, expected <= {n}"
             )
 
-    def test_stratified_raf_decile_exact_201(self):
+    def test_stratified_raf_decile_exact_201(self) -> None:
         """Primary CMS compliance check: exactly 201 with sufficient candidates."""
         patients = _make_patients(2000)
         result = _sample(patients, sample_size=201, method="stratified_raf_decile")
@@ -380,7 +380,7 @@ class TestSimulateLCBPlumbing:
     what would be written to lcb_dollars without needing a live MySQL instance.
     """
 
-    def test_simulate_response_includes_lcb(self):
+    def test_simulate_response_includes_lcb(self) -> None:
         """simulate_exposure must include lower_confidence_bound_dollars in its return dict.
 
         We stub the DB calls so the test is self-contained.  The key assertion
@@ -429,7 +429,7 @@ class TestSimulateLCBPlumbing:
         assert lcb >= 0.0
         assert lcb < exp, f"LCB {lcb} must be < extrapolated {exp}"
 
-    def test_simulate_persists_lcb_to_db(self):
+    def test_simulate_persists_lcb_to_db(self) -> None:
         """simulate_exposure must issue UPDATE raf_radv_audit_runs SET lcb_dollars when LCB is non-null."""
         from unittest.mock import MagicMock, patch
 
@@ -480,7 +480,7 @@ class TestSimulateLCBPlumbing:
         persisted_lcb = lcb_write_args[0][0]
         assert persisted_lcb == result["lower_confidence_bound_dollars"]
 
-    def test_simulate_legacy_v1_lcb_is_none(self):
+    def test_simulate_legacy_v1_lcb_is_none(self) -> None:
         """methodology=legacy_v1 (no members_enrolled) must return None for LCB."""
         from unittest.mock import MagicMock, patch
 

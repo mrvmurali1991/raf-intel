@@ -68,26 +68,26 @@ def _make_cursor_cm(fetch_sequence):
 # ---------------------------------------------------------------------------
 
 class TestPercentileRank:
-    def test_top_value_yields_100(self):
+    def test_top_value_yields_100(self) -> None:
         # value at top of cohort
         assert pb._percentile_rank(10.0, [1.0, 5.0, 7.0, 10.0]) == 100.0
 
-    def test_bottom_value_yields_position(self):
+    def test_bottom_value_yields_position(self) -> None:
         # value at bottom — only itself ≤ value out of 4 → 25
         assert pb._percentile_rank(1.0, [1.0, 5.0, 7.0, 10.0]) == 25.0
 
-    def test_middle_value(self):
+    def test_middle_value(self) -> None:
         # value 7 → rows ≤7: [1,5,7] = 3 of 4 → 75.0
         assert pb._percentile_rank(7.0, [1.0, 5.0, 7.0, 10.0]) == 75.0
 
-    def test_empty_cohort_returns_zero(self):
+    def test_empty_cohort_returns_zero(self) -> None:
         assert pb._percentile_rank(5.0, []) == 0.0
 
-    def test_filters_none_values(self):
+    def test_filters_none_values(self) -> None:
         # None peers shouldn't blow up
         assert pb._percentile_rank(5.0, [None, 5.0, None, 1.0]) == 100.0
 
-    def test_handles_ties(self):
+    def test_handles_ties(self) -> None:
         # value 5 with two ties — both count as ≤
         assert pb._percentile_rank(5.0, [5.0, 5.0, 1.0, 9.0]) == 75.0
 
@@ -97,21 +97,21 @@ class TestPercentileRank:
 # ---------------------------------------------------------------------------
 
 class TestSummaryStats:
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert pb._summary_stats([]) == {
             "min": None, "median": None, "max": None,
         }
 
-    def test_odd_length(self):
+    def test_odd_length(self) -> None:
         s = pb._summary_stats([1.0, 3.0, 5.0])
         assert s == {"min": 1.0, "median": 3.0, "max": 5.0}
 
-    def test_even_length(self):
+    def test_even_length(self) -> None:
         s = pb._summary_stats([1.0, 2.0, 3.0, 4.0])
         # median = (2+3)/2 = 2.5
         assert s == {"min": 1.0, "median": 2.5, "max": 4.0}
 
-    def test_unsorted_input(self):
+    def test_unsorted_input(self) -> None:
         s = pb._summary_stats([7.0, 1.0, 4.0])
         assert s == {"min": 1.0, "median": 4.0, "max": 7.0}
 
@@ -143,7 +143,7 @@ def _scorecard_row(provider_id, **overrides):
 
 
 class TestComputePercentiles:
-    def test_full_cohort_yields_percentiles(self):
+    def test_full_cohort_yields_percentiles(self) -> None:
         # 4 providers in cohort.  Provider id=2 has middle-ish RAF.
         cohort = [
             _scorecard_row(1, average_raf=2.0, hcc_capture_rate=0.9),
@@ -172,7 +172,7 @@ class TestComputePercentiles:
         assert result["cohort_summary"]["average_raf"]["min"] == 0.5
         assert result["cohort_summary"]["average_raf"]["max"] == 2.0
 
-    def test_insufficient_cohort_marks_flag(self):
+    def test_insufficient_cohort_marks_flag(self) -> None:
         # only 2 providers → below MIN_COHORT_SIZE
         cohort = [
             _scorecard_row(1, average_raf=2.0),
@@ -196,7 +196,7 @@ class TestComputePercentiles:
         # Provider's own KPI snapshot still populated
         assert result["provider_kpis"]["average_raf"] == 1.0
 
-    def test_provider_specialty_unknown(self):
+    def test_provider_specialty_unknown(self) -> None:
         # specialty lookup returns None → empty result
         cm, _ = _make_cursor_cm([[]])
 
@@ -208,7 +208,7 @@ class TestComputePercentiles:
         assert result["insufficient_peers"] is True
         assert all(v is None for v in result["percentiles"].values())
 
-    def test_provider_not_in_cohort(self):
+    def test_provider_not_in_cohort(self) -> None:
         # Cohort returned but provider's own row missing — defensive path.
         cohort = [
             _scorecard_row(1, average_raf=2.0),
@@ -228,7 +228,7 @@ class TestComputePercentiles:
         # provider_kpis stays at default None values
         assert result["provider_kpis"]["average_raf"] is None
 
-    def test_handles_null_kpi_values(self):
+    def test_handles_null_kpi_values(self) -> None:
         cohort = [
             _scorecard_row(1, average_raf=None, hcc_capture_rate=0.9),
             _scorecard_row(2, average_raf=1.5, hcc_capture_rate=None),
@@ -253,7 +253,7 @@ class TestComputePercentiles:
 # ---------------------------------------------------------------------------
 
 class TestSpecialtyCohortSummary:
-    def test_summary_shape(self):
+    def test_summary_shape(self) -> None:
         cohort = [
             _scorecard_row(1, average_raf=2.0),
             _scorecard_row(2, average_raf=1.5),
@@ -271,7 +271,7 @@ class TestSpecialtyCohortSummary:
         assert result["cohort_summary"]["average_raf"]["max"] == 2.0
         assert result["cohort_summary"]["average_raf"]["median"] == 1.5
 
-    def test_small_cohort_flags_insufficient(self):
+    def test_small_cohort_flags_insufficient(self) -> None:
         cohort = [
             _scorecard_row(1, average_raf=2.0),
             _scorecard_row(2, average_raf=1.5),
@@ -290,7 +290,7 @@ class TestSpecialtyCohortSummary:
 # ---------------------------------------------------------------------------
 
 class TestSpecialtyBenchmarks:
-    def test_groups_specialties(self):
+    def test_groups_specialties(self) -> None:
         # First execute returns distinct specialties
         # Then one cohort fetch per specialty
         im_cohort = [

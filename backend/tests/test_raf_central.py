@@ -129,7 +129,7 @@ def patch_panel_services(fake_breakdown, fake_suspects, fake_recapture):
 # ---------------------------------------------------------------------------
 
 
-def test_panel_returns_full_payload_shape(client, admin_headers, patch_panel_services):
+def test_panel_returns_full_payload_shape(client, admin_headers, patch_panel_services) -> None:
     resp = client.get("/api/raf-central/1?year=2025", headers=admin_headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -190,12 +190,12 @@ def test_panel_returns_full_payload_shape(client, admin_headers, patch_panel_ser
 # ---------------------------------------------------------------------------
 
 
-def test_panel_requires_auth(client):
+def test_panel_requires_auth(client) -> None:
     resp = client.get("/api/raf-central/1")
     assert resp.status_code == 401
 
 
-def test_panel_rejects_user_without_tenant(client, admin_headers, patch_panel_services):
+def test_panel_rejects_user_without_tenant(client, admin_headers, patch_panel_services) -> None:
     """A tenant-less user is rejected — `get_current_user` catches it at the
     auth layer (401) before raf_central's own 403 guard runs."""
     from tests.conftest import MOCK_ADMIN_USER
@@ -213,7 +213,7 @@ def test_panel_rejects_user_without_tenant(client, admin_headers, patch_panel_se
 # ---------------------------------------------------------------------------
 
 
-def test_panel_serves_from_cache_when_present(client, admin_headers, fake_breakdown):
+def test_panel_serves_from_cache_when_present(client, admin_headers, fake_breakdown) -> None:
     """Cache hit must short-circuit all service fan-outs."""
     cached_payload = {
         "patient_id": 1,
@@ -271,7 +271,7 @@ def test_panel_serves_from_cache_when_present(client, admin_headers, fake_breakd
 # ---------------------------------------------------------------------------
 
 
-def test_accept_suspect_invalidates_cache(client, admin_headers):
+def test_accept_suspect_invalidates_cache(client, admin_headers) -> None:
     with (
         patch(
             "app.routers.raf_central.accept_suspect",
@@ -299,7 +299,7 @@ def test_accept_suspect_invalidates_cache(client, admin_headers):
         assert inv.call_count >= 1
 
 
-def test_accept_suspect_skips_emr_push_when_disabled(client, admin_headers):
+def test_accept_suspect_skips_emr_push_when_disabled(client, admin_headers) -> None:
     with (
         patch(
             "app.routers.raf_central.accept_suspect",
@@ -320,7 +320,7 @@ def test_accept_suspect_skips_emr_push_when_disabled(client, admin_headers):
         push.assert_not_called()
 
 
-def test_dismiss_suspect_calls_service(client, admin_headers):
+def test_dismiss_suspect_calls_service(client, admin_headers) -> None:
     with (
         patch(
             "app.routers.raf_central.dismiss_suspect",
@@ -342,7 +342,7 @@ def test_dismiss_suspect_calls_service(client, admin_headers):
 
 def test_mark_meat_reviewed_sets_status_from_filled_letters(
     client, admin_headers, mock_raf_cursor_factory
-):
+) -> None:
     """Filling all four MEAT letters → meat_status = 'complete'."""
     patcher, _ = mock_raf_cursor_factory()
     with patcher, patch("app.routers.raf_central.cache_delete_pattern"):
@@ -365,7 +365,7 @@ def test_mark_meat_reviewed_sets_status_from_filled_letters(
 
 def test_mark_meat_reviewed_partial_status(
     client, admin_headers, mock_raf_cursor_factory
-):
+) -> None:
     patcher, _ = mock_raf_cursor_factory()
     with patcher, patch("app.routers.raf_central.cache_delete_pattern"):
         resp = client.post(
@@ -381,7 +381,7 @@ def test_mark_meat_reviewed_partial_status(
         assert resp.json()["meat_status"] == "partial"
 
 
-def test_action_endpoints_require_auth(client):
+def test_action_endpoints_require_auth(client) -> None:
     for path, body in [
         ("/api/raf-central/1/actions/accept-suspect", {"suspect_id": 1}),
         ("/api/raf-central/1/actions/dismiss-suspect", {"suspect_id": 1}),
@@ -401,7 +401,7 @@ def test_action_endpoints_require_auth(client):
 # ---------------------------------------------------------------------------
 
 
-def test_start_treatment_happy_path_uses_hcc_fallback(client, admin_headers):
+def test_start_treatment_happy_path_uses_hcc_fallback(client, admin_headers) -> None:
     """When the client does not supply a drug, the endpoint falls back to
     the hardcoded HCC→treatment map (HCC 37 → Metformin) and returns the
     new prescription id."""
@@ -434,7 +434,7 @@ def test_start_treatment_happy_path_uses_hcc_fallback(client, admin_headers):
     assert inv.call_count >= 1
 
 
-def test_start_treatment_uses_client_supplied_drug(client, admin_headers):
+def test_start_treatment_uses_client_supplied_drug(client, admin_headers) -> None:
     """Client-supplied drug/rxnorm/dosage override the fallback map."""
     with (
         patch(
@@ -464,7 +464,7 @@ def test_start_treatment_uses_client_supplied_drug(client, admin_headers):
 
 def test_start_treatment_rejects_unknown_hcc_without_override(
     client, admin_headers,
-):
+) -> None:
     """An HCC with no fallback and no client override → 400, no EMR write."""
     with (
         patch("app.routers.raf_central.push_prescription") as push_rx,
@@ -479,7 +479,7 @@ def test_start_treatment_rejects_unknown_hcc_without_override(
     push_rx.assert_not_called()
 
 
-def test_start_treatment_accepts_without_ui_confirm(client, admin_headers):
+def test_start_treatment_accepts_without_ui_confirm(client, admin_headers) -> None:
     """Confirm-dialog protection is a UI concern — the endpoint itself
     must accept a direct POST without any confirm token/flag."""
     with (
@@ -497,7 +497,7 @@ def test_start_treatment_accepts_without_ui_confirm(client, admin_headers):
     assert resp.json()["drug"] == "Lisinopril 10mg"
 
 
-def test_start_treatment_502_when_emr_disconnected(client, admin_headers):
+def test_start_treatment_502_when_emr_disconnected(client, admin_headers) -> None:
     """push_prescription returns None when the decorator catches
     NoActiveEMRConnection — endpoint maps that to 502."""
     with (
@@ -519,7 +519,7 @@ def test_start_treatment_502_when_emr_disconnected(client, admin_headers):
 # ---------------------------------------------------------------------------
 
 
-def test_order_lab_happy_path_uses_hcc_default_map(client, admin_headers):
+def test_order_lab_happy_path_uses_hcc_default_map(client, admin_headers) -> None:
     """HCC 37 (diabetes family) must default to Hemoglobin A1c (LOINC 4548-4)."""
     with (
         patch(
@@ -554,7 +554,7 @@ def test_order_lab_happy_path_uses_hcc_default_map(client, admin_headers):
         assert log_action.called
 
 
-def test_order_lab_uses_explicit_override(client, admin_headers):
+def test_order_lab_uses_explicit_override(client, admin_headers) -> None:
     """An explicit suggested_lab_code must win over the HCC default map."""
     with (
         patch(
@@ -581,7 +581,7 @@ def test_order_lab_uses_explicit_override(client, admin_headers):
         assert kwargs["procedure_name"] == "PSA"
 
 
-def test_order_lab_returns_skipped_when_no_emr(client, admin_headers):
+def test_order_lab_returns_skipped_when_no_emr(client, admin_headers) -> None:
     """push_procedure_order→None + no EMR configured must yield 200/skipped,
     not 500 — explicit spec constraint."""
     from app.db import NoActiveEMRConnection
@@ -617,7 +617,7 @@ def test_order_lab_returns_skipped_when_no_emr(client, admin_headers):
         assert body["suggested_lab_code"] == "4548-4"
 
 
-def test_order_lab_rejects_unmapped_hcc_without_suggestion(client, admin_headers):
+def test_order_lab_rejects_unmapped_hcc_without_suggestion(client, admin_headers) -> None:
     """Unknown HCC + no explicit suggested_lab_code → 400 (not a silent pick)."""
     with (
         patch("app.routers.raf_central.push_procedure_order") as push,
@@ -639,7 +639,7 @@ def test_order_lab_rejects_unmapped_hcc_without_suggestion(client, admin_headers
 # ---------------------------------------------------------------------------
 
 
-def test_refresh_meat_happy_path(client, admin_headers):
+def test_refresh_meat_happy_path(client, admin_headers) -> None:
     """POST refresh-meat should enqueue a Celery task and return 202/queued."""
     from unittest.mock import MagicMock
 
@@ -666,7 +666,7 @@ def test_refresh_meat_happy_path(client, admin_headers):
     assert call_kwargs["patient_id"] == 1
 
 
-def test_refresh_meat_requires_auth(client):
+def test_refresh_meat_requires_auth(client) -> None:
     """Missing bearer token should 401 before the task is enqueued."""
     from unittest.mock import MagicMock
 
@@ -679,7 +679,7 @@ def test_refresh_meat_requires_auth(client):
     mock_task_cls.apply_async.assert_not_called()
 
 
-def test_refresh_meat_500_on_enqueue_error(client, admin_headers):
+def test_refresh_meat_500_on_enqueue_error(client, admin_headers) -> None:
     """apply_async raising must surface as 500."""
     with patch(
         "app.routers.raf_central.task_refresh_meat_for_patient"

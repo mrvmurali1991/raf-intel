@@ -96,7 +96,7 @@ class TestReveleerClient:
             tenant_id="tenant-abc",
         )
 
-    def test_list_retrieved_charts_returns_list(self):
+    def test_list_retrieved_charts_returns_list(self) -> None:
         charts_payload = {
             "charts": [
                 {"chart_id": "c1", "patient_external_id": "P001", "filename": "chart1.pdf",
@@ -116,14 +116,14 @@ class TestReveleerClient:
         assert kwargs["params"]["status"] == "ready"
         assert kwargs["params"]["since"] == "2026-05-01T00:00:00Z"
 
-    def test_list_retrieved_charts_default_status_ready(self):
+    def test_list_retrieved_charts_default_status_ready(self) -> None:
         mock_resp = _make_response(json_data={"charts": []})
         with patch("httpx.get", return_value=mock_resp) as mock_get:
             self._client().list_retrieved_charts()
         _, kwargs = mock_get.call_args
         assert kwargs["params"]["status"] == "ready"
 
-    def test_download_chart_returns_bytes_and_mime(self):
+    def test_download_chart_returns_bytes_and_mime(self) -> None:
         pdf_bytes = b"%PDF-test-content"
         mock_resp = _make_response(
             content=pdf_bytes,
@@ -135,7 +135,7 @@ class TestReveleerClient:
         assert data == pdf_bytes
         assert mime == "application/pdf"
 
-    def test_download_chart_fallback_mime(self):
+    def test_download_chart_fallback_mime(self) -> None:
         # headers mapping without a content-type key should yield the fallback mime
         mock_resp = MagicMock()
         mock_resp.content = b"data"
@@ -145,7 +145,7 @@ class TestReveleerClient:
             _, mime = self._client().download_chart("c99")
         assert mime == "application/octet-stream"
 
-    def test_submit_hcc_suspects_posts_bulk(self):
+    def test_submit_hcc_suspects_posts_bulk(self) -> None:
         suspects = [
             {
                 "hcc": "19",
@@ -165,7 +165,7 @@ class TestReveleerClient:
         assert body["patient_external_id"] == "P001"
         assert len(body["suspects"]) == 1
 
-    def test_submit_hcc_suspects_drops_empty_evidence(self):
+    def test_submit_hcc_suspects_drops_empty_evidence(self) -> None:
         suspects = [
             {"hcc": "19", "icd10": "E11.9", "confidence": 0.9,
              "evidence_sentence": "Valid evidence.", "source_document_id": "d1"},
@@ -288,20 +288,20 @@ class TestPullChartsFromReveleer:
 
         return summary, inserted_charts, inserted_suspects
 
-    def test_two_charts_both_processed(self):
+    def test_two_charts_both_processed(self) -> None:
         summary, charts, suspects = self._run_pull()
         assert summary["charts_found"] == 2
         assert summary["charts_processed"] == 2
         assert summary["charts_skipped"] == 0
         assert len(charts) == 2
 
-    def test_suspects_extracted_and_persisted(self):
+    def test_suspects_extracted_and_persisted(self) -> None:
         summary, charts, suspects = self._run_pull()
         # 1 suspect per chart × 2 charts
         assert summary["suspects_extracted"] == 2
         assert len(suspects) == 2
 
-    def test_already_pulled_chart_skipped(self):
+    def test_already_pulled_chart_skipped(self) -> None:
         """If chart_id already in DB, it must be skipped (idempotency)."""
         summary, charts, _ = self._run_pull(already_pulled_ids={"rev-chart-001"})
         assert summary["charts_skipped"] == 1
@@ -309,7 +309,7 @@ class TestPullChartsFromReveleer:
         assert len(charts) == 1
         assert charts[0]["reveleer_chart_id"] == "rev-chart-002"
 
-    def test_both_charts_already_pulled_all_skipped(self):
+    def test_both_charts_already_pulled_all_skipped(self) -> None:
         summary, charts, _ = self._run_pull(
             already_pulled_ids={"rev-chart-001", "rev-chart-002"}
         )
@@ -403,7 +403,7 @@ class TestPushSuspectsToReveleer:
 
         return summary, push_records, mock_client
 
-    def test_three_suspects_pushed_successfully(self):
+    def test_three_suspects_pushed_successfully(self) -> None:
         summary, records, mock_client = self._run_push()
         assert summary["pushed"] == 3
         assert summary["failed"] == 0
@@ -411,11 +411,11 @@ class TestPushSuspectsToReveleer:
         # All recorded as success
         assert all(r["status"] == "success" for r in records)
 
-    def test_push_records_contain_response_id(self):
+    def test_push_records_contain_response_id(self) -> None:
         _, records, _ = self._run_push()
         assert all(r["reveleer_response_id"] == "rv-bulk-999" for r in records)
 
-    def test_submit_failure_marks_all_failed(self):
+    def test_submit_failure_marks_all_failed(self) -> None:
         summary, records, _ = self._run_push(
             submit_raises=RuntimeError("503 Service Unavailable")
         )
@@ -424,12 +424,12 @@ class TestPushSuspectsToReveleer:
         assert all(r["status"] == "failed" for r in records)
         assert all("503" in (r["error_text"] or "") for r in records)
 
-    def test_empty_suspect_list_returns_zeros(self):
+    def test_empty_suspect_list_returns_zeros(self) -> None:
         summary, records, mock_client = self._run_push(suspects=[])
         assert summary == {"suspects_found": 0, "pushed": 0, "failed": 0, "skipped": 0}
         mock_client.submit_hcc_suspects.assert_not_called()
 
-    def test_idempotency_unique_suspect_already_pushed(self):
+    def test_idempotency_unique_suspect_already_pushed(self) -> None:
         """Suspects returned by _get_unpushed_suspects already exclude pushed ones
         (via LEFT JOIN).  Confirm that if list is empty (all already pushed),
         nothing is submitted to Reveleer."""
@@ -463,7 +463,7 @@ class TestGetUnpushedSuspectsFilter:
             for r in rows_data
         ]
 
-    def test_suspects_with_empty_evidence_excluded(self):
+    def test_suspects_with_empty_evidence_excluded(self) -> None:
         raw_rows = [
             {"id": 1, "hcc": "19", "icd10": "E11.9", "conf": 0.9, "evidence_sentence": "DM documented."},
             {"id": 2, "hcc": "85", "icd10": "I50.9", "conf": 0.8, "evidence_sentence": ""},
@@ -485,7 +485,7 @@ class TestGetUnpushedSuspectsFilter:
         assert result[0]["id"] == 1
         assert result[0]["evidence_sentence"] == "DM documented."
 
-    def test_non_gemini_vision_source_excluded(self):
+    def test_non_gemini_vision_source_excluded(self) -> None:
         """Only gemini_vision sourced suspects should be returned."""
         db_rows = [
             {

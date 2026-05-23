@@ -110,7 +110,7 @@ def _reset_hook_instance_state():
 # ---------------------------------------------------------------------------
 
 
-def test_max_3_cards_returned_for_10_suspects(client):
+def test_max_3_cards_returned_for_10_suspects(client) -> None:
     """Even if 10 suspects are open, at most 3 cards are returned."""
     suspects = _make_suspects(10)
 
@@ -135,7 +135,7 @@ def test_max_3_cards_returned_for_10_suspects(client):
 # ---------------------------------------------------------------------------
 
 
-def test_recently_shown_suspect_is_suppressed(client):
+def test_recently_shown_suspect_is_suppressed(client) -> None:
     """A suspect with shown/dismissed status in last 24 h must not appear as a card."""
     suspects = _make_suspects(3)
     # suspects[0].id == 1 — mark as recently shown
@@ -162,7 +162,7 @@ def test_recently_shown_suspect_is_suppressed(client):
     assert call_kwargs["suspect_id"] == 1
 
 
-def test_all_suspects_suppressed_returns_empty_cards(client):
+def test_all_suspects_suppressed_returns_empty_cards(client) -> None:
     """If all suspects are recently shown, return empty card list."""
     suspects = _make_suspects(2)
     recently_shown = {1, 2}
@@ -187,7 +187,7 @@ def test_all_suspects_suppressed_returns_empty_cards(client):
 # ---------------------------------------------------------------------------
 
 
-def test_feedback_endpoint_updates_status_accepted(client):
+def test_feedback_endpoint_updates_status_accepted(client) -> None:
     """POST feedback with outcome=accepted should update status and return ok."""
     card_uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     fake_row = {"id": 99, "patient_id": 42, "suspect_id": 1}
@@ -225,7 +225,7 @@ def test_feedback_endpoint_updates_status_accepted(client):
     assert audit_kwargs["card_uuid"] == card_uuid
 
 
-def test_feedback_endpoint_returns_not_found_for_unknown_card(client):
+def test_feedback_endpoint_returns_not_found_for_unknown_card(client) -> None:
     """Feedback for an unknown card uuid should return status not_found."""
     with patch(
         "app.routers.cds_hooks._update_feedback_status", return_value=None
@@ -248,7 +248,7 @@ def test_feedback_endpoint_returns_not_found_for_unknown_card(client):
     assert result["status"] == "not_found"
 
 
-def test_feedback_endpoint_requires_auth(client):
+def test_feedback_endpoint_requires_auth(client) -> None:
     """Feedback endpoint must reject requests without the shared secret."""
     resp = client.post(
         "/cds-services/hcc-suggestions-realtime/feedback",
@@ -263,7 +263,7 @@ def test_feedback_endpoint_requires_auth(client):
 # ---------------------------------------------------------------------------
 
 
-def test_hook_instance_rate_limit_blocks_second_invocation(client):
+def test_hook_instance_rate_limit_blocks_second_invocation(client) -> None:
     """A second call with the same hookInstance for the same patient within
     60 s must return 429."""
     suspects = _make_suspects(3)
@@ -295,7 +295,7 @@ def test_hook_instance_rate_limit_blocks_second_invocation(client):
     )
 
 
-def test_hook_instance_allows_new_instance(client):
+def test_hook_instance_allows_new_instance(client) -> None:
     """A different hookInstance UUID for the same patient must be allowed."""
     suspects = _make_suspects(2)
 
@@ -328,7 +328,7 @@ def test_hook_instance_allows_new_instance(client):
 # ---------------------------------------------------------------------------
 
 
-def test_cds_discovery_still_lists_both_services(client):
+def test_cds_discovery_still_lists_both_services(client) -> None:
     r = client.get("/cds-services")
     assert r.status_code == 200
     ids = {svc["id"] for svc in r.json()["services"]}

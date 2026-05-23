@@ -91,7 +91,7 @@ PARAMS = list(_enumerate_get_routes())
 
 
 @pytest.mark.parametrize("url,model", PARAMS)
-def test_response_matches_declared_schema(client, url: str, model: type[BaseModel]):
+def test_response_matches_declared_schema(client, url: str, model: type[BaseModel]) -> None:
     """Every GET endpoint with response_model must not 500 and its body must
     re-validate against the declared schema."""
     token = _make_access_token(dict(MOCK_ADMIN_USER))

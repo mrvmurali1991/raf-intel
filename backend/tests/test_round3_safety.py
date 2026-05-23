@@ -33,7 +33,7 @@ class TestFhirCallSiteWireup:
     bug (missing kwargs) cannot regress silently.
     """
 
-    def test_push_call_includes_meat_signed(self):
+    def test_push_call_includes_meat_signed(self) -> None:
         """push_problem_list_condition call must include meat_signed kwarg."""
         import inspect
         from app.routers import raf_central
@@ -43,7 +43,7 @@ class TestFhirCallSiteWireup:
             "push_problem_list_condition call site is missing meat_signed=_meat_signed"
         )
 
-    def test_push_call_includes_user_role(self):
+    def test_push_call_includes_user_role(self) -> None:
         """push_problem_list_condition call must include user_role kwarg."""
         import inspect
         from app.routers import raf_central
@@ -53,7 +53,7 @@ class TestFhirCallSiteWireup:
             "push_problem_list_condition call site is missing user_role=_user_role"
         )
 
-    def test_push_call_includes_user_id(self):
+    def test_push_call_includes_user_id(self) -> None:
         """push_problem_list_condition call must include user_id kwarg."""
         import inspect
         from app.routers import raf_central
@@ -63,7 +63,7 @@ class TestFhirCallSiteWireup:
             "push_problem_list_condition call site is missing user_id=_user_id"
         )
 
-    def test_user_role_sourced_from_current_user(self):
+    def test_user_role_sourced_from_current_user(self) -> None:
         """_user_role must be derived from current_user.get('role')."""
         import inspect
         from app.routers import raf_central
@@ -73,7 +73,7 @@ class TestFhirCallSiteWireup:
             "_user_role not set from current_user.get('role')"
         )
 
-    def test_user_id_sourced_from_current_user(self):
+    def test_user_id_sourced_from_current_user(self) -> None:
         """_user_id must be derived from current_user id fields."""
         import inspect
         from app.routers import raf_central
@@ -83,7 +83,7 @@ class TestFhirCallSiteWireup:
             "_user_id not set from current_user id fields"
         )
 
-    def test_meat_signed_sourced_from_body(self):
+    def test_meat_signed_sourced_from_body(self) -> None:
         """_meat_signed must be derived from body.meat_signed."""
         import inspect
         from app.routers import raf_central
@@ -101,7 +101,7 @@ class TestAcceptMeatSignedKwargsViaFhirLib:
     This validates the round-trip through the build_condition_body logic.
     """
 
-    def test_accept_meat_signed_results_in_confirmed_writeback(self):
+    def test_accept_meat_signed_results_in_confirmed_writeback(self) -> None:
         """meat_signed=True + coder role -> verificationStatus confirmed."""
         from app.services.fhir_problem_list import build_condition_body
 
@@ -121,7 +121,7 @@ class TestAcceptMeatSignedKwargsViaFhirLib:
         # recorder should be set
         assert body.get("recorder") == {"reference": "Practitioner/1234567890"}
 
-    def test_accept_no_meat_results_in_provisional(self):
+    def test_accept_no_meat_results_in_provisional(self) -> None:
         """meat_signed=False -> verificationStatus provisional."""
         from app.services.fhir_problem_list import build_condition_body
 
@@ -143,7 +143,7 @@ class TestAcceptMeatSignedKwargsViaFhirLib:
 # N1 — physician role is in _REVERSAL_ALLOWED_ROLES
 # ---------------------------------------------------------------------------
 
-def test_reversal_allows_physician():
+def test_reversal_allows_physician() -> None:
     """physician must be in _REVERSAL_ALLOWED_ROLES (consistent with credentialed write roles)."""
     from app.routers.suspects import _REVERSAL_ALLOWED_ROLES
 
@@ -159,7 +159,7 @@ def test_reversal_allows_physician():
 # N2 — EDI override rejects same user as both submitter and reviewer
 # ---------------------------------------------------------------------------
 
-def test_edi_override_rejects_self_review():
+def test_edi_override_rejects_self_review() -> None:
     """reviewer_user_id == submitter user_id must return HTTP 422."""
     from fastapi import HTTPException
     from app.routers.edi_generation import generate_837, Generate837Request

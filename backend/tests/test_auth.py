@@ -100,57 +100,57 @@ def _raf_cursor_returning(rows: list[dict]):
 # ---------------------------------------------------------------------------
 
 class TestPasswordComplexity:
-    def test_valid_strong_password(self):
+    def test_valid_strong_password(self) -> None:
         ok, err = validate_password_strength("R@fIntel2025!Secure")
         assert ok is True
         assert err == ""
 
-    def test_minimum_12_chars(self):
+    def test_minimum_12_chars(self) -> None:
         ok, err = validate_password_strength("Short1!")
         assert ok is False
         assert "12 characters" in err
 
-    def test_exactly_12_chars_valid(self):
+    def test_exactly_12_chars_valid(self) -> None:
         ok, err = validate_password_strength("Abcdef1!ghij")
         assert ok is True
 
-    def test_requires_uppercase(self):
+    def test_requires_uppercase(self) -> None:
         ok, err = validate_password_strength("alllowercase1!")
         assert ok is False
         assert "uppercase" in err.lower()
 
-    def test_requires_lowercase(self):
+    def test_requires_lowercase(self) -> None:
         ok, err = validate_password_strength("ALLUPPERCASE1!")
         assert ok is False
         assert "lowercase" in err.lower()
 
-    def test_requires_digit(self):
+    def test_requires_digit(self) -> None:
         ok, err = validate_password_strength("NoDigitsHere!!")
         assert ok is False
         assert "digit" in err.lower()
 
-    def test_requires_special_char(self):
+    def test_requires_special_char(self) -> None:
         ok, err = validate_password_strength("NoSpecial1234A")
         assert ok is False
         assert "special" in err.lower()
 
-    def test_max_128_chars(self):
+    def test_max_128_chars(self) -> None:
         too_long = "A1a!" + "x" * 128  # 132 chars
         ok, err = validate_password_strength(too_long)
         assert ok is False
         assert "128" in err
 
-    def test_exactly_128_chars_valid(self):
+    def test_exactly_128_chars_valid(self) -> None:
         pw = "A1a!" + "b" * 124
         assert len(pw) == 128
         ok, _ = validate_password_strength(pw)
         assert ok is True
 
-    def test_common_password_rejected(self):
+    def test_common_password_rejected(self) -> None:
         ok2, err2 = validate_password_strength("password")
         assert ok2 is False
 
-    def test_admin123_rejected(self):
+    def test_admin123_rejected(self) -> None:
         ok, err = validate_password_strength("admin123")
         assert ok is False
 
@@ -166,20 +166,20 @@ class TestPasswordComplexity:
         "password1",
         "password123",
     ])
-    def test_top_common_passwords_blocked(self, pw):
+    def test_top_common_passwords_blocked(self, pw) -> None:
         ok, err = validate_password_strength(pw)
         assert ok is False, f"Expected {pw!r} to be rejected"
 
-    def test_returns_empty_error_on_success(self):
+    def test_returns_empty_error_on_success(self) -> None:
         ok, err = validate_password_strength("ValidPass1!XYZ")
         assert ok is True
         assert err == ""
 
-    def test_11_char_password_fails(self):
+    def test_11_char_password_fails(self) -> None:
         ok, err = validate_password_strength("Short1!abcd")
         assert ok is False
 
-    def test_empty_string_rejected(self):
+    def test_empty_string_rejected(self) -> None:
         ok, err = validate_password_strength("")
         assert ok is False
 
@@ -189,33 +189,33 @@ class TestPasswordComplexity:
 # ---------------------------------------------------------------------------
 
 class TestPasswordHashing:
-    def test_hash_and_verify_round_trip(self):
+    def test_hash_and_verify_round_trip(self) -> None:
         pw = "StrongP@ssw0rd!Secure"
         hashed = hash_password(pw)
         assert verify_password(pw, hashed) is True
 
-    def test_wrong_password_fails_verify(self):
+    def test_wrong_password_fails_verify(self) -> None:
         hashed = hash_password("Correct1!Pass")
         assert verify_password("Wrong1!Pass", hashed) is False
 
-    def test_hash_is_not_plaintext(self):
+    def test_hash_is_not_plaintext(self) -> None:
         pw = "MySecret1!Passwd"
         hashed = hash_password(pw)
         assert pw not in hashed
         assert hashed != pw
 
-    def test_same_password_different_hashes(self):
+    def test_same_password_different_hashes(self) -> None:
         pw = "SamePass1!Word"
         h1 = hash_password(pw)
         h2 = hash_password(pw)
         # bcrypt salts each hash → should be different
         assert h1 != h2
 
-    def test_hash_starts_with_bcrypt_prefix(self):
+    def test_hash_starts_with_bcrypt_prefix(self) -> None:
         hashed = hash_password("BcryptTest1!Pass")
         assert hashed.startswith("$2")
 
-    def test_verify_returns_bool(self):
+    def test_verify_returns_bool(self) -> None:
         hashed = hash_password("TestPass1!abc")
         result = verify_password("TestPass1!abc", hashed)
         assert isinstance(result, bool)
@@ -226,7 +226,7 @@ class TestPasswordHashing:
 # ---------------------------------------------------------------------------
 
 class TestJWTTokens:
-    def test_create_and_decode_access_token(self):
+    def test_create_and_decode_access_token(self) -> None:
         session_id = _make_session_id()
         token = create_access_token(
             user_id=1,
@@ -242,7 +242,7 @@ class TestJWTTokens:
         assert payload["type"] == "access"
         assert payload["session_id"] == session_id
 
-    def test_access_token_has_exp_in_future(self):
+    def test_access_token_has_exp_in_future(self) -> None:
         token = create_access_token(
             user_id=1, email="e@t.h", role="admin", tenant_id=1, session_id="s1"
         )
@@ -250,7 +250,7 @@ class TestJWTTokens:
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
         assert exp > datetime.now(timezone.utc)
 
-    def test_expired_access_token_raises(self):
+    def test_expired_access_token_raises(self) -> None:
         now = datetime.now(timezone.utc)
         payload = {
             "sub": "1",
@@ -266,7 +266,7 @@ class TestJWTTokens:
         with pytest.raises(jwt.PyJWTError):
             decode_token(expired_token)
 
-    def test_tampered_token_raises(self):
+    def test_tampered_token_raises(self) -> None:
         token = create_access_token(
             user_id=1, email="a@b.c", role="admin", tenant_id=1, session_id="s"
         )
@@ -276,7 +276,7 @@ class TestJWTTokens:
         with pytest.raises(jwt.PyJWTError):
             decode_token(tampered)
 
-    def test_token_signed_with_wrong_secret_rejected(self):
+    def test_token_signed_with_wrong_secret_rejected(self) -> None:
         now = datetime.now(timezone.utc)
         payload = {
             "sub": "1",
@@ -287,7 +287,7 @@ class TestJWTTokens:
         with pytest.raises(jwt.PyJWTError):
             decode_token(bad_token)
 
-    def test_create_refresh_token_has_correct_type(self):
+    def test_create_refresh_token_has_correct_type(self) -> None:
         session_id = _make_session_id()
         token = create_refresh_token(user_id=1, session_id=session_id)
         payload = jwt.decode(
@@ -297,7 +297,7 @@ class TestJWTTokens:
         assert payload["sub"] == "1"
         assert payload["session_id"] == session_id
 
-    def test_refresh_token_cannot_be_decoded_as_access(self):
+    def test_refresh_token_cannot_be_decoded_as_access(self) -> None:
         """Refresh token is signed with refresh secret — decoding with access secret must fail."""
         token = create_refresh_token(user_id=1, session_id="s")
         # jwt_refresh_secret may equal jwt_secret + "_refresh" in test env
@@ -313,14 +313,14 @@ class TestJWTTokens:
             )
             assert payload["type"] == "refresh"
 
-    def test_access_token_contains_tenant_id(self):
+    def test_access_token_contains_tenant_id(self) -> None:
         token = create_access_token(
             user_id=5, email="t@t.h", role="viewer", tenant_id=99, session_id="s"
         )
         payload = decode_token(token)
         assert payload["tenant_id"] == 99
 
-    def test_mfa_pending_token_type(self):
+    def test_mfa_pending_token_type(self) -> None:
         token = _make_mfa_pending_token(user_id=7)
         payload = jwt.decode(token, TEST_JWT_SECRET, algorithms=[TEST_JWT_ALGORITHM])
         assert payload["type"] == "mfa_pending"
@@ -361,7 +361,7 @@ def _make_auth_user_row(
 class TestAuthenticateUser:
     """Test authenticate_user via direct service call with mocked DB cursor."""
 
-    def test_successful_login_returns_tokens(self):
+    def test_successful_login_returns_tokens(self) -> None:
         from app.services.auth_service import authenticate_user
 
         user_row = _make_auth_user_row("CorrectPass1!")
@@ -393,7 +393,7 @@ class TestAuthenticateUser:
         assert "refresh_token" in result
         assert result["user"]["id"] == 10
 
-    def test_wrong_password_raises_value_error(self):
+    def test_wrong_password_raises_value_error(self) -> None:
         from app.services.auth_service import authenticate_user
 
         user_row = _make_auth_user_row("CorrectPass1!")
@@ -414,7 +414,7 @@ class TestAuthenticateUser:
                     user_agent="pytest",
                 )
 
-    def test_nonexistent_email_raises(self):
+    def test_nonexistent_email_raises(self) -> None:
         from app.services.auth_service import authenticate_user
 
         # fetchone returns None → user not found
@@ -432,7 +432,7 @@ class TestAuthenticateUser:
                 user_agent="pytest",
             )
 
-    def test_inactive_user_raises(self):
+    def test_inactive_user_raises(self) -> None:
         from app.services.auth_service import authenticate_user
 
         user_row = _make_auth_user_row("SomePass1!", is_active=0)
@@ -453,7 +453,7 @@ class TestAuthenticateUser:
                     user_agent="pytest",
                 )
 
-    def test_locked_account_raises(self):
+    def test_locked_account_raises(self) -> None:
         from app.services.auth_service import authenticate_user
 
         future = datetime.now(timezone.utc) + timedelta(minutes=10)
@@ -481,13 +481,13 @@ class TestAuthenticateUser:
 # ---------------------------------------------------------------------------
 
 class TestAccountLockout:
-    def test_max_failed_logins_setting(self):
+    def test_max_failed_logins_setting(self) -> None:
         assert settings.max_failed_logins == 5
 
-    def test_lockout_duration_configured(self):
+    def test_lockout_duration_configured(self) -> None:
         assert settings.lockout_duration_minutes == 15
 
-    def test_locked_until_in_future_causes_lockout(self):
+    def test_locked_until_in_future_causes_lockout(self) -> None:
         """A user with locked_until in the future must not be able to log in."""
         from app.services.auth_service import authenticate_user
 
@@ -506,7 +506,7 @@ class TestAccountLockout:
             with pytest.raises(ValueError):
                 authenticate_user("locked@test.com", "Pass1!Word", "127.0.0.1", "ua")
 
-    def test_expired_lockout_allows_login(self):
+    def test_expired_lockout_allows_login(self) -> None:
         """A lockout in the past should not block the user."""
         from app.services.auth_service import authenticate_user
 
@@ -540,14 +540,14 @@ class TestAccountLockout:
 # ---------------------------------------------------------------------------
 
 class TestPasswordHistory:
-    def test_password_history_depth_constant(self):
+    def test_password_history_depth_constant(self) -> None:
         """The system must track at least 5 previous passwords per HIPAA guidance."""
         from app.services import auth_service
         # Check the constant or default depth
         depth = getattr(auth_service, "_PASSWORD_HISTORY_DEPTH", 5)
         assert depth >= 5
 
-    def test_check_password_history_raises_on_reuse(self):
+    def test_check_password_history_raises_on_reuse(self) -> None:
         """Re-using a recently-used password must raise ValueError."""
         from app.services.auth_service import _check_password_history
 
@@ -558,7 +558,7 @@ class TestPasswordHistory:
             with pytest.raises(ValueError, match="[Pp]revious|[Rr]euse|[Hh]istory"):
                 _check_password_history(user_id=1, new_password=old_pw)
 
-    def test_check_password_history_passes_for_new_password(self):
+    def test_check_password_history_passes_for_new_password(self) -> None:
         """A fresh password not in history must not raise."""
         from app.services.auth_service import _check_password_history
 
@@ -569,13 +569,13 @@ class TestPasswordHistory:
             # Should not raise
             _check_password_history(user_id=1, new_password="NewPass2!fresh")
 
-    def test_check_password_history_empty_history_passes(self):
+    def test_check_password_history_empty_history_passes(self) -> None:
         from app.services.auth_service import _check_password_history
 
         with _raf_cursor_returning([]):
             _check_password_history(user_id=1, new_password="AnyPass1!")
 
-    def test_change_password_enforces_complexity(self):
+    def test_change_password_enforces_complexity(self) -> None:
         """change_password must reject a weak new password with ValueError."""
         from app.services.auth_service import change_password
 
@@ -600,7 +600,7 @@ class TestPasswordHistory:
 # ---------------------------------------------------------------------------
 
 class TestMFAFlow:
-    def test_mfa_pending_token_short_expiry(self):
+    def test_mfa_pending_token_short_expiry(self) -> None:
         """mfa_pending token must expire in ~5 minutes."""
         token = _make_mfa_pending_token(user_id=42)
         payload = jwt.decode(token, TEST_JWT_SECRET, algorithms=[TEST_JWT_ALGORITHM])
@@ -612,17 +612,17 @@ class TestMFAFlow:
         # Must not be already expired
         assert delta.total_seconds() > 0
 
-    def test_expired_mfa_pending_token_rejected(self):
+    def test_expired_mfa_pending_token_rejected(self) -> None:
         expired_token = _make_mfa_pending_token(user_id=42, expired=True)
         with pytest.raises(jwt.PyJWTError):
             decode_token(expired_token)
 
-    def test_mfa_pending_token_has_correct_type_claim(self):
+    def test_mfa_pending_token_has_correct_type_claim(self) -> None:
         token = _make_mfa_pending_token(user_id=7)
         payload = jwt.decode(token, TEST_JWT_SECRET, algorithms=[TEST_JWT_ALGORITHM])
         assert payload["type"] == "mfa_pending"
 
-    def test_complete_mfa_login_with_correct_code(self):
+    def test_complete_mfa_login_with_correct_code(self) -> None:
         """complete_mfa_login must return tokens when the TOTP code verifies."""
         from app.services.auth_service import complete_mfa_login
 
@@ -652,7 +652,7 @@ class TestMFAFlow:
             )
         assert "access_token" in result
 
-    def test_complete_mfa_login_with_wrong_code_raises(self):
+    def test_complete_mfa_login_with_wrong_code_raises(self) -> None:
         from app.services.auth_service import complete_mfa_login
 
         mfa_user = dict(MOCK_MFA_USER)
@@ -680,22 +680,22 @@ class TestMFAFlow:
 class TestLoginEndpoint:
     """Tests against POST /api/auth/login through TestClient."""
 
-    def test_login_missing_email_returns_422(self, client):
+    def test_login_missing_email_returns_422(self, client) -> None:
         resp = client.post("/api/auth/login", json={"password": "Pass1!"})
         assert resp.status_code == 422
 
-    def test_login_missing_password_returns_422(self, client):
+    def test_login_missing_password_returns_422(self, client) -> None:
         resp = client.post("/api/auth/login", json={"email": "a@b.com"})
         assert resp.status_code == 422
 
-    def test_login_invalid_email_format_returns_422(self, client):
+    def test_login_invalid_email_format_returns_422(self, client) -> None:
         resp = client.post(
             "/api/auth/login",
             json={"email": "not-an-email", "password": "Pass1!Word"},
         )
         assert resp.status_code == 422
 
-    def test_login_wrong_credentials_returns_401(self, client):
+    def test_login_wrong_credentials_returns_401(self, client) -> None:
         # Empty cursor → user not found → 401
         noop_cm, _ = make_cursor_cm(rows=[])
         with (
@@ -710,7 +710,7 @@ class TestLoginEndpoint:
             )
         assert resp.status_code == 401
 
-    def test_login_success_returns_access_and_refresh_tokens(self, client):
+    def test_login_success_returns_access_and_refresh_tokens(self, client) -> None:
         user_row = _make_auth_user_row("AdminPass1!")
         user_row["email"] = "admin@test.health"
         session_row = {
@@ -739,7 +739,7 @@ class TestLoginEndpoint:
         assert "access_token" in data
         assert "refresh_token" in data
 
-    def test_login_response_never_leaks_password_hash(self, client):
+    def test_login_response_never_leaks_password_hash(self, client) -> None:
         user_row = _make_auth_user_row("AdminPass1!")
         user_row["email"] = "admin@test.health"
         session_row = {
@@ -767,7 +767,7 @@ class TestLoginEndpoint:
         assert "password_hash" not in resp_text
         assert "$2b$" not in resp_text
 
-    def test_login_mfa_required_returns_mfa_token(self, client):
+    def test_login_mfa_required_returns_mfa_token(self, client) -> None:
         mfa_result = {
             "mfa_required": True,
             "mfa_token": "test_mfa_token_abc",
@@ -792,11 +792,11 @@ class TestLoginEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestMeEndpoint:
-    def test_me_without_auth_returns_401(self, client):
+    def test_me_without_auth_returns_401(self, client) -> None:
         resp = client.get("/api/auth/me")
         assert resp.status_code == 401
 
-    def test_me_with_valid_token_returns_user(self, client):
+    def test_me_with_valid_token_returns_user(self, client) -> None:
         user = dict(MOCK_ADMIN_USER)
         session_row = {"session_id": user["session_id"], "is_revoked": 0}
         token = _make_access_token(user)
@@ -813,7 +813,7 @@ class TestMeEndpoint:
         data = resp.json()
         assert data["email"] == user["email"]
 
-    def test_me_with_expired_token_returns_401(self, client):
+    def test_me_with_expired_token_returns_401(self, client) -> None:
         user = dict(MOCK_ADMIN_USER)
         expired_token = _make_access_token(user, expired=True)
         resp = client.get(
@@ -822,7 +822,7 @@ class TestMeEndpoint:
         )
         assert resp.status_code == 401
 
-    def test_me_response_does_not_contain_password_hash(self, client):
+    def test_me_response_does_not_contain_password_hash(self, client) -> None:
         user = dict(MOCK_ADMIN_USER)
         session_row = {"session_id": user["session_id"], "is_revoked": 0}
         token = _make_access_token(user)

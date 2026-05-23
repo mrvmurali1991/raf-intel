@@ -57,21 +57,21 @@ def _cursor_cm(fetch_sequence):
 
 
 class TestPercentileMath:
-    def test_top_value(self):
+    def test_top_value(self) -> None:
         assert rpb._percentile_rank(0.9, [0.1, 0.4, 0.6, 0.9]) == 100.0
 
-    def test_bottom_value(self):
+    def test_bottom_value(self) -> None:
         assert rpb._percentile_rank(0.1, [0.1, 0.4, 0.6, 0.9]) == 25.0
 
-    def test_empty_peers(self):
+    def test_empty_peers(self) -> None:
         assert rpb._percentile_rank(0.5, []) == 0.0
 
-    def test_quartiles_basic(self):
+    def test_quartiles_basic(self) -> None:
         q1, med, q3 = rpb._quartiles([0.1, 0.2, 0.4, 0.6, 0.8])
         assert med == pytest.approx(0.4, abs=1e-3)
         assert q1 < med < q3
 
-    def test_quartiles_single_value(self):
+    def test_quartiles_single_value(self) -> None:
         q1, med, q3 = rpb._quartiles([0.5])
         assert q1 == med == q3 == 0.5
 
@@ -116,7 +116,7 @@ GAPS_FIXTURE = [
 
 
 class TestComputeProviderRates:
-    def test_rates_and_sort_order(self):
+    def test_rates_and_sort_order(self) -> None:
         cm, _ = _cursor_cm([PROVIDERS_FIXTURE, PANEL_FIXTURE, GAPS_FIXTURE])
         with patch.object(rpb, "raf_cursor", cm):
             rows = rpb.compute_provider_rates(tenant_id=1, year=2026)
@@ -142,7 +142,7 @@ class TestComputeProviderRates:
         assert p5["total_gaps"] == 0
         assert p5["panel_size"] == 4
 
-    def test_rate_zero_when_no_gaps(self):
+    def test_rate_zero_when_no_gaps(self) -> None:
         # All providers have zero gaps
         cm, _ = _cursor_cm([PROVIDERS_FIXTURE, PANEL_FIXTURE, []])
         with patch.object(rpb, "raf_cursor", cm):
@@ -153,7 +153,7 @@ class TestComputeProviderRates:
 
 
 class TestComputeSpecialtyCohorts:
-    def test_quartiles_within_specialty(self):
+    def test_quartiles_within_specialty(self) -> None:
         cm, _ = _cursor_cm([
             PROVIDERS_FIXTURE, PANEL_FIXTURE, GAPS_FIXTURE,  # leaderboard call 1 (compute_provider_rates)
         ])
@@ -178,7 +178,7 @@ class TestComputeSpecialtyCohorts:
 
 
 class TestProviderPercentile:
-    def test_percentile_in_specialty(self):
+    def test_percentile_in_specialty(self) -> None:
         # First call: compute_provider_rates → 3 fetchall
         cm, _ = _cursor_cm([PROVIDERS_FIXTURE, PANEL_FIXTURE, GAPS_FIXTURE])
         with patch.object(rpb, "raf_cursor", cm):
@@ -195,7 +195,7 @@ class TestProviderPercentile:
         # Network has 4 active members; provider 1 still at top → 100
         assert res["percentile_in_network"] == 100.0
 
-    def test_insufficient_peers_for_solo_specialty(self):
+    def test_insufficient_peers_for_solo_specialty(self) -> None:
         cm, _ = _cursor_cm([PROVIDERS_FIXTURE, PANEL_FIXTURE, GAPS_FIXTURE])
         with patch.object(rpb, "raf_cursor", cm):
             res = rpb.provider_percentile(provider_id=4, tenant_id=1, year=2026)
@@ -207,7 +207,7 @@ class TestProviderPercentile:
         # Network has n=4, still computes
         assert res["percentile_in_network"] is not None
 
-    def test_unknown_provider_falls_back(self):
+    def test_unknown_provider_falls_back(self) -> None:
         cm, _ = _cursor_cm([PROVIDERS_FIXTURE, PANEL_FIXTURE, GAPS_FIXTURE])
         with patch.object(rpb, "raf_cursor", cm):
             res = rpb.provider_percentile(provider_id=999, tenant_id=1, year=2026)
@@ -222,7 +222,7 @@ class TestProviderPercentile:
 
 
 class TestProviderDecay:
-    def test_three_year_lookback(self):
+    def test_three_year_lookback(self) -> None:
         rows = [
             {"yr": 2024, "gaps_total": 10, "gaps_closed": 4},
             {"yr": 2025, "gaps_total": 10, "gaps_closed": 6},
@@ -236,7 +236,7 @@ class TestProviderDecay:
         assert res["rates"] == [0.4, 0.6, 0.8]
         assert res["deltas"] == [None, pytest.approx(0.2, abs=1e-4), pytest.approx(0.2, abs=1e-4)]
 
-    def test_missing_year_zero_filled(self):
+    def test_missing_year_zero_filled(self) -> None:
         rows = [
             {"yr": 2026, "gaps_total": 10, "gaps_closed": 5},
         ]
@@ -253,7 +253,7 @@ class TestProviderDecay:
 
 
 class TestUnrecapturedTopHccs:
-    def test_orders_by_at_risk(self):
+    def test_orders_by_at_risk(self) -> None:
         rows = [
             {"hcc_code": "85", "patient_count": 3, "dollars_at_risk": 9000.0},
             {"hcc_code": "18", "patient_count": 2, "dollars_at_risk": 6000.0},

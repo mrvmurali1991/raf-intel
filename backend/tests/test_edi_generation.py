@@ -59,7 +59,7 @@ def _stub_db(monkeypatch):
 # 837
 # ---------------------------------------------------------------------------
 
-def test_837_single_encounter_envelope():
+def test_837_single_encounter_envelope() -> None:
     text = x12_837.generate_837_encounter(patient_id=3, encounter_id=None,
                                           hcc_codes=["E11.65", "I50.23"])
     assert text.startswith("ISA*")
@@ -70,19 +70,19 @@ def test_837_single_encounter_envelope():
     assert "IEA*1*" in text
 
 
-def test_837_isa_is_106_bytes():
+def test_837_isa_is_106_bytes() -> None:
     text = x12_837.generate_837_encounter(3, None, ["E11.65"])
     isa_line = text.splitlines()[0]
     assert len(isa_line) == 106, f"ISA must be 106 bytes incl terminator, got {len(isa_line)}"
 
 
-def test_837_diagnosis_segment_present():
+def test_837_diagnosis_segment_present() -> None:
     text = x12_837.generate_837_encounter(3, None, ["E11.65", "I50.23"])
     assert "HI*ABK:E1165" in text
     assert "ABF:I5023" in text
 
 
-def test_837_se_count_matches_segments():
+def test_837_se_count_matches_segments() -> None:
     text = x12_837.generate_837_encounter(3, None, ["E11.65"])
     # Find ST..SE block
     body = text.split("ST*837*", 1)[1]
@@ -96,7 +96,7 @@ def test_837_se_count_matches_segments():
     assert actual == se_count, f"SE01 says {se_count} but counted {actual}"
 
 
-def test_837_batch_one_st_per_patient():
+def test_837_batch_one_st_per_patient() -> None:
     text = x12_837.generate_837_batch([3, 4, 5], 2026)
     assert text.count("ST*837*") == 3
     assert text.count("SE*") == 3
@@ -104,7 +104,7 @@ def test_837_batch_one_st_per_patient():
     assert text.count("ISA*") == 1
 
 
-def test_837_required_loops_present():
+def test_837_required_loops_present() -> None:
     text = x12_837.generate_837_encounter(3, None, ["E11.65"])
     # 1000A submitter, 1000B receiver, 2010AA billing prov, 2010BA subscriber
     assert "NM1*41*" in text
@@ -117,7 +117,7 @@ def test_837_required_loops_present():
 # 834
 # ---------------------------------------------------------------------------
 
-def test_834_envelope():
+def test_834_envelope() -> None:
     text = x12_834.generate_834_enrollment([3, 4], 2026)
     assert text.startswith("ISA*")
     assert "GS*BE*" in text
@@ -127,12 +127,12 @@ def test_834_envelope():
     assert "IEA*1*" in text
 
 
-def test_834_one_ins_per_member():
+def test_834_one_ins_per_member() -> None:
     text = x12_834.generate_834_enrollment([3, 4, 5], 2026)
     assert text.count("\nINS*") == 3
 
 
-def test_834_member_loop_segments():
+def test_834_member_loop_segments() -> None:
     text = x12_834.generate_834_enrollment([3], 2026)
     assert "INS*Y*18*030" in text
     assert "NM1*IL*1*DOE*JANE" in text
@@ -142,7 +142,7 @@ def test_834_member_loop_segments():
     assert "DTP*349*D8*20261231" in text
 
 
-def test_834_empty_patient_ids_raises():
+def test_834_empty_patient_ids_raises() -> None:
     with pytest.raises(ValueError):
         x12_834.generate_834_enrollment([], 2026)
 
@@ -151,13 +151,13 @@ def test_834_empty_patient_ids_raises():
 # Common
 # ---------------------------------------------------------------------------
 
-def test_normalize_icd10_strips_dot_and_uppercases():
+def test_normalize_icd10_strips_dot_and_uppercases() -> None:
     assert x12.normalize_icd10("E11.65") == "E1165"
     assert x12.normalize_icd10("i50.23") == "I5023"
     assert x12.normalize_icd10("") == ""
 
 
-def test_isa_segment_pads_sender_and_receiver():
+def test_isa_segment_pads_sender_and_receiver() -> None:
     isa = x12.isa_segment(
         sender_id="SEND",
         receiver_id="RECV",
@@ -170,12 +170,12 @@ def test_isa_segment_pads_sender_and_receiver():
     assert len(parts[8]) == 15
 
 
-def test_segment_strips_trailing_empty_elements():
+def test_segment_strips_trailing_empty_elements() -> None:
     s = x12.segment("REF", "0F", "12345", "", "")
     assert s == "REF*0F*12345~"
 
 
-def test_segment_preserves_inner_empty_elements():
+def test_segment_preserves_inner_empty_elements() -> None:
     # composite elements must be passed as a tuple/list — pre-joining with ':'
     # would be sanitised by clean() since ':' is the sub-element separator.
     s = x12.segment("CLM", "C1", "0.00", "", "", ["11", "B", "1"], "Y")

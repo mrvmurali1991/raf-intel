@@ -42,7 +42,7 @@ class TestTesseractOcr:
     def _mock_pytesseract_output(self, words: list[str], confs: list[int]) -> dict:
         return {"text": words, "conf": confs}
 
-    def test_returns_text_and_confidence(self):
+    def test_returns_text_and_confidence(self) -> None:
         """tesseract_ocr should join word tokens and average confidence."""
         from app.services.ocr_fallback import tesseract_ocr
 
@@ -100,7 +100,7 @@ class TestTesseractOcr:
         assert "World" in text
         assert abs(conf - (85.0 / 100.0)) < 0.01  # avg of 90 + 80 = 85, /100
 
-    def test_empty_page_returns_zero_confidence(self):
+    def test_empty_page_returns_zero_confidence(self) -> None:
         """All -1 confidence tokens → mean_conf = 0.0."""
         mock_pyt = MagicMock()
         mock_pyt.Output.DICT = "dict"
@@ -128,7 +128,7 @@ class TestTesseractOcr:
 class TestAwsTextractOcr:
     """Unit tests for ocr_fallback.aws_textract_ocr."""
 
-    def test_parses_line_blocks(self, monkeypatch):
+    def test_parses_line_blocks(self, monkeypatch) -> None:
         """Should extract LINE block text and average confidence."""
         blocks = [
             {"BlockType": "PAGE", "Text": "", "Confidence": 99.0},
@@ -155,7 +155,7 @@ class TestAwsTextractOcr:
         expected_conf = ((98.5 + 97.0) / 2) / 100.0
         assert abs(conf - expected_conf) < 0.001
 
-    def test_empty_response_returns_zero_conf(self, monkeypatch):
+    def test_empty_response_returns_zero_conf(self, monkeypatch) -> None:
         """Empty Blocks list → text='' and conf=0.0."""
         mock_client = MagicMock()
         mock_client.analyze_document.return_value = {"Blocks": []}
@@ -189,49 +189,49 @@ class TestChooseExtractor:
     def _policy(self, **kwargs):
         return self.TenantDocPolicy(**kwargs)
 
-    def test_llm_disabled_tenant_pdf_uses_ocr_fallback(self):
+    def test_llm_disabled_tenant_pdf_uses_ocr_fallback(self) -> None:
         """LLM-disabled tenant + PDF → ocr_fallback."""
         policy = self._policy(tenant_id="t1", disable_llm_documents=True)
         result = self.choose_extractor(b"data", "application/pdf", policy)
         assert result == "ocr_fallback"
 
-    def test_behavioral_health_category_pdf_uses_ocr_fallback(self):
+    def test_behavioral_health_category_pdf_uses_ocr_fallback(self) -> None:
         """Behavioral-health category + PDF → ocr_fallback (42 CFR Part 2)."""
         policy = self._policy(tenant_id="t1", disable_llm_documents=False)
         result = self.choose_extractor(b"data", "application/pdf", policy, "behavioral_health")
         assert result == "ocr_fallback"
 
-    def test_substance_abuse_category_uses_ocr_fallback(self):
+    def test_substance_abuse_category_uses_ocr_fallback(self) -> None:
         """Substance-abuse category → ocr_fallback."""
         policy = self._policy(tenant_id="t1")
         result = self.choose_extractor(b"data", "application/pdf", policy, "substance_abuse")
         assert result == "ocr_fallback"
 
-    def test_normal_tenant_pdf_uses_gemini_vision(self):
+    def test_normal_tenant_pdf_uses_gemini_vision(self) -> None:
         """Normal tenant + PDF + no special category → gemini_vision."""
         policy = self._policy(tenant_id="t1", disable_llm_documents=False)
         result = self.choose_extractor(b"data", "application/pdf", policy)
         assert result == "gemini_vision"
 
-    def test_tiff_always_uses_ocr_fallback(self):
+    def test_tiff_always_uses_ocr_fallback(self) -> None:
         """TIFF is not supported by Gemini → ocr_fallback."""
         policy = self._policy(tenant_id="t1", disable_llm_documents=False)
         result = self.choose_extractor(b"data", "image/tiff", policy)
         assert result == "ocr_fallback"
 
-    def test_jpeg_normal_tenant_uses_gemini_vision(self):
+    def test_jpeg_normal_tenant_uses_gemini_vision(self) -> None:
         """JPEG + normal tenant → gemini_vision."""
         policy = self._policy(tenant_id="t1")
         result = self.choose_extractor(b"data", "image/jpeg", policy)
         assert result == "gemini_vision"
 
-    def test_unknown_mimetype_skips(self):
+    def test_unknown_mimetype_skips(self) -> None:
         """Unsupported MIME type → skip."""
         policy = self._policy(tenant_id="t1")
         result = self.choose_extractor(b"data", "application/octet-stream", policy)
         assert result == "skip"
 
-    def test_tenant_blocked_category_list(self):
+    def test_tenant_blocked_category_list(self) -> None:
         """Per-tenant llm_blocked_categories overrides even supported MIME types."""
         policy = self._policy(
             tenant_id="t1",
@@ -241,7 +241,7 @@ class TestChooseExtractor:
         result = self.choose_extractor(b"data", "application/pdf", policy, "cardiology_notes")
         assert result == "ocr_fallback"
 
-    def test_tenant_blocked_category_case_insensitive(self):
+    def test_tenant_blocked_category_case_insensitive(self) -> None:
         """Category matching should be case-insensitive."""
         policy = self._policy(
             tenant_id="t1",
@@ -260,7 +260,7 @@ class TestChooseExtractor:
 class TestOcrDocumentMultiPage:
     """Integration-style test for ocr_document with a multi-page PDF."""
 
-    def test_multi_page_pdf_returns_per_page_text(self):
+    def test_multi_page_pdf_returns_per_page_text(self) -> None:
         """ocr_document with PDF should return one entry per page."""
         # Build mock pypdfium2 with 2 pages
         mock_bitmap1 = MagicMock()
@@ -316,7 +316,7 @@ class TestOcrDocumentMultiPage:
         assert "Page" in result["pages"][0]["text"] or result["pages"][0]["text"] != ""
         assert result["full_text"] != ""
 
-    def test_tiff_single_frame(self):
+    def test_tiff_single_frame(self) -> None:
         """Single-frame TIFF returns one page result."""
         mock_pyt = MagicMock()
         mock_pyt.Output.DICT = "dict"

@@ -118,25 +118,25 @@ def _mk(prefix: str, ontology: str, code_suffix: str, label: str | None = None) 
 # ---------------------------------------------------------------------------
 
 
-def test_ontology_enum_matches_schema_constants():
+def test_ontology_enum_matches_schema_constants() -> None:
     assert "umls" in ONTOLOGIES
     assert "icd10" in ONTOLOGIES
     assert "hcc" in ONTOLOGIES
     assert len(ONTOLOGIES) == len(set(ONTOLOGIES))
 
 
-def test_edge_type_constants_unique_and_present():
+def test_edge_type_constants_unique_and_present() -> None:
     assert EdgeType.MAPS_TO in EDGE_TYPES
     assert EdgeType.HAS_INDICATION in EDGE_TYPES
     assert len(EDGE_TYPES) == len(set(EDGE_TYPES))
 
 
-def test_concept_dataclass_validates_ontology():
+def test_concept_dataclass_validates_ontology() -> None:
     with pytest.raises(ValueError):
         Concept(ontology="not-real", code="X", preferred_label="X")
 
 
-def test_edge_dataclass_validates_self_loop_and_weight():
+def test_edge_dataclass_validates_self_loop_and_weight() -> None:
     with pytest.raises(ValueError):
         Edge(src_concept_id=1, dst_concept_id=1, edge_type=EdgeType.MAPS_TO)
     with pytest.raises(ValueError):
@@ -148,7 +148,7 @@ def test_edge_dataclass_validates_self_loop_and_weight():
 # ---------------------------------------------------------------------------
 
 
-def test_upsert_concept_inserts_and_returns_id(run_prefix: str):
+def test_upsert_concept_inserts_and_returns_id(run_prefix: str) -> None:
     c = _mk(run_prefix, "icd10", "001")
     cid = repo.upsert_concept(c)
     assert isinstance(cid, int) and cid > 0
@@ -159,7 +159,7 @@ def test_upsert_concept_inserts_and_returns_id(run_prefix: str):
     assert fetched.metadata == {"test": True, "prefix": run_prefix}
 
 
-def test_upsert_concept_idempotent_on_repeat(run_prefix: str):
+def test_upsert_concept_idempotent_on_repeat(run_prefix: str) -> None:
     c1 = _mk(run_prefix, "icd10", "002", label="Original")
     cid1 = repo.upsert_concept(c1)
 
@@ -172,7 +172,7 @@ def test_upsert_concept_idempotent_on_repeat(run_prefix: str):
     assert refetched.preferred_label == "Updated"
 
 
-def test_find_by_uri_and_by_code(run_prefix: str):
+def test_find_by_uri_and_by_code(run_prefix: str) -> None:
     c = _mk(run_prefix, "loinc", "003")
     cid = repo.upsert_concept(c)
 
@@ -186,7 +186,7 @@ def test_find_by_uri_and_by_code(run_prefix: str):
     assert repo.find_by_code("loinc", "DOES-NOT-EXIST") is None
 
 
-def test_search_concepts_label_match(run_prefix: str):
+def test_search_concepts_label_match(run_prefix: str) -> None:
     repo.upsert_concept(_mk(run_prefix, "icd10", "010", "Acme Diabetes Marker"))
     repo.upsert_concept(_mk(run_prefix, "loinc", "011", "Acme Diabetes Lab"))
     repo.upsert_concept(_mk(run_prefix, "icd10", "012", "Unrelated Concept"))
@@ -207,7 +207,7 @@ def test_search_concepts_label_match(run_prefix: str):
 # ---------------------------------------------------------------------------
 
 
-def test_upsert_edge_idempotent(run_prefix: str):
+def test_upsert_edge_idempotent(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "100"))
     b = repo.upsert_concept(_mk(run_prefix, "hcc", "101"))
 
@@ -224,7 +224,7 @@ def test_upsert_edge_idempotent(run_prefix: str):
     assert pytest.approx(edges[0].weight, rel=1e-3) == 0.5
 
 
-def test_outgoing_and_incoming_edge_filtering(run_prefix: str):
+def test_outgoing_and_incoming_edge_filtering(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "200"))
     b = repo.upsert_concept(_mk(run_prefix, "hcc", "201"))
     c = repo.upsert_concept(_mk(run_prefix, "loinc", "202"))
@@ -253,7 +253,7 @@ def test_outgoing_and_incoming_edge_filtering(run_prefix: str):
 # ---------------------------------------------------------------------------
 
 
-def test_traverse_zero_depth_returns_only_start(run_prefix: str):
+def test_traverse_zero_depth_returns_only_start(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "300"))
     b = repo.upsert_concept(_mk(run_prefix, "hcc", "301"))
     repo.upsert_edge(Edge(src_concept_id=a, dst_concept_id=b, edge_type=EdgeType.MAPS_TO))
@@ -265,7 +265,7 @@ def test_traverse_zero_depth_returns_only_start(run_prefix: str):
     assert result[0]["via_edge"] is None
 
 
-def test_traverse_respects_max_depth(run_prefix: str):
+def test_traverse_respects_max_depth(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "400"))
     b = repo.upsert_concept(_mk(run_prefix, "icd10", "401"))
     c = repo.upsert_concept(_mk(run_prefix, "hcc", "402"))
@@ -292,7 +292,7 @@ def test_traverse_respects_max_depth(run_prefix: str):
     assert by_id[a] == 0 and by_id[b] == 1 and by_id[c] == 2 and by_id[d] == 3
 
 
-def test_traverse_filters_by_edge_type(run_prefix: str):
+def test_traverse_filters_by_edge_type(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "500"))
     b = repo.upsert_concept(_mk(run_prefix, "hcc", "501"))
     c = repo.upsert_concept(_mk(run_prefix, "loinc", "502"))
@@ -308,17 +308,17 @@ def test_traverse_filters_by_edge_type(run_prefix: str):
     assert {r["concept"].id for r in both} == {a, b, c}
 
 
-def test_traverse_missing_start_returns_empty():
+def test_traverse_missing_start_returns_empty() -> None:
     assert repo.traverse(2_147_483_640, max_depth=2) == []
 
 
-def test_traverse_negative_depth_raises(run_prefix: str):
+def test_traverse_negative_depth_raises(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "600"))
     with pytest.raises(ValueError):
         repo.traverse(a, max_depth=-1)
 
 
-def test_traverse_handles_cycles(run_prefix: str):
+def test_traverse_handles_cycles(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "700"))
     b = repo.upsert_concept(_mk(run_prefix, "hcc", "701"))
     repo.upsert_edge(Edge(src_concept_id=a, dst_concept_id=b, edge_type=EdgeType.COMORBID_WITH))
@@ -333,7 +333,7 @@ def test_traverse_handles_cycles(run_prefix: str):
 # ---------------------------------------------------------------------------
 
 
-def test_delete_concept_cascades_edges(run_prefix: str):
+def test_delete_concept_cascades_edges(run_prefix: str) -> None:
     a = repo.upsert_concept(_mk(run_prefix, "icd10", "800"))
     b = repo.upsert_concept(_mk(run_prefix, "hcc", "801"))
     repo.upsert_edge(Edge(src_concept_id=a, dst_concept_id=b, edge_type=EdgeType.MAPS_TO))
@@ -345,7 +345,7 @@ def test_delete_concept_cascades_edges(run_prefix: str):
     assert repo.incoming_edges(b) == []
 
 
-def test_stats_returns_expected_keys():
+def test_stats_returns_expected_keys() -> None:
     s = repo.stats()
     assert {"concepts", "edges", "by_ontology", "by_edge_type"} <= set(s)
     assert isinstance(s["concepts"], int)
@@ -358,7 +358,7 @@ def test_stats_returns_expected_keys():
 # ---------------------------------------------------------------------------
 
 
-def test_batch_insert_100_concepts_under_one_second(run_prefix: str):
+def test_batch_insert_100_concepts_under_one_second(run_prefix: str) -> None:
     concepts = [_mk(run_prefix, "custom", f"BATCH{i:03d}") for i in range(120)]
     start = time.perf_counter()
     ids = repo.bulk_upsert_concepts(concepts)
@@ -374,7 +374,7 @@ def test_batch_insert_100_concepts_under_one_second(run_prefix: str):
 # ---------------------------------------------------------------------------
 
 
-def test_seed_top_hccs_meets_acceptance_criteria():
+def test_seed_top_hccs_meets_acceptance_criteria() -> None:
     summary = seed_top_hccs()
     assert summary["concepts_inserted"] >= 80, summary
     assert summary["edges_inserted"] >= 80, summary

@@ -71,7 +71,7 @@ def _scripted_cursor(steps):
 
 
 class TestAttributeOrphanGaps:
-    def test_updates_orphan_with_panel_provider(self):
+    def test_updates_orphan_with_panel_provider(self) -> None:
         candidates = [
             {"gap_id": 10, "patient_id": 100, "provider_npi": "1234567890"},
             {"gap_id": 11, "patient_id": 101, "provider_npi": None},
@@ -89,7 +89,7 @@ class TestAttributeOrphanGaps:
         assert result["updated"] == 1
         assert result["still_orphan"] == 1
 
-    def test_no_panel_match_leaves_orphan(self):
+    def test_no_panel_match_leaves_orphan(self) -> None:
         candidates = [{"gap_id": 50, "patient_id": 700, "provider_npi": None}]
         steps = [
             {"fetchall": candidates},
@@ -101,7 +101,7 @@ class TestAttributeOrphanGaps:
         assert result["updated"] == 0
         assert result["still_orphan"] == 1
 
-    def test_zero_orphans(self):
+    def test_zero_orphans(self) -> None:
         steps = [
             {"fetchall": []},
             {"fetchone": {"c": 0}},
@@ -111,7 +111,7 @@ class TestAttributeOrphanGaps:
             result = attribute_orphan_gaps(tenant_id="1")
         assert result == {"checked": 0, "updated": 0, "still_orphan": 0}
 
-    def test_first_provider_wins_when_multiple(self):
+    def test_first_provider_wins_when_multiple(self) -> None:
         # Two panel rows for same gap, only one with NPI; we should pick that one.
         candidates = [
             {"gap_id": 9, "patient_id": 5, "provider_npi": None},
@@ -144,7 +144,7 @@ class TestSmartClose:
         "status": "open", "provider_npi": "1234567890",
     }
 
-    def test_close_writes_evidence_and_inserts_hcc(self):
+    def test_close_writes_evidence_and_inserts_hcc(self) -> None:
         steps = [
             {"fetchone": dict(self.GAP)},   # SELECT gap
             {"rowcount": 1},                # UPDATE recapture_gaps
@@ -177,7 +177,7 @@ class TestSmartClose:
         assert params[3] == "M"          # normalized to upper
         assert params[4] == 1
 
-    def test_close_skips_hcc_when_already_present(self):
+    def test_close_skips_hcc_when_already_present(self) -> None:
         steps = [
             {"fetchone": dict(self.GAP)},
             {"rowcount": 1},
@@ -196,7 +196,7 @@ class TestSmartClose:
         assert result["raf_hcc_inserted"] is False
         assert result["raf_hcc_already_present"] is True
 
-    def test_close_skips_hcc_when_flag_disabled(self):
+    def test_close_skips_hcc_when_flag_disabled(self) -> None:
         steps = [
             {"fetchone": dict(self.GAP)},
             {"rowcount": 1},
@@ -217,7 +217,7 @@ class TestSmartClose:
         sqls = [c[0] for c in cursor.execute_calls]
         assert not any("raf_patient_hcc" in s for s in sqls)
 
-    def test_close_raises_when_gap_missing(self):
+    def test_close_raises_when_gap_missing(self) -> None:
         steps = [{"fetchone": None}]
         cm, _ = _scripted_cursor(steps)
         with patch("app.services.recapture_close_service.raf_cursor", cm):
@@ -229,22 +229,22 @@ class TestSmartClose:
                     tenant_id="1",
                 )
 
-    def test_close_requires_evidence(self):
+    def test_close_requires_evidence(self) -> None:
         with pytest.raises(ValueError, match="evidence_phrase"):
             smart_close(gap_id=1, closed_by="x", evidence_phrase="", tenant_id="1")
 
-    def test_close_requires_closed_by(self):
+    def test_close_requires_closed_by(self) -> None:
         with pytest.raises(ValueError, match="closed_by"):
             smart_close(gap_id=1, closed_by="", evidence_phrase="ok", tenant_id="1")
 
-    def test_close_rejects_invalid_meat_element(self):
+    def test_close_rejects_invalid_meat_element(self) -> None:
         with pytest.raises(ValueError, match="meat_element"):
             smart_close(
                 gap_id=1, closed_by="x",
                 evidence_phrase="ok", meat_element="Z", tenant_id="1",
             )
 
-    def test_close_succeeds_even_if_hcc_insert_blows_up(self):
+    def test_close_succeeds_even_if_hcc_insert_blows_up(self) -> None:
         # Simulate an INSERT exception. The close still succeeds.
         steps = [
             {"fetchone": dict(self.GAP)},
@@ -280,7 +280,7 @@ class TestSmartClose:
 
 
 class TestBulkClose:
-    def test_bulk_closes_all_supplied_gaps(self):
+    def test_bulk_closes_all_supplied_gaps(self) -> None:
         # Patch smart_close so we don't need to script multi-step cursors per id.
         with patch(
             "app.services.recapture_close_service.smart_close",
@@ -303,7 +303,7 @@ class TestBulkClose:
         assert result["errors"] == []
         assert mock_close.call_count == 3
 
-    def test_bulk_collects_errors_and_continues(self):
+    def test_bulk_collects_errors_and_continues(self) -> None:
         def _fake(gap_id, **kw):
             if gap_id == 2:
                 raise ValueError(f"Gap {gap_id} not found")
@@ -326,7 +326,7 @@ class TestBulkClose:
         assert len(result["errors"]) == 1
         assert result["errors"][0]["gap_id"] == 2
 
-    def test_bulk_empty_input(self):
+    def test_bulk_empty_input(self) -> None:
         result = bulk_close(
             gap_ids=[], closed_by="x", evidence_phrase="ok", tenant_id="1",
         )
@@ -341,7 +341,7 @@ class TestBulkClose:
 
 
 class TestReopenGap:
-    def test_reopen_clears_close_audit(self):
+    def test_reopen_clears_close_audit(self) -> None:
         steps = [
             {"fetchone": {"id": 1, "tenant_id": "1", "status": "recaptured"}},
             {"rowcount": 1},
@@ -359,18 +359,18 @@ class TestReopenGap:
         assert update_call[1][2] == "MEAT failed audit"
         assert update_call[1][3] == 1
 
-    def test_reopen_missing_gap(self):
+    def test_reopen_missing_gap(self) -> None:
         steps = [{"fetchone": None}]
         cm, _ = _scripted_cursor(steps)
         with patch("app.services.recapture_close_service.raf_cursor", cm):
             with pytest.raises(ValueError, match="not found"):
                 reopen_gap(gap_id=99, reopened_by="x", reason="why", tenant_id="1")
 
-    def test_reopen_requires_reason(self):
+    def test_reopen_requires_reason(self) -> None:
         with pytest.raises(ValueError, match="reason"):
             reopen_gap(gap_id=1, reopened_by="x", reason="", tenant_id="1")
 
-    def test_reopen_requires_reopened_by(self):
+    def test_reopen_requires_reopened_by(self) -> None:
         with pytest.raises(ValueError, match="reopened_by"):
             reopen_gap(gap_id=1, reopened_by="", reason="why", tenant_id="1")
 
@@ -381,7 +381,7 @@ class TestReopenGap:
 
 
 class TestCloseHistory:
-    def test_returns_recently_closed_gaps(self):
+    def test_returns_recently_closed_gaps(self) -> None:
         rows = [
             {
                 "id": 1, "patient_id": 100, "tenant_id": "1", "hcc_code": "85",
@@ -405,7 +405,7 @@ class TestCloseHistory:
         # ISO-formatted datetime
         assert isinstance(result[0]["resolved_at"], str)
 
-    def test_empty_history(self):
+    def test_empty_history(self) -> None:
         steps = [{"fetchall": []}]
         cm, _ = _scripted_cursor(steps)
         with patch("app.services.recapture_close_service.raf_cursor", cm):

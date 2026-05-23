@@ -64,7 +64,7 @@ def _run_with_fixtures(
 # ---------------------------------------------------------------------------
 
 class TestEmptyPanel:
-    def test_empty_panel_returns_zero_total(self):
+    def test_empty_panel_returns_zero_total(self) -> None:
         out = _run_with_fixtures(
             panel=[],
             coded=[],
@@ -88,7 +88,7 @@ class TestEmptyPanel:
 # ---------------------------------------------------------------------------
 
 class TestRecaptureBucket:
-    def test_single_unrecaptured_hcc(self):
+    def test_single_unrecaptured_hcc(self) -> None:
         # coef 0.5, persistence 0.85 → risk_factor = 0.15
         # 0.5 × 0.15 × 12000 = 900
         out = _run_with_fixtures(
@@ -105,7 +105,7 @@ class TestRecaptureBucket:
         assert recap["count"] == 1
         assert out["total"] == pytest.approx(900.0, rel=1e-4)
 
-    def test_multi_recapture_sums(self):
+    def test_multi_recapture_sums(self) -> None:
         out = _run_with_fixtures(
             panel=[1, 2],
             coded=[],
@@ -123,7 +123,7 @@ class TestRecaptureBucket:
         assert recap["amount"] == pytest.approx(1440.0, rel=1e-4)
         assert recap["count"] == 2
 
-    def test_persistence_one_zeros_recapture(self):
+    def test_persistence_one_zeros_recapture(self) -> None:
         out = _run_with_fixtures(
             panel=[1],
             coded=[],
@@ -145,7 +145,7 @@ class TestRecaptureBucket:
 # ---------------------------------------------------------------------------
 
 class TestMeatImprovementBucket:
-    def test_below_threshold_counts(self):
+    def test_below_threshold_counts(self) -> None:
         # coef 0.4, meat 0.5, base 12000 → 0.4 × 0.5 × 12000 = 2400
         out = _run_with_fixtures(
             panel=[1],
@@ -162,7 +162,7 @@ class TestMeatImprovementBucket:
         assert meat["amount"] == pytest.approx(2400.0, rel=1e-4)
         assert meat["count"] == 1
 
-    def test_at_or_above_threshold_skipped(self):
+    def test_at_or_above_threshold_skipped(self) -> None:
         out = _run_with_fixtures(
             panel=[1],
             coded=[
@@ -179,7 +179,7 @@ class TestMeatImprovementBucket:
         assert meat["amount"] == 0.0
         assert meat["count"] == 0
 
-    def test_no_meat_score_treated_as_zero(self):
+    def test_no_meat_score_treated_as_zero(self) -> None:
         # Missing MEAT row → assumed 0.0 → full coef × 1.0 × base
         out = _run_with_fixtures(
             panel=[1],
@@ -202,7 +202,7 @@ class TestMeatImprovementBucket:
 # ---------------------------------------------------------------------------
 
 class TestNewSuspectBucket:
-    def test_confidence_scales_dollars(self):
+    def test_confidence_scales_dollars(self) -> None:
         # coef 0.6, conf 0.8, base 12000 → 5760
         out = _run_with_fixtures(
             panel=[1],
@@ -216,7 +216,7 @@ class TestNewSuspectBucket:
         assert sus["amount"] == pytest.approx(5760.0, rel=1e-4)
         assert sus["count"] == 1
 
-    def test_zero_confidence_is_skipped(self):
+    def test_zero_confidence_is_skipped(self) -> None:
         out = _run_with_fixtures(
             panel=[1],
             coded=[],
@@ -235,7 +235,7 @@ class TestNewSuspectBucket:
 # ---------------------------------------------------------------------------
 
 class TestCombinedBreakdown:
-    def test_total_is_sum_of_three_buckets_and_pcts_sum_to_100(self):
+    def test_total_is_sum_of_three_buckets_and_pcts_sum_to_100(self) -> None:
         # Recapture: 0.5 × 0.15 × 12000 = 900
         # MEAT:      0.4 × (1-0.5) × 12000 = 2400
         # Suspect:   0.6 × 0.5 × 12000 = 3600
@@ -269,7 +269,7 @@ class TestCombinedBreakdown:
 # ---------------------------------------------------------------------------
 
 class TestTopContributors:
-    def test_top_3_aggregates_same_code(self):
+    def test_top_3_aggregates_same_code(self) -> None:
         # Two patients both with HCC 108 prior-year unrecaptured →
         # top_3 should collapse to a single entry for HCC 108.
         out = _run_with_fixtures(
@@ -295,7 +295,7 @@ class TestTopContributors:
         # Labels surface from the lookup
         assert recap["top_3_hccs"][0]["hcc_label"] == "Heart failure"
 
-    def test_top_3_caps_at_three(self):
+    def test_top_3_caps_at_three(self) -> None:
         rows = [
             {"patient_id": 1, "hcc_code": h, "raf_coefficient": 0.5}
             for h in (1, 2, 3, 4, 5)
@@ -317,7 +317,7 @@ class TestTopContributors:
 # ---------------------------------------------------------------------------
 
 class TestAssumptions:
-    def test_base_rate_imported_from_provider_service(self):
+    def test_base_rate_imported_from_provider_service(self) -> None:
         from app.services.provider_service import _HCC_BASE_RATE
         out = _run_with_fixtures(
             panel=[1],

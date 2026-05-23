@@ -78,14 +78,14 @@ def _patch_active_subquery() -> Any:
 # ===========================================================================
 
 class TestEmptyCases:
-    def test_no_panel_returns_empty(self):
+    def test_no_panel_returns_empty(self) -> None:
         # Single cursor call (panel lookup) → empty list
         db = _FakeDB([[]])
         with _patch_active_subquery(), patch.object(svc, "raf_cursor", db.cursor_cm()):
             result = svc.compute_top_hccs(provider_id=1, year=2026)
         assert result == []
 
-    def test_panel_with_no_open_suspects_returns_empty(self):
+    def test_panel_with_no_open_suspects_returns_empty(self) -> None:
         # 1) panel ids   2) open suspects aggregated → empty
         db = _FakeDB([
             [{"patient_id": 100}, {"patient_id": 101}],
@@ -101,7 +101,7 @@ class TestEmptyCases:
 # ===========================================================================
 
 class TestScoring:
-    def test_expected_lift_formula(self):
+    def test_expected_lift_formula(self) -> None:
         """expected_lift = patient_count * coefficient * BASE_RATE * avg_confidence"""
         # plan order — see compute_top_hccs body:
         #   1. _provider_panel
@@ -135,7 +135,7 @@ class TestScoring:
         assert row["expected_lift"] == round(expected, 2)
         assert row["peer_capture_rate"] is None  # no peers
 
-    def test_already_coded_hcc_excluded(self):
+    def test_already_coded_hcc_excluded(self) -> None:
         """An HCC that's already coded for the panel must NOT be returned."""
         plans = [
             [{"patient_id": 100}, {"patient_id": 101}],
@@ -156,7 +156,7 @@ class TestScoring:
         assert "108" not in codes
         assert "111" in codes
 
-    def test_hcc_without_coefficient_is_dropped(self):
+    def test_hcc_without_coefficient_is_dropped(self) -> None:
         """Unknown coefficient → score is zero; the row must be omitted."""
         plans = [
             [{"patient_id": 100}],
@@ -182,7 +182,7 @@ class TestScoring:
 # ===========================================================================
 
 class TestOrdering:
-    def test_sorted_by_lift_desc_and_limited(self):
+    def test_sorted_by_lift_desc_and_limited(self) -> None:
         # Three candidate HCCs, none coded; check ordering and limit=2
         plans = [
             [{"patient_id": 100}, {"patient_id": 101}, {"patient_id": 102}, {"patient_id": 103}],
@@ -219,7 +219,7 @@ class TestOrdering:
 # ===========================================================================
 
 class TestPeerCaptureRate:
-    def test_peer_rate_averages_across_peers(self):
+    def test_peer_rate_averages_across_peers(self) -> None:
         """
         Two peers in same specialty.
           peer A: coded 1, suspect 1 → 0.5
@@ -260,7 +260,7 @@ class TestPeerCaptureRate:
         # (0.5 + 0.75) / 2 = 0.625
         assert result[0]["peer_capture_rate"] == pytest.approx(0.625, abs=1e-4)
 
-    def test_peer_rate_none_when_no_signal(self):
+    def test_peer_rate_none_when_no_signal(self) -> None:
         plans = [
             [{"patient_id": 100}],
             [{"hcc_code": "85", "patient_count": 1, "avg_confidence": 1.0}],

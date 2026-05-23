@@ -100,29 +100,29 @@ def _patch_openemr_cursor(monkeypatch, scripted: list[Any]):
 # ---------------------------------------------------------------------------
 
 class TestEvaluateThreshold:
-    def test_above_triggers(self):
+    def test_above_triggers(self) -> None:
         assert loinc_service.evaluate_threshold(8.2, None, 6.5, "above") is True
 
-    def test_above_does_not_trigger_below(self):
+    def test_above_does_not_trigger_below(self) -> None:
         assert loinc_service.evaluate_threshold(5.5, None, 6.5, "above") is False
 
-    def test_below_triggers(self):
+    def test_below_triggers(self) -> None:
         assert loinc_service.evaluate_threshold(25, 30, None, "below") is True
 
-    def test_within_inclusive(self):
+    def test_within_inclusive(self) -> None:
         assert loinc_service.evaluate_threshold(140, 135, 145, "within") is True
         assert loinc_service.evaluate_threshold(155, 135, 145, "within") is False
 
-    def test_outside_high(self):
+    def test_outside_high(self) -> None:
         assert loinc_service.evaluate_threshold(160, 135, 145, "outside") is True
 
-    def test_outside_low(self):
+    def test_outside_low(self) -> None:
         assert loinc_service.evaluate_threshold(120, 135, 145, "outside") is True
 
-    def test_unknown_meaning_returns_false(self):
+    def test_unknown_meaning_returns_false(self) -> None:
         assert loinc_service.evaluate_threshold(1, 0, 2, "spaghetti") is False
 
-    def test_non_numeric_value_safe(self):
+    def test_non_numeric_value_safe(self) -> None:
         assert loinc_service.evaluate_threshold("oops", 1, 2, "above") is False  # type: ignore[arg-type]
 
 
@@ -157,7 +157,7 @@ class TestEvaluateLabValue:
              "display_name": "Type 2 DM (uncontrolled)", "hcc_code": "HCC36"},
         ]
 
-    def test_hba1c_82_triggers_diabetes_only(self, monkeypatch):
+    def test_hba1c_82_triggers_diabetes_only(self, monkeypatch) -> None:
         scripted = self._hba1c_rows()
         # Only first concept lookup happens (8.2 < 9.0 so uncontrolled rule misses)
         scripted = [scripted[0], scripted[1]]
@@ -169,7 +169,7 @@ class TestEvaluateLabValue:
         assert out[0]["hcc_code"] == "HCC36"
         assert out[0]["threshold_explanation"].startswith("8.2 %")
 
-    def test_hba1c_95_triggers_both(self, monkeypatch):
+    def test_hba1c_95_triggers_both(self, monkeypatch) -> None:
         scripted = self._hba1c_rows()
         _patch_raf_cursor(monkeypatch, scripted)
 
@@ -178,15 +178,15 @@ class TestEvaluateLabValue:
         codes = sorted(o["condition_code"] for o in out)
         assert codes == ["E11.65", "E11.9"]
 
-    def test_unknown_loinc_returns_empty(self, monkeypatch):
+    def test_unknown_loinc_returns_empty(self, monkeypatch) -> None:
         _patch_raf_cursor(monkeypatch, [[]])
         assert loinc_service.evaluate_lab_value("9999-9", 100) == []
 
-    def test_non_numeric_value_returns_empty(self, monkeypatch):
+    def test_non_numeric_value_returns_empty(self, monkeypatch) -> None:
         _patch_raf_cursor(monkeypatch, [])
         assert loinc_service.evaluate_lab_value("4548-4", "non-numeric") == []
 
-    def test_egfr_25_triggers_ckd_stage4(self, monkeypatch):
+    def test_egfr_25_triggers_ckd_stage4(self, monkeypatch) -> None:
         scripted = [
             [
                 {"id": 10, "loinc_code": "33914-3", "test_name": "eGFR",
@@ -239,7 +239,7 @@ class TestAnemiaSexSpecific:
             ],
         ]
 
-    def test_hgb_12_triggers_male_only(self, monkeypatch):
+    def test_hgb_12_triggers_male_only(self, monkeypatch) -> None:
         scripted = self._rows(12.0)
         # value=12: only male rule fires (12 <= 13).  One concept lookup.
         scripted.append({"id": 301, "code_system": "ICD10", "code": "D64.9",
@@ -250,7 +250,7 @@ class TestAnemiaSexSpecific:
         assert len(out) == 1
         assert "male" in (out[0]["test_name"] or "").lower()
 
-    def test_hgb_105_triggers_both(self, monkeypatch):
+    def test_hgb_105_triggers_both(self, monkeypatch) -> None:
         scripted = self._rows(10.5)
         scripted.append({"id": 300, "code_system": "ICD10", "code": "D64.9",
                          "display_name": "Anemia (female)", "hcc_code": "HCC48"})
@@ -279,7 +279,7 @@ class TestResolveLabToLoinc:
              "threshold_high": None, "confidence": 0.7},
         ]
 
-    def test_resolve_hba1c_alias(self, monkeypatch):
+    def test_resolve_hba1c_alias(self, monkeypatch) -> None:
         # First LIKE returns nothing (since 'hemoglobin a1c' vs the LIKE pattern
         # token starts with 'hemoglobin'); we still test the broad-scan fallback.
         scripted = [
@@ -292,7 +292,7 @@ class TestResolveLabToLoinc:
         assert out[0]["loinc_code"] == "4548-4"
         assert out[0]["similarity"] > 0
 
-    def test_resolve_egfr(self, monkeypatch):
+    def test_resolve_egfr(self, monkeypatch) -> None:
         scripted = [[self._signal_rows()[1]]]
         _patch_raf_cursor(monkeypatch, scripted)
 
@@ -300,12 +300,12 @@ class TestResolveLabToLoinc:
         assert out
         assert out[0]["loinc_code"] == "33914-3"
 
-    def test_resolve_empty_input(self, monkeypatch):
+    def test_resolve_empty_input(self, monkeypatch) -> None:
         _patch_raf_cursor(monkeypatch, [])
         assert loinc_service.resolve_lab_to_loinc("") == []
         assert loinc_service.resolve_lab_to_loinc("   ") == []
 
-    def test_resolve_no_matches_returns_empty(self, monkeypatch):
+    def test_resolve_no_matches_returns_empty(self, monkeypatch) -> None:
         # LIKE returns nothing, broad scan returns rows with low similarity.
         scripted = [[], self._signal_rows()]
         _patch_raf_cursor(monkeypatch, scripted)
@@ -319,7 +319,7 @@ class TestResolveLabToLoinc:
 # ---------------------------------------------------------------------------
 
 class TestLabSuspectEngineIntegration:
-    def test_kg_signal_appears_in_detect_lab_suspects(self, monkeypatch):
+    def test_kg_signal_appears_in_detect_lab_suspects(self, monkeypatch) -> None:
         """A note containing 'HbA1c: 8.2' must yield a KG-driven suspect tagged
         via the kg_lab_signals signal id."""
 
@@ -351,7 +351,7 @@ class TestLabSuspectEngineIntegration:
             s["evidence_detail"].get("via") == "kg_lab_signals" for s in suspects
         ), "expected at least one kg_lab_signals-sourced suspect"
 
-    def test_legacy_rules_still_fire_when_kg_empty(self, monkeypatch):
+    def test_legacy_rules_still_fire_when_kg_empty(self, monkeypatch) -> None:
         """When kg_lab_signals returns nothing, the legacy hardcoded rules
         must still produce a suspect (eGFR <30 → CKD Stage 4)."""
         monkeypatch.setattr(lab_suspect_engine, "_kg_evaluate", lambda *a, **k: [])
@@ -362,7 +362,7 @@ class TestLabSuspectEngineIntegration:
         )
         assert any(s["icd10"].startswith("N18") for s in suspects)
 
-    def test_existing_diagnosis_suppresses_kg_signal(self, monkeypatch):
+    def test_existing_diagnosis_suppresses_kg_signal(self, monkeypatch) -> None:
         """A patient already coded for E11 should NOT receive a duplicate DM
         suspect from kg_lab_signals."""
 
@@ -399,7 +399,7 @@ class TestLabSuspectEngineIntegration:
 # ---------------------------------------------------------------------------
 
 class TestGetLoincSignalsForHcc:
-    def test_returns_only_matching_hcc(self, monkeypatch):
+    def test_returns_only_matching_hcc(self, monkeypatch) -> None:
         scripted = [[
             {"id": 1, "loinc_code": "4548-4", "test_name": "Hemoglobin A1c",
              "unit": "%", "threshold_low": None, "threshold_high": 6.5,
@@ -418,7 +418,7 @@ class TestGetLoincSignalsForHcc:
         assert len(out) == 1
         assert out[0]["loinc_code"] == "4548-4"
 
-    def test_accepts_numeric_hcc(self, monkeypatch):
+    def test_accepts_numeric_hcc(self, monkeypatch) -> None:
         scripted = [[
             {"id": 1, "loinc_code": "4548-4", "test_name": "Hemoglobin A1c",
              "unit": "%", "threshold_low": None, "threshold_high": 6.5,

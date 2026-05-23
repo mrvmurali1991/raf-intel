@@ -62,12 +62,12 @@ def _auth_mocks(user: dict):
 # ---------------------------------------------------------------------------
 
 class TestHealthEndpoint:
-    def test_health_returns_200(self, client):
+    def test_health_returns_200(self, client) -> None:
         with patch("app.db.check_connections", return_value={"openemr": True, "raf": True}):
             resp = client.get("/health")
         assert resp.status_code == 200
 
-    def test_health_response_has_status_field(self, client):
+    def test_health_response_has_status_field(self, client) -> None:
         with patch("app.db.check_connections", return_value={"openemr": True, "raf": True}):
             resp = client.get("/health")
         data = resp.json()
@@ -75,7 +75,7 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         assert isinstance(data, dict)
 
-    def test_health_degraded_still_responds(self, client):
+    def test_health_degraded_still_responds(self, client) -> None:
         with patch("app.db.check_connections", return_value={"openemr": False, "raf": True}):
             resp = client.get("/health")
         # App should still respond even with degraded DB
@@ -94,7 +94,7 @@ class TestUnauthenticatedRequests:
         ("/api/raf/population-summary", "GET"),
         ("/api/auth/logout", "POST"),
     ])
-    def test_missing_auth_header_returns_401(self, client, path, method):
+    def test_missing_auth_header_returns_401(self, client, path, method) -> None:
         if method == "GET":
             resp = client.get(path)
         else:
@@ -103,19 +103,19 @@ class TestUnauthenticatedRequests:
             f"Expected 401 for unauthenticated {method} {path}, got {resp.status_code}"
         )
 
-    def test_invalid_bearer_token_returns_401(self, client):
+    def test_invalid_bearer_token_returns_401(self, client) -> None:
         headers = {"Authorization": "Bearer this-is-not-a-valid-jwt"}
         resp = client.get("/api/auth/me", headers=headers)
         assert resp.status_code == 401
 
-    def test_expired_token_returns_401(self, client):
+    def test_expired_token_returns_401(self, client) -> None:
         from tests.conftest import MOCK_ADMIN_USER, _make_access_token
         expired_token = _make_access_token(MOCK_ADMIN_USER, expired=True)
         headers = {"Authorization": f"Bearer {expired_token}"}
         resp = client.get("/api/auth/me", headers=headers)
         assert resp.status_code == 401
 
-    def test_no_auth_header_returns_www_authenticate(self, client):
+    def test_no_auth_header_returns_www_authenticate(self, client) -> None:
         resp = client.get("/api/auth/me")
         assert resp.status_code == 401
         # RFC 7235: WWW-Authenticate header should be present
@@ -134,7 +134,7 @@ class TestLoginEndpoint:
             yield MockCursor()
         return _cm
 
-    def test_login_with_valid_credentials_returns_200(self, client):
+    def test_login_with_valid_credentials_returns_200(self, client) -> None:
         import uuid
 
         from tests.conftest import MOCK_ADMIN_USER, _make_access_token
@@ -162,7 +162,7 @@ class TestLoginEndpoint:
         data = resp.json()
         assert "access_token" in data
 
-    def test_login_with_wrong_password_returns_401(self, client):
+    def test_login_with_wrong_password_returns_401(self, client) -> None:
         with patch("app.routers.auth.authenticate_user",
                    side_effect=ValueError("Invalid email or password.")):
             resp = client.post(
@@ -171,7 +171,7 @@ class TestLoginEndpoint:
             )
         assert resp.status_code == 401
 
-    def test_login_with_unknown_email_returns_401(self, client):
+    def test_login_with_unknown_email_returns_401(self, client) -> None:
         with patch("app.routers.auth.authenticate_user",
                    side_effect=ValueError("Invalid email or password.")):
             resp = client.post(
@@ -180,18 +180,18 @@ class TestLoginEndpoint:
             )
         assert resp.status_code == 401
 
-    def test_login_missing_fields_returns_422(self, client):
+    def test_login_missing_fields_returns_422(self, client) -> None:
         resp = client.post("/api/auth/login", json={"email": "test@test.com"})
         assert resp.status_code == 422
 
-    def test_login_invalid_email_format_returns_422(self, client):
+    def test_login_invalid_email_format_returns_422(self, client) -> None:
         resp = client.post(
             "/api/auth/login",
             json={"email": "not-an-email", "password": "Pass1!"},
         )
         assert resp.status_code == 422
 
-    def test_login_error_does_not_leak_internal_details(self, client):
+    def test_login_error_does_not_leak_internal_details(self, client) -> None:
         """401 response body must not contain stack traces or DB details."""
         with patch("app.routers.auth.authenticate_user",
                    side_effect=ValueError("Invalid email or password.")):
@@ -212,7 +212,7 @@ class TestLoginEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestGetMe:
-    def test_get_me_returns_user_profile(self, client, admin_headers):
+    def test_get_me_returns_user_profile(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -224,7 +224,7 @@ class TestGetMe:
         assert data["email"] == user["email"]
         assert data["role"] == user["role"]
 
-    def test_get_me_does_not_expose_password_hash(self, client, admin_headers):
+    def test_get_me_does_not_expose_password_hash(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -241,11 +241,11 @@ class TestGetMe:
 # ---------------------------------------------------------------------------
 
 class TestPatientsEndpoint:
-    def test_patients_list_requires_auth(self, client):
+    def test_patients_list_requires_auth(self, client) -> None:
         resp = client.get("/api/patients")
         assert resp.status_code == 401
 
-    def test_patients_list_returns_data_when_authenticated(self, client, admin_headers):
+    def test_patients_list_returns_data_when_authenticated(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -282,7 +282,7 @@ class TestPatientsEndpoint:
         assert data.get("total") == 2
         assert len(data.get("patients")) == 2
 
-    def test_patients_response_does_not_expose_ssn(self, client, admin_headers):
+    def test_patients_response_does_not_expose_ssn(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -315,11 +315,11 @@ class TestPatientsEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestRAFCalculateEndpoint:
-    def test_raf_calculate_requires_auth(self, client):
+    def test_raf_calculate_requires_auth(self, client) -> None:
         resp = client.post("/api/raf/calculate/1")
         assert resp.status_code == 401
 
-    def test_raf_calculate_returns_score_data(self, client, admin_headers):
+    def test_raf_calculate_returns_score_data(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -349,7 +349,7 @@ class TestRAFCalculateEndpoint:
 
         assert resp.status_code in (200, 404, 422), f"Got {resp.status_code}: {resp.text[:300]}"
 
-    def test_raf_calculate_nonexistent_patient_returns_404(self, client, admin_headers):
+    def test_raf_calculate_nonexistent_patient_returns_404(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -376,14 +376,14 @@ class TestRAFCalculateEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestDocumentUploadEndpoint:
-    def test_document_upload_requires_auth(self, client):
+    def test_document_upload_requires_auth(self, client) -> None:
         resp = client.post(
             "/api/documents/upload",
             files={"file": ("test.pdf", b"fake pdf content", "application/pdf")},
         )
         assert resp.status_code == 401
 
-    def test_document_upload_accepted_with_auth(self, client, admin_headers):
+    def test_document_upload_accepted_with_auth(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER, MockCursor
 
         user = dict(MOCK_ADMIN_USER)
@@ -412,7 +412,7 @@ class TestDocumentUploadEndpoint:
             f"Unexpected status: {resp.status_code}: {resp.text[:300]}"
         )
 
-    def test_document_upload_error_response_generic(self, client, admin_headers):
+    def test_document_upload_error_response_generic(self, client, admin_headers) -> None:
         """Error responses from document upload must not leak file paths or DB errors."""
         from tests.conftest import MOCK_ADMIN_USER
 
@@ -443,7 +443,7 @@ class TestDocumentUploadEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestErrorResponseSafety:
-    def test_404_does_not_expose_stack_trace(self, client, admin_headers):
+    def test_404_does_not_expose_stack_trace(self, client, admin_headers) -> None:
         from tests.conftest import MOCK_ADMIN_USER
 
         user = dict(MOCK_ADMIN_USER)
@@ -455,7 +455,7 @@ class TestErrorResponseSafety:
         for forbidden in ["traceback", "sqlalchemy", "mysql", "exception at"]:
             assert forbidden not in body
 
-    def test_422_validation_error_is_structured(self, client):
+    def test_422_validation_error_is_structured(self, client) -> None:
         resp = client.post(
             "/api/auth/login",
             json={"not_email": "test"},
@@ -465,7 +465,7 @@ class TestErrorResponseSafety:
         # FastAPI 422 responses have a "detail" list
         assert "detail" in data
 
-    def test_401_body_is_minimal(self, client):
+    def test_401_body_is_minimal(self, client) -> None:
         resp = client.get("/api/auth/me")
         assert resp.status_code == 401
         data = resp.json()
@@ -475,7 +475,7 @@ class TestErrorResponseSafety:
         for forbidden in ["password", "hash", "database", "traceback"]:
             assert forbidden not in detail
 
-    def test_forgot_password_same_response_for_existing_and_missing_email(self, client):
+    def test_forgot_password_same_response_for_existing_and_missing_email(self, client) -> None:
         """Forgot-password must return identical response regardless of whether
         the email exists (prevents account enumeration)."""
         generic_msg = "If an account with that email exists"

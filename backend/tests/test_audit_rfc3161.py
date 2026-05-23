@@ -86,7 +86,7 @@ def chain_100() -> list[dict]:
 # Test 1: get_timestamp_for_hash — happy path with mocked TSA
 # ---------------------------------------------------------------------------
 
-def test_get_timestamp_for_hash_returns_token(chain_100, tmp_audit_dir, monkeypatch):
+def test_get_timestamp_for_hash_returns_token(chain_100, tmp_audit_dir, monkeypatch) -> None:
     """get_timestamp_for_hash returns non-empty bytes when TSA is reachable."""
     monkeypatch.setenv("IMMUTABLE_AUDIT_DIR", str(tmp_audit_dir))
     monkeypatch.setenv("RFC3161_TSA_URL", "http://fake-tsa.test/tsr")
@@ -213,7 +213,7 @@ def _db_factory(entries: list[dict]):
     return _fake_raf_cursor, token_store
 
 
-def test_celery_task_stores_token_covering_full_range(chain_100, monkeypatch):
+def test_celery_task_stores_token_covering_full_range(chain_100, monkeypatch) -> None:
     """task_rfc3161_timestamp stores a token covering all 100 entries."""
     import sys
     sys.modules.pop("app.services.audit_rfc3161", None)
@@ -266,7 +266,7 @@ def test_celery_task_stores_token_covering_full_range(chain_100, monkeypatch):
 # Test 3: verify endpoint logic returns valid=True for a good token
 # ---------------------------------------------------------------------------
 
-def test_verify_endpoint_returns_valid_true(chain_100, monkeypatch):
+def test_verify_endpoint_returns_valid_true(chain_100, monkeypatch) -> None:
     """Service-layer verify logic returns valid=True for a correct token."""
     import sys
     sys.modules.pop("app.services.audit_rfc3161", None)
@@ -315,7 +315,7 @@ def test_verify_endpoint_returns_valid_true(chain_100, monkeypatch):
 # Test 4: Unreachable TSA returns b'' without corrupting the chain
 # ---------------------------------------------------------------------------
 
-def test_unreachable_tsa_returns_empty_bytes(chain_100, tmp_audit_dir, monkeypatch):
+def test_unreachable_tsa_returns_empty_bytes(chain_100, tmp_audit_dir, monkeypatch) -> None:
     """When the TSA is unreachable, get_timestamp_for_hash returns b'' safely."""
     import sys
     sys.modules.pop("app.services.audit_rfc3161", None)

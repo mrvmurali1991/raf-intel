@@ -61,27 +61,27 @@ def _norm_payload(**kwargs) -> dict:
 # ===========================================================================
 
 class TestAutoChainEnabled:
-    def test_default_enabled(self):
+    def test_default_enabled(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "true"}):
             assert _auto_chain_enabled() is True
 
-    def test_disabled_by_false(self):
+    def test_disabled_by_false(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "false"}):
             assert _auto_chain_enabled() is False
 
-    def test_disabled_by_0(self):
+    def test_disabled_by_0(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "0"}):
             assert _auto_chain_enabled() is False
 
-    def test_disabled_by_no(self):
+    def test_disabled_by_no(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "no"}):
             assert _auto_chain_enabled() is False
 
-    def test_disabled_by_off(self):
+    def test_disabled_by_off(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "off"}):
             assert _auto_chain_enabled() is False
 
-    def test_enabled_when_missing(self):
+    def test_enabled_when_missing(self) -> None:
         env = {k: v for k, v in os.environ.items() if k != "RAF_AUTO_CHAIN"}
         with patch.dict(os.environ, env, clear=True):
             assert _auto_chain_enabled() is True
@@ -92,7 +92,7 @@ class TestAutoChainEnabled:
 # ===========================================================================
 
 class TestSetupPipelineChain:
-    def test_registers_three_handlers(self):
+    def test_registers_three_handlers(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "true"}), patch(
             "app.services.event_emitter.register_handler"
         ) as mock_reg:
@@ -103,7 +103,7 @@ class TestSetupPipelineChain:
         assert "normalization_completed" in event_names
         assert "raf_calculation_completed" in event_names
 
-    def test_no_registration_when_disabled(self):
+    def test_no_registration_when_disabled(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "false"}), patch(
             "app.services.event_emitter.register_handler"
         ) as mock_reg:
@@ -126,7 +126,7 @@ def _noop_update_run(*args, **kwargs):
 
 
 class TestHandleEmrSyncCompleted:
-    def test_calls_sync_encounters_and_sync_diagnoses(self):
+    def test_calls_sync_encounters_and_sync_diagnoses(self) -> None:
         with (
             patch("app.services.pipeline_chain._create_run", _noop_create_run),
             patch("app.services.pipeline_chain._update_run", _noop_update_run),
@@ -145,15 +145,15 @@ class TestHandleEmrSyncCompleted:
         mock_enc.assert_called_once_with(tenant_id="tenant-1")
         mock_diag.assert_called_once_with(tenant_id="tenant-1")
 
-    def test_missing_tenant_id_raises(self):
+    def test_missing_tenant_id_raises(self) -> None:
         with pytest.raises(ValueError, match="tenant_id"):
             _handle_emr_sync_completed({"connection_id": 42})
 
-    def test_empty_tenant_id_raises(self):
+    def test_empty_tenant_id_raises(self) -> None:
         with pytest.raises(ValueError, match="tenant_id"):
             _handle_emr_sync_completed({"tenant_id": "", "connection_id": 1})
 
-    def test_connection_id_is_optional(self):
+    def test_connection_id_is_optional(self) -> None:
         """connection_id is informational only — omitting it should not raise."""
         with (
             patch("app.services.pipeline_chain._create_run", _noop_create_run),
@@ -171,7 +171,7 @@ class TestHandleEmrSyncCompleted:
             # Should not raise — connection_id is optional in the updated code
             _handle_emr_sync_completed({"tenant_id": "tenant-1"})
 
-    def test_sync_encounters_failure_stops_chain(self):
+    def test_sync_encounters_failure_stops_chain(self) -> None:
         """When sync_encounters raises, sync_diagnoses must NOT be called."""
         with (
             patch("app.services.pipeline_chain._create_run", _noop_create_run),
@@ -188,7 +188,7 @@ class TestHandleEmrSyncCompleted:
 
         mock_diag.assert_not_called()
 
-    def test_sync_diagnoses_failure_still_proceeds_to_raf(self):
+    def test_sync_diagnoses_failure_still_proceeds_to_raf(self) -> None:
         """sync_diagnoses failure is non-fatal — RAF calculation runs on existing data."""
         with (
             patch("app.services.pipeline_chain._create_run", _noop_create_run),
@@ -237,7 +237,7 @@ class TestHandleNormalizationCompleted:
             _handle_normalization_completed(payload)
         return emit_mock
 
-    def test_calls_calculate_raf_for_all_patients(self):
+    def test_calls_calculate_raf_for_all_patients(self) -> None:
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
             patch("app.services.pipeline_chain._update_run", _noop_update_run),
@@ -251,7 +251,7 @@ class TestHandleNormalizationCompleted:
 
         mock_calc.assert_called_once_with(tenant_id="tenant-1")
 
-    def test_emits_raf_calculation_completed_on_success(self):
+    def test_emits_raf_calculation_completed_on_success(self) -> None:
         mock_emit = self._run_norm(
             mock_calc_rv=[{"patient_id": "1"}, {"patient_id": "2", "error": "bad"}]
         )
@@ -263,11 +263,11 @@ class TestHandleNormalizationCompleted:
         assert emitted_payload["errors"] == 1
         assert emitted_payload["tenant_id"] == "tenant-1"
 
-    def test_missing_tenant_id_raises(self):
+    def test_missing_tenant_id_raises(self) -> None:
         with pytest.raises(ValueError, match="tenant_id"):
             _handle_normalization_completed({"patient_ids": []})
 
-    def test_raf_calc_exception_does_not_propagate(self):
+    def test_raf_calc_exception_does_not_propagate(self) -> None:
         """RAF calc exception is caught and logged — handler must not raise."""
         emit_mock = MagicMock()
         with (
@@ -285,7 +285,7 @@ class TestHandleNormalizationCompleted:
         # No completion event emitted when RAF calc fails
         emit_mock.assert_not_called()
 
-    def test_empty_results_emits_with_zero_counts(self):
+    def test_empty_results_emits_with_zero_counts(self) -> None:
         mock_emit = self._run_norm(mock_calc_rv=[])
         _, payload = mock_emit.call_args.args
         assert payload["total"] == 0
@@ -298,17 +298,17 @@ class TestHandleNormalizationCompleted:
 # ===========================================================================
 
 class TestHandleRafCalculationCompleted:
-    def test_logs_completion_without_exception(self):
+    def test_logs_completion_without_exception(self) -> None:
         # Should not raise
         _handle_raf_calculation_completed(
             {"tenant_id": "tenant-1", "total": 50, "success": 48, "errors": 2}
         )
 
-    def test_missing_tenant_id_raises(self):
+    def test_missing_tenant_id_raises(self) -> None:
         with pytest.raises(ValueError, match="tenant_id"):
             _handle_raf_calculation_completed({"total": 10, "success": 10})
 
-    def test_empty_tenant_id_raises(self):
+    def test_empty_tenant_id_raises(self) -> None:
         with pytest.raises(ValueError, match="tenant_id"):
             _handle_raf_calculation_completed({"tenant_id": ""})
 
@@ -327,20 +327,20 @@ class TestFetchActivePatientIds:
 
         return _cm
 
-    def test_returns_string_ids(self):
+    def test_returns_string_ids(self) -> None:
         rows = [{"id": 1}, {"id": 2}, {"id": 3}]
         cm = self._cursor_cm(rows)
         with patch("app.db.raf_cursor", cm):
             ids = _fetch_active_patient_ids("tenant-1")
         assert ids == ["1", "2", "3"]
 
-    def test_empty_table_returns_empty_list(self):
+    def test_empty_table_returns_empty_list(self) -> None:
         cm = self._cursor_cm([])
         with patch("app.db.raf_cursor", cm):
             ids = _fetch_active_patient_ids("tenant-1")
         assert ids == []
 
-    def test_db_exception_returns_empty_list(self):
+    def test_db_exception_returns_empty_list(self) -> None:
         @contextmanager
         def _failing_cm(*args, **kwargs):
             raise RuntimeError("DB connection lost")
@@ -356,7 +356,7 @@ class TestFetchActivePatientIds:
 # ===========================================================================
 
 class TestEventEmitterIntegration:
-    def test_registered_handler_called_synchronously_via_direct_call(self):
+    def test_registered_handler_called_synchronously_via_direct_call(self) -> None:
         """
         Bypass the thread pool by calling the handler directly.
         This verifies the registration/dispatch wiring without
@@ -381,7 +381,7 @@ class TestEventEmitterIntegration:
         finally:
             _internal_handlers[event_name].remove(_test_handler)
 
-    def test_emit_internal_no_handlers_is_safe(self):
+    def test_emit_internal_no_handlers_is_safe(self) -> None:
         from app.services.event_emitter import emit_internal
         # Unknown event — should not raise
         emit_internal("_nonexistent_event_xyz", {"tenant_id": "t1"})

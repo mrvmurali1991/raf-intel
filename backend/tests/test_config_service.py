@@ -52,12 +52,12 @@ def fake_db(monkeypatch):
     return store
 
 
-def test_roundtrip_global(fake_db):
+def test_roundtrip_global(fake_db) -> None:
     config_service.set_config("ai_analysis_cutoff_date", "2030-01-01")
     assert config_service.get_config("ai_analysis_cutoff_date") == "2030-01-01"
 
 
-def test_roundtrip_tenant(fake_db):
+def test_roundtrip_tenant(fake_db) -> None:
     config_service.set_config("ai_analysis_cutoff_date", "2030-01-01")  # global
     config_service.set_config("ai_analysis_cutoff_date", "2031-06-15", tenant_id="t1")
     assert (
@@ -68,12 +68,12 @@ def test_roundtrip_tenant(fake_db):
     )
 
 
-def test_typed_accessor_int(fake_db):
+def test_typed_accessor_int(fake_db) -> None:
     config_service.set_config("max_analyses_per_patient_per_day", "5", tenant_id="t1")
     assert config_service.get_max_analyses_per_patient_per_day("t1") == 5
 
 
-def test_defaults_fallback_when_empty(fake_db):
+def test_defaults_fallback_when_empty(fake_db) -> None:
     # Nothing set — should fall back to DEFAULTS
     assert (
         config_service.get_ai_analysis_cutoff_date()
@@ -84,7 +84,7 @@ def test_defaults_fallback_when_empty(fake_db):
     )
 
 
-def test_defaults_contents():
+def test_defaults_contents() -> None:
     # Canonical values the migration also seeds — keep in sync.
     assert config_service.DEFAULTS["ai_analysis_cutoff_date"] == "2026-04-15"
     assert config_service.DEFAULTS["max_analyses_per_patient_per_day"] == "2"

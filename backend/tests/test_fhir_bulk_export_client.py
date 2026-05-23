@@ -62,7 +62,7 @@ def _mock_response(status_code: int, headers: dict | None = None, json_body=None
 
 
 class TestKickoffGroupExport:
-    def test_returns_content_location_on_202(self):
+    def test_returns_content_location_on_202(self) -> None:
         polling_url = "https://fhir.example.com/fhir/__bulk_status/abc123"
         mock_resp = _mock_response(
             202,
@@ -76,20 +76,20 @@ class TestKickoffGroupExport:
         call_kwargs = mock_post.call_args
         assert "/Group/G1/$export" in call_kwargs.args[0]
 
-    def test_raises_on_non_202(self):
+    def test_raises_on_non_202(self) -> None:
         mock_resp = _mock_response(403)
         mock_resp.text = "Forbidden"
         with patch("httpx.post", return_value=mock_resp):
             with pytest.raises(BulkExportKickoffError, match="403"):
                 kickoff_group_export(ADAPTER, group_id="G1")
 
-    def test_raises_when_no_content_location(self):
+    def test_raises_when_no_content_location(self) -> None:
         mock_resp = _mock_response(202, headers={})
         with patch("httpx.post", return_value=mock_resp):
             with pytest.raises(BulkExportKickoffError, match="Content-Location"):
                 kickoff_group_export(ADAPTER)
 
-    def test_since_param_is_url_encoded(self):
+    def test_since_param_is_url_encoded(self) -> None:
         """The _since param must appear in the request params as-is."""
         since_value = "2025-01-01T00:00:00+00:00"
         polling_url = "https://fhir.example.com/fhir/__bulk_status/xyz"
@@ -103,7 +103,7 @@ class TestKickoffGroupExport:
         params = call_kwargs.kwargs.get("params") or {}
         assert params.get("_since") == since_value
 
-    def test_default_group_id_fallback(self):
+    def test_default_group_id_fallback(self) -> None:
         """When group_id is None the URL should use 'all'."""
         polling_url = "https://fhir.example.com/fhir/__bulk_status/def"
         mock_resp = _mock_response(202, headers={"Content-Location": polling_url})
@@ -113,7 +113,7 @@ class TestKickoffGroupExport:
         url_called = mock_post.call_args.args[0]
         assert "/Group/all/$export" in url_called
 
-    def test_types_encoded_in_params(self):
+    def test_types_encoded_in_params(self) -> None:
         polling_url = "https://fhir.example.com/fhir/__bulk_status/t1"
         mock_resp = _mock_response(202, headers={"Content-Location": polling_url})
         custom_types = ("Patient", "Condition")
@@ -131,7 +131,7 @@ class TestKickoffGroupExport:
 
 
 class TestKickoffPatientExport:
-    def test_returns_polling_url(self):
+    def test_returns_polling_url(self) -> None:
         polling_url = "https://fhir.example.com/fhir/__bulk_status/patient1"
         mock_resp = _mock_response(
             202, headers={"Content-Location": polling_url}
@@ -143,7 +143,7 @@ class TestKickoffPatientExport:
         url_called = mock_post.call_args.args[0]
         assert "/Patient/P42/$export" in url_called
 
-    def test_since_param_forwarded(self):
+    def test_since_param_forwarded(self) -> None:
         since = "2024-06-01T00:00:00Z"
         polling_url = "https://fhir.example.com/fhir/__bulk_status/patient2"
         mock_resp = _mock_response(202, headers={"Content-Location": polling_url})
@@ -170,7 +170,7 @@ class TestPollExport:
         ],
     }
 
-    def test_polls_202_then_200_returns_manifest(self):
+    def test_polls_202_then_200_returns_manifest(self) -> None:
         """First call returns 202 (in-progress); second call returns 200 with manifest."""
         in_progress = _mock_response(202, headers={"Retry-After": "0"})
         complete = _mock_response(200, json_body=self.MANIFEST)
@@ -181,7 +181,7 @@ class TestPollExport:
 
         assert result == self.MANIFEST
 
-    def test_raises_timeout_error(self):
+    def test_raises_timeout_error(self) -> None:
         """If the export never completes within max_wait_seconds, raise BulkExportTimeoutError."""
         in_progress = _mock_response(202, headers={"Retry-After": "0"})
 
@@ -198,7 +198,7 @@ class TestPollExport:
                     with pytest.raises(BulkExportTimeoutError):
                         poll_export(ADAPTER, self.POLLING_URL, max_wait_seconds=600)
 
-    def test_honors_retry_after_header(self):
+    def test_honors_retry_after_header(self) -> None:
         """Retry-After header value should be used as the sleep duration."""
         in_progress = _mock_response(202, headers={"Retry-After": "5"})
         complete = _mock_response(200, json_body=self.MANIFEST)
@@ -215,7 +215,7 @@ class TestPollExport:
         # First sleep should use Retry-After=5 (capped by min(5, 30, remaining))
         assert sleep_calls[0] == pytest.approx(5.0, abs=1.0)
 
-    def test_raises_on_error_status(self):
+    def test_raises_on_error_status(self) -> None:
         """Non-202/200 status during polling should raise BulkExportKickoffError."""
         error_resp = _mock_response(500)
         error_resp.text = "Internal Server Error"
@@ -234,7 +234,7 @@ class TestDownloadManifestFiles:
     def _make_ndjson(self, resources: list[dict]) -> bytes:
         return b"\n".join(json.dumps(r).encode() for r in resources)
 
-    def test_yields_all_resources(self):
+    def test_yields_all_resources(self) -> None:
         """Three NDJSON lines should produce three (type, dict) tuples."""
         resources = [
             {"resourceType": "Patient", "id": "p1"},
@@ -257,7 +257,7 @@ class TestDownloadManifestFiles:
             assert rtype == "Patient"
             assert rdict["id"] == f"p{i + 1}"
 
-    def test_gzip_decompression(self):
+    def test_gzip_decompression(self) -> None:
         """Gzip-compressed NDJSON should be transparently decompressed."""
         import gzip
 
@@ -283,7 +283,7 @@ class TestDownloadManifestFiles:
         assert rtype == "Condition"
         assert rdict["id"] == "c1"
 
-    def test_skips_malformed_lines(self):
+    def test_skips_malformed_lines(self) -> None:
         """A malformed JSON line should be skipped; valid lines still yielded."""
         bad_ndjson = b'{"resourceType":"Patient","id":"p1"}\nnot-json\n{"resourceType":"Patient","id":"p2"}\n'
         manifest = {
@@ -298,7 +298,7 @@ class TestDownloadManifestFiles:
 
         assert len(results) == 2
 
-    def test_multiple_output_files(self):
+    def test_multiple_output_files(self) -> None:
         """Manifest with two output entries should yield rows from both."""
         patient_ndjson = self._make_ndjson([{"resourceType": "Patient", "id": "p1"}])
         condition_ndjson = self._make_ndjson([{"resourceType": "Condition", "id": "c1"}])
@@ -322,12 +322,12 @@ class TestDownloadManifestFiles:
         types = {r[0] for r in results}
         assert types == {"Patient", "Condition"}
 
-    def test_empty_manifest_yields_nothing(self):
+    def test_empty_manifest_yields_nothing(self) -> None:
         manifest = {"output": []}
         results = list(download_manifest_files(ADAPTER, manifest))
         assert results == []
 
-    def test_missing_output_key_yields_nothing(self):
+    def test_missing_output_key_yields_nothing(self) -> None:
         manifest = {}
         results = list(download_manifest_files(ADAPTER, manifest))
         assert results == []

@@ -68,7 +68,7 @@ class TestRAFCalculate:
 
     def test_calculate_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.post(
             f"{base_url}/api/raf/calculate/{first_pid}",
             json={"year": CURRENT_YEAR},
@@ -77,7 +77,7 @@ class TestRAFCalculate:
 
     def test_calculate_result_has_required_top_level_fields(
         self, calc_result: dict, first_pid: int
-    ):
+    ) -> None:
         """The calculation response must contain all documented top-level fields."""
         required = [
             "patient_id",
@@ -91,7 +91,7 @@ class TestRAFCalculate:
                 f"Got keys: {sorted(calc_result)}"
             )
 
-    def test_raf_score_is_within_valid_range(self, calc_result: dict):
+    def test_raf_score_is_within_valid_range(self, calc_result: dict) -> None:
         raf = calc_result.get("raf_score")
         assert raf is not None, "raf_score must not be None"
         assert isinstance(raf, (int, float)), f"raf_score must be numeric, got {type(raf)}"
@@ -100,18 +100,18 @@ class TestRAFCalculate:
             f"[{RAF_SCORE_MIN}, {RAF_SCORE_MAX}]"
         )
 
-    def test_raf_score_is_positive(self, calc_result: dict):
+    def test_raf_score_is_positive(self, calc_result: dict) -> None:
         """Every patient receives at least the demographic base rate."""
         raf = float(calc_result.get("raf_score", 0))
         assert raf >= 0, f"raf_score must be >= 0, got {raf}"
 
-    def test_icd_codes_is_list(self, calc_result: dict):
+    def test_icd_codes_is_list(self, calc_result: dict) -> None:
         icd_codes = calc_result.get("icd_codes")
         assert isinstance(icd_codes, list), (
             f"'icd_codes' must be a list, got {type(icd_codes).__name__}"
         )
 
-    def test_icd_codes_look_like_icd10(self, calc_result: dict):
+    def test_icd_codes_look_like_icd10(self, calc_result: dict) -> None:
         """
         ICD-10-CM codes follow the pattern: letter + 2 digits [+ optional chars].
         Validate a spot-check of the first ten codes.
@@ -125,7 +125,7 @@ class TestRAFCalculate:
                 f"ICD code '{code}' does not look like a valid ICD-10-CM code"
             )
 
-    def test_final_hcc_list_is_list(self, calc_result: dict):
+    def test_final_hcc_list_is_list(self, calc_result: dict) -> None:
         hcc_list = calc_result.get("final_hcc_list")
         assert isinstance(hcc_list, list), (
             f"'final_hcc_list' must be a list, got {type(hcc_list).__name__}"
@@ -133,7 +133,7 @@ class TestRAFCalculate:
 
     def test_patient_id_in_response_matches_request(
         self, calc_result: dict, first_pid: int
-    ):
+    ) -> None:
         assert int(calc_result.get("patient_id")) == first_pid, (
             f"patient_id in response ({calc_result.get('patient_id')}) "
             f"!= requested pid ({first_pid})"
@@ -141,7 +141,7 @@ class TestRAFCalculate:
 
     def test_returns_404_for_nonexistent_pid(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.post(
             f"{base_url}/api/raf/calculate/{nonexistent_pid}",
             json={"year": CURRENT_YEAR},
@@ -150,7 +150,7 @@ class TestRAFCalculate:
             f"Expected 404 for nonexistent PID, got {r.status_code}"
         )
 
-    def test_demographic_score_is_present(self, calc_result: dict):
+    def test_demographic_score_is_present(self, calc_result: dict) -> None:
         """Demographic score should be a key component of the RAF."""
         demo = calc_result.get("demographic_score")
         # May be nested or top-level depending on hccinfhir version
@@ -199,7 +199,7 @@ class TestRAFBreakdown:
 
     def test_breakdown_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         api_client.post(
             f"{base_url}/api/raf/calculate/{first_pid}",
             json={"year": CURRENT_YEAR},
@@ -210,7 +210,7 @@ class TestRAFBreakdown:
         )
         _assert_ok(r, f"GET /api/raf/scores/{first_pid}/breakdown")
 
-    def test_breakdown_has_required_fields(self, breakdown: dict):
+    def test_breakdown_has_required_fields(self, breakdown: dict) -> None:
         required = [
             "patient_id",
             "patient_name",
@@ -228,13 +228,13 @@ class TestRAFBreakdown:
                 f"Breakdown missing required field '{field}'. Got keys: {sorted(breakdown)}"
             )
 
-    def test_raf_score_in_range(self, breakdown: dict):
+    def test_raf_score_in_range(self, breakdown: dict) -> None:
         raf = float(breakdown["raf_score"])
         assert RAF_SCORE_MIN <= raf <= RAF_SCORE_MAX, (
             f"raf_score {raf} out of expected range [{RAF_SCORE_MIN}, {RAF_SCORE_MAX}]"
         )
 
-    def test_score_components_sum_to_raf(self, breakdown: dict):
+    def test_score_components_sum_to_raf(self, breakdown: dict) -> None:
         """
         Total RAF = demographic + disease + interaction (within floating point tolerance).
         """
@@ -249,23 +249,23 @@ class TestRAFBreakdown:
             f"do not sum to raf_score ({total}) within tolerance"
         )
 
-    def test_demographic_score_is_positive(self, breakdown: dict):
+    def test_demographic_score_is_positive(self, breakdown: dict) -> None:
         """Every CMS-HCC V28 segment has a positive demographic base rate."""
         demo = float(breakdown.get("demographic_score", 0))
         assert demo > 0, (
             f"Demographic score should be > 0 (CMS always assigns a base rate). Got: {demo}"
         )
 
-    def test_hcc_count_matches_hcc_details_length(self, breakdown: dict):
+    def test_hcc_count_matches_hcc_details_length(self, breakdown: dict) -> None:
         assert breakdown["hcc_count"] == len(breakdown["hcc_details"]), (
             f"hcc_count ({breakdown['hcc_count']}) != len(hcc_details) "
             f"({len(breakdown['hcc_details'])})"
         )
 
-    def test_hcc_details_is_list(self, breakdown: dict):
+    def test_hcc_details_is_list(self, breakdown: dict) -> None:
         assert isinstance(breakdown["hcc_details"], list)
 
-    def test_hcc_detail_records_have_required_fields(self, breakdown: dict):
+    def test_hcc_detail_records_have_required_fields(self, breakdown: dict) -> None:
         """Each HCC detail entry must have hcc_code, hcc_label, and icd10_codes."""
         for hcc in breakdown["hcc_details"][:10]:
             for field in ("hcc_code", "hcc_label", "icd10_codes", "meat_status"):
@@ -273,13 +273,13 @@ class TestRAFBreakdown:
                     f"HCC detail record missing '{field}'. Got: {hcc}"
                 )
 
-    def test_hcc_icd10_codes_is_list(self, breakdown: dict):
+    def test_hcc_icd10_codes_is_list(self, breakdown: dict) -> None:
         for hcc in breakdown["hcc_details"][:10]:
             assert isinstance(hcc.get("icd10_codes"), list), (
                 f"'icd10_codes' in HCC detail must be a list. Got: {hcc}"
             )
 
-    def test_model_segment_is_known_value(self, breakdown: dict):
+    def test_model_segment_is_known_value(self, breakdown: dict) -> None:
         """CMS-HCC V28 model segments are well-defined strings."""
         known_segments = {
             "CNA", "CND", "CFA", "CFD", "CPA", "CPD",
@@ -291,7 +291,7 @@ class TestRAFBreakdown:
 
     def test_breakdown_returns_404_for_nonexistent_pid(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.get(
             f"{base_url}/api/raf/scores/{nonexistent_pid}/breakdown"
         )
@@ -306,7 +306,7 @@ class TestRAFStoredScore:
 
     def test_stored_score_returns_200_after_calculate(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         api_client.post(
             f"{base_url}/api/raf/calculate/{first_pid}",
             json={"year": CURRENT_YEAR},
@@ -319,7 +319,7 @@ class TestRAFStoredScore:
 
     def test_stored_score_has_required_fields(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         api_client.post(
             f"{base_url}/api/raf/calculate/{first_pid}",
             json={"year": CURRENT_YEAR},
@@ -338,7 +338,7 @@ class TestRAFStoredScore:
 
     def test_stored_score_returns_404_for_uncalculated_year(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         """A year with no calculation should return 404."""
         past_year = CURRENT_YEAR - 50  # very unlikely to have data
         r = api_client.get(
@@ -358,13 +358,13 @@ class TestRAFScoreHistory:
 
     def test_history_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/scores/{first_pid}/history")
         _assert_ok(r, f"GET /api/raf/scores/{first_pid}/history")
 
     def test_history_has_required_fields(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/scores/{first_pid}/history")
         data = _assert_ok(r)
         for field in ("patient_id", "patient_name", "years_calculated", "history"):
@@ -372,7 +372,7 @@ class TestRAFScoreHistory:
 
     def test_history_entries_have_expected_fields(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/scores/{first_pid}/history")
         data = _assert_ok(r)
         for entry in data.get("history", [])[:5]:
@@ -383,14 +383,14 @@ class TestRAFScoreHistory:
 
     def test_history_years_calculated_matches_history_list(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/scores/{first_pid}/history")
         data = _assert_ok(r)
         assert data["years_calculated"] == len(data["history"])
 
     def test_history_is_ordered_newest_first(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         """
         History must be sorted descending by measurement_year.
         """
@@ -410,13 +410,13 @@ class TestRAFPopulationSummary:
 
     def test_population_summary_returns_200(
         self, api_client: requests.Session, base_url: str
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/population-summary")
         _assert_ok(r, "GET /api/raf/population-summary")
 
     def test_population_summary_has_required_fields(
         self, api_client: requests.Session, base_url: str
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/population-summary")
         data = _assert_ok(r)
         for field in (
@@ -429,7 +429,7 @@ class TestRAFPopulationSummary:
 
     def test_distribution_has_expected_buckets(
         self, api_client: requests.Session, base_url: str
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/population-summary")
         data = _assert_ok(r)
         dist = data.get("raf_distribution", [])
@@ -439,14 +439,14 @@ class TestRAFPopulationSummary:
             f"Expected distribution buckets {expected_labels} not all present. Got: {labels}"
         )
 
-    def test_average_raf_is_non_negative(self, api_client: requests.Session, base_url: str):
+    def test_average_raf_is_non_negative(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/api/raf/population-summary")
         data = _assert_ok(r)
         assert float(data.get("average_raf", 0)) >= 0
 
     def test_measurement_year_is_current_or_recent(
         self, api_client: requests.Session, base_url: str
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/population-summary")
         data = _assert_ok(r)
         year = data.get("measurement_year")

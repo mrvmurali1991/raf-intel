@@ -18,7 +18,7 @@ def _route_paths():
     return [getattr(r, "path", "") for r in app.routes]
 
 
-def test_app_boots_with_all_routers():
+def test_app_boots_with_all_routers() -> None:
     paths = _route_paths()
     assert len(paths) > 100, f"Expected 100+ routes, got {len(paths)}"
 
@@ -35,7 +35,7 @@ def test_app_boots_with_all_routers():
         ("/api/recapture/audit-readiness", "RADV audit-readiness endpoint"),
     ],
 )
-def test_required_route_prefix_registered(prefix: str, description: str):
+def test_required_route_prefix_registered(prefix: str, description: str) -> None:
     paths = _route_paths()
     assert any(p.startswith(prefix) for p in paths), (
         f"{description} not registered (looked for prefix {prefix!r}). "
@@ -44,7 +44,7 @@ def test_required_route_prefix_registered(prefix: str, description: str):
     )
 
 
-def test_kg_smoke_inputs_file_present():
+def test_kg_smoke_inputs_file_present() -> None:
     # The smoke-test fixture file must ship with the backend so dev
     # / staging pipelines can re-run the end-to-end probe.
     from pathlib import Path
@@ -52,7 +52,7 @@ def test_kg_smoke_inputs_file_present():
     assert fixture.exists(), f"kg_smoke_inputs.json missing at {fixture}"
 
 
-def test_evaluation_fixtures_present():
+def test_evaluation_fixtures_present() -> None:
     # The benchmark fixtures must ship; otherwise the calibration
     # report shown to customers would silently be empty.
     from pathlib import Path

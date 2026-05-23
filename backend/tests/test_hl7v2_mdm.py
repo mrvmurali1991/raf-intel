@@ -63,7 +63,7 @@ _MDM_T08_TEXT = (
 class TestParseMDM:
     """Tests for ``hl7v2_mdm_listener.parse_mdm``."""
 
-    def test_t02_extracts_all_fields(self):
+    def test_t02_extracts_all_fields(self) -> None:
         from app.services.hl7v2_mdm_listener import parse_mdm
 
         result = parse_mdm(_MDM_T02_PDF)
@@ -80,7 +80,7 @@ class TestParseMDM:
         assert result["payload_mime"] == "application/pdf"
         assert result["text_payload"] is None
 
-    def test_t08_text_mode(self):
+    def test_t08_text_mode(self) -> None:
         from app.services.hl7v2_mdm_listener import parse_mdm
 
         result = parse_mdm(_MDM_T08_TEXT)
@@ -94,7 +94,7 @@ class TestParseMDM:
         assert "uncontrolled T2DM" in result["text_payload"]
         assert "HbA1c 9.8" in result["text_payload"]
 
-    def test_non_mdm_raises(self):
+    def test_non_mdm_raises(self) -> None:
         from app.services.hl7v2_mdm_listener import HL7MDMParseError, parse_mdm
 
         adt = (
@@ -104,20 +104,20 @@ class TestParseMDM:
         with pytest.raises(HL7MDMParseError, match="ADT"):
             parse_mdm(adt)
 
-    def test_empty_raises(self):
+    def test_empty_raises(self) -> None:
         from app.services.hl7v2_mdm_listener import HL7MDMParseError, parse_mdm
 
         with pytest.raises(HL7MDMParseError, match="Empty"):
             parse_mdm("")
 
-    def test_sending_app_and_facility(self):
+    def test_sending_app_and_facility(self) -> None:
         from app.services.hl7v2_mdm_listener import parse_mdm
 
         result = parse_mdm(_MDM_T02_PDF)
         assert result["sending_app"] == "MIRTH"
         assert result["sending_facility"] == "HOSPITAL"
 
-    def test_observation_date_extracted(self):
+    def test_observation_date_extracted(self) -> None:
         from app.services.hl7v2_mdm_listener import parse_mdm
 
         result = parse_mdm(_MDM_T02_PDF)
@@ -199,7 +199,7 @@ def _get_test_client():
 class TestReceiverAuth:
     """Authentication / HMAC header enforcement."""
 
-    def test_missing_header_returns_401(self):
+    def test_missing_header_returns_401(self) -> None:
         client = _get_test_client()
         with _patch_db(source_exists=True):
             resp = client.post(
@@ -209,7 +209,7 @@ class TestReceiverAuth:
             )
         assert resp.status_code == 401
 
-    def test_wrong_key_returns_403(self):
+    def test_wrong_key_returns_403(self) -> None:
         client = _get_test_client()
         # source_exists=False → _lookup_source returns None → 403
         with _patch_db(source_exists=False):
@@ -223,7 +223,7 @@ class TestReceiverAuth:
             )
         assert resp.status_code == 403
 
-    def test_valid_key_returns_200_with_ack(self):
+    def test_valid_key_returns_200_with_ack(self) -> None:
         client = _get_test_client()
         with _patch_db(source_key="good-key", source_exists=True):
             resp = client.post(
@@ -244,7 +244,7 @@ class TestReceiverAuth:
 class TestReceiverIdempotency:
     """Same msg_control_id ingested twice must not create a duplicate row."""
 
-    def test_duplicate_returns_200_no_insert(self):
+    def test_duplicate_returns_200_no_insert(self) -> None:
         client = _get_test_client()
 
         persist_mock = MagicMock(return_value=1)

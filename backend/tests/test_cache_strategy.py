@@ -124,7 +124,7 @@ def _make_tenant_cached_fn(entity: str = "test_entity", ttl: int = 300):
 
 
 class TestTenantCachedDecorator:
-    def test_cache_miss_calls_function(self, fake_redis):
+    def test_cache_miss_calls_function(self, fake_redis) -> None:
         """First call with no cached entry must invoke the wrapped function."""
         call_count = 0
 
@@ -141,7 +141,7 @@ class TestTenantCachedDecorator:
         assert call_count == 1, "Function must be called exactly once on cache miss"
         assert result == {"x": 42, "tenant": "tenant_1"}
 
-    def test_cache_miss_stores_result(self, fake_redis):
+    def test_cache_miss_stores_result(self, fake_redis) -> None:
         """A cache miss must persist the result so the next call is a hit."""
         from app.services.cache_strategy import tenant_cached
 
@@ -153,7 +153,7 @@ class TestTenantCachedDecorator:
 
         assert len(fake_redis.keys_snapshot()) >= 1, "At least one key must be stored after a miss"
 
-    def test_cache_hit_does_not_call_function_again(self, fake_redis):
+    def test_cache_hit_does_not_call_function_again(self, fake_redis) -> None:
         """Subsequent calls with the same args must be served from cache."""
         call_count = 0
 
@@ -171,7 +171,7 @@ class TestTenantCachedDecorator:
 
         assert call_count == 1, "Wrapped function must only be called once across three identical calls"
 
-    def test_cache_hit_returns_identical_data(self, fake_redis):
+    def test_cache_hit_returns_identical_data(self, fake_redis) -> None:
         """Cached result must be equal to the original return value."""
         from app.services.cache_strategy import tenant_cached
 
@@ -184,7 +184,7 @@ class TestTenantCachedDecorator:
 
         assert first == second
 
-    def test_different_args_produce_different_cache_entries(self, fake_redis):
+    def test_different_args_produce_different_cache_entries(self, fake_redis) -> None:
         """Different argument values must generate separate cache entries."""
         call_count = 0
 
@@ -201,7 +201,7 @@ class TestTenantCachedDecorator:
 
         assert call_count == 2
 
-    def test_none_result_not_cached(self, fake_redis):
+    def test_none_result_not_cached(self, fake_redis) -> None:
         """A None return value must not be written to cache (pass-through)."""
         call_count = 0
 
@@ -226,7 +226,7 @@ class TestTenantCachedDecorator:
 
 
 class TestCacheInvalidation:
-    def test_invalidate_wrapper_clears_entity_keys(self, fake_redis):
+    def test_invalidate_wrapper_clears_entity_keys(self, fake_redis) -> None:
         """Calling wrapper.invalidate(tenant_id) must remove that tenant's keys."""
         from app.services.cache_strategy import tenant_cached
 
@@ -245,7 +245,7 @@ class TestCacheInvalidation:
         keys_after = [k for k in fake_redis.keys_snapshot() if "t1" in k and "inv_entity" in k]
         assert len(keys_after) == 0, "All tenant-scoped keys must be removed after invalidation"
 
-    def test_invalidate_raf_scores_removes_raf_keys(self, fake_redis):
+    def test_invalidate_raf_scores_removes_raf_keys(self, fake_redis) -> None:
         """invalidate_raf_scores() must remove raf_breakdown keys for the target tenant."""
         from app.services.cache_strategy import invalidate_raf_scores
 
@@ -265,7 +265,7 @@ class TestCacheInvalidation:
             "raf_breakdown keys for t2 must survive t1 invalidation"
         )
 
-    def test_invalidate_patient_list(self, fake_redis):
+    def test_invalidate_patient_list(self, fake_redis) -> None:
         """invalidate_patient_list() must clear patient_list keys for the tenant."""
         from app.services.cache_strategy import invalidate_patient_list
 
@@ -279,7 +279,7 @@ class TestCacheInvalidation:
         assert not any("t1:patient_list" in k for k in remaining)
         assert "t2:patient_list:page=1" in remaining
 
-    def test_invalidate_worklist(self, fake_redis):
+    def test_invalidate_worklist(self, fake_redis) -> None:
         """invalidate_worklist() must clear both worklist and coder_worklist keys."""
         from app.services.cache_strategy import invalidate_worklist
 
@@ -295,7 +295,7 @@ class TestCacheInvalidation:
         )
         assert "t2:worklist:provider=other" in remaining
 
-    def test_invalidate_all_for_tenant(self, fake_redis):
+    def test_invalidate_all_for_tenant(self, fake_redis) -> None:
         """invalidate_all_for_tenant() must wipe every key for that tenant only."""
         from app.services.cache_strategy import invalidate_all_for_tenant
 
@@ -317,7 +317,7 @@ class TestCacheInvalidation:
 
 
 class TestTenantIsolation:
-    def test_tenant_1_cache_does_not_leak_to_tenant_2(self, fake_redis):
+    def test_tenant_1_cache_does_not_leak_to_tenant_2(self, fake_redis) -> None:
         """Cache entries for tenant_1 must not be returned for tenant_2 lookups."""
         call_results: list[dict] = []
 
@@ -339,7 +339,7 @@ class TestTenantIsolation:
         assert r1["tenant"] == "tenant_1"
         assert r2["tenant"] == "tenant_2"
 
-    def test_tenant_2_key_distinct_from_tenant_1_key(self, fake_redis):
+    def test_tenant_2_key_distinct_from_tenant_1_key(self, fake_redis) -> None:
         """The cache keys for tenant_1 and tenant_2 with identical args must differ."""
         from app.services.cache_strategy import _make_key
 
@@ -350,7 +350,7 @@ class TestTenantIsolation:
         assert key_t1.startswith("tenant_1:")
         assert key_t2.startswith("tenant_2:")
 
-    def test_invalidating_tenant_1_does_not_clear_tenant_2(self, fake_redis):
+    def test_invalidating_tenant_1_does_not_clear_tenant_2(self, fake_redis) -> None:
         """Invalidating tenant_1 must leave tenant_2's cached entries intact."""
         from app.services.cache_strategy import tenant_cached
 
@@ -375,7 +375,7 @@ class TestTenantIsolation:
             "tenant_2 cache must not be evicted when tenant_1 is invalidated"
         )
 
-    def test_warm_cache_for_one_tenant_not_visible_to_another(self, fake_redis):
+    def test_warm_cache_for_one_tenant_not_visible_to_another(self, fake_redis) -> None:
         """Explicitly written cache entries for tenant_1 must not be readable by tenant_2."""
         import app.cache as cache_mod
 
@@ -397,13 +397,13 @@ class TestTenantIsolation:
 
 
 class TestCachePrimitives:
-    def test_cache_get_miss_returns_none(self, fake_redis):
+    def test_cache_get_miss_returns_none(self, fake_redis) -> None:
         from app.cache import cache_get
 
         result = cache_get("nonexistent:key")
         assert result is None
 
-    def test_cache_set_then_get_roundtrip(self, fake_redis):
+    def test_cache_set_then_get_roundtrip(self, fake_redis) -> None:
         from app.cache import cache_get, cache_set
 
         data = {"hcc": 96, "score": 1.234}
@@ -412,7 +412,7 @@ class TestCachePrimitives:
         result = cache_get("test:key:roundtrip")
         assert result == data
 
-    def test_cache_set_handles_various_types(self, fake_redis):
+    def test_cache_set_handles_various_types(self, fake_redis) -> None:
         from app.cache import cache_get, cache_set
 
         for payload in (
@@ -427,7 +427,7 @@ class TestCachePrimitives:
             result = cache_get(f"type_test:{type(payload).__name__}")
             assert result == payload
 
-    def test_cache_delete_pattern_removes_matching_keys(self, fake_redis):
+    def test_cache_delete_pattern_removes_matching_keys(self, fake_redis) -> None:
         from app.cache import cache_delete_pattern, cache_get, cache_set
 
         cache_set("t1:raf:1", {"score": 1.0}, ttl=60)
@@ -441,7 +441,7 @@ class TestCachePrimitives:
         # Non-matching key must survive
         assert cache_get("t1:other:key") is not None
 
-    def test_cache_delete_pattern_noop_on_no_match(self, fake_redis):
+    def test_cache_delete_pattern_noop_on_no_match(self, fake_redis) -> None:
         """Deleting a pattern with no matches must not raise or corrupt the store."""
         from app.cache import cache_delete_pattern, cache_get, cache_set
 
@@ -450,7 +450,7 @@ class TestCachePrimitives:
 
         assert cache_get("safe:key") == {"ok": True}
 
-    def test_cache_get_with_redis_disabled_returns_none(self):
+    def test_cache_get_with_redis_disabled_returns_none(self) -> None:
         """When _get_redis() returns None, cache_get must return None gracefully."""
         with patch("app.cache._get_redis", return_value=None):
             from app.cache import cache_get
@@ -458,7 +458,7 @@ class TestCachePrimitives:
             result = cache_get("any:key")
             assert result is None
 
-    def test_cache_set_with_redis_disabled_is_noop(self):
+    def test_cache_set_with_redis_disabled_is_noop(self) -> None:
         """When _get_redis() returns None, cache_set must not raise."""
         with patch("app.cache._get_redis", return_value=None):
             from app.cache import cache_set

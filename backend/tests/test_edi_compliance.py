@@ -65,7 +65,7 @@ def _stub_db(monkeypatch):
 # 1. SBR09 = 'MA' when destination is CMSEDPS
 # ---------------------------------------------------------------------------
 
-def test_sbr09_is_MA_for_cmsedps():
+def test_sbr09_is_MA_for_cmsedps() -> None:
     """When receiver_id contains 'EDPS', SBR09 must be 'MA', not 'MB'."""
     text = x12_837.generate_837_encounter(
         patient_id=42,
@@ -87,7 +87,7 @@ def test_sbr09_is_MA_for_cmsedps():
     assert "MB" not in sbr, "SBR segment must not contain 'MB' for EDPS destination"
 
 
-def test_sbr09_is_not_MB_default():
+def test_sbr09_is_not_MB_default() -> None:
     """Default submitter (CMSEDPS) should never produce MB in SBR."""
     text = x12_837.generate_837_encounter(patient_id=42, encounter_id=None)
     assert "SBR*P*18********MB" not in text
@@ -97,14 +97,14 @@ def test_sbr09_is_not_MB_default():
 # 2. Invalid MBI raises ValueError
 # ---------------------------------------------------------------------------
 
-def test_invalid_mbi_raises_value_error(monkeypatch):
+def test_invalid_mbi_raises_value_error(monkeypatch) -> None:
     """A spoofed / missing MBI must raise ValueError before building the 837."""
     monkeypatch.setattr(x12_837, "_load_patient_mbi", lambda pid: "PID42")
     with pytest.raises(ValueError, match="CMS-conformant"):
         x12_837.generate_837_encounter(patient_id=42, encounter_id=None, hcc_codes=["E11.65"])
 
 
-def test_empty_mbi_raises_value_error(monkeypatch):
+def test_empty_mbi_raises_value_error(monkeypatch) -> None:
     """An empty MBI string must also raise ValueError."""
     monkeypatch.setattr(x12_837, "_load_patient_mbi", lambda pid: "")
     with pytest.raises(ValueError, match="CMS-conformant"):
@@ -115,7 +115,7 @@ def test_empty_mbi_raises_value_error(monkeypatch):
 # 3. SV1 contains DPS composite (diagnosis pointers)
 # ---------------------------------------------------------------------------
 
-def test_sv1_contains_dps_composite_for_two_diagnoses():
+def test_sv1_contains_dps_composite_for_two_diagnoses() -> None:
     """SV1 must include a diagnosis-pointer composite when 2 ICD-10s are present."""
     text = x12_837.generate_837_encounter(
         patient_id=42, encounter_id=None, hcc_codes=["E11.65", "I50.23"]
@@ -134,7 +134,7 @@ def test_sv1_contains_dps_composite_for_two_diagnoses():
     assert dps == "1:2", f"Expected DPS '1:2' for 2 diagnoses, got '{dps}'"
 
 
-def test_sv1_dps_single_diagnosis():
+def test_sv1_dps_single_diagnosis() -> None:
     """SV1 must include pointer '1' for a single diagnosis."""
     text = x12_837.generate_837_encounter(
         patient_id=42, encounter_id=None, hcc_codes=["E11.65"]
@@ -147,7 +147,7 @@ def test_sv1_dps_single_diagnosis():
     assert dps == "1", f"Expected DPS '1' for single diagnosis, got '{dps}'"
 
 
-def test_sv1_uses_encounter_procedure_code():
+def test_sv1_uses_encounter_procedure_code() -> None:
     """SV1 must use the encounter procedure_code (99214) not the hardcoded 99499."""
     text = x12_837.generate_837_encounter(
         patient_id=42, encounter_id=None, hcc_codes=["E11.65"]
@@ -155,7 +155,7 @@ def test_sv1_uses_encounter_procedure_code():
     assert "HC:99214" in text, "SV1 should use encounter procedure_code 99214"
 
 
-def test_sv1_fallback_to_99499_when_no_proc_code(monkeypatch):
+def test_sv1_fallback_to_99499_when_no_proc_code(monkeypatch) -> None:
     """When no procedure_code on encounter, fall back to 99499 with a WARNING."""
     enc = dict(_ENCOUNTER_STUB)
     enc.pop("procedure_code", None)
@@ -274,7 +274,7 @@ def _stub_generate_837(monkeypatch):
         ),
     ],
 )
-def test_override_gate_validation(payload, expected_status, monkeypatch):
+def test_override_gate_validation(payload, expected_status, monkeypatch) -> None:
     """Override requests missing required fields / violating constraints return 422."""
     _stub_validator_high(monkeypatch, failed_ids=payload.get("patient_ids", [101])[:1])
     _stub_generate_837(monkeypatch)
@@ -294,7 +294,7 @@ def test_override_gate_validation(payload, expected_status, monkeypatch):
     )
 
 
-def test_override_gate_non_supervisor_reviewer_returns_403(monkeypatch):
+def test_override_gate_non_supervisor_reviewer_returns_403(monkeypatch) -> None:
     """reviewer_user_id with role 'coder' (not supervisor) must return 403."""
     _stub_validator_high(monkeypatch, failed_ids=[101])
     _stub_generate_837(monkeypatch)

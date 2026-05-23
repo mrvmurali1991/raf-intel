@@ -71,7 +71,7 @@ def mock_lookups():
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_urgency_formula(mock_lookups):
+def test_urgency_formula(mock_lookups) -> None:
     """Single suspect → urgency = 0.5*conf + 0.3*1.0 (it's the max) + 0.2*days/90."""
     suspects = [_suspect(1, 100, 19, confidence=0.8, days_old=45)]
     out = svc.get_hotlist(provider_id=1, year=2026, _suspects_override=suspects)
@@ -90,14 +90,14 @@ def test_urgency_formula(mock_lookups):
     assert item["urgency_score"] == round(min(1.0, expected), 4)
 
 
-def test_urgency_capped_at_one(mock_lookups):
+def test_urgency_capped_at_one(mock_lookups) -> None:
     """Max-confidence + max-recency + max-$ should cap at 1.0."""
     suspects = [_suspect(1, 100, 19, confidence=1.0, days_old=200)]
     out = svc.get_hotlist(provider_id=1, year=2026, _suspects_override=suspects)
     assert out["items"][0]["urgency_score"] == 1.0
 
 
-def test_sort_by_urgency_desc(mock_lookups):
+def test_sort_by_urgency_desc(mock_lookups) -> None:
     """Higher urgency must come first regardless of insertion order."""
     suspects = [
         _suspect(1, 100, 19, confidence=0.3, days_old=10),
@@ -110,7 +110,7 @@ def test_sort_by_urgency_desc(mock_lookups):
     assert out["items"][0]["suspect_id"] == 2
 
 
-def test_min_confidence_filter(mock_lookups):
+def test_min_confidence_filter(mock_lookups) -> None:
     """Suspects below min_confidence are dropped before ranking and aggregates."""
     suspects = [
         _suspect(1, 100, 19, confidence=0.4, days_old=5),
@@ -126,7 +126,7 @@ def test_min_confidence_filter(mock_lookups):
     assert out["items"][0]["suspect_id"] == 2
 
 
-def test_limit_truncates(mock_lookups):
+def test_limit_truncates(mock_lookups) -> None:
     """`limit` caps the items list but not the summary aggregates."""
     suspects = [
         _suspect(i, 100 + i, 19, confidence=0.5 + i * 0.05, days_old=i)
@@ -139,7 +139,7 @@ def test_limit_truncates(mock_lookups):
     assert out["summary"]["total_open"] == 10  # all 10 included in aggregates
 
 
-def test_summary_aggregates(mock_lookups):
+def test_summary_aggregates(mock_lookups) -> None:
     """high_confidence_count uses 0.80 threshold; avg_$ = total_$/total_open."""
     suspects = [
         _suspect(1, 100, 19, confidence=0.85, days_old=10),  # high-conf
@@ -158,7 +158,7 @@ def test_summary_aggregates(mock_lookups):
     assert s["high_confidence_threshold"] == svc.HIGH_CONFIDENCE_THRESHOLD
 
 
-def test_empty_panel_returns_zeroed_summary(mock_lookups):
+def test_empty_panel_returns_zeroed_summary(mock_lookups) -> None:
     """No suspects → empty items, zero aggregates, still 200-shaped."""
     out = svc.get_hotlist(provider_id=999, year=2026, _suspects_override=[])
     assert out["items"] == []
@@ -170,7 +170,7 @@ def test_empty_panel_returns_zeroed_summary(mock_lookups):
     assert out["measurement_year"] == 2026
 
 
-def test_dollars_use_imported_base_rate(mock_lookups):
+def test_dollars_use_imported_base_rate(mock_lookups) -> None:
     """expected_dollars == coefficient * confidence * _HCC_BASE_RATE (no hard-code)."""
     suspects = [_suspect(1, 100, 19, confidence=0.5, days_old=0)]
     out = svc.get_hotlist(provider_id=1, year=2026, _suspects_override=suspects)
@@ -180,7 +180,7 @@ def test_dollars_use_imported_base_rate(mock_lookups):
     )
 
 
-def test_days_open_handles_naive_datetime(mock_lookups):
+def test_days_open_handles_naive_datetime(mock_lookups) -> None:
     """Naive datetime (no tzinfo) should not crash days_open math."""
     suspects = [{
         "id": 1, "patient_id": 100, "suspect_hcc": 19,
@@ -193,7 +193,7 @@ def test_days_open_handles_naive_datetime(mock_lookups):
     assert out["items"][0]["days_open"] <= 13
 
 
-def test_items_carry_required_keys(mock_lookups):
+def test_items_carry_required_keys(mock_lookups) -> None:
     """Public contract: each item carries the documented keys."""
     suspects = [_suspect(1, 100, 19, confidence=0.7, days_old=5)]
     out = svc.get_hotlist(provider_id=1, year=2026, _suspects_override=suspects)

@@ -85,7 +85,7 @@ def _row(
 # ===========================================================================
 
 
-def test_summary_shape_has_required_keys():
+def test_summary_shape_has_required_keys() -> None:
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
         out = get_executive_summary("1", 2026, today=date(2026, 7, 2))
@@ -105,7 +105,7 @@ def test_summary_shape_has_required_keys():
     assert len(out["quarter_breakdown"]) == 4
 
 
-def test_summary_empty_db_yields_zeros():
+def test_summary_empty_db_yields_zeros() -> None:
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
         out = get_executive_summary("1", 2026, today=date(2026, 7, 2))
@@ -123,7 +123,7 @@ def test_summary_empty_db_yields_zeros():
 # ===========================================================================
 
 
-def test_forecast_linear_extrapolation():
+def test_forecast_linear_extrapolation() -> None:
     """4 closed gaps × $3000 = $12 000 in 100 days → $43 800 projection."""
     rows = [
         _row(
@@ -147,7 +147,7 @@ def test_forecast_linear_extrapolation():
     assert out["ytd_velocity_per_day"] == 120.0
 
 
-def test_forecast_zero_days_elapsed_is_safe():
+def test_forecast_zero_days_elapsed_is_safe() -> None:
     """Future year (today before Jan 1) must not divide by zero."""
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
@@ -161,7 +161,7 @@ def test_forecast_zero_days_elapsed_is_safe():
 # ===========================================================================
 
 
-def test_variance_against_budget():
+def test_variance_against_budget() -> None:
     """Budget = (open + closed) × $3000; variance = forecast − budget."""
     rows = (
         # 5 open gaps
@@ -192,7 +192,7 @@ def test_variance_against_budget():
 # ===========================================================================
 
 
-def test_month_breakdown_buckets_correctly():
+def test_month_breakdown_buckets_correctly() -> None:
     rows = [
         _row(status="open", revenue_impact=3000.0,
              created_at=datetime(2026, 1, 5)),
@@ -217,7 +217,7 @@ def test_month_breakdown_buckets_correctly():
     assert months[3]["remaining_dollars"] == 3000.0
 
 
-def test_quarter_breakdown_sums_months():
+def test_quarter_breakdown_sums_months() -> None:
     rows = [
         _row(status="open", revenue_impact=3000.0,
              created_at=datetime(2026, 2, 5)),
@@ -240,7 +240,7 @@ def test_quarter_breakdown_sums_months():
 # ===========================================================================
 
 
-def test_top_3_recaptured_conditions_sorted_by_dollars():
+def test_top_3_recaptured_conditions_sorted_by_dollars() -> None:
     rows = [
         _row(status="recaptured", hcc_code="85", revenue_impact=3000.0,
              created_at=datetime(2026, 1, 1), resolved_at=datetime(2026, 2, 1)),
@@ -265,7 +265,7 @@ def test_top_3_recaptured_conditions_sorted_by_dollars():
 # ===========================================================================
 
 
-def test_audit_risk_flag_true_when_low_dual_coding():
+def test_audit_risk_flag_true_when_low_dual_coding() -> None:
     rows = [
         _row(status="open", icd10_code="", hcc_code="85") for _ in range(20)
     ]
@@ -278,7 +278,7 @@ def test_audit_risk_flag_true_when_low_dual_coding():
     assert out["audit_dual_coded_pct"] < 10.0
 
 
-def test_audit_risk_flag_false_when_high_dual_coding():
+def test_audit_risk_flag_false_when_high_dual_coding() -> None:
     rows = [_row(status="open", icd10_code="I50.9", hcc_code="85") for _ in range(10)]
     cm, _ = _make_cm(rows)
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
@@ -291,7 +291,7 @@ def test_audit_risk_flag_false_when_high_dual_coding():
 # ===========================================================================
 
 
-def test_csv_export_has_correct_header_and_12_rows():
+def test_csv_export_has_correct_header_and_12_rows() -> None:
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
         content, mime = export_for_bi("1", 2026, format="csv",
@@ -305,7 +305,7 @@ def test_csv_export_has_correct_header_and_12_rows():
     assert len(rows) == 13
 
 
-def test_json_export_returns_list_of_12():
+def test_json_export_returns_list_of_12() -> None:
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
         content, mime = export_for_bi("1", 2026, format="json",
@@ -318,7 +318,7 @@ def test_json_export_returns_list_of_12():
             "recaptured_$", "remaining_$"} <= set(parsed[0].keys())
 
 
-def test_export_unknown_format_raises():
+def test_export_unknown_format_raises() -> None:
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
         with pytest.raises(ValueError):
@@ -330,7 +330,7 @@ def test_export_unknown_format_raises():
 # ===========================================================================
 
 
-def test_yoy_returns_requested_year_window():
+def test_yoy_returns_requested_year_window() -> None:
     cm, _ = _make_cm([])
     with patch("app.services.recapture_cfo_forecast.raf_cursor", cm):
         out = get_year_over_year_trend("1", years_back=3, today=date(2026, 6, 1))

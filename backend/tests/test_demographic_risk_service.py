@@ -156,14 +156,14 @@ def _row(
 # Normalisation helper tests
 # ===========================================================================
 
-def test_normalise_hcc_strips_prefix_and_zeros():
+def test_normalise_hcc_strips_prefix_and_zeros() -> None:
     assert drs._normalise_hcc("HCC0138") == "138"
     assert drs._normalise_hcc("hcc 19") == "19"
     assert drs._normalise_hcc("0") == "0"
     assert drs._normalise_hcc(None) == ""
 
 
-def test_normalise_dual_accepts_variants():
+def test_normalise_dual_accepts_variants() -> None:
     assert drs._normalise_dual(True) == "dual"
     assert drs._normalise_dual("FBD") == "dual"
     assert drs._normalise_dual("non-dual") == "non_dual"
@@ -171,14 +171,14 @@ def test_normalise_dual_accepts_variants():
     assert drs._normalise_dual(None) == "any"
 
 
-def test_normalise_sex_accepts_variants():
+def test_normalise_sex_accepts_variants() -> None:
     assert drs._normalise_sex("Female") == "F"
     assert drs._normalise_sex("M") == "M"
     assert drs._normalise_sex("Unknown") == "U"
     assert drs._normalise_sex(None) is None
 
 
-def test_parse_conditional_hccs_handles_string_and_list():
+def test_parse_conditional_hccs_handles_string_and_list() -> None:
     assert drs._parse_conditional_hccs(None) == []
     assert drs._parse_conditional_hccs(["19", "138"]) == ["19", "138"]
     assert drs._parse_conditional_hccs('["18","226"]') == ["18", "226"]
@@ -189,7 +189,7 @@ def test_parse_conditional_hccs_handles_string_and_list():
 # Row-matching tests
 # ===========================================================================
 
-def test_age_range_matching():
+def test_age_range_matching() -> None:
     row = _row(1, "138", age_min=65, age_max=74, multiplier=1.4)
     matchers = {"age": 70, "sex": None, "dual_status": "any",
                 "disabled": None, "institutional": None,
@@ -199,35 +199,35 @@ def test_age_range_matching():
     assert drs._row_matches(row, **matchers) is False
 
 
-def test_sex_null_matches_any():
+def test_sex_null_matches_any() -> None:
     row = _row(1, "138", sex=None, multiplier=1.5)
     args = {"age": 70, "sex": "F", "dual_status": "any",
             "disabled": None, "institutional": None, "prior_hccs_normalised": set()}
     assert drs._row_matches(row, **args) is True
 
 
-def test_sex_specific_excludes_others():
+def test_sex_specific_excludes_others() -> None:
     row = _row(1, "138", sex="F")
     args = {"age": 70, "sex": "M", "dual_status": "any",
             "disabled": None, "institutional": None, "prior_hccs_normalised": set()}
     assert drs._row_matches(row, **args) is False
 
 
-def test_dual_any_matches_anyone():
+def test_dual_any_matches_anyone() -> None:
     row = _row(1, "138", dual="any")
     args = {"age": 70, "sex": None, "dual_status": "non_dual",
             "disabled": None, "institutional": None, "prior_hccs_normalised": set()}
     assert drs._row_matches(row, **args) is True
 
 
-def test_dual_specific_must_match():
+def test_dual_specific_must_match() -> None:
     row = _row(1, "138", dual="dual")
     args = {"age": 70, "sex": None, "dual_status": "non_dual",
             "disabled": None, "institutional": None, "prior_hccs_normalised": set()}
     assert drs._row_matches(row, **args) is False
 
 
-def test_conditional_on_hccs_requires_overlap():
+def test_conditional_on_hccs_requires_overlap() -> None:
     row = _row(1, "138", cond=["18"])
     yes = {"age": 75, "sex": None, "dual_status": "any",
            "disabled": None, "institutional": None,
@@ -239,7 +239,7 @@ def test_conditional_on_hccs_requires_overlap():
     assert drs._row_matches(row, **no_empty) is False
 
 
-def test_disabled_flag_when_specified_must_match():
+def test_disabled_flag_when_specified_must_match() -> None:
     row = _row(1, "138", disabled=1)
     args = {"age": 60, "sex": None, "dual_status": "any",
             "disabled": 0, "institutional": None, "prior_hccs_normalised": set()}
@@ -248,14 +248,14 @@ def test_disabled_flag_when_specified_must_match():
     assert drs._row_matches(row, **args) is True
 
 
-def test_institutional_null_row_ignored():
+def test_institutional_null_row_ignored() -> None:
     row = _row(1, "138", institutional=None)
     args = {"age": 70, "sex": None, "dual_status": "any",
             "disabled": None, "institutional": 1, "prior_hccs_normalised": set()}
     assert drs._row_matches(row, **args) is True
 
 
-def test_constrained_row_does_not_fire_on_unknown_demographic():
+def test_constrained_row_does_not_fire_on_unknown_demographic() -> None:
     """
     A row that REQUIRES institutional=1 must not match a patient whose
     institutional status is None (unknown).  Same for disabled.
@@ -283,7 +283,7 @@ def test_constrained_row_does_not_fire_on_unknown_demographic():
 # compute_modulated_prior tests
 # ===========================================================================
 
-def test_compute_modulated_prior_target_scenario_2_1x(patch_db):
+def test_compute_modulated_prior_target_scenario_2_1x(patch_db) -> None:
     """The acceptance-criteria curl: HCC 138, F 78, dual, prior HCC 18 -> 2.1x."""
     rows = [
         _row(1, "138", age_min=75, age_max=120, multiplier=2.1, cond=["18"],
@@ -302,7 +302,7 @@ def test_compute_modulated_prior_target_scenario_2_1x(patch_db):
     assert result["factors_applied"][0]["source"] == "curated-USRDS-2023"
 
 
-def test_overlapping_age_ranges_compound(patch_db):
+def test_overlapping_age_ranges_compound(patch_db) -> None:
     """Two matching rows with overlapping age ranges multiply their multipliers."""
     rows = [
         _row(1, "138", age_min=65, age_max=120, sex="F", multiplier=1.4),
@@ -318,7 +318,7 @@ def test_overlapping_age_ranges_compound(patch_db):
     assert result["factor_count"] == 2
 
 
-def test_missing_demographics_default_to_no_modulation(patch_db):
+def test_missing_demographics_default_to_no_modulation(patch_db) -> None:
     """Empty patient_demo + factor that requires age 75+ -> no match -> 1.0x."""
     rows = [
         _row(1, "138", age_min=75, age_max=120, multiplier=1.5),
@@ -334,7 +334,7 @@ def test_missing_demographics_default_to_no_modulation(patch_db):
     assert result["modulated_prior"] >= result["base_prior"]
 
 
-def test_age_outside_range_yields_unit_multiplier(patch_db):
+def test_age_outside_range_yields_unit_multiplier(patch_db) -> None:
     rows = [
         _row(1, "138", age_min=75, age_max=120, multiplier=1.5),
     ]
@@ -347,7 +347,7 @@ def test_age_outside_range_yields_unit_multiplier(patch_db):
     assert result["modulated_prior"] == pytest.approx(0.4)
 
 
-def test_conditional_factor_does_not_fire_without_prior_hcc(patch_db):
+def test_conditional_factor_does_not_fire_without_prior_hcc(patch_db) -> None:
     rows = [
         _row(1, "138", age_min=65, age_max=120, multiplier=2.1, cond=["18"]),
     ]
@@ -361,7 +361,7 @@ def test_conditional_factor_does_not_fire_without_prior_hcc(patch_db):
     assert result["factor_count"] == 0
 
 
-def test_conditional_factor_fires_with_overlap(patch_db):
+def test_conditional_factor_fires_with_overlap(patch_db) -> None:
     rows = [
         _row(1, "138", age_min=65, age_max=120, multiplier=2.1,
              cond=["18", "19"]),
@@ -375,7 +375,7 @@ def test_conditional_factor_fires_with_overlap(patch_db):
     assert result["multiplier"] == pytest.approx(2.1, abs=1e-4)
 
 
-def test_base_prior_override_skips_db_lookup(patch_db):
+def test_base_prior_override_skips_db_lookup(patch_db) -> None:
     rows = [
         _row(1, "138", age_min=65, age_max=120, multiplier=1.5),
     ]
@@ -389,7 +389,7 @@ def test_base_prior_override_skips_db_lookup(patch_db):
     assert result["modulated_prior"] == pytest.approx(0.8 * 1.5, abs=1e-4)
 
 
-def test_zero_or_negative_multiplier_rows_ignored(patch_db):
+def test_zero_or_negative_multiplier_rows_ignored(patch_db) -> None:
     rows = [
         _row(1, "138", multiplier=1.5),
         _row(2, "138", multiplier=0.0),
@@ -402,7 +402,7 @@ def test_zero_or_negative_multiplier_rows_ignored(patch_db):
     assert result["multiplier"] == pytest.approx(1.5, abs=1e-4)
 
 
-def test_compounded_multiplier_clamped(patch_db):
+def test_compounded_multiplier_clamped(patch_db) -> None:
     rows = [_row(i, "138", multiplier=5.0) for i in range(1, 5)]
     patch_db(rows, coefficients={(138, "CNA", 2024): 1.0})
     result = drs.compute_modulated_prior(
@@ -412,7 +412,7 @@ def test_compounded_multiplier_clamped(patch_db):
     assert result["multiplier"] == pytest.approx(drs.MAX_COMPOUNDED_MULTIPLIER)
 
 
-def test_inactive_rows_excluded(patch_db):
+def test_inactive_rows_excluded(patch_db) -> None:
     rows = [
         _row(1, "138", multiplier=1.5, is_active=0),
     ]
@@ -424,7 +424,7 @@ def test_inactive_rows_excluded(patch_db):
     assert result["factor_count"] == 0
 
 
-def test_factors_applied_carries_source_citation(patch_db):
+def test_factors_applied_carries_source_citation(patch_db) -> None:
     rows = [
         _row(1, "138", age_min=75, age_max=120, multiplier=2.1, cond=["18"],
              source="MEDPAR-2023", notes="dual women 75+ CKD"),
@@ -443,7 +443,7 @@ def test_factors_applied_carries_source_citation(patch_db):
     assert "conditional_on_hccs=[18]" in fa["factor"]
 
 
-def test_get_risk_factors_returns_decoded_conditional(patch_db):
+def test_get_risk_factors_returns_decoded_conditional(patch_db) -> None:
     rows = [
         _row(1, "138", multiplier=1.5, cond=["18"], source="MEDPAR-2023"),
         _row(2, "138", multiplier=2.0, source="curated-USRDS-2023"),
@@ -456,14 +456,14 @@ def test_get_risk_factors_returns_decoded_conditional(patch_db):
     assert factors[1]["conditional_on_hccs"] == []
 
 
-def test_get_risk_factors_handles_hcc_prefix(patch_db):
+def test_get_risk_factors_handles_hcc_prefix(patch_db) -> None:
     rows = [_row(1, "138", multiplier=1.5)]
     patch_db(rows)
     factors = drs.get_risk_factors("HCC0138")
     assert len(factors) == 1
 
 
-def test_dual_eligible_compounding_priors(patch_db):
+def test_dual_eligible_compounding_priors(patch_db) -> None:
     """Realistic stack: female + dual + prior CHF -> three rows fire on CKD."""
     rows = [
         _row(1, "138", age_min=65, age_max=74, sex="F", dual="dual",
@@ -490,7 +490,7 @@ def test_dual_eligible_compounding_priors(patch_db):
 # Integration with raf_forecast.calculate_patient_forecast
 # ===========================================================================
 
-def test_raf_forecast_demographic_modulation_toggle_off_preserves_baseline():
+def test_raf_forecast_demographic_modulation_toggle_off_preserves_baseline() -> None:
     """With USE_DEMOGRAPHIC_RISK_MODULATION=false the by_suspect numbers must
     match the pre-feature baseline byte-for-byte."""
     from app.services import raf_forecast as rf
@@ -516,7 +516,7 @@ def test_raf_forecast_demographic_modulation_toggle_off_preserves_baseline():
     assert "demographic_multiplier" not in forecast["by_suspect"][0]
 
 
-def test_raf_forecast_demographic_modulation_toggle_on_applies_multiplier():
+def test_raf_forecast_demographic_modulation_toggle_on_applies_multiplier() -> None:
     """With the flag ON each suspect's lift gets scaled by the modulation."""
     from app.services import raf_forecast as rf
 
@@ -571,7 +571,7 @@ def test_raf_forecast_demographic_modulation_toggle_on_applies_multiplier():
     assert suspect_entry["demographic_factors"][0]["source"] == "curated-USRDS-2023"
 
 
-def test_raf_forecast_modulation_drops_back_to_unit_when_drs_missing():
+def test_raf_forecast_modulation_drops_back_to_unit_when_drs_missing() -> None:
     """If the demographic_risk_service module is unavailable the forecast
     must still return a valid result (regression guard)."""
     from app.services import raf_forecast as rf

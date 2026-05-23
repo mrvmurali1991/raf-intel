@@ -112,7 +112,7 @@ def _make_provider_query():
     )
 
 
-def test_run_for_patient_chains_stages_in_order(fake_cur, fake_bundle):
+def test_run_for_patient_chains_stages_in_order(fake_cur, fake_bundle) -> None:
     from app.services.ai_pipeline import orchestrator
 
     call_log: list[str] = []
@@ -216,7 +216,7 @@ def test_run_for_patient_chains_stages_in_order(fake_cur, fake_bundle):
     assert result["stages"]["provider_queries"] == 2
 
 
-def test_run_for_patient_skips_when_over_limit(fake_bundle):
+def test_run_for_patient_skips_when_over_limit(fake_bundle) -> None:
     from app.services.ai_pipeline import orchestrator
 
     with patch.object(orchestrator.eligibility, "can_run_analysis", return_value=False), \
@@ -231,7 +231,7 @@ def test_run_for_patient_skips_when_over_limit(fake_bundle):
     assemble_mock.assert_not_called()
 
 
-def test_meat_extractor_receives_real_encounter_type(fake_cur):
+def test_meat_extractor_receives_real_encounter_type(fake_cur) -> None:
     """A note linked to a telephone encounter must cause meat_extractor to
     receive encounter_type='telephone' — NOT the old hardcoded 'office visit'.
     """
@@ -290,7 +290,7 @@ def test_meat_extractor_receives_real_encounter_type(fake_cur):
     assert captured["context"]["encounter_date"] == "2026-01-15"
 
 
-def test_meat_extractor_gets_none_when_encounter_unresolved(fake_cur):
+def test_meat_extractor_gets_none_when_encounter_unresolved(fake_cur) -> None:
     """Unresolvable encounter => encounter_type=None (RADV-safe)."""
     from app.services.ai_pipeline import orchestrator
 
@@ -340,7 +340,7 @@ def test_meat_extractor_gets_none_when_encounter_unresolved(fake_cur):
     assert captured["context"]["encounter_type"] is None
 
 
-def test_schedule_daily_passes_tenant_id():
+def test_schedule_daily_passes_tenant_id() -> None:
     from app.services.ai_pipeline import orchestrator
 
     with patch.object(orchestrator, "_all_tenant_ids", return_value=["t1"]), \
@@ -356,7 +356,7 @@ def test_schedule_daily_passes_tenant_id():
         assert kwargs["trigger_reason"] == "daily_beat"
 
 
-def test_orchestrator_sql_is_mysql_compatible(fake_cur, fake_bundle):
+def test_orchestrator_sql_is_mysql_compatible(fake_cur, fake_bundle) -> None:
     """Regression guard: the orchestrator must not emit Postgres-only idioms
     (``::jsonb`` casts, ``RETURNING`` clauses, ``jsonb_build_*`` functions,
     or ``$1``-style numbered placeholders) because production runs on MySQL.

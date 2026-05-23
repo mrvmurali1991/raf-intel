@@ -83,31 +83,31 @@ def _run_v24(
 # ===========================================================================
 
 class TestDemographicScore:
-    def test_demographic_score_nonzero(self):
+    def test_demographic_score_nonzero(self) -> None:
         result = _run_v28(icd_codes=["Z00.00"])  # Annual exam — no HCC
         assert result["demographic_score"] > 0
 
-    def test_female_and_male_demographic_scores_differ(self):
+    def test_female_and_male_demographic_scores_differ(self) -> None:
         female = _run_v28(icd_codes=[], sex="F", age=70)
         male = _run_v28(icd_codes=[], sex="M", age=70)
         assert female["demographic_score"] != male["demographic_score"]
 
-    def test_older_patient_has_higher_demographic_score(self):
+    def test_older_patient_has_higher_demographic_score(self) -> None:
         young = _run_v28(icd_codes=[], age=65)
         old = _run_v28(icd_codes=[], age=85)
         assert old["demographic_score"] > young["demographic_score"]
 
-    def test_no_disease_score_for_no_hcc_codes(self):
+    def test_no_disease_score_for_no_hcc_codes(self) -> None:
         result = _run_v28(icd_codes=["Z00.00"])
         assert result["disease_score"] == pytest.approx(0.0, abs=0.001)
 
-    def test_demographic_score_equals_subtotal_when_no_hccs(self):
+    def test_demographic_score_equals_subtotal_when_no_hccs(self) -> None:
         result = _run_v28(icd_codes=["Z00.00"])
         assert result["subtotal"] == pytest.approx(
             result["demographic_score"] + result["disease_score"], abs=0.001
         )
 
-    def test_score_keys_present(self):
+    def test_score_keys_present(self) -> None:
         result = _run_v28(icd_codes=[])
         required = {
             "raw_raf", "payment_raf", "demographic_score", "disease_score",
@@ -122,35 +122,35 @@ class TestDemographicScore:
 # ===========================================================================
 
 class TestHccCoefficientAddition:
-    def test_diabetes_hcc_increases_score(self):
+    def test_diabetes_hcc_increases_score(self) -> None:
         base = _run_v28(icd_codes=[])
         with_dm = _run_v28(icd_codes=["E11.65"])
         assert with_dm["raw_raf"] > base["raw_raf"]
 
-    def test_chf_hcc_increases_disease_score(self):
+    def test_chf_hcc_increases_disease_score(self) -> None:
         result = _run_v28(icd_codes=["I50.9"])
         assert result["disease_score"] > 0
 
-    def test_two_hccs_higher_than_one(self):
+    def test_two_hccs_higher_than_one(self) -> None:
         single = _run_v28(icd_codes=["E11.65"])
         multi = _run_v28(icd_codes=["E11.65", "I50.9"])
         assert multi["raw_raf"] >= single["raw_raf"]
 
-    def test_three_hccs_higher_than_two(self):
+    def test_three_hccs_higher_than_two(self) -> None:
         two = _run_v28(icd_codes=["E11.65", "I50.9"])
         three = _run_v28(icd_codes=["E11.65", "I50.9", "N18.4"])
         assert three["raw_raf"] >= two["raw_raf"]
 
-    def test_disease_score_is_sum_of_hcc_contributions(self):
+    def test_disease_score_is_sum_of_hcc_contributions(self) -> None:
         result = _run_v28(icd_codes=["E11.65", "I50.9"])
         total_from_contribs = sum(h["coefficient"] for h in result["hcc_contributions"])
         assert total_from_contribs == pytest.approx(result["disease_score"], abs=0.001)
 
-    def test_hcc_list_populated(self):
+    def test_hcc_list_populated(self) -> None:
         result = _run_v28(icd_codes=["E11.65"])
         assert len(result["hcc_list"]) >= 1
 
-    def test_hcc_contributions_have_required_fields(self):
+    def test_hcc_contributions_have_required_fields(self) -> None:
         result = _run_v28(icd_codes=["E11.65"])
         for contrib in result["hcc_contributions"]:
             assert "hcc_code" in contrib
@@ -163,26 +163,26 @@ class TestHccCoefficientAddition:
 # ===========================================================================
 
 class TestPaymentRafFormula:
-    def test_payment_raf_less_than_raw_raf(self):
+    def test_payment_raf_less_than_raw_raf(self) -> None:
         """Normalization and MACI reduce the raw RAF."""
         result = _run_v28(icd_codes=["E11.65", "I50.9"])
         assert result["payment_raf"] < result["raw_raf"]
 
-    def test_payment_raf_formula(self):
+    def test_payment_raf_formula(self) -> None:
         result = _run_v28(icd_codes=["E11.65"], year=2026)
         expected = result["raw_raf"] * (1 - result["maci_factor"]) / result["norm_factor"]
         assert result["payment_raf"] == pytest.approx(expected, rel=1e-4)
 
-    def test_payment_raf_is_positive(self):
+    def test_payment_raf_is_positive(self) -> None:
         result = _run_v28(icd_codes=["E11.65"])
         assert result["payment_raf"] > 0
 
-    def test_norm_factor_stored_in_result(self):
+    def test_norm_factor_stored_in_result(self) -> None:
         norm = _NORM_FACTORS_V28[2026]
         result = _run_v28(icd_codes=["E11.9"], year=2026)
         assert result["norm_factor"] == pytest.approx(norm)
 
-    def test_maci_factor_stored_in_result(self):
+    def test_maci_factor_stored_in_result(self) -> None:
         maci = _MACI_FACTORS_V28[2026]
         result = _run_v28(icd_codes=["E11.9"], year=2026)
         assert result["maci_factor"] == pytest.approx(maci)
@@ -196,60 +196,60 @@ class TestBlendingRatios:
     """Verify blending arithmetic directly against CMS transition weights."""
 
     @pytest.mark.golden
-    def test_py2024_blend_weights(self):
+    def test_py2024_blend_weights(self) -> None:
         v24_w, v28_w = _BLEND_WEIGHTS[2024]
         assert v24_w == pytest.approx(0.67)
         assert v28_w == pytest.approx(0.33)
 
     @pytest.mark.golden
-    def test_py2025_blend_weights(self):
+    def test_py2025_blend_weights(self) -> None:
         v24_w, v28_w = _BLEND_WEIGHTS[2025]
         assert v24_w == pytest.approx(0.33)
         assert v28_w == pytest.approx(0.67)
 
     @pytest.mark.golden
-    def test_py2026_pure_v28(self):
+    def test_py2026_pure_v28(self) -> None:
         v24_w, v28_w = _BLEND_WEIGHTS[2026]
         assert v24_w == pytest.approx(0.0)
         assert v28_w == pytest.approx(1.0)
 
-    def test_all_blend_weights_sum_to_one(self):
+    def test_all_blend_weights_sum_to_one(self) -> None:
         for year, (v24_w, v28_w) in _BLEND_WEIGHTS.items():
             assert v24_w + v28_w == pytest.approx(1.0), f"Year {year}"
 
-    def test_py2024_v24_dominant(self):
+    def test_py2024_v24_dominant(self) -> None:
         v24_w, v28_w = _BLEND_WEIGHTS[2024]
         assert v24_w > v28_w
 
-    def test_py2025_v28_dominant(self):
+    def test_py2025_v28_dominant(self) -> None:
         v24_w, v28_w = _BLEND_WEIGHTS[2025]
         assert v28_w > v24_w
 
-    def test_manual_blend_arithmetic_py2024(self):
+    def test_manual_blend_arithmetic_py2024(self) -> None:
         v24_raw, v28_raw = 1.300, 1.100
         v24_w, v28_w = _BLEND_WEIGHTS[2024]
         blended = v24_w * v24_raw + v28_w * v28_raw
         assert blended == pytest.approx(0.67 * 1.300 + 0.33 * 1.100, rel=1e-4)
 
-    def test_manual_blend_arithmetic_py2025(self):
+    def test_manual_blend_arithmetic_py2025(self) -> None:
         v24_raw, v28_raw = 1.300, 1.100
         v24_w, v28_w = _BLEND_WEIGHTS[2025]
         blended = v24_w * v24_raw + v28_w * v28_raw
         assert blended == pytest.approx(0.33 * 1.300 + 0.67 * 1.100, rel=1e-4)
 
-    def test_py2026_blended_equals_v28_score(self):
+    def test_py2026_blended_equals_v28_score(self) -> None:
         v24_raw, v28_raw = 1.300, 1.100
         v24_w, v28_w = _BLEND_WEIGHTS[2026]
         blended = v24_w * v24_raw + v28_w * v28_raw
         assert blended == pytest.approx(v28_raw)
 
-    def test_blended_score_within_v24_v28_bounds(self):
+    def test_blended_score_within_v24_v28_bounds(self) -> None:
         v24_raw, v28_raw = 1.400, 1.100
         v24_w, v28_w = _BLEND_WEIGHTS[2025]
         blended = v24_w * v24_raw + v28_w * v28_raw
         assert min(v24_raw, v28_raw) <= blended <= max(v24_raw, v28_raw)
 
-    def test_v24_score_differs_from_v28_score_for_same_patient(self):
+    def test_v24_score_differs_from_v28_score_for_same_patient(self) -> None:
         """V24 and V28 models should produce distinct raw scores for the same inputs."""
         v24_result = _run_v24(icd_codes=["E11.65", "I50.9"])
         v28_result = _run_v28(icd_codes=["E11.65", "I50.9"])
@@ -278,7 +278,7 @@ class TestTrumpedHccsExcludedFromScore:
     raw_raf when the less-severe HCC is present alone.
     """
 
-    def test_severe_diabetes_hcc_alone_vs_mild_alone(self):
+    def test_severe_diabetes_hcc_alone_vs_mild_alone(self) -> None:
         """
         E11.65 (DM with hyperglycemia) and E11.9 (DM without complications)
         both fire HCCs.  Neither score should be zero.
@@ -289,7 +289,7 @@ class TestTrumpedHccsExcludedFromScore:
         assert severe["raw_raf"] > 0
         assert mild["raw_raf"] > 0
 
-    def test_adding_redundant_mild_hcc_does_not_increase_score(self):
+    def test_adding_redundant_mild_hcc_does_not_increase_score(self) -> None:
         """
         When the severe HCC is already present, adding the mild HCC from
         the same chain should NOT increase the total score — hccinfhir
@@ -301,7 +301,7 @@ class TestTrumpedHccsExcludedFromScore:
         # differ, but severe+mild must never be LESS than severe-only.
         assert severe_plus_mild["raw_raf"] >= severe_only["raw_raf"]
 
-    def test_apply_hierarchy_then_score_excludes_trumped(self):
+    def test_apply_hierarchy_then_score_excludes_trumped(self) -> None:
         """
         Explicitly verify: compute scores with and without hierarchy filtering.
         Scoring only non-trumped HCCs should yield a score <= scoring all HCCs.
@@ -316,7 +316,7 @@ class TestTrumpedHccsExcludedFromScore:
         assert severe_only_result["disease_score"] >= 0
         assert all_hcc_result["disease_score"] >= 0
 
-    def test_non_redundant_hccs_both_contribute(self):
+    def test_non_redundant_hccs_both_contribute(self) -> None:
         """HCCs in different families both contribute positively to the total score."""
         dm_result = _run_v28(icd_codes=["E11.65"])           # diabetes
         chf_result = _run_v28(icd_codes=["I50.9"])            # CHF
@@ -331,37 +331,37 @@ class TestTrumpedHccsExcludedFromScore:
 # ===========================================================================
 
 class TestEdgeCasesAndIdempotency:
-    def test_same_inputs_produce_identical_score(self):
+    def test_same_inputs_produce_identical_score(self) -> None:
         r1 = _run_v28(icd_codes=["E11.65", "I50.9"], age=72, sex="F")
         r2 = _run_v28(icd_codes=["E11.65", "I50.9"], age=72, sex="F")
         assert r1["raw_raf"] == pytest.approx(r2["raw_raf"])
 
-    def test_empty_icd_list_returns_demographic_only(self):
+    def test_empty_icd_list_returns_demographic_only(self) -> None:
         result = _run_v28(icd_codes=[])
         assert result["disease_score"] == pytest.approx(0.0, abs=0.001)
         assert result["demographic_score"] > 0
 
-    def test_unknown_icd_code_does_not_raise(self):
+    def test_unknown_icd_code_does_not_raise(self) -> None:
         result = _run_v28(icd_codes=["ZZZZZ"])
         assert result["raw_raf"] > 0  # demographic score still present
         assert result["hcc_list"] == []
 
-    def test_very_old_patient_age_95_plus(self):
+    def test_very_old_patient_age_95_plus(self) -> None:
         result = _run_v28(icd_codes=[], age=97, sex="F")
         assert result["demographic_score"] > 0
 
-    def test_young_patient_age_35(self):
+    def test_young_patient_age_35(self) -> None:
         """Younger patients have lower demographic scores."""
         young = _run_v28(icd_codes=[], age=35, sex="M", segment="CND")
         old = _run_v28(icd_codes=[], age=85, sex="M")
         assert young["demographic_score"] < old["demographic_score"]
 
-    def test_raw_raf_is_finite(self):
+    def test_raw_raf_is_finite(self) -> None:
         result = _run_v28(icd_codes=["E11.65", "I50.9", "N18.4"])
         assert math.isfinite(result["raw_raf"])
         assert math.isfinite(result["payment_raf"])
 
-    def test_v24_processor_valid_result(self):
+    def test_v24_processor_valid_result(self) -> None:
         result = _run_v24(icd_codes=["E11.65", "I50.9"])
         assert result["raw_raf"] > 0
         assert len(result["hcc_list"]) >= 1
@@ -372,19 +372,19 @@ class TestEdgeCasesAndIdempotency:
 # ===========================================================================
 
 class TestModelSegmentIntegration:
-    def test_aged_non_dual_community_segment(self):
+    def test_aged_non_dual_community_segment(self) -> None:
         seg = determine_model_segment(age=70)
         assert seg == "CNA"
         result = _run_v28(icd_codes=["E11.65"], segment=seg)
         assert result["demographic_score"] > 0
 
-    def test_disabled_non_dual_segment(self):
+    def test_disabled_non_dual_segment(self) -> None:
         seg = determine_model_segment(age=55, orec="1")
         assert seg == "CND"
         result = _run_v28(icd_codes=["E11.65"], segment=seg, age=55)
         assert result["demographic_score"] > 0
 
-    def test_new_enrollee_demographic_only(self):
+    def test_new_enrollee_demographic_only(self) -> None:
         from app.services.raf_calculator import _calculate_new_enrollee_score
         result = _calculate_new_enrollee_score(age=67, sex="F", model_segment="NE_CNA")
         assert result["is_new_enrollee"] is True

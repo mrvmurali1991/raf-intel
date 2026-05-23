@@ -53,7 +53,7 @@ def _get_ver_code(body: dict) -> str:
 # Test 1 — provisional when MEAT absent
 # ---------------------------------------------------------------------------
 
-def test_provisional_without_meat():
+def test_provisional_without_meat() -> None:
     body = _build(meat_signed=False, user_role="coder")
     assert _get_ver_code(body) == "provisional", (
         "Should be provisional when MEAT not signed"
@@ -64,12 +64,12 @@ def test_provisional_without_meat():
 # Test 2 — provisional when user is not credentialed even with MEAT
 # ---------------------------------------------------------------------------
 
-def test_provisional_non_credentialed_role_even_with_meat():
+def test_provisional_non_credentialed_role_even_with_meat() -> None:
     body = _build(meat_signed=True, user_role="viewer")
     assert _get_ver_code(body) == "provisional"
 
 
-def test_provisional_null_role_with_meat():
+def test_provisional_null_role_with_meat() -> None:
     body = _build(meat_signed=True, user_role=None)
     assert _get_ver_code(body) == "provisional"
 
@@ -79,7 +79,7 @@ def test_provisional_null_role_with_meat():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("role", ["coder", "admin", "physician"])
-def test_confirmed_with_meat_and_credentialed_role(role):
+def test_confirmed_with_meat_and_credentialed_role(role) -> None:
     body = _build(meat_signed=True, user_role=role)
     assert _get_ver_code(body) == "confirmed", (
         f"Role '{role}' with MEAT should yield confirmed"
@@ -90,7 +90,7 @@ def test_confirmed_with_meat_and_credentialed_role(role):
 # Test 4 — note[] populated from MEAT letters
 # ---------------------------------------------------------------------------
 
-def test_notes_populated_from_meat_letters():
+def test_notes_populated_from_meat_letters() -> None:
     notes = [
         {"authorString": "coder1", "time": "2026-05-01T00:00:00", "text": "[M] Monitoring: HbA1c elevated"},
         {"authorString": "coder1", "time": "2026-05-01T00:00:00", "text": "[E] Evaluation: exam findings confirm DM"},
@@ -107,7 +107,7 @@ def test_notes_populated_from_meat_letters():
     assert any("[T]" in t for t in texts)
 
 
-def test_notes_empty_when_no_meat_evidence():
+def test_notes_empty_when_no_meat_evidence() -> None:
     body = _build(meat_notes=[], meat_signed=False, user_role="coder")
     assert "note" not in body
 
@@ -116,14 +116,14 @@ def test_notes_empty_when_no_meat_evidence():
 # Test 5 — evidence[] points to source encounter
 # ---------------------------------------------------------------------------
 
-def test_evidence_element_with_encounter():
+def test_evidence_element_with_encounter() -> None:
     body = _build(source={"suspect_id": 7, "source_encounter_id": 99})
     assert "evidence" in body
     ref = body["evidence"][0]["detail"][0]["reference"]
     assert ref == "DocumentReference/99"
 
 
-def test_evidence_absent_when_no_encounter():
+def test_evidence_absent_when_no_encounter() -> None:
     body = _build(source={"suspect_id": 7})
     assert "evidence" not in body
 
@@ -132,13 +132,13 @@ def test_evidence_absent_when_no_encounter():
 # Test 6 — recorder present when NPI provided
 # ---------------------------------------------------------------------------
 
-def test_recorder_ref_when_npi_present():
+def test_recorder_ref_when_npi_present() -> None:
     body = _build(user_npi="1234567890")
     assert "recorder" in body
     assert body["recorder"] == {"reference": "Practitioner/1234567890"}
 
 
-def test_recorder_absent_when_npi_null():
+def test_recorder_absent_when_npi_null() -> None:
     body = _build(user_npi=None)
     assert "recorder" not in body
 
@@ -148,7 +148,7 @@ def test_recorder_absent_when_npi_null():
 # is preserved (e.g. callers setting "entered-in-error")
 # ---------------------------------------------------------------------------
 
-def test_explicit_non_default_verification_status_preserved():
+def test_explicit_non_default_verification_status_preserved() -> None:
     body = _build(verification_status="entered-in-error")
     assert _get_ver_code(body) == "entered-in-error"
 
@@ -157,7 +157,7 @@ def test_explicit_non_default_verification_status_preserved():
 # Test 8 — _fetch_meat_notes returns empty list on DB error (non-blocking)
 # ---------------------------------------------------------------------------
 
-def test_fetch_meat_notes_graceful_on_db_error():
+def test_fetch_meat_notes_graceful_on_db_error() -> None:
     from app.services.fhir_problem_list import _fetch_meat_notes
 
     # raf_cursor is imported inside the function body, so patch via app.db
@@ -171,7 +171,7 @@ def test_fetch_meat_notes_graceful_on_db_error():
 # Test 9 — reverse_problem_list_condition emits audit + updates DB
 # ---------------------------------------------------------------------------
 
-def test_reverse_emits_audit_and_updates_db():
+def test_reverse_emits_audit_and_updates_db() -> None:
     from app.services.fhir_problem_list import reverse_problem_list_condition
 
     # Mock FHIR HTTP call
@@ -226,7 +226,7 @@ def test_reverse_emits_audit_and_updates_db():
     assert "fhir_writeback_reversal_reason" in sql_call
 
 
-def test_reverse_raises_on_short_reason():
+def test_reverse_raises_on_short_reason() -> None:
     from app.services.fhir_problem_list import reverse_problem_list_condition
 
     fake_adapter = MagicMock()
@@ -242,7 +242,7 @@ def test_reverse_raises_on_short_reason():
         )
 
 
-def test_reverse_raises_on_fhir_error():
+def test_reverse_raises_on_fhir_error() -> None:
     from app.services.fhir_problem_list import reverse_problem_list_condition
 
     mock_resp = MagicMock()

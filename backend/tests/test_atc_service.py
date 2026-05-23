@@ -178,7 +178,7 @@ def _patch_fetch():
 # resolve_drug_to_atc
 # ---------------------------------------------------------------------------
 
-def test_resolve_known_drug_exact_name():
+def test_resolve_known_drug_exact_name() -> None:
     matches = atc_service.resolve_drug_to_atc("metformin")
     assert len(matches) == 1
     assert matches[0]["atc_code"] == "A10BA02"
@@ -186,27 +186,27 @@ def test_resolve_known_drug_exact_name():
     assert matches[0]["atc_class"]["name"] == "Metformin"
 
 
-def test_resolve_known_drug_case_insensitive():
+def test_resolve_known_drug_case_insensitive() -> None:
     matches = atc_service.resolve_drug_to_atc("Metformin")
     assert len(matches) == 1
     assert matches[0]["drug_name"] == "metformin"
 
 
-def test_resolve_by_rxcui():
+def test_resolve_by_rxcui() -> None:
     matches = atc_service.resolve_drug_to_atc("6809")
     assert matches and matches[0]["drug_name"] == "metformin"
 
 
-def test_resolve_by_ndc():
+def test_resolve_by_ndc() -> None:
     matches = atc_service.resolve_drug_to_atc("00071022223")
     assert matches and matches[0]["atc_code"] == "C09AA"
 
 
-def test_resolve_unknown_drug_returns_empty():
+def test_resolve_unknown_drug_returns_empty() -> None:
     assert atc_service.resolve_drug_to_atc("definitely-not-a-real-drug") == []
 
 
-def test_resolve_empty_input():
+def test_resolve_empty_input() -> None:
     assert atc_service.resolve_drug_to_atc("") == []
     assert atc_service.resolve_drug_to_atc("   ") == []
 
@@ -215,7 +215,7 @@ def test_resolve_empty_input():
 # get_atc_hierarchy
 # ---------------------------------------------------------------------------
 
-def test_hierarchy_metformin_full_chain():
+def test_hierarchy_metformin_full_chain() -> None:
     chain = atc_service.get_atc_hierarchy("A10BA02")
     codes = [n["atc_code"] for n in chain]
     assert codes == ["A", "A10", "A10B", "A10BA", "A10BA02"]
@@ -223,11 +223,11 @@ def test_hierarchy_metformin_full_chain():
     assert chain[-1]["level"] == 5
 
 
-def test_hierarchy_unknown_code_returns_empty():
+def test_hierarchy_unknown_code_returns_empty() -> None:
     assert atc_service.get_atc_hierarchy("Z99ZZ99") == []
 
 
-def test_hierarchy_handles_orphan_root():
+def test_hierarchy_handles_orphan_root() -> None:
     chain = atc_service.get_atc_hierarchy("A")
     assert len(chain) == 1
     assert chain[0]["parent_atc_code"] is None
@@ -237,7 +237,7 @@ def test_hierarchy_handles_orphan_root():
 # get_drugs_in_class
 # ---------------------------------------------------------------------------
 
-def test_get_drugs_in_class_with_subclasses():
+def test_get_drugs_in_class_with_subclasses() -> None:
     drugs = atc_service.get_drugs_in_class("A10B", include_subclasses=True)
     names = sorted(d["drug_name"] for d in drugs)
     assert "metformin" in names
@@ -245,13 +245,13 @@ def test_get_drugs_in_class_with_subclasses():
     assert "ozempic" in names
 
 
-def test_get_drugs_in_class_strict():
+def test_get_drugs_in_class_strict() -> None:
     # No drugs are mapped directly to A10B (only to A10BA02 / A10BJ).
     drugs = atc_service.get_drugs_in_class("A10B", include_subclasses=False)
     assert drugs == []
 
 
-def test_get_drugs_in_leaf_class():
+def test_get_drugs_in_leaf_class() -> None:
     drugs = atc_service.get_drugs_in_class("A10BA02", include_subclasses=False)
     assert len(drugs) == 1
     assert drugs[0]["drug_name"] == "metformin"
@@ -261,20 +261,20 @@ def test_get_drugs_in_leaf_class():
 # get_indications_for_atc
 # ---------------------------------------------------------------------------
 
-def test_indications_at_class_level():
+def test_indications_at_class_level() -> None:
     inds = atc_service.get_indications_for_atc("A10BJ")
     codes = [c["code"] for c in inds]
     assert "E11" in codes
 
 
-def test_indications_walk_up_for_leaf():
+def test_indications_walk_up_for_leaf() -> None:
     # Metformin (level-5) has no indications; should bubble up to A10BA.
     inds = atc_service.get_indications_for_atc("A10BA02")
     codes = [c["code"] for c in inds]
     assert "E11" in codes
 
 
-def test_indications_acei_two_concepts():
+def test_indications_acei_two_concepts() -> None:
     inds = atc_service.get_indications_for_atc("C09AA")
     codes = sorted(c["code"] for c in inds)
     assert codes == ["I10", "I50"]
@@ -284,7 +284,7 @@ def test_indications_acei_two_concepts():
 # drug_to_hcc_chain
 # ---------------------------------------------------------------------------
 
-def test_metformin_full_hcc_chain():
+def test_metformin_full_hcc_chain() -> None:
     chain = atc_service.drug_to_hcc_chain("metformin")
     assert chain["atc_code"] == "A10BA02"
     assert chain["matched_drug"] == "metformin"
@@ -299,13 +299,13 @@ def test_metformin_full_hcc_chain():
     assert hcc_codes == ["18", "19"]
 
 
-def test_brand_drug_resolves_to_class():
+def test_brand_drug_resolves_to_class() -> None:
     chain = atc_service.drug_to_hcc_chain("ozempic")
     assert chain["atc_code"] == "A10BJ"
     assert any(h["code"] in ("18", "19") for h in chain["hccs"])
 
 
-def test_unknown_drug_empty_chain():
+def test_unknown_drug_empty_chain() -> None:
     chain = atc_service.drug_to_hcc_chain("flarbazon")
     assert chain["atc_code"] is None
     assert chain["hccs"] == []
@@ -315,7 +315,7 @@ def test_unknown_drug_empty_chain():
 # unseen_drug_inference
 # ---------------------------------------------------------------------------
 
-def test_unseen_drug_stem_glutide():
+def test_unseen_drug_stem_glutide() -> None:
     # albiglutide is not in our bridge; stem "-glutide" -> A10BJ (GLP-1).
     chain = atc_service.unseen_drug_inference("albiglutide")
     assert chain["inferred"] is True
@@ -324,7 +324,7 @@ def test_unseen_drug_stem_glutide():
     assert any(h["code"] in ("18", "19") for h in chain["hccs"])
 
 
-def test_unseen_drug_stem_gliflozin():
+def test_unseen_drug_stem_gliflozin() -> None:
     # ertugliflozin not in our bridge; stem "-gliflozin" -> A10BK (SGLT-2).
     chain = atc_service.unseen_drug_inference("ertugliflozin")
     # We didn't fixture A10BK, so the chain will return atc_code=A10BK with
@@ -333,19 +333,19 @@ def test_unseen_drug_stem_gliflozin():
     assert chain["atc_code"] == "A10BK"
 
 
-def test_unseen_drug_stem_pril():
+def test_unseen_drug_stem_pril() -> None:
     chain = atc_service.unseen_drug_inference("benazepril")
     assert chain["inferred"] is True
     assert chain["atc_code"] == "C09AA"
 
 
-def test_unseen_drug_exact_match_marked_not_inferred():
+def test_unseen_drug_exact_match_marked_not_inferred() -> None:
     chain = atc_service.unseen_drug_inference("metformin")
     assert chain["inferred"] is False
     assert chain["inference_path"] == "exact_bridge"
 
 
-def test_unseen_drug_no_match():
+def test_unseen_drug_no_match() -> None:
     chain = atc_service.unseen_drug_inference("xyzzy123")
     assert chain["atc_code"] is None
     assert chain["inferred"] is False
@@ -355,7 +355,7 @@ def test_unseen_drug_no_match():
 # Integration: suspect_engine fallback uses ATC service
 # ---------------------------------------------------------------------------
 
-def test_suspect_engine_atc_fallback_calls_unseen_inference():
+def test_suspect_engine_atc_fallback_calls_unseen_inference() -> None:
     """The new helper in suspect_engine should fall back to ATC inference
     when no medication signal matches.
     """
@@ -382,7 +382,7 @@ def test_suspect_engine_atc_fallback_calls_unseen_inference():
         assert 0.0 < s["confidence"] < 0.6
 
 
-def test_suspect_engine_atc_fallback_skips_already_coded_hccs():
+def test_suspect_engine_atc_fallback_skips_already_coded_hccs() -> None:
     from app.services import suspect_engine
     suspects = suspect_engine._atc_inferred_suspects(
         patient_id=42,

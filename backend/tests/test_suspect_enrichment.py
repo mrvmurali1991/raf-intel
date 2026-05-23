@@ -50,7 +50,7 @@ def _patch_targets():
     )
 
 
-def test_tenant_id_is_required():
+def test_tenant_id_is_required() -> None:
     """Calling without tenant_id must raise to prevent cross-tenant writes."""
     from app.services.suspect_enrichment import enrich_suspects_for_patient
 
@@ -58,7 +58,7 @@ def test_tenant_id_is_required():
         enrich_suspects_for_patient(patient_id=3, tenant_id="", year=2025)
 
 
-def test_to_hcc_int_handles_common_shapes():
+def test_to_hcc_int_handles_common_shapes() -> None:
     from app.services.suspect_enrichment import _to_hcc_int
 
     assert _to_hcc_int("HCC 85") == 85
@@ -70,7 +70,7 @@ def test_to_hcc_int_handles_common_shapes():
     assert _to_hcc_int("0") is None  # 0 → None (no real HCC)
 
 
-def test_enrich_writes_meat_and_trumped_per_row():
+def test_enrich_writes_meat_and_trumped_per_row() -> None:
     """Two suspects → both rows updated with correct (meat, trumped) tuples."""
     from tests.conftest import make_cursor_cm  # type: ignore[attr-defined]
     cm, cursor = make_cursor_cm(
@@ -122,7 +122,7 @@ def test_enrich_writes_meat_and_trumped_per_row():
     assert update_calls[2][1] == (json.dumps(None), json.dumps(None), 13)
 
 
-def test_enrich_swallows_meat_failure():
+def test_enrich_swallows_meat_failure() -> None:
     """MEAT lookup blowing up must not stop trumped-map enrichment."""
     from tests.conftest import make_cursor_cm  # type: ignore[attr-defined]
     cm, cursor = make_cursor_cm(

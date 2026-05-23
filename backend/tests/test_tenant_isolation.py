@@ -97,7 +97,7 @@ _TENANT_2_PATIENT = {
 class TestGetTenantIdDependency:
     """Unit-level tests for the get_tenant_id FastAPI dependency."""
 
-    def test_returns_string_tenant_id(self):
+    def test_returns_string_tenant_id(self) -> None:
         from app.auth import get_tenant_id
 
         user = {**MOCK_ADMIN_USER, "tenant_id": 7}
@@ -105,13 +105,13 @@ class TestGetTenantIdDependency:
         assert result == "7"
         assert isinstance(result, str)
 
-    def test_returns_string_for_int_tenant_id(self):
+    def test_returns_string_for_int_tenant_id(self) -> None:
         from app.auth import get_tenant_id
 
         user = {**MOCK_ADMIN_USER, "tenant_id": 42}
         assert get_tenant_id(user) == "42"
 
-    def test_raises_or_defaults_when_tenant_id_is_none(self):
+    def test_raises_or_defaults_when_tenant_id_is_none(self) -> None:
         """When tenant_id is None the app either raises 403 or defaults to '1'.
         Both are acceptable — the important thing is no cross-tenant data leaks.
         """
@@ -127,13 +127,13 @@ class TestGetTenantIdDependency:
             # 403 is also acceptable — user has no tenant assigned
             assert exc.status_code == 403
 
-    def test_tenant_1_user_gets_1(self):
+    def test_tenant_1_user_gets_1(self) -> None:
         from app.auth import get_tenant_id
 
         user = {**MOCK_ADMIN_USER, "tenant_id": 1}
         assert get_tenant_id(user) == "1"
 
-    def test_tenant_2_user_gets_2(self):
+    def test_tenant_2_user_gets_2(self) -> None:
         from app.auth import get_tenant_id
 
         user = {**MOCK_TENANT_B_USER, "tenant_id": 2}
@@ -148,7 +148,7 @@ class TestGetTenantIdDependency:
 class TestOpenEMRCursorTenantGuard:
     """openemr_cursor must refuse to open a cursor without a tenant_id."""
 
-    def test_raises_value_error_without_tenant_id(self):
+    def test_raises_value_error_without_tenant_id(self) -> None:
         """Calling openemr_cursor(tenant_id=None) raises ValueError — security guard."""
         from app.db import openemr_cursor
 
@@ -156,7 +156,7 @@ class TestOpenEMRCursorTenantGuard:
             with openemr_cursor(tenant_id=None):
                 pass
 
-    def test_raises_value_error_with_no_kwargs(self):
+    def test_raises_value_error_with_no_kwargs(self) -> None:
         """Calling openemr_cursor(tenant_id=None) raises ValueError — security guard."""
         from app.db import openemr_cursor
 
@@ -175,7 +175,7 @@ class TestOpenEMRCursorTenantGuard:
 class TestPatientListIsolation:
     """GET /api/patients must scope results to the requesting user's tenant."""
 
-    def test_tenant1_patient_list_does_not_include_tenant2_rows(self, client):
+    def test_tenant1_patient_list_does_not_include_tenant2_rows(self, client) -> None:
         """
         When the DB returns a mixed row set, the router must filter by the
         calling user's tenant_id.  We verify that tenant 2 patient data is
@@ -200,7 +200,7 @@ class TestPatientListIsolation:
         # Tenant 2's patient ID must not appear in tenant 1's results
         assert _TENANT_2_PATIENT["pid"] not in pids
 
-    def test_tenant2_user_sees_own_patient_list(self, client):
+    def test_tenant2_user_sees_own_patient_list(self, client) -> None:
         """Tenant 2 user gets their own data — not tenant 1's."""
         tenant2_user = dict(MOCK_TENANT_B_USER)  # tenant_id=2
         with (
@@ -229,7 +229,7 @@ class TestPatientListIsolation:
 class TestPatientDetailIsolation:
     """GET /api/patients/{pid} must 404 for foreign-tenant PIDs."""
 
-    def test_tenant1_cannot_access_tenant2_patient(self, client):
+    def test_tenant1_cannot_access_tenant2_patient(self, client) -> None:
         """patient_is_accessible must return False for cross-tenant PIDs."""
         tenant1_user = dict(MOCK_ADMIN_USER)  # tenant_id=1
         foreign_pid = _TENANT_2_PATIENT["pid"]
@@ -250,7 +250,7 @@ class TestPatientDetailIsolation:
             f"got {resp.status_code}"
         )
 
-    def test_tenant2_cannot_access_tenant1_patient(self, client):
+    def test_tenant2_cannot_access_tenant1_patient(self, client) -> None:
         tenant2_user = dict(MOCK_TENANT_B_USER)  # tenant_id=2
         tenant1_pid = _TENANT_1_PATIENT["pid"]
 
@@ -276,7 +276,7 @@ class TestPatientDetailIsolation:
 class TestRAFScoreIsolation:
     """RAF score endpoints must be scoped to the requesting tenant."""
 
-    def test_tenant1_cannot_get_raf_score_for_tenant2_patient(self, client):
+    def test_tenant1_cannot_get_raf_score_for_tenant2_patient(self, client) -> None:
         tenant1_user = dict(MOCK_ADMIN_USER)  # tenant_id=1
         foreign_pid = _TENANT_2_PATIENT["pid"]
 
@@ -293,7 +293,7 @@ class TestRAFScoreIsolation:
         # Should be 404 or 403 — never return foreign-tenant RAF data
         assert resp.status_code in (404, 403, 422)
 
-    def test_population_summary_scoped_to_tenant(self, client):
+    def test_population_summary_scoped_to_tenant(self, client) -> None:
         """Population summary endpoint returns data only for the caller's tenant."""
         tenant1_user = dict(MOCK_ADMIN_USER)  # tenant_id=1
         with (
@@ -315,7 +315,7 @@ class TestRAFScoreIsolation:
 class TestEncounterIsolation:
     """Encounter endpoints must enforce tenant scope."""
 
-    def test_tenant1_cannot_read_tenant2_encounters(self, client):
+    def test_tenant1_cannot_read_tenant2_encounters(self, client) -> None:
         tenant1_user = dict(MOCK_ADMIN_USER)
         foreign_pid = _TENANT_2_PATIENT["pid"]
 
@@ -343,7 +343,7 @@ class TestJWTTenantClaimOverride:
     The server must use the DB-sourced tenant_id exclusively.
     """
 
-    def test_crafted_token_with_elevated_tenant_id_uses_db_value(self, client):
+    def test_crafted_token_with_elevated_tenant_id_uses_db_value(self, client) -> None:
         from datetime import datetime, timedelta, timezone
 
         import jwt as pyjwt
@@ -395,7 +395,7 @@ class TestJWTTenantClaimOverride:
 class TestAnalysisBatchIsolation:
     """POST /api/analysis/batch/{pid} must 404 for foreign-tenant PIDs."""
 
-    def test_tenant1_cannot_trigger_batch_on_tenant2_patient(self, client):
+    def test_tenant1_cannot_trigger_batch_on_tenant2_patient(self, client) -> None:
         tenant1_user = dict(MOCK_ADMIN_USER)  # tenant_id=1
         foreign_pid = _TENANT_2_PATIENT["pid"]
         with (
@@ -412,7 +412,7 @@ class TestAnalysisBatchIsolation:
 class TestSuspectsScanIsolation:
     """POST /api/suspects/scan/{pid} must 404 for foreign-tenant PIDs."""
 
-    def test_tenant2_cannot_scan_tenant1_patient(self, client):
+    def test_tenant2_cannot_scan_tenant1_patient(self, client) -> None:
         tenant2_user = dict(MOCK_TENANT_B_USER)  # tenant_id=2
         foreign_pid = _TENANT_1_PATIENT["pid"]
         with (

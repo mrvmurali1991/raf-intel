@@ -161,7 +161,7 @@ def weasyprint_stub():
 # ---------------------------------------------------------------------------
 
 
-def test_generate_provider_pdf_returns_pdf_bytes(provider_pdf_mocks, weasyprint_stub):
+def test_generate_provider_pdf_returns_pdf_bytes(provider_pdf_mocks, weasyprint_stub) -> None:
     """generate_provider_pdf returns bytes that start with '%PDF-'."""
     from app.services.provider_pdf_report import generate_provider_pdf
 
@@ -174,7 +174,7 @@ def test_generate_provider_pdf_returns_pdf_bytes(provider_pdf_mocks, weasyprint_
 
 def test_generate_provider_pdf_contains_provider_and_year(
     provider_pdf_mocks, weasyprint_stub
-):
+) -> None:
     """Provider name, NPI, specialty, and year all show up in the rendered HTML."""
     from app.services.provider_pdf_report import generate_provider_pdf
 
@@ -201,7 +201,7 @@ def test_generate_provider_pdf_contains_provider_and_year(
 
 def test_generate_provider_pdf_includes_watermark_footer(
     provider_pdf_mocks, weasyprint_stub
-):
+) -> None:
     """Footer watermark must appear in every generated report."""
     from app.services.provider_pdf_report import generate_provider_pdf
 
@@ -213,7 +213,7 @@ def test_generate_provider_pdf_includes_watermark_footer(
     assert "Confidential" in text
 
 
-def test_audit_risk_band_high_when_low_meat(provider_pdf_mocks, weasyprint_stub):
+def test_audit_risk_band_high_when_low_meat(provider_pdf_mocks, weasyprint_stub) -> None:
     """Sanity-check the audit-risk derivation: very low MEAT triggers HIGH band."""
     low_card = dict(SCORECARD, meat_completeness_avg=0.20, suspects_open=40)
     with (
@@ -254,7 +254,7 @@ def _headers(user: dict) -> dict[str, str]:
 
 def test_endpoint_returns_pdf_for_authorized_user(
     client, provider_pdf_mocks, weasyprint_stub
-):
+) -> None:
     """GET /api/providers/{id}/report.pdf returns 200 application/pdf with a
     sane attachment filename."""
     user = dict(MOCK_ADMIN_USER)
@@ -287,7 +287,7 @@ def test_endpoint_returns_pdf_for_authorized_user(
     assert "provider-provider-2026.pdf" in cd
 
 
-def test_endpoint_returns_404_for_unknown_provider(client):
+def test_endpoint_returns_404_for_unknown_provider(client) -> None:
     """Unknown provider id → 404, never a PDF."""
     user = dict(MOCK_ADMIN_USER)
 
@@ -313,7 +313,7 @@ def test_endpoint_returns_404_for_unknown_provider(client):
     assert "application/pdf" not in resp.headers.get("content-type", "")
 
 
-def test_endpoint_requires_auth(client):
+def test_endpoint_requires_auth(client) -> None:
     """Unauthenticated caller must never receive a PDF."""
     resp = client.get("/api/providers/42/report.pdf?year=2026")
     assert resp.status_code in (401, 403)

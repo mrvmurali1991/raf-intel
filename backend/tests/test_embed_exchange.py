@@ -68,7 +68,7 @@ def _patch_embed_db():
 # ---------------------------------------------------------------------------
 
 
-def test_create_and_authenticate_embed_token_roundtrip():
+def test_create_and_authenticate_embed_token_roundtrip() -> None:
     token = auth_service.create_embed_token(
         user_email=MOCK_ADMIN_USER["email"],
         pid=12345,
@@ -87,7 +87,7 @@ def test_create_and_authenticate_embed_token_roundtrip():
     assert result["expires_in"] == settings.embed_access_token_expire_minutes * 60
 
 
-def test_authenticate_embed_token_emits_embed_claim_in_access():
+def test_authenticate_embed_token_emits_embed_claim_in_access() -> None:
     token = auth_service.create_embed_token(
         user_email=MOCK_ADMIN_USER["email"],
         pid=99,
@@ -112,7 +112,7 @@ def test_authenticate_embed_token_emits_embed_claim_in_access():
 # ---------------------------------------------------------------------------
 
 
-def test_expired_embed_token_rejected():
+def test_expired_embed_token_rejected() -> None:
     now = datetime.now(timezone.utc)
     expired = jwt.encode(
         {
@@ -129,27 +129,27 @@ def test_expired_embed_token_rejected():
         auth_service.authenticate_embed_token(embed_token=expired)
 
 
-def test_tampered_signature_rejected():
+def test_tampered_signature_rejected() -> None:
     bogus = _mint_with("completely-wrong-secret")
     with pytest.raises(ValueError, match="Invalid embed token"):
         auth_service.authenticate_embed_token(embed_token=bogus)
 
 
-def test_non_embed_type_rejected():
+def test_non_embed_type_rejected() -> None:
     good_secret = auth_service._embed_signing_secret()
     not_embed = _mint_with(good_secret, {"type": "access"})
     with pytest.raises(ValueError, match="not an embed token"):
         auth_service.authenticate_embed_token(embed_token=not_embed)
 
 
-def test_missing_sub_rejected():
+def test_missing_sub_rejected() -> None:
     good_secret = auth_service._embed_signing_secret()
     no_sub = _mint_with(good_secret, {"sub": ""})
     with pytest.raises(ValueError, match="missing sub"):
         auth_service.authenticate_embed_token(embed_token=no_sub)
 
 
-def test_unknown_user_rejected():
+def test_unknown_user_rejected() -> None:
     token = auth_service.create_embed_token(
         user_email="not-a-real-user@example.com",
         pid=1,
@@ -159,7 +159,7 @@ def test_unknown_user_rejected():
         auth_service.authenticate_embed_token(embed_token=token)
 
 
-def test_tenant_mismatch_rejected():
+def test_tenant_mismatch_rejected() -> None:
     """token.tenant_id != user.tenant_id must be rejected."""
     token = auth_service.create_embed_token(
         user_email=MOCK_ADMIN_USER["email"],
@@ -175,7 +175,7 @@ def test_tenant_mismatch_rejected():
 # ---------------------------------------------------------------------------
 
 
-def test_embed_exchange_endpoint_success(client):
+def test_embed_exchange_endpoint_success(client) -> None:
     token = auth_service.create_embed_token(
         user_email=MOCK_ADMIN_USER["email"],
         pid=54321,
@@ -198,7 +198,7 @@ def test_embed_exchange_endpoint_success(client):
     ), "refresh cookie missing"
 
 
-def test_embed_exchange_endpoint_invalid_signature(client):
+def test_embed_exchange_endpoint_invalid_signature(client) -> None:
     bogus = _mint_with("completely-wrong-secret")
     resp = client.post(
         "/api/auth/embed/exchange",
@@ -208,7 +208,7 @@ def test_embed_exchange_endpoint_invalid_signature(client):
     assert "Invalid embed token" in resp.json()["detail"]
 
 
-def test_embed_exchange_endpoint_expired(client):
+def test_embed_exchange_endpoint_expired(client) -> None:
     now = datetime.now(timezone.utc)
     expired = jwt.encode(
         {
@@ -229,7 +229,7 @@ def test_embed_exchange_endpoint_expired(client):
     assert "expired" in resp.json()["detail"].lower()
 
 
-def test_embed_exchange_requires_body(client):
+def test_embed_exchange_requires_body(client) -> None:
     resp = client.post("/api/auth/embed/exchange", json={})
     assert resp.status_code == 422  # Pydantic validation error
 
@@ -239,7 +239,7 @@ def test_embed_exchange_requires_body(client):
 # ---------------------------------------------------------------------------
 
 
-def test_embed_mint_requires_admin(client, viewer_headers):
+def test_embed_mint_requires_admin(client, viewer_headers) -> None:
     resp = client.post(
         "/api/auth/embed/mint",
         headers=viewer_headers,
@@ -248,7 +248,7 @@ def test_embed_mint_requires_admin(client, viewer_headers):
     assert resp.status_code == 403
 
 
-def test_embed_mint_returns_token_for_admin(client, admin_headers):
+def test_embed_mint_returns_token_for_admin(client, admin_headers) -> None:
     resp = client.post(
         "/api/auth/embed/mint",
         headers=admin_headers,

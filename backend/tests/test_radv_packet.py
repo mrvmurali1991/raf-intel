@@ -212,7 +212,7 @@ def weasyprint_stub():
 # ---------------------------------------------------------------------------
 
 
-def test_build_packet_returns_pdf_bytes(packet_db_mock, weasyprint_stub):
+def test_build_packet_returns_pdf_bytes(packet_db_mock, weasyprint_stub) -> None:
     """build_packet returns bytes that start with the PDF magic header."""
     from app.services.radv.packet_builder import build_packet
 
@@ -223,7 +223,7 @@ def test_build_packet_returns_pdf_bytes(packet_db_mock, weasyprint_stub):
     assert len(pdf) > 500, "Rendered PDF should be non-trivial in size"
 
 
-def test_build_packet_contains_billed_hccs_and_icds(packet_db_mock, weasyprint_stub):
+def test_build_packet_contains_billed_hccs_and_icds(packet_db_mock, weasyprint_stub) -> None:
     """Every billed HCC + ICD-10 + provider NPI appears in the rendered content."""
     from app.services.radv.packet_builder import build_packet
 
@@ -251,7 +251,7 @@ def test_build_packet_contains_billed_hccs_and_icds(packet_db_mock, weasyprint_s
     assert "dr.provider@raf.health" in text
 
 
-def test_build_packet_excludes_unbilled_suspects(packet_db_mock, weasyprint_stub):
+def test_build_packet_excludes_unbilled_suspects(packet_db_mock, weasyprint_stub) -> None:
     """Open suspects (not in raf_patient_hcc) must NOT appear in the packet."""
     from app.services.radv.packet_builder import build_packet
 
@@ -266,7 +266,7 @@ def test_build_packet_excludes_unbilled_suspects(packet_db_mock, weasyprint_stub
     assert "D68.9" not in text
 
 
-def test_build_packet_watermark_present(packet_db_mock, weasyprint_stub):
+def test_build_packet_watermark_present(packet_db_mock, weasyprint_stub) -> None:
     """The non-negotiable watermark must appear in every packet."""
     from app.services.radv.packet_builder import build_packet
 
@@ -298,7 +298,7 @@ def _headers(user: dict) -> dict[str, str]:
 
 def test_endpoint_returns_pdf_for_authorized_user(
     client, packet_db_mock, weasyprint_stub
-):
+) -> None:
     """GET /api/radv/{pid}/packet returns 200 application/pdf for in-tenant caller."""
     user = dict(MOCK_ADMIN_USER)  # tenant_id=1
 
@@ -325,7 +325,7 @@ def test_endpoint_returns_pdf_for_authorized_user(
     assert "radv_packet_patient_10_py2025.pdf" in cd
 
 
-def test_endpoint_rejects_wrong_tenant(client):
+def test_endpoint_rejects_wrong_tenant(client) -> None:
     """Cross-tenant caller gets 404 — IDOR guard."""
     # Tenant B admin trying to pull a tenant-1 patient's packet.
     user = dict(MOCK_TENANT_B_USER)  # tenant_id=2
@@ -353,7 +353,7 @@ def test_endpoint_rejects_wrong_tenant(client):
     assert "application/pdf" not in resp.headers.get("content-type", "")
 
 
-def test_endpoint_requires_auth(client):
+def test_endpoint_requires_auth(client) -> None:
     """Unauthenticated caller must never receive a PDF."""
     resp = client.get("/api/radv/10/packet?payment_year=2025")
     assert resp.status_code in (401, 403), resp.text

@@ -80,7 +80,7 @@ def _noop_raf_cursor():
 class TestMFASecretNotLeaked:
     """MFA secret must never appear in any user-facing API response."""
 
-    def test_me_endpoint_hides_mfa_secret(self, client):
+    def test_me_endpoint_hides_mfa_secret(self, client) -> None:
         user = dict(MOCK_MFA_USER)
         with _auth_as(user):
             resp = client.get("/api/auth/me", headers=_headers(user))
@@ -94,7 +94,7 @@ class TestMFASecretNotLeaked:
                 "mfa_secret field must not be present in /me JSON"
             )
 
-    def test_user_list_hides_mfa_secret(self, client):
+    def test_user_list_hides_mfa_secret(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         with (
             _auth_as(admin),
@@ -125,7 +125,7 @@ class TestPasswordHashNotLeaked:
 
     SENTINEL_HASH = "$2b$12$TEST_HASH_SENTINEL_MUST_NOT_APPEAR_IN_ANY_RESPONSE"
 
-    def test_me_does_not_return_password_hash(self, client):
+    def test_me_does_not_return_password_hash(self, client) -> None:
         user = {**MOCK_ADMIN_USER, "password_hash": self.SENTINEL_HASH}
         with _auth_as(user):
             resp = client.get("/api/auth/me", headers=_headers(user))
@@ -133,7 +133,7 @@ class TestPasswordHashNotLeaked:
             assert "password_hash" not in resp.json()
             assert self.SENTINEL_HASH not in resp.text
 
-    def test_login_response_does_not_return_password_hash(self, client):
+    def test_login_response_does_not_return_password_hash(self, client) -> None:
         user = {**MOCK_ADMIN_USER, "password_hash": self.SENTINEL_HASH}
         with (
             patch("app.routers.auth.authenticate_user", return_value=user),
@@ -156,7 +156,7 @@ class TestPasswordHashNotLeaked:
             assert "password_hash" not in resp.json()
             assert self.SENTINEL_HASH not in resp.text
 
-    def test_user_list_does_not_return_password_hashes(self, client):
+    def test_user_list_does_not_return_password_hashes(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         users_with_hashes = [
             {**MOCK_VIEWER_USER, "password_hash": self.SENTINEL_HASH},
@@ -189,7 +189,7 @@ class TestSQLInjectionBlocking:
         "' OR 1=1 --",
     ]
 
-    def test_login_email_sql_injection_blocked(self, client):
+    def test_login_email_sql_injection_blocked(self, client) -> None:
         for payload in self.PAYLOADS:
             resp = client.post(
                 "/api/auth/login",
@@ -200,7 +200,7 @@ class TestSQLInjectionBlocking:
                 f"Status: {resp.status_code}"
             )
 
-    def test_login_password_injection_no_500(self, client):
+    def test_login_password_injection_no_500(self, client) -> None:
         for payload in self.PAYLOADS:
             with patch(
                 "app.routers.auth.authenticate_user",
@@ -212,7 +212,7 @@ class TestSQLInjectionBlocking:
                 )
             assert resp.status_code != 500
 
-    def test_path_param_injection_rejected(self, client):
+    def test_path_param_injection_rejected(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         with _auth_as(admin):
             resp = client.get(
@@ -259,14 +259,14 @@ class TestSSRFValidation:
         except ValueError:
             return False
 
-    def test_internal_ips_are_rejected_by_validation(self):
+    def test_internal_ips_are_rejected_by_validation(self) -> None:
         """Verify the logic that should back SSRF protection."""
         for host in self.INTERNAL_HOSTS:
             assert self._is_internal_ip(host), (
                 f"Host {host!r} should be classified as internal/blocked"
             )
 
-    def test_emr_connection_with_internal_host_rejected(self, client):
+    def test_emr_connection_with_internal_host_rejected(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         for internal_host in ["127.0.0.1", "169.254.169.254", "10.0.0.1"]:
             with _auth_as(admin):
@@ -297,17 +297,17 @@ class TestSSRFValidation:
 class TestRateLimitingInfrastructure:
     """Verify the rate limiter is configured and the 429 handler is registered."""
 
-    def test_limiter_object_exists(self):
+    def test_limiter_object_exists(self) -> None:
         from app.rate_limit import limiter
         assert limiter is not None
 
-    def test_rate_limit_exceeded_handler_registered(self):
+    def test_rate_limit_exceeded_handler_registered(self) -> None:
         from app.main import app as _app
         handlers = getattr(_app, "exception_handlers", {})
         # Either as a direct handler or via middleware — just check it doesn't crash
         assert _app is not None
 
-    def test_login_route_has_rate_limit_applied(self):
+    def test_login_route_has_rate_limit_applied(self) -> None:
         """The login endpoint function should be decorated by the limiter."""
         from app.rate_limit import limiter
         from app.routers.auth import login
@@ -326,7 +326,7 @@ class TestRateLimitingInfrastructure:
 class TestExpiredJWTRejection:
     """Expired tokens must return 401 — never succeed."""
 
-    def test_expired_access_token_returns_401(self, client):
+    def test_expired_access_token_returns_401(self, client) -> None:
         user = dict(MOCK_ADMIN_USER)
         expired_token = _make_access_token(user, expired=True)
         resp = client.get(
@@ -337,7 +337,7 @@ class TestExpiredJWTRejection:
             f"Expired JWT must be rejected with 401, got {resp.status_code}"
         )
 
-    def test_expired_refresh_token_returns_401_on_refresh(self, client):
+    def test_expired_refresh_token_returns_401_on_refresh(self, client) -> None:
         user = dict(MOCK_ADMIN_USER)
         expired_refresh = _make_refresh_token(user, expired=True)
         resp = client.post(
@@ -346,18 +346,18 @@ class TestExpiredJWTRejection:
         )
         assert resp.status_code == 401
 
-    def test_no_token_returns_401(self, client):
+    def test_no_token_returns_401(self, client) -> None:
         resp = client.get("/api/auth/me")
         assert resp.status_code == 401
 
-    def test_malformed_token_returns_401(self, client):
+    def test_malformed_token_returns_401(self, client) -> None:
         resp = client.get(
             "/api/auth/me",
             headers={"Authorization": "Bearer not.a.real.token"},
         )
         assert resp.status_code == 401
 
-    def test_wrong_secret_token_returns_401(self, client):
+    def test_wrong_secret_token_returns_401(self, client) -> None:
         user = dict(MOCK_ADMIN_USER)
         now = datetime.now(timezone.utc)
         payload = {
@@ -387,7 +387,7 @@ class TestExpiredJWTRejection:
 class TestCORSHeaders:
     """CORS must allow legitimate origins and not use wildcard with credentials."""
 
-    def test_options_preflight_accepted_for_allowed_origin(self, client):
+    def test_options_preflight_accepted_for_allowed_origin(self, client) -> None:
         resp = client.options(
             "/api/auth/login",
             headers={
@@ -397,7 +397,7 @@ class TestCORSHeaders:
         )
         assert resp.status_code in (200, 204)
 
-    def test_no_wildcard_origin_with_credentials(self, client):
+    def test_no_wildcard_origin_with_credentials(self, client) -> None:
         resp = client.options(
             "/api/auth/login",
             headers={
@@ -412,7 +412,7 @@ class TestCORSHeaders:
                 "Wildcard CORS origin must not be used when credentials are enabled"
             )
 
-    def test_arbitrary_origin_does_not_cause_500(self, client):
+    def test_arbitrary_origin_does_not_cause_500(self, client) -> None:
         resp = client.options(
             "/api/auth/login",
             headers={
@@ -430,7 +430,7 @@ class TestCORSHeaders:
 
 @pytest.mark.security
 class TestNoSensitiveDataInHeaders:
-    def test_response_headers_contain_no_db_credentials(self, client, admin_headers):
+    def test_response_headers_contain_no_db_credentials(self, client, admin_headers) -> None:
         user = dict(MOCK_ADMIN_USER)
         with _auth_as(user):
             resp = client.get("/api/auth/me", headers=_headers(user))
@@ -440,7 +440,7 @@ class TestNoSensitiveDataInHeaders:
                 f"Sensitive term '{sensitive}' found in response headers"
             )
 
-    def test_health_endpoint_headers_safe(self, client):
+    def test_health_endpoint_headers_safe(self, client) -> None:
         resp = client.get("/health")
         header_values = " ".join(resp.headers.values()).lower()
         for sensitive in ["password", "secret"]:
@@ -456,7 +456,7 @@ class TestNoSensitiveDataInHeaders:
 class TestTokenTypeEnforcement:
     """A refresh token must not be accepted as an access token."""
 
-    def test_refresh_token_rejected_for_api_access(self, client):
+    def test_refresh_token_rejected_for_api_access(self, client) -> None:
         from app.config import settings
 
         user = dict(MOCK_ADMIN_USER)
@@ -477,7 +477,7 @@ class TestTokenTypeEnforcement:
         )
         assert resp.status_code == 401
 
-    def test_mfa_pending_token_rejected_for_api_access(self, client):
+    def test_mfa_pending_token_rejected_for_api_access(self, client) -> None:
         from app.config import settings
 
         now = datetime.now(timezone.utc)
@@ -496,7 +496,7 @@ class TestTokenTypeEnforcement:
         )
         assert resp.status_code == 401
 
-    def test_token_without_type_claim_rejected(self, client):
+    def test_token_without_type_claim_rejected(self, client) -> None:
         from app.config import settings
 
         now = datetime.now(timezone.utc)
@@ -525,13 +525,13 @@ class TestTokenTypeEnforcement:
 
 @pytest.mark.security
 class TestRBACEnforcement:
-    def test_viewer_cannot_access_user_list(self, client):
+    def test_viewer_cannot_access_user_list(self, client) -> None:
         viewer = dict(MOCK_VIEWER_USER)
         with _auth_as(viewer):
             resp = client.get("/api/auth/users", headers=_headers(viewer))
         assert resp.status_code == 403
 
-    def test_viewer_cannot_create_user(self, client):
+    def test_viewer_cannot_create_user(self, client) -> None:
         viewer = dict(MOCK_VIEWER_USER)
         with _auth_as(viewer):
             resp = client.post(
@@ -541,7 +541,7 @@ class TestRBACEnforcement:
             )
         assert resp.status_code == 403
 
-    def test_admin_can_access_user_list(self, client):
+    def test_admin_can_access_user_list(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         with (
             _auth_as(admin),
@@ -559,7 +559,7 @@ class TestRBACEnforcement:
 
 @pytest.mark.security
 class TestSelfDeactivationBlocked:
-    def test_admin_cannot_deactivate_own_account(self, client):
+    def test_admin_cannot_deactivate_own_account(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         user_id = admin["id"]
         with (

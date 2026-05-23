@@ -37,7 +37,7 @@ def _stub_llm(response_json: dict):
 # ---------------------------------------------------------------------------
 
 
-def test_extract_returns_copd_suspect_with_offsets():
+def test_extract_returns_copd_suspect_with_offsets() -> None:
     note = (
         "Visit 04/12: 65 yo M with hx COPD on tiotropium. "
         "Wheezing on exam, FEV1 47% predicted. Continues albuterol PRN."
@@ -79,7 +79,7 @@ def test_extract_returns_copd_suspect_with_offsets():
 # ---------------------------------------------------------------------------
 
 
-def test_extract_filters_out_already_coded_icd():
+def test_extract_filters_out_already_coded_icd() -> None:
     """If the patient already has the ICD on the chart we must drop the
     LLM-emitted suspect, even when the LLM still returns it."""
     note = "Type 2 DM with hyperglycemia, A1c 9.4. Titrating insulin."
@@ -112,7 +112,7 @@ def test_extract_filters_out_already_coded_icd():
 # ---------------------------------------------------------------------------
 
 
-def test_extract_applies_v28_hierarchy_trumping(monkeypatch):
+def test_extract_applies_v28_hierarchy_trumping(monkeypatch) -> None:
     """When two HCCs from the same V28 chain come back, only the most-severe
     one should survive."""
     note = (
@@ -170,7 +170,7 @@ def test_extract_applies_v28_hierarchy_trumping(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_extract_rejects_hallucinated_evidence():
+def test_extract_rejects_hallucinated_evidence() -> None:
     """If the LLM returns an evidence_sentence that is NOT verbatim in the
     note, the finding must be dropped (anti-hallucination guard)."""
     note = "Hemophilia A on prophylactic factor VIII every other day."

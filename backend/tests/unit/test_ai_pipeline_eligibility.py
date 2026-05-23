@@ -59,7 +59,7 @@ def _cursor_cm(cursor):
 # ---------------------------------------------------------------------------
 
 
-def test_cutoff_filter_includes_only_recent_patients():
+def test_cutoff_filter_includes_only_recent_patients() -> None:
     cutoff = date(2026, 4, 15)
     # OpenEMR: patient_data returns pid=1 (updated after cutoff).
     # form_clinical_notes returns empty.
@@ -92,7 +92,7 @@ def test_cutoff_filter_includes_only_recent_patients():
     assert bound_dt.date() == cutoff
 
 
-def test_cutoff_filter_excludes_when_nothing_changed():
+def test_cutoff_filter_excludes_when_nothing_changed() -> None:
     emr = ScriptedCursor(
         [("FROM patient_data", []), ("FROM form_clinical_notes", [])]
     )
@@ -115,7 +115,7 @@ def test_cutoff_filter_excludes_when_nothing_changed():
 # ---------------------------------------------------------------------------
 
 
-def test_child_table_update_makes_patient_eligible():
+def test_child_table_update_makes_patient_eligible() -> None:
     # Patient record itself is stale, but a FHIR observation moved.
     emr = ScriptedCursor(
         [("FROM patient_data", []), ("FROM form_clinical_notes", [])]
@@ -195,7 +195,7 @@ class CountingRafCursor:
         return list(self._last)
 
 
-def test_rate_limit_allows_first_two_blocks_third():
+def test_rate_limit_allows_first_two_blocks_third() -> None:
     cur = CountingRafCursor()
     with patch.object(E, "raf_cursor", _cursor_cm(cur)), \
          patch.object(E, "_get_config", return_value=None):
@@ -218,7 +218,7 @@ def test_rate_limit_allows_first_two_blocks_third():
     assert cur.rows[0]["trigger_reason"] == "scheduled"
 
 
-def test_rate_limit_is_per_patient():
+def test_rate_limit_is_per_patient() -> None:
     cur = CountingRafCursor()
     with patch.object(E, "raf_cursor", _cursor_cm(cur)), \
          patch.object(E, "_get_config", return_value=None):
@@ -230,13 +230,13 @@ def test_rate_limit_is_per_patient():
         assert E.can_run_analysis("p1", "tenant-1") is False
 
 
-def test_record_run_finish_rejects_bad_status():
+def test_record_run_finish_rejects_bad_status() -> None:
     cur = CountingRafCursor()
     with patch.object(E, "raf_cursor", _cursor_cm(cur)), pytest.raises(ValueError):
         E.record_run_finish(1, status="bogus")
 
 
-def test_cutoff_resolves_from_config():
+def test_cutoff_resolves_from_config() -> None:
     emr = ScriptedCursor(
         [("FROM patient_data", []), ("FROM form_clinical_notes", [])]
     )

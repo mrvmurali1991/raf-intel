@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 class TestImports:
     """The application and its core modules must import cleanly."""
 
-    def test_app_main_imports_without_error(self):
+    def test_app_main_imports_without_error(self) -> None:
         """
         Importing app.main must not raise any exception.
         If there is a circular import or a missing dependency the import will
@@ -39,25 +39,25 @@ class TestImports:
         except (ImportError, ModuleNotFoundError) as exc:
             pytest.fail(f"app.main failed to import: {exc}")
 
-    def test_app_config_imports_without_error(self):
+    def test_app_config_imports_without_error(self) -> None:
         try:
             import app.config  # noqa: F401
         except (ImportError, ModuleNotFoundError) as exc:
             pytest.fail(f"app.config failed to import: {exc}")
 
-    def test_app_auth_imports_without_error(self):
+    def test_app_auth_imports_without_error(self) -> None:
         try:
             import app.auth  # noqa: F401
         except (ImportError, ModuleNotFoundError) as exc:
             pytest.fail(f"app.auth failed to import: {exc}")
 
-    def test_app_db_imports_without_error(self):
+    def test_app_db_imports_without_error(self) -> None:
         try:
             import app.db  # noqa: F401
         except (ImportError, ModuleNotFoundError) as exc:
             pytest.fail(f"app.db failed to import: {exc}")
 
-    def test_all_router_modules_import_without_error(self):
+    def test_all_router_modules_import_without_error(self) -> None:
         """Every router listed in app/routers must import cleanly."""
         router_names = [
             "app.routers.auth",
@@ -84,13 +84,13 @@ class TestImports:
             except (ImportError, ModuleNotFoundError) as exc:
                 pytest.fail(f"Router module '{module_name}' failed to import: {exc}")
 
-    def test_auth_service_imports_without_error(self):
+    def test_auth_service_imports_without_error(self) -> None:
         try:
             import app.services.auth_service  # noqa: F401
         except (ImportError, ModuleNotFoundError) as exc:
             pytest.fail(f"app.services.auth_service failed to import: {exc}")
 
-    def test_no_duplicate_module_objects(self):
+    def test_no_duplicate_module_objects(self) -> None:
         """
         The same module must not appear twice under different paths in sys.modules.
         This catches certain classes of import cycle / reload bugs.
@@ -148,7 +148,7 @@ class TestRouterRegistration:
     @pytest.mark.parametrize("prefix", EXPECTED_PREFIXES)
     def test_router_prefix_registered(
         self, openapi_paths: set[str], prefix: str
-    ):
+    ) -> None:
         matching = [p for p in openapi_paths if p.startswith(prefix)]
         assert matching, (
             f"No path starting with '{prefix}' found in the OpenAPI schema. "
@@ -156,7 +156,7 @@ class TestRouterRegistration:
             f"Registered paths (first 30): {sorted(openapi_paths)[:30]}"
         )
 
-    def test_total_route_count_is_reasonable(self, openapi_paths: set[str]):
+    def test_total_route_count_is_reasonable(self, openapi_paths: set[str]) -> None:
         """
         A fully-wired application should have many routes.
         This catches catastrophic partial-registration failures.
@@ -166,17 +166,17 @@ class TestRouterRegistration:
             "expected at least 30 for a fully-wired application."
         )
 
-    def test_auth_login_endpoint_registered(self, openapi_paths: set[str]):
+    def test_auth_login_endpoint_registered(self, openapi_paths: set[str]) -> None:
         assert "/api/auth/login" in openapi_paths, (
             "POST /api/auth/login not found in OpenAPI schema"
         )
 
-    def test_health_endpoint_registered(self, openapi_paths: set[str]):
+    def test_health_endpoint_registered(self, openapi_paths: set[str]) -> None:
         assert "/health" in openapi_paths, (
             "/health not found in OpenAPI schema"
         )
 
-    def test_root_endpoint_registered(self, openapi_paths: set[str]):
+    def test_root_endpoint_registered(self, openapi_paths: set[str]) -> None:
         assert "/" in openapi_paths, (
             "Root path '/' not found in OpenAPI schema"
         )
@@ -189,7 +189,7 @@ class TestRouterRegistration:
 class TestMiddleware:
     """Verify that all expected middleware layers are active."""
 
-    def test_cors_headers_present_on_options_preflight(self, client: TestClient):
+    def test_cors_headers_present_on_options_preflight(self, client: TestClient) -> None:
         """
         CORSMiddleware must respond to OPTIONS preflight requests with the
         appropriate Access-Control-Allow-* headers.
@@ -207,7 +207,7 @@ class TestMiddleware:
             f"CORS preflight returned {r.status_code} — CORSMiddleware may not be wired"
         )
 
-    def test_security_headers_on_root_endpoint(self, client: TestClient):
+    def test_security_headers_on_root_endpoint(self, client: TestClient) -> None:
         """SecurityHeadersMiddleware must inject HIPAA headers on every response."""
         r = client.get("/")
         assert r.status_code == 200
@@ -224,29 +224,29 @@ class TestMiddleware:
             f"Got: {dict(r.headers)}"
         )
 
-    def test_x_content_type_options_is_nosniff(self, client: TestClient):
+    def test_x_content_type_options_is_nosniff(self, client: TestClient) -> None:
         r = client.get("/")
         assert r.headers.get("x-content-type-options", "").lower() == "nosniff"
 
-    def test_x_frame_options_is_deny(self, client: TestClient):
+    def test_x_frame_options_is_deny(self, client: TestClient) -> None:
         r = client.get("/")
         assert r.headers.get("x-frame-options", "").upper() == "DENY"
 
-    def test_cache_control_prevents_caching(self, client: TestClient):
+    def test_cache_control_prevents_caching(self, client: TestClient) -> None:
         r = client.get("/health")
         cc = r.headers.get("cache-control", "").lower()
         assert "no-store" in cc or "no-cache" in cc, (
             f"Cache-Control header does not prevent caching: '{cc}'"
         )
 
-    def test_process_time_header_present(self, client: TestClient):
+    def test_process_time_header_present(self, client: TestClient) -> None:
         """The request-timing middleware must add X-Process-Time-Ms."""
         r = client.get("/")
         assert "x-process-time-ms" in {k.lower() for k in r.headers.keys()}, (
             "X-Process-Time-Ms header missing — request timing middleware may not be active"
         )
 
-    def test_process_time_is_numeric(self, client: TestClient):
+    def test_process_time_is_numeric(self, client: TestClient) -> None:
         r = client.get("/")
         val = r.headers.get("x-process-time-ms") or r.headers.get("X-Process-Time-Ms")
         if val is not None:
@@ -268,32 +268,32 @@ class TestConfigLoads:
         from app.config import settings as _settings
         return _settings
 
-    def test_settings_object_exists(self, settings):
+    def test_settings_object_exists(self, settings) -> None:
         assert settings is not None
 
-    def test_jwt_secret_is_set(self, settings):
+    def test_jwt_secret_is_set(self, settings) -> None:
         assert getattr(settings, "jwt_secret", None), (
             "settings.jwt_secret must not be empty — JWT signing will fail"
         )
 
-    def test_gemini_model_is_set(self, settings):
+    def test_gemini_model_is_set(self, settings) -> None:
         assert getattr(settings, "gemini_model", None), (
             "settings.gemini_model must not be empty"
         )
 
-    def test_access_token_expire_minutes_is_positive(self, settings):
+    def test_access_token_expire_minutes_is_positive(self, settings) -> None:
         minutes = getattr(settings, "access_token_expire_minutes", None)
         assert minutes is not None and int(minutes) > 0, (
             f"settings.access_token_expire_minutes must be a positive int, got {minutes}"
         )
 
-    def test_refresh_token_expire_days_is_positive(self, settings):
+    def test_refresh_token_expire_days_is_positive(self, settings) -> None:
         days = getattr(settings, "refresh_token_expire_days", None)
         assert days is not None and int(days) > 0, (
             f"settings.refresh_token_expire_days must be positive, got {days}"
         )
 
-    def test_app_port_is_valid(self, settings):
+    def test_app_port_is_valid(self, settings) -> None:
         port = getattr(settings, "app_port", None)
         if port is not None:
             assert 1 <= int(port) <= 65535, f"settings.app_port {port} is out of range"
@@ -309,13 +309,13 @@ class TestDatabaseGracefulDegradation:
     even when the database is unavailable.
     """
 
-    def test_health_returns_200_or_503(self, client: TestClient):
+    def test_health_returns_200_or_503(self, client: TestClient) -> None:
         r = client.get("/health")
         assert r.status_code in (200, 503), (
             f"GET /health returned {r.status_code} — expected 200 (healthy) or 503 (degraded)"
         )
 
-    def test_health_body_is_json(self, client: TestClient):
+    def test_health_body_is_json(self, client: TestClient) -> None:
         r = client.get("/health")
         try:
             data = r.json()
@@ -323,25 +323,25 @@ class TestDatabaseGracefulDegradation:
             pytest.fail(f"/health returned non-JSON body: {exc}. Body: {r.text[:200]}")
         assert isinstance(data, dict)
 
-    def test_health_status_field_present(self, client: TestClient):
+    def test_health_status_field_present(self, client: TestClient) -> None:
         r = client.get("/health")
         data = r.json()
         assert "status" in data, f"Missing 'status' key in /health: {data}"
 
-    def test_health_databases_field_present(self, client: TestClient):
+    def test_health_databases_field_present(self, client: TestClient) -> None:
         r = client.get("/health")
         data = r.json()
         assert "databases" in data, f"Missing 'databases' key in /health: {data}"
         assert isinstance(data["databases"], dict)
 
-    def test_health_status_is_known_value(self, client: TestClient):
+    def test_health_status_is_known_value(self, client: TestClient) -> None:
         r = client.get("/health")
         status = r.json().get("status")
         assert status in ("healthy", "degraded"), (
             f"Unexpected health status value: {status!r}"
         )
 
-    def test_db_check_function_does_not_raise(self):
+    def test_db_check_function_does_not_raise(self) -> None:
         """app.db.check_connections() must not raise even if DB is down."""
         from app.db import check_connections
         try:
@@ -368,26 +368,26 @@ class TestAppObject:
     def fastapi_app(self, app):
         return app
 
-    def test_app_title_is_set(self, fastapi_app):
+    def test_app_title_is_set(self, fastapi_app) -> None:
         assert fastapi_app.title, "FastAPI app.title must not be empty"
 
-    def test_app_version_is_set(self, fastapi_app):
+    def test_app_version_is_set(self, fastapi_app) -> None:
         assert fastapi_app.version, "FastAPI app.version must not be empty"
 
-    def test_docs_url_is_configured(self, fastapi_app):
+    def test_docs_url_is_configured(self, fastapi_app) -> None:
         assert fastapi_app.docs_url == "/docs", (
             f"Expected docs_url='/docs', got {fastapi_app.docs_url!r}"
         )
 
-    def test_redoc_url_is_configured(self, fastapi_app):
+    def test_redoc_url_is_configured(self, fastapi_app) -> None:
         assert fastapi_app.redoc_url == "/redoc", (
             f"Expected redoc_url='/redoc', got {fastapi_app.redoc_url!r}"
         )
 
-    def test_openapi_url_is_configured(self, fastapi_app):
+    def test_openapi_url_is_configured(self, fastapi_app) -> None:
         assert fastapi_app.openapi_url == "/openapi.json"
 
-    def test_router_count_is_reasonable(self, fastapi_app):
+    def test_router_count_is_reasonable(self, fastapi_app) -> None:
         """The app must have a substantial number of route handlers."""
         routes = fastapi_app.routes
         assert len(routes) >= 30, (
@@ -395,13 +395,13 @@ class TestAppObject:
             "Some routers may not be registered."
         )
 
-    def test_rate_limiter_attached(self, fastapi_app):
+    def test_rate_limiter_attached(self, fastapi_app) -> None:
         """slowapi limiter must be stored in app.state."""
         assert hasattr(fastapi_app.state, "limiter"), (
             "app.state.limiter not found — rate limiting middleware may not be active"
         )
 
-    def test_exception_handler_registered(self, fastapi_app):
+    def test_exception_handler_registered(self, fastapi_app) -> None:
         """A global exception handler must be present to prevent stack-trace leakage."""
         handlers = dict(fastapi_app.exception_handlers)
         assert Exception in handlers or 500 in handlers, (
@@ -410,7 +410,7 @@ class TestAppObject:
 
     def test_global_exception_handler_returns_500_not_traceback(
         self, client: TestClient
-    ):
+    ) -> None:
         """
         The global exception handler must return a clean JSON 500 without
         leaking internal details such as stack traces.
@@ -431,11 +431,11 @@ class TestAppObject:
                     f"500 response leaks internal detail ('{forbidden}'): {r.text[:300]}"
                 )
 
-    def test_docs_endpoint_returns_200(self, client: TestClient):
+    def test_docs_endpoint_returns_200(self, client: TestClient) -> None:
         r = client.get("/docs")
         assert r.status_code == 200, f"GET /docs returned {r.status_code}"
 
-    def test_openapi_json_is_valid(self, client: TestClient):
+    def test_openapi_json_is_valid(self, client: TestClient) -> None:
         r = client.get("/openapi.json")
         assert r.status_code == 200
         schema = r.json()
@@ -444,7 +444,7 @@ class TestAppObject:
                 f"OpenAPI schema missing required key '{required_key}'"
             )
 
-    def test_openapi_tags_cover_all_routers(self, client: TestClient):
+    def test_openapi_tags_cover_all_routers(self, client: TestClient) -> None:
         """
         Each router must have at least one tag defined in the global tags_metadata
         list so that the Swagger UI groups them correctly.

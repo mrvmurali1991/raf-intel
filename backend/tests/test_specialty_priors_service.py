@@ -215,34 +215,34 @@ def patch_raf_cursor(monkeypatch):
 # ---------------------------------------------------------------------------
 
 class TestCanonicalize:
-    def test_alias_exact(self):
+    def test_alias_exact(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         assert canonicalize("Cards") == "Cardiology"
 
-    def test_alias_case_insensitive(self):
+    def test_alias_case_insensitive(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         assert canonicalize("cards") == "Cardiology"
         assert canonicalize("CARDS") == "Cardiology"
 
-    def test_canonical_passthrough(self):
+    def test_canonical_passthrough(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         assert canonicalize("Cardiology") == "Cardiology"
 
-    def test_whitespace_handling(self):
+    def test_whitespace_handling(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         assert canonicalize("  Internal   Medicine  ") == "Internal Medicine"
 
-    def test_fuzzy_match(self):
+    def test_fuzzy_match(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         # close to "Cardiology"
         assert canonicalize("Cardiolgy") == "Cardiology"
 
-    def test_unknown_returned_unchanged(self):
+    def test_unknown_returned_unchanged(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         # Far enough away that fuzzy matching will not pick anything
         assert canonicalize("Astrology") == "Astrology"
 
-    def test_empty_input(self):
+    def test_empty_input(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import canonicalize
         assert canonicalize("") == ""
         assert canonicalize("   ") == ""
@@ -253,19 +253,19 @@ class TestCanonicalize:
 # ---------------------------------------------------------------------------
 
 class TestGetPriorsForSpecialty:
-    def test_cardiology_priors_returned(self):
+    def test_cardiology_priors_returned(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import get_priors_for_specialty
         rows = get_priors_for_specialty("Cardiology")
         assert len(rows) >= 5
         assert all(r["specialty"] == "Cardiology" for r in rows)
 
-    def test_alias_resolution_in_lookup(self):
+    def test_alias_resolution_in_lookup(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import get_priors_for_specialty
         rows = get_priors_for_specialty("Cards")
         assert rows
         assert rows[0]["specialty"] == "Cardiology"
 
-    def test_unknown_specialty_returns_empty(self):
+    def test_unknown_specialty_returns_empty(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import get_priors_for_specialty
         # Not seeded — fuzzy match may resolve to one of the canonical names,
         # but the specialty's prior list will be empty if our fake DB has
@@ -280,7 +280,7 @@ class TestGetPriorsForSpecialty:
 # ---------------------------------------------------------------------------
 
 class TestApplySpecialtyPrior:
-    def test_nephrology_138_multiplies_8x(self):
+    def test_nephrology_138_multiplies_8x(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("Nephrology", "138", 0.5)
         assert out["applied"] is True
@@ -289,32 +289,32 @@ class TestApplySpecialtyPrior:
         assert out["specialty"] == "Nephrology"
         assert out["hcc_code"] == "138"
 
-    def test_cardiology_chf_5x(self):
+    def test_cardiology_chf_5x(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("Cardiology", "226", 0.2)
         assert out["adjusted_score"] == pytest.approx(1.0)
         assert "Cardiology" in out["reason"]
 
-    def test_alias_resolution_in_apply(self):
+    def test_alias_resolution_in_apply(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("Nephro", "138", 1.0)
         assert out["specialty"] == "Nephrology"
         assert out["prior_weight"] == 8.0
 
-    def test_missing_combo_uses_baseline(self):
+    def test_missing_combo_uses_baseline(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("Cardiology", "999", 0.5)
         assert out["applied"] is False
         assert out["prior_weight"] == 1.0
         assert out["adjusted_score"] == pytest.approx(0.5)
 
-    def test_hcc_prefix_stripped(self):
+    def test_hcc_prefix_stripped(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("Cardiology", "HCC226", 1.0)
         assert out["applied"] is True
         assert out["hcc_code"] == "226"
 
-    def test_leading_zeros_stripped(self):
+    def test_leading_zeros_stripped(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("Internal Medicine", "0019", 2.0)
         assert out["applied"] is True
@@ -328,7 +328,7 @@ class TestApplySpecialtyPrior:
 # ---------------------------------------------------------------------------
 
 class TestTopNLikelyHccs:
-    def test_cardiology_top_5_starts_with_chf(self):
+    def test_cardiology_top_5_starts_with_chf(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import top_n_likely_hccs
         rows = top_n_likely_hccs("Cardiology", n=5)
         codes = [r["hcc_code"] for r in rows]
@@ -338,7 +338,7 @@ class TestTopNLikelyHccs:
         # The very top should be CHF (5.0 weight, highest prevalence among ties)
         assert rows[0]["hcc_code"] == "226"
 
-    def test_nephrology_top_3(self):
+    def test_nephrology_top_3(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import top_n_likely_hccs
         rows = top_n_likely_hccs("Nephrology", n=3)
         codes = {r["hcc_code"] for r in rows}
@@ -348,12 +348,12 @@ class TestTopNLikelyHccs:
         assert "136" in codes
         assert len(rows) == 3
 
-    def test_pulmonology_top_3_starts_with_copd(self):
+    def test_pulmonology_top_3_starts_with_copd(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import top_n_likely_hccs
         rows = top_n_likely_hccs("Pulmonology", n=3)
         assert rows[0]["hcc_code"] == "280"  # COPD
 
-    def test_n_zero_returns_empty(self):
+    def test_n_zero_returns_empty(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import top_n_likely_hccs
         assert top_n_likely_hccs("Cardiology", n=0) == []
 
@@ -363,7 +363,7 @@ class TestTopNLikelyHccs:
 # ---------------------------------------------------------------------------
 
 class TestProviderCalibration:
-    def test_cardiologist_provider(self):
+    def test_cardiologist_provider(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import compute_provider_calibrated_priors
         out = compute_provider_calibrated_priors(101)
         assert out["raw_specialty"] == "Cards"
@@ -372,20 +372,20 @@ class TestProviderCalibration:
         assert out["top_likely"]
         assert out["top_likely"][0]["hcc_code"] == "226"
 
-    def test_nephrologist_provider(self):
+    def test_nephrologist_provider(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import compute_provider_calibrated_priors
         out = compute_provider_calibrated_priors(102)
         assert out["canonical_specialty"] == "Nephrology"
         assert any(p["hcc_code"] == "138" for p in out["priors"])
 
-    def test_unknown_specialty_provider(self):
+    def test_unknown_specialty_provider(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import compute_provider_calibrated_priors
         out = compute_provider_calibrated_priors(104)
         # Specialty resolves (fuzzy or unchanged) but has no prior rows.
         assert out["prior_count"] == 0
         assert out["priors"] == []
 
-    def test_missing_provider_returns_empty(self):
+    def test_missing_provider_returns_empty(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import compute_provider_calibrated_priors
         out = compute_provider_calibrated_priors(999)
         assert out["prior_count"] == 0
@@ -397,7 +397,7 @@ class TestProviderCalibration:
 # ---------------------------------------------------------------------------
 
 class TestApplyPriorsToScores:
-    def test_bulk_adjustment_and_sort(self):
+    def test_bulk_adjustment_and_sort(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_priors_to_scores
 
         candidates = [
@@ -414,7 +414,7 @@ class TestApplyPriorsToScores:
         assert candidates[1]["score"] == 0.5
         assert "specialty_adjusted_score" not in candidates[1]
 
-    def test_missing_hcc_uses_baseline(self):
+    def test_missing_hcc_uses_baseline(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_priors_to_scores
         adjusted = apply_priors_to_scores(
             "Cardiology",
@@ -429,7 +429,7 @@ class TestApplyPriorsToScores:
 # ---------------------------------------------------------------------------
 
 class TestBaselineFallback:
-    def test_unknown_specialty_keeps_score(self):
+    def test_unknown_specialty_keeps_score(self) -> None:
         from app.services.knowledge_graph.specialty_priors_service import apply_specialty_prior
         out = apply_specialty_prior("UnseededDiscipline", "226", 1.5)
         # Even if fuzzy-matches to nothing, the weight should be 1.0

@@ -35,11 +35,11 @@ def server_available():  # type: ignore[override]
 # 1. Rule catalogue integrity
 # ---------------------------------------------------------------------------
 
-def test_catalogue_has_at_least_50_rules():
+def test_catalogue_has_at_least_50_rules() -> None:
     assert len(CURATED_RULES) >= 50, "Need at least 50 curated rules"
 
 
-def test_every_rule_has_source_attribution():
+def test_every_rule_has_source_attribution() -> None:
     """No ad-hoc rules: every rule must cite source_type AND source_citation."""
     for r in CURATED_RULES:
         assert r.get("source_type"), f"missing source_type: {r['rule_name']}"
@@ -48,7 +48,7 @@ def test_every_rule_has_source_attribution():
         assert len(r["source_citation"]) > 20
 
 
-def test_unique_rule_names():
+def test_unique_rule_names() -> None:
     names = [r["rule_name"] for r in CURATED_RULES]
     assert len(names) == len(set(names)), "rule_name must be unique"
 
@@ -57,7 +57,7 @@ def test_unique_rule_names():
 # 2. Trigger AND/OR semantics
 # ---------------------------------------------------------------------------
 
-def test_trigger_all_requires_every_condition():
+def test_trigger_all_requires_every_condition() -> None:
     cond = [
         {"kind": "icd10", "prefix": "E11"},
         {"kind": "loinc_threshold", "code": "4548-4", "op": ">", "value": 9.0},
@@ -70,7 +70,7 @@ def test_trigger_all_requires_every_condition():
     assert _check_trigger(cond, ev, logic="all") is True
 
 
-def test_trigger_any_succeeds_with_one_condition():
+def test_trigger_any_succeeds_with_one_condition() -> None:
     cond = [
         {"kind": "icd10", "code": "I50.21"},
         {"kind": "icd10", "code": "I50.23"},
@@ -85,19 +85,19 @@ def test_trigger_any_succeeds_with_one_condition():
 # 3. Threshold operators
 # ---------------------------------------------------------------------------
 
-def test_loinc_threshold_lt_op():
+def test_loinc_threshold_lt_op() -> None:
     cond = [{"kind": "loinc_threshold", "code": "62238-1", "op": "<", "value": 30.0}]
     assert _check_trigger(cond, {"loinc": [{"code": "62238-1", "value": 14.0}]}, "all") is True
     assert _check_trigger(cond, {"loinc": [{"code": "62238-1", "value": 30.0}]}, "all") is False
 
 
-def test_loinc_threshold_gt_op():
+def test_loinc_threshold_gt_op() -> None:
     cond = [{"kind": "loinc_threshold", "code": "4548-4", "op": ">", "value": 9.0}]
     assert _check_trigger(cond, {"loinc": [{"code": "4548-4", "value": 9.1}]}, "all") is True
     assert _check_trigger(cond, {"loinc": [{"code": "4548-4", "value": 9.0}]}, "all") is False
 
 
-def test_loinc_threshold_eq_op():
+def test_loinc_threshold_eq_op() -> None:
     cond = [{"kind": "loinc_threshold", "code": "X", "op": "=", "value": 5.0}]
     assert _check_trigger(cond, {"loinc": [{"code": "X", "value": 5.0}]}, "all") is True
     assert _check_trigger(cond, {"loinc": [{"code": "X", "value": 5.5}]}, "all") is False
@@ -107,7 +107,7 @@ def test_loinc_threshold_eq_op():
 # 4. Marquee rule happy paths
 # ---------------------------------------------------------------------------
 
-def test_marquee_dm_uncontrolled_hba1c():
+def test_marquee_dm_uncontrolled_hba1c() -> None:
     """ADA: DM + HbA1c >9 → HCC 18 uncontrolled."""
     matches = evaluate_evidence(
         {
@@ -122,7 +122,7 @@ def test_marquee_dm_uncontrolled_hba1c():
     assert "ADA" in target["source_citation"] or "Diabetes" in target["source_citation"]
 
 
-def test_marquee_ckd_stage4():
+def test_marquee_ckd_stage4() -> None:
     """KDIGO: N18.4 + eGFR <30 → HCC 137."""
     matches = evaluate_evidence(
         {
@@ -135,7 +135,7 @@ def test_marquee_ckd_stage4():
     assert rules["kdigo_ckd_stage4_egfr_15_30"]["output_hcc"] == "137"
 
 
-def test_marquee_hfref():
+def test_marquee_hfref() -> None:
     """ACC/AHA: I50.x + LVEF <40 → HFrEF HCC 224."""
     matches = evaluate_evidence(
         {
@@ -147,14 +147,14 @@ def test_marquee_hfref():
     assert "accaha_hfref_lvef_lt40" in names
 
 
-def test_marquee_copd_exacerbation():
+def test_marquee_copd_exacerbation() -> None:
     """GOLD: J44.1 → acute COPD exacerbation HCC 279."""
     matches = evaluate_evidence({"icd10": ["J44.1"]})
     names = {m["rule_name"] for m in matches}
     assert "gold_copd_acute_exacerbation" in names
 
 
-def test_marquee_mdd_severe():
+def test_marquee_mdd_severe() -> None:
     """DSM-5: F33.2 severe recurrent MDD → HCC 155."""
     matches = evaluate_evidence({"icd10": ["F33.2"]})
     names = {m["rule_name"] for m in matches}
@@ -165,11 +165,11 @@ def test_marquee_mdd_severe():
 # 5. Negative paths
 # ---------------------------------------------------------------------------
 
-def test_negative_no_evidence_returns_no_matches():
+def test_negative_no_evidence_returns_no_matches() -> None:
     assert evaluate_evidence({}) == []
 
 
-def test_negative_unrelated_codes():
+def test_negative_unrelated_codes() -> None:
     matches = evaluate_evidence({"icd10": ["Z00.00", "Z23"]})
     # Allow USPSTF screening rules to NOT match (they require Z87.891 / I71.x)
     names = {m["rule_name"] for m in matches}
@@ -181,7 +181,7 @@ def test_negative_unrelated_codes():
 # 6. Source citation present in every output
 # ---------------------------------------------------------------------------
 
-def test_source_citation_in_every_output():
+def test_source_citation_in_every_output() -> None:
     matches = evaluate_evidence(
         {
             "icd10": ["E11.9", "I50.22", "J44.1", "N18.4", "F33.2"],
@@ -202,14 +202,14 @@ def test_source_citation_in_every_output():
 # 7. Lookup helpers
 # ---------------------------------------------------------------------------
 
-def test_get_rule_by_id():
+def test_get_rule_by_id() -> None:
     rule = get_rule(1)
     assert rule is not None
     assert rule["id"] == 1
     assert get_rule(99999) is None
 
 
-def test_get_rules_by_hcc_filters():
+def test_get_rules_by_hcc_filters() -> None:
     rules = get_rules_by_hcc("18")
     assert len(rules) >= 1
     assert all(r["output_hcc"] == "18" for r in rules)
@@ -217,13 +217,13 @@ def test_get_rules_by_hcc_filters():
     assert get_rules_by_hcc("HCC18")
 
 
-def test_get_rules_by_source_filters():
+def test_get_rules_by_source_filters() -> None:
     ada = get_rules_by_source("ADA-guideline")
     assert len(ada) >= 4
     assert all(r["source_type"] == "ADA-guideline" for r in ada)
 
 
-def test_list_rules_assigns_ids():
+def test_list_rules_assigns_ids() -> None:
     rules = list_rules()
     ids = [r["id"] for r in rules]
     assert ids == list(range(1, len(rules) + 1))
@@ -233,7 +233,7 @@ def test_list_rules_assigns_ids():
 # 8. Acceptance test from the brief
 # ---------------------------------------------------------------------------
 
-def test_acceptance_dm_uncontrolled_with_retinopathy():
+def test_acceptance_dm_uncontrolled_with_retinopathy() -> None:
     """Exact acceptance fixture from the brief."""
     matches = evaluate_evidence(
         {

@@ -98,7 +98,7 @@ class TestDetectAndPersistGaps:
 
         return _cm
 
-    def test_prior_hcc_missing_in_current_year_creates_gap(self):
+    def test_prior_hcc_missing_in_current_year_creates_gap(self) -> None:
         """Patient with HCC 17 in prior year but not in current → 1 new gap."""
         detect_rows = _detect_rows(
             prior_hccs=[{"patient_id": "42", "hcc_code": "17", "icd10_code": "E11.0"}],
@@ -111,7 +111,7 @@ class TestDetectAndPersistGaps:
         assert result["new_gaps"] == 1
         assert result["total_open"] == 1
 
-    def test_hcc_in_both_years_creates_no_gap(self):
+    def test_hcc_in_both_years_creates_no_gap(self) -> None:
         """HCC 17 present in both prior and current year → no new gap."""
         detect_rows = _detect_rows(
             prior_hccs=[{"patient_id": "42", "hcc_code": "17", "icd10_code": "E11.0"}],
@@ -124,7 +124,7 @@ class TestDetectAndPersistGaps:
         assert result["new_gaps"] == 0
         assert result["total_open"] == 0
 
-    def test_multiple_patients_partial_recapture(self):
+    def test_multiple_patients_partial_recapture(self) -> None:
         """Three HCCs: two gaps, one recaptured."""
         prior = [
             {"patient_id": "1", "hcc_code": "17", "icd10_code": "E11.0"},
@@ -142,11 +142,11 @@ class TestDetectAndPersistGaps:
         assert result["new_gaps"] == 2
         assert result["total_open"] == 2
 
-    def test_revenue_impact_assigned_per_gap(self):
+    def test_revenue_impact_assigned_per_gap(self) -> None:
         """Each gap should receive the standard revenue impact."""
         assert pytest.approx(3000.00) == _REVENUE_IMPACT_PER_GAP
 
-    def test_empty_prior_year_returns_zeros(self):
+    def test_empty_prior_year_returns_zeros(self) -> None:
         """When there are no prior-year HCCs, no gaps are inserted and total_open=0."""
         count_row = {"total_open": 0}
 
@@ -166,7 +166,7 @@ class TestDetectAndPersistGaps:
         assert result["new_gaps"] == 0
         assert result["total_open"] == 0
 
-    def test_duplicate_patient_provider_rows_deduped(self):
+    def test_duplicate_patient_provider_rows_deduped(self) -> None:
         """Same (patient_id, hcc_code) from two provider rows → only one gap inserted."""
         detect_rows = [
             {"patient_id": "5", "hcc_code": "17", "icd10_code": "E11.0",
@@ -201,7 +201,7 @@ class TestDetectAndPersistGaps:
 # ===========================================================================
 
 class TestDetectGaps:
-    def test_year_derivation(self):
+    def test_year_derivation(self) -> None:
         """detect_gaps(measurement_year=2026) → prior_year=2025 current_year=2026."""
         with patch(
             "app.services.recapture_gap_service.detect_and_persist_gaps",
@@ -221,23 +221,23 @@ class TestDetectGaps:
 # ===========================================================================
 
 class TestResolveGap:
-    def test_recaptured_transition(self):
+    def test_recaptured_transition(self) -> None:
         cm, cursor = _make_cursor_cm(rowcount=1)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             success = resolve_gap(gap_id=1, status="recaptured", resolved_by="user@raf.health")
         assert success is True
 
-    def test_dismissed_transition(self):
+    def test_dismissed_transition(self) -> None:
         cm, cursor = _make_cursor_cm(rowcount=1)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             success = resolve_gap(gap_id=1, status="dismissed", resolved_by="admin")
         assert success is True
 
-    def test_invalid_status_raises_value_error(self):
+    def test_invalid_status_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="Invalid status"):
             resolve_gap(gap_id=1, status="pending", resolved_by="user")
 
-    def test_gap_not_found_returns_false(self):
+    def test_gap_not_found_returns_false(self) -> None:
         cm, cursor = _make_cursor_cm(rowcount=0)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             success = resolve_gap(gap_id=9999, status="recaptured", resolved_by="user")
@@ -249,7 +249,7 @@ class TestResolveGap:
 # ===========================================================================
 
 class TestCloseGap:
-    def test_close_gap_recaptures_successfully(self):
+    def test_close_gap_recaptures_successfully(self) -> None:
         existing_gap = {"id": 1}
         call_n = {"n": 0}
 
@@ -266,7 +266,7 @@ class TestCloseGap:
             # Should not raise
             close_gap(gap_id=1, tenant_id="1")
 
-    def test_close_gap_raises_if_not_found(self):
+    def test_close_gap_raises_if_not_found(self) -> None:
         cm, cursor = _make_cursor_cm(rows=[])
 
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
@@ -289,7 +289,7 @@ class TestListGaps:
             "patient_name": "John Doe",
         }
 
-    def test_returns_open_gaps(self):
+    def test_returns_open_gaps(self) -> None:
         rows = [self._gap_row(1, "open"), self._gap_row(2, "open")]
         cm, _ = _make_cursor_cm(rows=rows)
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
@@ -297,13 +297,13 @@ class TestListGaps:
         assert len(result) == 2
         assert all(r["status"] == "open" for r in result)
 
-    def test_empty_result_when_no_gaps(self):
+    def test_empty_result_when_no_gaps(self) -> None:
         cm, _ = _make_cursor_cm(rows=[])
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             result = list_gaps(tenant_id="1")
         assert result == []
 
-    def test_pagination_parameters_passed(self):
+    def test_pagination_parameters_passed(self) -> None:
         cm, cursor = _make_cursor_cm(rows=[])
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             list_gaps(tenant_id="1", limit=10, offset=20)
@@ -319,7 +319,7 @@ class TestListGaps:
 # ===========================================================================
 
 class TestGetGapStats:
-    def test_stats_mapped_correctly(self):
+    def test_stats_mapped_correctly(self) -> None:
         stats_row = {
             "total_gaps": 10,
             "open_count": 6,
@@ -336,7 +336,7 @@ class TestGetGapStats:
         assert result["dismissed"] == 1
         assert result["total_revenue_at_risk"] == pytest.approx(18000.00)
 
-    def test_null_values_default_to_zero(self):
+    def test_null_values_default_to_zero(self) -> None:
         stats_row = {
             "total_gaps": None,
             "open_count": None,
@@ -357,7 +357,7 @@ class TestGetGapStats:
 # ===========================================================================
 
 class TestGetPatientGaps:
-    def test_returns_open_gaps_for_patient(self):
+    def test_returns_open_gaps_for_patient(self) -> None:
         rows = [
             {
                 "id": 1, "patient_id": "42", "hcc_code": "17", "icd10_code": "E11.0",
@@ -374,7 +374,7 @@ class TestGetPatientGaps:
         assert result[0]["hcc_code"] == "17"
         assert "hcc_description" in result[0]
 
-    def test_hcc_description_attached(self):
+    def test_hcc_description_attached(self) -> None:
         rows = [
             {
                 "id": 1, "patient_id": "42", "hcc_code": "17", "icd10_code": "E11.0",
@@ -389,7 +389,7 @@ class TestGetPatientGaps:
             result = get_patient_gaps(patient_id=42, tenant_id="1")
         assert result[0]["hcc_description"] == "Diabetes with Acute Complications"
 
-    def test_no_gaps_returns_empty_list(self):
+    def test_no_gaps_returns_empty_list(self) -> None:
         cm, _ = _make_cursor_cm(rows=[])
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             result = get_patient_gaps(patient_id=999, tenant_id="1")
@@ -409,13 +409,13 @@ class TestHccDescription:
         ("111", "Chronic Obstructive Pulmonary Disease"),
         ("134", "Dialysis Status"),
     ])
-    def test_known_hcc_descriptions(self, code: str, expected: str):
+    def test_known_hcc_descriptions(self, code: str, expected: str) -> None:
         assert _hcc_description(code) == expected
 
-    def test_unknown_hcc_returns_fallback(self):
+    def test_unknown_hcc_returns_fallback(self) -> None:
         assert _hcc_description("9999") == "HCC 9999"
 
-    def test_hcc_prefix_stripped(self):
+    def test_hcc_prefix_stripped(self) -> None:
         """Input 'HCC17' should resolve the same as '17'."""
         assert _hcc_description("HCC17") == _hcc_description("17")
 
@@ -425,7 +425,7 @@ class TestHccDescription:
 # ===========================================================================
 
 class TestGetRecaptureBundle:
-    def test_bundle_rows_structured_correctly(self):
+    def test_bundle_rows_structured_correctly(self) -> None:
         rows = [
             {
                 "Patient_ID": "42", "HCC": "17", "ICD10": "E11.0",
@@ -444,7 +444,7 @@ class TestGetRecaptureBundle:
         assert item["Revenue_Impact"] == pytest.approx(3000.00)
         assert item["Last_Encounter_Date"] is None
 
-    def test_empty_bundle_when_no_gaps(self):
+    def test_empty_bundle_when_no_gaps(self) -> None:
         cm, _ = _make_cursor_cm(rows=[])
         with patch("app.services.recapture_gap_service.raf_cursor", cm):
             bundle = get_recapture_bundle(tenant_id="1")

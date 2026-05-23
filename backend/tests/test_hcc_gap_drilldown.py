@@ -137,39 +137,39 @@ def _service_env(
         ("abc", None),
     ],
 )
-def test_hcc_to_int(raw, expected):
+def test_hcc_to_int(raw, expected) -> None:
     assert _hcc_to_int(raw) == expected
 
 
-def test_calc_age_basic():
+def test_calc_age_basic() -> None:
     today = date(2026, 5, 5)
     assert _calc_age(date(1980, 1, 1), today) == 46
     # Birthday hasn't happened yet this year
     assert _calc_age(date(1980, 12, 31), today) == 45
 
 
-def test_calc_age_str_iso():
+def test_calc_age_str_iso() -> None:
     assert _calc_age("1990-06-15", date(2026, 5, 5)) == 35
 
 
-def test_calc_age_garbage_returns_none():
+def test_calc_age_garbage_returns_none() -> None:
     assert _calc_age(None) is None
     assert _calc_age("") is None
     assert _calc_age("not-a-date") is None
 
 
-def test_evidence_snippet_dict_note_excerpt():
+def test_evidence_snippet_dict_note_excerpt() -> None:
     payload = json.dumps({"note_excerpt": "A1c 9.1 on 2026-04-12"})
     snippet = _evidence_snippet("lab", payload)
     assert "Lab" in snippet
     assert "A1c 9.1" in snippet
 
 
-def test_evidence_snippet_handles_none():
+def test_evidence_snippet_handles_none() -> None:
     assert _evidence_snippet(None, None) == ""
 
 
-def test_evidence_snippet_truncates_long_text():
+def test_evidence_snippet_truncates_long_text() -> None:
     long = "x" * 500
     snippet = _evidence_snippet("medication", {"note_excerpt": long})
     assert len(snippet) <= 240
@@ -180,7 +180,7 @@ def test_evidence_snippet_truncates_long_text():
 # 2. Missing definition + ordering
 # ---------------------------------------------------------------------------
 
-def test_returns_empty_when_panel_empty():
+def test_returns_empty_when_panel_empty() -> None:
     """No panel → no rows. The service should not crash on an empty IN().
     """
     raf_factory = _CursorScript([[]])  # only the panel query is reached
@@ -191,12 +191,12 @@ def test_returns_empty_when_panel_empty():
     assert out == []
 
 
-def test_returns_empty_for_invalid_hcc():
+def test_returns_empty_for_invalid_hcc() -> None:
     out = get_gap_patients(provider_id=1, hcc_code="not-a-hcc", year=2026)
     assert out == []
 
 
-def test_already_coded_excluded_from_results():
+def test_already_coded_excluded_from_results() -> None:
     """Patient who already has the HCC coded for the year must NOT appear,
     even if they also have an open suspect."""
     panel = [10, 11, 12]
@@ -236,7 +236,7 @@ def test_already_coded_excluded_from_results():
     assert out[0]["prior_year_coded"] is False
 
 
-def test_prior_year_coded_only_is_a_gap():
+def test_prior_year_coded_only_is_a_gap() -> None:
     """A patient with no open suspect, but coded last year, must still
     appear (recapture-due gap). Confidence falls back to 0.0."""
     panel = [42]
@@ -261,7 +261,7 @@ def test_prior_year_coded_only_is_a_gap():
     assert row["evidence_snippet"] == ""
 
 
-def test_sort_by_confidence_desc_then_prior_year_desc():
+def test_sort_by_confidence_desc_then_prior_year_desc() -> None:
     """Sort priorities:
        1. confidence DESC
        2. prior_year_coded DESC (True first)
@@ -313,7 +313,7 @@ def test_sort_by_confidence_desc_then_prior_year_desc():
     assert [r["patient_id"] for r in out] == [1, 2, 4, 3]
 
 
-def test_limit_truncates_results():
+def test_limit_truncates_results() -> None:
     panel = [1, 2, 3]
     suspects = [
         {"patient_id": pid, "confidence_score": 0.1 * pid,
@@ -340,7 +340,7 @@ def test_limit_truncates_results():
     assert out[1]["patient_id"] == 2
 
 
-def test_missing_demographics_falls_back_to_placeholder_name():
+def test_missing_demographics_falls_back_to_placeholder_name() -> None:
     panel = [99]
     suspects = [{
         "patient_id": 99, "confidence_score": 0.6,
@@ -363,7 +363,7 @@ def test_missing_demographics_falls_back_to_placeholder_name():
     assert out[0]["sex"] == "Unknown"
 
 
-def test_hcc_code_accepts_hcc_prefix():
+def test_hcc_code_accepts_hcc_prefix() -> None:
     """Callers may pass either '85' or 'HCC85' — both should work."""
     panel = [1]
     suspects = [{

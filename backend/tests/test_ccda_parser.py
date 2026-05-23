@@ -281,7 +281,7 @@ class TestParseCCDAXml:
             side_effect=_fake_lookup,
         )
 
-    def test_three_problems_extracted(self):
+    def test_three_problems_extracted(self) -> None:
         """parse_ccda_xml returns exactly 3 problem entries."""
         xml = _build_ccda(problems=THREE_PROBLEMS)
         with patch("app.services.ccda_parser._icd10_to_hcc", return_value=(None, None)):
@@ -290,7 +290,7 @@ class TestParseCCDAXml:
             ).parse_ccda_xml(xml)
         assert len(result["problems"]) == 3
 
-    def test_problem_icd10_codes(self):
+    def test_problem_icd10_codes(self) -> None:
         """Each problem has the correct ICD-10 code."""
         xml = _build_ccda(problems=THREE_PROBLEMS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -301,7 +301,7 @@ class TestParseCCDAXml:
         assert "I10"  in codes
         assert "I509" in codes
 
-    def test_problem_onset_dates(self):
+    def test_problem_onset_dates(self) -> None:
         """Onset dates are extracted as ISO strings."""
         xml = _build_ccda(problems=THREE_PROBLEMS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -312,7 +312,7 @@ class TestParseCCDAXml:
         assert "2019-01-01" in onset_dates
         assert "2022-03-01" in onset_dates
 
-    def test_hcc_mapping_applied(self):
+    def test_hcc_mapping_applied(self) -> None:
         """HCC codes from mock crosswalk are reflected in problems and hcc_suspects."""
         xml = _build_ccda(problems=THREE_PROBLEMS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -330,7 +330,7 @@ class TestParseCCDAXml:
         assert len(result["hcc_suspects"]) == len(set(result["hcc_suspects"]))
         assert "19" in result["hcc_suspects"]
 
-    def test_two_medications_extracted(self):
+    def test_two_medications_extracted(self) -> None:
         """parse_ccda_xml extracts 2 medications with RxNorm codes and doses."""
         xml = _build_ccda(medications=TWO_MEDS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -341,7 +341,7 @@ class TestParseCCDAXml:
         assert "860975" in rxnorm_codes
         assert "308460" in rxnorm_codes
 
-    def test_medication_dose(self):
+    def test_medication_dose(self) -> None:
         """Medication dose string is assembled correctly."""
         xml = _build_ccda(medications=TWO_MEDS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -350,7 +350,7 @@ class TestParseCCDAXml:
         metformin = next(m for m in result["medications"] if m["rxnorm_code"] == "860975")
         assert metformin["dose"] == "500 mg"
 
-    def test_four_lab_results_extracted(self):
+    def test_four_lab_results_extracted(self) -> None:
         """parse_ccda_xml extracts 4 lab results with LOINC codes."""
         xml = _build_ccda(results=FOUR_RESULTS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -363,7 +363,7 @@ class TestParseCCDAXml:
         assert "2160-0" in loincs
         assert "17861-6" in loincs
 
-    def test_result_value_and_date(self):
+    def test_result_value_and_date(self) -> None:
         """Result value and date are extracted correctly."""
         xml = _build_ccda(results=FOUR_RESULTS)
         from app.services.ccda_parser import parse_ccda_xml
@@ -373,7 +373,7 @@ class TestParseCCDAXml:
         assert "7.2" in (hba1c["value"] or "")
         assert hba1c["result_date"] == "2024-01-15"
 
-    def test_encounters_extracted(self):
+    def test_encounters_extracted(self) -> None:
         """Encounter type, dates, and NPI are extracted."""
         enc = [{"type": "Office Visit", "start": "20240110", "end": "20240110", "npi": "1234567890"}]
         xml = _build_ccda(encounters=enc)
@@ -386,7 +386,7 @@ class TestParseCCDAXml:
         assert e["start_date"] == "2024-01-10"
         assert e["provider_npi"] == "1234567890"
 
-    def test_allergies_extracted(self):
+    def test_allergies_extracted(self) -> None:
         """Allergy substance and reaction are extracted."""
         alg = [{"substance": "Penicillin", "reaction": "Hives"}]
         xml = _build_ccda(allergies=alg)
@@ -397,7 +397,7 @@ class TestParseCCDAXml:
         assert result["allergies"][0]["substance"] == "Penicillin"
         assert result["allergies"][0]["reaction"] == "Hives"
 
-    def test_patient_identifiers_extracted(self):
+    def test_patient_identifiers_extracted(self) -> None:
         """Patient MRN, name, DOB, and gender are extracted from recordTarget."""
         xml = _build_ccda()
         from app.services.ccda_parser import parse_ccda_xml
@@ -410,20 +410,20 @@ class TestParseCCDAXml:
         assert patient["date_of_birth"] == "1960-03-15"
         assert patient["gender"] == "female"
 
-    def test_oversized_document_raises(self):
+    def test_oversized_document_raises(self) -> None:
         """Documents over 20 MB raise ValueError."""
         from app.services.ccda_parser import parse_ccda_xml, _MAX_BYTES
         oversized = b"x" * (_MAX_BYTES + 1)
         with pytest.raises(ValueError, match="exceeds maximum size"):
             parse_ccda_xml(oversized)
 
-    def test_malformed_xml_raises(self):
+    def test_malformed_xml_raises(self) -> None:
         """Malformed XML raises ValueError."""
         from app.services.ccda_parser import parse_ccda_xml
         with pytest.raises(ValueError, match="XML parse error"):
             parse_ccda_xml(b"<<not xml>>")
 
-    def test_hcc_db_error_degrades_gracefully(self):
+    def test_hcc_db_error_degrades_gracefully(self) -> None:
         """DB exception during HCC lookup does not crash the parser.
 
         We simulate the failure by patching ``raf_cursor`` inside the
@@ -446,7 +446,7 @@ class TestParseCCDAXml:
         assert len(result["problems"]) == 3
         assert all(p["hcc_code"] is None for p in result["problems"])
 
-    def test_combined_document_all_sections(self):
+    def test_combined_document_all_sections(self) -> None:
         """Full synthetic CCDA with 3 problems + 2 meds + 4 results parses cleanly."""
         xml = _build_ccda(
             problems=THREE_PROBLEMS,

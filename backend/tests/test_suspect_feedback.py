@@ -61,7 +61,7 @@ def _auth_patch(user: dict):
 
 
 @pytest.mark.parametrize("sentiment", ["helpful", "incorrect", "irrelevant"])
-def test_submit_feedback_201(client, sentiment):
+def test_submit_feedback_201(client, sentiment) -> None:
     """201 returned for each valid sentiment value."""
     # no duplicate row → fetchone returns None; INSERT returns id=42
     cur_cm, _ = make_cursor_cm(rows=[], lastrowid=42)
@@ -81,7 +81,7 @@ def test_submit_feedback_201(client, sentiment):
     assert data["id"] == 42
 
 
-def test_submit_feedback_no_comment(client):
+def test_submit_feedback_no_comment(client) -> None:
     """comment is optional — omitting it still returns 201."""
     cur_cm, _ = make_cursor_cm(rows=[], lastrowid=7)
 
@@ -104,7 +104,7 @@ def test_submit_feedback_no_comment(client):
 # ---------------------------------------------------------------------------
 
 
-def test_submit_feedback_409_duplicate(client):
+def test_submit_feedback_409_duplicate(client) -> None:
     """409 when user already submitted feedback for this suspect today."""
     # fetchone returns an existing row → duplicate detected
     existing_row = {"id": 5}
@@ -129,7 +129,7 @@ def test_submit_feedback_409_duplicate(client):
 # ---------------------------------------------------------------------------
 
 
-def test_submit_feedback_422_invalid_sentiment(client):
+def test_submit_feedback_422_invalid_sentiment(client) -> None:
     """422 for a sentiment value that is not in the allowed enum."""
     with _auth_patch(MOCK_ADMIN_USER):
         resp = client.post(
@@ -146,7 +146,7 @@ def test_submit_feedback_422_invalid_sentiment(client):
 # ---------------------------------------------------------------------------
 
 
-def test_submit_feedback_401_unauthenticated(client):
+def test_submit_feedback_401_unauthenticated(client) -> None:
     """401 when no Authorization header is provided."""
     resp = client.post(
         "/api/suspects/suspect-abc/feedback",

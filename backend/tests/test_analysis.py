@@ -75,7 +75,7 @@ class TestAnalysisEncounterPost:
         api_client: requests.Session,
         base_url: str,
         first_encounter_id: int,
-    ):
+    ) -> None:
         r = api_client.post(
             f"{base_url}/api/analysis/encounter/{first_encounter_id}",
             json={"include_context": True, "save_results": False},
@@ -83,38 +83,38 @@ class TestAnalysisEncounterPost:
         )
         _assert_ok(r, f"POST /api/analysis/encounter/{first_encounter_id}")
 
-    def test_response_has_diagnoses_key(self, analysis_result: dict):
+    def test_response_has_diagnoses_key(self, analysis_result: dict) -> None:
         assert "diagnoses" in analysis_result, (
             f"'diagnoses' missing from analysis response. Got keys: {sorted(analysis_result)}"
         )
 
-    def test_response_has_suspect_conditions_key(self, analysis_result: dict):
+    def test_response_has_suspect_conditions_key(self, analysis_result: dict) -> None:
         assert "suspect_conditions" in analysis_result, (
             f"'suspect_conditions' missing from analysis response. "
             f"Got keys: {sorted(analysis_result)}"
         )
 
-    def test_response_has_pipeline_key(self, analysis_result: dict):
+    def test_response_has_pipeline_key(self, analysis_result: dict) -> None:
         assert "pipeline" in analysis_result, (
             f"'pipeline' missing from analysis response. Got keys: {sorted(analysis_result)}"
         )
 
-    def test_diagnoses_is_list(self, analysis_result: dict):
+    def test_diagnoses_is_list(self, analysis_result: dict) -> None:
         assert isinstance(analysis_result["diagnoses"], list), (
             f"'diagnoses' must be a list, got {type(analysis_result['diagnoses']).__name__}"
         )
 
-    def test_suspect_conditions_is_list(self, analysis_result: dict):
+    def test_suspect_conditions_is_list(self, analysis_result: dict) -> None:
         assert isinstance(analysis_result["suspect_conditions"], list), (
             f"'suspect_conditions' must be a list"
         )
 
-    def test_pipeline_is_dict(self, analysis_result: dict):
+    def test_pipeline_is_dict(self, analysis_result: dict) -> None:
         assert isinstance(analysis_result["pipeline"], dict), (
             f"'pipeline' must be a dict, got {type(analysis_result['pipeline']).__name__}"
         )
 
-    def test_pipeline_has_tool_calls_or_stages_run(self, analysis_result: dict):
+    def test_pipeline_has_tool_calls_or_stages_run(self, analysis_result: dict) -> None:
         """
         The skill pipeline records its activity under 'tool_calls' (skill_pipeline.py)
         or 'stages_run' (legacy pipeline).  At least one must be present.
@@ -127,7 +127,7 @@ class TestAnalysisEncounterPost:
             f"Got pipeline keys: {sorted(pipeline)}"
         )
 
-    def test_diagnosis_records_have_required_fields(self, analysis_result: dict):
+    def test_diagnosis_records_have_required_fields(self, analysis_result: dict) -> None:
         """Each diagnosis must carry icd10, description, confidence, and meat."""
         required = ("icd10", "description", "confidence")
         for dx in analysis_result["diagnoses"][:10]:
@@ -136,14 +136,14 @@ class TestAnalysisEncounterPost:
                     f"Diagnosis record missing '{field}'. Got: {sorted(dx)}"
                 )
 
-    def test_diagnosis_confidence_is_numeric(self, analysis_result: dict):
+    def test_diagnosis_confidence_is_numeric(self, analysis_result: dict) -> None:
         for dx in analysis_result["diagnoses"][:10]:
             conf = dx.get("confidence")
             assert isinstance(conf, (int, float)), (
                 f"Diagnosis confidence must be numeric, got {type(conf).__name__}: {conf}"
             )
 
-    def test_diagnosis_confidence_range(self, analysis_result: dict):
+    def test_diagnosis_confidence_range(self, analysis_result: dict) -> None:
         """Confidence scores should be in [0, 1]."""
         for dx in analysis_result["diagnoses"][:10]:
             conf = float(dx.get("confidence", 0))
@@ -151,14 +151,14 @@ class TestAnalysisEncounterPost:
                 f"Confidence {conf} outside expected range [0, 1] for dx: {dx}"
             )
 
-    def test_diagnosis_meat_field_present(self, analysis_result: dict):
+    def test_diagnosis_meat_field_present(self, analysis_result: dict) -> None:
         """The meat (Monitoring/Evaluation/Assessment/Treatment) field must exist."""
         for dx in analysis_result["diagnoses"][:10]:
             assert "meat" in dx, (
                 f"Diagnosis record missing 'meat' field. Got fields: {sorted(dx)}"
             )
 
-    def test_diagnosis_meat_is_dict(self, analysis_result: dict):
+    def test_diagnosis_meat_is_dict(self, analysis_result: dict) -> None:
         for dx in analysis_result["diagnoses"][:10]:
             meat = dx.get("meat")
             if meat is not None:
@@ -166,14 +166,14 @@ class TestAnalysisEncounterPost:
                     f"'meat' must be a dict, got {type(meat).__name__}"
                 )
 
-    def test_pipeline_tool_calls_is_list_if_present(self, analysis_result: dict):
+    def test_pipeline_tool_calls_is_list_if_present(self, analysis_result: dict) -> None:
         pipeline = analysis_result["pipeline"]
         if "tool_calls" in pipeline:
             assert isinstance(pipeline["tool_calls"], list), (
                 f"'pipeline.tool_calls' must be a list"
             )
 
-    def test_pipeline_tool_calls_contain_expected_functions(self, analysis_result: dict):
+    def test_pipeline_tool_calls_contain_expected_functions(self, analysis_result: dict) -> None:
         """
         The skill pipeline should invoke at least lookup_hcc or validate_icd10
         for any meaningful clinical note with diagnosable conditions.
@@ -202,26 +202,26 @@ class TestAnalysisEncounterPost:
             f"but found: {called_functions}"
         )
 
-    def test_overall_confidence_is_present(self, analysis_result: dict):
+    def test_overall_confidence_is_present(self, analysis_result: dict) -> None:
         """overall_confidence must be in the top-level response."""
         assert "overall_confidence" in analysis_result, (
             f"'overall_confidence' missing. Got keys: {sorted(analysis_result)}"
         )
 
-    def test_overall_confidence_is_numeric(self, analysis_result: dict):
+    def test_overall_confidence_is_numeric(self, analysis_result: dict) -> None:
         conf = analysis_result.get("overall_confidence")
         assert isinstance(conf, (int, float)), (
             f"'overall_confidence' must be numeric, got {type(conf).__name__}: {conf}"
         )
 
-    def test_negated_conditions_is_list(self, analysis_result: dict):
+    def test_negated_conditions_is_list(self, analysis_result: dict) -> None:
         neg = analysis_result.get("negated_conditions")
         if neg is not None:
             assert isinstance(neg, list), (
                 f"'negated_conditions' must be a list, got {type(neg).__name__}"
             )
 
-    def test_routing_key_present(self, analysis_result: dict):
+    def test_routing_key_present(self, analysis_result: dict) -> None:
         """Confidence routing result should be exposed."""
         assert "routing" in analysis_result, (
             f"'routing' key missing from analysis response. Keys: {sorted(analysis_result)}"
@@ -244,7 +244,7 @@ class TestAnalysisCachedResult:
         base_url: str,
         first_encounter_id: int,
         analysis_result: dict,  # ensures analysis ran first
-    ):
+    ) -> None:
         """Cached endpoint must return 200 once data has been stored."""
         r = api_client.get(
             f"{base_url}/api/analysis/encounter/{first_encounter_id}/cached",
@@ -264,7 +264,7 @@ class TestAnalysisCachedResult:
         base_url: str,
         first_encounter_id: int,
         analysis_result: dict,
-    ):
+    ) -> None:
         r = api_client.get(
             f"{base_url}/api/analysis/encounter/{first_encounter_id}/cached",
             timeout=30,
@@ -282,7 +282,7 @@ class TestAnalysisCachedResult:
         base_url: str,
         first_encounter_id: int,
         analysis_result: dict,
-    ):
+    ) -> None:
         """
         The cached result should have at minimum the same number of diagnoses
         as the live analysis that just ran (allowing for re-analysis enrichment).
@@ -368,7 +368,7 @@ class TestAnalysisNoteInline:
 
     def test_note_analysis_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.post(
             f"{base_url}/api/analysis/note",
             json={
@@ -382,13 +382,13 @@ class TestAnalysisNoteInline:
             pytest.skip("POST /api/analysis/note endpoint not implemented.")
         assert r.status_code == 200
 
-    def test_note_analysis_returns_diagnoses(self, note_analysis: dict):
+    def test_note_analysis_returns_diagnoses(self, note_analysis: dict) -> None:
         assert "diagnoses" in note_analysis, (
             f"'diagnoses' missing. Got: {sorted(note_analysis)}"
         )
         assert isinstance(note_analysis["diagnoses"], list)
 
-    def test_note_analysis_finds_diabetes_diagnosis(self, note_analysis: dict):
+    def test_note_analysis_finds_diabetes_diagnosis(self, note_analysis: dict) -> None:
         """
         The sample note explicitly mentions Type 2 DM — Gemini should extract it.
         E11.22 (Type 2 DM with diabetic CKD) is the expected code.
@@ -404,7 +404,7 @@ class TestAnalysisNoteInline:
             f"Got ICD codes: {icd10_codes}"
         )
 
-    def test_note_analysis_finds_hypertension(self, note_analysis: dict):
+    def test_note_analysis_finds_hypertension(self, note_analysis: dict) -> None:
         """I10 (essential hypertension) is explicitly in the ASSESSMENT section."""
         diagnoses = note_analysis.get("diagnoses", [])
         icd10_codes = [

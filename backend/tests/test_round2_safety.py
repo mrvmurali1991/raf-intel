@@ -27,7 +27,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def test_nlp_extractor_drops_low_confidence_suspects():
+def test_nlp_extractor_drops_low_confidence_suspects() -> None:
     """Suspects with confidence < 0.70 must be dropped before reaching the coder."""
     from app.services.nlp_suspect_extractor import (
         NLP_MIN_CONFIDENCE_SURFACED,
@@ -80,7 +80,7 @@ def test_nlp_extractor_drops_low_confidence_suspects():
 # ---------------------------------------------------------------------------
 
 
-def test_accept_handler_blocks_low_conf_nlp_writeback_without_attestation():
+def test_accept_handler_blocks_low_conf_nlp_writeback_without_attestation() -> None:
     """Gate raises HTTPException 422 when NLP source, confidence=0.80, meat_signed=false."""
     from fastapi import HTTPException
     from app.services.nlp_suspect_extractor import NLP_MIN_CONFIDENCE_WRITEBACK
@@ -117,7 +117,7 @@ def test_accept_handler_blocks_low_conf_nlp_writeback_without_attestation():
     assert "0.85" in exc_info.value.detail
 
 
-def test_accept_handler_allows_low_conf_nlp_writeback_with_attestation():
+def test_accept_handler_allows_low_conf_nlp_writeback_with_attestation() -> None:
     """Gate passes (no exception) when NLP source, confidence=0.80, meat_signed=true."""
     from fastapi import HTTPException
     from app.services.nlp_suspect_extractor import NLP_MIN_CONFIDENCE_WRITEBACK
@@ -151,7 +151,7 @@ def test_accept_handler_allows_low_conf_nlp_writeback_with_attestation():
 # ---------------------------------------------------------------------------
 
 
-def test_verify_chain_on_boot_raises_when_jsonl_missing_after_db_events():
+def test_verify_chain_on_boot_raises_when_jsonl_missing_after_db_events() -> None:
     """RuntimeError when DB has a last-hash but JSONL does not exist."""
     from app.services.immutable_audit import verify_chain_on_boot
 
@@ -170,7 +170,7 @@ def test_verify_chain_on_boot_raises_when_jsonl_missing_after_db_events():
 # ---------------------------------------------------------------------------
 
 
-def test_append_audit_entry_raises_tamper_error_on_hash_divergence():
+def test_append_audit_entry_raises_tamper_error_on_hash_divergence() -> None:
     """AuditChainTamperError raised when DB last-hash != JSONL last-hash."""
     from app.services.immutable_audit import (
         AuditChainTamperError,

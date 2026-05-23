@@ -112,7 +112,7 @@ def patch_raf_cursor(monkeypatch, cursor: FakeCursor) -> None:
 # Test 1 — KG candidate normalisation
 # ---------------------------------------------------------------------------
 
-def test_normalize_kg_candidate_with_canonical_keys():
+def test_normalize_kg_candidate_with_canonical_keys() -> None:
     item = {
         "suspect_hcc": "HCC18",
         "suspect_icd10": "E11.65",
@@ -127,13 +127,13 @@ def test_normalize_kg_candidate_with_canonical_keys():
     assert out["raw_confidence"] == 0.82
 
 
-def test_normalize_kg_candidate_maps_kind_to_evidence_type():
+def test_normalize_kg_candidate_maps_kind_to_evidence_type() -> None:
     item = {"hcc": "HCC37", "icd10": "E11.9", "kind": "drug", "confidence": 0.7}
     out = orch._normalize_kg_candidate(item)
     assert out["evidence_type"] == "kg_drug_class"
 
 
-def test_normalize_kg_candidate_falls_back_to_kg_rule_when_kind_unknown():
+def test_normalize_kg_candidate_falls_back_to_kg_rule_when_kind_unknown() -> None:
     item = {"hcc": "HCC22", "icd10": "I10", "kind": "mystery"}
     out = orch._normalize_kg_candidate(item)
     assert out["evidence_type"] == "kg_rule"
@@ -143,7 +143,7 @@ def test_normalize_kg_candidate_falls_back_to_kg_rule_when_kind_unknown():
 # Test 2 — KG returns 3, LLM returns 2 (1 overlap) → KG primary, LLM merged
 # ---------------------------------------------------------------------------
 
-def test_merge_kg_3_and_llm_2_with_overlap_keeps_kg_primary():
+def test_merge_kg_3_and_llm_2_with_overlap_keeps_kg_primary() -> None:
     kg = [
         {
             "suspect_hcc": "HCC18",
@@ -209,7 +209,7 @@ def test_merge_kg_3_and_llm_2_with_overlap_keeps_kg_primary():
 # Test 3 — KG returns nothing → LLM is fully responsible
 # ---------------------------------------------------------------------------
 
-def test_kg_empty_falls_through_to_llm_only():
+def test_kg_empty_falls_through_to_llm_only() -> None:
     kg: list[dict] = []
     llm = [
         {
@@ -230,7 +230,7 @@ def test_kg_empty_falls_through_to_llm_only():
 # Test 4 — Demographic modulation: 78F dual + DM → CKD prior boosted
 # ---------------------------------------------------------------------------
 
-def test_demographic_modulation_elderly_dual_female_boosts_ckd():
+def test_demographic_modulation_elderly_dual_female_boosts_ckd() -> None:
     candidate = {
         "suspect_hcc": "HCC327",  # CKD stage 4
         "suspect_icd10": "N184",
@@ -245,7 +245,7 @@ def test_demographic_modulation_elderly_dual_female_boosts_ckd():
     assert out["evidence_detail"]["final_confidence"] == pytest.approx(0.70, rel=1e-3)
 
 
-def test_demographic_modulation_does_not_affect_unrelated_hcc():
+def test_demographic_modulation_does_not_affect_unrelated_hcc() -> None:
     candidate = {
         "suspect_hcc": "HCC108",  # cancer group, untouched by CKD rule
         "suspect_icd10": "C509",
@@ -263,7 +263,7 @@ def test_demographic_modulation_does_not_affect_unrelated_hcc():
 # Test 5 — Specialty modulation: cardiology boosts CHF priors
 # ---------------------------------------------------------------------------
 
-def test_specialty_modulation_cardiology_boosts_chf():
+def test_specialty_modulation_cardiology_boosts_chf() -> None:
     candidate = {
         "suspect_hcc": "HCC85",
         "suspect_icd10": "I5023",
@@ -276,7 +276,7 @@ def test_specialty_modulation_cardiology_boosts_chf():
     assert out["evidence_detail"]["final_confidence"] == pytest.approx(0.625, rel=1e-3)
 
 
-def test_specialty_modulation_unknown_specialty_is_passthrough():
+def test_specialty_modulation_unknown_specialty_is_passthrough() -> None:
     candidate = {
         "suspect_hcc": "HCC85",
         "suspect_icd10": "I5023",
@@ -288,7 +288,7 @@ def test_specialty_modulation_unknown_specialty_is_passthrough():
     assert out["evidence_detail"]["specialty_multiplier"] == 1.0
 
 
-def test_specialty_and_demographic_multipliers_compound():
+def test_specialty_and_demographic_multipliers_compound() -> None:
     candidate = {
         "suspect_hcc": "HCC327",
         "suspect_icd10": "N184",
@@ -304,7 +304,7 @@ def test_specialty_and_demographic_multipliers_compound():
     assert out["evidence_detail"]["final_confidence"] == pytest.approx(0.91, rel=1e-2)
 
 
-def test_calibration_caps_final_confidence_at_0_99():
+def test_calibration_caps_final_confidence_at_0_99() -> None:
     candidate = {
         "suspect_hcc": "HCC327",
         "suspect_icd10": "N184",
@@ -321,7 +321,7 @@ def test_calibration_caps_final_confidence_at_0_99():
 # Test 6 — Audit chain JSON well-formed for every suspect
 # ---------------------------------------------------------------------------
 
-def test_audit_chain_json_shape_for_every_suspect():
+def test_audit_chain_json_shape_for_every_suspect() -> None:
     kg = [
         {
             "suspect_hcc": "HCC18",
@@ -355,7 +355,7 @@ def test_audit_chain_json_shape_for_every_suspect():
 # Test 7 — Persistence dedup on (patient_id, year, hcc)
 # ---------------------------------------------------------------------------
 
-def test_persist_dedup_uses_on_duplicate_key(monkeypatch):
+def test_persist_dedup_uses_on_duplicate_key(monkeypatch) -> None:
     cur = FakeCursor()
     patch_raf_cursor(monkeypatch, cur)
     suspects = [
@@ -382,7 +382,7 @@ def test_persist_dedup_uses_on_duplicate_key(monkeypatch):
     assert p[4] == "kg_rule"
 
 
-def test_persist_writes_json_to_evidence_detail_column(monkeypatch):
+def test_persist_writes_json_to_evidence_detail_column(monkeypatch) -> None:
     cur = FakeCursor()
     patch_raf_cursor(monkeypatch, cur)
     suspects = [
@@ -403,7 +403,7 @@ def test_persist_writes_json_to_evidence_detail_column(monkeypatch):
     assert parsed["drug_class_inference"]["from_drug"] == "metformin"
 
 
-def test_persist_skips_when_empty(monkeypatch):
+def test_persist_skips_when_empty(monkeypatch) -> None:
     cur = FakeCursor()
     patch_raf_cursor(monkeypatch, cur)
     written = orch._persist_suspects([], patient_id=3, year=2026)
@@ -415,7 +415,7 @@ def test_persist_skips_when_empty(monkeypatch):
 # Test 8 — Lab fallback: KG seed missing → falls back to legacy regex
 # ---------------------------------------------------------------------------
 
-def test_lab_fallback_when_kg_lookup_unavailable(monkeypatch):
+def test_lab_fallback_when_kg_lookup_unavailable(monkeypatch) -> None:
     # Simulate KG service not installed
     monkeypatch.setattr(lab_engine, "_kg_lookup_service", lambda: None)
     note_text = "HbA1c: 9.2  eGFR: 45"
@@ -429,7 +429,7 @@ def test_lab_fallback_when_kg_lookup_unavailable(monkeypatch):
     assert "E11.65" in icds  # diabetes
 
 
-def test_lab_kg_first_uses_kg_when_available(monkeypatch):
+def test_lab_kg_first_uses_kg_when_available(monkeypatch) -> None:
     fake_svc = types.SimpleNamespace(
         evaluate_lab_value=MagicMock(return_value=[
             {
@@ -455,7 +455,7 @@ def test_lab_kg_first_uses_kg_when_available(monkeypatch):
     fake_svc.evaluate_lab_value.assert_called_once()
 
 
-def test_lab_kg_returns_nothing_falls_through_to_note_legacy(monkeypatch):
+def test_lab_kg_returns_nothing_falls_through_to_note_legacy(monkeypatch) -> None:
     fake_svc = types.SimpleNamespace(evaluate_lab_value=MagicMock(return_value=[]))
     monkeypatch.setattr(lab_engine, "_kg_lookup_service", lambda: fake_svc)
 
@@ -472,7 +472,7 @@ def test_lab_kg_returns_nothing_falls_through_to_note_legacy(monkeypatch):
 # Test 9 — Rx fallback: drug not in KG table → legacy lookup
 # ---------------------------------------------------------------------------
 
-def test_rx_fallback_when_kg_returns_nothing(monkeypatch):
+def test_rx_fallback_when_kg_returns_nothing(monkeypatch) -> None:
     fake_svc = types.SimpleNamespace(infer_from_drug=MagicMock(return_value=[]))
     monkeypatch.setattr(rx_engine, "_drug_class_reasoner", lambda: fake_svc)
 
@@ -501,7 +501,7 @@ def test_rx_fallback_when_kg_returns_nothing(monkeypatch):
     assert suspects[0]["hcc"] == "HCC127"
 
 
-def test_rx_kg_first_short_circuits_legacy(monkeypatch):
+def test_rx_kg_first_short_circuits_legacy(monkeypatch) -> None:
     fake_svc = types.SimpleNamespace(
         infer_from_drug=MagicMock(return_value=[
             {
@@ -527,7 +527,7 @@ def test_rx_kg_first_short_circuits_legacy(monkeypatch):
     legacy_loader.assert_not_called()
 
 
-def test_rx_kg_unavailable_falls_back_to_legacy_only(monkeypatch):
+def test_rx_kg_unavailable_falls_back_to_legacy_only(monkeypatch) -> None:
     monkeypatch.setattr(rx_engine, "_drug_class_reasoner", lambda: None)
     monkeypatch.setattr(
         rx_engine,
@@ -555,7 +555,7 @@ def test_rx_kg_unavailable_falls_back_to_legacy_only(monkeypatch):
 # Test 10 — Existing diagnosis suppresses suspect (KG + legacy)
 # ---------------------------------------------------------------------------
 
-def test_existing_diagnosis_suppresses_kg_suspect(monkeypatch):
+def test_existing_diagnosis_suppresses_kg_suspect(monkeypatch) -> None:
     fake_svc = types.SimpleNamespace(
         infer_from_drug=MagicMock(return_value=[
             {"icd10": "E11.9", "hcc": "HCC37", "condition": "Type 2 DM"}
@@ -574,7 +574,7 @@ def test_existing_diagnosis_suppresses_kg_suspect(monkeypatch):
 # Test 11 — Full pipeline end-to-end with mocked siblings + DB
 # ---------------------------------------------------------------------------
 
-def test_run_kg_first_detection_end_to_end(monkeypatch):
+def test_run_kg_first_detection_end_to_end(monkeypatch) -> None:
     # Mock KG service
     fake_kg = types.SimpleNamespace(
         patient_full_inference=MagicMock(return_value=[
@@ -631,7 +631,7 @@ def test_run_kg_first_detection_end_to_end(monkeypatch):
 # Test 12 — KG service missing → orchestrator returns empty list, no crash
 # ---------------------------------------------------------------------------
 
-def test_kg_service_missing_graceful_degradation(monkeypatch):
+def test_kg_service_missing_graceful_degradation(monkeypatch) -> None:
     monkeypatch.setattr(orch, "_kg_lookup_service", lambda: None)
     monkeypatch.setattr(orch, "_gemini_suspect_runner", lambda: (None, None, None))
     cur = FakeCursor()
@@ -652,7 +652,7 @@ def test_kg_service_missing_graceful_degradation(monkeypatch):
 # Test 13 — LLM runner error doesn't crash orchestrator
 # ---------------------------------------------------------------------------
 
-def test_llm_runner_exception_does_not_crash(monkeypatch):
+def test_llm_runner_exception_does_not_crash(monkeypatch) -> None:
     fake_kg = types.SimpleNamespace(
         patient_full_inference=MagicMock(return_value=[
             {
@@ -687,7 +687,7 @@ def test_llm_runner_exception_does_not_crash(monkeypatch):
 # Test 14 — get_evidence_chain returns parsed JSON
 # ---------------------------------------------------------------------------
 
-def test_get_evidence_chain_parses_json(monkeypatch):
+def test_get_evidence_chain_parses_json(monkeypatch) -> None:
     cur = FakeCursor()
     cur.set_next_row({
         "id": 17,
@@ -714,7 +714,7 @@ def test_get_evidence_chain_parses_json(monkeypatch):
     assert out["evidence_chain"]["trigger_evidence"][0]["code"] == "H35.022"
 
 
-def test_get_evidence_chain_404_when_missing(monkeypatch):
+def test_get_evidence_chain_404_when_missing(monkeypatch) -> None:
     cur = FakeCursor()
     cur.set_next_rows([])
     patch_raf_cursor(monkeypatch, cur)
@@ -726,7 +726,7 @@ def test_get_evidence_chain_404_when_missing(monkeypatch):
 # Test 15 — Distribution helper groups by evidence_type
 # ---------------------------------------------------------------------------
 
-def test_get_evidence_type_distribution(monkeypatch):
+def test_get_evidence_type_distribution(monkeypatch) -> None:
     cur = FakeCursor()
     cur.set_next_rows([
         {"evidence_type": "kg_rule", "n": 12},
@@ -749,7 +749,7 @@ def test_get_evidence_type_distribution(monkeypatch):
 # Test 16 — Tenant isolation: tenant_id propagates into orchestrator
 # ---------------------------------------------------------------------------
 
-def test_tenant_id_param_does_not_leak_into_other_tenants(monkeypatch):
+def test_tenant_id_param_does_not_leak_into_other_tenants(monkeypatch) -> None:
     # The schema doesn't carry tenant_id on raf_suspect_conditions in this
     # repo, but the orchestrator API accepts it for forward-compat and
     # logs it.  The persist path must not raise when tenant_id is set.
@@ -790,7 +790,7 @@ def test_tenant_id_param_does_not_leak_into_other_tenants(monkeypatch):
 # Test 17 — Multiple KG candidates for same HCC are merged with related_kg
 # ---------------------------------------------------------------------------
 
-def test_two_kg_candidates_same_hcc_keep_highest_and_record_related():
+def test_two_kg_candidates_same_hcc_keep_highest_and_record_related() -> None:
     kg = [
         {
             "suspect_hcc": "HCC18",
@@ -819,7 +819,7 @@ def test_two_kg_candidates_same_hcc_keep_highest_and_record_related():
 # Test 18 — Empty KG, empty LLM → empty output
 # ---------------------------------------------------------------------------
 
-def test_merge_empty_inputs_returns_empty_list():
+def test_merge_empty_inputs_returns_empty_list() -> None:
     assert orch._merge_kg_and_llm([], []) == []
 
 
@@ -827,7 +827,7 @@ def test_merge_empty_inputs_returns_empty_list():
 # Test 19 — KG pass with kg_lookup_service that raises
 # ---------------------------------------------------------------------------
 
-def test_kg_pass_swallows_kg_exceptions(monkeypatch):
+def test_kg_pass_swallows_kg_exceptions(monkeypatch) -> None:
     fake_kg = types.SimpleNamespace(
         patient_full_inference=MagicMock(side_effect=RuntimeError("DB down"))
     )
@@ -840,7 +840,7 @@ def test_kg_pass_swallows_kg_exceptions(monkeypatch):
 # Test 20 — Acceptance: evidence_type values match the allowlist
 # ---------------------------------------------------------------------------
 
-def test_evidence_type_allowlist_contains_required_tags():
+def test_evidence_type_allowlist_contains_required_tags() -> None:
     required = {
         "kg_rule",
         "kg_comorbidity",
@@ -858,7 +858,7 @@ def test_evidence_type_allowlist_contains_required_tags():
 # Test 21 — Audit chain shape matches the documented JSON skeleton
 # ---------------------------------------------------------------------------
 
-def test_audit_chain_default_skeleton_has_documented_keys():
+def test_audit_chain_default_skeleton_has_documented_keys() -> None:
     item = {"hcc": "HCC18", "icd10": "E11.9"}
     out = orch._normalize_kg_candidate(item)
     detail = out["evidence_detail"]
@@ -881,7 +881,7 @@ def test_audit_chain_default_skeleton_has_documented_keys():
 # Test 22 — Orchestrator returns calibrated confidence_score field
 # ---------------------------------------------------------------------------
 
-def test_orchestrator_writes_top_level_confidence_score(monkeypatch):
+def test_orchestrator_writes_top_level_confidence_score(monkeypatch) -> None:
     fake_kg = types.SimpleNamespace(
         patient_full_inference=MagicMock(return_value=[
             {

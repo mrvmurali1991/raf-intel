@@ -40,35 +40,35 @@ def _assert_response_ok(r: requests.Response, context: str = "") -> dict:
 class TestPatientsWithEncounters:
     """Patients that have at least one encounter."""
 
-    def test_endpoint_returns_200(self, api_client: requests.Session, base_url: str):
+    def test_endpoint_returns_200(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/api/patients/with-encounters")
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
 
-    def test_response_has_patients_key(self, api_client: requests.Session, base_url: str):
+    def test_response_has_patients_key(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/api/patients/with-encounters")
         data = r.json()
         assert "patients" in data, f"Missing 'patients' key in response: {data}"
 
-    def test_response_has_total_key(self, api_client: requests.Session, base_url: str):
+    def test_response_has_total_key(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/api/patients/with-encounters")
         data = r.json()
         assert "total" in data, f"Missing 'total' key in response: {data}"
 
-    def test_total_matches_patients_length(self, api_client: requests.Session, base_url: str):
+    def test_total_matches_patients_length(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/api/patients/with-encounters")
         data = r.json()
         assert data["total"] == len(data["patients"]), (
             f"'total' ({data['total']}) does not match len(patients) ({len(data['patients'])})"
         )
 
-    def test_patients_is_a_list(self, api_client: requests.Session, base_url: str):
+    def test_patients_is_a_list(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/api/patients/with-encounters")
         data = r.json()
         assert isinstance(data["patients"], list), "'patients' must be a list"
 
     def test_patient_records_have_pid(
         self, api_client: requests.Session, base_url: str, sample_patients: list[dict]
-    ):
+    ) -> None:
         """Every returned patient must carry a non-null identifier."""
         if not sample_patients:
             pytest.skip("No patients with encounters in the database.")
@@ -80,7 +80,7 @@ class TestPatientsWithEncounters:
             )
             assert has_id, f"Patient record missing identifier: {patient}"
 
-    def test_limit_query_param_is_respected(self, api_client: requests.Session, base_url: str):
+    def test_limit_query_param_is_respected(self, api_client: requests.Session, base_url: str) -> None:
         """Passing limit=1 should return at most one patient."""
         r = api_client.get(
             f"{base_url}/api/patients/with-encounters", params={"limit": 1}
@@ -101,13 +101,13 @@ class TestSinglePatient:
 
     def test_returns_200_for_valid_pid(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}")
         _assert_response_ok(r, f"GET /api/patients/{first_pid}")
 
     def test_response_has_demographic_fields(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         """Patient record must expose core demographic fields."""
         r = api_client.get(f"{base_url}/api/patients/{first_pid}")
         data = _assert_response_ok(r)
@@ -120,7 +120,7 @@ class TestSinglePatient:
 
     def test_response_has_raf_score_fields(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         """
         Patient endpoint injects RAF score fields even if no score has been
         calculated yet (values will be None).
@@ -135,7 +135,7 @@ class TestSinglePatient:
 
     def test_raf_score_is_numeric_or_none(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}")
         data = _assert_response_ok(r)
         raf = data.get("raf_score")
@@ -145,7 +145,7 @@ class TestSinglePatient:
 
     def test_pid_in_response_matches_request(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}")
         data = _assert_response_ok(r)
         response_pid = data.get("pid") or data.get("id")
@@ -155,7 +155,7 @@ class TestSinglePatient:
 
     def test_returns_404_for_nonexistent_pid(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}")
         assert r.status_code == 404, (
             f"Expected 404 for nonexistent PID {nonexistent_pid}, got {r.status_code}"
@@ -163,7 +163,7 @@ class TestSinglePatient:
 
     def test_404_response_has_detail_field(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}")
         data = r.json()
         assert "detail" in data, f"404 response should contain 'detail'. Got: {data}"
@@ -177,13 +177,13 @@ class TestPatientEncounters:
 
     def test_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
         _assert_response_ok(r, f"GET /api/patients/{first_pid}/encounters")
 
     def test_response_structure(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
         data = _assert_response_ok(r)
         for key in ("pid", "count", "encounters"):
@@ -191,14 +191,14 @@ class TestPatientEncounters:
 
     def test_pid_matches(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
         data = _assert_response_ok(r)
         assert int(data["pid"]) == first_pid
 
     def test_count_matches_list_length(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
         data = _assert_response_ok(r)
         assert data["count"] == len(data["encounters"]), (
@@ -207,14 +207,14 @@ class TestPatientEncounters:
 
     def test_encounters_is_list(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
         data = _assert_response_ok(r)
         assert isinstance(data["encounters"], list)
 
     def test_encounter_records_have_id(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/encounters")
         data = _assert_response_ok(r)
         for enc in data["encounters"][:5]:
@@ -223,7 +223,7 @@ class TestPatientEncounters:
 
     def test_returns_404_for_nonexistent_pid(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}/encounters")
         assert r.status_code == 404
 
@@ -236,13 +236,13 @@ class TestPatientDiagnoses:
 
     def test_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
         _assert_response_ok(r, f"GET /api/patients/{first_pid}/diagnoses")
 
     def test_response_structure(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
         data = _assert_response_ok(r)
         for key in ("pid", "count", "diagnoses"):
@@ -250,21 +250,21 @@ class TestPatientDiagnoses:
 
     def test_diagnoses_is_list(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
         data = _assert_response_ok(r)
         assert isinstance(data["diagnoses"], list)
 
     def test_count_matches_list_length(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
         data = _assert_response_ok(r)
         assert data["count"] == len(data["diagnoses"])
 
     def test_diagnosis_records_have_icd10_validation_flag(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         """Diagnoses endpoint enriches records with valid_icd10 flag."""
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/diagnoses")
         data = _assert_response_ok(r)
@@ -275,7 +275,7 @@ class TestPatientDiagnoses:
 
     def test_returns_404_for_nonexistent_pid(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}/diagnoses")
         assert r.status_code == 404
 
@@ -288,13 +288,13 @@ class TestPatientMedications:
 
     def test_returns_200(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
         _assert_response_ok(r, f"GET /api/patients/{first_pid}/medications")
 
     def test_response_structure(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
         data = _assert_response_ok(r)
         for key in ("pid", "count", "medications"):
@@ -302,21 +302,21 @@ class TestPatientMedications:
 
     def test_medications_is_list(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
         data = _assert_response_ok(r)
         assert isinstance(data["medications"], list)
 
     def test_count_matches_list_length(
         self, api_client: requests.Session, base_url: str, first_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{first_pid}/medications")
         data = _assert_response_ok(r)
         assert data["count"] == len(data["medications"])
 
     def test_returns_404_for_nonexistent_pid(
         self, api_client: requests.Session, base_url: str, nonexistent_pid: int
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/patients/{nonexistent_pid}/medications")
         assert r.status_code == 404
 
@@ -333,7 +333,7 @@ class TestPatientClinicalNotes:
         base_url: str,
         first_pid: int,
         first_encounter_id: int,
-    ):
+    ) -> None:
         r = api_client.get(
             f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
         )
@@ -348,7 +348,7 @@ class TestPatientClinicalNotes:
         base_url: str,
         first_pid: int,
         first_encounter_id: int,
-    ):
+    ) -> None:
         r = api_client.get(
             f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
         )
@@ -364,7 +364,7 @@ class TestPatientClinicalNotes:
         base_url: str,
         first_pid: int,
         first_encounter_id: int,
-    ):
+    ) -> None:
         r = api_client.get(
             f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
         )
@@ -378,7 +378,7 @@ class TestPatientClinicalNotes:
         base_url: str,
         first_pid: int,
         first_encounter_id: int,
-    ):
+    ) -> None:
         r = api_client.get(
             f"{base_url}/api/patients/{first_pid}/clinical-notes/{first_encounter_id}"
         )

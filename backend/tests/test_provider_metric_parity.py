@@ -137,7 +137,7 @@ _V1_SCRIPT = [
 ]
 
 
-def test_v1_scorecard_canonical_metrics():
+def test_v1_scorecard_canonical_metrics() -> None:
     """v1 calculate_provider_scorecard matches canonical avg_raf + recapture_rate."""
     from app.services import provider_service
 
@@ -192,7 +192,7 @@ _V2_SCRIPT = [
 ]
 
 
-def test_v2_scorecard_canonical_metrics():
+def test_v2_scorecard_canonical_metrics() -> None:
     """v2 _aggregate_provider_metrics matches canonical avg_raf + recapture_rate_pct."""
     from app.services import provider_scorecard_v2
 
@@ -213,7 +213,7 @@ def test_v2_scorecard_canonical_metrics():
     )
 
 
-def test_v1_v2_recapture_formula_same_value():
+def test_v1_v2_recapture_formula_same_value() -> None:
     """Both services produce numerically equivalent recapture values for
     the same underlying data (v1 fraction * 100 == v2 percentage)."""
     # The assertions above already validate this individually; this test
@@ -222,7 +222,7 @@ def test_v1_v2_recapture_formula_same_value():
     assert round(_CANON_RECAPTURE_RATE * 100, 1) == _CANON_RECAPTURE_RATE_PCT
 
 
-def test_v2_recapture_no_prior_hccs_returns_100():
+def test_v2_recapture_no_prior_hccs_returns_100() -> None:
     """When prior-year HCC count is 0, v2 returns 100.0% (same as v1)."""
     script_no_prior = [
         {"rows": [{"id": 1, "npi": None, "full_name": "Bob Jones", "specialty": None}]},

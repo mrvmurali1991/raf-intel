@@ -183,7 +183,7 @@ def _canned_llm_generate_content(*args, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def test_pipeline_end_to_end_smoke(fake_bundle):
+def test_pipeline_end_to_end_smoke(fake_bundle) -> None:
     from app.services.ai_pipeline import orchestrator
 
     raf_cur = _RecordingCursor()

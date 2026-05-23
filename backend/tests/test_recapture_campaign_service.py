@@ -86,27 +86,27 @@ def _patch_cursor(cursor: _ScriptedCursor):
 
 
 class TestBuildFilterClause:
-    def test_empty_returns_no_fragment(self):
+    def test_empty_returns_no_fragment(self) -> None:
         clause, params = svc._build_filter_clause({})
         assert clause == ""
         assert params == []
 
-    def test_hcc_codes_translates_to_in_list(self):
+    def test_hcc_codes_translates_to_in_list(self) -> None:
         clause, params = svc._build_filter_clause({"hcc_codes": ["18", "19"]})
         assert "rg.hcc_code IN" in clause
         assert params == ["18", "19"]
 
-    def test_min_revenue_filter(self):
+    def test_min_revenue_filter(self) -> None:
         clause, params = svc._build_filter_clause({"min_revenue": 5000})
         assert "rg.revenue_impact >= %s" in clause
         assert params == [5000.0]
 
-    def test_max_age_days_filter(self):
+    def test_max_age_days_filter(self) -> None:
         clause, params = svc._build_filter_clause({"max_age_days": 90})
         assert "INTERVAL %s DAY" in clause
         assert params == [90]
 
-    def test_combined_filters(self):
+    def test_combined_filters(self) -> None:
         clause, params = svc._build_filter_clause(
             {"hcc_codes": ["19"], "min_revenue": 5000, "max_age_days": 30}
         )
@@ -114,7 +114,7 @@ class TestBuildFilterClause:
         assert clause.count("AND") == 3  # leading AND + 2 between fragments
         assert params == ["19", 5000.0, 30]
 
-    def test_unknown_keys_ignored(self):
+    def test_unknown_keys_ignored(self) -> None:
         clause, params = svc._build_filter_clause({"foo": "bar", "min_revenue": 100})
         assert "foo" not in clause
         assert params == [100.0]
@@ -125,7 +125,7 @@ class TestBuildFilterClause:
 # ---------------------------------------------------------------------------
 
 
-def test_preview_filter_returns_count_and_breakdown():
+def test_preview_filter_returns_count_and_breakdown() -> None:
     cursor = _ScriptedCursor(
         replies=[
             {"matched_gaps": 16, "total_revenue_at_risk": 48000},  # head row
@@ -148,15 +148,15 @@ def test_preview_filter_returns_count_and_breakdown():
 
 
 class TestRoundRobin:
-    def test_even_distribution(self):
+    def test_even_distribution(self) -> None:
         out = svc._round_robin([1, 2, 3, 4, 5, 6], buckets=2)
         assert out == [[1, 3, 5], [2, 4, 6]]
 
-    def test_uneven_distribution(self):
+    def test_uneven_distribution(self) -> None:
         out = svc._round_robin([1, 2, 3, 4, 5], buckets=2)
         assert out == [[1, 3, 5], [2, 4]]
 
-    def test_more_buckets_than_items(self):
+    def test_more_buckets_than_items(self) -> None:
         out = svc._round_robin([1, 2], buckets=3)
         assert out == [[1], [2], []]
 
@@ -166,7 +166,7 @@ class TestRoundRobin:
 # ---------------------------------------------------------------------------
 
 
-def test_assign_gaps_round_robin_balances_two_coders():
+def test_assign_gaps_round_robin_balances_two_coders() -> None:
     """16 open gaps assigned to 2 coders → 8 per coder."""
     gap_ids = list(range(1, 17))
     gaps = [
@@ -209,12 +209,12 @@ def test_assign_gaps_round_robin_balances_two_coders():
     assert len(coder_202_gaps) == 8
 
 
-def test_assign_rejects_unknown_distribution():
+def test_assign_rejects_unknown_distribution() -> None:
     with pytest.raises(ValueError, match="Invalid distribution"):
         svc.assign_gaps_to_coders(campaign_id=1, coder_ids=[1], distribution="bogus")
 
 
-def test_assign_rejects_empty_coder_list():
+def test_assign_rejects_empty_coder_list() -> None:
     with pytest.raises(ValueError, match="At least one coder_id"):
         svc.assign_gaps_to_coders(campaign_id=1, coder_ids=[])
 
@@ -224,7 +224,7 @@ def test_assign_rejects_empty_coder_list():
 # ---------------------------------------------------------------------------
 
 
-def test_mark_assignment_closes_gap_and_rolls_up_stats():
+def test_mark_assignment_closes_gap_and_rolls_up_stats() -> None:
     """Mark 5 of 16 assignments closed → closure_rate=31.25, recaptured=$15,000."""
     cursor = _ScriptedCursor(
         replies=[
@@ -256,12 +256,12 @@ def test_mark_assignment_closes_gap_and_rolls_up_stats():
     assert stats["recaptured_revenue"] == 15000.0
 
 
-def test_mark_assignment_rejects_unknown_status():
+def test_mark_assignment_rejects_unknown_status() -> None:
     with pytest.raises(ValueError, match="Invalid status"):
         svc.mark_assignment(assignment_id=1, status="exploded")
 
 
-def test_mark_assignment_enforces_coder_ownership():
+def test_mark_assignment_enforces_coder_ownership() -> None:
     cursor = _ScriptedCursor(
         replies=[
             {"id": 1, "campaign_id": 7, "coder_id": 101, "gap_id": 99,
@@ -278,7 +278,7 @@ def test_mark_assignment_enforces_coder_ownership():
 # ---------------------------------------------------------------------------
 
 
-def test_get_campaign_kanban_groups_by_status():
+def test_get_campaign_kanban_groups_by_status() -> None:
     rows = [
         {"assignment_id": 1, "campaign_id": 7, "coder_id": 101, "gap_id": 11,
          "assignment_status": "assigned", "closed_at": None, "notes": None,
@@ -345,7 +345,7 @@ def test_get_campaign_kanban_groups_by_status():
 # ---------------------------------------------------------------------------
 
 
-def test_list_campaigns_computes_closure_rate():
+def test_list_campaigns_computes_closure_rate() -> None:
     cursor = _ScriptedCursor(
         replies=[
             [{
@@ -370,7 +370,7 @@ def test_list_campaigns_computes_closure_rate():
     assert stats["recaptured_revenue"] == 15000.0
 
 
-def test_list_campaigns_handles_zero_total():
+def test_list_campaigns_handles_zero_total() -> None:
     cursor = _ScriptedCursor(
         replies=[
             [{
@@ -395,7 +395,7 @@ def test_list_campaigns_handles_zero_total():
 # ---------------------------------------------------------------------------
 
 
-def test_create_campaign_persists_and_returns_row():
+def test_create_campaign_persists_and_returns_row() -> None:
     cursor = _ScriptedCursor(
         replies=[
             # post-insert SELECT
@@ -417,7 +417,7 @@ def test_create_campaign_persists_and_returns_row():
     assert out["filter_criteria"] == {"hcc_codes": ["19"]}
 
 
-def test_create_campaign_rejects_blank_name():
+def test_create_campaign_rejects_blank_name() -> None:
     with pytest.raises(ValueError, match="name is required"):
         svc.create_campaign(tenant_id="1", name="   ")
 
@@ -439,5 +439,5 @@ def test_create_campaign_rejects_blank_name():
         ("not-json", {}),
     ],
 )
-def test_parse_filter_criteria(raw, expected):
+def test_parse_filter_criteria(raw, expected) -> None:
     assert svc._parse_filter_criteria(raw) == expected

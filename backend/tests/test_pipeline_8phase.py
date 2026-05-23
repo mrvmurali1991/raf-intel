@@ -138,7 +138,7 @@ def pipeline_settings_manual():
 
 
 class TestAutoBasicModeSkipsAi:
-    def test_normalization_completed_calls_raf_calc_directly(self, pipeline_settings_auto_basic):
+    def test_normalization_completed_calls_raf_calc_directly(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
@@ -163,7 +163,7 @@ class TestAutoBasicModeSkipsAi:
         emitted_event = emit_mock.call_args.args[0]
         assert emitted_event == "raf_calculation_completed"
 
-    def test_analysis_requested_never_emitted_in_auto_basic(self, pipeline_settings_auto_basic):
+    def test_analysis_requested_never_emitted_in_auto_basic(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
@@ -191,7 +191,7 @@ class TestAutoBasicModeSkipsAi:
 
 
 class TestAutoAiModeTriggersAnalysis:
-    def test_emits_analysis_requested(self, pipeline_settings_auto_ai):
+    def test_emits_analysis_requested(self, pipeline_settings_auto_ai) -> None:
         emit_mock = MagicMock()
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
@@ -210,7 +210,7 @@ class TestAutoAiModeTriggersAnalysis:
         assert emitted_event == "analysis_requested"
         assert emitted_payload["tenant_id"] == "tenant-1"
 
-    def test_raf_calc_not_called_in_auto_ai(self, pipeline_settings_auto_ai):
+    def test_raf_calc_not_called_in_auto_ai(self, pipeline_settings_auto_ai) -> None:
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
             patch("app.services.pipeline_chain._update_run", _noop_update_run),
@@ -236,7 +236,7 @@ class TestAutoAiModeTriggersAnalysis:
 
 
 class TestManualModeStopsAfterRaf:
-    def test_no_emit_in_manual_mode(self, pipeline_settings_manual):
+    def test_no_emit_in_manual_mode(self, pipeline_settings_manual) -> None:
         emit_mock = MagicMock()
         with (
             patch(
@@ -250,7 +250,7 @@ class TestManualModeStopsAfterRaf:
 
         emit_mock.assert_not_called()
 
-    def test_suspect_scan_not_called_in_manual_mode(self, pipeline_settings_manual):
+    def test_suspect_scan_not_called_in_manual_mode(self, pipeline_settings_manual) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -272,7 +272,7 @@ class TestManualModeStopsAfterRaf:
 
 
 class TestAnalysisCompletedTriggersRafAndHierarchy:
-    def test_calls_raf_calc_after_analysis(self, pipeline_settings_auto_ai):
+    def test_calls_raf_calc_after_analysis(self, pipeline_settings_auto_ai) -> None:
         emit_mock = MagicMock()
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
@@ -299,7 +299,7 @@ class TestAnalysisCompletedTriggersRafAndHierarchy:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "raf_calculation_completed" in emitted_events
 
-    def test_hierarchy_disabled_skips_apply_hierarchy(self):
+    def test_hierarchy_disabled_skips_apply_hierarchy(self) -> None:
         settings = {
             "pipeline_mode": "auto_ai",
             "hierarchy_enabled": False,
@@ -336,7 +336,7 @@ class TestAnalysisCompletedTriggersRafAndHierarchy:
 
 
 class TestRafCompletedTriggersSuspectScan:
-    def test_suspect_scan_called_when_enabled(self, pipeline_settings_auto_basic):
+    def test_suspect_scan_called_when_enabled(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch(
@@ -363,7 +363,7 @@ class TestRafCompletedTriggersSuspectScan:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "suspect_scan_completed" in emitted_events
 
-    def test_suspect_scan_disabled_still_emits_completed(self):
+    def test_suspect_scan_disabled_still_emits_completed(self) -> None:
         settings = {
             "pipeline_mode": "auto_basic",
             "suspect_scan_enabled": False,
@@ -393,7 +393,7 @@ class TestRafCompletedTriggersSuspectScan:
 
 
 class TestSuspectCompletedTriggersGapGeneration:
-    def test_gap_generation_called_when_enabled(self, pipeline_settings_auto_basic):
+    def test_gap_generation_called_when_enabled(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch(
@@ -415,7 +415,7 @@ class TestSuspectCompletedTriggersGapGeneration:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "pipeline_completed" in emitted_events
 
-    def test_gap_generation_payload_carries_gaps_created(self, pipeline_settings_auto_basic):
+    def test_gap_generation_payload_carries_gaps_created(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch(
@@ -434,7 +434,7 @@ class TestSuspectCompletedTriggersGapGeneration:
         emitted_payload = emit_mock.call_args.args[1]
         assert emitted_payload["gaps_created"] == 12
 
-    def test_gap_disabled_still_emits_pipeline_completed(self):
+    def test_gap_disabled_still_emits_pipeline_completed(self) -> None:
         settings = {
             "pipeline_mode": "auto_basic",
             "gap_generation_enabled": False,
@@ -464,7 +464,7 @@ class TestSuspectCompletedTriggersGapGeneration:
 
 
 class TestPipelineCompletedFiresWebhook:
-    def test_webhook_fired_when_enabled(self, pipeline_settings_auto_ai):
+    def test_webhook_fired_when_enabled(self, pipeline_settings_auto_ai) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -480,7 +480,7 @@ class TestPipelineCompletedFiresWebhook:
         assert call_args.args[0] == "pipeline.full_run_completed"
         assert call_args.args[1] == "tenant-1"
 
-    def test_webhook_payload_includes_gaps_created(self, pipeline_settings_auto_ai):
+    def test_webhook_payload_includes_gaps_created(self, pipeline_settings_auto_ai) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -502,7 +502,7 @@ class TestPipelineCompletedFiresWebhook:
 
 
 class TestPipelineCompletedNoWebhookWhenDisabled:
-    def test_webhook_not_fired_when_disabled(self, pipeline_settings_auto_basic):
+    def test_webhook_not_fired_when_disabled(self, pipeline_settings_auto_basic) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -515,7 +515,7 @@ class TestPipelineCompletedNoWebhookWhenDisabled:
 
         mock_fire.assert_not_called()
 
-    def test_webhook_not_fired_in_manual_mode(self, pipeline_settings_manual):
+    def test_webhook_not_fired_in_manual_mode(self, pipeline_settings_manual) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -537,7 +537,7 @@ class TestPipelineCompletedNoWebhookWhenDisabled:
 
 
 class TestAiAnalysisFailureFallsThroughToRaf:
-    def test_analysis_completed_emitted_after_outer_failure(self):
+    def test_analysis_completed_emitted_after_outer_failure(self) -> None:
         """analysis_completed is always emitted even when the outer try-block fails."""
         emit_mock = MagicMock()
         with (
@@ -557,7 +557,7 @@ class TestAiAnalysisFailureFallsThroughToRaf:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "analysis_completed" in emitted_events
 
-    def test_raf_calc_is_still_triggered_after_ai_failure(self, pipeline_settings_auto_ai):
+    def test_raf_calc_is_still_triggered_after_ai_failure(self, pipeline_settings_auto_ai) -> None:
         """Full chain: when AI analysis fails, analysis_completed → RAF calc runs."""
         emit_mock = MagicMock()
         with (
@@ -585,7 +585,7 @@ class TestAiAnalysisFailureFallsThroughToRaf:
 
 
 class TestHierarchyFailureIsNonFatal:
-    def test_raf_calc_completed_emitted_despite_hierarchy_failure(self, pipeline_settings_auto_ai):
+    def test_raf_calc_completed_emitted_despite_hierarchy_failure(self, pipeline_settings_auto_ai) -> None:
         emit_mock = MagicMock()
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
@@ -610,7 +610,7 @@ class TestHierarchyFailureIsNonFatal:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "raf_calculation_completed" in emitted_events
 
-    def test_handler_does_not_raise_on_hierarchy_failure(self, pipeline_settings_auto_ai):
+    def test_handler_does_not_raise_on_hierarchy_failure(self, pipeline_settings_auto_ai) -> None:
         with (
             patch("app.services.pipeline_chain._pop_run_id", return_value=None),
             patch("app.services.pipeline_chain._update_run", _noop_update_run),
@@ -639,7 +639,7 @@ class TestHierarchyFailureIsNonFatal:
 
 
 class TestSuspectScanFailureIsNonFatal:
-    def test_suspect_scan_completed_emitted_after_failure(self, pipeline_settings_auto_basic):
+    def test_suspect_scan_completed_emitted_after_failure(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch(
@@ -658,7 +658,7 @@ class TestSuspectScanFailureIsNonFatal:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "suspect_scan_completed" in emitted_events
 
-    def test_handler_does_not_raise_on_suspect_failure(self, pipeline_settings_auto_basic):
+    def test_handler_does_not_raise_on_suspect_failure(self, pipeline_settings_auto_basic) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -674,7 +674,7 @@ class TestSuspectScanFailureIsNonFatal:
             # Must not raise
             _handle_raf_calculation_completed(_raf_completed_payload())
 
-    def test_per_patient_failure_continues_to_next_patient(self, pipeline_settings_auto_basic):
+    def test_per_patient_failure_continues_to_next_patient(self, pipeline_settings_auto_basic) -> None:
         """A failure on one patient does not stop scanning remaining patients."""
         call_tracker: list[int] = []
 
@@ -713,7 +713,7 @@ class TestSuspectScanFailureIsNonFatal:
 
 
 class TestGapGenerationFailureStillCompletesPipeline:
-    def test_pipeline_completed_emitted_after_gap_failure(self, pipeline_settings_auto_basic):
+    def test_pipeline_completed_emitted_after_gap_failure(self, pipeline_settings_auto_basic) -> None:
         emit_mock = MagicMock()
         with (
             patch(
@@ -732,7 +732,7 @@ class TestGapGenerationFailureStillCompletesPipeline:
         emitted_events = [c.args[0] for c in emit_mock.call_args_list]
         assert "pipeline_completed" in emitted_events
 
-    def test_handler_does_not_raise_on_gap_failure(self, pipeline_settings_auto_basic):
+    def test_handler_does_not_raise_on_gap_failure(self, pipeline_settings_auto_basic) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",
@@ -756,7 +756,7 @@ class TestGapGenerationFailureStillCompletesPipeline:
 
 
 class TestFull8PhaseFlow:
-    def test_event_chain_order_auto_basic(self, pipeline_settings_auto_basic):
+    def test_event_chain_order_auto_basic(self, pipeline_settings_auto_basic) -> None:
         """
         auto_basic mode full chain:
         emr_sync → normalization_completed → raf_calculation_completed
@@ -792,7 +792,7 @@ class TestFull8PhaseFlow:
 
     def test_event_chain_auto_basic_normalization_to_pipeline_completed(
         self, pipeline_settings_auto_basic
-    ):
+    ) -> None:
         """
         Drive the chain from normalization_completed all the way to pipeline_completed
         in auto_basic mode by calling handlers directly in sequence.
@@ -873,7 +873,7 @@ class TestFull8PhaseFlow:
 
         mock_fire.assert_not_called()
 
-    def test_event_chain_auto_ai_mode(self, pipeline_settings_auto_ai):
+    def test_event_chain_auto_ai_mode(self, pipeline_settings_auto_ai) -> None:
         """
         auto_ai: normalization_completed → analysis_requested (not RAF directly)
         """
@@ -900,7 +900,7 @@ class TestFull8PhaseFlow:
 
 
 class TestPipelineSettingsDefaults:
-    def test_returns_auto_basic_when_no_db_row(self):
+    def test_returns_auto_basic_when_no_db_row(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -917,7 +917,7 @@ class TestPipelineSettingsDefaults:
         assert settings["hierarchy_enabled"] is True
         assert settings["webhook_enabled"] is False
 
-    def test_returns_defaults_on_db_exception(self):
+    def test_returns_defaults_on_db_exception(self) -> None:
         @contextmanager
         def _failing_cm(*args, **kwargs):
             raise RuntimeError("DB offline")
@@ -928,7 +928,7 @@ class TestPipelineSettingsDefaults:
 
         assert settings["pipeline_mode"] == "auto_basic"
 
-    def test_db_row_overrides_defaults(self):
+    def test_db_row_overrides_defaults(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -966,7 +966,7 @@ class TestSetupRegistersAllHandlers:
         "pipeline_completed",
     }
 
-    def test_registers_expected_handlers(self):
+    def test_registers_expected_handlers(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "true"}):
             with (
                 patch("app.services.event_emitter.register_handler") as mock_reg,
@@ -977,7 +977,7 @@ class TestSetupRegistersAllHandlers:
         registered_events = {c.args[0] for c in mock_reg.call_args_list}
         assert registered_events == self._EXPECTED_EVENTS
 
-    def test_handler_count_is_seven(self):
+    def test_handler_count_is_seven(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "true"}):
             with (
                 patch("app.services.event_emitter.register_handler") as mock_reg,
@@ -987,7 +987,7 @@ class TestSetupRegistersAllHandlers:
 
         assert mock_reg.call_count == 7
 
-    def test_no_registration_when_disabled(self):
+    def test_no_registration_when_disabled(self) -> None:
         with patch.dict(os.environ, {"RAF_AUTO_CHAIN": "false"}):
             with patch("app.services.event_emitter.register_handler") as mock_reg:
                 setup_pipeline_chain()
@@ -1001,7 +1001,7 @@ class TestSetupRegistersAllHandlers:
 
 
 class TestWebhookFailureIsNonFatal:
-    def test_handler_does_not_raise_on_webhook_failure(self, pipeline_settings_auto_ai):
+    def test_handler_does_not_raise_on_webhook_failure(self, pipeline_settings_auto_ai) -> None:
         with (
             patch(
                 "app.services.pipeline_chain._get_pipeline_settings",

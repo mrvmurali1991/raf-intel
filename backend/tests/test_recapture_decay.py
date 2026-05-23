@@ -68,7 +68,7 @@ def _gap(
 # ===========================================================================
 
 class TestDecayCurve:
-    def test_cohort_grouping_three_years(self):
+    def test_cohort_grouping_three_years(self) -> None:
         rows = [
             _gap(current_year=2024, resolved_at=datetime(2024, 2, 15)),
             _gap(current_year=2025, resolved_at=datetime(2025, 3, 10)),
@@ -87,7 +87,7 @@ class TestDecayCurve:
             # 12 months emitted
             assert [p["month_of_year"] for p in c["points"]] == list(range(1, 13))
 
-    def test_cumulative_percentages_reach_one(self):
+    def test_cumulative_percentages_reach_one(self) -> None:
         # 4 gaps in cohort 2026, all resolved across different months
         rows = [
             _gap(current_year=2026, resolved_at=datetime(2026, 1, 5)),
@@ -109,7 +109,7 @@ class TestDecayCurve:
         # $ recaptured cumulative ≈ 4 × 3000 = 12000 by Dec
         assert pts[11]["cumulative_$_recaptured"] == pytest.approx(12000.0)
 
-    def test_open_gaps_count_in_total_but_not_closed(self):
+    def test_open_gaps_count_in_total_but_not_closed(self) -> None:
         rows = [
             _gap(current_year=2026, status="open", resolved_at=None),
             _gap(current_year=2026, status="recaptured", resolved_at=datetime(2026, 4, 10)),
@@ -124,7 +124,7 @@ class TestDecayCurve:
         # And stays at 0.5 for the rest of the year
         assert c["points"][11]["cumulative_closed_pct"] == pytest.approx(0.5)
 
-    def test_empty_cohort_emits_zeros(self):
+    def test_empty_cohort_emits_zeros(self) -> None:
         with patch("app.services.recapture_decay.raf_cursor", _cursor_cm([])):
             res = get_decay_curve(tenant_id="1", current_year=2026, lookback_years=2)
         assert len(res["cohorts"]) == 2
@@ -134,14 +134,14 @@ class TestDecayCurve:
                 assert p["closure_rate"] == 0.0
                 assert p["cumulative_closed_pct"] == 0.0
 
-    def test_lookback_clamped_to_one(self):
+    def test_lookback_clamped_to_one(self) -> None:
         with patch("app.services.recapture_decay.raf_cursor", _cursor_cm([])):
             res = get_decay_curve(tenant_id="1", current_year=2026, lookback_years=0)
         # Clamped to 1 → only 2026 cohort in result
         assert len(res["cohorts"]) == 1
         assert res["cohorts"][0]["cohort_year"] == 2026
 
-    def test_dollars_summed_per_month(self):
+    def test_dollars_summed_per_month(self) -> None:
         rows = [
             _gap(current_year=2026, resolved_at=datetime(2026, 3, 5), revenue_impact=1000),
             _gap(current_year=2026, resolved_at=datetime(2026, 3, 20), revenue_impact=2000),
@@ -159,7 +159,7 @@ class TestDecayCurve:
 # ===========================================================================
 
 class TestVelocityKpis:
-    def test_avg_and_median_days_to_close(self):
+    def test_avg_and_median_days_to_close(self) -> None:
         # Two gaps closed in 10 and 20 days → avg=15, median=15
         rows = [
             _gap(current_year=2026,
@@ -179,7 +179,7 @@ class TestVelocityKpis:
         assert kpis["closed_cohort_gaps"] == 2
         assert kpis["ytd_$_recaptured"] == pytest.approx(6000.0)
 
-    def test_year_end_projection_linear_extrapolation(self):
+    def test_year_end_projection_linear_extrapolation(self) -> None:
         # Closed $4000 by day 100 of a 365-day year → projected ≈ 4000 * 365/100
         rows = [
             _gap(current_year=2026,
@@ -193,7 +193,7 @@ class TestVelocityKpis:
         expected = 4000 * (365 / 100)
         assert kpis["ye_projected_$"] == pytest.approx(expected, rel=0.01)
 
-    def test_target_30_days_ratio(self):
+    def test_target_30_days_ratio(self) -> None:
         # 1 of 2 closed within 30 days → 0.5
         rows = [
             _gap(current_year=2026,
@@ -207,7 +207,7 @@ class TestVelocityKpis:
             kpis = get_velocity_kpis(tenant_id="1", year=2026, today=date(2026, 6, 30))
         assert kpis["days_to_close_target_30"] == pytest.approx(0.5)
 
-    def test_q1_q4_ratios(self):
+    def test_q1_q4_ratios(self) -> None:
         rows = [
             _gap(current_year=2026, resolved_at=datetime(2026, 2, 10),
                  created_at=datetime(2026, 1, 1)),   # Q1
@@ -223,7 +223,7 @@ class TestVelocityKpis:
         assert kpis["early_recapture_rate"] == pytest.approx(2 / 4)
         assert kpis["late_recapture_rate"] == pytest.approx(1 / 4)
 
-    def test_no_data_returns_zeros(self):
+    def test_no_data_returns_zeros(self) -> None:
         with patch("app.services.recapture_decay.raf_cursor", _cursor_cm([])):
             kpis = get_velocity_kpis(tenant_id="1", year=2026, today=date(2026, 6, 30))
         assert kpis["avg_days_to_close"] == 0.0
@@ -233,7 +233,7 @@ class TestVelocityKpis:
         assert kpis["closed_cohort_gaps"] == 0
         assert kpis["open_cohort_gaps"] == 0
 
-    def test_open_count_excludes_closed(self):
+    def test_open_count_excludes_closed(self) -> None:
         rows = [
             _gap(current_year=2026, status="open", resolved_at=None),
             _gap(current_year=2026, status="open", resolved_at=None),
@@ -253,7 +253,7 @@ class TestVelocityKpis:
 # ===========================================================================
 
 class TestSlowMovers:
-    def test_ranking_by_avg_days_to_close(self):
+    def test_ranking_by_avg_days_to_close(self) -> None:
         rows = [
             # HCC 85 closed in 10 days
             _gap(current_year=2026, hcc_code="85",
@@ -274,7 +274,7 @@ class TestSlowMovers:
         assert codes == ["111", "18", "85"]
         assert res[0]["avg_days_to_close"] == pytest.approx(100.0)
 
-    def test_no_closures_ranked_first(self):
+    def test_no_closures_ranked_first(self) -> None:
         # HCC 85 has 100-day avg; HCC 999 has only open gaps (no avg)
         rows = [
             _gap(current_year=2026, hcc_code="85",
@@ -292,7 +292,7 @@ class TestSlowMovers:
         assert res[0]["$_at_risk"] == pytest.approx(6000.0)
         assert res[0]["open_count"] == 2
 
-    def test_limit_clamps_results(self):
+    def test_limit_clamps_results(self) -> None:
         # 5 distinct HCCs, all with same speed → limit to 2
         rows = [
             _gap(current_year=2026, hcc_code=str(c),
@@ -304,7 +304,7 @@ class TestSlowMovers:
             res = get_top_slow_movers(tenant_id="1", year=2026, limit=2)
         assert len(res) == 2
 
-    def test_at_risk_only_counts_open(self):
+    def test_at_risk_only_counts_open(self) -> None:
         # One closed (3000) + one open (3000) for HCC 85 → at_risk = 3000
         rows = [
             _gap(current_year=2026, hcc_code="85", status="open",
@@ -327,36 +327,36 @@ class TestSlowMovers:
 # ===========================================================================
 
 class TestHelpers:
-    def test_safe_month_datetime(self):
+    def test_safe_month_datetime(self) -> None:
         assert _safe_month(datetime(2026, 7, 15)) == 7
 
-    def test_safe_month_iso_string(self):
+    def test_safe_month_iso_string(self) -> None:
         assert _safe_month("2026-07-15T10:00:00Z") == 7
 
-    def test_safe_month_unparseable_falls_back_to_december(self):
+    def test_safe_month_unparseable_falls_back_to_december(self) -> None:
         assert _safe_month("not a date") == 12
         assert _safe_month(None) == 12
 
-    def test_coerce_dt_strips_tzinfo(self):
+    def test_coerce_dt_strips_tzinfo(self) -> None:
         dt = _coerce_dt("2026-01-15T10:00:00Z")
         assert dt is not None
         assert dt.tzinfo is None
         assert dt.month == 1
 
-    def test_coerce_dt_handles_date(self):
+    def test_coerce_dt_handles_date(self) -> None:
         d = _coerce_dt(date(2026, 5, 1))
         assert d == datetime(2026, 5, 1)
 
-    def test_median_odd(self):
+    def test_median_odd(self) -> None:
         assert _median([1, 2, 3]) == 2
 
-    def test_median_even(self):
+    def test_median_even(self) -> None:
         assert _median([1, 2, 3, 4]) == 2.5
 
-    def test_median_empty(self):
+    def test_median_empty(self) -> None:
         assert _median([]) == 0.0
 
-    def test_is_leap_year(self):
+    def test_is_leap_year(self) -> None:
         assert _is_leap(2024) is True
         assert _is_leap(2025) is False
         assert _is_leap(2000) is True

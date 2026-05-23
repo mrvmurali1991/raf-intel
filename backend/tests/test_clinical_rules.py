@@ -85,18 +85,18 @@ def _one(loinc_set) -> LabResult:
 # ===========================================================================
 
 class TestHCC37:
-    def test_happy_path_dm_complication_plus_rx(self):
+    def test_happy_path_dm_complication_plus_rx(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["E11.22"],   # nephropathy complication
             medications=[Medication(rx_class="metformin")],
         )
         assert RULE_HCC37.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_missing_evidence_no_dm_at_all(self):
+    def test_missing_evidence_no_dm_at_all(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I10"])
         assert RULE_HCC37.evaluate(ctx).status == RuleStatus.FAIL
 
-    def test_insufficient_specificity_dm_without_complication(self):
+    def test_insufficient_specificity_dm_without_complication(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["E11.9"],    # uncomplicated
             medications=[Medication(rx_class="insulin")],
@@ -105,7 +105,7 @@ class TestHCC37:
         assert r.status == RuleStatus.FAIL
         assert any("complication" in msg.lower() for msg in r.reasons)
 
-    def test_warn_when_complication_but_no_rx(self):
+    def test_warn_when_complication_but_no_rx(self) -> None:
         ctx = _ctx(diagnoses_icd10=["E11.22"], medications=[])
         assert RULE_HCC37.evaluate(ctx).status == RuleStatus.WARN
 
@@ -115,18 +115,18 @@ class TestHCC37:
 # ===========================================================================
 
 class TestHCC38:
-    def test_happy_path_dm_plus_a1c(self):
+    def test_happy_path_dm_plus_a1c(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["E11.9"],
             labs=[_one(LOINC_HBA1C)],
         )
         assert RULE_HCC38.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_missing_dm_fails(self):
+    def test_missing_dm_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I10"])
         assert RULE_HCC38.evaluate(ctx).status == RuleStatus.FAIL
 
-    def test_no_rx_no_a1c_warns(self):
+    def test_no_rx_no_a1c_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["E11.9"])
         assert RULE_HCC38.evaluate(ctx).status == RuleStatus.WARN
 
@@ -136,14 +136,14 @@ class TestHCC38:
 # ===========================================================================
 
 class TestHCC_CKD:
-    def test_happy_path_stage_coded_plus_egfr(self):
+    def test_happy_path_stage_coded_plus_egfr(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["N18.4"],
             labs=[_one(LOINC_EGFR)],
         )
         assert RULE_HCC_CKD.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_unspecified_ckd_fails(self):
+    def test_unspecified_ckd_fails(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["N18.9"],
             labs=[_one(LOINC_EGFR)],
@@ -152,11 +152,11 @@ class TestHCC_CKD:
         assert r.status == RuleStatus.FAIL
         assert any("N18.9" in msg or "unspecified" in msg.lower() for msg in r.reasons)
 
-    def test_stage_coded_but_no_egfr_warns(self):
+    def test_stage_coded_but_no_egfr_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["N18.4"])
         assert RULE_HCC_CKD.evaluate(ctx).status == RuleStatus.WARN
 
-    def test_no_ckd_at_all_fails(self):
+    def test_no_ckd_at_all_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I10"])
         assert RULE_HCC_CKD.evaluate(ctx).status == RuleStatus.FAIL
 
@@ -166,18 +166,18 @@ class TestHCC_CKD:
 # ===========================================================================
 
 class TestHCC226:
-    def test_happy_path_specific_chf_plus_rx(self):
+    def test_happy_path_specific_chf_plus_rx(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["I50.22"],
             medications=[Medication(rx_class="beta blocker")],
         )
         assert RULE_HCC226.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_no_chf_fails(self):
+    def test_no_chf_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["E11.9"])
         assert RULE_HCC226.evaluate(ctx).status == RuleStatus.FAIL
 
-    def test_unspecified_chf_warns(self):
+    def test_unspecified_chf_warns(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["I50.9"],
             medications=[Medication(rx_class="beta blocker")],
@@ -186,7 +186,7 @@ class TestHCC226:
         assert r.status == RuleStatus.WARN
         assert any("I50.9" in msg or "unspecified" in msg.lower() for msg in r.reasons)
 
-    def test_specific_but_no_rx_no_bnp_warns(self):
+    def test_specific_but_no_rx_no_bnp_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I50.22"])
         assert RULE_HCC226.evaluate(ctx).status == RuleStatus.WARN
 
@@ -196,25 +196,25 @@ class TestHCC226:
 # ===========================================================================
 
 class TestHCC280:
-    def test_happy_path_copd_plus_pft(self):
+    def test_happy_path_copd_plus_pft(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["J44.9"],
             labs=[_one(LOINC_PFT)],
         )
         assert RULE_HCC280.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_happy_path_copd_plus_inhaler(self):
+    def test_happy_path_copd_plus_inhaler(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["J44.9"],
             medications=[Medication(rx_class="LAMA")],
         )
         assert RULE_HCC280.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_no_copd_fails(self):
+    def test_no_copd_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["E11.9"])
         assert RULE_HCC280.evaluate(ctx).status == RuleStatus.FAIL
 
-    def test_copd_no_pft_no_rx_warns(self):
+    def test_copd_no_pft_no_rx_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["J44.9"])
         assert RULE_HCC280.evaluate(ctx).status == RuleStatus.WARN
 
@@ -224,21 +224,21 @@ class TestHCC280:
 # ===========================================================================
 
 class TestHCC155_MDD:
-    def test_happy_path_specific_mdd_plus_rx(self):
+    def test_happy_path_specific_mdd_plus_rx(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["F33.1"],
             medications=[Medication(rx_class="SSRI")],
         )
         assert RULE_HCC155_MDD.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_no_mdd_gets_demoted_to_warn(self):
+    def test_no_mdd_gets_demoted_to_warn(self) -> None:
         """advisory_only=True: FAIL is demoted to WARN."""
         ctx = _ctx(diagnoses_icd10=["I10"])
         r = RULE_HCC155_MDD.evaluate(ctx)
         assert r.status == RuleStatus.WARN
         assert any("advisory" in msg.lower() for msg in r.reasons)
 
-    def test_unspecified_mdd_warns(self):
+    def test_unspecified_mdd_warns(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["F32.9"],
             medications=[Medication(rx_class="SSRI")],
@@ -251,14 +251,14 @@ class TestHCC155_MDD:
 # ===========================================================================
 
 class TestActiveCancer:
-    def test_happy_path_cancer_plus_chemo(self):
+    def test_happy_path_cancer_plus_chemo(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["C50.911"],
             medications=[Medication(rx_class="chemotherapy")],
         )
         assert RULE_ACTIVE_CANCER.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_happy_path_cancer_plus_oncology_encounter(self):
+    def test_happy_path_cancer_plus_oncology_encounter(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["C50.911"],
             encounters=[Encounter(
@@ -268,13 +268,13 @@ class TestActiveCancer:
         )
         assert RULE_ACTIVE_CANCER.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_only_history_of_cancer_fails(self):
+    def test_only_history_of_cancer_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["Z85.3"])
         r = RULE_ACTIVE_CANCER.evaluate(ctx)
         assert r.status == RuleStatus.FAIL
         assert any("Z85" in msg for msg in r.reasons)
 
-    def test_cancer_coded_but_no_treatment_warns(self):
+    def test_cancer_coded_but_no_treatment_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["C50.911"])
         assert RULE_ACTIVE_CANCER.evaluate(ctx).status == RuleStatus.WARN
 
@@ -284,18 +284,18 @@ class TestActiveCancer:
 # ===========================================================================
 
 class TestStroke:
-    def test_happy_path(self):
+    def test_happy_path(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["I69.320"],
             medications=[Medication(rx_class="aspirin")],
         )
         assert RULE_HCC_STROKE.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_no_stroke_fails_demoted_to_warn(self):
+    def test_no_stroke_fails_demoted_to_warn(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I10"])
         assert RULE_HCC_STROKE.evaluate(ctx).status == RuleStatus.WARN
 
-    def test_stroke_no_rx_warns(self):
+    def test_stroke_no_rx_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I69.320"])
         assert RULE_HCC_STROKE.evaluate(ctx).status == RuleStatus.WARN
 
@@ -305,7 +305,7 @@ class TestStroke:
 # ===========================================================================
 
 class TestAcuteMI:
-    def test_happy_path(self):
+    def test_happy_path(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["I21.01"],
             encounters=[Encounter(
@@ -315,13 +315,13 @@ class TestAcuteMI:
         )
         assert RULE_HCC228_MI.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_only_old_mi_fails(self):
+    def test_only_old_mi_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I25.2"])
         r = RULE_HCC228_MI.evaluate(ctx)
         assert r.status == RuleStatus.FAIL
         assert any("I25.2" in msg or "old" in msg.lower() for msg in r.reasons)
 
-    def test_acute_mi_no_cardiology_warns(self):
+    def test_acute_mi_no_cardiology_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I21.01"])
         assert RULE_HCC228_MI.evaluate(ctx).status == RuleStatus.WARN
 
@@ -331,15 +331,15 @@ class TestAcuteMI:
 # ===========================================================================
 
 class TestPVD:
-    def test_happy_path_specific_pvd(self):
+    def test_happy_path_specific_pvd(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I70.213"])
         assert RULE_HCC262_PVD.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_unspecified_pvd_warns(self):
+    def test_unspecified_pvd_warns(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I73.9"])
         assert RULE_HCC262_PVD.evaluate(ctx).status == RuleStatus.WARN
 
-    def test_no_pvd_demoted_to_warn(self):
+    def test_no_pvd_demoted_to_warn(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I10"])
         # advisory_only demotes FAIL to WARN
         assert RULE_HCC262_PVD.evaluate(ctx).status == RuleStatus.WARN
@@ -350,15 +350,15 @@ class TestPVD:
 # ===========================================================================
 
 class TestAmputation:
-    def test_happy_path_z_code(self):
+    def test_happy_path_z_code(self) -> None:
         ctx = _ctx(diagnoses_icd10=["Z89.511"])
         assert RULE_HCC409_AMP.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_happy_path_acute_trauma(self):
+    def test_happy_path_acute_trauma(self) -> None:
         ctx = _ctx(diagnoses_icd10=["S78.111A"])
         assert RULE_HCC409_AMP.evaluate(ctx).status == RuleStatus.PASS
 
-    def test_missing_fails(self):
+    def test_missing_fails(self) -> None:
         ctx = _ctx(diagnoses_icd10=["I10"])
         assert RULE_HCC409_AMP.evaluate(ctx).status == RuleStatus.FAIL
 
@@ -369,7 +369,7 @@ class TestAmputation:
 
 class TestValidatorIntegration:
 
-    def test_single_pass(self):
+    def test_single_pass(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["E11.22"],
             medications=[Medication(rx_class="metformin")],
@@ -378,13 +378,13 @@ class TestValidatorIntegration:
         assert rep.overall_status == RuleStatus.PASS
         assert rep.failed() == []
 
-    def test_single_fail_blocks_hcc(self):
+    def test_single_fail_blocks_hcc(self) -> None:
         ctx = _ctx(diagnoses_icd10=["N18.9"], labs=[_one(LOINC_EGFR)])
         rep = validate_billed_hccs([BilledHCC(hcc=327)], ctx)
         assert rep.overall_status == RuleStatus.FAIL
         assert [o.hcc for o in rep.failed()] == [327]
 
-    def test_multi_hcc_mixed(self):
+    def test_multi_hcc_mixed(self) -> None:
         ctx = _ctx(
             diagnoses_icd10=["E11.22", "I50.9"],
             medications=[Medication(rx_class="metformin")],
@@ -396,25 +396,25 @@ class TestValidatorIntegration:
         assert rep.overall_status == RuleStatus.WARN
         assert [o.hcc for o in rep.warnings()] == [226]
 
-    def test_unknown_hcc_passes_automatically(self):
+    def test_unknown_hcc_passes_automatically(self) -> None:
         """HCCs without a registered rule must not be blocked."""
         ctx = _ctx()
         rep = validate_billed_hccs([BilledHCC(hcc=99999)], ctx)
         assert rep.overall_status == RuleStatus.PASS
 
-    def test_cancer_family_lookup(self):
+    def test_cancer_family_lookup(self) -> None:
         """HCC 18 (a cancer family HCC) should inherit the active-cancer rule."""
         ctx = _ctx(diagnoses_icd10=["Z85.3"])   # only history-of
         rep = validate_billed_hccs([BilledHCC(hcc=18)], ctx)
         assert rep.overall_status == RuleStatus.FAIL
 
-    def test_ckd_family_lookup(self):
+    def test_ckd_family_lookup(self) -> None:
         """HCC 326 and 328 should inherit the CKD stage-specificity rule."""
         ctx = _ctx(diagnoses_icd10=["N18.9"])
         rep = validate_billed_hccs([BilledHCC(hcc=326)], ctx)
         assert rep.overall_status == RuleStatus.FAIL
 
-    def test_report_to_dict_shape(self):
+    def test_report_to_dict_shape(self) -> None:
         ctx = _ctx(diagnoses_icd10=["E11.22"],
                    medications=[Medication(rx_class="metformin")])
         rep = validate_billed_hccs([BilledHCC(hcc=37)], ctx)
@@ -428,7 +428,7 @@ class TestValidatorIntegration:
 # Registry completeness — ensure we have rules for 10+ high-billed HCCs
 # ===========================================================================
 
-def test_registry_has_minimum_rules():
+def test_registry_has_minimum_rules() -> None:
     from app.services.raf.clinical_rules.registry import ALL_RULES
     assert len(ALL_RULES) >= 10, (
         f"Registry must contain >=10 rules (target: DM/CKD/CHF/COPD/MDD/"

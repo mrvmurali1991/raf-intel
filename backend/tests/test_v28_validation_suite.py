@@ -174,7 +174,7 @@ class TestV28ValidationSuite:
     """
 
     @pytest.mark.parametrize("icd, expected_hcc, description", V28_VALIDATION_CASES)
-    def test_v28_mapping(self, icd: str, expected_hcc, description: str):
+    def test_v28_mapping(self, icd: str, expected_hcc, description: str) -> None:
         result = dx_to_cc_default.get((icd, MODEL))
 
         if expected_hcc is None:

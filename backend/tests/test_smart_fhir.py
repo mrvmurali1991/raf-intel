@@ -58,7 +58,7 @@ REQUIRED_DISCOVERY_KEYS = {
 }
 
 
-def test_smart_configuration_discovery_doc_is_valid(client):
+def test_smart_configuration_discovery_doc_is_valid(client) -> None:
     """Discovery doc must include every SMART 2.0 metadata field we promise."""
     r = client.get("/smart/.well-known/smart-configuration")
     assert r.status_code == 200, r.text
@@ -96,7 +96,7 @@ def test_smart_configuration_discovery_doc_is_valid(client):
         assert required_capability in body["capabilities"], required_capability
 
 
-def test_smart_configuration_content_type_is_json(client):
+def test_smart_configuration_content_type_is_json(client) -> None:
     """RFC 8414 §3.2 requires application/json."""
     r = client.get("/smart/.well-known/smart-configuration")
     assert "application/json" in r.headers.get("content-type", "")
@@ -107,7 +107,7 @@ def test_smart_configuration_content_type_is_json(client):
 # ---------------------------------------------------------------------------
 
 
-def test_smart_launch_renders_html_with_pkce_redirect(client):
+def test_smart_launch_renders_html_with_pkce_redirect(client) -> None:
     """Launch page must hand back HTML that boots the PKCE+authorize hand-off."""
     r = client.get(
         "/smart/launch",
@@ -145,7 +145,7 @@ def _do_authorize(client, code_challenge: str):
     return r
 
 
-def test_authorize_returns_302_with_code_and_state(client):
+def test_authorize_returns_302_with_code_and_state(client) -> None:
     _verifier, challenge = _make_pkce_pair()
     r = _do_authorize(client, challenge)
     assert r.status_code == 302, r.text
@@ -155,7 +155,7 @@ def test_authorize_returns_302_with_code_and_state(client):
     assert "state=xyz-state-001" in loc
 
 
-def test_authorize_rejects_non_s256_challenge(client):
+def test_authorize_rejects_non_s256_challenge(client) -> None:
     r = client.get(
         "/smart/authorize",
         params={
@@ -181,7 +181,7 @@ def _extract_code(location: str) -> str:
     raise AssertionError(f"no code in {location!r}")
 
 
-def test_token_happy_path_verifies_pkce_and_issues_bearer(client):
+def test_token_happy_path_verifies_pkce_and_issues_bearer(client) -> None:
     verifier, challenge = _make_pkce_pair()
     auth = _do_authorize(client, challenge)
     code = _extract_code(auth.headers["location"])
@@ -204,7 +204,7 @@ def test_token_happy_path_verifies_pkce_and_issues_bearer(client):
     assert body["access_token"]
 
 
-def test_token_rejects_wrong_pkce_verifier(client):
+def test_token_rejects_wrong_pkce_verifier(client) -> None:
     _verifier, challenge = _make_pkce_pair()
     auth = _do_authorize(client, challenge)
     code = _extract_code(auth.headers["location"])
@@ -223,7 +223,7 @@ def test_token_rejects_wrong_pkce_verifier(client):
     assert "PKCE" in tok.json().get("detail", "")
 
 
-def test_token_authorization_code_is_single_use(client):
+def test_token_authorization_code_is_single_use(client) -> None:
     verifier, challenge = _make_pkce_pair()
     auth = _do_authorize(client, challenge)
     code = _extract_code(auth.headers["location"])
@@ -241,7 +241,7 @@ def test_token_authorization_code_is_single_use(client):
     assert second.status_code == 400
 
 
-def test_token_client_credentials_grant_issues_bearer(client):
+def test_token_client_credentials_grant_issues_bearer(client) -> None:
     r = client.post(
         "/smart/token",
         data={
@@ -261,7 +261,7 @@ def test_token_client_credentials_grant_issues_bearer(client):
 # ---------------------------------------------------------------------------
 
 
-def test_cds_services_lists_both_services(client):
+def test_cds_services_lists_both_services(client) -> None:
     r = client.get("/cds-services")
     assert r.status_code == 200, r.text
     body = r.json()
@@ -296,7 +296,7 @@ def _mock_suspects_for_pid(rows: list[dict]):
 
 def test_hcc_suggestions_realtime_returns_condition_resources(
     client, _cds_hooks_secret
-):
+) -> None:
     fake_suspects = [
         {
             "id": 1,
@@ -348,7 +348,7 @@ def test_hcc_suggestions_realtime_returns_condition_resources(
     assert resource.get("clinicalStatus")
 
 
-def test_hcc_suggestions_realtime_requires_bearer(client, _cds_hooks_secret):
+def test_hcc_suggestions_realtime_requires_bearer(client, _cds_hooks_secret) -> None:
     with _mock_suspects_for_pid([]):
         r = client.post(
             "/cds-services/hcc-suggestions-realtime",
@@ -361,7 +361,7 @@ def test_hcc_suggestions_realtime_requires_bearer(client, _cds_hooks_secret):
     assert r.status_code == 401
 
 
-def test_hcc_suggestions_realtime_503_when_secret_unset(client, monkeypatch):
+def test_hcc_suggestions_realtime_503_when_secret_unset(client, monkeypatch) -> None:
     monkeypatch.delenv("CDS_HOOKS_SHARED_SECRET", raising=False)
     r = client.post(
         "/cds-services/hcc-suggestions-realtime",

@@ -153,7 +153,7 @@ def scorecard_script() -> list[dict[str, Any]]:
 # calculate_hcc_performance: shape + query-count regression.
 # ---------------------------------------------------------------------------
 
-def test_calculate_hcc_performance_shape_and_query_count(hcc_perf_script):
+def test_calculate_hcc_performance_shape_and_query_count(hcc_perf_script) -> None:
     """Locks the per-HCC row shape and asserts the post-optimization
     query budget (panel fetch + one unioned aggregate = 2 round-trips)."""
     from app.services import provider_service
@@ -210,7 +210,7 @@ def test_calculate_hcc_performance_shape_and_query_count(hcc_perf_script):
     assert by_code["HCC22"]["capture_rate"] == 0.0
 
 
-def test_calculate_hcc_performance_empty_panel_returns_empty_list():
+def test_calculate_hcc_performance_empty_panel_returns_empty_list() -> None:
     """Empty panel must short-circuit (single panel query, no aggregates)."""
     from app.services import provider_service
 
@@ -229,7 +229,7 @@ def test_calculate_hcc_performance_empty_panel_returns_empty_list():
 # calculate_provider_scorecard: shape + query-count regression.
 # ---------------------------------------------------------------------------
 
-def test_calculate_provider_scorecard_shape_and_query_count(scorecard_script):
+def test_calculate_provider_scorecard_shape_and_query_count(scorecard_script) -> None:
     """Locks the scorecard dict shape and asserts the post-optimization
     query budget. Was 12 round-trips, now 8 (one large conditional
     aggregate replaces 4 separate COUNT-DISTINCT queries; one suspect
@@ -295,7 +295,7 @@ def test_calculate_provider_scorecard_shape_and_query_count(scorecard_script):
     assert isinstance(result["documentation_quality_score"], float)
 
 
-def test_calculate_provider_scorecard_empty_panel_returns_empty_scorecard():
+def test_calculate_provider_scorecard_empty_panel_returns_empty_scorecard() -> None:
     """Empty panel returns _empty_scorecard with no aggregate queries fired."""
     from app.services import provider_service
 

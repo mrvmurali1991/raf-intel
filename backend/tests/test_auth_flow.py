@@ -116,17 +116,17 @@ class TestLoginHappyPath:
                 json={"email": "admin@raf.health", "password": "Admin@123"},
             )
 
-    def test_login_returns_200(self, client: TestClient):
+    def test_login_returns_200(self, client: TestClient) -> None:
         r = self._post_login(client)
         _assert_status(r, 200, "login")
 
-    def test_login_response_contains_access_token(self, client: TestClient):
+    def test_login_response_contains_access_token(self, client: TestClient) -> None:
         r = self._post_login(client)
         data = _assert_status(r, 200, "login")
         assert "access_token" in data, f"Missing access_token in login response: {data}"
         assert data["access_token"], "access_token must not be empty"
 
-    def test_login_response_contains_refresh_token(self, client: TestClient):
+    def test_login_response_contains_refresh_token(self, client: TestClient) -> None:
         r = self._post_login(client)
         data = _assert_status(r, 200, "login")
         assert "refresh_token" in data, (
@@ -134,7 +134,7 @@ class TestLoginHappyPath:
         )
         assert data["refresh_token"], "refresh_token must not be empty"
 
-    def test_login_response_contains_user_object(self, client: TestClient):
+    def test_login_response_contains_user_object(self, client: TestClient) -> None:
         r = self._post_login(client)
         data = _assert_status(r, 200, "login")
         assert "user" in data, f"Missing user object in login response: {data}"
@@ -143,7 +143,7 @@ class TestLoginHappyPath:
             f"User object missing required fields: {user}"
         )
 
-    def test_login_user_email_matches_request(self, client: TestClient):
+    def test_login_user_email_matches_request(self, client: TestClient) -> None:
         r = self._post_login(client)
         data = r.json()
         assert data.get("user", {}).get("email") == "admin@raf.health"
@@ -164,7 +164,7 @@ class TestLoginInvalidCredentials:
             side_effect=ValueError("Invalid email or password."),
         )
 
-    def test_wrong_password_returns_401(self, client: TestClient):
+    def test_wrong_password_returns_401(self, client: TestClient) -> None:
         with self._mock_auth_fail():
             r = client.post(
                 "/api/auth/login",
@@ -172,7 +172,7 @@ class TestLoginInvalidCredentials:
             )
         _assert_status(r, 401, "wrong password")
 
-    def test_nonexistent_email_returns_401(self, client: TestClient):
+    def test_nonexistent_email_returns_401(self, client: TestClient) -> None:
         with self._mock_auth_fail():
             r = client.post(
                 "/api/auth/login",
@@ -182,7 +182,7 @@ class TestLoginInvalidCredentials:
             f"Expected 401 or 422 for nonexistent email, got {r.status_code}"
         )
 
-    def test_invalid_email_format_returns_422(self, client: TestClient):
+    def test_invalid_email_format_returns_422(self, client: TestClient) -> None:
         """Pydantic validation: malformed email → 422 Unprocessable Entity."""
         r = client.post(
             "/api/auth/login",
@@ -192,7 +192,7 @@ class TestLoginInvalidCredentials:
             f"Expected 422 for malformed email, got {r.status_code}"
         )
 
-    def test_empty_password_returns_401_or_422(self, client: TestClient):
+    def test_empty_password_returns_401_or_422(self, client: TestClient) -> None:
         with self._mock_auth_fail():
             r = client.post(
                 "/api/auth/login",
@@ -202,7 +202,7 @@ class TestLoginInvalidCredentials:
             f"Expected 401 or 422 for empty password, got {r.status_code}"
         )
 
-    def test_error_response_does_not_expose_internals(self, client: TestClient):
+    def test_error_response_does_not_expose_internals(self, client: TestClient) -> None:
         """Error body must not contain stack traces or DB details."""
         with self._mock_auth_fail():
             r = client.post(
@@ -234,18 +234,18 @@ class TestProtectedEndpointNoToken:
     @pytest.mark.parametrize("method,path", PROTECTED_ENDPOINTS)
     def test_unauthenticated_request_returns_401(
         self, client: TestClient, method: str, path: str
-    ):
+    ) -> None:
         r = client.request(method, path)
         assert r.status_code == 401, (
             f"{method} {path} — expected 401 without token, got {r.status_code}"
         )
 
-    def test_bearer_missing_scheme_returns_401(self, client: TestClient):
+    def test_bearer_missing_scheme_returns_401(self, client: TestClient) -> None:
         """A raw token without 'Bearer' prefix must be rejected."""
         r = client.get("/api/auth/me", headers={"Authorization": "rawtoken123"})
         assert r.status_code == 401
 
-    def test_malformed_bearer_token_returns_401(self, client: TestClient):
+    def test_malformed_bearer_token_returns_401(self, client: TestClient) -> None:
         r = client.get("/api/auth/me", headers={"Authorization": "Bearer not.a.jwt"})
         assert r.status_code == 401
 
@@ -260,13 +260,13 @@ class TestProtectedEndpointWithToken:
 
     def test_get_me_returns_200_with_valid_token(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/me", headers=auth_headers)
         _assert_status(r, 200, "GET /api/auth/me")
 
     def test_get_me_returns_correct_email(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/me", headers=auth_headers)
         data = r.json()
         # auth_headers is viewer role
@@ -274,18 +274,18 @@ class TestProtectedEndpointWithToken:
 
     def test_get_sessions_returns_200_with_valid_token(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/sessions", headers=auth_headers)
         _assert_status(r, 200, "GET /api/auth/sessions")
 
-    def test_sessions_is_list(self, client: TestClient, auth_headers: dict):
+    def test_sessions_is_list(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/auth/sessions", headers=auth_headers)
         data = r.json()
         assert isinstance(data, list), f"Expected list of sessions, got: {type(data)}"
 
     def test_security_headers_present_on_authenticated_response(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         """HIPAA middleware must inject security headers on every response."""
         r = client.get("/api/auth/me", headers=auth_headers)
         assert "x-content-type-options" in r.headers, (
@@ -309,7 +309,7 @@ class TestTokenRefresh:
             return_value=_make_mock_login_response(),
         )
 
-    def test_refresh_returns_200(self, client: TestClient):
+    def test_refresh_returns_200(self, client: TestClient) -> None:
         tokens = _make_mock_login_response()
         with self._mock_refresh():
             r = client.post(
@@ -318,7 +318,7 @@ class TestTokenRefresh:
             )
         _assert_status(r, 200, "POST /api/auth/refresh")
 
-    def test_refresh_returns_new_access_token(self, client: TestClient):
+    def test_refresh_returns_new_access_token(self, client: TestClient) -> None:
         tokens = _make_mock_login_response()
         with self._mock_refresh():
             r = client.post(
@@ -331,7 +331,7 @@ class TestTokenRefresh:
         )
         assert data["access_token"], "Refreshed access_token must not be empty"
 
-    def test_refresh_returns_new_refresh_token(self, client: TestClient):
+    def test_refresh_returns_new_refresh_token(self, client: TestClient) -> None:
         tokens = _make_mock_login_response()
         with self._mock_refresh():
             r = client.post(
@@ -343,7 +343,7 @@ class TestTokenRefresh:
             f"Missing refresh_token in refresh response: {data}"
         )
 
-    def test_invalid_refresh_token_returns_401(self, client: TestClient):
+    def test_invalid_refresh_token_returns_401(self, client: TestClient) -> None:
         r = client.post(
             "/api/auth/refresh",
             json={"refresh_token": "not.a.valid.jwt.token"},
@@ -352,7 +352,7 @@ class TestTokenRefresh:
 
     def test_new_access_token_is_accepted_by_protected_endpoint(
         self, client: TestClient
-    ):
+    ) -> None:
         tokens = _make_mock_login_response()
         with self._mock_refresh():
             r_refresh = client.post(
@@ -391,26 +391,26 @@ class TestLogout:
         )
         return r.json()
 
-    def test_logout_returns_200(self, client: TestClient, session_tokens: dict):
+    def test_logout_returns_200(self, client: TestClient, session_tokens: dict) -> None:
         headers = {"Authorization": f"Bearer {session_tokens['access_token']}"}
         r = client.post("/api/auth/logout", headers=headers)
         _assert_status(r, 200, "POST /api/auth/logout")
 
     def test_logout_response_has_message(
         self, client: TestClient, session_tokens: dict
-    ):
+    ) -> None:
         headers = {"Authorization": f"Bearer {session_tokens['access_token']}"}
         r = client.post("/api/auth/logout", headers=headers)
         data = r.json()
         assert "message" in data, f"Logout response missing 'message': {data}"
 
-    def test_logout_without_token_returns_401(self, client: TestClient):
+    def test_logout_without_token_returns_401(self, client: TestClient) -> None:
         r = client.post("/api/auth/logout")
         _assert_status(r, 401, "logout without token")
 
     def test_access_after_logout_returns_401(
         self, client: TestClient, session_tokens: dict
-    ):
+    ) -> None:
         """
         After logout the session is revoked; the same access token must be rejected.
 
@@ -439,7 +439,7 @@ class TestLogout:
 class TestAccountLockout:
     """Accounts should be locked after 5 consecutive failed login attempts."""
 
-    def test_repeated_failures_lock_account(self, client: TestClient):
+    def test_repeated_failures_lock_account(self, client: TestClient) -> None:
         """
         After 5 wrong-password attempts the 6th should also be rejected.
 
@@ -503,7 +503,7 @@ class TestPasswordComplexity:
         )
         return r.status_code
 
-    def test_password_too_short_rejected(self, client: TestClient, _admin_hdrs: dict):
+    def test_password_too_short_rejected(self, client: TestClient, _admin_hdrs: dict) -> None:
         """Password shorter than 12 chars must be rejected."""
         status = self._attempt_create(client, _admin_hdrs, "Short@1!")
         assert status in (400, 422), (
@@ -512,14 +512,14 @@ class TestPasswordComplexity:
 
     def test_password_no_uppercase_rejected(
         self, client: TestClient, _admin_hdrs: dict
-    ):
+    ) -> None:
         """Password without an uppercase letter must be rejected."""
         status = self._attempt_create(client, _admin_hdrs, "nouppercase@99!")
         assert status in (400, 422), (
             f"Expected 400/422 for no-uppercase password, got {status}"
         )
 
-    def test_password_no_digit_rejected(self, client: TestClient, _admin_hdrs: dict):
+    def test_password_no_digit_rejected(self, client: TestClient, _admin_hdrs: dict) -> None:
         """Password without a digit must be rejected."""
         status = self._attempt_create(client, _admin_hdrs, "NoDigitPass@@@!")
         assert status in (400, 422), (
@@ -528,14 +528,14 @@ class TestPasswordComplexity:
 
     def test_password_no_special_char_rejected(
         self, client: TestClient, _admin_hdrs: dict
-    ):
+    ) -> None:
         """Password without a special character must be rejected."""
         status = self._attempt_create(client, _admin_hdrs, "NoSpecialChar99A")
         assert status in (400, 422), (
             f"Expected 400/422 for no-special-char password, got {status}"
         )
 
-    def test_common_password_rejected(self, client: TestClient, _admin_hdrs: dict):
+    def test_common_password_rejected(self, client: TestClient, _admin_hdrs: dict) -> None:
         """Common passwords (e.g. 'password') must be rejected even if they pass length."""
         # 'password123' padded to meet length/complexity rules would still match
         # the common-password blocklist.
@@ -544,7 +544,7 @@ class TestPasswordComplexity:
             f"Expected 400/422 for common password, got {status}"
         )
 
-    def test_strong_password_accepted(self, client: TestClient, _admin_hdrs: dict):
+    def test_strong_password_accepted(self, client: TestClient, _admin_hdrs: dict) -> None:
         """A well-formed HIPAA password must be accepted."""
         status = self._attempt_create(client, _admin_hdrs, _strong_password())
         assert status in (201, 409), (
@@ -586,7 +586,7 @@ class TestUserCRUD:
         )
         return r.json()
 
-    def test_create_user_returns_201(self, client: TestClient, admin_headers: dict):
+    def test_create_user_returns_201(self, client: TestClient, admin_headers: dict) -> None:
         with patch("app.routers.auth.create_user", return_value=dict(self._MOCK_CREATED_USER)):
             r = client.post(
                 "/api/auth/users",
@@ -597,13 +597,13 @@ class TestUserCRUD:
             f"Create user returned {r.status_code}: {r.text[:200]}"
         )
 
-    def test_create_user_response_has_id(self, created_user: dict):
+    def test_create_user_response_has_id(self, created_user: dict) -> None:
         assert "id" in created_user, f"Created user missing 'id': {created_user}"
         assert created_user["id"] > 0
 
     def test_create_user_duplicate_email_returns_409(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         with patch(
             "app.routers.auth.create_user",
             side_effect=ValueError("A user with this email already exists."),
@@ -623,21 +623,21 @@ class TestUserCRUD:
 
     def test_read_user_returns_200(
         self, client: TestClient, admin_headers: dict, created_user: dict
-    ):
+    ) -> None:
         uid = created_user["id"]
         r = client.get(f"/api/auth/users/{uid}", headers=admin_headers)
         _assert_status(r, 200, f"GET /api/auth/users/{uid}")
 
     def test_read_user_has_correct_email(
         self, client: TestClient, admin_headers: dict, created_user: dict
-    ):
+    ) -> None:
         uid = created_user["id"]
         r = client.get(f"/api/auth/users/{uid}", headers=admin_headers)
         assert r.json().get("email") == created_user["email"]
 
     def test_update_user_full_name(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         updated_user = {
             "id": 2, "email": "viewer@raf-test.health", "full_name": "Updated Full Name",
             "role": "viewer", "tenant_id": 1, "is_active": 1, "avatar_url": None,
@@ -654,7 +654,7 @@ class TestUserCRUD:
 
     def test_update_user_role(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         updated_user = {
             "id": 2, "email": "viewer@raf-test.health", "full_name": "Test Viewer",
             "role": "auditor", "tenant_id": 1, "is_active": 1, "avatar_url": None,
@@ -671,7 +671,7 @@ class TestUserCRUD:
 
     def test_deactivate_user_returns_200_or_204(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         deactivated = {
             "id": 2, "email": "viewer@raf-test.health", "full_name": "Test Viewer",
             "role": "viewer", "tenant_id": 1, "is_active": 0, "avatar_url": None,
@@ -685,13 +685,13 @@ class TestUserCRUD:
 
     def test_list_users_returns_200_for_admin(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/users", headers=admin_headers)
         _assert_status(r, 200, "GET /api/auth/users")
 
     def test_list_users_response_structure(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/users", headers=admin_headers)
         data = r.json()
         assert "users" in data and "count" in data, (
@@ -708,14 +708,14 @@ class TestUserCRUD:
 class TestRBAC:
     """Role-based access control: viewers cannot perform admin actions."""
 
-    def test_viewer_cannot_list_all_users(self, client: TestClient, auth_headers: dict):
+    def test_viewer_cannot_list_all_users(self, client: TestClient, auth_headers: dict) -> None:
         """GET /api/auth/users is admin/manager only."""
         r = client.get("/api/auth/users", headers=auth_headers)
         assert r.status_code in (401, 403), (
             f"Viewer should be denied /api/auth/users, got {r.status_code}"
         )
 
-    def test_viewer_cannot_create_user(self, client: TestClient, auth_headers: dict):
+    def test_viewer_cannot_create_user(self, client: TestClient, auth_headers: dict) -> None:
         email = _unique_email("rbac_blocked")
         r = client.post(
             "/api/auth/users",
@@ -728,7 +728,7 @@ class TestRBAC:
 
     def test_viewer_cannot_delete_user(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         """Viewer cannot delete a user — should get 401/403."""
         # Use user_id=99 (exists in mock users)
         r_del = client.delete("/api/auth/users/99", headers=auth_headers)
@@ -736,17 +736,17 @@ class TestRBAC:
             f"Viewer should be denied DELETE /api/auth/users/99, got {r_del.status_code}"
         )
 
-    def test_admin_can_list_users(self, client: TestClient, admin_headers: dict):
+    def test_admin_can_list_users(self, client: TestClient, admin_headers: dict) -> None:
         r = client.get("/api/auth/users", headers=admin_headers)
         _assert_status(r, 200, "admin GET /api/auth/users")
 
-    def test_admin_can_view_audit_log(self, client: TestClient, admin_headers: dict):
+    def test_admin_can_view_audit_log(self, client: TestClient, admin_headers: dict) -> None:
         r = client.get("/api/auth/audit-log", headers=admin_headers)
         _assert_status(r, 200, "admin GET /api/auth/audit-log")
 
     def test_viewer_cannot_access_audit_log(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/audit-log", headers=auth_headers)
         assert r.status_code in (401, 403), (
             f"Viewer should be denied /api/auth/audit-log, got {r.status_code}"
@@ -754,7 +754,7 @@ class TestRBAC:
 
     def test_invalid_role_on_create_returns_422(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         """Attempting to create a user with an unknown role → 422."""
         email = _unique_email("badrole")
         r = client.post(
@@ -792,14 +792,14 @@ class TestPermissions:
 
     def test_get_permissions_returns_200(
         self, client: TestClient, admin_headers: dict, viewer_user: dict
-    ):
+    ) -> None:
         uid = viewer_user["id"]
         r = client.get(f"/api/auth/users/{uid}/permissions", headers=admin_headers)
         _assert_status(r, 200, f"GET /api/auth/users/{uid}/permissions")
 
     def test_permissions_response_has_required_fields(
         self, client: TestClient, admin_headers: dict, viewer_user: dict
-    ):
+    ) -> None:
         uid = viewer_user["id"]
         r = client.get(f"/api/auth/users/{uid}/permissions", headers=admin_headers)
         data = r.json()
@@ -811,7 +811,7 @@ class TestPermissions:
 
     def test_viewer_role_is_reported_correctly(
         self, client: TestClient, admin_headers: dict, viewer_user: dict
-    ):
+    ) -> None:
         uid = viewer_user["id"]
         with patch(
             "app.routers.auth.get_user_permissions",
@@ -824,7 +824,7 @@ class TestPermissions:
 
     def test_viewer_cannot_read_other_users_permissions(
         self, client: TestClient, auth_headers: dict, viewer_user: dict
-    ):
+    ) -> None:
         uid = viewer_user["id"]
         r = client.get(f"/api/auth/users/{uid}/permissions", headers=auth_headers)
         assert r.status_code in (401, 403), (
@@ -833,7 +833,7 @@ class TestPermissions:
 
     def test_set_permissions_returns_200_for_admin(
         self, client: TestClient, admin_headers: dict, viewer_user: dict
-    ):
+    ) -> None:
         uid = viewer_user["id"]
         r = client.put(
             f"/api/auth/users/{uid}/permissions",
@@ -848,6 +848,6 @@ class TestPermissions:
 
     def test_get_nonexistent_user_permissions_returns_404(
         self, client: TestClient, admin_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/auth/users/999999999/permissions", headers=admin_headers)
         assert r.status_code == 404

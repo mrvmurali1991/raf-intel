@@ -59,7 +59,7 @@ class TestIcdNormalisation:
             (None, ""),
         ],
     )
-    def test_normalize(self, raw, expected):
+    def test_normalize(self, raw, expected) -> None:
         assert _normalize_icd(raw) == expected
 
     @pytest.mark.parametrize(
@@ -74,41 +74,41 @@ class TestIcdNormalisation:
             ("ICD10:E11.9", "", False),
         ],
     )
-    def test_icd_matches(self, stored, target, match):
+    def test_icd_matches(self, stored, target, match) -> None:
         assert _icd_matches(stored, target) is match
 
 
 class TestRecency:
-    def test_value_inside_window(self):
+    def test_value_inside_window(self) -> None:
         today = date(2026, 5, 5)
         recent = today - timedelta(days=10)
         assert _is_recent(recent, today=today) is True
 
-    def test_value_at_exact_cutoff(self):
+    def test_value_at_exact_cutoff(self) -> None:
         today = date(2026, 5, 5)
         cutoff = today - timedelta(days=RECENCY_WINDOW_DAYS)
         # cutoff is inclusive
         assert _is_recent(cutoff, today=today) is True
 
-    def test_value_outside_window(self):
+    def test_value_outside_window(self) -> None:
         today = date(2026, 5, 5)
         old = today - timedelta(days=RECENCY_WINDOW_DAYS + 1)
         assert _is_recent(old, today=today) is False
 
-    def test_none(self):
+    def test_none(self) -> None:
         assert _is_recent(None) is False
 
-    def test_iso_string(self):
+    def test_iso_string(self) -> None:
         today = date(2026, 5, 5)
         recent_iso = (today - timedelta(days=5)).isoformat()
         assert _is_recent(recent_iso, today=today) is True
 
-    def test_datetime(self):
+    def test_datetime(self) -> None:
         today = date(2026, 5, 5)
         recent = datetime(2026, 5, 1, 9, 0, 0)
         assert _is_recent(recent, today=today) is True
 
-    def test_garbage_value(self):
+    def test_garbage_value(self) -> None:
         assert _is_recent("not-a-date") is False
 
 
@@ -118,7 +118,7 @@ class TestRecency:
 
 
 class TestScoreFormula:
-    def test_zero_components_zero_score(self):
+    def test_zero_components_zero_score(self) -> None:
         score, breakdown = _score_components(
             icd_on_problem_list=False,
             problem_list_recent=False,
@@ -134,7 +134,7 @@ class TestScoreFormula:
         }
         assert _tier(score) == "weak"
 
-    def test_problem_list_only(self):
+    def test_problem_list_only(self) -> None:
         score, breakdown = _score_components(
             icd_on_problem_list=True,
             problem_list_recent=False,
@@ -145,7 +145,7 @@ class TestScoreFormula:
         assert breakdown["problem_list"] == 30
         assert _tier(score) == "weak"  # 30 < 40
 
-    def test_moderate_threshold_at_40(self):
+    def test_moderate_threshold_at_40(self) -> None:
         # problem_list (30) + 1 MEAT (10) = 40 → moderate
         score, _ = _score_components(
             icd_on_problem_list=True,
@@ -156,7 +156,7 @@ class TestScoreFormula:
         assert score == TIER_MODERATE_MIN
         assert _tier(score) == "moderate"
 
-    def test_just_below_moderate_is_weak(self):
+    def test_just_below_moderate_is_weak(self) -> None:
         # 30 problem_list + 0 = 30 → weak
         score, _ = _score_components(
             icd_on_problem_list=True,
@@ -167,7 +167,7 @@ class TestScoreFormula:
         assert score == 30
         assert _tier(score) == "weak"
 
-    def test_strong_threshold_at_70(self):
+    def test_strong_threshold_at_70(self) -> None:
         # 30 + 20 + 20 = 70 → strong
         score, _ = _score_components(
             icd_on_problem_list=True,
@@ -178,7 +178,7 @@ class TestScoreFormula:
         assert score == TIER_STRONG_MIN
         assert _tier(score) == "strong"
 
-    def test_all_components_max_100(self):
+    def test_all_components_max_100(self) -> None:
         score, breakdown = _score_components(
             icd_on_problem_list=True,
             problem_list_recent=True,
@@ -189,7 +189,7 @@ class TestScoreFormula:
         assert breakdown["meat"] == MEAT_MAX_SCORE
         assert _tier(score) == "strong"
 
-    def test_meat_capped_at_30(self):
+    def test_meat_capped_at_30(self) -> None:
         # All four MEAT elements = 4 * SCORE_PER_MEAT = 40 raw, must cap to 30
         _, breakdown = _score_components(
             icd_on_problem_list=False,
@@ -210,7 +210,7 @@ class TestScoreFormula:
             ({"m": 1, "e": 1, "a": 1, "t": 1}, 30),  # capped
         ],
     )
-    def test_meat_progression(self, meat, expected_meat_pts):
+    def test_meat_progression(self, meat, expected_meat_pts) -> None:
         _, breakdown = _score_components(
             icd_on_problem_list=False,
             problem_list_recent=False,
@@ -232,12 +232,12 @@ class TestTier:
             (100, "strong"),
         ],
     )
-    def test_tier_boundaries(self, score, expected):
+    def test_tier_boundaries(self, score, expected) -> None:
         assert _tier(score) == expected
 
 
 class TestRecommendedActions:
-    def test_no_problem_list_action_first(self):
+    def test_no_problem_list_action_first(self) -> None:
         actions = _recommended_actions(
             icd_on_problem_list=False,
             problem_list_recent=False,
@@ -246,7 +246,7 @@ class TestRecommendedActions:
         )
         assert any("problem list" in a.lower() for a in actions)
 
-    def test_stale_problem_list_suggests_refresh(self):
+    def test_stale_problem_list_suggests_refresh(self) -> None:
         actions = _recommended_actions(
             icd_on_problem_list=True,
             problem_list_recent=False,
@@ -255,7 +255,7 @@ class TestRecommendedActions:
         )
         assert any("reaffirm" in a.lower() or "refresh" in a.lower() for a in actions)
 
-    def test_no_visit_suggests_scheduling(self):
+    def test_no_visit_suggests_scheduling(self) -> None:
         actions = _recommended_actions(
             icd_on_problem_list=True,
             problem_list_recent=True,
@@ -264,7 +264,7 @@ class TestRecommendedActions:
         )
         assert any("schedule" in a.lower() and "visit" in a.lower() for a in actions)
 
-    def test_missing_meat_listed(self):
+    def test_missing_meat_listed(self) -> None:
         actions = _recommended_actions(
             icd_on_problem_list=True,
             problem_list_recent=True,
@@ -275,7 +275,7 @@ class TestRecommendedActions:
         assert meat_action is not None
         assert "E" in meat_action and "A" in meat_action
 
-    def test_full_strong_no_actions(self):
+    def test_full_strong_no_actions(self) -> None:
         actions = _recommended_actions(
             icd_on_problem_list=True,
             problem_list_recent=True,
@@ -312,7 +312,7 @@ def _gap_row(gap_id: int = 1, **overrides):
 
 
 class TestComputeGapReadiness:
-    def test_strong_gap_full_evidence(self):
+    def test_strong_gap_full_evidence(self) -> None:
         with (
             patch.object(svc, "_load_gap", return_value=_gap_row()),
             patch.object(
@@ -345,7 +345,7 @@ class TestComputeGapReadiness:
         assert payload["recommended_actions"] == []
         assert payload["last_encounter_in_window"] == "2026-04-30"
 
-    def test_weak_gap_no_evidence(self):
+    def test_weak_gap_no_evidence(self) -> None:
         with (
             patch.object(svc, "_load_gap", return_value=_gap_row()),
             patch.object(svc, "_fetch_problem_list", return_value=[]),
@@ -365,7 +365,7 @@ class TestComputeGapReadiness:
         assert "Add condition to active problem list" in payload["recommended_actions"]
         assert any("Schedule" in a for a in payload["recommended_actions"])
 
-    def test_moderate_gap_problem_list_but_stale_no_encounter(self):
+    def test_moderate_gap_problem_list_but_stale_no_encounter(self) -> None:
         # Problem list match, but begdate > 90 days, no encounter, no MEAT
         # → 30 only → weak
         with (
@@ -397,12 +397,12 @@ class TestComputeGapReadiness:
         assert payload["components"]["problem_list"] is True
         assert payload["components"]["problem_list_recent"] is False
 
-    def test_unknown_gap_raises_lookup(self):
+    def test_unknown_gap_raises_lookup(self) -> None:
         with patch.object(svc, "_load_gap", return_value=None):
             with pytest.raises(LookupError):
                 compute_gap_readiness(gap_id=999, tenant_id="1")
 
-    def test_problem_list_match_handles_dotted_icd(self):
+    def test_problem_list_match_handles_dotted_icd(self) -> None:
         # Problem list stores 'ICD10:I50.9', gap stores 'I50.9' — must match
         with (
             patch.object(svc, "_load_gap", return_value=_gap_row(icd10_code="I50.9")),
@@ -467,7 +467,7 @@ class TestBulkAndSummary:
 
         return gaps, fake_problem, fake_enc, fake_meat
 
-    def test_bulk_returns_per_gap_payload(self):
+    def test_bulk_returns_per_gap_payload(self) -> None:
         gaps, fake_problem, fake_enc, fake_meat = self._patches_for_two_gaps()
 
         with (
@@ -486,7 +486,7 @@ class TestBulkAndSummary:
         assert items[1]["score"] == 0
         assert items[1]["defensibility_tier"] == "weak"
 
-    def test_summary_aggregates_distribution(self):
+    def test_summary_aggregates_distribution(self) -> None:
         gaps, fake_problem, fake_enc, fake_meat = self._patches_for_two_gaps()
 
         with (
@@ -506,7 +506,7 @@ class TestBulkAndSummary:
         # Only the weak gap has actions
         assert summary["actionable_gaps"] == 1
 
-    def test_summary_no_gaps(self):
+    def test_summary_no_gaps(self) -> None:
         with patch.object(svc, "_load_gaps_for_year", return_value=[]):
             summary = compute_readiness_summary(tenant_id="1", year=2026)
 
@@ -524,7 +524,7 @@ class TestBulkAndSummary:
 
 
 class TestMissingData:
-    def test_problem_list_db_failure_returns_empty(self):
+    def test_problem_list_db_failure_returns_empty(self) -> None:
         # When openemr_cursor raises, _fetch_problem_list must return []
         with patch(
             "app.services.recapture_readiness_service.openemr_cursor",
@@ -532,7 +532,7 @@ class TestMissingData:
         ):
             assert svc._fetch_problem_list(42) == []
 
-    def test_meat_db_failure_returns_zeros(self):
+    def test_meat_db_failure_returns_zeros(self) -> None:
         with patch(
             "app.services.recapture_readiness_service.raf_cursor",
             side_effect=Exception("boom"),
@@ -541,7 +541,7 @@ class TestMissingData:
                 "m": 0, "e": 0, "a": 0, "t": 0,
             }
 
-    def test_encounter_db_failure_returns_zero_count(self):
+    def test_encounter_db_failure_returns_zero_count(self) -> None:
         with patch(
             "app.services.recapture_readiness_service.openemr_cursor",
             side_effect=Exception("boom"),
@@ -549,7 +549,7 @@ class TestMissingData:
             out = svc._fetch_recent_encounters(42)
             assert out == {"count": 0, "last_date": None}
 
-    def test_invalid_patient_id(self):
+    def test_invalid_patient_id(self) -> None:
         # Non-numeric pid must not raise
         assert svc._fetch_problem_list("not-a-number") == []
         assert svc._fetch_recent_encounters("not-a-number") == {

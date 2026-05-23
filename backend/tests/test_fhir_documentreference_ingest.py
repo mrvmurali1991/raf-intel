@@ -133,7 +133,7 @@ def _mock_raf_cursor():
 class TestFhirDocumentReferenceIngest:
     """Core pipeline tests."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         _dedup_store.clear()
 
     def _run_ingest(self, adapter_mock, patient_row: dict | None = None):
@@ -173,7 +173,7 @@ class TestFhirDocumentReferenceIngest:
 
         return processed
 
-    def test_three_docs_processed(self):
+    def test_three_docs_processed(self) -> None:
         """3 docs → each returns status success."""
         adapter = MagicMock()
         adapter.fetch_binary.return_value = (FAKE_PDF, "application/pdf")
@@ -184,7 +184,7 @@ class TestFhirDocumentReferenceIngest:
         for r in results:
             assert r["status"] == "success", f"Expected success, got {r}"
 
-    def test_six_suspects_persisted(self):
+    def test_six_suspects_persisted(self) -> None:
         """2 suspects × 3 docs = 6 suspects_persisted total."""
         adapter = MagicMock()
         adapter.fetch_binary.return_value = (FAKE_PDF, "application/pdf")
@@ -193,7 +193,7 @@ class TestFhirDocumentReferenceIngest:
         total = sum(r.get("suspects_persisted", 0) for r in results)
         assert total == 6
 
-    def test_dedup_row_inserted(self):
+    def test_dedup_row_inserted(self) -> None:
         """After first run, fhir_documents_processed must contain all 3 doc IDs."""
         adapter = MagicMock()
         adapter.fetch_binary.return_value = (FAKE_PDF, "application/pdf")
@@ -204,7 +204,7 @@ class TestFhirDocumentReferenceIngest:
         assert ("tenant1", "docB") in _dedup_store
         assert ("tenant1", "docC") in _dedup_store
 
-    def test_idempotency_second_run_already_processed(self):
+    def test_idempotency_second_run_already_processed(self) -> None:
         """Second run on same docs returns 'already_processed' for all 3."""
         adapter = MagicMock()
         adapter.fetch_binary.return_value = (FAKE_PDF, "application/pdf")
@@ -220,7 +220,7 @@ class TestFhirDocumentReferenceIngest:
                 f"Expected already_processed on second run, got {r}"
             )
 
-    def test_fetch_binary_called_for_each_doc(self):
+    def test_fetch_binary_called_for_each_doc(self) -> None:
         """fetch_binary must be called once per document."""
         adapter = MagicMock()
         adapter.fetch_binary.return_value = (FAKE_PDF, "application/pdf")
@@ -229,7 +229,7 @@ class TestFhirDocumentReferenceIngest:
 
         assert adapter.fetch_binary.call_count == 3
 
-    def test_fetch_binary_error_captured(self):
+    def test_fetch_binary_error_captured(self) -> None:
         """If fetch_binary raises, status is 'fetch_error' and no suspects persisted."""
         import app.services.fhir_document_ingest as svc
 
@@ -257,7 +257,7 @@ class TestFhirDocumentReferenceIngest:
 class TestListDocumentReferences:
     """Unit tests for the adapter method."""
 
-    def test_returns_entries_list(self):
+    def test_returns_entries_list(self) -> None:
         """list_document_references should filter to DocumentReference resourceType."""
         from app.services.vendor_adapters.openemr_fhir import OpenEMRFhirAdapter
 
@@ -285,7 +285,7 @@ class TestListDocumentReferences:
         assert len(entries) == 3
         assert all(e["resource"]["resourceType"] == "DocumentReference" for e in entries)
 
-    def test_params_built_correctly(self):
+    def test_params_built_correctly(self) -> None:
         """since and _count should appear in the FHIR query params."""
         from app.services.vendor_adapters.openemr_fhir import OpenEMRFhirAdapter
 
@@ -321,7 +321,7 @@ class TestListDocumentReferences:
 class TestFetchBinary:
     """Unit tests for fetch_binary."""
 
-    def test_raw_bytes_returned(self):
+    def test_raw_bytes_returned(self) -> None:
         """fetch_binary returns (bytes, mime_type) for raw PDF response."""
         from app.services.vendor_adapters.openemr_fhir import OpenEMRFhirAdapter
         import httpx
@@ -358,7 +358,7 @@ class TestFetchBinary:
         assert result_bytes == FAKE_PDF
         assert result_mime == "application/pdf"
 
-    def test_full_url_passed_directly(self):
+    def test_full_url_passed_directly(self) -> None:
         """Full https:// URL must be used as-is, not prefixed with base_url."""
         from app.services.vendor_adapters.openemr_fhir import OpenEMRFhirAdapter
         import httpx

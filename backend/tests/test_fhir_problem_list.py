@@ -33,7 +33,7 @@ from app.services.fhir_problem_list import (
 # ---------------------------------------------------------------------------
 
 
-def test_build_condition_body_shape():
+def test_build_condition_body_shape() -> None:
     body = build_condition_body(
         patient_emr_pid="3",
         icd10_code="E11.22",
@@ -75,7 +75,7 @@ def test_build_condition_body_shape():
     assert cat_coding["code"] == "problem-list-item"
 
 
-def test_build_condition_body_defaults_recorded_date_to_today():
+def test_build_condition_body_defaults_recorded_date_to_today() -> None:
     body = build_condition_body(
         patient_emr_pid="9",
         icd10_code="J44.9",
@@ -102,7 +102,7 @@ def _make_fake_adapter() -> MagicMock:
     return adapter
 
 
-def test_push_problem_list_condition_happy_path():
+def test_push_problem_list_condition_happy_path() -> None:
     adapter = _make_fake_adapter()
 
     fake_resp = MagicMock()
@@ -143,7 +143,7 @@ def test_push_problem_list_condition_happy_path():
     assert sent["code"]["coding"][0]["code"] == "E11.22"
 
 
-def test_push_problem_list_condition_raises_on_4xx():
+def test_push_problem_list_condition_raises_on_4xx() -> None:
     adapter = _make_fake_adapter()
     fake_resp = MagicMock()
     fake_resp.status_code = 400
@@ -211,7 +211,7 @@ def _patch_router_guards():
 
 def test_action_accept_suspect_uses_fhir_when_push_to_emr_true(
     client, admin_headers, accept_result
-):
+) -> None:
     with (
         patch(
             "app.routers.raf_central.accept_suspect", return_value=accept_result
@@ -256,7 +256,7 @@ def test_action_accept_suspect_uses_fhir_when_push_to_emr_true(
 
 def test_action_accept_suspect_falls_back_to_push_medical_problem_on_fhir_failure(
     client, admin_headers, accept_result
-):
+) -> None:
     with (
         patch(
             "app.routers.raf_central.accept_suspect", return_value=accept_result
@@ -294,7 +294,7 @@ def test_action_accept_suspect_falls_back_to_push_medical_problem_on_fhir_failur
 
 def test_action_accept_suspect_records_force_source_in_audit(
     client, admin_headers, accept_result
-):
+) -> None:
     with (
         patch(
             "app.routers.raf_central.accept_suspect", return_value=accept_result
@@ -333,7 +333,7 @@ def test_action_accept_suspect_records_force_source_in_audit(
 
 def test_action_accept_suspect_emits_reconcile_mismatch_when_not_found(
     client, admin_headers, accept_result
-):
+) -> None:
     with (
         patch(
             "app.routers.raf_central.accept_suspect", return_value=accept_result

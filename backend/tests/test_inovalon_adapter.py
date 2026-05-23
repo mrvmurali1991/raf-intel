@@ -105,7 +105,7 @@ class TestInovalonClientToken:
         mock_resp.raise_for_status = MagicMock()
         return mock_resp
 
-    def test_token_fetched_on_first_call(self):
+    def test_token_fetched_on_first_call(self) -> None:
         client = self._make_client()
         mock_resp = self._mock_token_response()
         mock_http_client = MagicMock()
@@ -119,7 +119,7 @@ class TestInovalonClientToken:
         assert token == "tok123"
         assert mock_http_client.post.call_count == 1
 
-    def test_token_cached_on_second_call(self):
+    def test_token_cached_on_second_call(self) -> None:
         client = self._make_client()
         mock_resp = self._mock_token_response()
         mock_http_client = MagicMock()
@@ -133,7 +133,7 @@ class TestInovalonClientToken:
 
         assert mock_http_client.post.call_count == 1  # only one real HTTP call
 
-    def test_expired_token_triggers_refetch(self):
+    def test_expired_token_triggers_refetch(self) -> None:
         client = self._make_client()
         # Seed the cache with an already-expired token (expires_at in the past)
         client._token_cache = {
@@ -152,7 +152,7 @@ class TestInovalonClientToken:
         assert token == "new-token"
         assert mock_http_client.post.call_count == 1
 
-    def test_token_within_buffer_triggers_refetch(self):
+    def test_token_within_buffer_triggers_refetch(self) -> None:
         """Token expiring within 60 s should be refreshed proactively."""
         from app.services.partners.inovalon import _TOKEN_REFRESH_BUFFER_S
 
@@ -190,7 +190,7 @@ class TestInovalonClientAPIs:
         }
         return client
 
-    def test_pull_patient_record(self):
+    def test_pull_patient_record(self) -> None:
         client = self._make_client_with_cached_token()
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
@@ -212,7 +212,7 @@ class TestInovalonClientAPIs:
         assert result["pull_id"] == "pull-abc-123"
         assert result["status"] == "submitted"
 
-    def test_get_pull_status(self):
+    def test_get_pull_status(self) -> None:
         client = self._make_client_with_cached_token()
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
@@ -233,7 +233,7 @@ class TestInovalonClientAPIs:
         assert result["status"] == "completed"
         assert result["resources_returned"]["Condition"] == 2
 
-    def test_download_bundle(self):
+    def test_download_bundle(self) -> None:
         client = self._make_client_with_cached_token()
         mock_resp = MagicMock()
         mock_resp.content = b'{"resourceType":"Condition"}\n'
@@ -254,7 +254,7 @@ class TestInovalonClientAPIs:
 # ---------------------------------------------------------------------------
 
 class TestCredentialsCheck:
-    def test_no_env_returns_not_configured(self, monkeypatch):
+    def test_no_env_returns_not_configured(self, monkeypatch) -> None:
         monkeypatch.delenv("INOVALON_API_BASE", raising=False)
         monkeypatch.delenv("INOVALON_CLIENT_ID", raising=False)
         monkeypatch.delenv("INOVALON_CLIENT_SECRET", raising=False)
@@ -263,7 +263,7 @@ class TestCredentialsCheck:
         client = InovalonClient()
         assert client.is_configured is False
 
-    def test_all_env_set_returns_configured(self, monkeypatch):
+    def test_all_env_set_returns_configured(self, monkeypatch) -> None:
         monkeypatch.setenv("INOVALON_API_BASE", "https://api.inovalon.test")
         monkeypatch.setenv("INOVALON_CLIENT_ID", "cid")
         monkeypatch.setenv("INOVALON_CLIENT_SECRET", "csec")
@@ -295,7 +295,7 @@ class TestIngestPatientFromInovalon:
         # We'll set up patches one by one and apply them in the test.
         return tmp_pull_id, pull_status
 
-    def test_full_pipeline_creates_suspects_docs_and_observations(self):
+    def test_full_pipeline_creates_suspects_docs_and_observations(self) -> None:
         from app.services.partners.inovalon_ingest import ingest_patient_from_inovalon
 
         demographics = {
@@ -401,7 +401,7 @@ class TestIngestPatientFromInovalon:
             f"Expected 3 observations, got {result['observations_stored']}"
         )
 
-    def test_idempotent_skips_duplicate_pull_id(self):
+    def test_idempotent_skips_duplicate_pull_id(self) -> None:
         """If inovalon_pull_id already in DB the ingestion must be skipped."""
         from app.services.partners.inovalon_ingest import ingest_patient_from_inovalon
 
@@ -456,7 +456,7 @@ class TestIngestPatientFromInovalon:
         # Should not have called download_bundle since we skipped early
         mock_client.download_bundle.assert_not_called()
 
-    def test_unconfigured_client_returns_error(self, monkeypatch):
+    def test_unconfigured_client_returns_error(self, monkeypatch) -> None:
         monkeypatch.delenv("INOVALON_API_BASE", raising=False)
         monkeypatch.delenv("INOVALON_CLIENT_ID", raising=False)
         monkeypatch.delenv("INOVALON_CLIENT_SECRET", raising=False)
@@ -470,7 +470,7 @@ class TestIngestPatientFromInovalon:
         assert result["status"] == "error"
         assert "not configured" in result.get("error", "").lower()
 
-    def test_missing_patient_returns_error(self):
+    def test_missing_patient_returns_error(self) -> None:
         from app.services.partners.inovalon_ingest import ingest_patient_from_inovalon
 
         mock_client = MagicMock()

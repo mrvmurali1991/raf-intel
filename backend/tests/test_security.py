@@ -94,7 +94,7 @@ class TestSQLInjection:
         "1; SELECT * FROM users WHERE id=1",
     ]
 
-    def test_login_sql_injection_in_email_returns_422(self, client):
+    def test_login_sql_injection_in_email_returns_422(self, client) -> None:
         for payload in self.SQL_PAYLOADS:
             resp = client.post(
                 "/api/auth/login",
@@ -105,7 +105,7 @@ class TestSQLInjection:
                 f"Payload: {payload!r}, Status: {resp.status_code}"
             )
 
-    def test_login_sql_injection_in_password_no_500(self, client):
+    def test_login_sql_injection_in_password_no_500(self, client) -> None:
         for payload in self.SQL_PAYLOADS:
             # Patch authenticate_user at the router level so all DB/bcrypt is bypassed
             with patch("app.routers.auth.authenticate_user",
@@ -119,7 +119,7 @@ class TestSQLInjection:
                 f"Payload: {payload!r}, Status: {resp.status_code}"
             )
 
-    def test_patient_id_sql_injection_rejected(self, client):
+    def test_patient_id_sql_injection_rejected(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         with _auth_as(admin):
             resp = client.get(
@@ -131,7 +131,7 @@ class TestSQLInjection:
             f"SQL injection in path param should be rejected, got {resp.status_code}"
         )
 
-    def test_query_param_sql_injection_no_500(self, client):
+    def test_query_param_sql_injection_no_500(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
         with (
             _auth_as(admin),
@@ -165,7 +165,7 @@ class TestPathTraversal:
         "C:\\Windows\\System32\\cmd.exe",
     ]
 
-    def test_path_traversal_filename_rejected_or_sanitised(self, client):
+    def test_path_traversal_filename_rejected_or_sanitised(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
 
         with (
@@ -191,7 +191,7 @@ class TestPathTraversal:
                     f"Path traversal filename {filename!r} caused server error"
                 )
 
-    def test_executable_extension_rejected_or_treated_safely(self, client):
+    def test_executable_extension_rejected_or_treated_safely(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
 
         with (
@@ -219,7 +219,7 @@ class TestCORSHeaders:
     Verify CORS middleware is configured and returns appropriate headers.
     """
 
-    def test_cors_header_present_on_options_preflight(self, client):
+    def test_cors_header_present_on_options_preflight(self, client) -> None:
         resp = client.options(
             "/api/auth/login",
             headers={
@@ -232,7 +232,7 @@ class TestCORSHeaders:
             f"CORS preflight failed: {resp.status_code}"
         )
 
-    def test_cors_origin_header_in_response(self, client):
+    def test_cors_origin_header_in_response(self, client) -> None:
         resp = client.get(
             "/health",
             headers={"Origin": "http://localhost:3000"},
@@ -240,7 +240,7 @@ class TestCORSHeaders:
         # Either allow-origin or the response should not outright fail
         assert resp.status_code < 500
 
-    def test_cors_wildcard_not_set_with_credentials(self, client):
+    def test_cors_wildcard_not_set_with_credentials(self, client) -> None:
         """Access-Control-Allow-Origin: * should NOT be used alongside credentials."""
         resp = client.options(
             "/api/auth/login",
@@ -264,7 +264,7 @@ class TestCORSHeaders:
 
 @pytest.mark.security
 class TestSecurityHeaders:
-    def test_x_content_type_options_or_csp_present(self, client):
+    def test_x_content_type_options_or_csp_present(self, client) -> None:
         resp = client.get("/health")
         headers = dict(resp.headers)
         # Either CSP or X-Content-Type-Options should be set by the middleware
@@ -288,7 +288,7 @@ class TestSecurityHeaders:
                 # Just informational — the app may or may not set this
                 pass
 
-    def test_no_sensitive_data_in_headers(self, client, admin_headers):
+    def test_no_sensitive_data_in_headers(self, client, admin_headers) -> None:
         admin = dict(MOCK_ADMIN_USER)
         with _auth_as(admin):
             resp = client.get("/api/auth/me", headers=_headers(admin))
@@ -320,14 +320,14 @@ class TestRateLimiting:
     request counts (which would be flaky in CI).
     """
 
-    def test_rate_limiter_configured_on_login(self):
+    def test_rate_limiter_configured_on_login(self) -> None:
         """Verify the login route has rate limit decorator in source."""
         # The @limiter.limit("5/minute") decorator patches the function
         # Check that the app uses slowapi limiter
         from app.rate_limit import limiter
         assert limiter is not None
 
-    def test_login_endpoint_accepts_single_request(self, client):
+    def test_login_endpoint_accepts_single_request(self, client) -> None:
         """A single valid request must not be rate-limited when the limiter is bypassed."""
         # The TestClient shares a single IP across all tests so the rate limiter
         # may have been exhausted by earlier test runs.  We reset the limiter state
@@ -353,7 +353,7 @@ class TestRateLimiting:
             f"Expected 401 or 429, got {resp.status_code}"
         )
 
-    def test_rate_limit_exceeded_returns_429(self, client):
+    def test_rate_limit_exceeded_returns_429(self, client) -> None:
         """
         Simulate what happens when rate limit fires by testing the error handler.
         We mock the rate limiter to raise RateLimitExceeded directly.
@@ -379,7 +379,7 @@ class TestTenantIsolation:
     and the DB-stored user record — clients cannot override it.
     """
 
-    def test_tenant_id_sourced_from_db_not_request(self, client):
+    def test_tenant_id_sourced_from_db_not_request(self, client) -> None:
         """
         Even if a crafted JWT includes a different tenant_id, the app uses the
         value from the DB (loaded via get_user()) — not the token payload.
@@ -424,7 +424,7 @@ class TestTenantIsolation:
             "tenant_id in response should match DB value (1), not crafted token value (2)"
         )
 
-    def test_tenant_b_token_cannot_impersonate_tenant_a_user(self, client):
+    def test_tenant_b_token_cannot_impersonate_tenant_a_user(self, client) -> None:
         """A tenant B JWT sub that resolves to a tenant A user in DB is treated
         as tenant A — the tenant check is DB-authoritative."""
         tenant_b_user = dict(MOCK_TENANT_B_USER)  # tenant_id=2
@@ -443,7 +443,7 @@ class TestTenantIsolation:
         if resp.status_code == 200:
             assert resp.json().get("tenant_id") == 2
 
-    def test_get_tenant_id_dependency_uses_db_value(self):
+    def test_get_tenant_id_dependency_uses_db_value(self) -> None:
         """Unit test: get_tenant_id() returns the DB-sourced tenant_id."""
         from app.auth import get_tenant_id
 
@@ -453,7 +453,7 @@ class TestTenantIsolation:
         result = get_tenant_id(user)
         assert result == "5"
 
-    def test_get_tenant_id_defaults_to_1_when_none(self):
+    def test_get_tenant_id_defaults_to_1_when_none(self) -> None:
         """get_tenant_id() defaults to '1' when tenant_id is None."""
         from app.auth import get_tenant_id
 
@@ -474,7 +474,7 @@ class TestJWTTypeClaim:
     (and vice versa) by checking the 'type' claim.
     """
 
-    def test_refresh_token_cannot_be_used_as_access_token(self, client):
+    def test_refresh_token_cannot_be_used_as_access_token(self, client) -> None:
         """A refresh-type JWT must be rejected by the access-token validation path."""
         import uuid
 
@@ -499,7 +499,7 @@ class TestJWTTypeClaim:
             f"Refresh token used as access token must return 401, got {resp.status_code}"
         )
 
-    def test_mfa_pending_token_cannot_access_protected_resources(self, client):
+    def test_mfa_pending_token_cannot_access_protected_resources(self, client) -> None:
         """A mfa_pending type token must be rejected for normal resource access."""
         from app.config import settings
 
@@ -514,7 +514,7 @@ class TestJWTTypeClaim:
         resp = client.get("/api/auth/me", headers=headers)
         assert resp.status_code == 401
 
-    def test_token_without_type_claim_rejected(self, client):
+    def test_token_without_type_claim_rejected(self, client) -> None:
         """Tokens missing the 'type' claim should be rejected."""
         from app.config import settings
 
@@ -540,7 +540,7 @@ class TestJWTTypeClaim:
 
 @pytest.mark.security
 class TestRoleEnforcement:
-    def test_viewer_cannot_access_admin_user_list(self, client):
+    def test_viewer_cannot_access_admin_user_list(self, client) -> None:
         viewer = dict(MOCK_VIEWER_USER)
         with _auth_as(viewer):
             resp = client.get("/api/auth/users", headers=_headers(viewer))
@@ -548,7 +548,7 @@ class TestRoleEnforcement:
             f"Viewer should not access admin user list, got {resp.status_code}"
         )
 
-    def test_viewer_cannot_create_user(self, client):
+    def test_viewer_cannot_create_user(self, client) -> None:
         viewer = dict(MOCK_VIEWER_USER)
         with _auth_as(viewer):
             resp = client.post(
@@ -562,13 +562,13 @@ class TestRoleEnforcement:
             )
         assert resp.status_code == 403
 
-    def test_viewer_cannot_delete_user(self, client):
+    def test_viewer_cannot_delete_user(self, client) -> None:
         viewer = dict(MOCK_VIEWER_USER)
         with _auth_as(viewer):
             resp = client.delete("/api/auth/users/999", headers=_headers(viewer))
         assert resp.status_code == 403
 
-    def test_admin_can_list_users(self, client):
+    def test_admin_can_list_users(self, client) -> None:
         admin = dict(MOCK_ADMIN_USER)
 
         @contextmanager
@@ -584,7 +584,7 @@ class TestRoleEnforcement:
 
         assert resp.status_code == 200
 
-    def test_cannot_deactivate_own_account(self, client):
+    def test_cannot_deactivate_own_account(self, client) -> None:
         """Admin must not be able to deactivate their own account."""
         admin = dict(MOCK_ADMIN_USER)
         user_id = admin["id"]

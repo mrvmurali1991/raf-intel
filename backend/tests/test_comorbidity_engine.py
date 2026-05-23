@@ -93,21 +93,21 @@ def _evaluate(evidence: dict, patterns: list[dict] | None = None) -> list[dict]:
 # 0. Catalog meta-tests
 # ===========================================================================
 
-def test_catalog_has_at_least_100_patterns():
+def test_catalog_has_at_least_100_patterns() -> None:
     assert len(SEED_PATTERNS) >= 100, f"only {len(SEED_PATTERNS)} patterns seeded"
 
 
-def test_every_pattern_has_a_source():
+def test_every_pattern_has_a_source() -> None:
     bad = [p["pattern_name"] for p in SEED_PATTERNS if not p.get("source")]
     assert not bad, f"patterns missing source: {bad}"
 
 
-def test_every_pattern_has_required_evidence():
+def test_every_pattern_has_required_evidence() -> None:
     bad = [p["pattern_name"] for p in SEED_PATTERNS if not p.get("required_evidence")]
     assert not bad, f"patterns missing required_evidence: {bad}"
 
 
-def test_pattern_names_unique():
+def test_pattern_names_unique() -> None:
     names = [p["pattern_name"] for p in SEED_PATTERNS]
     assert len(names) == len(set(names)), "duplicate pattern_name in seed"
 
@@ -116,7 +116,7 @@ def test_pattern_names_unique():
 # 1. _pattern_matches — pure rule semantics
 # ===========================================================================
 
-def test_pattern_matches_and_semantics_all_present():
+def test_pattern_matches_and_semantics_all_present() -> None:
     p = {"required_evidence": {"hccs": ["19"], "icds": ["E11"]}, "pattern_name": "x"}
     ok, chain = engine._pattern_matches(p, {"hccs": ["19"], "icds": ["E11.9"]})
     assert ok
@@ -124,28 +124,28 @@ def test_pattern_matches_and_semantics_all_present():
     assert any(c["type"] == "icd" for c in chain)
 
 
-def test_pattern_matches_and_semantics_one_missing():
+def test_pattern_matches_and_semantics_one_missing() -> None:
     p = {"required_evidence": {"hccs": ["19"], "icds": ["E11", "H35"]}, "pattern_name": "x"}
     ok, chain = engine._pattern_matches(p, {"hccs": ["19"], "icds": ["E11.9"]})
     assert not ok
     assert chain == []
 
 
-def test_pattern_matches_icd_prefix():
+def test_pattern_matches_icd_prefix() -> None:
     p = {"required_evidence": {"icds": ["H35"]}, "pattern_name": "x"}
     # H35.31 (prolif retinopathy) should satisfy the H35 rule
     ok, _ = engine._pattern_matches(p, {"icds": ["H35.31"]})
     assert ok
 
 
-def test_pattern_matches_atc_prefix():
+def test_pattern_matches_atc_prefix() -> None:
     p = {"required_evidence": {"atc_codes": ["L04AB"]}, "pattern_name": "x"}
     # adalimumab is L04AB04
     ok, _ = engine._pattern_matches(p, {"atc_codes": ["L04AB04"]})
     assert ok
 
 
-def test_pattern_matches_loinc_threshold_lt():
+def test_pattern_matches_loinc_threshold_lt() -> None:
     p = {
         "required_evidence": {
             "icds": ["N18"],
@@ -166,7 +166,7 @@ def test_pattern_matches_loinc_threshold_lt():
     assert not ok2
 
 
-def test_pattern_matches_loinc_threshold_gt():
+def test_pattern_matches_loinc_threshold_gt() -> None:
     p = {
         "required_evidence": {
             "icds": ["E11"],
@@ -180,7 +180,7 @@ def test_pattern_matches_loinc_threshold_gt():
     assert not ok2
 
 
-def test_pattern_matches_loinc_unknown_op_fails():
+def test_pattern_matches_loinc_unknown_op_fails() -> None:
     p = {
         "required_evidence": {"loinc_with_threshold": [{"loinc": "X", "op": "NEAR", "value": 10}]},
         "pattern_name": "x",
@@ -189,7 +189,7 @@ def test_pattern_matches_loinc_unknown_op_fails():
     assert not ok
 
 
-def test_pattern_matches_empty_evidence_fails():
+def test_pattern_matches_empty_evidence_fails() -> None:
     p = {"required_evidence": {"icds": ["E11"]}, "pattern_name": "x"}
     ok, _ = engine._pattern_matches(p, {})
     assert not ok
@@ -199,7 +199,7 @@ def test_pattern_matches_empty_evidence_fails():
 # 2. Diabetes upgrades (HCC 19 → HCC 18)
 # ===========================================================================
 
-def test_dm_with_retinopathy_upgrades_to_hcc18():
+def test_dm_with_retinopathy_upgrades_to_hcc18() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.9", "H35.31"]})
     names = {m["pattern_name"] for m in matches}
     assert "dm_with_retinopathy_to_hcc18" in names
@@ -211,67 +211,67 @@ def test_dm_with_retinopathy_upgrades_to_hcc18():
     assert {"hcc", "icd"}.issubset(types_)
 
 
-def test_dm_with_retinopathy_negative_no_retinopathy():
+def test_dm_with_retinopathy_negative_no_retinopathy() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.9"]})
     names = {m["pattern_name"] for m in matches}
     assert "dm_with_retinopathy_to_hcc18" not in names
 
 
-def test_dm_with_nephropathy_upgrades_to_hcc18():
+def test_dm_with_nephropathy_upgrades_to_hcc18() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.9", "N18.3"]})
     names = {m["pattern_name"] for m in matches}
     assert "dm_with_nephropathy_to_hcc18" in names
 
 
-def test_dm_with_nephropathy_negative_without_n18():
+def test_dm_with_nephropathy_negative_without_n18() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.9"]})
     names = {m["pattern_name"] for m in matches}
     assert "dm_with_nephropathy_to_hcc18" not in names
 
 
-def test_dm_e1122_direct_to_hcc18_happy():
+def test_dm_e1122_direct_to_hcc18_happy() -> None:
     matches = _evaluate({"icds": ["E11.22"]})
     names = {m["pattern_name"] for m in matches}
     assert "dm_e1122_direct_to_hcc18" in names
 
 
-def test_dm_e1122_direct_negative():
+def test_dm_e1122_direct_negative() -> None:
     matches = _evaluate({"icds": ["E11.21"]})  # nephropathy alone, not DM-CKD
     names = {m["pattern_name"] for m in matches}
     assert "dm_e1122_direct_to_hcc18" not in names
 
 
-def test_dm_with_neuropathy_happy():
+def test_dm_with_neuropathy_happy() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.9", "E11.40"]})
     assert "dm_with_neuropathy_to_hcc18" in {m["pattern_name"] for m in matches}
 
 
-def test_dm_with_neuropathy_negative():
+def test_dm_with_neuropathy_negative() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.9"]})
     assert "dm_with_neuropathy_to_hcc18" not in {m["pattern_name"] for m in matches}
 
 
-def test_dm_with_foot_ulcer_happy():
+def test_dm_with_foot_ulcer_happy() -> None:
     matches = _evaluate({"hccs": ["19"], "icds": ["E11.621"]})
     assert "dm_with_foot_ulcer_to_hcc18" in {m["pattern_name"] for m in matches}
 
 
-def test_dm_with_foot_ulcer_compound_negative_without_l97():
+def test_dm_with_foot_ulcer_compound_negative_without_l97() -> None:
     matches = _evaluate({"icds": ["E11.621"]})  # no L97 site code
     assert "dm_with_foot_ulcer_compound_l97" not in {m["pattern_name"] for m in matches}
 
 
-def test_dm_with_charcot_foot_happy():
+def test_dm_with_charcot_foot_happy() -> None:
     matches = _evaluate({"icds": ["E11.610"]})
     assert "dm_with_charcot_foot" in {m["pattern_name"] for m in matches}
 
 
-def test_dm_chronic_with_morbid_obesity_compound():
+def test_dm_chronic_with_morbid_obesity_compound() -> None:
     matches = _evaluate({"hccs": ["18"], "icds": ["E66.01"]})
     assert "dm_chronic_compl_with_morbid_obesity" in {m["pattern_name"] for m in matches}
 
 
-def test_dm_dka_acute_complication():
+def test_dm_dka_acute_complication() -> None:
     matches = _evaluate({"icds": ["E11.10"]})
     m = next(m for m in matches if m["pattern_name"] == "dm_with_ketoacidosis_acute")
     assert m["output_hcc"] == "17"
@@ -282,7 +282,7 @@ def test_dm_dka_acute_complication():
 # 3. CKD staging
 # ===========================================================================
 
-def test_ckd_stage4_egfr_under_30():
+def test_ckd_stage4_egfr_under_30() -> None:
     matches = _evaluate({
         "icds": ["N18.9"],
         "labs": [{"loinc": "33914-3", "value": 22}],
@@ -292,7 +292,7 @@ def test_ckd_stage4_egfr_under_30():
     assert m["upgrades_from"] == "138"
 
 
-def test_ckd_stage4_negative_egfr_45():
+def test_ckd_stage4_negative_egfr_45() -> None:
     matches = _evaluate({
         "icds": ["N18.9"],
         "labs": [{"loinc": "33914-3", "value": 45}],
@@ -300,17 +300,17 @@ def test_ckd_stage4_negative_egfr_45():
     assert "ckd_stage4_from_egfr" not in {m["pattern_name"] for m in matches}
 
 
-def test_esrd_dialysis_z992():
+def test_esrd_dialysis_z992() -> None:
     matches = _evaluate({"icds": ["N18.6", "Z99.2"]})
     assert "esrd_dialysis_z992" in {m["pattern_name"] for m in matches}
 
 
-def test_esrd_negative_no_dialysis_status():
+def test_esrd_negative_no_dialysis_status() -> None:
     matches = _evaluate({"icds": ["N18.5"]})
     assert "esrd_dialysis_z992" not in {m["pattern_name"] for m in matches}
 
 
-def test_esrd_n186_direct():
+def test_esrd_n186_direct() -> None:
     matches = _evaluate({"icds": ["N18.6"]})
     assert "esrd_n186_direct" in {m["pattern_name"] for m in matches}
 
@@ -319,14 +319,14 @@ def test_esrd_n186_direct():
 # 4. CHF severity
 # ===========================================================================
 
-def test_chf_acute_systolic_upgrade():
+def test_chf_acute_systolic_upgrade() -> None:
     matches = _evaluate({"icds": ["I50.21"]})
     m = next(m for m in matches if m["pattern_name"] == "chf_acute_on_chronic_systolic")
     assert m["output_hcc"] == "224"
     assert m["upgrades_from"] == "226"
 
 
-def test_chf_low_ef_upgrade():
+def test_chf_low_ef_upgrade() -> None:
     matches = _evaluate({
         "icds": ["I50.9"],
         "labs": [{"loinc": "8806-2", "value": 28}],
@@ -334,7 +334,7 @@ def test_chf_low_ef_upgrade():
     assert "chf_with_low_ef_systolic" in {m["pattern_name"] for m in matches}
 
 
-def test_chf_low_ef_negative_normal_ef():
+def test_chf_low_ef_negative_normal_ef() -> None:
     matches = _evaluate({
         "icds": ["I50.9"],
         "labs": [{"loinc": "8806-2", "value": 60}],
@@ -342,12 +342,12 @@ def test_chf_low_ef_negative_normal_ef():
     assert "chf_with_low_ef_systolic" not in {m["pattern_name"] for m in matches}
 
 
-def test_chf_acute_pulm_edema_upgrade():
+def test_chf_acute_pulm_edema_upgrade() -> None:
     matches = _evaluate({"icds": ["I50.1", "J81.0"]})
     assert "chf_with_acute_pulm_edema" in {m["pattern_name"] for m in matches}
 
 
-def test_chf_acute_pulm_edema_negative():
+def test_chf_acute_pulm_edema_negative() -> None:
     matches = _evaluate({"icds": ["I50.1"]})
     assert "chf_with_acute_pulm_edema" not in {m["pattern_name"] for m in matches}
 
@@ -356,17 +356,17 @@ def test_chf_acute_pulm_edema_negative():
 # 5. COPD progression
 # ===========================================================================
 
-def test_copd_with_acute_exacerbation():
+def test_copd_with_acute_exacerbation() -> None:
     matches = _evaluate({"icds": ["J44.1"]})
     assert "copd_with_acute_exacerbation" in {m["pattern_name"] for m in matches}
 
 
-def test_copd_with_chronic_resp_failure():
+def test_copd_with_chronic_resp_failure() -> None:
     matches = _evaluate({"icds": ["J44.9", "J96.10"]})
     assert "copd_with_chronic_resp_failure" in {m["pattern_name"] for m in matches}
 
 
-def test_copd_with_chronic_resp_failure_negative():
+def test_copd_with_chronic_resp_failure_negative() -> None:
     matches = _evaluate({"icds": ["J44.9"]})
     assert "copd_with_chronic_resp_failure" not in {m["pattern_name"] for m in matches}
 
@@ -375,17 +375,17 @@ def test_copd_with_chronic_resp_failure_negative():
 # 6. Cancer staging
 # ===========================================================================
 
-def test_active_cancer_breast_with_chemo():
+def test_active_cancer_breast_with_chemo() -> None:
     matches = _evaluate({"icds": ["C50.911", "Z51.11"]})
     assert "active_cancer_breast_with_chemo" in {m["pattern_name"] for m in matches}
 
 
-def test_active_cancer_breast_without_chemo_negative():
+def test_active_cancer_breast_without_chemo_negative() -> None:
     matches = _evaluate({"icds": ["C50.911"]})
     assert "active_cancer_breast_with_chemo" not in {m["pattern_name"] for m in matches}
 
 
-def test_metastatic_cancer_secondary_codes():
+def test_metastatic_cancer_secondary_codes() -> None:
     matches = _evaluate({"icds": ["C77.9"]})
     m = next(m for m in matches if m["pattern_name"] == "metastatic_cancer_secondary_codes")
     assert m["output_hcc"] == "17"
@@ -395,19 +395,19 @@ def test_metastatic_cancer_secondary_codes():
 # 7. Mental health
 # ===========================================================================
 
-def test_bipolar_severe_psychotic():
+def test_bipolar_severe_psychotic() -> None:
     matches = _evaluate({"icds": ["F31.5"]})
     m = next(m for m in matches if m["pattern_name"] == "bipolar_severe_psychotic")
     assert m["output_hcc"] == "151"
     assert m["upgrades_from"] == "152"
 
 
-def test_schizophrenia_with_clozapine():
+def test_schizophrenia_with_clozapine() -> None:
     matches = _evaluate({"icds": ["F20.0"], "atc_codes": ["N05AH02"]})
     assert "schizophrenia_with_clozapine" in {m["pattern_name"] for m in matches}
 
 
-def test_schizophrenia_with_clozapine_negative_no_drug():
+def test_schizophrenia_with_clozapine_negative_no_drug() -> None:
     matches = _evaluate({"icds": ["F20.0"]})
     assert "schizophrenia_with_clozapine" not in {m["pattern_name"] for m in matches}
 
@@ -416,17 +416,17 @@ def test_schizophrenia_with_clozapine_negative_no_drug():
 # 8. HIV / AIDS
 # ===========================================================================
 
-def test_hiv_b20_direct():
+def test_hiv_b20_direct() -> None:
     matches = _evaluate({"icds": ["B20"]})
     assert "hiv_b20_direct" in {m["pattern_name"] for m in matches}
 
 
-def test_hiv_with_pcp_pneumonia():
+def test_hiv_with_pcp_pneumonia() -> None:
     matches = _evaluate({"icds": ["B20", "B59"]})
     assert "hiv_with_pcp_pneumonia" in {m["pattern_name"] for m in matches}
 
 
-def test_hiv_with_pcp_negative_no_pcp():
+def test_hiv_with_pcp_negative_no_pcp() -> None:
     matches = _evaluate({"icds": ["B20"]})
     assert "hiv_with_pcp_pneumonia" not in {m["pattern_name"] for m in matches}
 
@@ -435,17 +435,17 @@ def test_hiv_with_pcp_negative_no_pcp():
 # 9. Vascular complexity
 # ===========================================================================
 
-def test_pvd_with_amputation_status():
+def test_pvd_with_amputation_status() -> None:
     matches = _evaluate({"icds": ["I70.0", "Z89.511"]})
     assert "pvd_with_amputation_status" in {m["pattern_name"] for m in matches}
 
 
-def test_dm_pvd_with_amputation_compound():
+def test_dm_pvd_with_amputation_compound() -> None:
     matches = _evaluate({"icds": ["E11.9", "I70.219", "Z89.611"]})
     assert "dm_pvd_with_amputation_compound" in {m["pattern_name"] for m in matches}
 
 
-def test_dm_pvd_with_amputation_negative_no_amp():
+def test_dm_pvd_with_amputation_negative_no_amp() -> None:
     matches = _evaluate({"icds": ["E11.9", "I70.219"]})
     assert "dm_pvd_with_amputation_compound" not in {m["pattern_name"] for m in matches}
 
@@ -454,7 +454,7 @@ def test_dm_pvd_with_amputation_negative_no_amp():
 # 10. Upgrade-chain ordering and sort
 # ===========================================================================
 
-def test_upgrade_chain_dm_19_to_18_with_retinopathy():
+def test_upgrade_chain_dm_19_to_18_with_retinopathy() -> None:
     """The marquee acceptance test from the task brief:
     a HCC 19 patient gains retinopathy → engine emits HCC 18 upgrade with
     full evidence chain.
@@ -473,7 +473,7 @@ def test_upgrade_chain_dm_19_to_18_with_retinopathy():
     assert "icd" in chain_types
 
 
-def test_evaluate_results_sorted_by_confidence_desc():
+def test_evaluate_results_sorted_by_confidence_desc() -> None:
     matches = _evaluate({"icds": ["E11.9", "H35.31", "E66.01"], "hccs": ["19", "18"]})
     confs = [m["confidence"] for m in matches]
     assert confs == sorted(confs, reverse=True)
@@ -483,20 +483,20 @@ def test_evaluate_results_sorted_by_confidence_desc():
 # 11. Code-normalisation regression tests
 # ===========================================================================
 
-def test_norm_hcc_strips_prefix_and_zeros():
+def test_norm_hcc_strips_prefix_and_zeros() -> None:
     assert engine._norm_hcc("HCC 019") == "19"
     assert engine._norm_hcc("hcc18") == "18"
     assert engine._norm_hcc(19) == "19"
     assert engine._norm_hcc(None) == ""
 
 
-def test_norm_icd_dots_and_case():
+def test_norm_icd_dots_and_case() -> None:
     assert engine._norm_icd("e11.22") == "E1122"
     assert engine._norm_icd("E1122") == "E1122"
     assert engine._norm_icd(None) == ""
 
 
-def test_evaluate_with_no_patterns_returns_empty():
+def test_evaluate_with_no_patterns_returns_empty() -> None:
     assert _evaluate({"icds": ["E11.9"]}, patterns=[]) == []
 
 
@@ -504,7 +504,7 @@ def test_evaluate_with_no_patterns_returns_empty():
 # 12. Round-trip: every seed pattern can be matched by its own required evidence
 # ===========================================================================
 
-def test_every_pattern_is_self_satisfiable():
+def test_every_pattern_is_self_satisfiable() -> None:
     """For each pattern, build the *minimal* evidence set from its own
     required_evidence and confirm the pattern fires.  Catches typos in either
     the seed catalog or the matcher.

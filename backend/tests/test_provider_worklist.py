@@ -100,7 +100,7 @@ def _worklist_cursor_cm(items: list[dict], total: int = None):
 
 
 class TestGetWorklist:
-    def test_returns_items_with_correct_structure(self):
+    def test_returns_items_with_correct_structure(self) -> None:
         items = [_worklist_item(1), _worklist_item(2)]
         cm = _worklist_cursor_cm(items)
         with patch("app.services.coder_worklist_service.raf_cursor", cm):
@@ -110,7 +110,7 @@ class TestGetWorklist:
         assert result["coder_user_id"] == 10
         assert "items" in result
 
-    def test_empty_queue_returns_zero_total(self):
+    def test_empty_queue_returns_zero_total(self) -> None:
         cm = _worklist_cursor_cm([], total=0)
         with patch("app.services.coder_worklist_service.raf_cursor", cm):
             result = get_worklist(coder_user_id=10, tenant_id="1")
@@ -118,7 +118,7 @@ class TestGetWorklist:
         assert result["total"] == 0
         assert result["items"] == []
 
-    def test_hcc_codes_json_deserialized(self):
+    def test_hcc_codes_json_deserialized(self) -> None:
         items = [_worklist_item(1)]  # hcc_codes is a JSON string
         cm = _worklist_cursor_cm(items)
         with patch("app.services.coder_worklist_service.raf_cursor", cm):
@@ -129,7 +129,7 @@ class TestGetWorklist:
         assert isinstance(item["hcc_codes"], list)
         assert "17" in item["hcc_codes"]
 
-    def test_pagination_params_honored(self):
+    def test_pagination_params_honored(self) -> None:
         cm = _worklist_cursor_cm([], total=100)
         with patch("app.services.coder_worklist_service.raf_cursor", cm):
             result = get_worklist(coder_user_id=10, tenant_id="1", limit=20, offset=40)
@@ -143,7 +143,7 @@ class TestGetWorklist:
 # ===========================================================================
 
 class TestClaimNext:
-    def test_claim_next_returns_item(self):
+    def test_claim_next_returns_item(self) -> None:
         queued_item = _worklist_item(1)
 
         call_n = {"n": 0}
@@ -170,7 +170,7 @@ class TestClaimNext:
         assert result is not None
         assert result["id"] == 1
 
-    def test_claim_next_returns_none_when_empty(self):
+    def test_claim_next_returns_none_when_empty(self) -> None:
         cm, cursor = _make_cursor_cm(rows=[])
         cursor.fetchone.return_value = None
 
@@ -181,7 +181,7 @@ class TestClaimNext:
 
         assert result is None
 
-    def test_claim_next_requires_tenant_id(self):
+    def test_claim_next_requires_tenant_id(self) -> None:
         with pytest.raises(ValueError, match="tenant_id"):
             claim_next(coder_user_id=10, tenant_id=None)
 
@@ -191,7 +191,7 @@ class TestClaimNext:
 # ===========================================================================
 
 class TestPriorityOrdering:
-    def test_high_priority_items_before_low_priority(self):
+    def test_high_priority_items_before_low_priority(self) -> None:
         """Priority 1 should sort before priority 3 (lower = more urgent)."""
         items = [
             _worklist_item(1, priority=1, raf_impact=0.50),
@@ -201,13 +201,13 @@ class TestPriorityOrdering:
         assert items[0]["priority"] < items[1]["priority"]
         assert items[0]["raf_impact"] > items[1]["raf_impact"]
 
-    def test_recapture_gaps_patient_has_priority_set(self):
+    def test_recapture_gaps_patient_has_priority_set(self) -> None:
         """Items with review_type='recapture' represent patients with open gaps."""
         item = _worklist_item(1, review_type="recapture", priority=1)
         assert item["review_type"] == "recapture"
         assert item["priority"] == 1
 
-    def test_higher_raf_impact_gets_lower_priority_number(self):
+    def test_higher_raf_impact_gets_lower_priority_number(self) -> None:
         """Patients with larger RAF impact at risk should surface first (lower priority num)."""
         high_impact = _worklist_item(1, priority=1, raf_impact=0.80)
         low_impact = _worklist_item(2, priority=5, raf_impact=0.05)
@@ -219,7 +219,7 @@ class TestPriorityOrdering:
 # ===========================================================================
 
 class TestActionItems:
-    def test_start_review_transitions_to_in_progress(self):
+    def test_start_review_transitions_to_in_progress(self) -> None:
         item_in_progress = _worklist_item(1, status="in_progress")
 
         call_n = {"n": 0}
@@ -248,7 +248,7 @@ class TestActionItems:
 
         assert result["status"] == "in_progress"
 
-    def test_complete_review_transitions_to_completed(self):
+    def test_complete_review_transitions_to_completed(self) -> None:
         item_in_progress = _worklist_item(1, status="in_progress")
         item_done = _worklist_item(1, status="completed")
 
@@ -281,7 +281,7 @@ class TestActionItems:
 
         assert result["status"] == "completed"
 
-    def test_start_review_fails_if_item_not_found(self):
+    def test_start_review_fails_if_item_not_found(self) -> None:
         cm, cursor = _make_cursor_cm(rows=[])
         cursor.fetchone.return_value = None
 
@@ -289,7 +289,7 @@ class TestActionItems:
             with pytest.raises(Exception):
                 start_review(worklist_id=9999, coder_user_id=10)
 
-    def test_escalate_item_changes_status(self):
+    def test_escalate_item_changes_status(self) -> None:
         item_queued = _worklist_item(1, status="in_progress")
         item_escalated = _worklist_item(1, status="escalated")
 
@@ -326,7 +326,7 @@ class TestActionItems:
 # ===========================================================================
 
 class TestAutoQueueFromNlp:
-    def test_nlp_results_inserted_into_queue(self):
+    def test_nlp_results_inserted_into_queue(self) -> None:
         # Coders available for round-robin assignment
         coders = [{"id": 10}, {"id": 11}]
         cm, cursor = _make_cursor_cm(rows=coders)
@@ -351,7 +351,7 @@ class TestAutoQueueFromNlp:
         # items queued or skipped — must not raise and return summary dict
         assert "queued" in result
 
-    def test_empty_nlp_results_queues_nothing(self):
+    def test_empty_nlp_results_queues_nothing(self) -> None:
         cm, _ = _make_cursor_cm(rows=[])
 
         with patch("app.services.coder_worklist_service.raf_cursor", cm):
@@ -397,7 +397,7 @@ class TestGenerateChaseList:
             "provider_id": 5,
         }
 
-    def test_patients_with_gaps_appear_in_chase_list(self):
+    def test_patients_with_gaps_appear_in_chase_list(self) -> None:
         from app.services.prospective_service import generate_chase_list
         items = [
             self._patient_item(1, suspect_count=3, recapture_gaps=2),
@@ -412,7 +412,7 @@ class TestGenerateChaseList:
         assert len(chase) == 2
         assert all("patient_id" in r for r in chase)
 
-    def test_min_suspects_filter(self):
+    def test_min_suspects_filter(self) -> None:
         from app.services.prospective_service import generate_chase_list
         items = [
             self._patient_item(1, suspect_count=4),
@@ -427,7 +427,7 @@ class TestGenerateChaseList:
         assert len(chase) == 1
         assert chase[0]["patient_id"] == "1"
 
-    def test_not_seen_since_days_filter(self):
+    def test_not_seen_since_days_filter(self) -> None:
         from app.services.prospective_service import generate_chase_list
         items = [
             self._patient_item(1, days_since=200),  # overdue
@@ -444,7 +444,7 @@ class TestGenerateChaseList:
         assert len(chase) == 1
         assert chase[0]["patient_id"] == "1"
 
-    def test_empty_worklist_returns_empty_chase(self):
+    def test_empty_worklist_returns_empty_chase(self) -> None:
         from app.services.prospective_service import generate_chase_list
         with patch(
             "app.services.prospective_service.get_prospective_worklist",
@@ -454,7 +454,7 @@ class TestGenerateChaseList:
 
         assert chase == []
 
-    def test_chase_list_contains_required_fields(self):
+    def test_chase_list_contains_required_fields(self) -> None:
         from app.services.prospective_service import generate_chase_list
         items = [self._patient_item(1)]
         with patch(
@@ -471,7 +471,7 @@ class TestGenerateChaseList:
         }
         assert required.issubset(row.keys())
 
-    def test_priority_score_in_output(self):
+    def test_priority_score_in_output(self) -> None:
         from app.services.prospective_service import generate_chase_list
         items = [self._patient_item(1, priority_score=82.5)]
         with patch(
@@ -488,7 +488,7 @@ class TestGenerateChaseList:
 # ===========================================================================
 
 class TestTenantIsolation:
-    def test_worklist_query_includes_tenant_id(self):
+    def test_worklist_query_includes_tenant_id(self) -> None:
         count_row = {"total": 0}
 
         call_n = {"n": 0}

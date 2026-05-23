@@ -31,7 +31,7 @@ def _med(name, med_id="M1", cls=""):
 # ---------------------------------------------------------------------------
 # Diabetes
 # ---------------------------------------------------------------------------
-def test_diabetes_two_high_a1c_flags_suspect():
+def test_diabetes_two_high_a1c_flags_suspect() -> None:
     bundle = {
         "labs": [_lab("HbA1c", 7.8, "L1", "2026-01-01"), _lab("HbA1c", 7.2, "L2", "2025-10-01")],
         "medications": [],
@@ -42,7 +42,7 @@ def test_diabetes_two_high_a1c_flags_suspect():
     assert len(c.supporting_evidence) == 2
 
 
-def test_diabetes_already_coded_is_skipped():
+def test_diabetes_already_coded_is_skipped() -> None:
     bundle = {
         "labs": [_lab("HbA1c", 7.8), _lab("HbA1c", 7.5)],
         "problem_list": [{"icd10": "E11.9", "active": True}],
@@ -50,7 +50,7 @@ def test_diabetes_already_coded_is_skipped():
     assert diabetes._two_high_a1c(bundle) is None
 
 
-def test_diabetes_a1c_plus_metformin():
+def test_diabetes_a1c_plus_metformin() -> None:
     bundle = {
         "labs": [_lab("HbA1c", 6.8)],
         "medications": [_med("metformin 500 mg")],
@@ -63,7 +63,7 @@ def test_diabetes_a1c_plus_metformin():
 # ---------------------------------------------------------------------------
 # Renal
 # ---------------------------------------------------------------------------
-def test_renal_two_low_egfr():
+def test_renal_two_low_egfr() -> None:
     bundle = {
         "labs": [_lab("eGFR", 42), _lab("eGFR", 38)],
         "problem_list": [],
@@ -72,13 +72,13 @@ def test_renal_two_low_egfr():
     assert c and c.icd10.startswith("N18")
 
 
-def test_renal_stage_from_value():
+def test_renal_stage_from_value() -> None:
     bundle = {"labs": [_lab("eGFR", 20), _lab("eGFR", 22)], "problem_list": []}
     c = renal._low_egfr(bundle)
     assert c.icd10 == "N18.4"
 
 
-def test_renal_skipped_if_coded():
+def test_renal_skipped_if_coded() -> None:
     bundle = {"labs": [_lab("eGFR", 40), _lab("eGFR", 38)], "problem_list": [{"icd10": "N18.3"}]}
     assert renal._low_egfr(bundle) is None
 
@@ -86,7 +86,7 @@ def test_renal_skipped_if_coded():
 # ---------------------------------------------------------------------------
 # Cardiac
 # ---------------------------------------------------------------------------
-def test_chf_bnp_plus_furosemide():
+def test_chf_bnp_plus_furosemide() -> None:
     bundle = {
         "labs": [_lab("BNP", 850)],
         "medications": [_med("furosemide 40 mg")],
@@ -96,7 +96,7 @@ def test_chf_bnp_plus_furosemide():
     assert c and c.icd10 == "I50.9"
 
 
-def test_chf_requires_diuretic():
+def test_chf_requires_diuretic() -> None:
     bundle = {"labs": [_lab("BNP", 850)], "medications": [], "problem_list": []}
     assert cardiac._chf_bnp_loop(bundle) is None
 
@@ -104,7 +104,7 @@ def test_chf_requires_diuretic():
 # ---------------------------------------------------------------------------
 # Lipid
 # ---------------------------------------------------------------------------
-def test_lipid_ldl_plus_statin():
+def test_lipid_ldl_plus_statin() -> None:
     bundle = {
         "labs": [_lab("LDL-C", 160)],
         "medications": [_med("atorvastatin 40 mg")],
@@ -117,7 +117,7 @@ def test_lipid_ldl_plus_statin():
 # ---------------------------------------------------------------------------
 # Respiratory
 # ---------------------------------------------------------------------------
-def test_copd_lama():
+def test_copd_lama() -> None:
     bundle = {"medications": [_med("tiotropium inhaler")], "problem_list": []}
     c = respiratory._copd_long_acting(bundle)
     assert c and c.icd10 == "J44.9"
@@ -126,7 +126,7 @@ def test_copd_lama():
 # ---------------------------------------------------------------------------
 # Hepatic
 # ---------------------------------------------------------------------------
-def test_cirrhosis_triad():
+def test_cirrhosis_triad() -> None:
     bundle = {
         "labs": [_lab("Platelet", 110), _lab("INR", 1.5), _lab("Albumin", 3.0)],
         "problem_list": [],
@@ -135,7 +135,7 @@ def test_cirrhosis_triad():
     assert c and c.hcc == "HCC32"
 
 
-def test_cirrhosis_single_signal_insufficient():
+def test_cirrhosis_single_signal_insufficient() -> None:
     bundle = {"labs": [_lab("Platelet", 110)], "problem_list": []}
     assert hepatic._cirrhosis_signals(bundle) is None
 
@@ -143,13 +143,13 @@ def test_cirrhosis_single_signal_insufficient():
 # ---------------------------------------------------------------------------
 # Hematology / endocrine
 # ---------------------------------------------------------------------------
-def test_anemia_low_hgb():
+def test_anemia_low_hgb() -> None:
     bundle = {"labs": [_lab("Hemoglobin", 9.5)], "problem_list": []}
     c = hematology._anemia(bundle)
     assert c and c.icd10 == "D64.9"
 
 
-def test_hypothyroid_tsh_plus_levothyroxine():
+def test_hypothyroid_tsh_plus_levothyroxine() -> None:
     bundle = {
         "labs": [_lab("TSH", 8.2)],
         "medications": [_med("levothyroxine 50 mcg")],
@@ -159,7 +159,7 @@ def test_hypothyroid_tsh_plus_levothyroxine():
     assert c and c.confidence >= 0.8
 
 
-def test_morbid_obesity_bmi():
+def test_morbid_obesity_bmi() -> None:
     bundle = {"vitals": [{"id": "V1", "type": "BMI", "value": 42.3}], "problem_list": []}
     c = hematology._morbid_obesity(bundle)
     assert c and c.icd10 == "E66.01"
@@ -168,7 +168,7 @@ def test_morbid_obesity_bmi():
 # ---------------------------------------------------------------------------
 # Merge & dedupe
 # ---------------------------------------------------------------------------
-def test_merge_dedupes_by_family_and_marks_both():
+def test_merge_dedupes_by_family_and_marks_both() -> None:
     rule_c = SuspectCandidate(icd10="E11.9", hcc="HCC37", reason="rule", confidence=0.8, source="rule")
     llm_c = SuspectCandidate(icd10="E11.65", hcc="HCC37", reason="llm", confidence=0.6, source="llm")
     merged = se.merge([rule_c], [llm_c])
@@ -178,7 +178,7 @@ def test_merge_dedupes_by_family_and_marks_both():
     assert merged[0].confidence > 0.8
 
 
-def test_every_candidate_requires_provider_query():
+def test_every_candidate_requires_provider_query() -> None:
     bundle = {
         "labs": [_lab("HbA1c", 8.0), _lab("HbA1c", 7.6)],
         "medications": [_med("metformin")],
@@ -189,7 +189,7 @@ def test_every_candidate_requires_provider_query():
     assert all(c.requires_provider_query for c in results)
 
 
-def test_detect_suspects_rule_only_when_llm_disabled():
+def test_detect_suspects_rule_only_when_llm_disabled() -> None:
     bundle = {
         "labs": [_lab("HbA1c", 8.0), _lab("HbA1c", 7.8)],
         "problem_list": [],
@@ -199,7 +199,7 @@ def test_detect_suspects_rule_only_when_llm_disabled():
     assert all(c.source == "rule" for c in out)
 
 
-def test_detect_suspects_merges_llm(monkeypatch):
+def test_detect_suspects_merges_llm(monkeypatch) -> None:
     bundle = {
         "labs": [_lab("eGFR", 40), _lab("eGFR", 38)],
         "problem_list": [],
@@ -216,12 +216,12 @@ def test_detect_suspects_merges_llm(monkeypatch):
     assert out[0].requires_provider_query is True
 
 
-def test_llm_bad_json_returns_empty():
+def test_llm_bad_json_returns_empty() -> None:
     with patch.object(se, "llm_generate", return_value="not-json"):
         assert se.run_llm({}) == []
 
 
-def test_rule_inventory_count():
+def test_rule_inventory_count() -> None:
     # Starter inventory: 12 rules across 7 disease families.
     from app.services.ai_pipeline.rules import ALL_RULES
     assert len(ALL_RULES) >= 10

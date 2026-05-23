@@ -84,7 +84,7 @@ def _now() -> datetime:
 # ---------------------------------------------------------------------------
 
 class TestTemplates:
-    def test_create_template_basic(self):
+    def test_create_template_basic(self) -> None:
         # INSERT lastrowid=1, then SELECT returns persisted row
         row = {
             "id": 1, "tenant_id": "1", "channel": "sms", "name": "Test SMS",
@@ -108,20 +108,20 @@ class TestTemplates:
         # JSON should be deserialised back to dict for the API
         assert tpl["trigger_rules"] == {"min_days_open": 30}
 
-    def test_create_template_invalid_channel(self):
+    def test_create_template_invalid_channel(self) -> None:
         with pytest.raises(ValueError, match="Invalid channel"):
             create_template(
                 tenant_id="1", channel="carrier_pigeon",
                 name="Nope", message_text="hi",
             )
 
-    def test_create_template_requires_name_and_message(self):
+    def test_create_template_requires_name_and_message(self) -> None:
         with pytest.raises(ValueError, match="name"):
             create_template(tenant_id="1", channel="sms", name="", message_text="hi")
         with pytest.raises(ValueError, match="message_text"):
             create_template(tenant_id="1", channel="sms", name="A", message_text="")
 
-    def test_list_templates(self):
+    def test_list_templates(self) -> None:
         rows = [
             {"id": 1, "tenant_id": "1", "channel": "sms", "name": "A",
              "subject": None, "message_text": "x", "trigger_rules": None,
@@ -137,11 +137,11 @@ class TestTemplates:
         assert out[0]["is_active"] is True
         assert out[1]["is_active"] is False
 
-    def test_list_templates_invalid_channel_filter(self):
+    def test_list_templates_invalid_channel_filter(self) -> None:
         with pytest.raises(ValueError, match="Invalid channel"):
             list_templates(tenant_id="1", channel="bogus")
 
-    def test_seed_defaults_inserts_three_when_none_exist(self):
+    def test_seed_defaults_inserts_three_when_none_exist(self) -> None:
         # First call from seed_default_templates -> list_templates -> empty
         # Then for each of the 3 defaults: 1) create insert, 2) select back.
         # Plus seed_default_templates calls list_templates ONCE up front.
@@ -184,7 +184,7 @@ class TestTemplates:
             created = seed_default_templates(tenant_id="t1")
         assert len(created) == 3
 
-    def test_seed_defaults_idempotent_when_already_present(self):
+    def test_seed_defaults_idempotent_when_already_present(self) -> None:
         # list_templates returns the 3 default names already
         existing = [
             {"id": 1, "tenant_id": "t1", "channel": "sms",
@@ -229,7 +229,7 @@ class TestQueueOutreach:
         base.update(overrides)
         return base
 
-    def test_queue_with_template_inherits_channel(self):
+    def test_queue_with_template_inherits_channel(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -257,7 +257,7 @@ class TestQueueOutreach:
         assert evt["channel"] == "sms"
         assert evt["gap_id"] == 100
 
-    def test_queue_with_channel_only(self):
+    def test_queue_with_channel_only(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -283,7 +283,7 @@ class TestQueueOutreach:
         assert evt["channel"] == "phone"
         assert evt["template_id"] is None
 
-    def test_queue_requires_gap_to_exist_for_tenant(self):
+    def test_queue_requires_gap_to_exist_for_tenant(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -294,7 +294,7 @@ class TestQueueOutreach:
             with pytest.raises(ValueError, match="not found"):
                 queue_outreach(tenant_id="1", gap_id=999, channel="sms")
 
-    def test_queue_requires_either_template_or_channel(self):
+    def test_queue_requires_either_template_or_channel(self) -> None:
         with pytest.raises(ValueError, match="template_id or channel"):
             queue_outreach(tenant_id="1", gap_id=100)
 
@@ -335,7 +335,7 @@ class TestEventLifecycle:
             yield cur
         return _cm
 
-    def test_mark_sent_sets_sent_at(self):
+    def test_mark_sent_sets_sent_at(self) -> None:
         with patch(
             "app.services.recapture_outreach_service.raf_cursor",
             self._make_cm(self._row_after("sent")),
@@ -344,7 +344,7 @@ class TestEventLifecycle:
         assert evt["status"] == "sent"
         assert evt["sent_at"] is not None
 
-    def test_mark_delivered_sets_delivered_at(self):
+    def test_mark_delivered_sets_delivered_at(self) -> None:
         with patch(
             "app.services.recapture_outreach_service.raf_cursor",
             self._make_cm(self._row_after("delivered")),
@@ -353,7 +353,7 @@ class TestEventLifecycle:
         assert evt["status"] == "delivered"
         assert evt["delivered_at"] is not None
 
-    def test_mark_response_records_outcome_and_closes_gap(self):
+    def test_mark_response_records_outcome_and_closes_gap(self) -> None:
         target = self._row_after(
             "responded", response_text="Thanks", resulted_in_closure=1,
         )
@@ -388,7 +388,7 @@ class TestEventLifecycle:
         # Closure cascades to recapture_gap_service.close_gap
         mock_close.assert_called_once_with(gap_id=100, tenant_id="1")
 
-    def test_mark_response_without_closure_does_not_close_gap(self):
+    def test_mark_response_without_closure_does_not_close_gap(self) -> None:
         target = self._row_after("responded", resulted_in_visit=1)
 
         @contextmanager
@@ -414,7 +414,7 @@ class TestEventLifecycle:
             mark_response(7, resulted_in_visit=True, resulted_in_closure=False)
         mock_close.assert_not_called()
 
-    def test_mark_opted_out_terminal(self):
+    def test_mark_opted_out_terminal(self) -> None:
         with patch(
             "app.services.recapture_outreach_service.raf_cursor",
             self._make_cm(self._row_after("opted_out")),
@@ -422,11 +422,11 @@ class TestEventLifecycle:
             evt = mark_opted_out(7)
         assert evt["status"] == "opted_out"
 
-    def test_mark_invalid_status_raises(self):
+    def test_mark_invalid_status_raises(self) -> None:
         with pytest.raises(ValueError, match="not transitionable"):
             mark_event(event_id=7, status="exploded")
 
-    def test_mark_event_dispatches_to_correct_handler(self):
+    def test_mark_event_dispatches_to_correct_handler(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -446,12 +446,12 @@ class TestEventLifecycle:
             evt = mark_event(event_id=7, status="sent")
         assert evt["status"] == "sent"
 
-    def test_mark_event_rejects_queued(self):
+    def test_mark_event_rejects_queued(self) -> None:
         # 'queued' is the initial state — not transitionable via mark_event.
         with pytest.raises(ValueError, match="not transitionable"):
             mark_event(event_id=7, status="queued")
 
-    def test_mark_event_not_found_raises(self):
+    def test_mark_event_not_found_raises(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -468,11 +468,11 @@ class TestEventLifecycle:
 # ---------------------------------------------------------------------------
 
 class TestOutreachSummary:
-    def test_revenue_constant_matches_recapture_service(self):
+    def test_revenue_constant_matches_recapture_service(self) -> None:
         from app.services.recapture_gap_service import _REVENUE_IMPACT_PER_GAP
         assert _REVENUE_PER_CLOSURE == _REVENUE_IMPACT_PER_GAP
 
-    def test_summary_aggregates_correctly(self):
+    def test_summary_aggregates_correctly(self) -> None:
         channel_rows = [
             {
                 "channel": "sms", "total": 100,
@@ -532,7 +532,7 @@ class TestOutreachSummary:
         portal = out["by_channel"]["portal"]
         assert portal["closure_rate"] == pytest.approx(3 / 35)
 
-    def test_summary_handles_empty_dataset(self):
+    def test_summary_handles_empty_dataset(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -560,7 +560,7 @@ class TestOutreachSummary:
         assert out["avg_days_to_response"] is None
         assert out["by_channel"] == {}
 
-    def test_summary_no_zero_division_when_channel_has_only_queued(self):
+    def test_summary_no_zero_division_when_channel_has_only_queued(self) -> None:
         channel_rows = [{
             "channel": "sms", "total": 5,
             "queued": 5, "sent_or_later": 0, "delivered": 0,
@@ -599,7 +599,7 @@ class TestOutreachSummary:
 # ---------------------------------------------------------------------------
 
 class TestOutreachHistory:
-    def test_returns_chronological_events(self):
+    def test_returns_chronological_events(self) -> None:
         rows = [
             {
                 "id": 1, "tenant_id": "1", "gap_id": 100, "patient_id": "P1",
@@ -637,7 +637,7 @@ class TestOutreachHistory:
         assert events[1]["resulted_in_visit"] is True
         assert events[1]["resulted_in_closure"] is True
 
-    def test_empty_history(self):
+    def test_empty_history(self) -> None:
         @contextmanager
         def _cm(*args, **kwargs):
             cur = MagicMock()
@@ -654,13 +654,13 @@ class TestOutreachHistory:
 # ---------------------------------------------------------------------------
 
 class TestConstants:
-    def test_valid_channels(self):
+    def test_valid_channels(self) -> None:
         assert VALID_CHANNELS == {"sms", "portal", "phone", "email", "letter"}
 
-    def test_valid_statuses(self):
+    def test_valid_statuses(self) -> None:
         assert VALID_STATUSES == {
             "queued", "sent", "delivered", "responded", "failed", "opted_out",
         }
 
-    def test_revenue_per_closure_is_3000(self):
+    def test_revenue_per_closure_is_3000(self) -> None:
         assert _REVENUE_PER_CLOSURE == 3000.00

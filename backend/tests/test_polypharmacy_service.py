@@ -231,7 +231,7 @@ def _patch_fetches():
 # Brand-to-generic exact + fuzzy + reverse + bulk
 # ---------------------------------------------------------------------------
 
-def test_brand_to_generic_exact_ozempic():
+def test_brand_to_generic_exact_ozempic() -> None:
     hit = brand_generic_service.brand_to_generic("Ozempic")
     assert hit is not None
     assert hit["generic_name"] == "semaglutide"
@@ -240,20 +240,20 @@ def test_brand_to_generic_exact_ozempic():
     assert hit["confidence"] == 1.0
 
 
-def test_brand_to_generic_case_insensitive():
+def test_brand_to_generic_case_insensitive() -> None:
     hit = brand_generic_service.brand_to_generic("eliquis")
     assert hit is not None
     assert hit["generic_name"] == "apixaban"
 
 
-def test_brand_to_generic_with_dose_form_strips_to_head_token():
+def test_brand_to_generic_with_dose_form_strips_to_head_token() -> None:
     hit = brand_generic_service.brand_to_generic("Ozempic 0.5 mg")
     assert hit is not None
     assert hit["generic_name"] == "semaglutide"
     assert hit["match_type"] in {"exact_head_token", "fuzzy"}
 
 
-def test_brand_to_generic_fuzzy_typo():
+def test_brand_to_generic_fuzzy_typo() -> None:
     hit = brand_generic_service.brand_to_generic("Ozempick")  # common typo
     assert hit is not None
     assert hit["generic_name"] == "semaglutide"
@@ -261,22 +261,22 @@ def test_brand_to_generic_fuzzy_typo():
     assert 0.85 <= hit["confidence"] < 1.0
 
 
-def test_brand_to_generic_unknown_returns_none():
+def test_brand_to_generic_unknown_returns_none() -> None:
     assert brand_generic_service.brand_to_generic("Florbazonalin") is None
 
 
-def test_brand_to_generic_empty_input():
+def test_brand_to_generic_empty_input() -> None:
     assert brand_generic_service.brand_to_generic("") is None
     assert brand_generic_service.brand_to_generic("   ") is None
 
 
-def test_generic_to_brands_returns_all_variants():
+def test_generic_to_brands_returns_all_variants() -> None:
     brands = brand_generic_service.generic_to_brands("semaglutide")
     names = sorted(b["brand_name"] for b in brands)
     assert names == ["Ozempic", "Wegovy"]
 
 
-def test_bulk_resolve_mixed_brand_generic_unknown():
+def test_bulk_resolve_mixed_brand_generic_unknown() -> None:
     out = brand_generic_service.bulk_resolve(
         ["Ozempic", "metformin", "Florbazonalin", ""],
     )
@@ -294,14 +294,14 @@ def test_bulk_resolve_mixed_brand_generic_unknown():
 # ATC integration: brand bridge resolves Ozempic
 # ---------------------------------------------------------------------------
 
-def test_atc_resolve_via_brand_bridge_ozempic():
+def test_atc_resolve_via_brand_bridge_ozempic() -> None:
     matches = atc_service.resolve_drug_to_atc("Ozempic")
     assert matches, "Ozempic should resolve via brand bridge"
     # Bridge -> semaglutide row -> A10BJ
     assert any(m["atc_code"] == "A10BJ" for m in matches)
 
 
-def test_atc_unseen_drug_stem_still_works_after_brand_path():
+def test_atc_unseen_drug_stem_still_works_after_brand_path() -> None:
     # tirzepatide is in the bridge — exact path.  Stem inference for an
     # unseen drug like "albiglutide" should still hit A10BJ via stem suffix.
     chain = atc_service.unseen_drug_inference("albiglutide")
@@ -317,7 +317,7 @@ def _ids_of(triggered):
     return {t["pattern_id"] for t in triggered}
 
 
-def test_chf_gdmt_triggers_with_three_drugs():
+def test_chf_gdmt_triggers_with_three_drugs() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["furosemide", "lisinopril", "metoprolol"],
     )
@@ -328,7 +328,7 @@ def test_chf_gdmt_triggers_with_three_drugs():
     assert "C03CA" in chf["matched_atc_codes"]
 
 
-def test_chf_gdmt_with_mineralocorticoid_boost():
+def test_chf_gdmt_with_mineralocorticoid_boost() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["furosemide", "lisinopril", "metoprolol", "spironolactone"],
     )
@@ -338,7 +338,7 @@ def test_chf_gdmt_with_mineralocorticoid_boost():
     assert chf["confidence"] > 0.78
 
 
-def test_chf_gdmt_promotes_to_hfref_when_ef_low():
+def test_chf_gdmt_promotes_to_hfref_when_ef_low() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["furosemide", "lisinopril", "metoprolol"],
         patient_context={"ejection_fraction": 32},
@@ -347,14 +347,14 @@ def test_chf_gdmt_promotes_to_hfref_when_ef_low():
     assert chf["primary_hcc"] == "224"
 
 
-def test_chf_gdmt_negative_missing_beta_blocker():
+def test_chf_gdmt_negative_missing_beta_blocker() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["furosemide", "lisinopril"],
     )
     assert "chf_gdmt" not in _ids_of(triggered)
 
 
-def test_dm_multi_modal_triggers_insulin_plus_glp1():
+def test_dm_multi_modal_triggers_insulin_plus_glp1() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["insulin glargine", "semaglutide"],
     )
@@ -362,38 +362,38 @@ def test_dm_multi_modal_triggers_insulin_plus_glp1():
     assert "dm_multi_modal" in ids
 
 
-def test_dm_multi_modal_negative_only_metformin():
+def test_dm_multi_modal_negative_only_metformin() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(["metformin"])
     assert "dm_multi_modal" not in _ids_of(triggered)
 
 
-def test_cad_post_mi_triggers_with_full_quad():
+def test_cad_post_mi_triggers_with_full_quad() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["aspirin", "atorvastatin", "metoprolol", "lisinopril"],
     )
     assert "cad_post_mi" in _ids_of(triggered)
 
 
-def test_cad_post_mi_negative_no_antiplatelet():
+def test_cad_post_mi_negative_no_antiplatelet() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["atorvastatin", "metoprolol", "lisinopril"],
     )
     assert "cad_post_mi" not in _ids_of(triggered)
 
 
-def test_dementia_behavioral_triggers():
+def test_dementia_behavioral_triggers() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["donepezil", "olanzapine"],
     )
     assert "dementia_behavioral" in _ids_of(triggered)
 
 
-def test_dementia_behavioral_negative_no_antipsychotic():
+def test_dementia_behavioral_negative_no_antipsychotic() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(["donepezil"])
     assert "dementia_behavioral" not in _ids_of(triggered)
 
 
-def test_hiv_active_triggers_on_combination_tablet():
+def test_hiv_active_triggers_on_combination_tablet() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["bictegravir/emtricitabine/tenofovir"],
     )
@@ -403,13 +403,13 @@ def test_hiv_active_triggers_on_combination_tablet():
     assert hit["primary_hcc"] == "1"
 
 
-def test_hiv_active_negative_just_emtricitabine_alone_still_implies_hiv():
+def test_hiv_active_negative_just_emtricitabine_alone_still_implies_hiv() -> None:
     # NRTI alone is enough — pattern requires only one of [J05AR, J05AF].
     triggered = polypharmacy_service.evaluate_drug_combination(["emtricitabine"])
     assert "hiv_active_art" in _ids_of(triggered)
 
 
-def test_bipolar_lithium_plus_atypical_triggers_via_brand():
+def test_bipolar_lithium_plus_atypical_triggers_via_brand() -> None:
     # Lithobid is brand-bridged to lithium (ingredient name match).
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["Lithobid", "olanzapine"],
@@ -417,12 +417,12 @@ def test_bipolar_lithium_plus_atypical_triggers_via_brand():
     assert "bipolar_active" in _ids_of(triggered)
 
 
-def test_bipolar_negative_lithium_alone():
+def test_bipolar_negative_lithium_alone() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(["Lithobid"])
     assert "bipolar_active" not in _ids_of(triggered)
 
 
-def test_ckd_anemia_triggers_on_esa_plus_iron():
+def test_ckd_anemia_triggers_on_esa_plus_iron() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["epoetin alfa", "ferrous sulfate"],
     )
@@ -432,24 +432,24 @@ def test_ckd_anemia_triggers_on_esa_plus_iron():
     assert hit["primary_hcc"] == "138"
 
 
-def test_ckd_anemia_negative_iron_alone():
+def test_ckd_anemia_negative_iron_alone() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(["ferrous sulfate"])
     assert "ckd_anemia" not in _ids_of(triggered)
 
 
-def test_afib_anticoag_plus_rate_control():
+def test_afib_anticoag_plus_rate_control() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["apixaban", "metoprolol"],
     )
     assert "afib_anticoag_rate_control" in _ids_of(triggered)
 
 
-def test_afib_negative_anticoag_only():
+def test_afib_negative_anticoag_only() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(["apixaban"])
     assert "afib_anticoag_rate_control" not in _ids_of(triggered)
 
 
-def test_afib_warfarin_plus_carvedilol():
+def test_afib_warfarin_plus_carvedilol() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["warfarin", "carvedilol"],
     )
@@ -460,7 +460,7 @@ def test_afib_warfarin_plus_carvedilol():
 # Pattern catalogue
 # ---------------------------------------------------------------------------
 
-def test_list_patterns_returns_all_curated():
+def test_list_patterns_returns_all_curated() -> None:
     patterns = polypharmacy_service.list_patterns()
     # 8+ patterns required; current curation has 10.
     assert len(patterns) >= 8
@@ -474,11 +474,11 @@ def test_list_patterns_returns_all_curated():
         assert p["citation"], f"pattern {p['id']} missing citation"
 
 
-def test_evaluate_returns_empty_for_empty_drug_list():
+def test_evaluate_returns_empty_for_empty_drug_list() -> None:
     assert polypharmacy_service.evaluate_drug_combination([]) == []
 
 
-def test_evaluate_returns_reasoning_chain_for_each_trigger():
+def test_evaluate_returns_reasoning_chain_for_each_trigger() -> None:
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["furosemide", "lisinopril", "metoprolol"],
     )
@@ -488,7 +488,7 @@ def test_evaluate_returns_reasoning_chain_for_each_trigger():
         assert isinstance(t["matched_drugs"], list) and t["matched_drugs"]
 
 
-def test_evaluate_orders_by_confidence_descending():
+def test_evaluate_orders_by_confidence_descending() -> None:
     # Combination triggers multiple patterns — verify ordering.
     triggered = polypharmacy_service.evaluate_drug_combination(
         ["furosemide", "lisinopril", "metoprolol", "spironolactone",

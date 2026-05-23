@@ -34,41 +34,41 @@ class TestClassifyTier:
     """The risk-tier classification rules are the load-bearing logic of this
     feature; if these slip every CMO-facing badge is wrong."""
 
-    def test_ready_at_threshold(self):
+    def test_ready_at_threshold(self) -> None:
         assert _classify_tier(0.80, 5) == "ready"
 
-    def test_ready_above_threshold(self):
+    def test_ready_above_threshold(self) -> None:
         assert _classify_tier(0.95, 10) == "ready"
 
-    def test_at_risk_at_threshold(self):
+    def test_at_risk_at_threshold(self) -> None:
         assert _classify_tier(0.60, 5) == "at_risk"
 
-    def test_at_risk_in_band(self):
+    def test_at_risk_in_band(self) -> None:
         assert _classify_tier(0.79, 5) == "at_risk"
 
-    def test_audit_risk_below_threshold(self):
+    def test_audit_risk_below_threshold(self) -> None:
         assert _classify_tier(0.59, 5) == "audit_risk"
 
-    def test_audit_risk_zero(self):
+    def test_audit_risk_zero(self) -> None:
         assert _classify_tier(0.0, 5) == "audit_risk"
 
-    def test_insufficient_when_too_few_hccs(self):
+    def test_insufficient_when_too_few_hccs(self) -> None:
         # Even with perfect MEAT, < 3 HCCs is not statistically defensible.
         assert _classify_tier(1.0, 2) == "insufficient"
 
-    def test_insufficient_at_zero_hccs(self):
+    def test_insufficient_at_zero_hccs(self) -> None:
         assert _classify_tier(0.0, 0) == "insufficient"
 
-    def test_three_hccs_is_minimum(self):
+    def test_three_hccs_is_minimum(self) -> None:
         # The boundary: 3 HCCs is enough to render a verdict.
         assert _classify_tier(0.85, 3) == "ready"
 
 
 class TestMissingComponents:
-    def test_all_present(self):
+    def test_all_present(self) -> None:
         assert _missing_components(True, True, True, True) == []
 
-    def test_all_missing(self):
+    def test_all_missing(self) -> None:
         assert _missing_components(False, False, False, False) == [
             "Monitor",
             "Evaluate",
@@ -76,7 +76,7 @@ class TestMissingComponents:
             "Treat",
         ]
 
-    def test_mixed(self):
+    def test_mixed(self) -> None:
         assert _missing_components(True, False, True, False) == ["Evaluate", "Treat"]
 
 
@@ -125,7 +125,7 @@ class TestAssessProviderAuditRisk:
             ),
         )
 
-    def test_audit_ready_provider(self):
+    def test_audit_ready_provider(self) -> None:
         """High MEAT (>=0.80), enough HCCs → ready/AUDIT-READY."""
         panel = [{"patient_id": 1}, {"patient_id": 2}, {"patient_id": 3}]
         # 3 HCCs all 4/4 components → completeness = 1.0
@@ -150,7 +150,7 @@ class TestAssessProviderAuditRisk:
         # No HCC is below the 0.75 weak threshold
         assert result["top_weak_hccs"] == []
 
-    def test_at_risk_provider(self):
+    def test_at_risk_provider(self) -> None:
         """Provider in the 0.60–0.80 band shows AT RISK."""
         panel = [{"patient_id": 1}, {"patient_id": 2}, {"patient_id": 3}]
         # 4 HCCs at 0.75, 0.75, 0.75, 0.50 → mean = 0.6875 → at_risk
@@ -180,7 +180,7 @@ class TestAssessProviderAuditRisk:
         assert "Evaluate" in result["top_weak_hccs"][0]["missing_components"]
         assert "Treat" in result["top_weak_hccs"][0]["missing_components"]
 
-    def test_audit_risk_provider(self):
+    def test_audit_risk_provider(self) -> None:
         """Below 0.60 → red audit_risk tier."""
         panel = [{"patient_id": 1}, {"patient_id": 2}, {"patient_id": 3}]
         # 3 HCCs at 0.5, 0.25, 0.5 → mean ≈ 0.42 → audit_risk
@@ -202,7 +202,7 @@ class TestAssessProviderAuditRisk:
         assert result["risk_label"] == "AUDIT RISK"
         assert result["meat_completeness"] < 0.60
 
-    def test_insufficient_data_below_three_hccs(self):
+    def test_insufficient_data_below_three_hccs(self) -> None:
         """A provider with only 2 coded HCCs returns insufficient,
         regardless of the MEAT score on those two HCCs."""
         panel = [{"patient_id": 1}, {"patient_id": 2}]
@@ -219,7 +219,7 @@ class TestAssessProviderAuditRisk:
         assert result["risk_label"] == "INSUFFICIENT DATA"
         assert result["hcc_count"] == 2
 
-    def test_empty_panel_short_circuits(self):
+    def test_empty_panel_short_circuits(self) -> None:
         """Provider with no patients in panel → insufficient + zero HCCs.
 
         We don't even reach the MEAT query, so the cursor only needs to
@@ -237,7 +237,7 @@ class TestAssessProviderAuditRisk:
         assert result["meat_completeness"] == 0.0
         assert result["top_weak_hccs"] == []
 
-    def test_top_weak_ordering_lowest_first_capped_at_five(self):
+    def test_top_weak_ordering_lowest_first_capped_at_five(self) -> None:
         """Top-weak list orders ascending by score and is capped at 5 entries."""
         panel = [{"patient_id": 1}]
         # 8 HCCs with scores 0.0, 0.25, 0.25, 0.5, 0.5, 0.75 (excluded), 1.0, 1.0
@@ -274,7 +274,7 @@ class TestAssessProviderAuditRisk:
         assert "7" not in weak_codes
         assert "8" not in weak_codes
 
-    def test_hcc_with_no_meat_evidence_scores_zero(self):
+    def test_hcc_with_no_meat_evidence_scores_zero(self) -> None:
         """HCC coded but no raf_meat_evidence rows → all components missing."""
         panel = [{"patient_id": 1}, {"patient_id": 2}, {"patient_id": 3}]
         # has_m/e/a/t all None (LEFT JOIN miss) → bool() → False
@@ -308,7 +308,7 @@ class TestAssessProviderAuditRisk:
 
 
 class TestGetMeatEvidenceForHcc:
-    def test_normalises_hcc_string_prefix(self):
+    def test_normalises_hcc_string_prefix(self) -> None:
         """'HCC85' and '85' should both query for hcc_code=85."""
         cm, cursor = _cursor_with_responses(
             [
@@ -333,7 +333,7 @@ class TestGetMeatEvidenceForHcc:
         params = evidence_call.args[1]
         assert 85 in params
 
-    def test_invalid_hcc_returns_empty(self):
+    def test_invalid_hcc_returns_empty(self) -> None:
         cm, cursor = _cursor_with_responses([[{"patient_id": 1}]])
         with patch("app.services.meat_audit_risk.raf_cursor", cm), patch(
             "app.services.meat_audit_risk.active_patients_subquery",
@@ -344,7 +344,7 @@ class TestGetMeatEvidenceForHcc:
             )
         assert out == []
 
-    def test_empty_panel_returns_empty(self):
+    def test_empty_panel_returns_empty(self) -> None:
         cm, _ = _cursor_with_responses([[]])
         with patch("app.services.meat_audit_risk.raf_cursor", cm), patch(
             "app.services.meat_audit_risk.active_patients_subquery",
@@ -355,7 +355,7 @@ class TestGetMeatEvidenceForHcc:
             )
         assert out == []
 
-    def test_evidence_row_shape(self):
+    def test_evidence_row_shape(self) -> None:
         from datetime import date
 
         cm, _ = _cursor_with_responses(

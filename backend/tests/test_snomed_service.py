@@ -74,16 +74,16 @@ def _make_cursor_cm(query_responses: list[list[dict[str, Any]]]):
 
 
 class TestResolveTextToSnomed:
-    def test_empty_input_returns_empty_list(self):
+    def test_empty_input_returns_empty_list(self) -> None:
         assert resolve_text_to_snomed("") == []
         assert resolve_text_to_snomed("   ") == []
 
-    def test_no_candidates_returns_empty_list(self):
+    def test_no_candidates_returns_empty_list(self) -> None:
         cm, _ = _make_cursor_cm([[]])
         with patch.object(snomed_service, "raf_cursor", cm):
             assert resolve_text_to_snomed("acute lymphoblastic leukemia") == []
 
-    def test_exact_match_high_score(self):
+    def test_exact_match_high_score(self) -> None:
         rows = [
             {
                 "id": 1,
@@ -109,7 +109,7 @@ class TestResolveTextToSnomed:
         assert results[0].code == "44054006"
         assert results[0].score >= 80.0
 
-    def test_fuzzy_match_diabetic_foot_finds_diabetes_complications(self):
+    def test_fuzzy_match_diabetic_foot_finds_diabetes_complications(self) -> None:
         rows = [
             {
                 "id": 10,
@@ -132,7 +132,7 @@ class TestResolveTextToSnomed:
         assert len(results) >= 1
         assert any(r.code == "313839005" for r in results)
 
-    def test_top_k_limits_results(self):
+    def test_top_k_limits_results(self) -> None:
         rows = [
             {
                 "id": i,
@@ -148,7 +148,7 @@ class TestResolveTextToSnomed:
             results = resolve_text_to_snomed("type 2 diabetes", top_k=3)
         assert len(results) <= 3
 
-    def test_fallback_similarity_used_when_no_rapidfuzz(self):
+    def test_fallback_similarity_used_when_no_rapidfuzz(self) -> None:
         score = snomed_service._fallback_similarity(
             "type 2 diabetes", "Type 2 diabetes mellitus"
         )
@@ -161,17 +161,17 @@ class TestResolveTextToSnomed:
 
 
 class TestSnomedToIcd10:
-    def test_returns_codes(self):
+    def test_returns_codes(self) -> None:
         rows = [{"icd10_code": "E119"}, {"icd10_code": "E1140"}]
         cm, _ = _make_cursor_cm([rows])
         with patch.object(snomed_service, "raf_cursor", cm):
             codes = snomed_to_icd10("44054006")
         assert codes == ["E119", "E1140"]
 
-    def test_empty_input(self):
+    def test_empty_input(self) -> None:
         assert snomed_to_icd10("") == []
 
-    def test_normalizes_codes_no_dot(self):
+    def test_normalizes_codes_no_dot(self) -> None:
         rows = [{"icd10_code": "E11.9"}, {"icd10_code": "e1140"}]
         cm, _ = _make_cursor_cm([rows])
         with patch.object(snomed_service, "raf_cursor", cm):
@@ -179,7 +179,7 @@ class TestSnomedToIcd10:
         assert "E119" in codes
         assert "E1140" in codes
 
-    def test_db_error_returns_empty(self):
+    def test_db_error_returns_empty(self) -> None:
         @contextmanager
         def _cm(*_a, **_kw):
             raise RuntimeError("db down")
@@ -195,7 +195,7 @@ class TestSnomedToIcd10:
 
 
 class TestIcd10ToHcc:
-    def test_uses_crosswalk_table(self):
+    def test_uses_crosswalk_table(self) -> None:
         crosswalk = [
             {
                 "icd10_code": "E1140",
@@ -218,7 +218,7 @@ class TestIcd10ToHcc:
         assert rows[0]["raf_coefficient"] == pytest.approx(0.302)
         assert rows[0]["source"] == "hcc_icd10_crosswalk"
 
-    def test_unions_kg_edges(self):
+    def test_unions_kg_edges(self) -> None:
         crosswalk: list[dict[str, Any]] = []  # nothing in canonical table
         kg_rows = [
             {"hcc_code": "18", "hcc_label": "Diabetes with Chronic Complications", "source": "CMS-V28"}
@@ -233,7 +233,7 @@ class TestIcd10ToHcc:
         assert rows[0]["hcc_code"] == 18
         assert rows[0]["source"] == "kg_edge:CMS-V28"
 
-    def test_picks_v24_for_old_year(self):
+    def test_picks_v24_for_old_year(self) -> None:
         crosswalk = [
             {
                 "icd10_code": "E1140",
@@ -250,10 +250,10 @@ class TestIcd10ToHcc:
             rows = icd10_to_hcc("E1140", model_year=2024)
         assert rows[0]["model_version"] == "V24"
 
-    def test_empty_input(self):
+    def test_empty_input(self) -> None:
         assert icd10_to_hcc("") == []
 
-    def test_normalizes_input_code(self):
+    def test_normalizes_input_code(self) -> None:
         crosswalk = [
             {
                 "icd10_code": "E1140",
@@ -277,7 +277,7 @@ class TestIcd10ToHcc:
 
 
 class TestTextToHcc:
-    def test_full_pipeline_diabetes_neuropathy(self):
+    def test_full_pipeline_diabetes_neuropathy(self) -> None:
         # Stage 1: SNOMED candidate fetch returns one match
         snomed_rows = [
             {
@@ -318,7 +318,7 @@ class TestTextToHcc:
         assert top["raf_coefficient"] == pytest.approx(0.302)
         assert top["chain_score"] > 0
 
-    def test_pipeline_dedup_by_hcc(self):
+    def test_pipeline_dedup_by_hcc(self) -> None:
         # Two SNOMED concepts both map to the same HCC; keep the higher-scoring chain.
         snomed_rows = [
             {
@@ -361,10 +361,10 @@ class TestTextToHcc:
         codes = [r["hcc_code"] for r in results]
         assert codes.count(18) == 1
 
-    def test_empty_input(self):
+    def test_empty_input(self) -> None:
         assert text_to_hcc("") == []
 
-    def test_pipeline_with_no_snomed_match_returns_empty(self):
+    def test_pipeline_with_no_snomed_match_returns_empty(self) -> None:
         cm, _ = _make_cursor_cm([[]])
         with patch.object(snomed_service, "raf_cursor", cm):
             assert text_to_hcc("xyzzy") == []
@@ -376,7 +376,7 @@ class TestTextToHcc:
 
 
 class TestBulkResolve:
-    def test_problem_list_aggregates_unique_hccs(self):
+    def test_problem_list_aggregates_unique_hccs(self) -> None:
         # Build sequenced responses for two problem-list items.
         # Item 1: "Type 2 diabetes" → SNOMED 1 → E119 → HCC 19 (DM w/o complications)
         # Item 2: "CHF" → SNOMED 2 → I509 → HCC 85 (CHF)
@@ -426,7 +426,7 @@ class TestBulkResolve:
         assert codes == [19, 85]
         assert result["summary"]["total_raf"] == pytest.approx(0.495, rel=1e-2)
 
-    def test_empty_list(self):
+    def test_empty_list(self) -> None:
         result = bulk_resolve_problem_list([])
         assert result["items"] == []
         assert result["summary"]["unique_hccs"] == 0
@@ -441,7 +441,7 @@ class TestBulkResolve:
 class TestSeedDataCoverage:
     """Sanity-check that the seed list covers the top-30 HCC families."""
 
-    def test_seed_list_covers_top_hccs(self):
+    def test_seed_list_covers_top_hccs(self) -> None:
         from scripts.seed_snomed_top_concepts import _SEED  # type: ignore
 
         codes = {s.icd10_code.upper() for s in _SEED}
@@ -463,7 +463,7 @@ class TestSeedDataCoverage:
         # HIV
         assert "B20" in codes
 
-    def test_seed_list_is_comprehensive(self):
+    def test_seed_list_is_comprehensive(self) -> None:
         from scripts.seed_snomed_top_concepts import _SEED  # type: ignore
 
         # Per the agent task, ~150 SNOMED concepts.  Allow some slack.

@@ -78,7 +78,7 @@ GAP = {
 # _build_prompt
 # ---------------------------------------------------------------------------
 
-def test_build_prompt_contains_required_clauses():
+def test_build_prompt_contains_required_clauses() -> None:
     p = svc._build_prompt(icd10="E11.9", hcc_code="HCC36", notes=NOTES)
     assert "E11.9" in p
     assert "HCC36" in p
@@ -91,7 +91,7 @@ def test_build_prompt_contains_required_clauses():
     assert "Return JSON only" in p
 
 
-def test_build_prompt_handles_no_notes():
+def test_build_prompt_handles_no_notes() -> None:
     p = svc._build_prompt(icd10="E11.9", hcc_code=None, notes=[])
     assert "no notes available" in p
     # hcc fallback label
@@ -102,7 +102,7 @@ def test_build_prompt_handles_no_notes():
 # _parse_response
 # ---------------------------------------------------------------------------
 
-def test_parse_response_happy_path_keeps_verbatim_phrase():
+def test_parse_response_happy_path_keeps_verbatim_phrase() -> None:
     raw = {
         "found": True,
         "suggestions": [
@@ -125,7 +125,7 @@ def test_parse_response_happy_path_keeps_verbatim_phrase():
     assert s["encounter_date"] == "2025-09-12"
 
 
-def test_parse_response_drops_non_verbatim_phrase():
+def test_parse_response_drops_non_verbatim_phrase() -> None:
     raw = {
         "found": True,
         "suggestions": [
@@ -152,7 +152,7 @@ def test_parse_response_drops_non_verbatim_phrase():
     assert out[0]["evidence_phrase"] == "insulin glargine for diabetes"
 
 
-def test_parse_response_clamps_confidence_and_validates_meat():
+def test_parse_response_clamps_confidence_and_validates_meat() -> None:
     raw = {
         "suggestions": [
             {
@@ -171,22 +171,22 @@ def test_parse_response_clamps_confidence_and_validates_meat():
     assert out[0]["encounter_date"] is None
 
 
-def test_parse_response_returns_empty_on_invalid_json_string():
+def test_parse_response_returns_empty_on_invalid_json_string() -> None:
     out = svc._parse_response("this is not json", NOTES)
     assert out == []
 
 
-def test_parse_response_returns_empty_on_unexpected_shape():
+def test_parse_response_returns_empty_on_unexpected_shape() -> None:
     out = svc._parse_response(["unexpected", "list"], NOTES)
     assert out == []
 
 
-def test_parse_response_returns_empty_when_suggestions_missing():
+def test_parse_response_returns_empty_when_suggestions_missing() -> None:
     out = svc._parse_response({"found": False}, NOTES)
     assert out == []
 
 
-def test_parse_response_unknown_note_id_nulled_not_dropped():
+def test_parse_response_unknown_note_id_nulled_not_dropped() -> None:
     raw = {
         "suggestions": [
             {
@@ -215,7 +215,7 @@ def _stub_persist(captured: list[dict[str, Any]]):
     return _persist
 
 
-def test_suggest_recoding_happy_path(monkeypatch):
+def test_suggest_recoding_happy_path(monkeypatch) -> None:
     captured: list[dict[str, Any]] = []
     monkeypatch.setattr(svc, "_load_gap", lambda gid: GAP)
     monkeypatch.setattr(svc, "_fetch_recent_notes", lambda pid, months=12: NOTES)
@@ -253,7 +253,7 @@ def test_suggest_recoding_happy_path(monkeypatch):
 # suggest_recoding — graceful failures
 # ---------------------------------------------------------------------------
 
-def test_suggest_recoding_llm_timeout_returns_empty(monkeypatch):
+def test_suggest_recoding_llm_timeout_returns_empty(monkeypatch) -> None:
     monkeypatch.setattr(svc, "_load_gap", lambda gid: GAP)
     monkeypatch.setattr(svc, "_fetch_recent_notes", lambda pid, months=12: NOTES)
     monkeypatch.setattr(
@@ -270,7 +270,7 @@ def test_suggest_recoding_llm_timeout_returns_empty(monkeypatch):
     assert result["scanned_note_count"] == 2
 
 
-def test_suggest_recoding_invalid_json_returns_empty(monkeypatch):
+def test_suggest_recoding_invalid_json_returns_empty(monkeypatch) -> None:
     captured: list[dict[str, Any]] = []
     monkeypatch.setattr(svc, "_load_gap", lambda gid: GAP)
     monkeypatch.setattr(svc, "_fetch_recent_notes", lambda pid, months=12: NOTES)
@@ -284,7 +284,7 @@ def test_suggest_recoding_invalid_json_returns_empty(monkeypatch):
     assert captured == []
 
 
-def test_suggest_recoding_no_notes_returns_empty(monkeypatch):
+def test_suggest_recoding_no_notes_returns_empty(monkeypatch) -> None:
     monkeypatch.setattr(svc, "_load_gap", lambda gid: GAP)
     monkeypatch.setattr(svc, "_fetch_recent_notes", lambda pid, months=12: [])
     monkeypatch.setattr(
@@ -300,7 +300,7 @@ def test_suggest_recoding_no_notes_returns_empty(monkeypatch):
     assert result["scanned_note_count"] == 0
 
 
-def test_suggest_recoding_gap_not_found(monkeypatch):
+def test_suggest_recoding_gap_not_found(monkeypatch) -> None:
     monkeypatch.setattr(svc, "_load_gap", lambda gid: None)
     result = svc.suggest_recoding(9999)
     assert result["suggestions"] == []
@@ -341,7 +341,7 @@ class _FakeCM:
         return False
 
 
-def test_accept_suggestion_promotes_evidence_to_gap(monkeypatch):
+def test_accept_suggestion_promotes_evidence_to_gap(monkeypatch) -> None:
     fetch_row = {
         "id": 1000,
         "gap_id": 1,
@@ -373,7 +373,7 @@ def test_accept_suggestion_promotes_evidence_to_gap(monkeypatch):
     assert update_gap_params[1] == "A"
 
 
-def test_accept_suggestion_rejects_non_pending(monkeypatch):
+def test_accept_suggestion_rejects_non_pending(monkeypatch) -> None:
     fetch_row = {
         "id": 1000,
         "gap_id": 1,
@@ -391,7 +391,7 @@ def test_accept_suggestion_rejects_non_pending(monkeypatch):
     assert "already accepted" in result["error"]
 
 
-def test_reject_suggestion_marks_rejected(monkeypatch):
+def test_reject_suggestion_marks_rejected(monkeypatch) -> None:
     cursor = _FakeCursor(fetch_row=None)
     cursor.rowcount = 1
     monkeypatch.setattr(svc, "raf_cursor", lambda: _FakeCM(cursor))
@@ -411,7 +411,7 @@ def test_reject_suggestion_marks_rejected(monkeypatch):
 # Sanity — JSON-loadable response is also accepted
 # ---------------------------------------------------------------------------
 
-def test_parse_response_accepts_json_string():
+def test_parse_response_accepts_json_string() -> None:
     raw = json.dumps({
         "suggestions": [
             {

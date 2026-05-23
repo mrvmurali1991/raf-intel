@@ -65,7 +65,7 @@ MOCK_GEMINI_RESPONSE = {
 # ---------------------------------------------------------------------------
 
 class TestPdfGeneration:
-    def test_pdf_generation_produces_valid_file(self):
+    def test_pdf_generation_produces_valid_file(self) -> None:
         """reportlab generates a non-empty PDF under 50 KB."""
         pytest.importorskip("reportlab", reason="reportlab not installed")
 
@@ -86,7 +86,7 @@ class TestPdfGeneration:
             assert size_bytes > 0, "PDF is empty"
             assert size_bytes < 50 * 1024, f"PDF too large: {size_bytes / 1024:.1f} KB (limit 50 KB)"
 
-    def test_all_ten_note_templates_have_required_keys(self):
+    def test_all_ten_note_templates_have_required_keys(self) -> None:
         """Every clinical note definition has the mandatory keys."""
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -97,7 +97,7 @@ class TestPdfGeneration:
             missing = required - set(note.keys())
             assert not missing, f"{note.get('filename')}: missing keys {missing}"
 
-    def test_ten_notes_defined(self):
+    def test_ten_notes_defined(self) -> None:
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from scripts.seed_demo_pdfs import CLINICAL_NOTES
@@ -110,7 +110,7 @@ class TestPdfGeneration:
 # ---------------------------------------------------------------------------
 
 class TestSeederIdempotency:
-    def test_seed_twice_does_not_duplicate_pdf(self):
+    def test_seed_twice_does_not_duplicate_pdf(self) -> None:
         """Running seed for the same patient/note twice produces one PDF file."""
         pytest.importorskip("reportlab", reason="reportlab not installed")
 
@@ -135,7 +135,7 @@ class TestSeederIdempotency:
             existing_size = output_path.stat().st_size
             assert existing_size > 0
 
-    def test_openemr_insert_skips_existing_document(self):
+    def test_openemr_insert_skips_existing_document(self) -> None:
         """_insert_openemr_document returns existing id without INSERT on duplicate."""
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -162,7 +162,7 @@ class TestSeederIdempotency:
 
 class TestGeminiExtractionMock:
     @patch("app.routers.admin._gemini_extract_from_pdf", return_value=MOCK_GEMINI_RESPONSE)
-    def test_extraction_returns_expected_structure(self, mock_gemini):
+    def test_extraction_returns_expected_structure(self, mock_gemini) -> None:
         from app.routers.admin import _gemini_extract_from_pdf
 
         result = _gemini_extract_from_pdf("/fake/path.pdf")
@@ -173,7 +173,7 @@ class TestGeminiExtractionMock:
         assert first["hcc"] == "HCC85"
         assert first["confidence"] == 0.91
 
-    def test_extraction_skips_when_no_api_key(self):
+    def test_extraction_skips_when_no_api_key(self) -> None:
         """Without GEMINI_API_KEY the function returns error='no_api_key'."""
         with patch.dict(os.environ, {}, clear=True):
             # Remove both possible key names
@@ -185,7 +185,7 @@ class TestGeminiExtractionMock:
                 assert result["error"] == "no_api_key"
                 assert result["suspects"] == []
 
-    def test_extraction_returns_error_for_missing_file(self):
+    def test_extraction_returns_error_for_missing_file(self) -> None:
         """If the PDF file doesn't exist, error='file_not_found:...' is returned."""
         with patch.dict(os.environ, {"GOOGLE_API_KEY": "fake-key-for-test"}):
             from app.routers.admin import _gemini_extract_from_pdf
@@ -199,7 +199,7 @@ class TestGeminiExtractionMock:
 # ---------------------------------------------------------------------------
 
 class TestVisionSuspectStorage:
-    def test_store_vision_suspects_inserts_rows(self):
+    def test_store_vision_suspects_inserts_rows(self) -> None:
         """_store_vision_suspects calls raf_cursor and returns count of stored rows."""
         from app.routers.admin import _store_vision_suspects
 
@@ -217,7 +217,7 @@ class TestVisionSuspectStorage:
         assert count == 2
         assert mock_cursor.execute.call_count == 2
 
-    def test_store_vision_suspects_evidence_has_required_fields(self):
+    def test_store_vision_suspects_evidence_has_required_fields(self) -> None:
         """Each suspect upsert call includes evidence_sentence and source_document_id."""
         from app.routers.admin import _store_vision_suspects
 
@@ -247,7 +247,7 @@ class TestVisionSuspectStorage:
             assert evidence.get("evidence_sentence"), "evidence_sentence must be non-empty"
             assert evidence.get("source_document_id") == 202
 
-    def test_fingerprint_is_stable(self):
+    def test_fingerprint_is_stable(self) -> None:
         """Same patient+source+code always produces the same fingerprint."""
         from app.routers.admin import _fingerprint
 
@@ -264,7 +264,7 @@ class TestVisionSuspectStorage:
 # ---------------------------------------------------------------------------
 
 class TestIngestLog:
-    def test_log_ingest_writes_row(self):
+    def test_log_ingest_writes_row(self) -> None:
         """_log_ingest calls raf_cursor with correct parameters."""
         from app.routers.admin import _log_ingest
 
@@ -344,7 +344,7 @@ def _make_test_client():
 # ---------------------------------------------------------------------------
 
 class TestScanEndpointNoKey:
-    def test_scan_returns_skipped_when_no_key(self):
+    def test_scan_returns_skipped_when_no_key(self) -> None:
         """POST /api/admin/openemr-docs/scan returns status='skipped' when no key."""
         env_clean = {k: v for k, v in os.environ.items()
                      if k not in ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
@@ -364,7 +364,7 @@ class TestScanEndpointNoKey:
 # ---------------------------------------------------------------------------
 
 class TestScanEndpointMock:
-    def test_scan_processes_documents_and_returns_trace(self):
+    def test_scan_processes_documents_and_returns_trace(self) -> None:
         """Scan endpoint returns trace with suspects when Gemini mock fires."""
         fake_docs = [
             {
@@ -400,7 +400,7 @@ class TestScanEndpointMock:
         assert doc_trace["patient_id"] == 3
         assert doc_trace["status"] == "ok"
 
-    def test_scan_dry_run_does_not_persist(self):
+    def test_scan_dry_run_does_not_persist(self) -> None:
         """dry_run=true returns suspects in trace but does not call storage functions."""
         fake_docs = [
             {
@@ -441,7 +441,7 @@ class TestScanEndpointMock:
 # ---------------------------------------------------------------------------
 
 class TestEvidenceFieldsPresent:
-    def test_all_suspects_have_required_evidence_fields(self):
+    def test_all_suspects_have_required_evidence_fields(self) -> None:
         """Every stored suspect must carry evidence_sentence and source_document_id."""
         from app.routers.admin import _store_vision_suspects
 
@@ -480,7 +480,7 @@ class TestEvidenceFieldsPresent:
 # ---------------------------------------------------------------------------
 
 class TestMeatEvidenceWritten:
-    def test_meat_evidence_stored_for_each_suspect(self):
+    def test_meat_evidence_stored_for_each_suspect(self) -> None:
         """_store_meat_from_vision attempts to store a MEAT row for each suspect."""
         from app.routers.admin import _store_meat_from_vision
 
@@ -500,7 +500,7 @@ class TestMeatEvidenceWritten:
         # 2 suspects * 2 DB calls each (SELECT + INSERT) = 4 calls
         assert mock_cursor.execute.call_count >= 2
 
-    def test_meat_evidence_skipped_when_no_patient_hcc_row(self):
+    def test_meat_evidence_skipped_when_no_patient_hcc_row(self) -> None:
         """_store_meat_from_vision skips gracefully if raf_patient_hcc has no row."""
         from app.routers.admin import _store_meat_from_vision
 

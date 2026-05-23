@@ -138,7 +138,7 @@ def _png_bytes() -> bytes:
 # ---------------------------------------------------------------------------
 
 class TestDocumentUpload:
-    def test_upload_pdf_returns_201_or_200(self, client):
+    def test_upload_pdf_returns_201_or_200(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm(rows=[MOCK_DOCUMENT])
         with (
@@ -155,7 +155,7 @@ class TestDocumentUpload:
             )
         assert resp.status_code in (200, 201, 202, 422)
 
-    def test_upload_png_image(self, client):
+    def test_upload_png_image(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm(rows=[MOCK_DOCUMENT])
         with (
@@ -172,14 +172,14 @@ class TestDocumentUpload:
             )
         assert resp.status_code in (200, 201, 202, 422)
 
-    def test_upload_requires_auth(self, client):
+    def test_upload_requires_auth(self, client) -> None:
         resp = client.post(
             "/api/documents/upload",
             files={"file": ("note.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
         )
         assert resp.status_code == 401
 
-    def test_upload_returns_document_id_on_success(self, client):
+    def test_upload_returns_document_id_on_success(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -199,7 +199,7 @@ class TestDocumentUpload:
             # Should contain an id or document_id
             assert "id" in data or "document_id" in data
 
-    def test_upload_service_error_returns_500(self, client):
+    def test_upload_service_error_returns_500(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -228,11 +228,11 @@ class TestDocumentUpload:
 # ---------------------------------------------------------------------------
 
 class TestListDocuments:
-    def test_list_documents_requires_auth(self, client):
+    def test_list_documents_requires_auth(self, client) -> None:
         resp = client.get("/api/documents")
         assert resp.status_code == 401
 
-    def test_list_documents_returns_200(self, client):
+    def test_list_documents_returns_200(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -247,7 +247,7 @@ class TestListDocuments:
             )
         assert resp.status_code == 200
 
-    def test_list_documents_response_is_dict_or_list(self, client):
+    def test_list_documents_response_is_dict_or_list(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -268,11 +268,11 @@ class TestListDocuments:
 # ---------------------------------------------------------------------------
 
 class TestGetDocument:
-    def test_get_document_by_id_requires_auth(self, client):
+    def test_get_document_by_id_requires_auth(self, client) -> None:
         resp = client.get(f"/api/documents/{MOCK_DOCUMENT_ID}")
         assert resp.status_code == 401
 
-    def test_get_existing_document_returns_200(self, client):
+    def test_get_existing_document_returns_200(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -286,7 +286,7 @@ class TestGetDocument:
             )
         assert resp.status_code == 200
 
-    def test_get_nonexistent_document_returns_404(self, client):
+    def test_get_nonexistent_document_returns_404(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -306,11 +306,11 @@ class TestGetDocument:
 # ---------------------------------------------------------------------------
 
 class TestDocumentAnalysis:
-    def test_get_analysis_requires_auth(self, client):
+    def test_get_analysis_requires_auth(self, client) -> None:
         resp = client.get(f"/api/documents/{MOCK_DOCUMENT_ID}/analysis")
         assert resp.status_code == 401
 
-    def test_get_analysis_returns_200(self, client):
+    def test_get_analysis_returns_200(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -325,7 +325,7 @@ class TestDocumentAnalysis:
             )
         assert resp.status_code in (200, 404)
 
-    def test_analysis_for_missing_doc_returns_404(self, client):
+    def test_analysis_for_missing_doc_returns_404(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -345,11 +345,11 @@ class TestDocumentAnalysis:
 # ---------------------------------------------------------------------------
 
 class TestDocumentApprovalFlow:
-    def test_approve_endpoint_requires_auth(self, client):
+    def test_approve_endpoint_requires_auth(self, client) -> None:
         resp = client.post(f"/api/documents/{MOCK_DOCUMENT_ID}/approve-and-score")
         assert resp.status_code in (401, 422)
 
-    def test_approve_nonexistent_document_returns_404(self, client):
+    def test_approve_nonexistent_document_returns_404(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -363,7 +363,7 @@ class TestDocumentApprovalFlow:
             )
         assert resp.status_code in (404, 422)
 
-    def test_approve_document_returns_200_on_success(self, client):
+    def test_approve_document_returns_200_on_success(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         approved_result = {"approved_count": 1, "raf_updated": True}
@@ -386,16 +386,16 @@ class TestDocumentApprovalFlow:
 # ---------------------------------------------------------------------------
 
 class TestDocumentBatches:
-    def test_create_batch_requires_auth(self, client):
+    def test_create_batch_requires_auth(self, client) -> None:
         # upload-batch requires auth; without it should return 401 or 422
         resp = client.post("/api/documents/upload-batch")
         assert resp.status_code in (401, 422)
 
-    def test_list_batches_requires_auth(self, client):
+    def test_list_batches_requires_auth(self, client) -> None:
         resp = client.get("/api/documents/batches")
         assert resp.status_code == 401
 
-    def test_create_batch_returns_created(self, client):
+    def test_create_batch_returns_created(self, client) -> None:
         # The batch create route is /upload-batch (POST with files)
         # Just verify the list batches route works as a proxy for batch management
         token = _make_access_token(MOCK_ADMIN_USER)
@@ -411,7 +411,7 @@ class TestDocumentBatches:
             )
         assert resp.status_code in (200, 201)
 
-    def test_list_batches_returns_200(self, client):
+    def test_list_batches_returns_200(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         noop_cm, _ = make_cursor_cm()
         with (
@@ -443,7 +443,7 @@ class TestDocumentPathTraversal:
         "/etc/passwd",
         "../../../../app/config.py",
     ])
-    def test_path_traversal_filename_rejected_or_sanitized(self, client, evil_filename):
+    def test_path_traversal_filename_rejected_or_sanitized(self, client, evil_filename) -> None:
         """
         Uploading a file with a traversal filename must not succeed with the
         raw path intact.  The API should reject (4xx) or sanitize the filename.

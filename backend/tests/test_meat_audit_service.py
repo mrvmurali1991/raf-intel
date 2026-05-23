@@ -108,7 +108,7 @@ def _gap_row(**overrides: Any) -> dict[str, Any]:
 
 
 class TestRecordPrimaryEvidence:
-    def test_happy_path_returns_updated_gap(self):
+    def test_happy_path_returns_updated_gap(self) -> None:
         # First execute = UPDATE (rowcount=1), second execute = SELECT
         updated = _gap_row(
             audit_status="primary_coded",
@@ -133,19 +133,19 @@ class TestRecordPrimaryEvidence:
         assert result["meat_element"] == "T"
         assert result["primary_coder_id"] == 42
 
-    def test_blank_phrase_rejected(self):
+    def test_blank_phrase_rejected(self) -> None:
         with pytest.raises(ValueError, match="phrase"):
             record_primary_evidence(
                 gap_id=1, coder_id=42, phrase="   ", meat_element="M",
             )
 
-    def test_invalid_meat_element_rejected(self):
+    def test_invalid_meat_element_rejected(self) -> None:
         with pytest.raises(ValueError, match="meat_element"):
             record_primary_evidence(
                 gap_id=1, coder_id=42, phrase="ok", meat_element="Q",
             )
 
-    def test_missing_gap_raises(self):
+    def test_missing_gap_raises(self) -> None:
         cm, cur = _scripted_cursor(rowcounts=[0])
         with patch("app.services.meat_audit_service.raf_cursor", cm), \
              pytest.raises(ValueError, match="not found"):
@@ -160,7 +160,7 @@ class TestRecordPrimaryEvidence:
 
 
 class TestSubmitForReview:
-    def test_high_revenue_triggers_review_pending(self):
+    def test_high_revenue_triggers_review_pending(self) -> None:
         gap = _gap_row(
             revenue_impact=HIGH_REVENUE_THRESHOLD + 1.0,
             audit_status="primary_coded",
@@ -175,7 +175,7 @@ class TestSubmitForReview:
         assert result["audit_status"] == "review_pending"
         assert result["review_required"] is True
 
-    def test_old_gap_triggers_review_pending(self):
+    def test_old_gap_triggers_review_pending(self) -> None:
         old_created = datetime.now(timezone.utc) - timedelta(days=OLD_GAP_DAYS + 5)
         gap = _gap_row(
             revenue_impact=100.0,  # well below threshold
@@ -191,7 +191,7 @@ class TestSubmitForReview:
             result = submit_for_review(gap_id=1, coder_id=42, tenant_id="1")
         assert result["review_required"] is True
 
-    def test_low_revenue_recent_gap_does_not_require_review(self):
+    def test_low_revenue_recent_gap_does_not_require_review(self) -> None:
         gap = _gap_row(
             revenue_impact=100.0,
             audit_status="primary_coded",
@@ -207,14 +207,14 @@ class TestSubmitForReview:
         assert result["review_required"] is False
         assert result["audit_status"] == "primary_coded"
 
-    def test_missing_phrase_blocks_submit(self):
+    def test_missing_phrase_blocks_submit(self) -> None:
         gap = _gap_row(audit_status="primary_coded", evidence_phrase=None)
         cm, cur = _scripted_cursor(fetchone_results=[gap])
         with patch("app.services.meat_audit_service.raf_cursor", cm), \
              pytest.raises(ValueError, match="evidence_phrase"):
             submit_for_review(gap_id=1, coder_id=42, tenant_id="1")
 
-    def test_wrong_state_blocks_submit(self):
+    def test_wrong_state_blocks_submit(self) -> None:
         gap = _gap_row(audit_status="approved", evidence_phrase="ok", meat_element="M")
         cm, cur = _scripted_cursor(fetchone_results=[gap])
         with patch("app.services.meat_audit_service.raf_cursor", cm), \
@@ -228,7 +228,7 @@ class TestSubmitForReview:
 
 
 class TestApproveReview:
-    def test_happy_path(self):
+    def test_happy_path(self) -> None:
         gap = _gap_row(
             audit_status="review_pending",
             evidence_phrase="ok", meat_element="T",
@@ -246,14 +246,14 @@ class TestApproveReview:
         assert result["audit_status"] == "approved"
         assert result["secondary_coder_id"] == 99
 
-    def test_same_coder_rejected(self):
+    def test_same_coder_rejected(self) -> None:
         gap = _gap_row(audit_status="review_pending", primary_coder_id=42)
         cm, cur = _scripted_cursor(fetchone_results=[gap])
         with patch("app.services.meat_audit_service.raf_cursor", cm), \
              pytest.raises(ValueError, match="differ from primary"):
             approve_review(gap_id=1, secondary_coder_id=42, tenant_id="1")
 
-    def test_wrong_state(self):
+    def test_wrong_state(self) -> None:
         gap = _gap_row(audit_status="draft", primary_coder_id=42)
         cm, cur = _scripted_cursor(fetchone_results=[gap])
         with patch("app.services.meat_audit_service.raf_cursor", cm), \
@@ -267,7 +267,7 @@ class TestApproveReview:
 
 
 class TestRejectReview:
-    def test_happy_path(self):
+    def test_happy_path(self) -> None:
         gap = _gap_row(audit_status="review_pending", primary_coder_id=42)
         rejected = {**gap, "audit_status": "rejected", "secondary_coder_id": 99,
                     "audit_notes": "[REJECT] phrase too vague"}
@@ -279,11 +279,11 @@ class TestRejectReview:
             )
         assert result["audit_status"] == "rejected"
 
-    def test_blank_reason(self):
+    def test_blank_reason(self) -> None:
         with pytest.raises(ValueError, match="reason"):
             reject_review(gap_id=1, secondary_coder_id=99, reason="   ", tenant_id="1")
 
-    def test_wrong_state(self):
+    def test_wrong_state(self) -> None:
         gap = _gap_row(audit_status="approved")
         cm, cur = _scripted_cursor(fetchone_results=[gap])
         with patch("app.services.meat_audit_service.raf_cursor", cm), \
@@ -297,7 +297,7 @@ class TestRejectReview:
 
 
 class TestGetReviewQueue:
-    def test_returns_rows_for_status(self):
+    def test_returns_rows_for_status(self) -> None:
         rows = [
             _gap_row(id=1, audit_status="review_pending", revenue_impact=4000),
             _gap_row(id=2, audit_status="review_pending", revenue_impact=2000),
@@ -315,7 +315,7 @@ class TestGetReviewQueue:
 
 
 class TestAuditReadiness:
-    def test_empty_tenant_returns_zeroes(self):
+    def test_empty_tenant_returns_zeroes(self) -> None:
         cm, cur = _scripted_cursor(fetchall_results=[[]])
         with patch("app.services.meat_audit_service.raf_cursor", cm):
             result = compute_audit_readiness(tenant_id="1")
@@ -327,7 +327,7 @@ class TestAuditReadiness:
             "missing_meat": [],
         }
 
-    def test_mixed_states(self):
+    def test_mixed_states(self) -> None:
         rows = [
             # Fully approved + dual signed
             {"id": 1, "patient_id": "p1", "hcc_code": "85",
@@ -356,7 +356,7 @@ class TestAuditReadiness:
         ids = [m["gap_id"] for m in result["missing_meat"]]
         assert ids == [3, 2]
 
-    def test_readiness_rises_after_approval(self):
+    def test_readiness_rises_after_approval(self) -> None:
         # Initial state: no approvals.
         before_rows = [
             {"id": 1, "patient_id": "p1", "hcc_code": "85",
@@ -398,7 +398,7 @@ class TestAuditReadiness:
 
 
 class TestAuditPdfRender:
-    def test_render_audit_html_contains_header_and_gap(self):
+    def test_render_audit_html_contains_header_and_gap(self) -> None:
         from app.services import recapture_audit_pdf as pdf_mod
 
         approved_gaps = [
@@ -436,7 +436,7 @@ class TestAuditPdfRender:
         assert "Bob Reviewer" in html
         assert "100.0%" in html
 
-    def test_build_audit_pdf_returns_bytes_when_weasyprint_available(self):
+    def test_build_audit_pdf_returns_bytes_when_weasyprint_available(self) -> None:
         """Smoke test — only runs when WeasyPrint is importable."""
         try:
             import weasyprint  # noqa: F401

@@ -19,7 +19,7 @@ import pytest
 # 1. MEAT confidence average — only present letters
 # ---------------------------------------------------------------------------
 
-def test_mean_present_confidences_partial():
+def test_mean_present_confidences_partial() -> None:
     """Only M and E present — avg should be (0.9 + 0.8) / 2, not / 4."""
     from app.services.meat_evidence_extractor import _mean_present_confidences
 
@@ -28,7 +28,7 @@ def test_mean_present_confidences_partial():
     assert abs(result - 0.85) < 1e-6, f"Expected 0.85, got {result}"
 
 
-def test_mean_present_confidences_all_present():
+def test_mean_present_confidences_all_present() -> None:
     """All four letters present — avg of all four."""
     from app.services.meat_evidence_extractor import _mean_present_confidences
 
@@ -37,7 +37,7 @@ def test_mean_present_confidences_all_present():
     assert abs(result - 0.7) < 1e-6, f"Expected 0.7, got {result}"
 
 
-def test_mean_present_confidences_none_present():
+def test_mean_present_confidences_none_present() -> None:
     """No present letters — should return 0.0 without ZeroDivisionError."""
     from app.services.meat_evidence_extractor import _mean_present_confidences
 
@@ -50,7 +50,7 @@ def test_mean_present_confidences_none_present():
 # 2. Encounter-id strict mode — notes with encounter=0 skipped
 # ---------------------------------------------------------------------------
 
-def test_fetch_year_notes_skips_zero_encounter_strict():
+def test_fetch_year_notes_skips_zero_encounter_strict() -> None:
     """A note with encounter=0 that cannot be resolved should be skipped
     when strict_encounter_attribution=True (the default)."""
     from app.services import meat_evidence_extractor as mod
@@ -84,7 +84,7 @@ def test_fetch_year_notes_skips_zero_encounter_strict():
     assert result == [], f"Expected empty list, got {result}"
 
 
-def test_fetch_year_notes_includes_zero_encounter_nonstrict():
+def test_fetch_year_notes_includes_zero_encounter_nonstrict() -> None:
     """A note with encounter=0 should be included when
     strict_encounter_attribution=False."""
     from app.services import meat_evidence_extractor as mod
@@ -122,7 +122,7 @@ def test_fetch_year_notes_includes_zero_encounter_nonstrict():
 # 3. Span offset disambiguation — closest to LLM hint wins
 # ---------------------------------------------------------------------------
 
-def test_validate_offsets_picks_closest_to_llm_hint():
+def test_validate_offsets_picks_closest_to_llm_hint() -> None:
     """When 'diabetes' appears twice, pick the one nearest the LLM offset."""
     from app.services.meat_evidence_extractor import _validate_offsets
 
@@ -142,7 +142,7 @@ def test_validate_offsets_picks_closest_to_llm_hint():
     )
 
 
-def test_validate_offsets_picks_last_when_no_hint():
+def test_validate_offsets_picks_last_when_no_hint() -> None:
     """When no valid LLM hint is given, pick the LAST occurrence."""
     from app.services.meat_evidence_extractor import _validate_offsets
 
@@ -158,7 +158,7 @@ def test_validate_offsets_picks_last_when_no_hint():
     )
 
 
-def test_validate_offsets_returns_none_for_hallucinated_sentence():
+def test_validate_offsets_returns_none_for_hallucinated_sentence() -> None:
     """A sentence not present in the note at all returns None."""
     from app.services.meat_evidence_extractor import _validate_offsets
 
@@ -171,7 +171,7 @@ def test_validate_offsets_returns_none_for_hallucinated_sentence():
 # 4. V28 hierarchy trump before set-diff
 # ---------------------------------------------------------------------------
 
-def test_filter_hierarchy_removes_trumped_hcc():
+def test_filter_hierarchy_removes_trumped_hcc() -> None:
     """HCC 18 must be removed when HCC 17 is present (V24 diabetes chain)."""
     from app.services.v28_transition_calculator import _filter_hierarchy
 
@@ -181,7 +181,7 @@ def test_filter_hierarchy_removes_trumped_hcc():
     assert "19" not in result, "HCC 19 should be trumped by HCC 17 in V24"
 
 
-def test_score_delta_dropped_hccs_excludes_trumped():
+def test_score_delta_dropped_hccs_excludes_trumped() -> None:
     """When V24 has [HCC18, HCC17] and V28 has [HCC17], dropped_hccs should
     be empty — HCC 18 was already trumped on the V24 side, not lost in V28."""
     from app.services import v28_transition_calculator as mod
@@ -220,19 +220,19 @@ def test_score_delta_dropped_hccs_excludes_trumped():
 # 5. Revenue constants — PY2026 rate
 # ---------------------------------------------------------------------------
 
-def test_revenue_per_raf_point_2026():
+def test_revenue_per_raf_point_2026() -> None:
     from app.services.raf.revenue_constants import revenue_per_raf_point
 
     assert revenue_per_raf_point(2026) == 11800.0
 
 
-def test_revenue_per_raf_point_2024():
+def test_revenue_per_raf_point_2024() -> None:
     from app.services.raf.revenue_constants import revenue_per_raf_point
 
     assert revenue_per_raf_point(2024) == 11015.04
 
 
-def test_revenue_per_raf_point_default():
+def test_revenue_per_raf_point_default() -> None:
     """No year argument returns the 2026 default."""
     from app.services.raf.revenue_constants import revenue_per_raf_point
 

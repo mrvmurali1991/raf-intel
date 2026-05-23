@@ -97,7 +97,7 @@ _INELIGIBLE_TYPE_CASES: list[tuple[dict, int, str]] = [
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("enc,py,expected_ok,_reason", _IN_WINDOW_CASES)
-def test_encounter_in_window_accepted(enc, py, expected_ok, _reason):
+def test_encounter_in_window_accepted(enc, py, expected_ok, _reason) -> None:
     ok, reason = is_eligible_encounter(enc, py)
     assert ok is expected_ok, f"Expected in-window accept for {enc} / PY{py}; got ({ok}, {reason!r})"
     assert reason == ""
@@ -108,7 +108,7 @@ def test_encounter_in_window_accepted(enc, py, expected_ok, _reason):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("enc,py,expected_substring", _OUT_OF_WINDOW_CASES)
-def test_encounter_out_of_window_rejected(enc, py, expected_substring):
+def test_encounter_out_of_window_rejected(enc, py, expected_substring) -> None:
     ok, reason = is_eligible_encounter(enc, py)
     assert ok is False
     assert expected_substring in reason, (
@@ -123,7 +123,7 @@ def test_encounter_out_of_window_rejected(enc, py, expected_substring):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("enc,py,expected_substring", _INELIGIBLE_TYPE_CASES)
-def test_encounter_type_ineligible(enc, py, expected_substring):
+def test_encounter_type_ineligible(enc, py, expected_substring) -> None:
     ok, reason = is_eligible_encounter(enc, py)
     assert ok is False
     assert expected_substring in reason
@@ -138,7 +138,7 @@ def test_encounter_type_ineligible(enc, py, expected_substring):
     (2025, datetime(2024, 1, 1,  0,  0,  0), datetime(2024, 12, 31, 23, 59, 59)),
     (2026, datetime(2025, 1, 1,  0,  0,  0), datetime(2025, 12, 31, 23, 59, 59)),
 ])
-def test_datetime_edges_accepted(py, start_dt, end_dt):
+def test_datetime_edges_accepted(py, start_dt, end_dt) -> None:
     for dt in (start_dt, end_dt):
         ok, reason = is_eligible_encounter(
             {"date": dt, "encounter_type": "outpatient"}, py,
@@ -154,7 +154,7 @@ def test_datetime_edges_accepted(py, start_dt, end_dt):
     (2026, datetime(2024, 12, 31, 23, 59, 59)),
     (2026, datetime(2026,  1,  1,  0,  0,  0)),
 ])
-def test_datetime_just_outside_rejected(py, dt):
+def test_datetime_just_outside_rejected(py, dt) -> None:
     ok, reason = is_eligible_encounter(
         {"date": dt, "encounter_type": "outpatient"}, py,
     )
@@ -171,7 +171,7 @@ def test_datetime_just_outside_rejected(py, dt):
     (2025, {"V24": 0.33, "V28": 0.67}),
     (2026, {"V24": 0.00, "V28": 1.00}),
 ])
-def test_blend_weights(py, expected):
+def test_blend_weights(py, expected) -> None:
     blend = get_blend_weights(py)
     assert set(blend.keys()) == set(expected.keys())
     for key, value in expected.items():
@@ -182,7 +182,7 @@ def test_blend_weights(py, expected):
     assert sum(blend.values()) == pytest.approx(1.0, abs=1e-6)
 
 
-def test_blend_weights_unknown_year_raises():
+def test_blend_weights_unknown_year_raises() -> None:
     with pytest.raises(KeyError):
         get_blend_weights(2099)
 
@@ -192,7 +192,7 @@ def test_blend_weights_unknown_year_raises():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("py", [2024, 2025, 2026])
-def test_payment_year_window_registered(py):
+def test_payment_year_window_registered(py) -> None:
     win = get_payment_year_window(py)
     assert isinstance(win, PaymentYearWindow)
     assert win.year == py
@@ -201,14 +201,14 @@ def test_payment_year_window_registered(py):
     assert win.dos_end == date(py - 1, 12, 31)
 
 
-def test_registry_covers_required_years():
+def test_registry_covers_required_years() -> None:
     for required in (2024, 2025, 2026):
         assert required in PAYMENT_YEARS, (
             f"PAYMENT_YEARS must declare PY{required} — callers depend on it"
         )
 
 
-def test_eligible_encounter_types_covers_cms_categories():
+def test_eligible_encounter_types_covers_cms_categories() -> None:
     # These four are the only types our filter accepts.  A regression here
     # would silently allow (or silently drop) entire claim categories.
     assert "inpatient" in ELIGIBLE_ENCOUNTER_TYPES
@@ -224,7 +224,7 @@ def test_eligible_encounter_types_covers_cms_categories():
 # filter_encounters_for_py + partition_encounters_for_py
 # ---------------------------------------------------------------------------
 
-def test_filter_encounters_keeps_only_eligible():
+def test_filter_encounters_keeps_only_eligible() -> None:
     encs = [
         {"date": "2024-03-01", "encounter_type": "outpatient"},   # keep
         {"date": "2022-12-31", "encounter_type": "outpatient"},   # drop (DOS)
@@ -238,7 +238,7 @@ def test_filter_encounters_keeps_only_eligible():
     assert kept_dates == {"2024-03-01", "2024-12-31", "2024-01-01"}
 
 
-def test_partition_encounters_returns_reasons():
+def test_partition_encounters_returns_reasons() -> None:
     encs = [
         {"date": "2024-03-01", "encounter_type": "outpatient"},
         {"date": "2022-12-31", "encounter_type": "outpatient"},
@@ -266,18 +266,18 @@ def test_partition_encounters_returns_reasons():
     {"date":           date(2024, 5, 1), "encounter_type": "outpatient"},
     {"date":           datetime(2024, 5, 1, 14, 30), "type": "OUTPATIENT"},
 ])
-def test_alternate_field_names(enc):
+def test_alternate_field_names(enc) -> None:
     ok, reason = is_eligible_encounter(enc, 2025)
     assert ok, f"expected accept for {enc!r}, got reason={reason!r}"
 
 
-def test_missing_dos_rejected():
+def test_missing_dos_rejected() -> None:
     ok, reason = is_eligible_encounter({"encounter_type": "outpatient"}, 2025)
     assert ok is False
     assert "date-of-service" in reason
 
 
-def test_unparseable_dos_rejected():
+def test_unparseable_dos_rejected() -> None:
     ok, reason = is_eligible_encounter(
         {"date": "not-a-date", "encounter_type": "outpatient"}, 2025,
     )
@@ -285,7 +285,7 @@ def test_unparseable_dos_rejected():
     assert "date-of-service" in reason
 
 
-def test_unknown_payment_year_rejected_with_reason():
+def test_unknown_payment_year_rejected_with_reason() -> None:
     ok, reason = is_eligible_encounter(
         {"date": "2024-05-01", "encounter_type": "outpatient"}, 2099,
     )
@@ -297,7 +297,7 @@ def test_unknown_payment_year_rejected_with_reason():
 # PaymentYearWindow self-validation (blend sums, date ordering)
 # ---------------------------------------------------------------------------
 
-def test_blend_must_sum_to_one():
+def test_blend_must_sum_to_one() -> None:
     with pytest.raises(ValueError):
         PaymentYearWindow(
             year=9999,
@@ -307,7 +307,7 @@ def test_blend_must_sum_to_one():
         )
 
 
-def test_dos_end_must_be_after_start():
+def test_dos_end_must_be_after_start() -> None:
     with pytest.raises(ValueError):
         PaymentYearWindow(
             year=9999,

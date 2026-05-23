@@ -62,7 +62,7 @@ def _row(year: int, *, raf=None, recap=None, cap=None, rev=None,
 # get_provider_trend — multi-year happy path
 # ===========================================================================
 
-def test_get_provider_trend_multi_year_returns_ascending_values_and_deltas():
+def test_get_provider_trend_multi_year_returns_ascending_values_and_deltas() -> None:
     # DB returns rows DESC by year (matches the SQL ORDER BY).
     rows = [
         _row(2026, raf=1.34, recap=0.82, cap=0.78, rev=180_000),
@@ -99,7 +99,7 @@ def test_get_provider_trend_multi_year_returns_ascending_values_and_deltas():
 # get_provider_trend — single-year edge case
 # ===========================================================================
 
-def test_get_provider_trend_single_year_returns_null_deltas():
+def test_get_provider_trend_single_year_returns_null_deltas() -> None:
     rows = [_row(2026, raf=1.34, recap=0.82, cap=0.78, rev=180_000)]
     cm, _cur = _make_cursor_cm(rows)
 
@@ -116,7 +116,7 @@ def test_get_provider_trend_single_year_returns_null_deltas():
     assert len(raf["values"]) == 1
 
 
-def test_get_provider_trend_no_data_returns_empty_payload():
+def test_get_provider_trend_no_data_returns_empty_payload() -> None:
     cm, _cur = _make_cursor_cm([])
 
     with patch("app.services.provider_trends.raf_cursor", cm):
@@ -134,7 +134,7 @@ def test_get_provider_trend_no_data_returns_empty_payload():
 # get_provider_trend — metric filtering
 # ===========================================================================
 
-def test_get_provider_trend_filters_to_requested_metric():
+def test_get_provider_trend_filters_to_requested_metric() -> None:
     rows = [
         _row(2026, raf=1.34, recap=0.82),
         _row(2025, raf=1.21, recap=0.79),
@@ -147,7 +147,7 @@ def test_get_provider_trend_filters_to_requested_metric():
     assert list(out["metrics"].keys()) == ["raf"]
 
 
-def test_get_provider_trend_unknown_metric_falls_back_to_defaults():
+def test_get_provider_trend_unknown_metric_falls_back_to_defaults() -> None:
     rows = [_row(2026, raf=1.34, recap=0.82, cap=0.78, rev=100_000)]
     cm, _cur = _make_cursor_cm(rows)
 
@@ -162,7 +162,7 @@ def test_get_provider_trend_unknown_metric_falls_back_to_defaults():
 # get_provider_trend — None values do not poison deltas
 # ===========================================================================
 
-def test_get_provider_trend_skips_none_values_in_delta_calculation():
+def test_get_provider_trend_skips_none_values_in_delta_calculation() -> None:
     rows = [
         _row(2026, raf=1.50),
         _row(2025, raf=None),       # missing year — should be ignored for deltas
@@ -186,7 +186,7 @@ def test_get_provider_trend_skips_none_values_in_delta_calculation():
 # get_tenant_aggregate_trend
 # ===========================================================================
 
-def test_get_tenant_aggregate_trend_computes_average_per_year():
+def test_get_tenant_aggregate_trend_computes_average_per_year() -> None:
     # The SQL itself does the AVG(); the mock just hands back the resulting rows.
     rows = [
         {"measurement_year": 2026, "value": 1.30},
@@ -207,7 +207,7 @@ def test_get_tenant_aggregate_trend_computes_average_per_year():
     assert out["single_year_only"] is False
 
 
-def test_get_tenant_aggregate_trend_unknown_metric_falls_back_to_raf():
+def test_get_tenant_aggregate_trend_unknown_metric_falls_back_to_raf() -> None:
     cm, _cur = _make_cursor_cm([{"measurement_year": 2026, "value": 1.0}])
 
     with patch("app.services.provider_trends.raf_cursor", cm):
@@ -220,7 +220,7 @@ def test_get_tenant_aggregate_trend_unknown_metric_falls_back_to_raf():
 # Column registry self-check — guards against typos in METRIC_COLUMNS.
 # ===========================================================================
 
-def test_metric_columns_only_reference_known_snapshot_fields():
+def test_metric_columns_only_reference_known_snapshot_fields() -> None:
     # The columns referenced here must match those declared in
     # backend/app/migrations.py for provider_scorecard_snapshots.
     valid_columns = {

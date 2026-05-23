@@ -55,7 +55,7 @@ def _make_hmac_sig(body: bytes, secret: str) -> str:
 class TestSubmitChartRequest:
     """submit_chart_request posts to /api/v1/chart-requests."""
 
-    def test_returns_request_id(self, monkeypatch):
+    def test_returns_request_id(self, monkeypatch) -> None:
         """Mock httpx response → assert request_id is returned."""
         fake_response = MagicMock()
         fake_response.json.return_value = {
@@ -104,7 +104,7 @@ class TestSubmitChartRequest:
 class TestGetChartRequestStatus:
     """get_chart_request_status polls /api/v1/chart-requests/{id}."""
 
-    def test_complete_status_returns_document_list(self, monkeypatch):
+    def test_complete_status_returns_document_list(self, monkeypatch) -> None:
         """Mock httpx GET → status=complete with document list."""
         fake_response = MagicMock()
         fake_response.json.return_value = {
@@ -159,7 +159,7 @@ def webhook_client(monkeypatch):
 class TestWebhookBadSignature:
     """Requests with wrong or missing signatures must be rejected."""
 
-    def test_missing_signature_returns_403(self, webhook_client):
+    def test_missing_signature_returns_403(self, webhook_client) -> None:
         payload = json.dumps({"document_id": "doc-001", "request_id": "req-001"}).encode()
         resp = webhook_client.post(
             "/api/webhooks/datavant",
@@ -168,7 +168,7 @@ class TestWebhookBadSignature:
         )
         assert resp.status_code == 403
 
-    def test_wrong_signature_returns_403(self, webhook_client):
+    def test_wrong_signature_returns_403(self, webhook_client) -> None:
         payload = json.dumps({"document_id": "doc-002", "request_id": "req-002"}).encode()
         resp = webhook_client.post(
             "/api/webhooks/datavant",
@@ -184,7 +184,7 @@ class TestWebhookBadSignature:
 class TestWebhookValidSignature:
     """Valid signatures should enqueue the Celery task and return 200."""
 
-    def test_valid_signature_returns_200_and_enqueues(self, webhook_client, monkeypatch):
+    def test_valid_signature_returns_200_and_enqueues(self, webhook_client, monkeypatch) -> None:
         secret = os.environ.get("DATAVANT_WEBHOOK_SECRET", "super-secret-for-tests")
         payload_dict = {"document_id": "doc-xyz", "request_id": "req-xyz"}
         payload_bytes = json.dumps(payload_dict).encode()
@@ -213,7 +213,7 @@ class TestWebhookValidSignature:
         data = resp.json()
         assert data.get("accepted") is True
 
-    def test_valid_signature_triggers_delay(self, monkeypatch):
+    def test_valid_signature_triggers_delay(self, monkeypatch) -> None:
         """Directly test that task_datavant_ingest.delay is called on a valid webhook."""
         monkeypatch.setenv("DATAVANT_WEBHOOK_SECRET", "test-secret-key")
 
@@ -311,7 +311,7 @@ class TestCredentialsCheck:
         app.include_router(mini_router)
         return TestClient(app)
 
-    def test_no_env_returns_configured_false(self, monkeypatch):
+    def test_no_env_returns_configured_false(self, monkeypatch) -> None:
         client = self._make_admin_client(
             monkeypatch,
             {
@@ -327,7 +327,7 @@ class TestCredentialsCheck:
         assert data["api_base_reachable"] is False
         assert "Missing" in (data.get("detail") or "")
 
-    def test_all_env_set_but_unreachable(self, monkeypatch):
+    def test_all_env_set_but_unreachable(self, monkeypatch) -> None:
         """configured=true but HEAD request raises → api_base_reachable=false."""
         import httpx
 

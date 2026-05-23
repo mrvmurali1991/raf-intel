@@ -19,7 +19,7 @@ pytestmark = pytest.mark.integration
 class TestHealthEndpoint:
     """GET /health"""
 
-    def test_health_returns_2xx(self, api_client: requests.Session, base_url: str):
+    def test_health_returns_2xx(self, api_client: requests.Session, base_url: str) -> None:
         """
         /health MUST return either 200 (all DBs healthy) or 503 (degraded).
         Both indicate the server is alive and the endpoint is functional.
@@ -30,13 +30,13 @@ class TestHealthEndpoint:
             f"Body: {r.text[:300]}"
         )
 
-    def test_health_returns_json(self, api_client: requests.Session, base_url: str):
+    def test_health_returns_json(self, api_client: requests.Session, base_url: str) -> None:
         """Response body must be valid JSON."""
         r = api_client.get(f"{base_url}/health")
         data = r.json()
         assert isinstance(data, dict), "Expected a JSON object from /health"
 
-    def test_health_has_status_field(self, api_client: requests.Session, base_url: str):
+    def test_health_has_status_field(self, api_client: requests.Session, base_url: str) -> None:
         """Response must contain a 'status' key."""
         r = api_client.get(f"{base_url}/health")
         data = r.json()
@@ -44,7 +44,7 @@ class TestHealthEndpoint:
 
     def test_health_status_is_healthy_or_degraded(
         self, api_client: requests.Session, base_url: str
-    ):
+    ) -> None:
         """'status' value must be one of the known strings."""
         r = api_client.get(f"{base_url}/health")
         data = r.json()
@@ -52,21 +52,21 @@ class TestHealthEndpoint:
             f"Unexpected status value: {data['status']!r}"
         )
 
-    def test_health_has_databases_field(self, api_client: requests.Session, base_url: str):
+    def test_health_has_databases_field(self, api_client: requests.Session, base_url: str) -> None:
         """Response must expose DB connection status."""
         r = api_client.get(f"{base_url}/health")
         data = r.json()
         assert "databases" in data, f"Missing 'databases' field in /health response: {data}"
         assert isinstance(data["databases"], dict), "'databases' must be a mapping"
 
-    def test_health_has_gemini_model_field(self, api_client: requests.Session, base_url: str):
+    def test_health_has_gemini_model_field(self, api_client: requests.Session, base_url: str) -> None:
         """Response must indicate the configured Gemini model."""
         r = api_client.get(f"{base_url}/health")
         data = r.json()
         assert "gemini_model" in data, f"Missing 'gemini_model' in /health response: {data}"
         assert data["gemini_model"], "'gemini_model' should not be empty"
 
-    def test_health_is_healthy(self, api_client: requests.Session, base_url: str):
+    def test_health_is_healthy(self, api_client: requests.Session, base_url: str) -> None:
         """
         For integration tests to be meaningful both databases should be up.
         Mark as XFAIL (rather than hard-fail) if DB is degraded, so the CI
@@ -88,11 +88,11 @@ class TestHealthEndpoint:
 class TestRootEndpoint:
     """GET /"""
 
-    def test_root_returns_200(self, api_client: requests.Session, base_url: str):
+    def test_root_returns_200(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/")
         assert r.status_code == 200, f"Expected 200 from /, got {r.status_code}"
 
-    def test_root_returns_service_info(self, api_client: requests.Session, base_url: str):
+    def test_root_returns_service_info(self, api_client: requests.Session, base_url: str) -> None:
         r = api_client.get(f"{base_url}/")
         data = r.json()
         assert data.get("service") == "RAF Intelligence System"
@@ -108,21 +108,21 @@ class TestRootEndpoint:
 class TestDocsEndpoints:
     """FastAPI documentation endpoints."""
 
-    def test_docs_returns_200(self, api_client: requests.Session, base_url: str):
+    def test_docs_returns_200(self, api_client: requests.Session, base_url: str) -> None:
         """Swagger UI at /docs must be reachable."""
         r = api_client.get(f"{base_url}/docs")
         assert r.status_code == 200, (
             f"GET /docs returned {r.status_code} — Swagger UI not available"
         )
 
-    def test_redoc_returns_200(self, api_client: requests.Session, base_url: str):
+    def test_redoc_returns_200(self, api_client: requests.Session, base_url: str) -> None:
         """ReDoc UI at /redoc must be reachable."""
         r = api_client.get(f"{base_url}/redoc")
         assert r.status_code == 200, (
             f"GET /redoc returned {r.status_code} — ReDoc UI not available"
         )
 
-    def test_openapi_json_returns_200(self, api_client: requests.Session, base_url: str):
+    def test_openapi_json_returns_200(self, api_client: requests.Session, base_url: str) -> None:
         """OpenAPI JSON schema must be valid and parseable."""
         r = api_client.get(f"{base_url}/openapi.json")
         assert r.status_code == 200, f"GET /openapi.json returned {r.status_code}"
@@ -133,7 +133,7 @@ class TestDocsEndpoints:
 
     def test_openapi_schema_has_expected_routes(
         self, api_client: requests.Session, base_url: str
-    ):
+    ) -> None:
         """Key API paths must appear in the OpenAPI schema."""
         r = api_client.get(f"{base_url}/openapi.json")
         schema = r.json()
@@ -160,21 +160,21 @@ class TestDocsEndpoints:
 class TestICD10UtilityEndpoints:
     """GET /api/icd10/* — quick sanity checks for the validator layer."""
 
-    def test_validate_known_valid_code(self, api_client: requests.Session, base_url: str):
+    def test_validate_known_valid_code(self, api_client: requests.Session, base_url: str) -> None:
         """E11.9 (Type 2 DM without complications) is a canonical valid ICD-10 code."""
         r = api_client.get(f"{base_url}/api/icd10/validate/E11.9")
         assert r.status_code == 200, f"Unexpected status {r.status_code}"
         data = r.json()
         assert data.get("valid") is True, f"E11.9 should be valid — got: {data}"
 
-    def test_validate_invalid_code(self, api_client: requests.Session, base_url: str):
+    def test_validate_invalid_code(self, api_client: requests.Session, base_url: str) -> None:
         """ZZZZZZ is not a valid ICD-10 code."""
         r = api_client.get(f"{base_url}/api/icd10/validate/ZZZZZZ")
         assert r.status_code == 200, f"Endpoint should return 200 even for invalid codes"
         data = r.json()
         assert data.get("valid") is False, f"ZZZZZZ should be invalid — got: {data}"
 
-    def test_icd10_search_returns_results(self, api_client: requests.Session, base_url: str):
+    def test_icd10_search_returns_results(self, api_client: requests.Session, base_url: str) -> None:
         """Search for 'diabetes' should return at least one result."""
         r = api_client.get(f"{base_url}/api/icd10/search", params={"query": "diabetes"})
         assert r.status_code == 200, f"Unexpected status {r.status_code}"
@@ -182,7 +182,7 @@ class TestICD10UtilityEndpoints:
         assert "results" in data, f"Missing 'results' in ICD-10 search response: {data}"
         assert data.get("count", 0) > 0, "Expected at least one ICD-10 result for 'diabetes'"
 
-    def test_icd10_search_response_structure(self, api_client: requests.Session, base_url: str):
+    def test_icd10_search_response_structure(self, api_client: requests.Session, base_url: str) -> None:
         """Each result must contain 'code' and 'description' fields."""
         r = api_client.get(
             f"{base_url}/api/icd10/search", params={"query": "hypertension", "max_results": 5}

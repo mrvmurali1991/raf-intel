@@ -58,7 +58,7 @@ def _install_subs(**modules: Any) -> None:
 # 1. get_related_hccs — text input
 # ---------------------------------------------------------------------------
 
-def test_get_related_hccs_with_text_input(monkeypatch):
+def test_get_related_hccs_with_text_input(monkeypatch) -> None:
     snomed = _fake_module(
         search_concept=lambda q: [{"icd10_codes": ["E11.40"]}],
     )
@@ -82,7 +82,7 @@ def test_get_related_hccs_with_text_input(monkeypatch):
 # 2. get_related_hccs — concept_uri input + edges fallback
 # ---------------------------------------------------------------------------
 
-def test_get_related_hccs_with_concept_uri(monkeypatch):
+def test_get_related_hccs_with_concept_uri(monkeypatch) -> None:
     rules = _fake_module(
         fire_rules_for_codes=lambda codes: [
             {"hcc_code": "18", "rule_id": "R-2", "citation": "concept",
@@ -102,7 +102,7 @@ def test_get_related_hccs_with_concept_uri(monkeypatch):
 # 3. get_related_hccs — patient context applies modulation + specialty priors
 # ---------------------------------------------------------------------------
 
-def test_get_related_hccs_specialty_modulation(monkeypatch):
+def test_get_related_hccs_specialty_modulation(monkeypatch) -> None:
     rules = _fake_module(
         fire_rules_for_codes=lambda codes: [
             {"hcc_code": "18", "rule_id": "R", "citation": "x",
@@ -131,7 +131,7 @@ def test_get_related_hccs_specialty_modulation(monkeypatch):
 # 4. get_evidence_chain — full chain (mock all sub-services)
 # ---------------------------------------------------------------------------
 
-def test_get_evidence_chain_full_chain(monkeypatch):
+def test_get_evidence_chain_full_chain(monkeypatch) -> None:
     rules = _fake_module(
         get_evidence_for_patient_hcc=lambda pid, hcc, year: [
             {"rule_id": "R1", "citation": "Smith 2020",
@@ -173,7 +173,7 @@ def test_get_evidence_chain_full_chain(monkeypatch):
 # 5. traverse_path — BFS correctness
 # ---------------------------------------------------------------------------
 
-def test_traverse_path_bfs(monkeypatch):
+def test_traverse_path_bfs(monkeypatch) -> None:
     # Graph:  A -> B -> C ;  A -> D -> C  (two paths to C, BFS picks shortest)
     edges = {
         "A": [{"target_uri": "B", "relation": "rel", "weight": 1.0},
@@ -191,19 +191,19 @@ def test_traverse_path_bfs(monkeypatch):
     assert len(path) == 3  # A -> (B|D) -> C
 
 
-def test_traverse_path_self_loop(monkeypatch):
+def test_traverse_path_self_loop(monkeypatch) -> None:
     monkeypatch.setattr(kg, "_kg_edges_from", lambda u: [])
     path = kg.traverse_path("X", "X", max_depth=5)
     assert path and path[0]["node"] == "X"
 
 
-def test_traverse_path_unreachable(monkeypatch):
+def test_traverse_path_unreachable(monkeypatch) -> None:
     monkeypatch.setattr(kg, "_kg_edges_from", lambda u: [])
     path = kg.traverse_path("A", "Z", max_depth=3)
     assert path == []
 
 
-def test_traverse_path_respects_max_depth(monkeypatch):
+def test_traverse_path_respects_max_depth(monkeypatch) -> None:
     edges = {
         "A": [{"target_uri": "B", "relation": "r", "weight": 1.0}],
         "B": [{"target_uri": "C", "relation": "r", "weight": 1.0}],
@@ -219,7 +219,7 @@ def test_traverse_path_respects_max_depth(monkeypatch):
 # 6. explain_hcc — static lookup
 # ---------------------------------------------------------------------------
 
-def test_explain_hcc_static(monkeypatch):
+def test_explain_hcc_static(monkeypatch) -> None:
     rules = _fake_module(
         get_hcc_definition=lambda h: {"label": "Diabetes with Complications"},
         suggest_icd10_for_hcc=lambda h: ["E11.40", "E11.42"],
@@ -244,7 +244,7 @@ def test_explain_hcc_static(monkeypatch):
 # 7. patient_full_inference — orchestrates all sub-services
 # ---------------------------------------------------------------------------
 
-def test_patient_full_inference_orchestrates_all(monkeypatch):
+def test_patient_full_inference_orchestrates_all(monkeypatch) -> None:
     # Stub every sub-service
     rules = _fake_module(
         fire_rules_for_patient=lambda pid, year=2026: [
@@ -330,7 +330,7 @@ def _fake_cursor_ctx(rows):
 # 8. Caching — same call twice, second one cached
 # ---------------------------------------------------------------------------
 
-def test_explain_hcc_caches(monkeypatch):
+def test_explain_hcc_caches(monkeypatch) -> None:
     call_count = {"n": 0}
 
     def _fire(h):
@@ -349,7 +349,7 @@ def test_explain_hcc_caches(monkeypatch):
     assert call_count["n"] == 1  # second call hit cache
 
 
-def test_traverse_caches(monkeypatch):
+def test_traverse_caches(monkeypatch) -> None:
     call_count = {"n": 0}
 
     def _edges(u):
@@ -367,7 +367,7 @@ def test_traverse_caches(monkeypatch):
 # 9. Telemetry — kg_query_log row written
 # ---------------------------------------------------------------------------
 
-def test_telemetry_log_called(monkeypatch):
+def test_telemetry_log_called(monkeypatch) -> None:
     """Re-enable telemetry for one test and confirm _log_query is invoked."""
     monkeypatch.setattr(kg, "_log_query", MagicMock())
     rules = _fake_module(
@@ -383,7 +383,7 @@ def test_telemetry_log_called(monkeypatch):
     assert args[0] == "explain_hcc"
 
 
-def test_telemetry_failure_does_not_crash(monkeypatch):
+def test_telemetry_failure_does_not_crash(monkeypatch) -> None:
     """If kg_query_log INSERT fails, the call still returns normally."""
     def _boom(*a, **kw): raise RuntimeError("db down")
     # Patch raf_cursor used inside _log_query directly
@@ -398,7 +398,7 @@ def test_telemetry_failure_does_not_crash(monkeypatch):
 # 10. Graceful degradation — missing sub-service does not crash
 # ---------------------------------------------------------------------------
 
-def test_graceful_degradation_when_subservice_missing(monkeypatch):
+def test_graceful_degradation_when_subservice_missing(monkeypatch) -> None:
     """All sub-services unavailable → call still returns a (possibly empty) result."""
     # Force every sub-service to be None
     for name in kg._SUB_SERVICE_NAMES:
@@ -415,7 +415,7 @@ def test_graceful_degradation_when_subservice_missing(monkeypatch):
     assert chain["evidence_chain"] == []
 
 
-def test_one_subservice_raising_does_not_crash_full_inference(monkeypatch):
+def test_one_subservice_raising_does_not_crash_full_inference(monkeypatch) -> None:
     """A raising sub-service is logged and skipped, others still contribute."""
     def _raise(*a, **kw):
         raise RuntimeError("simulated failure")
@@ -451,7 +451,7 @@ def test_one_subservice_raising_does_not_crash_full_inference(monkeypatch):
 # 11. Parallel-safe — calling repeatedly does not deadlock
 # ---------------------------------------------------------------------------
 
-def test_repeated_calls_no_deadlock(monkeypatch):
+def test_repeated_calls_no_deadlock(monkeypatch) -> None:
     """The cache uses an RLock so re-entrant access from the same thread is OK."""
     rules = _fake_module(
         get_hcc_definition=lambda h: {"label": h},
@@ -469,18 +469,18 @@ def test_repeated_calls_no_deadlock(monkeypatch):
 # 12. _safe_call returns None on missing module
 # ---------------------------------------------------------------------------
 
-def test_safe_call_missing_module_returns_none():
+def test_safe_call_missing_module_returns_none() -> None:
     for name in kg._SUB_SERVICE_NAMES:
         kg._SUB_SERVICES[name] = None
     assert kg._safe_call("snomed_service", "foo") is None
 
 
-def test_safe_call_missing_function_returns_none():
+def test_safe_call_missing_function_returns_none() -> None:
     _install_subs(snomed_service=_fake_module())  # no functions
     assert kg._safe_call("snomed_service", "search_concept", "x") is None
 
 
-def test_safe_call_swallows_exceptions():
+def test_safe_call_swallows_exceptions() -> None:
     def _boom(*a, **kw):
         raise RuntimeError("oops")
     _install_subs(snomed_service=_fake_module(search_concept=_boom))
@@ -491,7 +491,7 @@ def test_safe_call_swallows_exceptions():
 # 13. sub_service_status reports availability
 # ---------------------------------------------------------------------------
 
-def test_sub_service_status():
+def test_sub_service_status() -> None:
     _install_subs(snomed_service=_fake_module(),
                   loinc_service=_fake_module())
     status = kg.sub_service_status()
@@ -504,7 +504,7 @@ def test_sub_service_status():
 # 14. Ranking — higher confidence always sorts first
 # ---------------------------------------------------------------------------
 
-def test_get_related_hccs_ranks_by_confidence(monkeypatch):
+def test_get_related_hccs_ranks_by_confidence(monkeypatch) -> None:
     rules = _fake_module(
         fire_rules_for_codes=lambda codes: [
             {"hcc_code": "37", "rule_id": "A", "citation": "",
@@ -528,7 +528,7 @@ def test_get_related_hccs_ranks_by_confidence(monkeypatch):
 # 15. limit honored
 # ---------------------------------------------------------------------------
 
-def test_get_related_hccs_respects_limit(monkeypatch):
+def test_get_related_hccs_respects_limit(monkeypatch) -> None:
     rules = _fake_module(
         fire_rules_for_codes=lambda codes: [
             {"hcc_code": str(i), "rule_id": str(i), "citation": "",
@@ -546,7 +546,7 @@ def test_get_related_hccs_respects_limit(monkeypatch):
 # 16. Drugs alone can produce HCC candidates
 # ---------------------------------------------------------------------------
 
-def test_drug_only_inference(monkeypatch):
+def test_drug_only_inference(monkeypatch) -> None:
     drugs = _fake_module(
         infer_hccs_from_drugs=lambda dx: [
             {"hcc_code": "111", "drug": "warfarin",
@@ -567,7 +567,7 @@ def test_drug_only_inference(monkeypatch):
 # 17. Lab-only inference
 # ---------------------------------------------------------------------------
 
-def test_lab_only_inference(monkeypatch):
+def test_lab_only_inference(monkeypatch) -> None:
     labs = _fake_module(
         infer_hccs_from_labs=lambda lx: [
             {"hcc_code": "138", "loinc": "33914-3",
@@ -588,7 +588,7 @@ def test_lab_only_inference(monkeypatch):
 # 18. Comorbidity upgrade with prior_hccs
 # ---------------------------------------------------------------------------
 
-def test_comorbidity_upgrade(monkeypatch):
+def test_comorbidity_upgrade(monkeypatch) -> None:
     comorb = _fake_module(
         find_upgrades=lambda hccs: [
             {"upgraded_hcc": "38", "from_hccs": hccs,
@@ -609,7 +609,7 @@ def test_comorbidity_upgrade(monkeypatch):
 # 19. clear_cache drops cached entries
 # ---------------------------------------------------------------------------
 
-def test_clear_cache(monkeypatch):
+def test_clear_cache(monkeypatch) -> None:
     rules = _fake_module(
         get_hcc_definition=MagicMock(return_value={}),
         suggest_icd10_for_hcc=lambda h: [],
@@ -629,7 +629,7 @@ def test_clear_cache(monkeypatch):
 # 20. _safe_params filters non-serializable values
 # ---------------------------------------------------------------------------
 
-def test_safe_params_filters_complex_objects():
+def test_safe_params_filters_complex_objects() -> None:
     out = kg._safe_params(
         ("hello", 42, object()),
         {"k": "v", "complex": object(), "nested": {"a": 1, "obj": object()}},
@@ -646,7 +646,7 @@ def test_safe_params_filters_complex_objects():
 # 21. get_query_stats returns gracefully when DB has no kg_query_log
 # ---------------------------------------------------------------------------
 
-def test_get_query_stats_handles_missing_table(monkeypatch):
+def test_get_query_stats_handles_missing_table(monkeypatch) -> None:
     def _boom(*a, **kw): raise RuntimeError("no such table")
     monkeypatch.setattr(kg, "raf_cursor", _boom)
     out = kg.get_query_stats(since_hours=1)

@@ -96,7 +96,7 @@ def _make_mock_binary_response(raw: bytes, content_type: str = "application/pdf"
 
 class TestCommonWellAdapter:
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         _reset_rate_state()
         # Inject required env vars
         os.environ["HIE_COMMONWELL_CERT_PATH"] = "/fake/cert.pem"
@@ -104,7 +104,7 @@ class TestCommonWellAdapter:
         os.environ["HIE_COMMONWELL_TRUST_BUNDLE"] = "/fake/ca.pem"
         os.environ["HIE_COMMONWELL_BASE_URL"] = "https://cw.test"
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         for k in ["HIE_COMMONWELL_CERT_PATH", "HIE_COMMONWELL_KEY_PATH",
                   "HIE_COMMONWELL_TRUST_BUNDLE", "HIE_COMMONWELL_BASE_URL"]:
             os.environ.pop(k, None)
@@ -112,7 +112,7 @@ class TestCommonWellAdapter:
 
     # --- discover_patient ---
 
-    def test_discover_patient_zero_matches(self):
+    def test_discover_patient_zero_matches(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         empty_bundle = _make_patient_bundle([])
@@ -133,7 +133,7 @@ class TestCommonWellAdapter:
         call_args = mock_client.post.call_args
         assert "/v1/patients/match" in call_args[0][0]
 
-    def test_discover_patient_single_match(self):
+    def test_discover_patient_single_match(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         patients = [_make_patient("cw-001", "John", "Doe", "1960-01-01", "male", score=0.97)]
@@ -154,7 +154,7 @@ class TestCommonWellAdapter:
         assert result[0]["hie_patient_id"] == "cw-001"
         assert result[0]["network"] == "commonwell"
 
-    def test_discover_patient_many_matches_sorted_by_confidence(self):
+    def test_discover_patient_many_matches_sorted_by_confidence(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         patients = [
@@ -180,7 +180,7 @@ class TestCommonWellAdapter:
         confidences = [r["confidence"] for r in result]
         assert confidences == sorted(confidences, reverse=True)
 
-    def test_discover_patient_includes_mbi_identifier(self):
+    def test_discover_patient_includes_mbi_identifier(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         bundle = _make_patient_bundle([])
@@ -200,7 +200,7 @@ class TestCommonWellAdapter:
         param_names = [p["name"] for p in posted_body["parameter"]]
         assert "identifier" in param_names
 
-    def test_mtls_cert_passed_to_httpx_client(self):
+    def test_mtls_cert_passed_to_httpx_client(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         bundle = _make_patient_bundle([])
@@ -219,7 +219,7 @@ class TestCommonWellAdapter:
 
     # --- list_document_references ---
 
-    def test_list_document_references_parses_bundle(self):
+    def test_list_document_references_parses_bundle(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         docs = [
@@ -244,7 +244,7 @@ class TestCommonWellAdapter:
         assert "cw-001" in call_url
         assert "DocumentReference" in call_url
 
-    def test_list_document_references_with_since_param(self):
+    def test_list_document_references_with_since_param(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         bundle = _make_doc_ref_bundle([])
@@ -264,7 +264,7 @@ class TestCommonWellAdapter:
 
     # --- fetch_binary ---
 
-    def test_fetch_binary_pdf_direct(self):
+    def test_fetch_binary_pdf_direct(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         pdf_bytes = b"%PDF-1.4 fake pdf content"
@@ -281,7 +281,7 @@ class TestCommonWellAdapter:
         assert raw == pdf_bytes
         assert mime == "application/pdf"
 
-    def test_fetch_binary_fhir_json_base64_fallback(self):
+    def test_fetch_binary_fhir_json_base64_fallback(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
 
         pdf_bytes = b"%PDF-1.4 fake content"
@@ -306,7 +306,7 @@ class TestCommonWellAdapter:
 
     # --- network not configured ---
 
-    def test_network_not_configured_raises(self):
+    def test_network_not_configured_raises(self) -> None:
         from app.services.hie.base import NetworkNotConfiguredError
         from app.services.hie.commonwell import CommonWellAdapter
 
@@ -317,7 +317,7 @@ class TestCommonWellAdapter:
         with pytest.raises(NetworkNotConfiguredError):
             asyncio.run(adapter.discover_patient("A", "B", "2000-01-01", "male"))
 
-    def test_is_configured_false_when_missing_vars(self):
+    def test_is_configured_false_when_missing_vars(self) -> None:
         from app.services.hie.commonwell import CommonWellAdapter
         os.environ.pop("HIE_COMMONWELL_TRUST_BUNDLE", None)
         adapter = CommonWellAdapter()
@@ -330,14 +330,14 @@ class TestCommonWellAdapter:
 
 class TestCarequalityAdapter:
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         _reset_rate_state()
         os.environ["HIE_CAREQUALITY_CERT_PATH"] = "/fake/cq-cert.pem"
         os.environ["HIE_CAREQUALITY_KEY_PATH"] = "/fake/cq-key.pem"
         os.environ["HIE_CAREQUALITY_TRUST_BUNDLE"] = "/fake/cq-ca.pem"
         os.environ["HIE_CAREQUALITY_BASE_URL"] = "https://cq.test/r4"
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         for k in ["HIE_CAREQUALITY_CERT_PATH", "HIE_CAREQUALITY_KEY_PATH",
                   "HIE_CAREQUALITY_TRUST_BUNDLE", "HIE_CAREQUALITY_BASE_URL"]:
             os.environ.pop(k, None)
@@ -352,7 +352,7 @@ class TestCarequalityAdapter:
             })
         return {"resourceType": "Bundle", "type": "searchset", "entry": entries}
 
-    def test_discover_patient_zero_matches(self):
+    def test_discover_patient_zero_matches(self) -> None:
         from app.services.hie.carequality import CarequalityAdapter
 
         bundle = {"resourceType": "Bundle", "entry": []}
@@ -369,7 +369,7 @@ class TestCarequalityAdapter:
             )
         assert result == []
 
-    def test_discover_patient_uses_patient_match_url(self):
+    def test_discover_patient_uses_patient_match_url(self) -> None:
         from app.services.hie.carequality import CarequalityAdapter
 
         bundle = {"resourceType": "Bundle", "entry": []}
@@ -386,7 +386,7 @@ class TestCarequalityAdapter:
         url = mock_client.post.call_args[0][0]
         assert url.endswith("/Patient/$match")
 
-    def test_discover_patient_multiple_matches_sorted(self):
+    def test_discover_patient_multiple_matches_sorted(self) -> None:
         from app.services.hie.carequality import CarequalityAdapter
 
         p1 = {"resourceType": "Patient", "id": "cq-001", "name": [{"given": ["Jane"], "family": "Doe"}],
@@ -410,7 +410,7 @@ class TestCarequalityAdapter:
         assert result[0]["confidence"] >= result[1]["confidence"]
         assert result[0]["network"] == "carequality"
 
-    def test_list_document_references_parses_bundle(self):
+    def test_list_document_references_parses_bundle(self) -> None:
         from app.services.hie.carequality import CarequalityAdapter
 
         docs = [
@@ -432,7 +432,7 @@ class TestCarequalityAdapter:
         assert len(result) == 3
         assert result[2]["id"] == "cq-doc-3"
 
-    def test_mtls_cert_passed_to_httpx_client(self):
+    def test_mtls_cert_passed_to_httpx_client(self) -> None:
         from app.services.hie.carequality import CarequalityAdapter
 
         bundle = {"resourceType": "Bundle", "entry": []}
@@ -449,7 +449,7 @@ class TestCarequalityAdapter:
             assert init_kwargs["cert"] == ("/fake/cq-cert.pem", "/fake/cq-key.pem")
             assert init_kwargs["verify"] == "/fake/cq-ca.pem"
 
-    def test_fetch_binary_fhir_json_base64_fallback(self):
+    def test_fetch_binary_fhir_json_base64_fallback(self) -> None:
         from app.services.hie.carequality import CarequalityAdapter
 
         raw_pdf = b"%PDF-1.4 carequality test doc"
@@ -479,14 +479,14 @@ class TestCarequalityAdapter:
 
 class TestSyncPatientFromHie:
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         _reset_rate_state()
         os.environ["HIE_COMMONWELL_CERT_PATH"] = "/fake/cert.pem"
         os.environ["HIE_COMMONWELL_KEY_PATH"] = "/fake/key.pem"
         os.environ["HIE_COMMONWELL_TRUST_BUNDLE"] = "/fake/ca.pem"
         os.environ["HIE_COMMONWELL_BASE_URL"] = "https://cw.test"
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         for k in ["HIE_COMMONWELL_CERT_PATH", "HIE_COMMONWELL_KEY_PATH",
                   "HIE_COMMONWELL_TRUST_BUNDLE", "HIE_COMMONWELL_BASE_URL"]:
             os.environ.pop(k, None)
@@ -513,7 +513,7 @@ class TestSyncPatientFromHie:
         mock_adapter.fetch_binary = AsyncMock(return_value=(b"%PDF-1.4 content", "application/pdf"))
         return mock_adapter
 
-    def test_sync_3_docs_3_vision_3_dedup_rows(self):
+    def test_sync_3_docs_3_vision_3_dedup_rows(self) -> None:
         from app.services.hie.sync import sync_patient_from_hie
 
         mock_adapter = self._mock_adapter_for_sync(n_docs=3)
@@ -551,7 +551,7 @@ class TestSyncPatientFromHie:
         assert mock_extract.call_count == 3
         mock_upsert.assert_called_once()
 
-    def test_sync_skips_already_processed_docs(self):
+    def test_sync_skips_already_processed_docs(self) -> None:
         from app.services.hie.sync import sync_patient_from_hie
 
         mock_adapter = self._mock_adapter_for_sync(n_docs=3)
@@ -579,7 +579,7 @@ class TestSyncPatientFromHie:
         assert mock_mark.call_count == 0
         assert mock_extract.call_count == 0
 
-    def test_sync_returns_network_not_configured(self):
+    def test_sync_returns_network_not_configured(self) -> None:
         from app.services.hie.sync import sync_patient_from_hie
 
         mock_adapter = MagicMock()
@@ -594,7 +594,7 @@ class TestSyncPatientFromHie:
 
         assert result["status"] == "network_not_configured"
 
-    def test_sync_handles_no_patient_found(self):
+    def test_sync_handles_no_patient_found(self) -> None:
         from app.services.hie.sync import sync_patient_from_hie
 
         mock_adapter = MagicMock()

@@ -40,7 +40,7 @@ def _persisted(cur: _FakeCursor) -> tuple[dict | None, dict | None]:
     )
 
 
-def test_ssn_in_nested_string_is_masked(fake_cursor):
+def test_ssn_in_nested_string_is_masked(fake_cursor) -> None:
     audit_mod.log_event(
         tenant_id="t1",
         action="coder.decision.edit",
@@ -55,7 +55,7 @@ def test_ssn_in_nested_string_is_masked(fake_cursor):
     assert "123-45-6789" not in note
 
 
-def test_redacted_keys_are_blanked(fake_cursor):
+def test_redacted_keys_are_blanked(fake_cursor) -> None:
     audit_mod.log_event(
         tenant_id="t1",
         action="coder.decision.edit",
@@ -76,7 +76,7 @@ def test_redacted_keys_are_blanked(fake_cursor):
         assert after[key] == "[REDACTED]", f"{key} was not redacted: {after[key]!r}"
 
 
-def test_clean_dict_passes_through(fake_cursor):
+def test_clean_dict_passes_through(fake_cursor) -> None:
     clean = {
         "hcc_code": "HCC18",
         "icd10": "E11.9",

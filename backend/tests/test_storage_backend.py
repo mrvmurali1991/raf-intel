@@ -16,26 +16,26 @@ import pytest
 # ---------------------------------------------------------------------------
 
 class TestLocalDiskStorage:
-    def test_put_returns_absolute_path(self, tmp_path):
+    def test_put_returns_absolute_path(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         result = storage.put("sub/hello.txt", b"hello world", "text/plain")
         assert result == str(tmp_path / "sub" / "hello.txt")
 
-    def test_get_returns_written_bytes(self, tmp_path):
+    def test_get_returns_written_bytes(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         storage.put("data.bin", b"\x00\x01\x02")
         assert storage.get("data.bin") == b"\x00\x01\x02"
 
-    def test_exists_true_after_put(self, tmp_path):
+    def test_exists_true_after_put(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         assert not storage.exists("missing.txt")
         storage.put("missing.txt", b"here now")
         assert storage.exists("missing.txt")
 
-    def test_delete_removes_file(self, tmp_path):
+    def test_delete_removes_file(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         storage.put("remove_me.txt", b"bye")
@@ -43,18 +43,18 @@ class TestLocalDiskStorage:
         storage.delete("remove_me.txt")
         assert not storage.exists("remove_me.txt")
 
-    def test_delete_nonexistent_is_noop(self, tmp_path):
+    def test_delete_nonexistent_is_noop(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         storage.delete("ghost.txt")  # must not raise
 
-    def test_get_nonexistent_raises_file_not_found(self, tmp_path):
+    def test_get_nonexistent_raises_file_not_found(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         with pytest.raises(FileNotFoundError):
             storage.get("does_not_exist.txt")
 
-    def test_signed_url_returns_file_uri(self, tmp_path):
+    def test_signed_url_returns_file_uri(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         storage.put("doc.pdf", b"%PDF-1.4")
@@ -62,13 +62,13 @@ class TestLocalDiskStorage:
         assert url.startswith("file://")
         assert "doc.pdf" in url
 
-    def test_nested_path_creates_directories(self, tmp_path):
+    def test_nested_path_creates_directories(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage
         storage = LocalDiskStorage(root=str(tmp_path))
         storage.put("a/b/c/deep.txt", b"deep")
         assert storage.exists("a/b/c/deep.txt")
 
-    def test_satisfies_protocol(self, tmp_path):
+    def test_satisfies_protocol(self, tmp_path) -> None:
         from app.services.storage import LocalDiskStorage, StorageBackend
         storage = LocalDiskStorage(root=str(tmp_path))
         assert isinstance(storage, StorageBackend)
@@ -95,39 +95,39 @@ class TestS3Storage:
             boto3.client("s3", region_name="us-east-1").create_bucket(Bucket=bucket)
             yield S3Storage(bucket=bucket, region="us-east-1")
 
-    def test_put_returns_s3_uri(self, s3_storage):
+    def test_put_returns_s3_uri(self, s3_storage) -> None:
         uri = s3_storage.put("patients/abc/chart.pdf", b"%PDF", "application/pdf")
         assert uri == "s3://test-raf-uploads/patients/abc/chart.pdf"
 
-    def test_get_round_trip(self, s3_storage):
+    def test_get_round_trip(self, s3_storage) -> None:
         s3_storage.put("file.bin", b"\xde\xad\xbe\xef")
         assert s3_storage.get("file.bin") == b"\xde\xad\xbe\xef"
 
-    def test_exists_true_after_put(self, s3_storage):
+    def test_exists_true_after_put(self, s3_storage) -> None:
         assert not s3_storage.exists("new.txt")
         s3_storage.put("new.txt", b"data")
         assert s3_storage.exists("new.txt")
 
-    def test_delete_removes_object(self, s3_storage):
+    def test_delete_removes_object(self, s3_storage) -> None:
         s3_storage.put("del.txt", b"bye")
         s3_storage.delete("del.txt")
         assert not s3_storage.exists("del.txt")
 
-    def test_get_missing_raises_file_not_found(self, s3_storage):
+    def test_get_missing_raises_file_not_found(self, s3_storage) -> None:
         with pytest.raises(FileNotFoundError):
             s3_storage.get("ghost.txt")
 
-    def test_signed_url_is_https(self, s3_storage):
+    def test_signed_url_is_https(self, s3_storage) -> None:
         s3_storage.put("doc.pdf", b"%PDF-1.4")
         url = s3_storage.signed_url("doc.pdf", expires_in=60)
         assert url.startswith("https://")
         assert "doc.pdf" in url
 
-    def test_satisfies_protocol(self, s3_storage):
+    def test_satisfies_protocol(self, s3_storage) -> None:
         from app.services.storage import StorageBackend
         assert isinstance(s3_storage, StorageBackend)
 
-    def test_missing_bucket_raises_value_error(self):
+    def test_missing_bucket_raises_value_error(self) -> None:
         import boto3
         from moto import mock_aws
         from app.services.storage import S3Storage
@@ -142,13 +142,13 @@ class TestS3Storage:
 # ---------------------------------------------------------------------------
 
 class TestGetStorageBackend:
-    def test_returns_local_by_default(self, monkeypatch):
+    def test_returns_local_by_default(self, monkeypatch) -> None:
         monkeypatch.setattr("app.config.settings.storage_backend", "local")
         from app.services.storage import get_storage_backend, LocalDiskStorage
         backend = get_storage_backend()
         assert isinstance(backend, LocalDiskStorage)
 
-    def test_returns_s3_when_configured(self, monkeypatch):
+    def test_returns_s3_when_configured(self, monkeypatch) -> None:
         pytest.importorskip("boto3", reason="boto3 not installed")
         pytest.importorskip("moto", reason="moto not installed")
         import boto3
@@ -164,7 +164,7 @@ class TestGetStorageBackend:
             backend = get_storage_backend()
             assert isinstance(backend, S3Storage)
 
-    def test_unknown_backend_raises(self, monkeypatch):
+    def test_unknown_backend_raises(self, monkeypatch) -> None:
         monkeypatch.setattr("app.config.settings.storage_backend", "gcs")
         from app.services.storage import get_storage_backend
         with pytest.raises(ValueError, match="STORAGE_BACKEND"):

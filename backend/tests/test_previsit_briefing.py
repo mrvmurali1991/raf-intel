@@ -72,7 +72,7 @@ def _cursor_cm(results: list[list[dict]]):
 # ---------------------------------------------------------------------------
 
 class TestEmptyCase:
-    def test_no_upcoming_visits_returns_empty_list(self):
+    def test_no_upcoming_visits_returns_empty_list(self) -> None:
         # First openemr_cursor query returns no encounters → service exits early.
         cm_oe, _ = _cursor_cm([[]])  # form_encounter
         cm_raf, _ = _cursor_cm([])
@@ -89,7 +89,7 @@ class TestEmptyCase:
 # ---------------------------------------------------------------------------
 
 class TestSuspectCandidates:
-    def test_open_suspect_appears_with_correct_metadata(self):
+    def test_open_suspect_appears_with_correct_metadata(self) -> None:
         # Set up: 1 visit, 1 open suspect for that patient.
         visit_dt = datetime.combine(date.today() + timedelta(days=2),
                                     datetime.min.time().replace(hour=10, minute=30))
@@ -155,7 +155,7 @@ class TestSuspectCandidates:
 # ---------------------------------------------------------------------------
 
 class TestRanking:
-    def test_higher_score_ranks_first_and_top_n_enforced(self):
+    def test_higher_score_ranks_first_and_top_n_enforced(self) -> None:
         visit_dt = datetime.combine(
             date.today() + timedelta(days=1),
             datetime.min.time().replace(hour=9),
@@ -219,7 +219,7 @@ class TestRanking:
         statuses = {h["status"] for h in top}
         assert statuses & {"suspect", "recapture", "meat_weak"}
 
-    def test_dedupe_keeps_highest_score_when_same_hcc_appears_twice(self):
+    def test_dedupe_keeps_highest_score_when_same_hcc_appears_twice(self) -> None:
         visit_dt = datetime.combine(
             date.today() + timedelta(days=1),
             datetime.min.time().replace(hour=9),
@@ -270,7 +270,7 @@ class TestRanking:
 # ---------------------------------------------------------------------------
 
 class TestDateFiltering:
-    def test_days_ahead_passed_into_sql_bind_params(self):
+    def test_days_ahead_passed_into_sql_bind_params(self) -> None:
         captured: dict[str, tuple] = {}
 
         class CapturingCursor(FakeCursor):
@@ -306,7 +306,7 @@ class TestDateFiltering:
 # ---------------------------------------------------------------------------
 
 class TestOrphanPatientSkipped:
-    def test_encounter_with_no_active_patient_record_is_skipped(self):
+    def test_encounter_with_no_active_patient_record_is_skipped(self) -> None:
         visit_dt = datetime.combine(
             date.today() + timedelta(days=1),
             datetime.min.time(),

@@ -56,7 +56,7 @@ def _noisy_sigmoid_labels(raw: np.ndarray, seed: int = 7) -> np.ndarray:
 # Platt
 # ---------------------------------------------------------------------------
 
-def test_platt_monotone_and_bounded():
+def test_platt_monotone_and_bounded() -> None:
     rng = np.random.default_rng(0)
     raw = rng.uniform(0, 1, size=400)
     labels = _noisy_sigmoid_labels(raw)
@@ -76,7 +76,7 @@ def test_platt_monotone_and_bounded():
     assert np.all(diffs >= -1e-9), f"non-monotone: {diffs}"
 
 
-def test_platt_single_class_degenerate_fallback():
+def test_platt_single_class_degenerate_fallback() -> None:
     """Platt with a single-class label set should not crash and should
     return the base rate (here: all zeros -> 0.0, all ones -> 1.0)."""
     raw = np.array([0.2, 0.3, 0.4, 0.5])
@@ -95,7 +95,7 @@ def test_platt_single_class_degenerate_fallback():
 # Isotonic
 # ---------------------------------------------------------------------------
 
-def test_isotonic_recovers_step_function():
+def test_isotonic_recovers_step_function() -> None:
     """Raw scores below 0.5 -> label 0; above -> label 1.  Isotonic
     should learn a near-step function.
     """
@@ -121,7 +121,7 @@ def test_isotonic_recovers_step_function():
     assert np.all((out >= 0.0) & (out <= 1.0))
 
 
-def test_identity_calibrator_returns_input():
+def test_identity_calibrator_returns_input() -> None:
     cal = IdentityCalibrator()
     assert cal.fitted
     raw = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
@@ -146,7 +146,7 @@ def _make_suspect(**overrides):
     return base
 
 
-def test_bootstrap_positive_via_corroboration():
+def test_bootstrap_positive_via_corroboration() -> None:
     lab = _make_suspect(source="lab", suspected_icd="E119", confidence=0.6)
     med = _make_suspect(source="medication", suspected_icd="E119", confidence=0.5)
     rows = build_bootstrap_set([lab, med])
@@ -155,7 +155,7 @@ def test_bootstrap_positive_via_corroboration():
     assert labels.get("medication") == 1
 
 
-def test_bootstrap_negative_via_negation():
+def test_bootstrap_negative_via_negation() -> None:
     s = _make_suspect(
         source="nlp",
         confidence=0.85,
@@ -166,14 +166,14 @@ def test_bootstrap_negative_via_negation():
     assert rows[0].label == 0
 
 
-def test_bootstrap_negative_via_weak_single_signal():
+def test_bootstrap_negative_via_weak_single_signal() -> None:
     s = _make_suspect(source="lab", confidence=0.30, evidence={})
     rows = build_bootstrap_set([s])
     assert len(rows) == 1
     assert rows[0].label == 0
 
 
-def test_bootstrap_positive_via_strong_lab():
+def test_bootstrap_positive_via_strong_lab() -> None:
     s = _make_suspect(
         source="lab",
         confidence=0.6,
@@ -184,13 +184,13 @@ def test_bootstrap_positive_via_strong_lab():
     assert rows[0].label == 1
 
 
-def test_bootstrap_history_always_positive():
+def test_bootstrap_history_always_positive() -> None:
     s = _make_suspect(source="history", confidence=0.85)
     rows = build_bootstrap_set([s])
     assert rows[0].label == 1
 
 
-def test_bootstrap_excludes_ambiguous():
+def test_bootstrap_excludes_ambiguous() -> None:
     """Single mid-confidence lab with no corroboration, no negation,
     no extreme value -> ambiguous -> excluded."""
     s = _make_suspect(source="lab", confidence=0.6, evidence={})
@@ -198,7 +198,7 @@ def test_bootstrap_excludes_ambiguous():
     assert rows == []
 
 
-def test_bootstrap_class_balance_not_degenerate():
+def test_bootstrap_class_balance_not_degenerate() -> None:
     """Build a mixed cohort and confirm the generator yields both
     labels and both sources, i.e. not 100%/0% on any axis."""
     suspects = [
@@ -231,7 +231,7 @@ def test_bootstrap_class_balance_not_degenerate():
     assert 0.0 < overall_pos < 1.0, balance
 
 
-def test_bootstrap_csv_round_trip(tmp_path):
+def test_bootstrap_csv_round_trip(tmp_path) -> None:
     rows = [
         BootstrapRow(source="lab", raw_score=0.7, label=1),
         BootstrapRow(source="med", raw_score=0.3, label=0),
@@ -246,7 +246,7 @@ def test_bootstrap_csv_round_trip(tmp_path):
 # Persistence
 # ---------------------------------------------------------------------------
 
-def test_persistence_round_trip(tmp_path, monkeypatch):
+def test_persistence_round_trip(tmp_path, monkeypatch) -> None:
     """Save a fitted Platt calibrator, load it from disk, and confirm
     transform produces the identical probabilities."""
     from app.services.raf.calibration import persistence as P
@@ -268,7 +268,7 @@ def test_persistence_round_trip(tmp_path, monkeypatch):
     assert np.allclose(cal.transform(grid), loaded.transform(grid))
 
 
-def test_persistence_missing_artifact_falls_back_to_identity(tmp_path, monkeypatch):
+def test_persistence_missing_artifact_falls_back_to_identity(tmp_path, monkeypatch) -> None:
     from app.services.raf.calibration import persistence as P
 
     monkeypatch.setattr(P, "MODEL_DIR", tmp_path)  # empty
@@ -281,7 +281,7 @@ def test_persistence_missing_artifact_falls_back_to_identity(tmp_path, monkeypat
     assert cal.transform_one(1.5) == pytest.approx(1.0)
 
 
-def test_source_normalisation_aliases():
+def test_source_normalisation_aliases() -> None:
     # A few aliases we actually see in production suspect rows.
     assert _normalise_source("medication") == "med"
     assert _normalise_source("MED") == "med"

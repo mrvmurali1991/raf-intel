@@ -198,7 +198,7 @@ class TestDirectInboundHeaders:
             return b"From: foo@bar.org\r\n\r\ntest"
 
     @pytest.mark.asyncio
-    async def test_missing_x_direct_from_returns_400(self):
+    async def test_missing_x_direct_from_returns_400(self) -> None:
         """No X-Direct-From header → HTTPException 400."""
         from fastapi import HTTPException
         from app.routers.direct_inbound import direct_inbound
@@ -212,7 +212,7 @@ class TestDirectInboundHeaders:
         assert "X-Direct-From" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    async def test_missing_x_direct_to_returns_400(self):
+    async def test_missing_x_direct_to_returns_400(self) -> None:
         """No X-Direct-To header → HTTPException 400."""
         from fastapi import HTTPException
         from app.routers.direct_inbound import direct_inbound
@@ -233,14 +233,14 @@ class TestDirectInboundHeaders:
 class TestTrustAnchorLookup:
     """Verify trust anchor whitelist logic without the HTTP stack."""
 
-    def test_unknown_sender_rejected(self):
+    def test_unknown_sender_rejected(self) -> None:
         from app.routers.direct_inbound import _lookup_trust_anchor
         no_rows_cm, _ = _make_cursor_cm(rows=[])
         with patch("app.routers.direct_inbound.raf_cursor", no_rows_cm):
             result = _lookup_trust_anchor("default", "attacker@evil.org")
         assert result is False
 
-    def test_known_sender_trusted(self):
+    def test_known_sender_trusted(self) -> None:
         from app.routers.direct_inbound import _lookup_trust_anchor
         anchor_row = {"id": 1}
         rows_cm, _ = _make_cursor_cm(rows=[anchor_row])
@@ -248,7 +248,7 @@ class TestTrustAnchorLookup:
             result = _lookup_trust_anchor("default", "provider@direct.example.org")
         assert result is True
 
-    def test_db_exception_returns_false(self):
+    def test_db_exception_returns_false(self) -> None:
         """Trust anchor DB error degrades to rejection (fail-closed)."""
         from app.routers.direct_inbound import _lookup_trust_anchor
 
@@ -265,13 +265,13 @@ class TestTrustAnchorLookup:
 class TestDuplicateCheck:
     """Verify idempotency logic."""
 
-    def test_new_message_not_duplicate(self):
+    def test_new_message_not_duplicate(self) -> None:
         from app.routers.direct_inbound import _check_duplicate
         no_rows_cm, _ = _make_cursor_cm(rows=[])
         with patch("app.routers.direct_inbound.raf_cursor", no_rows_cm):
             assert _check_duplicate("default", "msg-new-001") is False
 
-    def test_existing_message_is_duplicate(self):
+    def test_existing_message_is_duplicate(self) -> None:
         from app.routers.direct_inbound import _check_duplicate
         existing_cm, _ = _make_cursor_cm(rows=[{"id": 5}])
         with patch("app.routers.direct_inbound.raf_cursor", existing_cm):
@@ -292,7 +292,7 @@ class TestDirectInboundPipeline:
         return raw, "provider@direct.example.org", "raf@direct.raf.health"
 
     @pytest.mark.asyncio
-    async def test_valid_ccda_message_inserts_document(self):
+    async def test_valid_ccda_message_inserts_document(self) -> None:
         """Valid trust anchor + CCDA → ccda_documents row inserted, 200 response."""
         from app.routers.direct_inbound import direct_inbound
 
@@ -337,7 +337,7 @@ class TestDirectInboundPipeline:
         assert resp["ccda_documents"] == 1
 
     @pytest.mark.asyncio
-    async def test_duplicate_message_returns_no_new_rows(self):
+    async def test_duplicate_message_returns_no_new_rows(self) -> None:
         """Re-submitting same message_id returns duplicate=True."""
         from app.routers.direct_inbound import direct_inbound
 
@@ -369,7 +369,7 @@ class TestDirectInboundPipeline:
         assert resp["ccda_documents"] == 0
 
     @pytest.mark.asyncio
-    async def test_untrusted_sender_raises_403(self):
+    async def test_untrusted_sender_raises_403(self) -> None:
         """Sender absent from trust anchors → HTTPException 403."""
         from fastapi import HTTPException
         from app.routers.direct_inbound import direct_inbound
@@ -392,7 +392,7 @@ class TestDirectInboundPipeline:
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_invalid_ccda_xml_captures_error_still_200(self):
+    async def test_invalid_ccda_xml_captures_error_still_200(self) -> None:
         """Garbage XML in attachment → error captured in response, status still 200."""
         from app.routers.direct_inbound import direct_inbound
 

@@ -36,11 +36,11 @@ SAMPLE_NOTE = (
 # --------------------------------------------------------------------------- #
 
 
-def test_validate_quote_exact_substring():
+def test_validate_quote_exact_substring() -> None:
     assert validate_quote_in_source("HbA1c 8.3", SAMPLE_NOTE)
 
 
-def test_validate_quote_whitespace_normalised():
+def test_validate_quote_whitespace_normalised() -> None:
     assert validate_quote_in_source(
         "Continue metformin 1000 mg BID.", SAMPLE_NOTE
     )
@@ -50,12 +50,12 @@ def test_validate_quote_whitespace_normalised():
     )
 
 
-def test_validate_quote_rejects_paraphrase():
+def test_validate_quote_rejects_paraphrase() -> None:
     assert not validate_quote_in_source("patient has diabetes", SAMPLE_NOTE)
     assert not validate_quote_in_source("HbA1c was 8.4", SAMPLE_NOTE)
 
 
-def test_validate_quote_rejects_empty():
+def test_validate_quote_rejects_empty() -> None:
     assert not validate_quote_in_source("", SAMPLE_NOTE)
     assert not validate_quote_in_source(None, SAMPLE_NOTE)  # type: ignore[arg-type]
 
@@ -82,7 +82,7 @@ def test_validate_quote_rejects_empty():
         ("Something weird", False),
     ],
 )
-def test_face_to_face_gate(enc, expected):
+def test_face_to_face_gate(enc, expected) -> None:
     assert is_face_to_face_encounter(enc) is expected
 
 
@@ -97,7 +97,7 @@ def _fake_llm(response: str):
     return _inner
 
 
-def test_extract_meat_all_four_verbatim():
+def test_extract_meat_all_four_verbatim() -> None:
     cand = _Candidate("E11.65", "Type 2 DM with hyperglycemia", "HCC37")
     llm_resp = json.dumps({
         "m_quote": "home BG log shows fasting 150-180",
@@ -125,7 +125,7 @@ def test_extract_meat_all_four_verbatim():
     assert out.dropped_quotes == []
 
 
-def test_extract_meat_drops_hallucinated_quote():
+def test_extract_meat_drops_hallucinated_quote() -> None:
     cand = _Candidate("E11.65", "Type 2 DM", "HCC37")
     llm_resp = json.dumps({
         "m_quote": "patient reports good adherence",  # NOT in note
@@ -152,7 +152,7 @@ def test_extract_meat_drops_hallucinated_quote():
     assert out.overall_valid is True  # at least one MEAT + F2F
 
 
-def test_extract_meat_rejects_non_f2f_without_llm_call():
+def test_extract_meat_rejects_non_f2f_without_llm_call() -> None:
     cand = _Candidate("E11.65", "DM2", "HCC37")
     called = {"n": 0}
 
@@ -172,14 +172,14 @@ def test_extract_meat_rejects_non_f2f_without_llm_call():
     assert "not face-to-face" in (out.reason_if_invalid or "")
 
 
-def test_extract_meat_empty_note():
+def test_extract_meat_empty_note() -> None:
     cand = _Candidate("E11.65", "DM2", "HCC37")
     out = extract_meat_evidence(cand, "", context={"encounter_type": "Office"})
     assert out.overall_valid is False
     assert out.reason_if_invalid == "empty note"
 
 
-def test_extract_meat_all_quotes_dropped_marks_invalid():
+def test_extract_meat_all_quotes_dropped_marks_invalid() -> None:
     cand = _Candidate("E11.65", "DM2", "HCC37")
     bad = json.dumps({
         "m_quote": "fake m",

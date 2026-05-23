@@ -78,7 +78,7 @@ class TestUnauthenticatedAccess:
         method: str,
         path: str,
         description: str,
-    ):
+    ) -> None:
         r = client.request(method, path)
         assert r.status_code == 401, (
             f"[{description}] {method} {path} — "
@@ -108,7 +108,7 @@ class TestAuthenticatedAccess:
         method: str,
         path: str,
         description: str,
-    ):
+    ) -> None:
         r = client.request(method, path, headers=admin_headers)
         assert r.status_code != 401, (
             f"[{description}] {method} {path} — "
@@ -131,7 +131,7 @@ class TestAuthenticatedAccess:
         method: str,
         path: str,
         description: str,
-    ):
+    ) -> None:
         """Every endpoint must return a parseable JSON body."""
         r = client.request(method, path, headers=auth_headers)
         try:
@@ -153,7 +153,7 @@ class TestRAFModelsEndpoint:
 
     def test_models_returns_list_or_dict(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/raf/models", headers=auth_headers)
         assert r.status_code == 200, f"GET /api/raf/models returned {r.status_code}"
         data = r.json()
@@ -163,7 +163,7 @@ class TestRAFModelsEndpoint:
 
     def test_models_contains_at_least_one_model(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/raf/models", headers=auth_headers)
         data = r.json()
         if isinstance(data, list):
@@ -178,7 +178,7 @@ class TestRAFModelsEndpoint:
 class TestQualityMeasuresEndpoint:
     """GET /api/quality/measures — structural validation."""
 
-    def test_measures_returns_list(self, client: TestClient, auth_headers: dict):
+    def test_measures_returns_list(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/quality/measures", headers=auth_headers)
         assert r.status_code == 200, f"GET /api/quality/measures returned {r.status_code}"
         data = r.json()
@@ -186,7 +186,7 @@ class TestQualityMeasuresEndpoint:
             f"Expected a list from /api/quality/measures, got {type(data)}"
         )
 
-    def test_measures_not_empty(self, client: TestClient, auth_headers: dict):
+    def test_measures_not_empty(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/quality/measures", headers=auth_headers)
         data = r.json()
         if isinstance(data, list):
@@ -196,7 +196,7 @@ class TestQualityMeasuresEndpoint:
 class TestWebhookEventsEndpoint:
     """GET /api/webhooks/events — structural validation."""
 
-    def test_events_returns_list(self, client: TestClient, auth_headers: dict):
+    def test_events_returns_list(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/webhooks/events", headers=auth_headers)
         assert r.status_code == 200, f"GET /api/webhooks/events returned {r.status_code}"
         data = r.json()
@@ -204,7 +204,7 @@ class TestWebhookEventsEndpoint:
             f"Expected a list from /api/webhooks/events, got {type(data)}"
         )
 
-    def test_event_items_have_name_field(self, client: TestClient, auth_headers: dict):
+    def test_event_items_have_name_field(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/webhooks/events", headers=auth_headers)
         events = r.json()
         if events:
@@ -219,13 +219,13 @@ class TestWebhookEventsEndpoint:
 class TestBenchmarkTestCasesEndpoint:
     """GET /api/benchmarks/test-cases — structural validation."""
 
-    def test_test_cases_returns_200(self, client: TestClient, auth_headers: dict):
+    def test_test_cases_returns_200(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/benchmarks/test-cases", headers=auth_headers)
         assert r.status_code == 200, (
             f"GET /api/benchmarks/test-cases returned {r.status_code}: {r.text[:200]}"
         )
 
-    def test_test_cases_response_structure(self, client: TestClient, auth_headers: dict):
+    def test_test_cases_response_structure(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/benchmarks/test-cases", headers=auth_headers)
         data = r.json()
         # Accepts either a list or a dict with a 'cases'/'test_cases' key.
@@ -237,7 +237,7 @@ class TestBenchmarkTestCasesEndpoint:
 
     def test_test_cases_category_filter_accepted(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         """Query param ?category=diabetes must not cause a 500."""
         r = client.get(
             "/api/benchmarks/test-cases",
@@ -252,11 +252,11 @@ class TestBenchmarkTestCasesEndpoint:
 class TestJobsEndpoint:
     """GET /api/jobs — structural validation."""
 
-    def test_jobs_returns_200(self, client: TestClient, auth_headers: dict):
+    def test_jobs_returns_200(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/jobs", headers=auth_headers)
         assert r.status_code == 200, f"GET /api/jobs returned {r.status_code}"
 
-    def test_jobs_is_list(self, client: TestClient, auth_headers: dict):
+    def test_jobs_is_list(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/jobs", headers=auth_headers)
         data = r.json()
         assert isinstance(data, list), (
@@ -267,7 +267,7 @@ class TestJobsEndpoint:
 class TestFHIRConnectionsEndpoint:
     """GET /api/fhir/connections — structural validation."""
 
-    def test_fhir_connections_returns_200(self, client: TestClient, auth_headers: dict):
+    def test_fhir_connections_returns_200(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/fhir/connections", headers=auth_headers)
         assert r.status_code == 200, (
             f"GET /api/fhir/connections returned {r.status_code}: {r.text[:200]}"
@@ -275,7 +275,7 @@ class TestFHIRConnectionsEndpoint:
 
     def test_fhir_connections_is_list_or_paginated_dict(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/fhir/connections", headers=auth_headers)
         data = r.json()
         assert isinstance(data, (list, dict)), (
@@ -286,7 +286,7 @@ class TestFHIRConnectionsEndpoint:
 class TestClaimsBatchesEndpoint:
     """GET /api/claims/batches — structural validation."""
 
-    def test_claims_batches_returns_200(self, client: TestClient, auth_headers: dict):
+    def test_claims_batches_returns_200(self, client: TestClient, auth_headers: dict) -> None:
         r = client.get("/api/claims/batches", headers=auth_headers)
         assert r.status_code == 200, (
             f"GET /api/claims/batches returned {r.status_code}: {r.text[:200]}"
@@ -294,7 +294,7 @@ class TestClaimsBatchesEndpoint:
 
     def test_claims_batches_has_expected_shape(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/claims/batches", headers=auth_headers)
         data = r.json()
         # Accept list or paginated {"batches": [...], "total": N}
@@ -308,7 +308,7 @@ class TestProspectiveWorklistEndpoint:
 
     def test_prospective_worklist_reachable(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/prospective/worklist", headers=auth_headers)
         # 200 = data present, 403 = permission not granted for viewer — both OK
         assert r.status_code in (200, 403, 404), (
@@ -317,7 +317,7 @@ class TestProspectiveWorklistEndpoint:
 
     def test_prospective_worklist_not_401(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         """A valid token must never produce 401 — that would indicate broken auth wiring."""
         r = client.get("/api/prospective/worklist", headers=auth_headers)
         assert r.status_code != 401, (
@@ -330,7 +330,7 @@ class TestSubmissionsBatchesEndpoint:
 
     def test_submissions_batches_returns_200(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/submissions/batches", headers=auth_headers)
         assert r.status_code == 200, (
             f"GET /api/submissions/batches returned {r.status_code}: {r.text[:200]}"
@@ -342,7 +342,7 @@ class TestProvidersSummaryEndpoint:
 
     def test_providers_summary_reachable(
         self, client: TestClient, auth_headers: dict
-    ):
+    ) -> None:
         r = client.get("/api/providers/summary", headers=auth_headers)
         assert r.status_code in (200, 403, 404), (
             f"GET /api/providers/summary returned {r.status_code}"

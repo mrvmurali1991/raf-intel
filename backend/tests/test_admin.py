@@ -97,7 +97,7 @@ MOCK_BACKUP_JOB_COMPLETE = {
 # ---------------------------------------------------------------------------
 
 class TestListBackups:
-    def test_admin_can_list_backups_200(self, client):
+    def test_admin_can_list_backups_200(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -111,7 +111,7 @@ class TestListBackups:
             )
         assert resp.status_code == 200
 
-    def test_backups_response_contains_backups_key(self, client):
+    def test_backups_response_contains_backups_key(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -126,7 +126,7 @@ class TestListBackups:
         data = resp.json()
         assert "backups" in data or "backup_dir" in data
 
-    def test_backups_response_contains_schedule(self, client):
+    def test_backups_response_contains_schedule(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -141,7 +141,7 @@ class TestListBackups:
         data = resp.json()
         assert "schedule" in data
 
-    def test_viewer_cannot_list_backups_403(self, client):
+    def test_viewer_cannot_list_backups_403(self, client) -> None:
         token = _make_access_token(MOCK_VIEWER_USER)
         with _auth_patch(MOCK_VIEWER_USER):
             resp = client.get(
@@ -150,7 +150,7 @@ class TestListBackups:
             )
         assert resp.status_code in (403, 401)
 
-    def test_manager_cannot_list_backups_403(self, client):
+    def test_manager_cannot_list_backups_403(self, client) -> None:
         token = _make_access_token(MOCK_MANAGER_USER)
         with _auth_patch(MOCK_MANAGER_USER):
             resp = client.get(
@@ -159,11 +159,11 @@ class TestListBackups:
             )
         assert resp.status_code in (403, 401)
 
-    def test_unauthenticated_returns_401(self, client):
+    def test_unauthenticated_returns_401(self, client) -> None:
         resp = client.get("/api/admin/backups")
         assert resp.status_code == 401
 
-    def test_service_exception_returns_500(self, client):
+    def test_service_exception_returns_500(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -186,7 +186,7 @@ class TestListBackups:
 # ---------------------------------------------------------------------------
 
 class TestTriggerBackup:
-    def test_admin_can_trigger_backup_202(self, client):
+    def test_admin_can_trigger_backup_202(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -199,7 +199,7 @@ class TestTriggerBackup:
             )
         assert resp.status_code == 202
 
-    def test_trigger_raf_backup(self, client):
+    def test_trigger_raf_backup(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         job = {**MOCK_BACKUP_JOB, "backup_type": "raf"}
         with (
@@ -213,7 +213,7 @@ class TestTriggerBackup:
             )
         assert resp.status_code == 202
 
-    def test_invalid_backup_type_returns_422(self, client):
+    def test_invalid_backup_type_returns_422(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with _auth_patch(MOCK_ADMIN_USER):
             resp = client.post(
@@ -223,7 +223,7 @@ class TestTriggerBackup:
             )
         assert resp.status_code == 422
 
-    def test_viewer_cannot_trigger_backup(self, client):
+    def test_viewer_cannot_trigger_backup(self, client) -> None:
         token = _make_access_token(MOCK_VIEWER_USER)
         with _auth_patch(MOCK_VIEWER_USER):
             resp = client.post(
@@ -233,7 +233,7 @@ class TestTriggerBackup:
             )
         assert resp.status_code in (403, 401)
 
-    def test_trigger_response_contains_job_id(self, client):
+    def test_trigger_response_contains_job_id(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -247,7 +247,7 @@ class TestTriggerBackup:
         data = resp.json()
         assert "job_id" in data
 
-    def test_trigger_missing_backup_sh_returns_500(self, client):
+    def test_trigger_missing_backup_sh_returns_500(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -266,7 +266,7 @@ class TestTriggerBackup:
 # ---------------------------------------------------------------------------
 
 class TestBackupJobStatus:
-    def test_get_running_job(self, client):
+    def test_get_running_job(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -279,7 +279,7 @@ class TestBackupJobStatus:
         assert resp.status_code == 200
         assert resp.json()["status"] == "running"
 
-    def test_get_completed_job(self, client):
+    def test_get_completed_job(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -292,7 +292,7 @@ class TestBackupJobStatus:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    def test_get_nonexistent_job_returns_404(self, client):
+    def test_get_nonexistent_job_returns_404(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),
@@ -304,7 +304,7 @@ class TestBackupJobStatus:
             )
         assert resp.status_code == 404
 
-    def test_viewer_cannot_get_job_status(self, client):
+    def test_viewer_cannot_get_job_status(self, client) -> None:
         token = _make_access_token(MOCK_VIEWER_USER)
         with _auth_patch(MOCK_VIEWER_USER):
             resp = client.get(
@@ -319,7 +319,7 @@ class TestBackupJobStatus:
 # ---------------------------------------------------------------------------
 
 class TestSystemInfo:
-    def test_admin_can_get_system_info(self, client):
+    def test_admin_can_get_system_info(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with _auth_patch(MOCK_ADMIN_USER):
             resp = client.get(
@@ -329,7 +329,7 @@ class TestSystemInfo:
         # Either 200 (route exists) or 404 (route not yet implemented)
         assert resp.status_code in (200, 404)
 
-    def test_unauthenticated_system_info_returns_401(self, client):
+    def test_unauthenticated_system_info_returns_401(self, client) -> None:
         resp = client.get("/api/admin/system-info")
         assert resp.status_code in (401, 404)
 
@@ -339,7 +339,7 @@ class TestSystemInfo:
 # ---------------------------------------------------------------------------
 
 class TestAdminErrorSanitization:
-    def test_backup_list_error_does_not_leak_traceback(self, client):
+    def test_backup_list_error_does_not_leak_traceback(self, client) -> None:
         token = _make_access_token(MOCK_ADMIN_USER)
         with (
             _auth_patch(MOCK_ADMIN_USER),

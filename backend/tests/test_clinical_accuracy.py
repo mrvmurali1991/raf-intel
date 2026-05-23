@@ -108,7 +108,7 @@ class TestICD10Validity:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         """
         Every ICD-10 code in the patient's billing record must match the
         basic ICD-10-CM format (letter + 2 digits + optional decimal part).
@@ -136,7 +136,7 @@ class TestICD10Validity:
         self,
         api_client: requests.Session,
         base_url: str,
-    ):
+    ) -> None:
         """
         The /api/icd10/validate endpoint must confirm that codes from the
         official V28 crosswalk spot-check table are all valid billable codes.
@@ -158,7 +158,7 @@ class TestICD10Validity:
         self,
         api_client: requests.Session,
         base_url: str,
-    ):
+    ) -> None:
         """The validator must return valid=False for clearly invalid strings."""
         junk_codes = ["ZZZZZZ", "ABC123", "999", "NOT-A-CODE"]
         falsely_valid = []
@@ -176,7 +176,7 @@ class TestICD10Validity:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         """
         The patient diagnoses endpoint enriches records with valid_icd10.
         Any code passing the ICD10_PATTERN should have valid_icd10=True.
@@ -212,7 +212,7 @@ class TestHCCMappingAccuracy:
         self,
         api_client: requests.Session,
         base_url: str,
-    ):
+    ) -> None:
         """
         Use GET /api/icd10/validate/{code} (which returns HCC info if available)
         or POST /api/raf/calculate to verify HCC assignments for known codes.
@@ -256,7 +256,7 @@ class TestHCCMappingAccuracy:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         """
         After calculating RAF for a patient with diabetes coding,
         the final_hcc_list should contain at least one of the diabetes HCCs
@@ -300,7 +300,7 @@ class TestHCCMappingAccuracy:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         """
         Non-HCC codes like I10 (hypertension) must not appear in final_hcc_list
         and must not add disease score weight.
@@ -361,7 +361,7 @@ class TestNegationHandling:
         )
         return r.json()
 
-    def test_chf_not_in_active_diagnoses(self, negation_analysis: dict):
+    def test_chf_not_in_active_diagnoses(self, negation_analysis: dict) -> None:
         """
         The test note says 'No history of congestive heart failure'.
         I50.x codes must NOT appear in the active diagnoses list.
@@ -378,7 +378,7 @@ class TestNegationHandling:
             "Negation handling is failing."
         )
 
-    def test_copd_not_in_active_diagnoses(self, negation_analysis: dict):
+    def test_copd_not_in_active_diagnoses(self, negation_analysis: dict) -> None:
         """
         The test note says 'Patient does NOT have COPD'.
         J44.x codes must NOT appear in the active diagnoses list.
@@ -394,7 +394,7 @@ class TestNegationHandling:
             "'Patient does NOT have COPD' in the note."
         )
 
-    def test_atrial_fibrillation_not_in_active_diagnoses(self, negation_analysis: dict):
+    def test_atrial_fibrillation_not_in_active_diagnoses(self, negation_analysis: dict) -> None:
         """
         The test note says 'No history of... atrial fibrillation'.
         I48.x codes must NOT appear in the active diagnoses list.
@@ -410,7 +410,7 @@ class TestNegationHandling:
             "despite explicit negation in the note."
         )
 
-    def test_diabetes_is_in_active_diagnoses(self, negation_analysis: dict):
+    def test_diabetes_is_in_active_diagnoses(self, negation_analysis: dict) -> None:
         """
         The test note positively asserts Type 2 DM (E11.9).
         It must appear in the active diagnoses list.
@@ -426,7 +426,7 @@ class TestNegationHandling:
             f"Active codes: {active_codes}"
         )
 
-    def test_negated_conditions_captured_in_negated_list(self, negation_analysis: dict):
+    def test_negated_conditions_captured_in_negated_list(self, negation_analysis: dict) -> None:
         """
         Negated conditions should appear in negated_conditions, not diagnoses.
         The pipeline should track what was excluded and why.
@@ -450,7 +450,7 @@ class TestRAFScorePlausibility:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         """Every score component (demographic, disease, interaction) must be >= 0."""
         api_client.post(
             f"{base_url}/api/raf/calculate/{first_pid}",
@@ -473,7 +473,7 @@ class TestRAFScorePlausibility:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         """
         CMS-HCC V28 demographic base rates for community-dwelling Medicare
         beneficiaries range roughly from 0.1 to 1.0.  Scores outside this
@@ -499,7 +499,7 @@ class TestRAFScorePlausibility:
         api_client: requests.Session,
         base_url: str,
         first_pid: int,
-    ):
+    ) -> None:
         r = api_client.get(f"{base_url}/api/raf/scores/{first_pid}/breakdown")
         if r.status_code == 404:
             api_client.post(
@@ -514,7 +514,7 @@ class TestRAFScorePlausibility:
         api_client: requests.Session,
         base_url: str,
         sample_patients: list[dict],
-    ):
+    ) -> None:
         """
         Across at least 2 patients with scores, patients with more HCCs should
         generally have higher disease scores.  This is a population-level

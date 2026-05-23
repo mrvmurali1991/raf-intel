@@ -126,7 +126,7 @@ def _numerator_fum_30(patient: dict) -> bool:
 class TestBCSSpecValidator:
     """BCS spec validator structural checks."""
 
-    def test_returns_required_keys(self):
+    def test_returns_required_keys(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         required = [
@@ -141,22 +141,22 @@ class TestBCSSpecValidator:
         for key in required:
             assert key in result, f"Missing key: {key}"
 
-    def test_measure_id_correct(self):
+    def test_measure_id_correct(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         assert result["measure_id"] == "BCS"
 
-    def test_ncqa_version_references_my2026(self):
+    def test_ncqa_version_references_my2026(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         assert "MY2026" in result["ncqa_version_referenced"] or "2026" in result["ncqa_version_referenced"]
 
-    def test_measurement_year_returned(self):
+    def test_measurement_year_returned(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         assert result["measurement_year"] == 2026
 
-    def test_value_set_oids_present(self):
+    def test_value_set_oids_present(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         oids = result["value_set_oids_used"]
@@ -164,19 +164,19 @@ class TestBCSSpecValidator:
         # Mammography OID must be present
         assert "2.16.840.1.113883.3.464.1004.1115" in oids
 
-    def test_self_validation_score_range(self):
+    def test_self_validation_score_range(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         score = result["self_validation_score"]
         assert 0.0 <= score <= 1.0, f"Score {score} out of range [0, 1]"
 
-    def test_certification_status_not_certified(self):
+    def test_certification_status_not_certified(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         status = result["certification_status"].lower()
         assert "certified" not in status or "pending" in status or "self-validated" in status
 
-    def test_age_range_matches_spec(self):
+    def test_age_range_matches_spec(self) -> None:
         from app.services.hedis.spec_validators.bcs import validate_measure_spec
         result = validate_measure_spec(2026)
         age_range = result["denominator_criteria"]["age_range"]
@@ -184,7 +184,7 @@ class TestBCSSpecValidator:
 
 
 class TestCCSSpecValidator:
-    def test_returns_required_keys(self):
+    def test_returns_required_keys(self) -> None:
         from app.services.hedis.spec_validators.ccs import validate_measure_spec
         result = validate_measure_spec(2026)
         assert all(k in result for k in [
@@ -194,30 +194,30 @@ class TestCCSSpecValidator:
             "self_validation_score",
         ])
 
-    def test_measure_id_correct(self):
+    def test_measure_id_correct(self) -> None:
         from app.services.hedis.spec_validators.ccs import validate_measure_spec
         assert validate_measure_spec(2026)["measure_id"] == "CCS"
 
-    def test_age_range_matches_spec(self):
+    def test_age_range_matches_spec(self) -> None:
         from app.services.hedis.spec_validators.ccs import validate_measure_spec
         result = validate_measure_spec(2026)
         denom = result["denominator_criteria"]
         assert "21" in denom["age_range"] and "64" in denom["age_range"]
 
-    def test_three_numerator_paths_documented(self):
+    def test_three_numerator_paths_documented(self) -> None:
         from app.services.hedis.spec_validators.ccs import validate_measure_spec
         result = validate_measure_spec(2026)
         num = result["numerator_criteria"]
         assert "path_a" in num and "path_b" in num and "path_c" in num
 
-    def test_self_validation_score_range(self):
+    def test_self_validation_score_range(self) -> None:
         from app.services.hedis.spec_validators.ccs import validate_measure_spec
         score = validate_measure_spec(2026)["self_validation_score"]
         assert 0.0 <= score <= 1.0
 
 
 class TestHBDSpecValidator:
-    def test_returns_required_keys(self):
+    def test_returns_required_keys(self) -> None:
         from app.services.hedis.spec_validators.hbd import validate_measure_spec
         result = validate_measure_spec(2026)
         assert all(k in result for k in [
@@ -225,22 +225,22 @@ class TestHBDSpecValidator:
             "denominator_criteria_match", "value_set_oids_used",
         ])
 
-    def test_measure_id_correct(self):
+    def test_measure_id_correct(self) -> None:
         from app.services.hedis.spec_validators.hbd import validate_measure_spec
         assert validate_measure_spec(2026)["measure_id"] == "HBD"
 
-    def test_hba1c_threshold_documented(self):
+    def test_hba1c_threshold_documented(self) -> None:
         from app.services.hedis.spec_validators.hbd import validate_measure_spec
         result = validate_measure_spec(2026)
         assert result["numerator_criteria"]["threshold_pct"] == 8.0
 
-    def test_loinc_codes_present(self):
+    def test_loinc_codes_present(self) -> None:
         from app.services.hedis.spec_validators.hbd import validate_measure_spec
         result = validate_measure_spec(2026)
         loinc = result["numerator_criteria"]["loinc_codes"]
         assert "4548-4" in loinc  # Primary HbA1c LOINC
 
-    def test_diabetes_icd10_prefixes_correct(self):
+    def test_diabetes_icd10_prefixes_correct(self) -> None:
         from app.services.hedis.spec_validators.hbd import validate_measure_spec
         result = validate_measure_spec(2026)
         prefixes = result["denominator_criteria"]["diabetes_icd10_prefixes"]
@@ -248,7 +248,7 @@ class TestHBDSpecValidator:
 
 
 class TestCBPSpecValidator:
-    def test_returns_required_keys(self):
+    def test_returns_required_keys(self) -> None:
         from app.services.hedis.spec_validators.cbp import validate_measure_spec
         result = validate_measure_spec(2026)
         assert all(k in result for k in [
@@ -256,24 +256,24 @@ class TestCBPSpecValidator:
             "denominator_criteria_match", "value_set_oids_used",
         ])
 
-    def test_measure_id_correct(self):
+    def test_measure_id_correct(self) -> None:
         from app.services.hedis.spec_validators.cbp import validate_measure_spec
         assert validate_measure_spec(2026)["measure_id"] == "CBP"
 
-    def test_bp_thresholds_documented(self):
+    def test_bp_thresholds_documented(self) -> None:
         from app.services.hedis.spec_validators.cbp import validate_measure_spec
         result = validate_measure_spec(2026)
         num = result["numerator_criteria"]
         assert num["systolic_threshold_mmhg"] == 140
         assert num["diastolic_threshold_mmhg"] == 90
 
-    def test_htn_icd10_prefixes_correct(self):
+    def test_htn_icd10_prefixes_correct(self) -> None:
         from app.services.hedis.spec_validators.cbp import validate_measure_spec
         result = validate_measure_spec(2026)
         prefixes = result["denominator_criteria"]["hypertension_icd10_prefixes"]
         assert set(prefixes) >= {"I10", "I11", "I12", "I13"}
 
-    def test_age_range_matches_spec(self):
+    def test_age_range_matches_spec(self) -> None:
         from app.services.hedis.spec_validators.cbp import validate_measure_spec
         result = validate_measure_spec(2026)
         age_range = result["denominator_criteria"]["age_range"]
@@ -281,7 +281,7 @@ class TestCBPSpecValidator:
 
 
 class TestFUMSpecValidator:
-    def test_returns_required_keys(self):
+    def test_returns_required_keys(self) -> None:
         from app.services.hedis.spec_validators.fum import validate_measure_spec
         result = validate_measure_spec(2026)
         assert all(k in result for k in [
@@ -289,23 +289,23 @@ class TestFUMSpecValidator:
             "denominator_criteria_match", "value_set_oids_used",
         ])
 
-    def test_measure_id_correct(self):
+    def test_measure_id_correct(self) -> None:
         from app.services.hedis.spec_validators.fum import validate_measure_spec
         assert validate_measure_spec(2026)["measure_id"] == "FUM"
 
-    def test_two_rates_documented(self):
+    def test_two_rates_documented(self) -> None:
         from app.services.hedis.spec_validators.fum import validate_measure_spec
         result = validate_measure_spec(2026)
         num = result["numerator_criteria"]
         assert "FUM_7" in num and "FUM_30" in num
 
-    def test_followup_windows_correct(self):
+    def test_followup_windows_correct(self) -> None:
         from app.services.hedis.spec_validators.fum import validate_measure_spec
         result = validate_measure_spec(2026)
         assert "7" in result["numerator_criteria"]["FUM_7"]
         assert "30" in result["numerator_criteria"]["FUM_30"]
 
-    def test_age_min_6(self):
+    def test_age_min_6(self) -> None:
         from app.services.hedis.spec_validators.fum import validate_measure_spec
         result = validate_measure_spec(2026)
         assert result["denominator_criteria"]["age_min"] == 6
@@ -318,75 +318,75 @@ class TestFUMSpecValidator:
 class TestBCSMeasureBoundaries:
     """Cross-check BCSMeasure age/sex boundaries match NCQA spec."""
 
-    def test_age_min_50(self):
+    def test_age_min_50(self) -> None:
         from app.services.hedis.measures import BCSMeasure
         assert BCSMeasure.age_min == 50
 
-    def test_age_max_74(self):
+    def test_age_max_74(self) -> None:
         from app.services.hedis.measures import BCSMeasure
         assert BCSMeasure.age_max == 74
 
-    def test_sex_restriction_female(self):
+    def test_sex_restriction_female(self) -> None:
         from app.services.hedis.measures import BCSMeasure
         assert BCSMeasure.sex_restriction == "f"
 
-    def test_measure_id(self):
+    def test_measure_id(self) -> None:
         from app.services.hedis.measures import BCSMeasure
         assert BCSMeasure.measure_id == "BCS"
 
 
 class TestCCSMeasureBoundaries:
-    def test_age_min_21(self):
+    def test_age_min_21(self) -> None:
         from app.services.hedis.measures import CCSMeasure
         assert CCSMeasure.age_min == 21
 
-    def test_age_max_64(self):
+    def test_age_max_64(self) -> None:
         from app.services.hedis.measures import CCSMeasure
         assert CCSMeasure.age_max == 64
 
-    def test_sex_restriction_female(self):
+    def test_sex_restriction_female(self) -> None:
         from app.services.hedis.measures import CCSMeasure
         assert CCSMeasure.sex_restriction == "f"
 
 
 class TestHBDMeasureBoundaries:
-    def test_age_min_18(self):
+    def test_age_min_18(self) -> None:
         from app.services.hedis.measures import HBDMeasure
         assert HBDMeasure.age_min == 18
 
-    def test_age_max_75(self):
+    def test_age_max_75(self) -> None:
         from app.services.hedis.measures import HBDMeasure
         assert HBDMeasure.age_max == 75
 
-    def test_no_sex_restriction(self):
+    def test_no_sex_restriction(self) -> None:
         from app.services.hedis.measures import HBDMeasure
         assert HBDMeasure.sex_restriction is None
 
 
 class TestCBPMeasureBoundaries:
-    def test_age_min_18(self):
+    def test_age_min_18(self) -> None:
         from app.services.hedis.measures import CBPMeasure
         assert CBPMeasure.age_min == 18
 
-    def test_age_max_85(self):
+    def test_age_max_85(self) -> None:
         from app.services.hedis.measures import CBPMeasure
         assert CBPMeasure.age_max == 85
 
-    def test_no_sex_restriction(self):
+    def test_no_sex_restriction(self) -> None:
         from app.services.hedis.measures import CBPMeasure
         assert CBPMeasure.sex_restriction is None
 
 
 class TestFUMMeasureBoundaries:
-    def test_age_min_6(self):
+    def test_age_min_6(self) -> None:
         from app.services.hedis.measures import FUMMeasure
         assert FUMMeasure.age_min == 6
 
-    def test_no_age_max(self):
+    def test_no_age_max(self) -> None:
         from app.services.hedis.measures import FUMMeasure
         assert FUMMeasure.age_max is None
 
-    def test_no_sex_restriction(self):
+    def test_no_sex_restriction(self) -> None:
         from app.services.hedis.measures import FUMMeasure
         assert FUMMeasure.sex_restriction is None
 
@@ -411,7 +411,7 @@ class TestBCSSyntheticPatients:
         ("denom_in_hcpcs_mammogram", True, True),
         ("denom_in_mammogram_outside_window", True, False),
     ])
-    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data):
+    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data) -> None:
         patients = {p["label"]: p for p in fixture_data["patients"]}
         if label not in patients:
             pytest.skip(f"Patient fixture '{label}' not found")
@@ -448,7 +448,7 @@ class TestCCSSyntheticPatients:
         ("denom_out_too_old", False, False),
         ("denom_out_male", False, False),
     ])
-    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data):
+    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data) -> None:
         patients = {p["label"]: p for p in fixture_data["patients"]}
         if label not in patients:
             pytest.skip(f"Patient fixture '{label}' not found")
@@ -487,7 +487,7 @@ class TestHBDSyntheticPatients:
         ("denom_out_too_old", False, False),
         ("denom_in_t1dm_controlled", True, True),
     ])
-    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data):
+    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data) -> None:
         patients = {p["label"]: p for p in fixture_data["patients"]}
         if label not in patients:
             pytest.skip(f"Patient fixture '{label}' not found")
@@ -526,7 +526,7 @@ class TestCBPSyntheticPatients:
         ("denom_in_borderline_age_min", True, True),
         ("denom_in_borderline_age_max", True, True),
     ])
-    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data):
+    def test_patient_denom_and_met(self, label, expected_denom, expected_met, fixture_data) -> None:
         patients = {p["label"]: p for p in fixture_data["patients"]}
         if label not in patients:
             pytest.skip(f"Patient fixture '{label}' not found")
@@ -563,7 +563,7 @@ class TestFUMSyntheticPatients:
         ("denom_out_too_young", False, False, False),
         ("denom_in_self_harm_fum7_met", True, True, True),
     ])
-    def test_patient_fum_rates(self, label, expected_denom, expected_fum7, expected_fum30, fixture_data):
+    def test_patient_fum_rates(self, label, expected_denom, expected_fum7, expected_fum30, fixture_data) -> None:
         patients = {p["label"]: p for p in fixture_data["patients"]}
         if label not in patients:
             pytest.skip(f"Patient fixture '{label}' not found")
@@ -597,7 +597,7 @@ class TestSpecValidatorRegistry:
     """Ensure all 5 validators exist and return valid structure."""
 
     @pytest.mark.parametrize("measure_id", ["BCS", "CCS", "HBD", "CBP", "FUM"])
-    def test_validator_importable_and_callable(self, measure_id):
+    def test_validator_importable_and_callable(self, measure_id) -> None:
         from app.services.hedis.spec_validators import VALIDATORS
         assert measure_id in VALIDATORS, f"No validator registered for {measure_id}"
         fn = VALIDATORS[measure_id]
@@ -606,7 +606,7 @@ class TestSpecValidatorRegistry:
         assert result["measure_id"] == measure_id
 
     @pytest.mark.parametrize("measure_id", ["BCS", "CCS", "HBD", "CBP", "FUM"])
-    def test_no_logic_errors_only_known_gaps(self, measure_id):
+    def test_no_logic_errors_only_known_gaps(self, measure_id) -> None:
         """All 5 measures should have zero logic errors — only known MVP gaps."""
         from app.services.hedis.spec_validators import VALIDATORS
         result = VALIDATORS[measure_id](2026)
@@ -617,7 +617,7 @@ class TestSpecValidatorRegistry:
         )
 
     @pytest.mark.parametrize("measure_id", ["BCS", "CCS", "HBD", "CBP", "FUM"])
-    def test_self_validation_score_above_threshold(self, measure_id):
+    def test_self_validation_score_above_threshold(self, measure_id) -> None:
         """Score should be above 0.5 even with known MVP gaps."""
         from app.services.hedis.spec_validators import VALIDATORS
         result = VALIDATORS[measure_id](2026)
@@ -627,7 +627,7 @@ class TestSpecValidatorRegistry:
         )
 
     @pytest.mark.parametrize("measure_id", ["BCS", "CCS", "HBD", "CBP", "FUM"])
-    def test_certification_status_not_claimed(self, measure_id):
+    def test_certification_status_not_claimed(self, measure_id) -> None:
         """We must never claim NCQA certification we don't have."""
         from app.services.hedis.spec_validators import VALIDATORS
         result = VALIDATORS[measure_id](2026)
@@ -638,7 +638,7 @@ class TestSpecValidatorRegistry:
         )
 
     @pytest.mark.parametrize("measure_id", ["BCS", "CCS", "HBD", "CBP", "FUM"])
-    def test_discrepancies_lists_known_gaps(self, measure_id):
+    def test_discrepancies_lists_known_gaps(self, measure_id) -> None:
         """Each validator must document its known MVP gaps explicitly."""
         from app.services.hedis.spec_validators import VALIDATORS
         result = VALIDATORS[measure_id](2026)
@@ -660,7 +660,7 @@ class TestSpecConformanceSummary:
     visible in pytest -v output for enterprise/security review artifacts.
     """
 
-    def test_print_spec_validation_summary(self, capsys):
+    def test_print_spec_validation_summary(self, capsys) -> None:
         from app.services.hedis.spec_validators import VALIDATORS
         lines = [
             "",

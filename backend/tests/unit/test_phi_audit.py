@@ -27,7 +27,7 @@ def _drain(flush_fn):
 # ---------------------------------------------------------------------------
 
 class TestPhiEnqueue:
-    def test_enqueue_increments_pending(self):
+    def test_enqueue_increments_pending(self) -> None:
         from app.phi_access_logger import _enqueue, _metrics, _record_queue
 
         before = _record_queue.qsize()
@@ -40,7 +40,7 @@ class TestPhiEnqueue:
         except queue.Empty:
             pass
 
-    def test_queue_full_increments_dropped(self, monkeypatch):
+    def test_queue_full_increments_dropped(self, monkeypatch) -> None:
         from app import phi_access_logger as mod
 
         monkeypatch.setattr(mod, "_record_queue", queue.Queue(maxsize=1))
@@ -52,7 +52,7 @@ class TestPhiEnqueue:
 
 
 class TestFlushPending:
-    def test_flush_writes_to_db(self):
+    def test_flush_writes_to_db(self) -> None:
         from app.phi_access_logger import _enqueue, _flush_pending
 
         mock_cur = MagicMock()
@@ -66,7 +66,7 @@ class TestFlushPending:
             # DB write should have been attempted
             assert mock_db.call_count >= 1
 
-    def test_flush_falls_back_to_overflow_on_db_failure(self, tmp_path, monkeypatch):
+    def test_flush_falls_back_to_overflow_on_db_failure(self, tmp_path, monkeypatch) -> None:
         from app import phi_access_logger as mod
 
         overflow = tmp_path / "overflow.jsonl"
@@ -88,7 +88,7 @@ class TestFlushPending:
 class TestDirectCallApi:
     """log_phi_access() called with kwargs should enqueue immediately (no FastAPI request)."""
 
-    def test_direct_call_enqueues(self):
+    def test_direct_call_enqueues(self) -> None:
         from app.phi_access_logger import _record_queue, log_phi_access
 
         before = _record_queue.qsize()
@@ -97,7 +97,7 @@ class TestDirectCallApi:
         assert result is None  # direct-call path returns None, not a dependency
         assert _record_queue.qsize() == before + 1
 
-    def test_direct_call_flush_ok(self):
+    def test_direct_call_flush_ok(self) -> None:
         """Verify script from task description works end-to-end (DB patched)."""
         from app.phi_access_logger import _flush_pending, log_phi_access
 
@@ -109,7 +109,7 @@ class TestDirectCallApi:
 
 
 class TestPhiMetrics:
-    def test_phi_metrics_returns_dict(self):
+    def test_phi_metrics_returns_dict(self) -> None:
         from app.phi_access_logger import phi_metrics
 
         m = phi_metrics()
@@ -124,28 +124,28 @@ class TestPhiMetrics:
 # ---------------------------------------------------------------------------
 
 class TestAuditMiddlewareHook:
-    def setup_method(self):
+    def setup_method(self) -> None:
         from app.audit_middleware import reset_audit_counter
         reset_audit_counter()
 
-    def test_counter_starts_at_zero(self):
+    def test_counter_starts_at_zero(self) -> None:
         from app.audit_middleware import get_audit_counter
         assert get_audit_counter() == 0
 
-    def test_record_audit_entry_increments(self):
+    def test_record_audit_entry_increments(self) -> None:
         from app.audit_middleware import _record_audit_entry, get_audit_counter
         _record_audit_entry()
         _record_audit_entry()
         assert get_audit_counter() == 2
 
-    def test_reset_clears_counter(self):
+    def test_reset_clears_counter(self) -> None:
         from app.audit_middleware import _record_audit_entry, get_audit_counter, reset_audit_counter
         _record_audit_entry()
         reset_audit_counter()
         assert get_audit_counter() == 0
 
     @pytest.mark.asyncio
-    async def test_middleware_increments_on_authed_patient_route(self):
+    async def test_middleware_increments_on_authed_patient_route(self) -> None:
         """Middleware increments counter when Authorization + patient path present."""
         from app.audit_middleware import AuditRequestContextMiddleware, get_audit_counter
 
@@ -168,7 +168,7 @@ class TestAuditMiddlewareHook:
         assert get_audit_counter() == 1
 
     @pytest.mark.asyncio
-    async def test_middleware_does_not_increment_unauthenticated(self):
+    async def test_middleware_does_not_increment_unauthenticated(self) -> None:
         """No Authorization header — counter stays at 0."""
         from app.audit_middleware import AuditRequestContextMiddleware, get_audit_counter
 

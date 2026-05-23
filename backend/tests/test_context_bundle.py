@@ -97,7 +97,7 @@ def fake_patient_fixtures():
     }
 
 
-def test_assemble_bundle_shape(fake_patient_fixtures):
+def test_assemble_bundle_shape(fake_patient_fixtures) -> None:
     cur = FakeCursor(fake_patient_fixtures)
     bundle = assemble_bundle(
         patient_id=42,
@@ -120,7 +120,7 @@ def test_assemble_bundle_shape(fake_patient_fixtures):
     assert "form_clinical_notes" in bundle.meta.source_tables
 
 
-def test_abnormal_only_mode_filters_labs(fake_patient_fixtures):
+def test_abnormal_only_mode_filters_labs(fake_patient_fixtures) -> None:
     cur = FakeCursor(fake_patient_fixtures)
     bundle = assemble_bundle(
         patient_id=42,
@@ -134,7 +134,7 @@ def test_abnormal_only_mode_filters_labs(fake_patient_fixtures):
     assert bundle.recent_labs_12mo[0].code == "2345-7"
 
 
-def test_to_llm_payload_keys(fake_patient_fixtures):
+def test_to_llm_payload_keys(fake_patient_fixtures) -> None:
     cur = FakeCursor(fake_patient_fixtures)
     bundle = assemble_bundle(
         patient_id=42, cutoff_date=date(2025, 4, 16),
@@ -150,7 +150,7 @@ def test_to_llm_payload_keys(fake_patient_fixtures):
     assert "meta" in payload
 
 
-def test_token_budget_trims_notes_and_labs(fake_patient_fixtures):
+def test_token_budget_trims_notes_and_labs(fake_patient_fixtures) -> None:
     # Pump 50 large notes and 50 non-abnormal labs into fixtures.
     big = dict(fake_patient_fixtures)
     big["notes"] = [
@@ -177,7 +177,7 @@ def test_token_budget_trims_notes_and_labs(fake_patient_fixtures):
     assert bundle.meta.char_count <= 5_000 or len(bundle.clinical_notes) == 0
 
 
-def test_no_fhir_patient_falls_back_to_legacy_problems():
+def test_no_fhir_patient_falls_back_to_legacy_problems() -> None:
     fx = {
         "patients": [{
             "id": 7, "first_name": "Bob", "last_name": "Legacy",

@@ -78,26 +78,26 @@ class TestLocalFernetProvider(unittest.TestCase):
     def setUp(self):
         self.provider = LocalFernetProvider(key=_FERNET_KEY)
 
-    def test_encrypt_returns_version_prefix(self):
+    def test_encrypt_returns_version_prefix(self) -> None:
         blob = self.provider.encrypt(PLAINTEXT_BYTES)
         self.assertEqual(blob[:1], VERSION_FERNET)
 
-    def test_round_trip(self):
+    def test_round_trip(self) -> None:
         blob = self.provider.encrypt(PLAINTEXT_BYTES)
         recovered = self.provider.decrypt(blob)
         self.assertEqual(recovered, PLAINTEXT_BYTES)
 
-    def test_encrypt_str_round_trip(self):
+    def test_encrypt_str_round_trip(self) -> None:
         ct = self.provider.encrypt_str(PLAINTEXT)
         pt = self.provider.decrypt_str(ct)
         self.assertEqual(pt, PLAINTEXT)
 
-    def test_wrong_version_raises(self):
+    def test_wrong_version_raises(self) -> None:
         kms_blob = VERSION_KMS + b"\x00" * 40
         with self.assertRaises(ValueError):
             self.provider.decrypt(kms_blob)
 
-    def test_empty_blob_raises(self):
+    def test_empty_blob_raises(self) -> None:
         with self.assertRaises(ValueError):
             self.provider.decrypt(b"")
 
@@ -116,29 +116,29 @@ class TestAwsKmsProvider(unittest.TestCase):
         _DATA_KEY_CACHE.clear()
         self.provider = self._make_provider()
 
-    def test_encrypt_returns_kms_version(self):
+    def test_encrypt_returns_kms_version(self) -> None:
         blob = self.provider.encrypt(PLAINTEXT_BYTES)
         self.assertEqual(blob[:1], VERSION_KMS)
 
-    def test_round_trip(self):
+    def test_round_trip(self) -> None:
         blob = self.provider.encrypt(PLAINTEXT_BYTES)
         # Fresh provider (no cache) for decrypt
         dec_provider = self._make_provider()
         recovered = dec_provider.decrypt(blob)
         self.assertEqual(recovered, PLAINTEXT_BYTES)
 
-    def test_encrypt_str_round_trip(self):
+    def test_encrypt_str_round_trip(self) -> None:
         ct = self.provider.encrypt_str(PLAINTEXT)
         dec_provider = self._make_provider()
         pt = dec_provider.decrypt_str(ct)
         self.assertEqual(pt, PLAINTEXT)
 
-    def test_wrong_version_raises(self):
+    def test_wrong_version_raises(self) -> None:
         fernet_blob = VERSION_FERNET + b"\x00" * 40
         with self.assertRaises(ValueError):
             self.provider.decrypt(fernet_blob)
 
-    def test_empty_blob_raises(self):
+    def test_empty_blob_raises(self) -> None:
         with self.assertRaises(ValueError):
             self.provider.decrypt(b"")
 
@@ -154,7 +154,7 @@ class TestLegacyFernetReadableUnderKms(unittest.TestCase):
         self.kms_provider = AwsKmsProvider(key_arn="arn:aws:kms:us-east-1:123456789012:key/test")
         self.kms_provider._boto3_mod = _make_boto3_mock()
 
-    def test_legacy_fernet_blob_decryptable_via_universal_decrypt(self):
+    def test_legacy_fernet_blob_decryptable_via_universal_decrypt(self) -> None:
         # Encrypt with Fernet (legacy)
         fernet_blob = self.fernet_provider.encrypt(PLAINTEXT_BYTES)
         self.assertEqual(fernet_blob[:1], VERSION_FERNET)
@@ -175,7 +175,7 @@ class TestKmsCacheHit(unittest.TestCase):
     def setUp(self):
         _DATA_KEY_CACHE.clear()
 
-    def test_two_decrypts_one_kms_call(self):
+    def test_two_decrypts_one_kms_call(self) -> None:
         mock_boto3 = _make_boto3_mock()
         provider = AwsKmsProvider(key_arn="arn:aws:kms:us-east-1:123456789012:key/test")
         provider._boto3_mod = mock_boto3
@@ -204,7 +204,7 @@ class TestKmsCacheExpiry(unittest.TestCase):
     def setUp(self):
         _DATA_KEY_CACHE.clear()
 
-    def test_expired_cache_triggers_second_kms_call(self):
+    def test_expired_cache_triggers_second_kms_call(self) -> None:
         mock_boto3 = _make_boto3_mock()
         provider = AwsKmsProvider(key_arn="arn:aws:kms:us-east-1:123456789012:key/test")
         provider._boto3_mod = mock_boto3
@@ -257,7 +257,7 @@ class TestKeyRotationEndpoint(unittest.TestCase):
             rotated.append(base64.urlsafe_b64encode(new_blob).decode("ascii"))
         return rotated
 
-    def test_five_fernet_rows_become_kms(self):
+    def test_five_fernet_rows_become_kms(self) -> None:
         plaintexts = [f"secret-value-{i}" for i in range(5)]
 
         # Store as legacy Fernet blobs.

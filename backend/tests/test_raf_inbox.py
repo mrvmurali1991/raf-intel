@@ -85,7 +85,7 @@ def _fetch_row(row_id: int) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def test_mark_dirty_idempotent():
+def test_mark_dirty_idempotent() -> None:
     tid = _tid()
     try:
         first = raf_inbox.mark_dirty(pid=1, tenant_id=tid, reason="sync")
@@ -98,7 +98,7 @@ def test_mark_dirty_idempotent():
         _cleanup(tid)
 
 
-def test_mark_many_dirty_debounces():
+def test_mark_many_dirty_debounces() -> None:
     tid = _tid()
     try:
         # pids [1, 2, 3, 1, 2] — 5 items but only 3 unique
@@ -111,7 +111,7 @@ def test_mark_many_dirty_debounces():
         _cleanup(tid)
 
 
-def test_claim_next_atomic():
+def test_claim_next_atomic() -> None:
     tid = _tid()
     try:
         raf_inbox.mark_dirty(pid=10, tenant_id=tid, reason="sync")
@@ -139,7 +139,7 @@ def test_claim_next_atomic():
         _cleanup(tid)
 
 
-def test_mark_done_closes_row():
+def test_mark_done_closes_row() -> None:
     tid = _tid()
     try:
         raf_inbox.mark_dirty(pid=20, tenant_id=tid, reason="manual")
@@ -159,7 +159,7 @@ def test_mark_done_closes_row():
         _cleanup(tid)
 
 
-def test_mark_failed_preserves_row():
+def test_mark_failed_preserves_row() -> None:
     tid = _tid()
     try:
         raf_inbox.mark_dirty(pid=30, tenant_id=tid, reason="manual")
@@ -181,7 +181,7 @@ def test_mark_failed_preserves_row():
         _cleanup(tid)
 
 
-def test_requeue_failed_returns_rows_to_pending():
+def test_requeue_failed_returns_rows_to_pending() -> None:
     tid = _tid()
     try:
         raf_inbox.mark_dirty(pid=40, tenant_id=tid, reason="manual")
@@ -203,7 +203,7 @@ def test_requeue_failed_returns_rows_to_pending():
         _cleanup(tid)
 
 
-def test_mark_dirty_after_done_creates_new_row():
+def test_mark_dirty_after_done_creates_new_row() -> None:
     tid = _tid()
     try:
         raf_inbox.mark_dirty(pid=50, tenant_id=tid, reason="manual")
@@ -222,7 +222,7 @@ def test_mark_dirty_after_done_creates_new_row():
         _cleanup(tid)
 
 
-def test_is_enabled_flag(monkeypatch):
+def test_is_enabled_flag(monkeypatch) -> None:
     monkeypatch.setenv("RAF_INBOX_ENABLED", "false")
     assert raf_inbox.is_enabled() is False
 
