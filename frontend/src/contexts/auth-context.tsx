@@ -66,6 +66,8 @@ export interface User {
   mfa_enabled?: boolean;
   must_change_password?: boolean;
   onboarding_complete?: boolean;
+  /** Clinical providers table id this user is linked to (null for non-clinical users). */
+  provider_id?: number | null;
   /** Tenants this user may pivot into via the org switcher. */
   accessible_tenants?: AccessibleTenant[];
 }

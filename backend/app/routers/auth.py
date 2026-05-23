@@ -234,6 +234,7 @@ class UserProfileResponse(BaseModel):
     updated_at: str | None = None
     onboarding_complete: bool = False
     accessible_tenants: list[AccessibleTenantItem] = []
+    provider_id: int | None = None
 
 
 class UserDetailResponse(BaseModel):
@@ -1005,6 +1006,7 @@ def get_me(current_user: dict = Depends(get_current_user)) -> UserProfileRespons
             "avatar_url": user["avatar_url"],
             "last_login_at": user["last_login_at"],
             "created_at": user["created_at"],
+            "provider_id": user.get("provider_id"),
         }
     )
 
