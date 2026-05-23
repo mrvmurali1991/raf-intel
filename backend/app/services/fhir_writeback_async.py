@@ -31,6 +31,25 @@ def mark_writeback_pending(
         )
 
 
+def mark_writeback_failed(
+    *, tenant_id: str | int, suspect_id: int, error: str
+) -> None:
+    """Stamp the row with status='failed' + error message.
+
+    Used by the admin replay handler when celery .delay() raises BEFORE
+    the worker ever runs — without this, the row would be orphaned in
+    'pending' and invisible to list_failed_writebacks.
+    """
+    with raf_cursor() as cur:
+        cur.execute(
+            """UPDATE raf_suspect_conditions
+               SET fhir_writeback_status='failed',
+                   fhir_writeback_last_error=%s
+               WHERE id=%s AND tenant_id=%s""",
+            (error[:500], int(suspect_id), str(tenant_id)),
+        )
+
+
 def _row(tenant_id: str | int, suspect_id: int) -> dict[str, Any] | None:
     with raf_cursor() as cur:
         cur.execute(

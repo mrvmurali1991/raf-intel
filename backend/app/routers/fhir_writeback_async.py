@@ -74,11 +74,18 @@ def replay_failed(
                 user_id=user_id,
             )
             replayed += 1
-        except Exception:
+        except Exception as exc:
             logger.warning(
                 "fhir_writeback replay: could not enqueue suspect_id=%s",
                 r["id"],
                 exc_info=True,
+            )
+            # Restore 'failed' so the row stays visible to future replays
+            # instead of being orphaned in 'pending'.
+            svc.mark_writeback_failed(
+                tenant_id=tenant_id,
+                suspect_id=int(r["id"]),
+                error=f"enqueue error: {exc}",
             )
             skipped += 1
     return {"replayed_count": replayed, "skipped_count": skipped,
