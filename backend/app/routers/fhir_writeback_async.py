@@ -26,7 +26,7 @@ def writeback_status(
     suspect_id: int,
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("suspects", "read")),
-):
+) -> dict[str, Any]:
     row = svc.get_writeback_status(tenant_id, suspect_id)
     if not row:
         raise HTTPException(status_code=404, detail="suspect not found")
@@ -40,7 +40,7 @@ def writeback_status(
 def replay_failed(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
-):
+) -> dict[str, Any]:
     role = (current_user.get("role") or "").lower()
     if role not in {"admin", "manager"}:
         raise HTTPException(status_code=403, detail="Admin/manager only")
@@ -69,7 +69,11 @@ def replay_failed(
                 )
                 replayed += 1
             except Exception:
-                logger.debug("swallowed exception", exc_info=True)
+                logger.warning(
+                    "fhir_writeback replay: could not enqueue suspect_id=%s",
+                    r["id"],
+                    exc_info=True,
+                )
                 skipped += 1
         else:
             skipped += 1

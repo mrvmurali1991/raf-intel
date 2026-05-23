@@ -114,11 +114,8 @@ def _reject_if_non_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address, h
         reasons.append("reserved")
     # IPv6-specific: unique-local (fc00::/7)
     if isinstance(addr, ipaddress.IPv6Address):
-        try:
-            if addr in ipaddress.ip_network("fc00::/7"):
-                reasons.append("unique-local")
-        except Exception:
-            pass
+        if addr in ipaddress.ip_network("fc00::/7"):
+            reasons.append("unique-local")
 
     if reasons:
         raise ValueError(

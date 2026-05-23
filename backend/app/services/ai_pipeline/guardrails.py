@@ -368,10 +368,7 @@ def scrub_pii_from_logs(text: str | bytes | None) -> str:
     if text is None:
         return ""
     if isinstance(text, bytes):
-        try:
-            text = text.decode("utf-8", errors="replace")
-        except Exception:
-            return "[binary]"
+        text = text.decode("utf-8", errors="replace")
     s = str(text)
     s = _SSN.sub("***-**-****", s)
     try:
