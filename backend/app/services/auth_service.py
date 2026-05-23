@@ -527,7 +527,7 @@ def get_user(user_id: int) -> dict[str, Any] | None:
             SELECT id, email, full_name, role, tenant_id, is_active, avatar_url,
                    failed_login_attempts, locked_until, last_login_at,
                    password_changed_at, created_at, updated_at,
-                   mfa_enabled, mfa_secret, mfa_recovery_codes
+                   mfa_enabled, mfa_secret, mfa_recovery_codes, provider_id
             FROM users WHERE id = %s
             """,
             (user_id,),
@@ -930,7 +930,7 @@ def authenticate_user(
             """
             SELECT id, email, full_name, role, tenant_id, is_active, avatar_url,
                    failed_login_attempts, locked_until, password_hash,
-                   password_changed_at, created_at, mfa_enabled
+                   password_changed_at, created_at, mfa_enabled, provider_id
             FROM users WHERE email = %s
             """,
             (email,),
@@ -1066,6 +1066,7 @@ def _issue_tokens(
         "role": user["role"],
         "tenant_id": user["tenant_id"],
         "avatar_url": user["avatar_url"],
+        "provider_id": user.get("provider_id"),
         "must_change_password": user.get("must_change_password", False),
     }
 
