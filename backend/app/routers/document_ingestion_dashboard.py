@@ -24,10 +24,24 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.auth import get_current_user, require_permission
+from app.db import raf_cursor
+from app.services.redis_cache import cached as redis_cached
 
 # Module-level identifier guard — see _safe_ident below. Pre-compiled so the
 # regex is built once per process, not per query.
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Allowlist for the optional sub-filter column on shared ingestion tables.
+# Today the values originate from the in-process SOURCES dict, but this
+# frozenset is the single source of truth so future config-driven sources
+# can never become an injection vector. Used by both the aggregate query
+# and the row-fetch query in _query_source.
+_ALLOWED_FILTER_COLS: frozenset[str] = frozenset({"export_type"})
 
 
 def _safe_ident(value: str, field_name: str) -> str:
@@ -41,12 +55,6 @@ def _safe_ident(value: str, field_name: str) -> str:
             f"{field_name}={value!r}"
         )
     return value
-from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from app.db import raf_cursor
-from app.auth import get_current_user, require_permission
-from app.services.redis_cache import cached as redis_cached
 
 logger = logging.getLogger(__name__)
 
@@ -273,10 +281,9 @@ def _query_source(
         }
 
     # Optional sub-filter for tables shared between two logical sources.
-    # source_filter_col comes from the in-process SOURCES dict today, but
-    # allowlist enforcement guarantees the value can never be tenant-supplied
-    # text — defense in depth against future config sources (DB/JSON/yaml).
-    _ALLOWED_FILTER_COLS = {"export_type"}
+    # Uses module-level _ALLOWED_FILTER_COLS so the constant is built once,
+    # not per request, and so the same allowlist applies to every query path
+    # in this function (the aggregate + the rows fetch below).
     filter_clause = ""
     filter_params: list[Any] = [since]
     col = src.get("source_filter_col")
@@ -363,8 +370,14 @@ def _query_source(
             "recent_rows": recent_rows,
         }
 
-    except Exception as exc:
-        logger.warning("document_ingestion_dashboard: failed to query %s: %s", table, exc)
+    except Exception:
+        # Per-source isolation: a failure on one of the 9 source tables must
+        # not blank the whole dashboard. exc_info=True preserves the
+        # traceback so ops can diagnose schema drift / connection drops.
+        logger.warning(
+            "document_ingestion_dashboard: failed to query %s",
+            table, exc_info=True,
+        )
         return {
             "docs_24h": 0,
             "suspects_24h": 0,
@@ -449,7 +462,13 @@ def _build_doc_dashboard(hours: int) -> dict[str, Any]:
                 }
             )
 
-    # Sort recent documents by timestamp desc, cap at 500 for the response
+    # Sort recent documents by timestamp desc, cap at 500 for the response.
+    # Timestamps are produced via datetime.isoformat() at line 354 — so they
+    # always look like "2026-05-23T14:32:11.123456" or "...+00:00". ISO-8601
+    # is lexicographically sortable as long as all values share the same
+    # timezone-format flavour, which they do here (the upstream column is
+    # always UTC-naive datetime). Empty string sorts last under reverse=True
+    # which is the desired behaviour for missing timestamps.
     all_recent.sort(key=lambda r: r["timestamp"] or "", reverse=True)
     all_recent = all_recent[:500]
 

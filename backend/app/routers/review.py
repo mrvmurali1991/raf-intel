@@ -92,7 +92,6 @@ def list_candidates(
         ),
     ),
     limit: int = Query(default=200, ge=1, le=1000),
-    sort_by: str | None = Query(default=None, description="Ignored — reserved for future use"),
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("suspects", "read")),
@@ -248,6 +247,20 @@ def list_candidates(
 # POST /api/review/decision
 # ---------------------------------------------------------------------------
 
+def _actor_id(current_user: dict) -> str:
+    """Single source of truth for "who initiated this action" in audit logs
+    and reviewed_by columns. The fallback chain prefers username (matches
+    OpenEMR's actor convention), then email (always present on JWT), then
+    sub (numeric user id) as a last resort.
+    """
+    return str(
+        current_user.get("username")
+        or current_user.get("email")
+        or current_user.get("sub")
+        or "unknown"
+    )
+
+
 def _split_id(composite: str) -> tuple[ItemKind, int]:
     try:
         kind, raw = composite.split(":", 1)
@@ -255,6 +268,10 @@ def _split_id(composite: str) -> tuple[ItemKind, int]:
             raise ValueError
         return kind, int(raw)  # type: ignore[return-value]
     except Exception as e:
+        # Log malformed IDs at debug so ops can spot scraping / fuzzing
+        # patterns without polluting WARN level. The HTTP 400 still informs
+        # the caller; this just preserves the traceback for diagnostics.
+        logger.debug("_split_id rejected composite=%r", composite, exc_info=True)
         raise HTTPException(400, f"invalid candidate_id '{composite}'") from e
 
 
@@ -325,9 +342,7 @@ def post_decision(
             logger.exception("review decision lookup failed")
             raise HTTPException(500, "review item lookup failed") from e
 
-        reviewer = str(current_user.get("username") or
-                       current_user.get("email") or
-                       current_user.get("sub"))
+        reviewer = _actor_id(current_user)
         # update
         if body.decision == "edit":
             cur.execute(
@@ -353,8 +368,7 @@ def post_decision(
         tenant_id=tenant_id,
         action=action,
         actor_type="user",
-        actor_id=str(current_user.get("sub") or current_user.get("email") or
-                     current_user.get("username") or "unknown"),
+        actor_id=_actor_id(current_user),
         target_type=kind,
         target_id=numeric_id,
         before=before,
