@@ -321,6 +321,42 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
   return Promise.reject(error);
 });
 
+// ---------------------------------------------------------------------------
+// Global 5xx / network-error event dispatcher
+//
+// Fires AFTER the retry interceptor has given up (retries exhausted or method
+// not safe to retry). Does NOT intercept 401 (auth-context handles that) or
+// any other 4xx (page-level handling). Dispatches "api-error" so
+// GlobalErrorToast can surface a non-blocking notification.
+// ---------------------------------------------------------------------------
+
+api.interceptors.response.use(undefined, (error: AxiosError) => {
+  if (typeof window === "undefined") return Promise.reject(error);
+
+  const status = error.response?.status ?? 0;
+
+  // 401 is handled by registerAuthInterceptors — skip it here.
+  // All other 4xx are page-level concerns — skip those too.
+  const is5xx = status >= 500;
+  const isNetworkError = !error.response; // no response at all
+
+  if (is5xx || isNetworkError) {
+    const detail = {
+      status,
+      message: isNetworkError
+        ? "Network error. Check your connection."
+        : "Server error. Please try again.",
+    };
+    try {
+      window.dispatchEvent(new CustomEvent("api-error", { detail }));
+    } catch {
+      /* dispatch must never throw */
+    }
+  }
+
+  return Promise.reject(error);
+});
+
 /**
  * Helper: returns true if an error was emitted because the tenant has no
  * active EMR connection (HTTP 423 + code=EMR_DEACTIVATED). Use this in page

@@ -511,6 +511,20 @@ export default function LoginPage() {
   const { login, isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
 
+  /** Validate that a redirect path is a safe relative path on this origin. */
+  function isValidRedirectPath(path: string | null): boolean {
+    if (!path) return false;
+    if (!path.startsWith('/')) return false;
+    if (path.startsWith('//')) return false;
+    if (path.includes('..')) return false;
+    try {
+      const url = new URL(path, 'http://localhost');
+      return url.origin === 'http://localhost';
+    } catch {
+      return false;
+    }
+  }
+
   /** Resolve the post-login destination based on role, with `next` taking precedence. */
   function resolveDestination(role?: string): string {
     const dest: Record<string, string> = {
@@ -520,7 +534,8 @@ export default function LoginPage() {
       admin: "/",
       manager: "/",
     };
-    return searchParams.get("next") ?? dest[role ?? ""] ?? "/";
+    const next = searchParams.get("next");
+    return isValidRedirectPath(next) ? next! : (dest[role ?? ""] ?? "/");
   }
 
   useEffect(() => {

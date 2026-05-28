@@ -81,9 +81,25 @@ const nextConfig: NextConfig = {
           key: "Content-Security-Policy",
           // Next/React dev mode requires `unsafe-eval` for HMR and stack-trace
           // reconstruction. Production builds never need it.
+          //
+          // Production script-src uses a SHA-256 hash instead of 'unsafe-inline'
+          // to allow the single theme-initialisation script in src/app/layout.tsx
+          // (the blocking inline script that sets the `dark` class before first
+          // paint) without opening the door to arbitrary injected scripts.
+          //
+          // The hash was computed from the EXACT __html string in layout.tsx:
+          //   node -e "const c=require('crypto');process.stdout.write(
+          //     c.createHash('sha256')
+          //      .update(require('fs').readFileSync('src/app/layout.tsx','utf8')
+          //        .match(/__html:\s*\`([^\`]+)\`/)[1],'utf8')
+          //      .digest('base64'))"
+          //
+          // IF the inline script in layout.tsx ever changes, re-run the command
+          // above and update the hash here — otherwise the script will be blocked
+          // by the browser and the dark-mode flash prevention will stop working.
           value:
             process.env.NODE_ENV === "production"
-              ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+              ? "default-src 'self'; script-src 'self' 'sha256-R9nGBG9IkaVzCVzhzz/vQHokcx9FCqfIBnvYLz0zTlM=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
               : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' http: https: ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         },
         {

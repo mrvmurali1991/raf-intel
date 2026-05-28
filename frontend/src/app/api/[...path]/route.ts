@@ -82,7 +82,7 @@ async function proxyRequest(req: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error("[api-proxy] Backend unreachable:", err);
     return NextResponse.json(
-      { error: "Backend service unavailable", detail: String(err) },
+      { error: "Service temporarily unavailable" },
       { status: 503 }
     );
   }

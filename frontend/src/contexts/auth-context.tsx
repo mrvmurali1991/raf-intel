@@ -326,6 +326,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Only logout if we're not already on the login page
       () => {
         if (typeof window !== "undefined" && window.location.pathname === "/login") return;
+        try {
+          window.dispatchEvent(new CustomEvent("session-expired"));
+        } catch {
+          /* dispatch must never throw */
+        }
         performLogout();
         router.push("/login?reason=session_expired");
       }
