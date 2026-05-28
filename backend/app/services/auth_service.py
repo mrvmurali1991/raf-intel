@@ -519,19 +519,39 @@ def _attach_must_change_password(user: dict[str, Any]) -> dict[str, Any]:
     return user
 
 
-def get_user(user_id: int) -> dict[str, Any] | None:
+def get_user(user_id: int, tenant_id: str | int | None = None) -> dict[str, Any] | None:
+    """Fetch a user by primary key.
+
+    When ``tenant_id`` is supplied the query adds a ``tenant_id = %s`` filter
+    so the lookup is scoped to that tenant at the database level (defense-in-
+    depth). Callers that have already validated tenant ownership at the router
+    layer do not need to pass this argument, but it is recommended for any
+    admin code path that operates on user records by ID.
+    """
     _ensure_tables()
     with raf_cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, email, full_name, role, tenant_id, is_active, avatar_url,
-                   failed_login_attempts, locked_until, last_login_at,
-                   password_changed_at, created_at, updated_at,
-                   mfa_enabled, mfa_secret, mfa_recovery_codes, provider_id
-            FROM users WHERE id = %s
-            """,
-            (user_id,),
-        )
+        if tenant_id is not None:
+            cur.execute(
+                """
+                SELECT id, email, full_name, role, tenant_id, is_active, avatar_url,
+                       failed_login_attempts, locked_until, last_login_at,
+                       password_changed_at, created_at, updated_at,
+                       mfa_enabled, mfa_secret, mfa_recovery_codes, provider_id
+                FROM users WHERE id = %s AND tenant_id = %s
+                """,
+                (user_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, email, full_name, role, tenant_id, is_active, avatar_url,
+                       failed_login_attempts, locked_until, last_login_at,
+                       password_changed_at, created_at, updated_at,
+                       mfa_enabled, mfa_secret, mfa_recovery_codes, provider_id
+                FROM users WHERE id = %s
+                """,
+                (user_id,),
+            )
         row = cur.fetchone()
     if row is None:
         return None

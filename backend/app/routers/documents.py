@@ -197,6 +197,8 @@ def _do_approve_and_score(
     tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Approve all HCC-relevant diagnoses and recalculate RAF score."""
+    if tenant_id is None:
+        raise ValueError("tenant_id is required for _do_approve_and_score")
     from datetime import date as _d
 
     from app.services.raf_calculator import calculate_raf_score
@@ -236,16 +238,10 @@ def _do_approve_and_score(
         if not hcc:
             continue
         with raf_cursor() as cur:
-            if tenant_id is not None:
-                cur.execute(
-                    "SELECT id FROM raf_patient_hcc WHERE patient_id=%s AND hcc_code=%s AND measurement_year=%s AND tenant_id=%s LIMIT 1",
-                    (patient_id, hcc, year, tenant_id),
-                )
-            else:
-                cur.execute(
-                    "SELECT id FROM raf_patient_hcc WHERE patient_id=%s AND hcc_code=%s AND measurement_year=%s LIMIT 1",
-                    (patient_id, hcc, year),
-                )
+            cur.execute(
+                "SELECT id FROM raf_patient_hcc WHERE patient_id=%s AND hcc_code=%s AND measurement_year=%s AND tenant_id=%s LIMIT 1",
+                (patient_id, hcc, year, tenant_id),
+            )
             if cur.fetchone():
                 continue
             cur.execute(
@@ -271,16 +267,10 @@ def _do_approve_and_score(
         new_raf = None
 
     with raf_cursor() as cur:
-        if tenant_id is not None:
-            cur.execute(
-                "UPDATE documents SET status='approved' WHERE id=%s AND tenant_id=%s",
-                (document_id, tenant_id),
-            )
-        else:
-            cur.execute(
-                "UPDATE documents SET status='approved' WHERE id=%s",
-                (document_id,),
-            )
+        cur.execute(
+            "UPDATE documents SET status='approved' WHERE id=%s AND tenant_id=%s",
+            (document_id, tenant_id),
+        )
 
     return {"approved": len(ids), "new_hccs": inserted, "new_raf": new_raf}
 

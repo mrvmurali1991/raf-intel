@@ -115,7 +115,7 @@ class JSONFormatter(logging.Formatter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._sensitive_patterns = _scrub_patterns_for_level(
-            os.getenv("PHI_SCRUB_LEVEL", "standard")
+            os.getenv("PHI_SCRUB_LEVEL", "aggressive")
         )
 
     # Kept as a class attribute for back-compat with anything that imports it.

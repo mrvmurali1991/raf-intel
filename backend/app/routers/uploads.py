@@ -46,6 +46,11 @@ router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 
+# Magic byte signatures for content-type validation
+_CSV_SIGS = [b'\xef\xbb\xbf', b'"', b"'"]  # BOM, quote-delimited
+_XLSX_SIG = b'PK\x03\x04'  # ZIP/XLSX signature
+_XLS_SIG = b'\xd0\xcf\x11\xe0'  # OLE2 (legacy .xls)
+
 # ---------------------------------------------------------------------------
 # Template static file location
 # ---------------------------------------------------------------------------
@@ -161,6 +166,44 @@ _VALID_EVIDENCE_TYPE = {"medication", "lab", "imaging", "referral", "historical"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _validate_file_content(content: bytes, filename: str) -> None:
+    """Validate that uploaded file bytes match the declared extension.
+
+    Raises HTTPException 422 on magic-byte mismatch, 422 on non-UTF-8 CSV,
+    and 413 if the file exceeds the hard 100 MB ceiling (belt-and-suspenders;
+    the 25 MB cap in the route fires first).
+    """
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext == "xlsx":
+        if content[:4] != _XLSX_SIG:
+            raise HTTPException(
+                status_code=422,
+                detail="File content does not match .xlsx format",
+            )
+    elif ext == "xls":
+        if content[:4] != _XLS_SIG:
+            raise HTTPException(
+                status_code=422,
+                detail="File content does not match .xls format",
+            )
+    elif ext == "csv":
+        # CSV is plain text — verify it's valid UTF-8/ASCII
+        try:
+            content[:4096].decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=422,
+                detail="CSV file is not valid UTF-8 text",
+            )
+    # Also cap file size (hard ceiling)
+    MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)}MB limit",
+        )
 
 
 def _norm_header(v: Any) -> str:
@@ -1033,6 +1076,9 @@ async def upload_patients(
             status_code=413,
             detail=f"File too large. Max {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
         )
+
+    # Validate magic bytes BEFORE any parsing — extension alone is not enough.
+    _validate_file_content(content, fname)
 
     tenant_id = get_tenant_id(current_user)
     user_id = int(current_user.get("id") or 0)

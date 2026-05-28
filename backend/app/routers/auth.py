@@ -148,7 +148,7 @@ class CreateUserRequest(BaseModel):
     @field_validator("role")
     @classmethod
     def valid_role(cls, v: str) -> str:
-        allowed = {"admin", "manager", "auditor", "viewer"}
+        allowed = {"admin", "manager", "auditor", "coder", "viewer"}
         if v not in allowed:
             raise ValueError(f"Role must be one of: {', '.join(sorted(allowed))}")
         return v
@@ -164,7 +164,7 @@ class UpdateUserRequest(BaseModel):
     @classmethod
     def valid_role(cls, v: str | None) -> str | None:
         if v is not None:
-            allowed = {"admin", "manager", "auditor", "viewer"}
+            allowed = {"admin", "manager", "auditor", "coder", "viewer"}
             if v not in allowed:
                 raise ValueError(f"Role must be one of: {', '.join(sorted(allowed))}")
         return v
@@ -1205,9 +1205,10 @@ def admin_create_user(
 def admin_get_user(
     user_id: int,
     current_user: dict = Depends(require_role("admin", "manager")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> UserDetailResponse:
     user = get_user(user_id)
-    if not user:
+    if not user or str(user.get("tenant_id")) != str(tenant_id):
         raise HTTPException(status_code=404, detail="User not found.")
     safe = _safe_user(user)
     return UserDetailResponse(**safe)
@@ -1223,9 +1224,10 @@ def admin_update_user(
     user_id: int,
     body: UpdateUserRequest,
     current_user: dict = Depends(require_role("admin")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> UserDetailResponse:
     user = get_user(user_id)
-    if not user:
+    if not user or str(user.get("tenant_id")) != str(tenant_id):
         raise HTTPException(status_code=404, detail="User not found.")
     updated = update_user(
         user_id=user_id,
@@ -1254,6 +1256,7 @@ def admin_update_user(
 def admin_deactivate_user(
     user_id: int,
     current_user: dict = Depends(require_role("admin")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> UserDetailResponse:
     if user_id == current_user["id"]:
         raise HTTPException(
@@ -1261,7 +1264,7 @@ def admin_deactivate_user(
             detail="Cannot deactivate your own account.",
         )
     user = get_user(user_id)
-    if not user:
+    if not user or str(user.get("tenant_id")) != str(tenant_id):
         raise HTTPException(status_code=404, detail="User not found.")
     deactivated = deactivate_user(user_id)
     log_audit(
@@ -1282,9 +1285,10 @@ def admin_deactivate_user(
 def admin_get_permissions(
     user_id: int,
     current_user: dict = Depends(require_role("admin", "manager")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> UserPermissionsResponse:
     user = get_user(user_id)
-    if not user:
+    if not user or str(user.get("tenant_id")) != str(tenant_id):
         raise HTTPException(status_code=404, detail="User not found.")
     perms = get_user_permissions(user_id)
     return UserPermissionsResponse(user_id=user_id, role=user["role"], permissions=perms)
@@ -1299,9 +1303,10 @@ def admin_set_permissions(
     user_id: int,
     body: SetPermissionsRequest,
     current_user: dict = Depends(require_role("admin")),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> UserPermissionsResponse:
     user = get_user(user_id)
-    if not user:
+    if not user or str(user.get("tenant_id")) != str(tenant_id):
         raise HTTPException(status_code=404, detail="User not found.")
     perm_dicts = [p.model_dump() for p in body.permissions]
     set_user_permissions(user_id, perm_dicts)
@@ -1580,12 +1585,7 @@ def api_break_glass(
     """
     from app.services.break_glass import create_break_glass_session
 
-    forwarded = request.headers.get("X-Forwarded-For")
-    ip = (
-        forwarded.split(",")[0].strip()
-        if forwarded
-        else (request.client.host if request.client else None)
-    )
+    ip = _get_client_ip(request)
     try:
         session = create_break_glass_session(
             user_id=current_user["id"],

@@ -469,8 +469,13 @@ def explain_query(query: str, params: tuple | None = None) -> list[dict]:
 
     Only available when APP_ENV is 'development'. Returns an empty list in
     production to prevent accidental exposure of query internals.
+
+    Only SELECT statements are accepted; any other statement type is rejected
+    to prevent misuse of EXPLAIN as a vector for unintended DML execution.
     """
     if settings.app_env != "development":
+        return []
+    if not query.strip().upper().startswith("SELECT"):
         return []
     with _db_cursor(get_raf_pool) as cur:
         cur.execute(f"EXPLAIN {query}", params)
@@ -496,9 +501,10 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
     argument.
     """
     if tenant_id is None:
+        if os.getenv("APP_ENV", "development") == "production":
+            raise ValueError("openemr_cursor() requires tenant_id in production")
         # Fallback: use DEFAULT_TENANT_ID for legacy callers that haven't been
         # updated to pass tenant_id yet.  Log a warning so we can track them.
-        import os
         _default = os.environ.get("DEFAULT_TENANT_ID", "1")
         logger.debug(
             "openemr_cursor() called without tenant_id — defaulting to '%s'. "
@@ -922,6 +928,14 @@ TENANT_SCOPED_TABLES = {
 
 _TENANT_FILTER_RE = _re.compile(r"\btenant_id\s*=", _re.IGNORECASE)
 
+# Allowlist of tables that tenant_insert() is permitted to write to.
+# Derived from TENANT_SCOPED_TABLES above — the two sets must stay in sync.
+_TENANT_INSERT_TABLES: frozenset[str] = frozenset(TENANT_SCOPED_TABLES)
+
+# Valid SQL identifier: letter/underscore start, alphanumeric/underscore body,
+# max 64 chars (MySQL limit).
+_IDENT_RE = _re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
 
 def tenant_query(cursor, sql: str, params: tuple | list, tenant_id: str):
     """Execute SQL with automatic tenant_id injection if missing.
@@ -947,7 +961,21 @@ def tenant_query(cursor, sql: str, params: tuple | list, tenant_id: str):
 
 
 def tenant_insert(cursor, table: str, data: dict, tenant_id: str):
-    """Insert a row, auto-adding tenant_id if not already in *data*."""
+    """Insert a row, auto-adding tenant_id if not already in *data*.
+
+    Both the table name and every column key are validated against an
+    allowlist / regex before being interpolated into SQL, preventing
+    SQL injection through those otherwise-unparameterised identifiers.
+    """
+    if table not in _TENANT_INSERT_TABLES:
+        raise ValueError(
+            f"tenant_insert: table {table!r} is not in the allowed table list."
+        )
+    for col in data.keys():
+        if not _IDENT_RE.fullmatch(col):
+            raise ValueError(
+                f"tenant_insert: column name {col!r} contains invalid characters."
+            )
     if not tenant_id:
         raise ValueError("tenant_insert() requires a non-empty tenant_id.")
     if "tenant_id" not in data:
