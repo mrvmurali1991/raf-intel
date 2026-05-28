@@ -268,6 +268,53 @@
   --kpi-card-min-h: 160px;
   --kpi-card-pad: 24px;
 
+  /* ---- Typography scale ----
+   * Companion to the tokens.ts typography exports.
+   * Use these as font-size values in inline styles or CSS.
+   * In Tailwind, prefer text-xs / text-sm / etc. utility classes instead. */
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 14px;
+  --text-lg:   16px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  30px;
+
+  /* ---- Spacing scale ----
+   * 4px base unit. Maps to Tailwind's default scale (space-1 = 4px, etc.)
+   * Use these for inline style={{ margin/padding }} when Tailwind utilities
+   * are not available (e.g. dynamic values, canvas offsets). */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  28px;
+  --space-8:  32px;
+  --space-9:  36px;
+  --space-10: 40px;
+
+  /* ---- Sidebar layout tokens ----
+   * Semantic aliases over the existing --sidebar-* Shadcn tokens so that
+   * sidebar components can consume a single, named set of variables without
+   * knowing the underlying Shadcn naming convention. */
+  --sidebar-bg:        hsl(var(--sidebar));
+  --sidebar-text:      hsl(var(--sidebar-foreground));
+  --sidebar-hover:     hsl(var(--sidebar-accent));
+  --sidebar-active:    hsl(var(--sidebar-primary));
+  --sidebar-accent:    hsl(var(--sidebar-accent));
+  --sidebar-width:     240px;
+  --sidebar-collapsed: 64px;
+
+  /* ---- Table layout tokens ----
+   * Shared row/header heights and horizontal cell padding.
+   * Inline styles and CSS classes that build data tables should read
+   * these vars so every table in the app stays visually consistent. */
+  --table-row-height:    56px;
+  --table-header-height: 48px;
+  --table-pad-x:         24px;
+
   /* ---- Tenant co-branding defaults ----
    * Overridden at runtime by useTenantBranding() once the
    * GET /api/tenant/branding response lands.  Components that want

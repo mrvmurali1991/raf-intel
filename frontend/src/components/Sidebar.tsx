@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, CSSProperties } from "react";
+import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Users,
-  ClipboardCheck,
+  SearchCheck,
   CalendarClock,
   Target,
   Microscope,
@@ -35,6 +35,11 @@ import {
   MapPin,
   TrendingDown,
   FileStack,
+  FileSignature,
+  ClipboardList,
+  CheckCircle2,
+  ChevronDown,
+  Building2,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/theme-provider";
@@ -43,7 +48,6 @@ import api, { getEmrStatus } from "@/lib/api";
 import { useTenantBranding } from "@/lib/useTenantBranding";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { hasUsedKeyboardShortcuts } from "@/components/KeyboardShortcuts";
-import { Building2, ChevronDown } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -58,39 +62,43 @@ import {
 interface NavItem {
   href: string;
   label: string;
-  /** Alternative label shown to non-admin users. Admin always sees `label`. */
   nonAdminLabel?: string;
-  icon: React.ComponentType<{ className?: string; style?: CSSProperties }>;
+  icon: React.ComponentType<{ className?: string; size?: number }>;
   badge?: string | number;
-  /** Keyboard shortcut hint, e.g. "g h". Shown when sidebar is expanded and user has used shortcuts before. */
   shortcut?: string;
-  /** When set, the item is only shown to users whose `role` matches one of these values. */
   visibleToRoles?: string[];
-  /** Rich tooltip shown on hover (both collapsed and expanded). */
   tooltip?: string;
 }
 
 interface NavCluster {
   label: string;
   items: NavItem[];
-  /** When true, the cluster starts collapsed by default (independent of section collapse) */
   defaultCollapsed?: boolean;
-  /** When set, the cluster is only visible to users whose role matches */
   visibleToRoles?: string[];
 }
 
 interface NavGroup {
   title: string;
-  /** Flat item list — used when there are no sub-clusters */
   items?: NavItem[];
-  /** Sub-clusters with divider labels — used instead of `items` */
   clusters?: NavCluster[];
-  /** When true, section starts collapsed by default */
   defaultCollapsed?: boolean;
+}
+
+interface TenantInfo {
+  tenant_id: string;
+  name: string;
+  patient_count: number;
 }
 
 // Feature flag — set NEXT_PUBLIC_DEMO_MODE=true to reveal demo-only nav items
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+// ---------------------------------------------------------------------------
+// Design constants
+// ---------------------------------------------------------------------------
+
+const EXPANDED_WIDTH = 240;
+const COLLAPSED_WIDTH = 64;
 
 // ---------------------------------------------------------------------------
 // Navigation structure — 4 task-based sections
@@ -109,12 +117,12 @@ const navGroups: NavGroup[] = [
   {
     title: "HCC WORKFLOW",
     items: [
-      { href: "/suspects", label: "Suspects", icon: ClipboardCheck, tooltip: "AI-flagged HCC diagnoses awaiting coder review — Accept/Reject with reason codes" },
+      { href: "/suspects", label: "Suspects", icon: SearchCheck, tooltip: "AI-flagged HCC diagnoses awaiting coder review — Accept/Reject with reason codes" },
       { href: "/recapture", label: "Recapture Gaps", icon: CalendarClock, tooltip: "Prior-year HCCs not yet documented this payment year" },
-      { href: "/attestations", label: "Attestations", icon: ClipboardCheck, tooltip: "Provider sign-off workflow for accepted suspects" },
-      { href: "/review-queue", label: "Coder Review", icon: ClipboardCheck, shortcut: "g s", tooltip: "Queue assigned to coding team" },
+      { href: "/attestations", label: "Attestations", icon: FileSignature, tooltip: "Provider sign-off workflow for accepted suspects" },
+      { href: "/review-queue", label: "Coder Review", icon: ClipboardList, shortcut: "g s", tooltip: "Queue assigned to coding team" },
       { href: "/qa", label: "QA Audit", icon: ShieldCheck, tooltip: "QA team's review queue for completed attestations" },
-      { href: "/pre-submission", label: "Pre-submission", icon: ShieldCheck, tooltip: "5-tier validation gate before CMS EDI submission" },
+      { href: "/pre-submission", label: "Pre-submission", icon: CheckCircle2, tooltip: "5-tier validation gate before CMS EDI submission" },
       { href: "/goals", label: "Quarterly Goals", icon: Target, tooltip: "Goal-vs-actual RAF capture tracking" },
     ],
   },
@@ -180,20 +188,13 @@ const navGroups: NavGroup[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Design tokens
-// ---------------------------------------------------------------------------
-
-const EXPANDED_WIDTH = 240;
-const COLLAPSED_WIDTH = 64;
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function getUserInitials(firstName?: string, lastName?: string): string {
   const first = firstName?.[0] ?? "";
   const last = lastName?.[0] ?? "";
-  return (first + last).toUpperCase() || "\u2022";
+  return (first + last).toUpperCase() || "•";
 }
 
 function getUserDisplayName(
@@ -205,16 +206,10 @@ function getUserDisplayName(
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// TenantSwitcher sub-component
 // ---------------------------------------------------------------------------
 
-interface TenantInfo {
-  tenant_id: string;
-  name: string;
-  patient_count: number;
-}
-
-function TenantSwitcher({ isDark }: { isDark: boolean }) {
+function TenantSwitcher({ collapsed }: { collapsed: boolean }) {
   const { user, switchTenant } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -229,8 +224,6 @@ function TenantSwitcher({ isDark }: { isDark: boolean }) {
         );
         return res.data;
       } catch (err: unknown) {
-        // 404 means the backend version doesn't expose this endpoint yet.
-        // Return an empty result so the UI degrades gracefully (switcher stays hidden).
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 404) return { tenants: [], current_tenant_id: "1" };
         throw err;
@@ -258,62 +251,30 @@ function TenantSwitcher({ isDark }: { isDark: boolean }) {
     }
   }
 
-  if (tenants.length < 2) return null;
+  if (tenants.length < 2 || collapsed) return null;
 
   return (
-    <div style={{ position: "relative", marginTop: 6, marginBottom: 2 }}>
+    <div className="relative mt-1.5 mb-0.5">
       <button
         onClick={() => setOpen(!open)}
         aria-label={`Switch tenant. Current: ${displayName}`}
         aria-expanded={open}
         aria-haspopup="listbox"
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 10px",
-          borderRadius: 10,
-          border: `1px solid ${isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.8)"}`,
-          backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "rgba(241,245,249,0.7)",
-          cursor: "pointer",
-          color: isDark ? "#e2e8f0" : "#334155",
-          fontSize: 12,
-          fontWeight: 500,
-          transition: "all 200ms",
-        }}
+        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-[10px] border border-sidebar-border bg-sidebar-accent/50 cursor-pointer text-sidebar-foreground text-[12px] font-medium transition-colors duration-200 hover:bg-sidebar-accent"
       >
-        <Building2 style={{ width: 14, height: 14, flexShrink: 0, opacity: 0.7 }} />
-        <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <Building2 size={14} className="shrink-0 opacity-70" />
+        <span className="flex-1 text-left overflow-hidden text-ellipsis whitespace-nowrap">
           {displayName}
         </span>
         <ChevronDown
-          style={{
-            width: 12,
-            height: 12,
-            opacity: 0.5,
-            transform: open ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 200ms",
-          }}
+          size={12}
+          className={`opacity-50 transition-transform duration-200 ${open ? "rotate-180" : "rotate-0"}`}
         />
       </button>
 
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            backgroundColor: isDark ? "#1e293b" : "#ffffff",
-            border: `1px solid ${isDark ? "#334155" : "#e2e8f0"}`,
-            borderRadius: 10,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            zIndex: 50,
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ padding: "8px 10px 4px", fontSize: 10, fontWeight: 600, color: isDark ? "#64748b" : "#64748b", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <div className="absolute bottom-[calc(100%+4px)] left-0 right-0 bg-popover border border-border rounded-[10px] shadow-lg z-50 overflow-hidden">
+          <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
             Switch Tenant
           </div>
           {tenants.map((t) => (
@@ -321,42 +282,21 @@ function TenantSwitcher({ isDark }: { isDark: boolean }) {
               key={t.tenant_id}
               onClick={() => handleSwitch(t.tenant_id)}
               disabled={switching}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 10px",
-                border: "none",
-                backgroundColor: t.tenant_id === currentTid
-                  ? (isDark ? "rgba(15,118,110,0.2)" : "rgba(240,253,250,1)")
-                  : "transparent",
-                cursor: t.tenant_id === currentTid ? "default" : "pointer",
-                color: isDark ? "#e2e8f0" : "#334155",
-                fontSize: 12,
-                textAlign: "left",
-                transition: "background-color 150ms",
-              }}
-              onMouseEnter={(e) => {
-                if (t.tenant_id !== currentTid)
-                  e.currentTarget.style.backgroundColor = isDark ? "rgba(51,65,85,0.5)" : "#f8fafc";
-              }}
-              onMouseLeave={(e) => {
-                if (t.tenant_id !== currentTid)
-                  e.currentTarget.style.backgroundColor = "transparent";
-              }}
+              className={`w-full flex items-center gap-2 px-2.5 py-2 border-none text-[12px] text-left transition-colors duration-150 ${
+                t.tenant_id === currentTid
+                  ? "bg-primary/10 cursor-default"
+                  : "bg-transparent cursor-pointer hover:bg-muted"
+              } text-foreground`}
             >
-              <Building2 style={{ width: 13, height: 13, opacity: 0.6 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <Building2 size={13} className="opacity-60" />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                   {t.name}
                 </div>
-                <div style={{ fontSize: 10, opacity: 0.6 }}>
-                  {t.patient_count} patients
-                </div>
+                <div className="text-[10px] opacity-60">{t.patient_count} patients</div>
               </div>
               {t.tenant_id === currentTid && (
-                <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#10b981" }} />
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
               )}
             </button>
           ))}
@@ -366,13 +306,237 @@ function TenantSwitcher({ isDark }: { isDark: boolean }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// SidebarItem sub-component
+// ---------------------------------------------------------------------------
+
+interface SidebarItemProps {
+  item: NavItem;
+  collapsed: boolean;
+  isActive: boolean;
+  showShortcutHints: boolean;
+  userRole: string;
+}
+
+function SidebarItem({ item, collapsed, isActive, showShortcutHints, userRole }: SidebarItemProps) {
+  const isAdmin = userRole === "admin";
+  const resolvedLabel = (!isAdmin && item.nonAdminLabel) ? item.nonAdminLabel : item.label;
+
+  const linkEl = (
+    <Link
+      href={item.href}
+      title={item.tooltip ?? resolvedLabel}
+      aria-current={isActive ? "page" : undefined}
+      className={[
+        "group flex items-center h-9 text-[13px] font-medium no-underline",
+        "transition-all duration-150 ease-out relative",
+        // Collapsed: centered icon pill
+        collapsed
+          ? "justify-center mx-2 rounded-lg"
+          : "justify-start rounded-r-lg mr-2 ml-0 pl-[13px] pr-3",
+        // Active state
+        isActive
+          ? [
+              "border-l-[3px] border-sidebar-primary",
+              "bg-sidebar-primary/10 text-sidebar-primary font-semibold",
+              collapsed ? "shadow-[inset_0_0_0_1px_hsl(var(--sidebar-primary)/0.2)]" : "",
+            ].join(" ")
+          : [
+              "border-l-[3px] border-transparent",
+              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            ].join(" "),
+        // Collapsed adjustments — remove left border positioning issue
+        collapsed ? "border-l-0 border border-transparent" : "",
+      ].join(" ")}
+    >
+      <item.icon
+        size={17}
+        className={[
+          "shrink-0 transition-[color,transform] duration-150",
+          isActive
+            ? "text-sidebar-primary scale-[1.05]"
+            : "text-sidebar-foreground group-hover:text-sidebar-primary group-hover:scale-[1.12]",
+        ].join(" ")}
+      />
+      {!collapsed && (
+        <>
+          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap ml-2.5">
+            {resolvedLabel}
+          </span>
+          {item.badge !== undefined && (
+            <span className="ml-auto text-[11px] font-semibold bg-primary/15 text-sidebar-primary px-[7px] py-0.5 rounded">
+              {item.badge}
+            </span>
+          )}
+          {showShortcutHints && item.shortcut && item.badge === undefined && (
+            <span
+              aria-label={`Shortcut: ${item.shortcut}`}
+              className={`ml-auto flex gap-[3px] shrink-0 transition-opacity duration-150 ${isActive ? "opacity-100" : "opacity-45 group-hover:opacity-100"}`}
+            >
+              {item.shortcut.split(" ").map((k, i) => (
+                <kbd
+                  key={i}
+                  className="text-[10px] font-semibold font-[inherit] text-muted-foreground bg-muted border border-border rounded-[3px] px-1 py-0 leading-[1.5]"
+                >
+                  {k}
+                </kbd>
+              ))}
+            </span>
+          )}
+        </>
+      )}
+    </Link>
+  );
+
+  if (item.tooltip) {
+    return (
+      <Tooltip key={item.href}>
+        <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          {item.tooltip}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return linkEl;
+}
+
+// ---------------------------------------------------------------------------
+// SidebarCluster sub-component
+// ---------------------------------------------------------------------------
+
+interface SidebarClusterProps {
+  cluster: NavCluster;
+  clusterIndex: number;
+  collapsed: boolean;
+  clusterCollapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function SidebarCluster({
+  cluster,
+  clusterIndex,
+  collapsed,
+  clusterCollapsed,
+  onToggle,
+  children,
+}: SidebarClusterProps) {
+  if (collapsed) {
+    return <div>{children}</div>;
+  }
+
+  const hasToggle = cluster.defaultCollapsed !== undefined;
+
+  return (
+    <div>
+      <div
+        className={[
+          "mx-4 mb-0.5",
+          clusterIndex === 0 ? "mt-0.5" : "mt-2.5 pt-[7px] border-t border-border/50",
+        ].join(" ")}
+      >
+        {hasToggle ? (
+          <button
+            onClick={onToggle}
+            aria-expanded={!clusterCollapsed}
+            aria-controls={`nav-cluster-${cluster.label}`}
+            className="flex items-center justify-between w-full bg-transparent border-none cursor-pointer p-0"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {cluster.label}
+            </span>
+            <ChevronDown
+              size={11}
+              className={`text-muted-foreground shrink-0 transition-transform duration-200 ${clusterCollapsed ? "-rotate-90" : "rotate-0"}`}
+            />
+          </button>
+        ) : (
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            {cluster.label}
+          </span>
+        )}
+      </div>
+      {!clusterCollapsed && (
+        <div id={`nav-cluster-${cluster.label}`}>{children}</div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SidebarSection sub-component
+// ---------------------------------------------------------------------------
+
+interface SidebarSectionProps {
+  group: NavGroup;
+  groupIndex: number;
+  collapsed: boolean;
+  sectionCollapsed: boolean;
+  onToggleSection: () => void;
+  children: React.ReactNode;
+}
+
+function SidebarSection({
+  group,
+  groupIndex,
+  collapsed,
+  sectionCollapsed,
+  onToggleSection,
+  children,
+}: SidebarSectionProps) {
+  return (
+    <div>
+      {/* Section divider */}
+      {groupIndex > 0 && (
+        collapsed ? (
+          <div className="flex justify-center my-3">
+            <div className="w-7 h-px bg-border/60 rounded" />
+          </div>
+        ) : (
+          <div className="h-px mx-4 mt-3 bg-gradient-to-r from-transparent via-border to-transparent" />
+        )
+      )}
+
+      {/* Section header */}
+      {!collapsed ? (
+        <button
+          onClick={onToggleSection}
+          aria-expanded={!sectionCollapsed}
+          aria-controls={`nav-section-${group.title}`}
+          className={[
+            "flex items-center justify-between w-full bg-transparent border-none cursor-pointer",
+            "px-4 mb-1",
+            groupIndex > 0 ? "mt-2.5" : "mt-2",
+          ].join(" ")}
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+            {group.title}
+          </span>
+          <ChevronDown
+            size={12}
+            className={`text-muted-foreground/70 shrink-0 transition-transform duration-200 ${sectionCollapsed ? "-rotate-90" : "rotate-0"}`}
+          />
+        </button>
+      ) : null}
+
+      {/* Section content */}
+      {!sectionCollapsed && (
+        <div id={`nav-section-${group.title}`}>{children}</div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Sidebar component
+// ---------------------------------------------------------------------------
+
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { theme, toggle } = useTheme();
   const { user, logout, isAuthenticated } = useAuth();
-  // Tenant co-branding — falls back to "RAF Intelligence" defaults when the
-  // tenant has not customized anything (or when the user is unauthenticated).
   const { branding } = useTenantBranding();
 
   const { data: emrStatus, isLoading: emrLoading } = useQuery({
@@ -383,39 +547,23 @@ export function Sidebar() {
   });
 
   const isDark = theme === "dark";
-  const BG = isDark ? "#0f172a" : "#ffffff";
-  const BG_GRADIENT = isDark
-    ? "linear-gradient(180deg, #0f172a 0%, #0c1222 50%, #0f172a 100%)"
-    : "linear-gradient(180deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)";
-  const BG_HOVER = isDark ? "#1e293b" : "#f8fafc";
-  const BG_ACTIVE = isDark ? "#0f766e20" : "#f0fdfa";
-  const TEXT_DEFAULT = isDark ? "#94a3b8" : "#64748b";
-  const TEXT_ACTIVE = isDark ? "#ffffff" : "#0f766e";
-  const TEXT_SECTION = isDark ? "#64748b" : "#cbd5e1";
-  const TEXT_SUBTLE = isDark ? "#64748b" : "#64748b";
-  const ACCENT = isDark ? "#0f766e" : "#0d9488";
-  const ACCENT_LIGHT = isDark ? "#2dd4bf" : "#0f766e";
-  const BORDER_COLOR = isDark ? "#1e293b" : "#f1f5f9";
+
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-  // Per-section collapse state — keyed by section title, persisted in localStorage.
-  // On first load (no localStorage key yet) fall back to each group's defaultCollapsed flag.
+  const [showShortcutHints, setShowShortcutHints] = useState(false);
+
+  // Per-section collapse state — keyed by title, persisted in localStorage
   const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>(() => {
     try {
       const saved = typeof window !== "undefined" ? localStorage.getItem("raf-nav-sections") : null;
       if (saved) return JSON.parse(saved);
     } catch { /* noop */ }
-    // Build defaults from the nav structure so ANALYSIS + ADMIN start collapsed
     return Object.fromEntries(
-      navGroups
-        .filter((g) => g.defaultCollapsed)
-        .map((g) => [g.title, true])
+      navGroups.filter((g) => g.defaultCollapsed).map((g) => [g.title, true])
     );
   });
 
-  // Per-cluster collapse state — keyed by cluster label, for tertiary sub-clusters.
-  // Not persisted; respects each cluster's defaultCollapsed on first render.
+  // Per-cluster collapse state — keyed by cluster label
   const [clusterCollapsed, setClusterCollapsed] = useState<Record<string, boolean>>(() => {
     const defaults: Record<string, boolean> = {};
     for (const group of navGroups) {
@@ -437,12 +585,9 @@ export function Sidebar() {
   function toggleCluster(label: string) {
     setClusterCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
   }
-  // Only show shortcut hint badges after the user has triggered at least one shortcut
-  const [showShortcutHints, setShowShortcutHints] = useState(false);
 
+  // Keyboard shortcut hint detection
   useEffect(() => {
-    // Check on mount, then re-check whenever a shortcut fires (storage event
-    // covers cross-tab; custom event covers same-tab from KeyboardShortcuts).
     const refresh = () => setShowShortcutHints(hasUsedKeyboardShortcuts());
     refresh();
     window.addEventListener("raf-kb-used", refresh);
@@ -453,14 +598,14 @@ export function Sidebar() {
     };
   }, []);
 
-  // Close mobile menu on route change
+  // Close mobile drawer on route change
   const [prevPathname, setPrevPathname] = useState(pathname);
   if (prevPathname !== pathname) {
     setPrevPathname(pathname);
     if (mobileOpen) setMobileOpen(false);
   }
 
-  // Close mobile menu on Escape key
+  // Close mobile drawer on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMobileOpen(false);
@@ -471,641 +616,228 @@ export function Sidebar() {
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
-    // Match /patients as active for /patients/[pid] sub-pages
     return pathname === href || pathname.startsWith(href + "/");
   }
 
   function handleLogout() {
-    // logout() handles navigation to /login internally — no need to push here.
     logout();
   }
 
-  const width = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+  const role = (user as { role?: string } | null)?.role ?? "";
 
-  // ----- Nav item renderer -----
-  function renderNavItem(item: NavItem) {
-    const role = (user as { role?: string } | null)?.role ?? "";
-    const isAdmin = role === "admin";
-    // Non-admin users see the personalized label when one is provided
-    const resolvedLabel = (!isAdmin && item.nonAdminLabel) ? item.nonAdminLabel : item.label;
+  function filterItems(items: NavItem[]): NavItem[] {
+    return items.filter((it) => {
+      if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
+      return it.visibleToRoles.includes(role);
+    });
+  }
 
-    const active = isActive(item.href);
-    const hovered = hoveredItem === item.href;
+  // ---------------------------------------------------------------------------
+  // Render helpers
+  // ---------------------------------------------------------------------------
 
-    const itemStyle: CSSProperties = {
-      display: "flex",
-      alignItems: "center",
-      gap: collapsed ? 0 : 10,
-      justifyContent: collapsed ? "center" : "flex-start",
-      height: 36,
-      fontSize: 13,
-      fontWeight: active ? 600 : 500,
-      letterSpacing: active ? "-0.01em" : "normal",
-      color: active ? TEXT_ACTIVE : TEXT_DEFAULT,
-      // Linear-style: tinted bg when active, subtle hover bg
-      backgroundColor: active
-        ? isDark ? "rgba(15,118,110,0.18)" : "rgba(13,148,136,0.10)"
-        : hovered ? BG_HOVER : "transparent",
-      // Linear-style colored left bar accent
-      borderLeft: active ? `3px solid ${ACCENT}` : "3px solid transparent",
-      borderRadius: collapsed ? 8 : "0 8px 8px 0",
-      marginRight: collapsed ? 8 : 8,
-      marginLeft: collapsed ? 8 : 0,
-      paddingLeft: collapsed ? 0 : 13,
-      paddingRight: collapsed ? 0 : 12,
-      textDecoration: "none",
-      transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
-      position: "relative",
-      cursor: "pointer",
-      boxShadow: active
-        ? isDark
-          ? `inset 0 0 0 1px rgba(15,118,110,0.2), 0 1px 4px rgba(15,118,110,0.12)`
-          : `inset 0 0 0 1px rgba(13,148,136,0.18), 0 1px 3px rgba(13,148,136,0.10)`
-        : "none",
-    };
-
-    const iconStyle: CSSProperties = {
-      width: 17,
-      height: 17,
-      flexShrink: 0,
-      color: active ? ACCENT_LIGHT : hovered ? ACCENT : TEXT_DEFAULT,
-      transition: "transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), color 180ms",
-      transform: hovered && !active ? "scale(1.12)" : active ? "scale(1.05)" : "scale(1)",
-    };
-
-    // The title attribute always carries the rich description for screen-readers
-    // and as a native fallback tooltip. The shadcn Tooltip provides richer hover UI.
-    const titleAttr = item.tooltip ?? resolvedLabel;
-
-    const linkEl = (
-      <Link
+  function renderItem(item: NavItem) {
+    return (
+      <SidebarItem
         key={item.href}
-        href={item.href}
-        style={itemStyle}
-        title={titleAttr}
-        aria-current={active ? "page" : undefined}
-        onMouseEnter={() => setHoveredItem(item.href)}
-        onMouseLeave={() => setHoveredItem(null)}
-      >
-        <item.icon style={iconStyle} />
-        {!collapsed && (
-          <>
-            <span
-              style={{
-                flex: 1,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {resolvedLabel}
-            </span>
-            {item.badge !== undefined && (
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  backgroundColor: "rgba(37,99,235,0.15)",
-                  color: ACCENT_LIGHT,
-                  padding: "2px 7px",
-                  borderRadius: 4,
-                }}
-              >
-                {item.badge}
-              </span>
-            )}
-            {showShortcutHints && item.shortcut && item.badge === undefined && (
-              <span
-                aria-label={`Shortcut: ${item.shortcut}`}
-                title={`Shortcut: ${item.shortcut}`}
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  gap: 3,
-                  flexShrink: 0,
-                  opacity: hovered || active ? 1 : 0.45,
-                  transition: "opacity 150ms",
-                }}
-              >
-                {item.shortcut.split(" ").map((k, i) => (
-                  <kbd
-                    key={i}
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      fontFamily: "inherit",
-                      color: isDark ? "#64748b" : "#64748b",
-                      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                      border: `1px solid ${BORDER_COLOR}`,
-                      borderRadius: 3,
-                      padding: "1px 4px",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {k}
-                  </kbd>
-                ))}
-              </span>
-            )}
-          </>
-        )}
-      </Link>
-    );
-
-    // Always wrap in Tooltip so it works both when collapsed (icon-only)
-    // and when focused via keyboard in expanded mode.
-    // item.tooltip already contains the full "Label — description" string.
-    if (item.tooltip) {
-      return (
-        <Tooltip key={item.href}>
-          <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            {item.tooltip}
-          </TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    return linkEl;
-  }
-
-  // ----- Sub-cluster label (not collapsible; appears inside an expanded section) -----
-  function renderClusterLabel(label: string, isFirst: boolean) {
-    if (collapsed) return null;
-    return (
-      <div
-        key={label}
-        style={{
-          marginTop: isFirst ? 2 : 10,
-          marginBottom: 2,
-          marginLeft: 16,
-          marginRight: 16,
-          borderTop: isFirst
-            ? "none"
-            : `1px solid ${isDark ? "rgba(51,65,85,0.45)" : "rgba(226,232,240,0.9)"}`,
-          paddingTop: isFirst ? 0 : 7,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: isDark ? "#475569" : "#94a3b8",
-          }}
-        >
-          {label}
-        </span>
-      </div>
+        item={item}
+        collapsed={collapsed}
+        isActive={isActive(item.href)}
+        showShortcutHints={showShortcutHints}
+        userRole={role}
+      />
     );
   }
 
-  // ----- Nav group renderer -----
-  function renderNavGroup(group: NavGroup, index: number) {
-    // In collapsed (icon-only) sidebar mode, never hide items — no room for toggles
+  function renderGroup(group: NavGroup, groupIndex: number) {
+    // In collapsed mode, sections are always shown (no room for toggle controls)
     const isSectionCollapsed = !collapsed && !!sectionCollapsed[group.title];
-    const role = (user as { role?: string } | null)?.role ?? "";
 
-    function filterItems(items: NavItem[]): NavItem[] {
-      return items.filter((it) => {
-        if (!it.visibleToRoles || it.visibleToRoles.length === 0) return true;
-        return it.visibleToRoles.includes(role);
-      });
-    }
+    const sectionContent = group.clusters
+      ? group.clusters.map((cluster, ci) => {
+          // Cluster-level role gate
+          if (cluster.visibleToRoles && !cluster.visibleToRoles.includes(role)) return null;
+          const filteredItems = filterItems(cluster.items);
+          if (filteredItems.length === 0) return null;
 
-    function renderCluster(cluster: NavCluster, ci: number) {
-      // Cluster-level role gate (e.g. Power user is admin-only)
-      if (cluster.visibleToRoles && !cluster.visibleToRoles.includes(role)) return null;
+          const isClusterCollapsed = !collapsed && !!clusterCollapsed[cluster.label];
 
-      const filteredItems = filterItems(cluster.items);
-      if (filteredItems.length === 0) return null;
-
-      // Collapsible tertiary cluster — has its own toggle chevron
-      if (cluster.defaultCollapsed !== undefined) {
-        const isClusterCollapsed = !collapsed && !!clusterCollapsed[cluster.label];
-        return (
-          <div key={cluster.label}>
-            {!collapsed && (
-              <div
-                style={{
-                  marginTop: ci === 0 ? 2 : 10,
-                  marginBottom: 2,
-                  marginLeft: 16,
-                  marginRight: 16,
-                  borderTop: ci === 0
-                    ? "none"
-                    : `1px solid ${isDark ? "rgba(51,65,85,0.45)" : "rgba(226,232,240,0.9)"}`,
-                  paddingTop: ci === 0 ? 0 : 7,
-                }}
-              >
-                <button
-                  onClick={() => toggleCluster(cluster.label)}
-                  aria-expanded={!isClusterCollapsed}
-                  aria-controls={`nav-cluster-${cluster.label}`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      color: isDark ? "#475569" : "#94a3b8",
-                    }}
-                  >
-                    {cluster.label}
-                  </span>
-                  <ChevronDown
-                    style={{
-                      width: 11,
-                      height: 11,
-                      color: isDark ? "#475569" : "#94a3b8",
-                      flexShrink: 0,
-                      transform: isClusterCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                      transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
-                    }}
-                  />
-                </button>
-              </div>
-            )}
-            {!isClusterCollapsed && (
-              <div id={`nav-cluster-${cluster.label}`}>
-                {filteredItems.map(renderNavItem)}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Non-collapsible cluster — static divider label
-      return (
-        <div key={cluster.label}>
-          {renderClusterLabel(cluster.label, ci === 0)}
-          {filteredItems.map(renderNavItem)}
-        </div>
-      );
-    }
+          return (
+            <SidebarCluster
+              key={cluster.label}
+              cluster={cluster}
+              clusterIndex={ci}
+              collapsed={collapsed}
+              clusterCollapsed={isClusterCollapsed}
+              onToggle={() => toggleCluster(cluster.label)}
+            >
+              {filteredItems.map(renderItem)}
+            </SidebarCluster>
+          );
+        })
+      : filterItems(group.items ?? []).map(renderItem);
 
     return (
-      <div key={group.title}>
-        {!collapsed ? (
-          <>
-            {index > 0 && (
-              <div
-                style={{
-                  height: 1,
-                  margin: "12px 16px 0",
-                  background: isDark
-                    ? "linear-gradient(90deg, transparent, #1e293b 30%, #334155 50%, #1e293b 70%, transparent)"
-                    : "linear-gradient(90deg, transparent, #e2e8f0 30%, #cbd5e1 50%, #e2e8f0 70%, transparent)",
-                }}
-              />
-            )}
-            {/* Clickable section header — clicking collapses/expands the group */}
-            <button
-              onClick={() => toggleSection(group.title)}
-              aria-expanded={!isSectionCollapsed}
-              aria-controls={`nav-section-${group.title}`}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "0 16px 0 16px",
-                marginTop: index > 0 ? 10 : 8,
-                marginBottom: 4,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  color: TEXT_SECTION,
-                }}
-              >
-                {group.title}
-              </span>
-              <ChevronDown
-                style={{
-                  width: 12,
-                  height: 12,
-                  color: TEXT_SECTION,
-                  flexShrink: 0,
-                  transform: isSectionCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                  transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              />
-            </button>
-          </>
-        ) : (
-          index > 0 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                margin: "12px 0 8px",
-              }}
-            >
-              <div
-                style={{
-                  width: 28,
-                  height: 1,
-                  background: isDark
-                    ? "linear-gradient(90deg, transparent, #334155, transparent)"
-                    : "linear-gradient(90deg, transparent, #cbd5e1, transparent)",
-                  borderRadius: 1,
-                }}
-              />
-            </div>
-          )
-        )}
-        {!isSectionCollapsed && (
-          <div id={`nav-section-${group.title}`}>
-            {group.clusters
-              ? group.clusters.map((cluster, ci) => renderCluster(cluster, ci))
-              : filterItems(group.items ?? []).map(renderNavItem)}
-          </div>
-        )}
-      </div>
+      <SidebarSection
+        key={group.title}
+        group={group}
+        groupIndex={groupIndex}
+        collapsed={collapsed}
+        sectionCollapsed={isSectionCollapsed}
+        onToggleSection={() => toggleSection(group.title)}
+      >
+        {sectionContent}
+      </SidebarSection>
     );
   }
 
-  // ----- Shared sidebar content (used by both desktop and mobile) -----
+  // ---------------------------------------------------------------------------
+  // Shared sidebar content
+  // ---------------------------------------------------------------------------
+
   const sidebarContent = (
     <>
-      {/* Logo */}
+      {/* Logo header */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: collapsed ? 0 : 8,
-          justifyContent: collapsed ? "center" : "flex-start",
-          height: 64,
-          flexShrink: 0,
-          borderBottom: `1px solid ${BORDER_COLOR}`,
-          paddingLeft: collapsed ? 0 : 16,
-          paddingRight: collapsed ? 0 : 16,
-        }}
+        className={[
+          "flex items-center h-16 shrink-0 border-b border-sidebar-border",
+          collapsed ? "justify-center px-0" : "justify-start px-4 gap-2",
+        ].join(" ")}
       >
         {collapsed ? (
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -4, borderRadius: 10, background: `radial-gradient(circle, ${ACCENT}40, transparent 70%)`, filter: "blur(6px)" }} />
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff" }}>
+          <div className="relative flex items-center justify-center">
+            <div className="sidebar-logo-glow absolute inset-[-4px] rounded-[10px] bg-[radial-gradient(circle,hsl(var(--sidebar-primary)/0.25),transparent_70%)] blur-[6px]" />
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-sidebar-primary to-primary text-primary-foreground">
               <HeartPulse size={18} />
             </div>
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div className="sidebar-logo-glow" style={{ position: "absolute", inset: -6, borderRadius: 14, background: `radial-gradient(circle, ${ACCENT}50, transparent 70%)`, filter: "blur(8px)" }} />
-              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_LIGHT})`, color: "#fff", boxShadow: `0 2px 12px ${ACCENT}40` }}>
+          <>
+            <div className="relative flex items-center justify-center shrink-0">
+              <div className="sidebar-logo-glow absolute inset-[-6px] rounded-[14px] bg-[radial-gradient(circle,hsl(var(--sidebar-primary)/0.3),transparent_70%)] blur-[8px]" />
+              <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-sidebar-primary to-primary text-primary-foreground shadow-[0_2px_12px_hsl(var(--sidebar-primary)/0.25)]">
                 <HeartPulse size={18} />
               </div>
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                {/* Tenant logo text — driven by useTenantBranding().
-                    Defaults to "RAF Intel" when no row exists for the tenant. */}
+              <div className="flex items-baseline gap-1">
                 <span
                   data-testid="sidebar-logo-text"
-                  style={{
-                    fontSize: 17,
-                    fontWeight: 800,
-                    color: TEXT_ACTIVE,
-                    letterSpacing: "-0.02em",
-                  }}
+                  className="text-[17px] font-extrabold text-sidebar-accent-foreground tracking-tight"
                 >
                   {branding.logo_text || "Acme Health"}
                 </span>
               </div>
-              <div style={{ fontSize: 10, color: TEXT_SUBTLE, fontWeight: 600, marginTop: -2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <div className="text-[10px] text-muted-foreground font-semibold -mt-0.5 uppercase tracking-[0.05em]">
                 {branding.display_name || "Clinical Intelligence"}
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 
       {/* Search + Notifications row */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: collapsed ? 0 : 6,
-          margin: collapsed ? "8px 8px 0" : "8px 10px 0",
-          flexShrink: 0,
-        }}
+        className={[
+          "flex items-center shrink-0",
+          collapsed ? "gap-0 m-2 mt-2" : "gap-1.5 mx-2.5 mt-2",
+        ].join(" ")}
       >
-        {/* Search button */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
           title="Search (⌘K)"
           aria-label="Open command palette (Cmd+K)"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: collapsed ? 0 : 8,
-            justifyContent: collapsed ? "center" : "flex-start",
-            height: 38,
-            flex: collapsed ? "0 0 auto" : 1,
-            width: collapsed ? 32 : undefined,
-            padding: collapsed ? "0" : "0 10px",
-            borderRadius: 7,
-            background: isDark
-              ? "rgba(15,23,42,0.6)"
-              : "rgba(248,250,252,0.8)",
-            border: `1px solid ${BORDER_COLOR}`,
-            boxShadow: isDark
-              ? "inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 transparent"
-              : "inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0 transparent",
-            cursor: "pointer",
-            color: TEXT_DEFAULT,
-            fontSize: 13,
-            transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
-          }}
-          onMouseEnter={(e) => {
-            const btn = e.currentTarget as HTMLButtonElement;
-            btn.style.borderColor = isDark ? "#334155" : "#cbd5e1";
-            btn.style.background = isDark ? "rgba(30,41,59,0.8)" : "rgba(241,245,249,0.9)";
-            btn.style.boxShadow = isDark
-              ? `inset 0 1px 3px rgba(0,0,0,0.3), 0 0 8px ${ACCENT}20`
-              : `inset 0 1px 3px rgba(0,0,0,0.06), 0 0 8px ${ACCENT}15`;
-          }}
-          onMouseLeave={(e) => {
-            const btn = e.currentTarget as HTMLButtonElement;
-            btn.style.borderColor = BORDER_COLOR;
-            btn.style.background = isDark ? "rgba(15,23,42,0.6)" : "rgba(248,250,252,0.8)";
-            btn.style.boxShadow = isDark
-              ? "inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 transparent"
-              : "inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0 transparent";
-          }}
+          className={[
+            "group flex items-center h-[38px] rounded-[7px] cursor-pointer",
+            "bg-sidebar-accent/60 border border-sidebar-border text-sidebar-foreground text-[13px]",
+            "transition-all duration-200 hover:bg-sidebar-accent hover:border-border",
+            collapsed
+              ? "justify-center w-8 p-0 flex-none"
+              : "justify-start flex-1 gap-2 px-2.5",
+          ].join(" ")}
         >
-          <Search style={{ width: 15, height: 15, flexShrink: 0, color: TEXT_DEFAULT }} aria-hidden />
+          <Search size={15} className="shrink-0 text-sidebar-foreground" aria-hidden />
           {!collapsed && (
             <>
-              <span style={{ flex: 1, textAlign: "left", color: TEXT_DEFAULT }}>Search…</span>
-              <kbd
-                style={{
-                  fontSize: 10,
-                  color: TEXT_SUBTLE,
-                  backgroundColor: "rgba(255,255,255,0.06)",
-                  border: `1px solid ${BORDER_COLOR}`,
-                  borderRadius: 3,
-                  padding: "1px 5px",
-                  fontFamily: "inherit",
-                  flexShrink: 0,
-                }}
-              >
+              <span className="flex-1 text-left text-sidebar-foreground">Search…</span>
+              <kbd className="text-[10px] text-muted-foreground bg-muted/50 border border-border rounded-[3px] px-[5px] py-0 font-[inherit] shrink-0 leading-[1.8]">
                 ⌘K
               </kbd>
             </>
           )}
         </button>
-
-        {/* Notification bell */}
         <NotificationCenter collapsed={collapsed} />
       </div>
 
-      {/* Collapse toggle — desktop only (hidden on mobile via className) */}
+      {/* Collapse toggle — desktop only */}
       <div
-        className="hidden lg:flex"
-        style={{
-          justifyContent: collapsed ? "center" : "flex-end",
-          alignItems: "center",
-          height: 36,
-          flexShrink: 0,
-          paddingRight: collapsed ? 0 : 8,
-        }}
+        className={[
+          "hidden lg:flex items-center h-9 shrink-0",
+          collapsed ? "justify-center" : "justify-end pr-2",
+        ].join(" ")}
       >
         <button
           onClick={() => setCollapsed(!collapsed)}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 6,
-            cursor: "pointer",
-            color: TEXT_SUBTLE,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 4,
-          }}
+          className="p-1.5 rounded bg-transparent border-none cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? (
-            <PanelLeft style={{ width: 16, height: 16 }} />
-          ) : (
-            <PanelLeftClose style={{ width: 16, height: 16 }} />
-          )}
+          {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
         </button>
       </div>
 
       {/* Navigation */}
-      <TooltipProvider delay={300}>
+      <TooltipProvider delayDuration={300}>
         <nav
-          style={{ flex: 1, overflowY: "auto", paddingTop: 4, paddingBottom: 8 }}
+          className="flex-1 overflow-y-auto pt-1 pb-2"
           role="navigation"
           aria-label="Main navigation"
         >
-          {navGroups.map((group, i) => renderNavGroup(group, i))}
+          {navGroups.map((group, i) => renderGroup(group, i))}
         </nav>
       </TooltipProvider>
 
-      {/* Keyboard shortcut affordance hint — shown only when sidebar is expanded */}
+      {/* Keyboard shortcut hint */}
       {!collapsed && (
         <div
-          style={{
-            marginTop: "auto",
-            padding: "6px 14px 4px",
-            fontSize: 11,
-            color: isDark ? "#475569" : "#64748b",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-          }}
+          className="mt-auto px-3.5 pt-1.5 pb-1 text-[11px] text-muted-foreground flex items-center gap-1"
           aria-label="Press ? to open keyboard shortcuts"
         >
           Press{" "}
-          <kbd
-            style={{
-              display: "inline-block",
-              padding: "1px 5px",
-              border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}`,
-              borderRadius: 4,
-              fontSize: 11,
-              fontFamily: "monospace",
-              background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-              color: isDark ? "#64748b" : "#64748b",
-            }}
-          >
+          <kbd className="inline-block px-[5px] py-0 border border-border rounded bg-muted/40 text-[11px] font-mono text-muted-foreground leading-[1.7]">
             ?
           </kbd>{" "}
           for shortcuts
         </div>
       )}
 
-      {/* Bottom section: theme toggle + user profile + version */}
+      {/* Footer: EMR status, theme toggle, tenant switcher, user profile, version */}
       <div
-        style={{
-          flexShrink: 0,
-          borderTop: `1px solid ${BORDER_COLOR}`,
-          padding: collapsed ? "8px 4px" : "8px 12px",
-        }}
+        className={[
+          "shrink-0 border-t border-sidebar-border",
+          collapsed ? "px-1 py-2" : "px-3 py-2",
+        ].join(" ")}
       >
         {/* EMR Connection Status */}
         <Link
           href="/emr-config"
           title={collapsed ? (emrLoading ? "EMR: Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected") : undefined}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 8,
-            width: "100%",
-            height: 32,
-            background: "none",
-            textDecoration: "none",
-            cursor: "pointer",
-            color: TEXT_DEFAULT,
-            fontSize: 12,
-            borderRadius: 4,
-            paddingLeft: collapsed ? 0 : 4,
-            marginBottom: 4,
-          }}
+          className={[
+            "flex items-center gap-2 w-full h-8 no-underline cursor-pointer",
+            "text-sidebar-foreground text-[12px] rounded mb-1 transition-colors duration-150 hover:bg-sidebar-accent",
+            collapsed ? "justify-center px-0" : "justify-start pl-1",
+          ].join(" ")}
         >
           <span
-            className={emrStatus?.connected ? "emr-pulse" : undefined}
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              flexShrink: 0,
-              backgroundColor: emrLoading
-                ? (isDark ? "#64748b" : "#94a3b8")
+            className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-300 ${
+              emrLoading
+                ? "bg-muted-foreground"
                 : emrStatus?.connected
-                  ? "#22c55e"
-                  : "#ef4444",
-              transition: "background-color 300ms",
-            }}
+                  ? "bg-green-500 emr-pulse"
+                  : "bg-red-500"
+            }`}
           />
           {!collapsed && (
-            <span style={{ fontSize: 12, color: TEXT_DEFAULT }}>
+            <span className="text-[12px] text-sidebar-foreground">
               {emrLoading ? "EMR Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected"}
             </span>
           )}
@@ -1114,209 +846,109 @@ export function Sidebar() {
         {/* Theme toggle */}
         <button
           onClick={toggle}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 8,
-            width: "100%",
-            height: 32,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: TEXT_DEFAULT,
-            fontSize: 12,
-            borderRadius: 4,
-            paddingLeft: collapsed ? 0 : 4,
-          }}
-          aria-label={
-            theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
-          }
-          aria-pressed={theme === "dark"}
-          title={
-            collapsed
-              ? theme === "dark"
-                ? "Light mode"
-                : "Dark mode"
-              : undefined
-          }
+          className={[
+            "flex items-center gap-2 w-full h-8 bg-transparent border-none cursor-pointer",
+            "text-sidebar-foreground text-[12px] rounded mb-1 transition-colors duration-150 hover:bg-sidebar-accent",
+            collapsed ? "justify-center px-0" : "justify-start pl-1",
+          ].join(" ")}
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-pressed={isDark}
+          title={collapsed ? (isDark ? "Light mode" : "Dark mode") : undefined}
         >
-          {theme === "dark" ? (
-            <Sun style={{ width: 16, height: 16 }} />
-          ) : (
-            <Moon style={{ width: 16, height: 16 }} />
-          )}
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
           {!collapsed && (
             <>
-              <span style={{ flex: 1 }}>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
-              {/* Visual switch indicator — shows ON/OFF state at a glance */}
+              <span className="flex-1">{isDark ? "Light mode" : "Dark mode"}</span>
+              {/* Toggle switch indicator */}
               <span
                 role="presentation"
-                data-state={theme === "dark" ? "on" : "off"}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  width: 32,
-                  height: 18,
-                  borderRadius: 9,
-                  backgroundColor: theme === "dark" ? "#0f766e" : (isDark ? "#334155" : "#cbd5e1"),
-                  padding: "0 2px",
-                  transition: "background-color 200ms",
-                  flexShrink: 0,
-                }}
+                data-state={isDark ? "on" : "off"}
+                className={[
+                  "inline-flex items-center w-8 h-[18px] rounded-full px-0.5 shrink-0 transition-colors duration-200",
+                  isDark ? "bg-sidebar-primary" : "bg-muted-foreground/30",
+                ].join(" ")}
               >
                 <span
-                  style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    backgroundColor: "#ffffff",
-                    transform: theme === "dark" ? "translateX(14px)" : "translateX(0)",
-                    transition: "transform 200ms cubic-bezier(0.4,0,0.2,1)",
-                    flexShrink: 0,
-                  }}
+                  className={[
+                    "w-3.5 h-3.5 rounded-full bg-white shrink-0 transition-transform duration-200",
+                    isDark ? "translate-x-3.5" : "translate-x-0",
+                  ].join(" ")}
                 />
               </span>
             </>
           )}
         </button>
 
-        {/* Tenant switcher (admin only) */}
-        {user?.role === "admin" && !collapsed && <TenantSwitcher isDark={isDark} />}
+        {/* Tenant switcher (admin only, expanded only) */}
+        {user?.role === "admin" && (
+          <TenantSwitcher collapsed={collapsed} />
+        )}
 
         {/* User profile row */}
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: collapsed ? 0 : 8,
-            justifyContent: collapsed ? "center" : "flex-start",
-            padding: collapsed ? "6px 4px" : "8px 8px",
-            marginTop: 6,
-            borderRadius: 10,
-            backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "rgba(241,245,249,0.7)",
-            border: `1px solid ${isDark ? "rgba(51,65,85,0.3)" : "rgba(226,232,240,0.6)"}`,
-            transition: "background-color 200ms",
-          }}
+          className={[
+            "flex items-center gap-2 mt-1.5 rounded-[10px]",
+            "bg-sidebar-accent/50 border border-sidebar-border/60 transition-colors duration-200",
+            collapsed ? "justify-center px-1 py-1.5" : "justify-start px-2 py-2",
+          ].join(" ")}
         >
           {/* Avatar */}
           <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              backgroundColor: ACCENT,
-              color: TEXT_ACTIVE,
-              fontSize: 12,
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              overflow: "hidden",
-            }}
+            className="w-8 h-8 rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-[12px] font-semibold flex items-center justify-center shrink-0 overflow-hidden"
             title={collapsed ? getUserDisplayName(user) : undefined}
           >
             {user?.avatar_url && user.avatar_url.startsWith("https://") ? (
               <img
                 src={user.avatar_url}
                 alt={getUserDisplayName(user)}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                }}
+                className="w-8 h-8 rounded-full object-cover"
               />
             ) : (
               getUserInitials(user?.first_name, user?.last_name)
             )}
           </div>
 
-          {/* Name + role (expanded only) */}
+          {/* Name + role */}
           {!collapsed && (
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: TEXT_ACTIVE,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-sidebar-accent-foreground overflow-hidden text-ellipsis whitespace-nowrap">
                 {getUserDisplayName(user)}
               </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: TEXT_SUBTLE,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {(user as { role?: string } | null)?.role ?? "User"}
+              <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                {role || "User"}
               </div>
             </div>
           )}
 
-          {/* Logout button — inline when expanded */}
+          {/* Logout — inline when expanded */}
           {!collapsed && isAuthenticated && (
             <button
               onClick={handleLogout}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 4,
-                cursor: "pointer",
-                color: TEXT_SUBTLE,
-                display: "flex",
-                alignItems: "center",
-                borderRadius: 4,
-              }}
+              className="p-1 bg-transparent border-none cursor-pointer text-muted-foreground hover:text-foreground rounded flex items-center transition-colors duration-150"
               aria-label="Sign out"
               title="Sign out"
             >
-              <LogOut style={{ width: 15, height: 15 }} />
+              <LogOut size={15} />
             </button>
           )}
         </div>
 
-        {/* Logout button — standalone row when collapsed */}
+        {/* Logout — standalone when collapsed */}
         {collapsed && isAuthenticated && (
           <button
             onClick={handleLogout}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "100%",
-              height: 32,
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: TEXT_SUBTLE,
-              borderRadius: 4,
-            }}
+            className="flex items-center justify-center w-full h-8 bg-transparent border-none cursor-pointer text-muted-foreground hover:text-foreground rounded transition-colors duration-150"
             aria-label="Sign out"
             title="Sign out"
           >
-            <LogOut style={{ width: 15, height: 15 }} />
+            <LogOut size={15} />
           </button>
         )}
 
         {/* Version */}
-        <div
-          style={{
-            textAlign: collapsed ? "center" : "left",
-            paddingLeft: collapsed ? 0 : 4,
-            paddingTop: 6,
-          }}
-        >
+        <div className={`pt-1.5 ${collapsed ? "text-center" : "pl-1"}`}>
           <span
-            style={{ fontSize: 10, color: TEXT_SECTION, fontFamily: "monospace" }}
+            className="text-[10px] text-muted-foreground/60 font-mono"
             title={`Build ${process.env.NEXT_PUBLIC_BUILD_ID || "dev"} — ${process.env.NEXT_PUBLIC_BUILD_TIME || "unknown"}`}
           >
             v2.0 · {(process.env.NEXT_PUBLIC_BUILD_ID || "dev").slice(0, 7)}
@@ -1326,18 +958,13 @@ export function Sidebar() {
     </>
   );
 
-  const sidebarBaseStyle: CSSProperties = {
-    background: BG_GRADIENT,
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  };
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <>
-      {/* Keyframe animations for sidebar */}
+      {/* Keyframe animations */}
       <style>{`
         @keyframes sidebarLogoGlow {
           0%, 100% { opacity: 0.5; transform: scale(1); }
@@ -1358,13 +985,12 @@ export function Sidebar() {
       {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-lg shadow-lg lg:hidden"
-        style={{ backgroundColor: BG, border: `1px solid ${BORDER_COLOR}` }}
+        className="fixed left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-lg shadow-lg lg:hidden bg-sidebar border border-sidebar-border"
         aria-label="Open navigation menu"
         aria-expanded={mobileOpen}
         aria-controls="mobile-sidebar"
       >
-        <Menu className="h-5 w-5" style={{ color: TEXT_ACTIVE }} />
+        <Menu size={20} className="text-sidebar-accent-foreground" />
       </button>
 
       {/* Mobile backdrop */}
@@ -1376,58 +1002,31 @@ export function Sidebar() {
         />
       )}
 
-      {/* Mobile sidebar.
-       * Use the `inert` attribute when closed so focusable descendants
-       * (close button, nav links, sign-out) are removed from the tab
-       * order AND hidden from assistive tech. `aria-hidden` alone left
-       * those descendants focusable, which axe rightly flagged. */}
+      {/* Mobile sidebar */}
       <aside
         id="mobile-sidebar"
-        className="fixed left-0 top-0 z-50 lg:hidden transition-transform duration-300 ease-out"
-        style={{
-          ...sidebarBaseStyle,
-          width: EXPANDED_WIDTH,
-          transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
-        }}
+        className={`fixed left-0 top-0 z-50 lg:hidden flex flex-col h-full bg-sidebar transition-transform duration-300 ease-out ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ width: EXPANDED_WIDTH }}
         aria-label="Mobile navigation"
         inert={!mobileOpen}
       >
         {/* Close button */}
-        <div style={{ position: "absolute", right: 10, top: 10, zIndex: 10 }}>
+        <div className="absolute right-2.5 top-2.5 z-10">
           <button
             onClick={() => setMobileOpen(false)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 4,
-              cursor: "pointer",
-              color: TEXT_SUBTLE,
-              display: "flex",
-            }}
+            className="p-1 bg-transparent border-none cursor-pointer text-muted-foreground flex items-center rounded hover:text-foreground transition-colors duration-150"
             aria-label="Close navigation menu"
           >
-            <X style={{ width: 20, height: 20 }} />
+            <X size={20} />
           </button>
         </div>
         {sidebarContent}
       </aside>
 
-      {/* Desktop sidebar.
-          NOTE: do NOT add `display` to the inline style — the Tailwind
-          `hidden lg:flex` classes must control visibility. An inline
-          `display:flex` would override `hidden` (higher specificity than
-          classes) and leak the desktop sidebar into mobile viewports. */}
+      {/* Desktop sidebar */}
       <aside
-        className="fixed left-0 top-0 z-30 hidden lg:flex"
-        style={{
-          background: sidebarBaseStyle.background,
-          flexDirection: "column",
-          height: "100%",
-          overflow: "hidden",
-          fontFamily: sidebarBaseStyle.fontFamily,
-          width,
-          transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
-        }}
+        className="fixed left-0 top-0 z-30 hidden lg:flex flex-col h-full overflow-hidden bg-sidebar transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        style={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
         aria-label="Main navigation sidebar"
       >
         {sidebarContent}
@@ -1437,7 +1036,7 @@ export function Sidebar() {
 }
 
 // ---------------------------------------------------------------------------
-// Hook — returns the current desktop sidebar width for main-content offsetting
+// Hook — returns current desktop sidebar width for main-content offsetting
 // ---------------------------------------------------------------------------
 
 export function useSidebarWidth(): number {

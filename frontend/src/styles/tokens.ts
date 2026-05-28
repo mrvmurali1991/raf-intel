@@ -1,3 +1,5 @@
+// Single source of truth for design tokens. CSS vars defined in globals.css, JS references here.
+
 /**
  * @radius-policy Radius tokens — use ONLY Tailwind token classes, never arbitrary values.
  *   rounded-sm  → ~6px   (--radius * 0.6)  — inputs, chips
@@ -9,11 +11,18 @@
  *   NEVER use rounded-[Npx] — add a token above instead.
  *   eslint: no arbitrary value rounded classes (enforced by review)
  *
- * @deprecated DO NOT ADD NEW VALUES HERE.
+ * This file is the BRIDGE between CSS custom properties (defined in globals.css)
+ * and JavaScript/TypeScript consumers.  Every exported value references a
+ * `var(--token-name)` string so that dark-mode and theming are handled
+ * automatically by the browser — no JS toggling required.
  *
- * This file is the single source of truth for design tokens used as inline
- * `style={{}}` props across ~52 files (legacy pattern).  New components must
- * use Tailwind utility classes or CSS-variable references directly instead.
+ * Usage in React inline styles:
+ *   style={{ color: tokens.primary }}          // resolves via CSS at runtime
+ *   style={{ fontSize: typography.base }}      // '14px' literal
+ *   style={{ padding: spacing[4] }}            // '16px' literal
+ *
+ * For canvas/SVG APIs that cannot consume var() strings, use resolveToken():
+ *   const hex = resolveToken(tokens.primary, '#0f766e');
  *
  * ── COLOR DISCIPLINE RULES (enforced 2026-05-18) ────────────────────────────
  *
@@ -211,3 +220,128 @@ export const tokens = {
 } as const;
 
 export type Tokens = typeof tokens;
+
+// ---------------------------------------------------------------------------
+// Typography scale
+// ---------------------------------------------------------------------------
+/**
+ * Font-size tokens sourced from CSS custom properties defined in globals.css.
+ * Every value is a literal pixel string so it can be dropped directly into
+ * `style={{ fontSize: typography.base }}` without further transformation.
+ *
+ * In Tailwind JSX prefer `text-sm`, `text-base`, etc. — use these only when
+ * Tailwind utilities are unavailable (dynamic values, canvas, email templates).
+ */
+export const typography = {
+  /** 11px — fine print, legal footnotes */
+  xs:   "var(--text-xs)",
+  /** 13px — secondary labels, table cell meta */
+  sm:   "var(--text-sm)",
+  /** 14px — default body copy */
+  base: "var(--text-base)",
+  /** 16px — section sub-headings, emphasized body */
+  lg:   "var(--text-lg)",
+  /** 20px — card titles, modal headings */
+  xl:   "var(--text-xl)",
+  /** 24px — page-level headings */
+  "2xl": "var(--text-2xl)",
+  /** 30px — hero metrics, KPI values */
+  "3xl": "var(--text-3xl)",
+} as const;
+
+export type Typography = typeof typography;
+
+// ---------------------------------------------------------------------------
+// Spacing scale
+// ---------------------------------------------------------------------------
+/**
+ * 4 px-base spacing tokens sourced from CSS custom properties in globals.css.
+ * Keys are integers (1–10) so consumers can write `spacing[4]` → '16px'.
+ *
+ * Mapping:
+ *   1 → 4px   2 → 8px   3 → 12px   4 → 16px   5 → 20px
+ *   6 → 24px  7 → 28px  8 → 32px   9 → 36px   10 → 40px
+ */
+export const spacing: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10, string> = {
+  1:  "var(--space-1)",
+  2:  "var(--space-2)",
+  3:  "var(--space-3)",
+  4:  "var(--space-4)",
+  5:  "var(--space-5)",
+  6:  "var(--space-6)",
+  7:  "var(--space-7)",
+  8:  "var(--space-8)",
+  9:  "var(--space-9)",
+  10: "var(--space-10)",
+} as const;
+
+export type Spacing = typeof spacing;
+
+// ---------------------------------------------------------------------------
+// Sidebar layout tokens
+// ---------------------------------------------------------------------------
+/**
+ * Semantic sidebar tokens.  Color values alias the Shadcn `--sidebar-*` CSS
+ * variables and adapt automatically in dark mode.  Dimension tokens are
+ * fixed pixel values shared by the sidebar component and any layout that
+ * needs to know the sidebar width (e.g. main content left-margin calculation).
+ */
+export const sidebar = {
+  /** Background surface — resolves to hsl(--sidebar) */
+  bg:        "var(--sidebar-bg)",
+  /** Primary text color — resolves to hsl(--sidebar-foreground) */
+  text:      "var(--sidebar-text)",
+  /** Hover item background — resolves to hsl(--sidebar-accent) */
+  hover:     "var(--sidebar-hover)",
+  /** Active / selected item highlight — resolves to hsl(--sidebar-primary) */
+  active:    "var(--sidebar-active)",
+  /** Accent tint (same as hover, kept for semantic clarity) */
+  accent:    "var(--sidebar-accent)",
+  /** Expanded sidebar width — 240px */
+  width:     "var(--sidebar-width)",
+  /** Collapsed (icon-only) sidebar width — 64px */
+  collapsed: "var(--sidebar-collapsed)",
+} as const;
+
+export type Sidebar = typeof sidebar;
+
+// ---------------------------------------------------------------------------
+// Table layout tokens
+// ---------------------------------------------------------------------------
+/**
+ * Structural tokens for data tables.  Use these to keep row heights,
+ * header heights, and horizontal cell padding consistent across every
+ * table in the application.
+ *
+ * @example
+ * <tr style={{ height: table.rowHeight }}>
+ * <th style={{ height: table.headerHeight, paddingLeft: table.padX }}>
+ */
+export const table = {
+  /** Data row height — 56px */
+  rowHeight:    "var(--table-row-height)",
+  /** Header row height — 48px */
+  headerHeight: "var(--table-header-height)",
+  /** Horizontal cell padding — 24px */
+  padX:         "var(--table-pad-x)",
+} as const;
+
+export type Table = typeof table;
+
+// ---------------------------------------------------------------------------
+// Unified design-token interface
+// ---------------------------------------------------------------------------
+/**
+ * Aggregated type that covers every token group exported from this module.
+ * Import individual groups for tree-shaking; import this type for prop typing.
+ *
+ * @example
+ * import type { DesignTokens } from '@/styles/tokens';
+ */
+export interface DesignTokens {
+  tokens:     Tokens;
+  typography: Typography;
+  spacing:    Spacing;
+  sidebar:    Sidebar;
+  table:      Table;
+}

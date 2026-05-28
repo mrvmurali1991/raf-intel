@@ -1,53 +1,84 @@
 "use client";
 
-import Link from "next/link";
-import { ChevronRight, Home } from "lucide-react";
-import { cn } from "@/lib/utils";
+/**
+ * Breadcrumb — lightweight auto-generating breadcrumb nav.
+ *
+ * Usage:
+ *   <Breadcrumb items={[
+ *     { label: "Patients", href: "/patients" },
+ *     { label: "Jane Doe" },          // last item — no href, rendered bold
+ *   ]} />
+ *
+ * Rules:
+ *   - Last item is always the current page: no link, font-medium, text-foreground
+ *   - All prior items with an href render as links (text-muted-foreground, hover underline)
+ *   - Prior items without an href render as plain muted text (e.g. a static label)
+ *   - Separator: ChevronRight, small and muted
+ *   - Compact: text-sm throughout
+ *   - Fully accessible: nav[aria-label], aria-current="page" on last item
+ */
 
-interface BreadcrumbItem {
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+
+export interface BreadcrumbItem {
   label: string;
   href?: string;
 }
 
-export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
+interface BreadcrumbProps {
+  items: BreadcrumbItem[];
+  className?: string;
+}
+
+export function Breadcrumb({ items, className = "" }: BreadcrumbProps) {
+  if (!items || items.length === 0) return null;
+
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4"
+      className={`flex items-center flex-wrap gap-0.5 text-sm mb-4 ${className}`}
     >
-      <Link
-        href="/"
-        className="flex items-center gap-1 hover:text-foreground transition-colors rounded-md px-1.5 py-0.5 hover:bg-muted"
-        aria-label="Home"
-      >
-        <Home className="h-3.5 w-3.5" />
-      </Link>
-      {items.map((item, i) => {
-        const isLast = i === items.length - 1;
-        return (
-          <span key={item.label || item.href || i} className="flex items-center gap-1.5">
-            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-            {item.href && !isLast ? (
-              <Link
-                href={item.href}
-                className="hover:text-foreground transition-colors rounded-md px-1.5 py-0.5 hover:bg-muted"
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <span
-                className={cn(
-                  "px-1.5 py-0.5",
-                  isLast && "text-foreground font-medium"
-                )}
-                aria-current={isLast ? "page" : undefined}
-              >
-                {item.label}
-              </span>
-            )}
-          </span>
-        );
-      })}
+      <ol className="flex items-center flex-wrap gap-0.5 list-none m-0 p-0">
+        {items.map((item, i) => {
+          const isLast = i === items.length - 1;
+
+          return (
+            <li key={`${item.label}-${i}`} className="flex items-center gap-0.5">
+              {/* Separator — not shown before the very first item */}
+              {i > 0 && (
+                <ChevronRight
+                  className="h-3 w-3 text-muted-foreground/40 mx-0.5 flex-shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+
+              {isLast ? (
+                // Current page: no link, bold, full foreground color
+                <span
+                  className="font-medium text-foreground px-0.5"
+                  aria-current="page"
+                >
+                  {item.label}
+                </span>
+              ) : item.href ? (
+                // Ancestor with href: link, muted, hover underline
+                <Link
+                  href={item.href}
+                  className="text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors px-0.5 rounded"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                // Ancestor without href: plain muted text (static label)
+                <span className="text-muted-foreground px-0.5">
+                  {item.label}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

@@ -16,6 +16,7 @@ import { WelcomeWizard } from "@/components/WelcomeWizard";
 import { DemoBanner } from "@/components/DemoBanner";
 import { EmrDeactivatedBanner } from "@/components/EmrDeactivatedBanner";
 import { SessionTimeoutWarning } from "@/components/SessionTimeoutWarning";
+import { GlobalErrorToast } from "@/components/GlobalErrorToast";
 import { Loader2 } from "lucide-react";
 import { initErrorTracking } from "@/lib/error-tracking";
 
@@ -163,6 +164,17 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <TenantAccessBanner />
           <OrgSwitcher />
           <TenantPYChip />
+          {/* ⌘K discoverable hint — clicking opens the command palette */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs text-slate-500 dark:text-slate-400 transition-colors cursor-pointer select-none"
+            aria-label="Open command palette (⌘K)"
+            title="Search patients, pages and actions (⌘K)"
+          >
+            <span className="hidden xl:inline text-slate-400 dark:text-slate-500">Search…</span>
+            <kbd className="font-sans">⌘K</kbd>
+          </button>
         </div>
 
         {/* Tablet top bar — thin (48px) variant so the page below the
@@ -176,12 +188,25 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <TenantAccessBanner />
           <OrgSwitcher />
           <TenantPYChip />
+          {/* ⌘K hint for tablet */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+            className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs text-slate-500 dark:text-slate-400 transition-colors cursor-pointer select-none"
+            aria-label="Open command palette (⌘K)"
+            title="Search patients, pages and actions (⌘K)"
+          >
+            <kbd className="font-sans">⌘K</kbd>
+          </button>
         </div>
 
         <main
           id="main-content"
-          className="min-h-screen transition-all duration-300 ease-out p-4 pt-16 pl-16 md:pl-6 md:p-6 md:pt-16 lg:pl-10 lg:px-10 lg:pb-10 lg:pt-20 overflow-x-hidden"
-          style={{ marginLeft: isLg ? sidebarWidth : undefined }}
+          className="min-h-screen overflow-x-hidden pt-16 px-6 pb-6"
+          style={{
+            marginLeft: isLg ? sidebarWidth : undefined,
+            transition: "margin-left 300ms ease-out",
+          }}
           tabIndex={-1}
         >
           <EmrDeactivatedBanner />
@@ -194,6 +219,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         <KeyboardShortcuts />
         <WelcomeWizard />
         <SessionTimeoutWarning />
+        <GlobalErrorToast />
       </ToastProvider>
     </TooltipProvider>
   );
