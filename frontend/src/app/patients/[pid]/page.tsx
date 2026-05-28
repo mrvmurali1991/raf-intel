@@ -793,6 +793,10 @@ export default function PatientDetailPage({
         rafScore={rafScore}
         dataQuality={dataQuality}
         suspectCount={suspectCount}
+        recaptureCount={
+          (recaptureQ.data?.gaps?.length ?? recaptureQ.data?.recapture_gaps?.length) ?? null
+        }
+        revenueAtRisk={v28ImpactQ.data?.revenue_delta_annual ?? null}
         onAnalyzeAll={() => batchMutation.mutate()}
         onGenerateAudit={() => auditMutation.mutate(undefined)}
         onCalculateRAF={() => handleTabChange("raf")}

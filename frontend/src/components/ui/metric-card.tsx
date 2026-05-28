@@ -16,7 +16,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 // perf(demo): defer recharts (~95 KB gzipped) until a card actually needs
@@ -122,6 +122,19 @@ export interface MetricCardProps {
    * Supplements (does not replace) the MetricMetaTooltip formula icon.
    */
   labelTooltip?: string;
+  /**
+   * Plain-text explanation shown in a hover tooltip on the metric VALUE.
+   * Example: "Total patients in your attributed panel with active coverage."
+   * Supplements (does not replace) labelTooltip.
+   */
+  tooltip?: string;
+  /**
+   * Pure-SVG sparkline data — an alternative to the recharts `trend` prop.
+   * When provided, renders an inline SVG polyline (no external library).
+   * Color auto-derives from `intent`; last point vs first determines up/down tint.
+   * Use this when you want a zero-bundle-cost sparkline.
+   */
+  sparklineData?: number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +169,22 @@ const intentDelta: Record<MetricCardIntent, { pos: string; neg: string; zero: st
   danger:  { pos: "text-amber-600",   neg: "text-red-600",   zero: "text-muted-foreground" },
 };
 
+/** Subtle left border accent — visual intent marker without overwhelming the card. */
+const intentBorder: Record<MetricCardIntent, string> = {
+  default: "border-l-4 border-l-teal-400 dark:border-l-teal-600",
+  success: "border-l-4 border-l-emerald-400 dark:border-l-emerald-600",
+  warning: "border-l-4 border-l-amber-400  dark:border-l-amber-600",
+  danger:  "border-l-4 border-l-red-400    dark:border-l-red-600",
+};
+
+/** Sparkline line color — maps to intent for the pure-SVG sparkline. */
+const intentSparkColor: Record<MetricCardIntent, string> = {
+  default: "#14b8a6", // teal-500
+  success: "#10b981", // emerald-500
+  warning: "#f59e0b", // amber-500
+  danger:  "#ef4444", // red-500
+};
+
 // ---------------------------------------------------------------------------
 // Skeleton
 // ---------------------------------------------------------------------------
@@ -188,17 +217,18 @@ function DeltaBadge({ delta, intent }: { delta: number; intent: MetricCardIntent
   const colours = intentDelta[intent];
   const cls =
     delta > 0 ? colours.pos : delta < 0 ? colours.neg : colours.zero;
-  const Icon =
-    delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
-  const sign = delta > 0 ? "+" : "";
+  // Unicode directional arrows — immediately legible without icon loading
+  const arrow = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+  const sign  = delta > 0 ? "+" : "";
+  const label = `${sign}${delta.toFixed(1)}%`;
 
   return (
     <span
       className={cn("inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums", cls)}
-      aria-label={`${sign}${delta.toFixed(1)}% change`}
+      aria-label={`${label} change`}
     >
-      <Icon size={12} aria-hidden />
-      {sign}{delta.toFixed(1)}%
+      <span aria-hidden className="leading-none">{arrow}</span>
+      {label}
     </span>
   );
 }
@@ -218,6 +248,45 @@ function LastRefreshed({ freshness }: { freshness: string }) {
       <Clock size={11} aria-hidden />
       Last refreshed {rel} ago
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MiniSparkline — pure SVG, zero external dependencies
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders a minimal SVG polyline sparkline.
+ * 40 px tall (h-8 = 2rem), full card width, no axes, no labels.
+ * Color is passed in; caller decides up (green) vs down (red).
+ */
+function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+  if (data.length < 2) return null;
+  const h = 32, w = 100;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const points = data
+    .map((v, i) =>
+      `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`,
+    )
+    .join(" ");
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="w-full h-8 mt-2"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
   );
 }
 
@@ -245,6 +314,8 @@ export function MetricCard({
   labelTestId,
   valueTestId,
   labelTooltip,
+  tooltip,
+  sparklineData,
 }: MetricCardProps) {
   const router = useRouter();
   if (loading) return <MetricCardSkeleton className={className} />;
@@ -273,6 +344,8 @@ export function MetricCard({
         "[transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]",
         // Per-intent ring
         intentRing[intent],
+        // Subtle left border accent — signals semantic intent at a glance
+        intentBorder[intent],
         isInteractive && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className,
       )}
@@ -323,12 +396,31 @@ export function MetricCard({
 
         {/* Value row */}
         <div className="flex items-end gap-2">
-          <span
-            className="text-metric-value leading-none text-foreground"
-            data-testid={valueTestId}
-          >
-            {value}
-          </span>
+          {tooltip ? (
+            <TooltipProvider delay={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="text-metric-value leading-none text-foreground cursor-help"
+                    data-testid={valueTestId}
+                    tabIndex={0}
+                  >
+                    {value}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6} data-testid="metric-value-tooltip">
+                  {tooltip}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <span
+              className="text-metric-value leading-none text-foreground"
+              data-testid={valueTestId}
+            >
+              {value}
+            </span>
+          )}
           {delta !== undefined && <DeltaBadge delta={delta} intent={intent} />}
         </div>
 
@@ -349,6 +441,21 @@ export function MetricCard({
             className="mt-auto rounded-md bg-muted/40 h-8 w-full"
           />
         ) : null)}
+
+        {/* Pure-SVG sparkline — zero-bundle alternative to recharts trend prop.
+            Color derived from intent; tint shifts green/red based on trajectory. */}
+        {sparklineData && sparklineData.length >= 2 && (() => {
+          const first = sparklineData[0];
+          const last  = sparklineData[sparklineData.length - 1];
+          // When an explicit intent is set, respect it; otherwise tint by direction
+          const color =
+            intent !== "default"
+              ? intentSparkColor[intent]
+              : last >= first
+                ? "#10b981" // emerald-500 — trending up
+                : "#ef4444";  // red-500 — trending down
+          return <MiniSparkline data={sparklineData} color={color} />;
+        })()}
 
         {/* Action link — sits BELOW the number, never embedded as a button */}
         {actionLink && (

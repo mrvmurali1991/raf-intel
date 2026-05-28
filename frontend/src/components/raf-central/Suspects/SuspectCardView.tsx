@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, XCircle, HelpCircle, ThumbsUp, ThumbsDown, MessageSquareWarning } from "lucide-react";
+import { Loader2, ThumbsUp, ThumbsDown, MessageSquareWarning } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import {
   useAcceptSuspectCentral,
@@ -12,62 +11,26 @@ import {
   useForceAcceptSuspect,
 } from "@/hooks/mutations/useRAFCentralMutations";
 import ExplainPanel from "@/components/ExplainPanel";
-import { cn } from "@/lib/utils";
-import { confidenceTier, needsAcceptGate } from "@/lib/confidence";
-import { api } from "@/lib/api";
-import type { SuspectCard, SuspectMeat } from "../_shared";
+import { needsAcceptGate } from "@/lib/confidence";
+import api from "@/lib/api";
+import type { SuspectCard } from "../_shared";
 import {
   AcceptConfirmDialog,
   type AcceptOverridePayload,
 } from "@/components/AcceptConfirmDialog";
-import { SemiGauge } from "./SemiGauge";
 import { DismissReasonDialog } from "./DismissReasonDialog";
 import { registerContextShortcut } from "@/lib/keyboard-shortcuts";
-import { KeyHint } from "@/components/ui/key-hint";
-
-// ---------------------------------------------------------------------------
-// Compact MEAT chip — 4 coloured squares, no external MEATBadge dependency
-// ---------------------------------------------------------------------------
-const MEAT_LETTERS: { key: keyof SuspectMeat; label: string; bg: string }[] = [
-  { key: "monitor",  label: "M", bg: "bg-teal-500 dark:bg-teal-600"   },
-  { key: "evaluate", label: "E", bg: "bg-purple-500 dark:bg-purple-600" },
-  { key: "assess",   label: "A", bg: "bg-amber-500 dark:bg-amber-600"  },
-  { key: "treat",    label: "T", bg: "bg-green-500 dark:bg-green-600"  },
-];
-
-function CompactMeatChip({ meat }: { meat?: SuspectMeat | null }) {
-  if (meat === undefined || meat === null) {
-    return (
-      <span
-        title="MEAT evidence not yet generated"
-        className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300 cursor-default select-none"
-      >
-        MEAT: unknown
-      </span>
-    );
-  }
-  return (
-    <div className="inline-flex items-center gap-0.5" aria-label="MEAT completeness">
-      {MEAT_LETTERS.map(({ key, label, bg }) => (
-        <span
-          key={key}
-          title={`${label} (${key}) ${meat[key] ? "present" : "missing"}`}
-          className={cn(
-            "inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white",
-            meat[key] ? bg : "bg-muted text-muted-foreground"
-          )}
-        >
-          {label}
-        </span>
-      ))}
-    </div>
-  );
-}
+import { SuspectRow } from "@/components/ui/suspect-row";
 
 /**
- * SuspectCardView — individual suspect condition card with Accept/Dismiss/Why actions.
+ * SuspectCardView — individual suspect condition with Accept/Dismiss/Why actions.
+ *
+ * Layout: delegates to SuspectRow (horizontal, information-dense) for all visual
+ * structure. This component owns all mutations, dialogs, keyboard shortcuts, and
+ * feedback logic — SuspectRow is a pure display primitive.
+ *
  * Uses React Query mutations (useAcceptSuspectCentral / useDismissSuspectCentral).
- * ExplainPanel is mounted inside this component (portal-rendered by ExplainPanel itself).
+ * ExplainPanel is portal-rendered by ExplainPanel itself.
  */
 export function SuspectCardView({
   suspect,
@@ -115,11 +78,11 @@ export function SuspectCardView({
       if (e.key === "Tab") {
         // Scope the Send-button lookup to THIS dialog so a second
         // SuspectCardView mounted on the same page (or a parallel
-        // dialog) can't bleed into our focus trap. UX review N+2
-        // blocker.
-        const sendBtn = queryDialogRef.current?.querySelector<HTMLButtonElement>(
-          "[data-cq-send='1']",
-        ) ?? null;
+        // dialog) can't bleed into our focus trap. UX review N+2 blocker.
+        const sendBtn =
+          queryDialogRef.current?.querySelector<HTMLButtonElement>(
+            "[data-cq-send='1']",
+          ) ?? null;
         const focusable: HTMLElement[] = [
           queryTextareaRef.current,
           queryCloseBtnRef.current,
@@ -202,7 +165,10 @@ export function SuspectCardView({
       setForceAcceptMrn("");
       setForceAcceptReason("");
       onChange();
-      toast.success("Force-accepted", `${suspect.label} accepted with RADV-risk audit logged.`);
+      toast.success(
+        "Force-accepted",
+        `${suspect.label} accepted with RADV-risk audit logged.`,
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Force accept failed.";
       toast.error("Force accept failed", msg);
@@ -239,7 +205,9 @@ export function SuspectCardView({
               },
               onError: (err: unknown) => {
                 const msg =
-                  err instanceof Error ? err.message : "Could not restore suspect.";
+                  err instanceof Error
+                    ? err.message
+                    : "Could not restore suspect.";
                 toast.error("Restore failed", msg);
               },
             },
@@ -253,13 +221,12 @@ export function SuspectCardView({
   // Use the shared `api` client so the Bearer token and X-Active-Tenant header
   // are injected by the interceptor (raw fetch skipped both — broke for any
   // tenant other than the default).
-  const sendFeedback = async (sentiment: "helpful" | "incorrect" | "irrelevant") => {
+  const sendFeedback = async (
+    sentiment: "helpful" | "incorrect" | "irrelevant",
+  ) => {
     if (feedbackSent) return;
     try {
-      await api.post(
-        `/api/suspects/${suspect.id}/feedback`,
-        { sentiment },
-      );
+      await api.post(`/api/suspects/${suspect.id}/feedback`, { sentiment });
       setFeedbackSent(true);
       const label =
         sentiment === "helpful"
@@ -269,63 +236,78 @@ export function SuspectCardView({
           : "Marked as irrelevant";
       toast.success("Feedback noted", label);
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
       if (status === 409) {
-        toast.error("Feedback already submitted", "You have already rated this suspect today.");
+        toast.error(
+          "Feedback already submitted",
+          "You have already rated this suspect today.",
+        );
         setFeedbackSent(true);
         return;
       }
-      toast.error("Feedback failed", "Could not save your feedback. Please try again.");
+      toast.error(
+        "Feedback failed",
+        "Could not save your feedback. Please try again.",
+      );
     }
   };
 
-  const confPct = Math.round((suspect.confidence ?? 0) * 100);
-  const gaugeColor = confidenceTier(confPct).color;
-
   // Net-new / Audit / Confirmed taxonomy — Apixio's HCC-Complete pattern.
-  // Drives the badge color and clarifies the coder's action path: a
-  // net-new suspect needs evidence to submit; an audit row needs
-  // documentation review BEFORE submission; a confirmed row is
-  // informational. Backend may eventually ship suspect.taxonomy; until
-  // then we derive it from evidence_type + meat_completeness.
+  // Drives the badge color and clarifies the coder's action path.
   //
-  // Safety guard: "confirmed" implies "safe to accept" in the badge
-  // tooltip. The derivation MUST require BOTH high MEAT completeness
-  // AND high confidence AND no clinical-rule violation — otherwise a
-  // 35%-confidence suspect with thin evidence can be mislabeled
-  // "Confirmed" purely on a MEAT score the engine guessed at. Safety
-  // review round-N+1 #2.
+  // Safety guard: "confirmed" requires claim_history evidence OR a signed
+  // attestation so MEAT-guessed completeness alone cannot promote a suspect.
+  // Safety review round-N+1 #2.
   const taxonomy = (() => {
     if (suspect.taxonomy) return suspect.taxonomy;
     const meat = suspect.meat_completeness ?? 0;
     const conf = suspect.confidence ?? 0;
     const ev = (suspect.evidence_type || "").toLowerCase();
-    if (ev.startsWith("hist") || ev.startsWith("recap")) return "audit" as const;
+    if (ev.startsWith("hist") || ev.startsWith("recap"))
+      return "audit" as const;
     const ruleOk = !suspect.clinical_rule_violation;
-    // "confirmed" requires claim_history evidence OR a signed attestation so
-    // that MEAT-guessed completeness alone cannot promote a suspect to
-    // "Confirmed". Safety review round-N+1 #2 + Fix 1 taxonomy requirement.
     const evidenceConfirmed =
       ev === "claim_history" || suspect.attestation_signed_at != null;
-    if (meat >= 0.75 && conf >= 0.80 && ruleOk && evidenceConfirmed) return "confirmed" as const;
+    if (meat >= 0.75 && conf >= 0.8 && ruleOk && evidenceConfirmed)
+      return "confirmed" as const;
     return "new" as const;
   })();
+
   const taxonomyMeta = {
-    new:       { label: "Net-new",   className: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", title: "Net-new suspect — evidence supports a diagnosis that has not been coded before. Accept to add it to the patient's problem list." },
-    audit:     { label: "Audit",     className: "border-amber-300   bg-amber-50   text-amber-800   dark:border-amber-700   dark:bg-amber-950/40   dark:text-amber-300",   title: "Audit candidate — diagnosis was coded in a prior year but current MEAT documentation is thin. Review the chart before re-billing." },
-    confirmed: { label: "Confirmed", className: "border-sky-300     bg-sky-50     text-sky-800     dark:border-sky-700     dark:bg-sky-950/40     dark:text-sky-300",     title: "Already-validated suspect — MEAT documentation is sufficient. Informational; safe to accept." },
+    new: {
+      label: "Net-new",
+      className:
+        "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+      title:
+        "Net-new suspect — evidence supports a diagnosis that has not been coded before. Accept to add it to the patient's problem list.",
+    },
+    audit: {
+      label: "Audit",
+      className:
+        "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+      title:
+        "Audit candidate — diagnosis was coded in a prior year but current MEAT documentation is thin. Review the chart before re-billing.",
+    },
+    confirmed: {
+      label: "Confirmed",
+      className:
+        "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+      title:
+        "Already-validated suspect — MEAT documentation is sufficient. Informational; safe to accept.",
+    },
   }[taxonomy];
+
   // V28 hierarchy: when this HCC is trumped by a higher-priority HCC, the
   // RAF scorer will drop it at calculation time. Surface the relationship
-  // as a badge AND disable Accept — patient-safety review #7. Without this
-  // a clinician can double-document a subordinate condition.
+  // as a badge AND disable Accept — patient-safety review #7.
   const trumpedBy = suspect.trumped_by_hcc;
   const isTrumped = trumpedBy != null && trumpedBy > 0;
 
   // ----- Keyboard shortcuts: A / D / R fire on the focused card -----------
   // Register handlers only while a child of this card has focus; the global
   // shortcut layer keeps a LIFO stack so the most-recently-focused card
-  // wins.  Without this, Tab-navigating through a list of suspects would
+  // wins. Without this, Tab-navigating through a list of suspects would
   // ambiguously dispatch shortcuts.
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -335,10 +317,13 @@ export function SuspectCardView({
       if (busy || isTrumped) return;
       handleAcceptClick();
     });
-    const offDismiss = registerContextShortcut("dismiss-focused-suspect", () => {
-      if (busy) return;
-      setShowDismissDialog(true);
-    });
+    const offDismiss = registerContextShortcut(
+      "dismiss-focused-suspect",
+      () => {
+        if (busy) return;
+        setShowDismissDialog(true);
+      },
+    );
     // "R = mark MEAT reviewed" — sends a positive feedback signal (the
     // closest existing API affordance) until a dedicated meat-reviewed
     // endpoint ships.
@@ -355,8 +340,8 @@ export function SuspectCardView({
   }, [isFocused, busy, isTrumped, feedbackSent]);
 
   return (
-    <Card
-      ref={cardRef as unknown as React.Ref<HTMLDivElement>}
+    <div
+      ref={cardRef}
       tabIndex={0}
       data-suspect-card={suspect.id}
       onFocus={() => setIsFocused(true)}
@@ -366,132 +351,84 @@ export function SuspectCardView({
           setIsFocused(false);
         }
       }}
-      className="p-3 hover:bg-muted/50 transition-colors dark:hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
+      className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
     >
-      <div className="flex items-start gap-3">
-        {/* Semicircle confidence gauge */}
-        <SemiGauge value={confPct} color={gaugeColor} />
+      {/* ── Main horizontal row — SuspectRow owns all layout/visual structure ── */}
+      <SuspectRow
+        hcc={suspect.hcc}
+        icd10={suspect.icd10}
+        label={suspect.label}
+        confidence={suspect.confidence ?? 0}
+        meat={suspect.meat}
+        revenueDollars={suspect.expected_dollar_impact}
+        evidenceSource={suspect.evidence_type}
+        taxonomyBadge={taxonomyMeta}
+        isTrumped={isTrumped}
+        trumpedByHcc={trumpedBy ?? null}
+        isMeatMissing={isMeatMissing}
+        busy={busy}
+        onAccept={handleAcceptClick}
+        onDismiss={() => setShowDismissDialog(true)}
+        onWhy={() => setShowExplain(true)}
+      />
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold leading-snug truncate flex-1">{suspect.label}</span>
-            <span
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${taxonomyMeta.className}`}
-              title={taxonomyMeta.title}
-            >
-              {taxonomyMeta.label}
-            </span>
-          </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            HCC {suspect.hcc} · {suspect.icd10} · {suspect.trigger}
-            {isTrumped && (
-              <span
-                className="ml-2 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                title={`CMS-HCC V28 will trump this code at scoring time. Accepting will not change the patient's RAF — HCC ${trumpedBy} already covers this hierarchy.`}
-              >
-                Trumped by HCC {trumpedBy}
-              </span>
-            )}
-          </div>
-
-          {/* Button hierarchy: Accept primary, Dismiss outline, Why? ghost */}
-          <div className="mt-2.5 flex gap-2 items-center flex-wrap">
-            <CompactMeatChip meat={suspect.meat} />
-            <Button
-              size="sm"
-              onClick={handleAcceptClick}
-              disabled={busy !== null || isTrumped || isMeatMissing}
-              title={
-                isTrumped
-                  ? `Accept disabled — HCC ${trumpedBy} already covers this hierarchy in V28.`
-                  : isMeatMissing
-                  ? "Add MEAT evidence before accepting."
-                  : undefined
-              }
-              aria-disabled={isMeatMissing || isTrumped || busy !== null}
-            >
-              {busy === "accept" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <><Check className="h-3 w-3 mr-1" aria-hidden /> Accept<KeyHint>A</KeyHint></>
-              )}
-            </Button>
-            {isMeatMissing && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowForceAcceptDialog(true)}
-                disabled={busy !== null}
-                title="Force-accept despite missing MEAT — logs a RADV-risk audit event"
-                className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 px-2"
-              >
-                Force accept (RADV risk)
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowDismissDialog(true)}
-              disabled={busy !== null}
-            >
-              {busy === "dismiss" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <><XCircle className="h-3 w-3 mr-1" aria-hidden /> Dismiss<KeyHint>D</KeyHint></>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowExplain(true)}
-              disabled={busy !== null}
-              aria-label="Why was this flagged?"
-              className="text-muted-foreground hover:text-foreground px-2"
-            >
-              <HelpCircle className="h-3 w-3 mr-1" aria-hidden /> Why?<KeyHint>R</KeyHint>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              ref={queryTriggerRef}
-              onClick={() => setQueryDialogOpen(true)}
-              disabled={busy !== null}
-              aria-label="Request documentation from the provider"
-              title="Open a structured query to the PCP asking for documentation that supports this suspect. Status tracked Pending → Replied → Closed."
-              className="text-muted-foreground hover:text-foreground px-2"
-            >
-              <MessageSquareWarning className="h-3 w-3 mr-1" aria-hidden /> Request docs
-            </Button>
-            {/* Feedback affordance — persisted via POST /api/suspects/{id}/feedback. */}
-            <div
-              className="ml-auto flex items-center gap-0.5"
-              role="group"
-              aria-label="Suggestion feedback"
-            >
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => sendFeedback("helpful")}
-                disabled={busy !== null || feedbackSent}
-                aria-label="Suggestion was helpful"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600 disabled:opacity-40"
-              >
-                <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => sendFeedback("incorrect")}
-                disabled={busy !== null || feedbackSent}
-                aria-label="Suggestion was incorrect"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 disabled:opacity-40"
-              >
-                <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-            </div>
-          </div>
+      {/* ── Secondary action strip: Force Accept, Request Docs, Feedback ── */}
+      <div className="flex items-center gap-1 px-4 pb-2 flex-wrap">
+        {isMeatMissing && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowForceAcceptDialog(true)}
+            disabled={busy !== null}
+            title="Force-accept despite missing MEAT — logs a RADV-risk audit event"
+            className="h-7 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 px-2"
+          >
+            Force accept (RADV risk)
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          ref={queryTriggerRef}
+          onClick={() => setQueryDialogOpen(true)}
+          disabled={busy !== null}
+          aria-label="Request documentation from the provider"
+          title="Open a structured query to the PCP asking for documentation. Status tracked Pending → Replied → Closed."
+          className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
+        >
+          <MessageSquareWarning className="h-3 w-3 mr-1" aria-hidden />
+          Request docs
+        </Button>
+        {/* Feedback affordance — persisted via POST /api/suspects/{id}/feedback. */}
+        <div
+          className="ml-auto flex items-center gap-0.5"
+          role="group"
+          aria-label="Suggestion feedback"
+        >
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => sendFeedback("helpful")}
+            disabled={busy !== null || feedbackSent}
+            aria-label="Suggestion was helpful"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600 disabled:opacity-40"
+          >
+            <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => sendFeedback("incorrect")}
+            disabled={busy !== null || feedbackSent}
+            aria-label="Suggestion was incorrect"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 disabled:opacity-40"
+          >
+            <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
+          </Button>
         </div>
       </div>
+
+      {/* ── Dialogs and panels (portal-rendered, always present in DOM) ── */}
       <ExplainPanel
         patientId={patientId}
         suspectId={suspect.id}
@@ -502,7 +439,13 @@ export function SuspectCardView({
         onAccept={async () => {
           setShowExplain(false);
           // Route through the gate — gate will call acceptSuspect on confirm.
-          if (needsAcceptGate(suspect.confidence, suspect.meat_status, suspect.clinical_rule_violation)) {
+          if (
+            needsAcceptGate(
+              suspect.confidence,
+              suspect.meat_status,
+              suspect.clinical_rule_violation,
+            )
+          ) {
             setShowAcceptGate(true);
           } else {
             await acceptSuspect();
@@ -535,6 +478,8 @@ export function SuspectCardView({
           measurement_year: measurementYear ?? null,
         }}
       />
+
+      {/* Request-docs dialog */}
       {queryDialogOpen && (
         <div
           ref={queryDialogRef}
@@ -598,32 +543,44 @@ export function SuspectCardView({
                     setQueryText("");
                     setQueryDialogOpen(false);
                   } catch (err: unknown) {
-                    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-                    const status = (err as { response?: { status?: number } })?.response?.status;
-                    toast.error("Could not send", detail || `HTTP ${status ?? "?"}`);
+                    const detail = (
+                      err as { response?: { data?: { detail?: string } } }
+                    )?.response?.data?.detail;
+                    const status = (err as { response?: { status?: number } })
+                      ?.response?.status;
+                    toast.error(
+                      "Could not send",
+                      detail || `HTTP ${status ?? "?"}`,
+                    );
                   } finally {
                     setQuerySubmitting(false);
                   }
                 }}
                 disabled={queryText.trim().length < 10 || querySubmitting}
               >
-                {querySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send query"}
+                {querySubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Send query"
+                )}
               </Button>
             </div>
           </div>
         </div>
       )}
-      {/* Force-accept dialog — shown only when MEAT is missing and the user
-          clicks "Force accept (RADV risk)". Requires MRN confirmation + a
-          minimum-20-char reason before submitting. Writes audit event
-          SUSPECT_FORCE_ACCEPTED_NO_MEAT via the forceAcceptMut mutation. */}
+
+      {/* Force-accept dialog — shown only when MEAT is missing.
+          Requires MRN confirmation + a minimum-20-char reason.
+          Writes audit event SUSPECT_FORCE_ACCEPTED_NO_MEAT. */}
       {showForceAcceptDialog && (
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="force-accept-title"
           className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
-          onClick={() => !forceAcceptSubmitting && setShowForceAcceptDialog(false)}
+          onClick={() =>
+            !forceAcceptSubmitting && setShowForceAcceptDialog(false)
+          }
         >
           <div
             className="bg-white dark:bg-zinc-900 rounded-lg shadow-2xl w-full max-w-md p-5"
@@ -636,7 +593,10 @@ export function SuspectCardView({
               >
                 !
               </span>
-              <h3 id="force-accept-title" className="text-base font-bold text-red-700 dark:text-red-400">
+              <h3
+                id="force-accept-title"
+                className="text-base font-bold text-red-700 dark:text-red-400"
+              >
                 Force accept — RADV risk
               </h3>
             </div>
@@ -659,7 +619,9 @@ export function SuspectCardView({
                   className="block text-sm font-medium mb-1"
                 >
                   Confirm patient MRN (or last 4 digits)
-                  <span className="text-destructive ml-1" aria-hidden="true">*</span>
+                  <span className="text-destructive ml-1" aria-hidden="true">
+                    *
+                  </span>
                 </label>
                 <input
                   id="force-accept-mrn"
@@ -679,7 +641,9 @@ export function SuspectCardView({
                   className="block text-sm font-medium mb-1"
                 >
                   Clinical reason for override
-                  <span className="text-destructive ml-1" aria-hidden="true">*</span>
+                  <span className="text-destructive ml-1" aria-hidden="true">
+                    *
+                  </span>
                 </label>
                 <textarea
                   id="force-accept-reason"
@@ -702,7 +666,9 @@ export function SuspectCardView({
                 >
                   {forceAcceptReason.trim().length >= 20
                     ? "Minimum length met."
-                    : `${20 - forceAcceptReason.trim().length} more character${20 - forceAcceptReason.trim().length === 1 ? "" : "s"} required`}
+                    : `${20 - forceAcceptReason.trim().length} more character${
+                        20 - forceAcceptReason.trim().length === 1 ? "" : "s"
+                      } required`}
                 </p>
               </div>
             </div>
@@ -738,6 +704,6 @@ export function SuspectCardView({
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

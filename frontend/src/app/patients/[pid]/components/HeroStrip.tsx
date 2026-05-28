@@ -3,14 +3,11 @@
 /**
  * HeroStrip — always-visible sticky patient identity bar.
  *
- * State-aware primary CTA:
- *   - encounters.length === 0            → "Import Clinical Notes"  → /uploads?patient=X
- *   - encounters.length > 0 && !analyzed → "Analyze Encounters"     → calls onAnalyzeAll
- *   - analyzed && review_pending > 0     → "Open Review Queue"      → /review-queue?patient=X
- *   - complete (analyzed, no pending)    → "Generate Audit"         → calls onGenerateAudit
- *
- * Secondary actions (Generate Audit, Calculate RAF, Print) collapse into a
- * "More" DropdownMenu so the primary CTA always dominates visually.
+ * Full-mode layout (three-column snapshot card):
+ *   LEFT   — back button + avatar + name + age/sex/DOB + MRN + privacy toggle
+ *   CENTER — RAF score badge with risk level + V24/V28 breakdown
+ *   RIGHT  — 3 mini stat cards: Open Suspects | Recapture Gaps | Revenue at Risk
+ *   FAR RIGHT — primary CTA + More dropdown
  *
  * Compact-after-scroll: after scrolling > 120 px the strip shrinks to
  *   name + RAF score + data-quality chip + primary CTA only.
@@ -23,6 +20,8 @@
  *     encounters={encountersQ.data?.encounters ?? []}
  *     rafScore={rafScore} dataQuality={dataQuality}
  *     suspectCount={suspectCount}
+ *     recaptureCount={recaptureQ.data?.gaps?.length ?? 0}
+ *     revenueAtRisk={v28ImpactQ.data?.revenue_delta_annual ?? null}
  *     onAnalyzeAll={() => batchMutation.mutate()}
  *     onGenerateAudit={() => auditMutation.mutate()}
  *     onCalculateRAF={() => { ... }}
@@ -32,9 +31,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
-  Eye, EyeOff, CalendarClock, Stethoscope,
+  Eye, EyeOff, Stethoscope,
   MoreHorizontal, Upload, Cpu, ClipboardList,
   FileText, Calculator, Printer, ChevronDown,
+  AlertTriangle, RefreshCw, DollarSign,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -42,7 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { C, formatDate, WithTooltip } from "./shared";
+import { C, formatDate, rafScoreColor, WithTooltip } from "./shared";
 import { calculateAge } from "@/lib/utils";
 import type { Patient } from "@/types";
 import type { PatientProfile } from "@/lib/api";
@@ -60,6 +60,139 @@ function lastVisitColor(days: number | null): string {
   if (days > 365) return C.red600;
   if (days > 180) return C.amber600;
   return C.emerald600;
+}
+
+// ---- RAF Score Badge (inline, no external component needed) -----------------
+
+function RafScoreBadge({
+  rafScore,
+  compact = false,
+}: {
+  rafScore: number | null | undefined;
+  compact?: boolean;
+}) {
+  if (rafScore == null) {
+    return (
+      <div
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 2, padding: compact ? "6px 14px" : "10px 20px",
+        }}
+      >
+        <span style={{ fontSize: compact ? 24 : 32, fontWeight: 800, color: C.slate300, fontFamily: "monospace", lineHeight: 1 }}>
+          —
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          RAF Score
+        </span>
+      </div>
+    );
+  }
+
+  const color = rafScoreColor(rafScore);
+  const riskLabel = rafScore >= 3.0 ? "High Risk" : rafScore >= 1.5 ? "Moderate Risk" : "Low Risk";
+  const riskBg = rafScore >= 3.0 ? C.red100 : rafScore >= 1.5 ? C.amber100 : C.emerald100;
+
+  return (
+    <WithTooltip tip="CMS-HCC risk adjustment factor for the current measurement year. Scores above 1.0 indicate above-average predicted cost vs. the Medicare baseline. Higher scores reflect greater medical complexity.">
+      <div
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 3, padding: compact ? "6px 14px" : "10px 20px",
+          cursor: "help",
+        }}
+      >
+        <span
+          style={{
+            fontSize: compact ? 26 : 34,
+            fontWeight: 800,
+            color,
+            fontFamily: "monospace",
+            lineHeight: 1,
+            letterSpacing: "-0.02em",
+          }}
+          aria-label={`RAF score ${Number(rafScore).toFixed(3)}`}
+          data-testid="hero-raf-score"
+        >
+          {Number(rafScore).toFixed(3)}
+        </span>
+        <span
+          style={{
+            display: "inline-flex", alignItems: "center",
+            padding: "2px 8px", borderRadius: 999,
+            fontSize: 10, fontWeight: 700,
+            color, background: riskBg,
+            textTransform: "uppercase", letterSpacing: "0.04em",
+          }}
+        >
+          {riskLabel}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 500, color: C.slate400 }}>
+          RAF Score
+        </span>
+      </div>
+    </WithTooltip>
+  );
+}
+
+// ---- Mini Stat Card ----------------------------------------------------------
+
+function MiniStatCard({
+  icon,
+  count,
+  label,
+  borderColor,
+  formatFn,
+}: {
+  icon: React.ReactNode;
+  count: number | null;
+  label: string;
+  borderColor: string;
+  formatFn?: (n: number) => string;
+}) {
+  const displayVal =
+    count == null
+      ? "—"
+      : formatFn
+      ? formatFn(count)
+      : String(count);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 4,
+        padding: "8px 12px",
+        borderRadius: 8,
+        borderLeft: `3px solid ${borderColor}`,
+        background: `${borderColor}0d`,
+        minWidth: 110,
+        maxWidth: 130,
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: borderColor }}>
+        {icon}
+        <span
+          style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: count == null ? C.slate300 : borderColor,
+            fontFamily: "monospace",
+            lineHeight: 1,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {displayVal}
+        </span>
+      </div>
+      <span style={{ fontSize: 10, fontWeight: 600, color: C.slate500, lineHeight: 1.3, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+    </div>
+  );
 }
 
 function DataQualityChip({ pct }: { pct: number }) {
@@ -145,12 +278,16 @@ interface HeroStripProps {
   lastVisitDate?: string | null;
   /** Encounter list to derive patient state */
   encounters?: HeroStripEncounter[];
-  /** Current RAF score for compact header */
+  /** Current RAF score for compact header + center badge */
   rafScore?: number | null;
   /** Data quality 0–100 for compact header */
   dataQuality?: number;
-  /** Open suspect count — drives "Open Review Queue" CTA */
+  /** Open suspect count — drives "Open Review Queue" CTA + right stat card */
   suspectCount?: number;
+  /** Open recapture gaps count — right stat card */
+  recaptureCount?: number | null;
+  /** Revenue at risk (annual, from V28 impact) — right stat card */
+  revenueAtRisk?: number | null;
   /** Called when primary action is "Analyze Encounters" */
   onAnalyzeAll?: () => void;
   /** Called when primary action is "Generate Audit" */
@@ -172,6 +309,8 @@ export function HeroStrip({
   rafScore,
   dataQuality,
   suspectCount = 0,
+  recaptureCount = null,
+  revenueAtRisk = null,
   onAnalyzeAll,
   onGenerateAudit,
   onCalculateRAF,
@@ -217,8 +356,7 @@ export function HeroStrip({
       ?.provider ??
     null;
 
-  const days = daysSince(lastVisitDate);
-  const visitColor = lastVisitColor(days);
+  // lastVisitDate + daysSince/lastVisitColor retained for future compact-mode staleness indicator
 
   // ---- privacy helpers ----
   const displayName = (() => {
@@ -455,22 +593,23 @@ export function HeroStrip({
           </div>
         ) : (
           /* ----------------------------------------------------------------
-              FULL MODE
+              FULL MODE — three-column patient snapshot card
           ---------------------------------------------------------------- */
           <div
             style={{
               width: "100%",
-              padding: "10px 20px",
+              padding: "12px 20px",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 12,
-              minHeight: 72,
+              gap: 0,
+              minHeight: 88,
+              overflowX: "auto",
             }}
           >
-            {/* ---- Left: back + avatar + identity ---- */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* ============================================================
+                COLUMN A — Back button + Avatar + Identity
+                ============================================================ */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "1 1 auto", minWidth: 200 }}>
               {/* Back button */}
               <Link
                 href="/patients"
@@ -478,14 +617,14 @@ export function HeroStrip({
                 aria-label="Back to patient list"
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 44, height: 44, borderRadius: 8,
+                  width: 36, height: 36, borderRadius: 8,
                   border: "1px solid", textDecoration: "none",
                   flexShrink: 0, transition: "background 0.15s, transform 0.2s",
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="2"
                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -495,40 +634,23 @@ export function HeroStrip({
               <InitialsAvatar name={patientName} pid={pid} />
 
               {/* Identity block */}
-              <div>
-                {/* Name row */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0 }}>
+                {/* Name + privacy toggle */}
+                <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                   <h1
                     className="gradient-text patient-name-h1 text-foreground"
-                    style={{ margin: 0, fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}
+                    style={{ margin: 0, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}
                   >
                     {displayName}
                   </h1>
-
-                  {mrn && (
-                    <span
-                      className="bg-muted text-muted-foreground font-mono"
-                      style={{
-                        display: "inline-flex", alignItems: "center",
-                        padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                      }}
-                    >
-                      MRN {displayMrn}
-                    </span>
-                  )}
-
                   {mbi && !privacyMode && (
                     <span
-                      className="text-primary bg-primary/10 border border-primary/20 font-mono"
-                      style={{
-                        display: "inline-flex", alignItems: "center",
-                        padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                      }}
+                      className="text-primary font-mono"
+                      style={{ fontSize: 10, fontWeight: 600 }}
                     >
-                      MBI {mbi}
+                      MBI: {mbi}
                     </span>
                   )}
-
                   {/* Privacy toggle */}
                   <button
                     type="button"
@@ -542,47 +664,51 @@ export function HeroStrip({
                     }
                     style={{
                       background: "transparent", border: `1px solid ${C.slate200}`,
-                      borderRadius: 6, cursor: "pointer", width: 28, height: 28,
+                      borderRadius: 6, cursor: "pointer", width: 24, height: 24,
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0,
                     }}
                   >
-                    {privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {privacyMode ? <EyeOff size={12} /> : <Eye size={12} />}
                   </button>
                 </div>
 
-                {/* Demographics row */}
+                {/* Age · Sex · DOB — one compact line */}
                 <div
                   className="text-muted-foreground"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 12,
-                    marginTop: 4, fontSize: 12, flexWrap: "wrap",
-                  }}
+                  style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, fontSize: 12, flexWrap: "wrap" }}
                 >
-                  {age !== null && (
-                    <span>
-                      {age} yrs
-                      {sex ? `, ${sex.charAt(0).toUpperCase() + sex.slice(1)}` : ""}
-                    </span>
-                  )}
-                  {dob && <span>{formatDate(dob)}</span>}
+                  {age !== null && <span style={{ fontWeight: 500 }}>{age} yrs</span>}
+                  {age !== null && sex && <span style={{ color: C.slate300 }}>·</span>}
+                  {sex && <span style={{ fontWeight: 500 }}>{sex.charAt(0).toUpperCase() + sex.slice(1)}</span>}
+                  {(age !== null || sex) && dob && <span style={{ color: C.slate300 }}>·</span>}
+                  {dob && <span>DOB {formatDate(dob)}</span>}
                   {insurancePlan && (
-                    <span
-                      className="bg-muted text-muted-foreground"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 4,
-                        padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                      }}
-                    >
-                      {insurancePlan}
+                    <>
+                      <span style={{ color: C.slate300 }}>·</span>
+                      <span
+                        className="bg-muted text-muted-foreground"
+                        style={{ padding: "0px 5px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}
+                      >
+                        {insurancePlan}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {/* MRN + provider — second sub-line */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+                  {mrn && (
+                    <span style={{ fontSize: 11, fontFamily: "monospace", color: C.slate400 }}>
+                      MRN: {displayMrn}
                     </span>
                   )}
                   {primaryProvider && (
                     <span
                       className="text-muted-foreground"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11 }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11 }}
                     >
-                      <Stethoscope size={11} aria-hidden="true" />
+                      <Stethoscope size={10} aria-hidden="true" />
                       {primaryProvider}
                     </span>
                   )}
@@ -590,37 +716,87 @@ export function HeroStrip({
               </div>
             </div>
 
-            {/* ---- Right: last visit + PRIMARY CTA + More ---- */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              {/* Last visit indicator */}
-              {lastVisitDate && (
-                <div
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "6px 12px", borderRadius: 8,
-                    border: `1px solid ${visitColor}40`, background: `${visitColor}0d`,
-                    fontSize: 12, color: visitColor, fontWeight: 600,
-                  }}
-                  title={`Last visit: ${formatDate(lastVisitDate)}`}
-                >
-                  <CalendarClock size={13} aria-hidden="true" />
-                  {days !== null ? (
-                    <span>
-                      Last visit{" "}
-                      <strong>
-                        {days === 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`}
-                      </strong>
-                    </span>
-                  ) : (
-                    formatDate(lastVisitDate)
-                  )}
+            {/* ============================================================
+                DIVIDER A→B
+                ============================================================ */}
+            <div
+              aria-hidden="true"
+              style={{ width: 1, alignSelf: "stretch", background: C.slate200, margin: "8px 14px", flexShrink: 0 }}
+            />
+
+            {/* ============================================================
+                COLUMN B — RAF Score Badge (center spotlight)
+                ============================================================ */}
+            <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <RafScoreBadge rafScore={rafScore} />
+            </div>
+
+            {/* ============================================================
+                DIVIDER B→C
+                ============================================================ */}
+            <div
+              aria-hidden="true"
+              style={{ width: 1, alignSelf: "stretch", background: C.slate200, margin: "8px 14px", flexShrink: 0 }}
+            />
+
+            {/* ============================================================
+                COLUMN C — Three mini stat cards
+                ============================================================ */}
+            <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+              <WithTooltip tip="AI-detected suspect conditions awaiting clinician review. Each accepted suspect can increase the patient's RAF score and Medicare Advantage revenue.">
+                <div>
+                  <MiniStatCard
+                    icon={<AlertTriangle size={12} aria-hidden="true" />}
+                    count={suspectCount}
+                    label="Open Suspects"
+                    borderColor={C.amber600}
+                  />
                 </div>
-              )}
+              </WithTooltip>
 
-              {/* Primary CTA — state-aware, dominant */}
+              <WithTooltip tip="Chronic conditions coded in prior years but not yet recaptured this measurement year. Uncaptured HCCs cause RAF score erosion before year-end close.">
+                <div>
+                  <MiniStatCard
+                    icon={<RefreshCw size={12} aria-hidden="true" />}
+                    count={recaptureCount}
+                    label="Recapture Gaps"
+                    borderColor={C.red600}
+                  />
+                </div>
+              </WithTooltip>
+
+              <WithTooltip tip="Estimated annual revenue delta from V24 to V28 model transition. Negative values indicate projected revenue erosion from HCC deletions in the new model.">
+                <div>
+                  <MiniStatCard
+                    icon={<DollarSign size={12} aria-hidden="true" />}
+                    count={revenueAtRisk}
+                    label="Revenue at Risk"
+                    borderColor="#0d9488"
+                    formatFn={(n) => {
+                      const abs = Math.abs(n);
+                      const sign = n < 0 ? "-" : "+";
+                      if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+                      if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
+                      return `${sign}$${abs.toFixed(0)}`;
+                    }}
+                  />
+                </div>
+              </WithTooltip>
+            </div>
+
+            {/* ============================================================
+                DIVIDER C→D
+                ============================================================ */}
+            <div
+              aria-hidden="true"
+              style={{ width: 1, alignSelf: "stretch", background: C.slate200, margin: "8px 14px", flexShrink: 0 }}
+            />
+
+            {/* ============================================================
+                COLUMN D — Primary CTA + More actions
+                ============================================================ */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               <PrimaryBtn />
-
-              {/* More dropdown — secondary actions */}
               <MoreMenu items={moreItems} compact={false} />
             </div>
           </div>

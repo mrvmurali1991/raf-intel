@@ -45,6 +45,7 @@ import {
   X,
   BookOpen,
   MapPin,
+  CalendarClock,
 } from "lucide-react";
 import api, {
   getDashboardStats,
@@ -432,6 +433,98 @@ function CmsSweepWidget({ revenueOpp, loading }: { revenueOpp: number; loading?:
 // (OnboardingCard extracted to ./admin/OnboardingCard.tsx)
 // (V28HeroCard extracted to ./admin/V28HeroCard.tsx)
 
+// ---------------------------------------------------------------------------
+// AttentionCard — left-bordered alert card for the "Needs Attention" row
+// ---------------------------------------------------------------------------
+
+type AttentionCardUrgency = "critical" | "high" | "medium";
+
+const URGENCY_STYLES: Record<AttentionCardUrgency, { border: string; iconBg: string; iconColor: string; actionColor: string }> = {
+  critical: { border: "#EF4444", iconBg: "#FEF2F2", iconColor: "#DC2626", actionColor: "#DC2626" },
+  high:     { border: "#F59E0B", iconBg: "#FFFBEB", iconColor: "#D97706", actionColor: "#D97706" },
+  medium:   { border: "#EAB308", iconBg: "#FEFCE8", iconColor: "#CA8A04", actionColor: "#CA8A04" },
+};
+
+function AttentionCard({
+  icon,
+  title,
+  subtitle,
+  action,
+  urgency,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  action: { label: string; href: string };
+  urgency: AttentionCardUrgency;
+}) {
+  const s = URGENCY_STYLES[urgency];
+  return (
+    <div
+      style={{
+        background: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderLeft: `4px solid ${s.border}`,
+        borderRadius: 12,
+        padding: "16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        transition: "box-shadow 0.2s, transform 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = `0 4px 16px ${s.border}20, 0 1px 3px rgba(0,0,0,0.04)`;
+        e.currentTarget.style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 8,
+            background: s.iconBg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          {/* Clone icon to apply color */}
+          <span style={{ color: s.iconColor, display: "flex", alignItems: "center" }}>{icon}</span>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="text-foreground text-[13px] font-semibold leading-snug">{title}</div>
+          <div className="text-muted-foreground text-[12px] mt-0.5 leading-snug">{subtitle}</div>
+        </div>
+      </div>
+      <Link
+        href={action.href}
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: s.actionColor,
+          textDecoration: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          alignSelf: "flex-start",
+          opacity: 0.9,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = "1"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = "0.9"; }}
+      >
+        {action.label} <ChevronRight size={12} />
+      </Link>
+    </div>
+  );
+}
+
 // Main Dashboard
 // ---------------------------------------------------------------------------
 
@@ -796,6 +889,7 @@ export function AdminDashboard() {
         .fade-in-up-5 { animation-delay: 400ms; }
         .fade-in-up-6 { animation-delay: 500ms; }
         @media (max-width: 1024px) {
+          .attention-grid   { grid-template-columns: 1fr !important; }
           .kpi-strip        { grid-template-columns: repeat(2, 1fr) !important; }
           .row-60-40        { grid-template-columns: 1fr !important; }
           .row-55-45        { grid-template-columns: 1fr !important; }
@@ -1128,7 +1222,7 @@ export function AdminDashboard() {
         <DashboardSkeleton />
       ) : (
         <div
-          className="kpi-strip grid grid-cols-4 gap-4 mb-6"
+          className="kpi-strip grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
           role="status"
           aria-live="polite"
         >
@@ -1201,6 +1295,113 @@ export function AdminDashboard() {
         </div>
       )}
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          NEEDS ATTENTION — 3-up alert cards (derived from already-fetched data)
+          ══════════════════════════════════════════════════════════════════════ */}
+      <div
+        className="attention-grid fade-in-up fade-in-up-2"
+        style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}
+        role="region"
+        aria-label="Needs attention"
+      >
+        {/* Card 1: Suspects pending review
+            Data: suspectsCount from suspectsQ (already fetched above).
+            Revenue estimate: suspectsCount × $2,800 per HCC (same formula used in the
+            Suspect Conditions summary card below). */}
+        <AttentionCard
+          icon={<AlertTriangle size={16} />}
+          title={
+            suspectsCount > 0
+              ? `${fmtN(suspectsCount)} Suspect${suspectsCount !== 1 ? "s" : ""} Pending`
+              : "Suspects Pending"
+          }
+          subtitle={
+            suspectsCount > 0
+              ? `${fmt$(suspectsCount * 2800)} revenue at risk`
+              : "Run analysis to identify gaps"
+          }
+          action={{ label: "Review Now", href: "/suspects" }}
+          urgency={suspectsCount > 20 ? "critical" : suspectsCount > 0 ? "high" : "medium"}
+        />
+
+        {/* Card 2: Gaps closing soon
+            TODO: wire to recapture query when a dedicated recapture endpoint is added.
+            Currently using attestationCountQ (approved gaps) as a proxy for gaps that
+            have been actioned — when that count is 0, all open gaps are unattended. */}
+        <AttentionCard
+          icon={<CalendarClock size={16} />}
+          title={
+            onboardingAttestCount > 0
+              ? `${fmtN(onboardingAttestCount)} Gap${onboardingAttestCount !== 1 ? "s" : ""} Need Action`
+              : "Recapture Gaps Open"
+          }
+          subtitle={
+            onboardingAttestCount > 0
+              ? `${fmt$(onboardingAttestCount * 3000)} est. at risk — review before deadline`
+              : "No attested gaps yet — review recapture queue"
+          }
+          action={{ label: "View Gaps", href: "/recapture" }}
+          urgency="critical"
+        />
+
+        {/* Card 3: Quality / high-confidence alerts
+            Data: workflowData.high_confidence_suspects — suspects with confidence >= 90%,
+            these are the highest-signal items that should be actioned first. */}
+        <AttentionCard
+          icon={<Target size={16} />}
+          title={
+            (workflowData?.high_confidence_suspects ?? 0) > 0
+              ? `${fmtN(workflowData?.high_confidence_suspects ?? 0)} High-Confidence Alert${(workflowData?.high_confidence_suspects ?? 0) !== 1 ? "s" : ""}`
+              : "High-Confidence Alerts"
+          }
+          subtitle={
+            (workflowData?.high_confidence_suspects ?? 0) > 0
+              ? "≥90% confidence — highest priority for coding"
+              : "Run analysis to surface quality alerts"
+          }
+          action={{ label: "View Alerts", href: "/suspects?filter=high_confidence" }}
+          urgency={(workflowData?.high_confidence_suspects ?? 0) > 5 ? "critical" : (workflowData?.high_confidence_suspects ?? 0) > 0 ? "high" : "medium"}
+        />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          QUICK STATS — inline pipe-separated summary row (only when data exists)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {totalPop > 0 && (
+        <div
+          className="fade-in-up fade-in-up-2"
+          style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 0", marginBottom: 20 }}
+          aria-label="Population quick stats"
+        >
+          {[
+            { label: `${fmtN(totalPop)} patient${totalPop !== 1 ? "s" : ""}`, href: "/patients" },
+            { label: `${fmtN(suspectsCount)} open suspect${suspectsCount !== 1 ? "s" : ""}`, href: "/suspects" },
+            { label: `${revenueOpp > 0 ? fmt$(revenueOpp) : "—"} at risk`, href: "/reports" },
+            { label: `RAF ${avgRaf > 0 ? avgRaf.toFixed(2) : "—"} avg`, href: "/providers" },
+          ].map((item, i, arr) => (
+            <span key={item.href} style={{ display: "inline-flex", alignItems: "center" }}>
+              <Link
+                href={item.href}
+                style={{
+                  fontSize: 12,
+                  color: "hsl(var(--muted-foreground))",
+                  textDecoration: "none",
+                  padding: "0 2px",
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "hsl(var(--foreground))"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "hsl(var(--muted-foreground))"; }}
+              >
+                {item.label}
+              </Link>
+              {i < arr.length - 1 && (
+                <span style={{ color: "hsl(var(--muted-foreground))", opacity: 0.4, padding: "0 6px", fontSize: 12 }}>|</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Chart Requests KPI Banner — RADV CMS compliance */}
       <ChartRequestsKpiBanner />
