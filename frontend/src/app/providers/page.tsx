@@ -428,7 +428,7 @@ export default function ProvidersPage() {
   const isLoading = sumLoading || lbLoading;
 
   return (
-    <div className="p-6 min-h-screen bg-background">
+    <div className="p-4 sm:p-6 min-h-screen bg-background">
       {/* ── Page Header ──────────────────────────────────────────────────── */}
       <PageHeader
         title="Provider Scorecards"
@@ -439,21 +439,21 @@ export default function ProvidersPage() {
             <button
               onClick={() => setShowFeatureSettings(true)}
               title="Page features (add/hide sections)"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors min-h-[44px] sm:min-h-0"
             >
               <Settings size={15} aria-hidden />
-              Page Features
+              <span className="hidden sm:inline">Page Features</span>
             </button>
             <button
               onClick={() => setShowDiscoverDialog(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors min-h-[44px] sm:min-h-0"
             >
               <Zap size={15} aria-hidden />
-              Auto-Discover from EMR
+              <span className="hidden sm:inline">Auto-Discover from EMR</span>
             </button>
             <button
               onClick={() => setShowAddDialog(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-0 bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-0 bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors min-h-[44px] sm:min-h-0"
             >
               <Plus size={15} aria-hidden />
               Add Provider
@@ -521,7 +521,7 @@ export default function ProvidersPage() {
       {/* ── Leaderboard Table ────────────────────────────────────────────── */}
       <div className="bg-card border border-border rounded-[14px] overflow-clip">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 sm:px-5 py-4 border-b border-border gap-3">
           <div className="flex items-center gap-2.5">
             <h2 className="m-0 text-base font-bold text-foreground">
               Provider Leaderboard
@@ -533,7 +533,7 @@ export default function ProvidersPage() {
 
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Search */}
-            <div className="relative flex items-center">
+            <div className="relative flex items-center w-full sm:w-auto">
               <Search
                 size={14}
                 className="absolute left-2.5 text-muted-foreground/60 pointer-events-none"
@@ -545,12 +545,12 @@ export default function ProvidersPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search providers"
-                className="pl-8 pr-3.5 py-2 border border-border rounded-lg text-[13px] w-[220px] bg-card text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                className="pl-8 pr-3.5 py-2.5 sm:py-2 border border-border rounded-lg text-[13px] w-full sm:w-[220px] bg-card text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring min-h-[44px] sm:min-h-0"
               />
             </div>
 
             {/* Specialty filter */}
-            <div className="relative flex items-center">
+            <div className="relative flex items-center w-full sm:w-auto">
               <Filter
                 size={13}
                 className="absolute left-2.5 text-muted-foreground/60 pointer-events-none"
@@ -562,7 +562,7 @@ export default function ProvidersPage() {
                   setSpecialtyFilter(e.target.value as SpecialtyFilter)
                 }
                 aria-label="Filter by specialty category"
-                className="pl-7 pr-8 py-2 border border-border rounded-lg text-[13px] bg-card text-foreground cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring"
+                className="pl-7 pr-8 py-2.5 sm:py-2 border border-border rounded-lg text-[13px] bg-card text-foreground cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring w-full sm:w-auto min-h-[44px] sm:min-h-0"
               >
                 <option value="all">All Categories</option>
                 <option value="PCP">PCP</option>
@@ -579,7 +579,7 @@ export default function ProvidersPage() {
             <button
               onClick={exportProvidersCSV}
               aria-label="Export providers as CSV"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex-shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex-shrink-0 w-full sm:w-auto min-h-[44px] sm:min-h-0"
             >
               <FileDown size={14} aria-hidden />
               Export CSV

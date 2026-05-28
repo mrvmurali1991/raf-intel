@@ -267,7 +267,7 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
               placeholder="2026-Q2"
               pattern="\d{4}-Q[1-4]"
               required
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] sm:min-h-0"
             />
             <p className="text-xs text-muted-foreground">
               Format: YYYY-QN (e.g. 2026-Q2)
@@ -285,7 +285,7 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
               id="metric"
               value={metric}
               onChange={(e) => setMetric(e.target.value as GoalMetric)}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
+              className="w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground min-h-[44px] sm:min-h-0"
             >
               {(Object.keys(METRIC_LABELS) as GoalMetric[]).map((m) => (
                 <option key={m} value={m}>
@@ -311,22 +311,22 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
               onChange={(e) => setTarget(e.target.value)}
               placeholder={metric === "revenue" ? "500000" : "200"}
               required
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
+              className="w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground min-h-[44px] sm:min-h-0"
             />
           </div>
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors"
+              className="flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors min-h-[44px] sm:min-h-0"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity min-h-[44px] sm:min-h-0"
             >
               {saving ? "Saving..." : "Save Goal"}
             </button>
@@ -371,7 +371,7 @@ export default function GoalsPage() {
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+        className="flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
         aria-label="Set a new quarterly goal"
       >
         <Plus className="h-4 w-4" />
@@ -391,7 +391,7 @@ export default function GoalsPage() {
         />
       )}
 
-      <div className="container mx-auto p-6 space-y-8 max-w-5xl">
+      <div className="container mx-auto p-4 sm:p-6 space-y-8 max-w-5xl">
         <PageHeader
           title="Quarterly Goals"
           subtitle="Track RAF capture targets vs actuals for the current quarter."

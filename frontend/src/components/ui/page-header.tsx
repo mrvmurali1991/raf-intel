@@ -18,7 +18,7 @@ export interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between mb-6 pb-5 border-b border-border dark:border-slate-700 gap-4 flex-wrap">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 pb-5 border-b border-border dark:border-slate-700 gap-3">
       <div className="flex items-center gap-3 min-w-0">
         {backHref && (
           <Link
@@ -34,11 +34,13 @@ export function PageHeader({ title, subtitle, icon, actions, backHref }: PageHea
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="m-0 text-2xl font-bold text-foreground dark:text-white leading-tight">{title}</h1>
+          <h1 className="m-0 text-xl sm:text-2xl font-bold text-foreground dark:text-white leading-tight">{title}</h1>
           {subtitle && <p className="mt-1 mb-0 text-sm text-muted-foreground dark:text-slate-400">{subtitle}</p>}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">{actions}</div>
+      )}
     </div>
   );
 }

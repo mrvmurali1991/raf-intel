@@ -386,7 +386,7 @@ export function DataTable<T extends Record<string, unknown>>({
 
   return (
     <div
-      className="flex flex-col rounded-xl border border-border bg-card overflow-hidden w-full animate-fade-in"
+      className="-mx-4 sm:mx-0 flex flex-col rounded-none sm:rounded-xl border-y sm:border border-border bg-card overflow-hidden w-[calc(100%+2rem)] sm:w-full animate-fade-in"
       role="region"
       aria-label="Data table"
       aria-busy={loading}
@@ -397,7 +397,7 @@ export function DataTable<T extends Record<string, unknown>>({
       {hasToolbar && (
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border flex-wrap">
           {searchable && (
-            <div className="relative flex-1 min-w-[160px] max-w-[320px]">
+            <div className="relative w-full sm:flex-1 sm:min-w-[160px] sm:max-w-[320px]">
               <Search
                 size={14}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
@@ -409,7 +409,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 onChange={handleSearch}
                 aria-label={searchPlaceholder}
                 className={cn(
-                  "h-8 w-full rounded-lg border border-input bg-transparent",
+                  "h-11 sm:h-8 w-full rounded-lg border border-input bg-transparent",
                   "pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground",
                   "transition-colors outline-none",
                   "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
